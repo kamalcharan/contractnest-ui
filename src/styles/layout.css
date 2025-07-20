@@ -1,0 +1,77 @@
+/* src/styles/layout.css */
+
+/* Ensure layout components properly use CSS variables for theming */
+
+/* Main layout container */
+.bg-page-background {
+  background-color: var(--page-background);
+}
+
+/* Sidebar styling */
+.sidebar {
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border-right: 1px solid var(--border);
+  transition: width 0.3s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav-item {
+  color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sidebar-nav-item:hover {
+  background-color: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+}
+
+.sidebar-nav-item.active {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Header styling */
+.header {
+  background-color: var(--card);
+  border-bottom: 1px solid var(--border);
+  color: var(--card-foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Content area */
+.main-content {
+  background-color: var(--page-background);
+  color: var(--foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  height: 100%;
+}
+
+/* Settings page styling */
+.settings-page {
+  background-color: var(--page-background);
+  min-height: 100%;
+  height: 100%;
+}
+
+.settings-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.2s ease;
+}
+
+.settings-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.dark .settings-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Footer */
+.footer {
+  background-color: var(--card);
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}

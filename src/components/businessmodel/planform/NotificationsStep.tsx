@@ -1,0 +1,626 @@
+// src/components/businessmodel/planform/NotificationsStep.tsx
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFormContext } from 'react-hook-form';
+import { Plus, Trash2, Info, ChevronDown, Bell, Edit } from 'lucide-react';
+import { 
+  notificationItems, 
+  NotificationMethodType,
+  NotificationCategoryType
+} from '@/utils/constants/pricing';
+import { DEFAULT_VALUES } from '@/utils/constants/businessModelConstants';
+import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { toast } from 'react-hot-toast';
+
+// Define the structure for a notification row
+interface NotificationRow {
+  notif_type: string;
+  category: string;
+  enabled: boolean;
+  credits_per_unit: number;
+  prices: Record<string, number>;
+}
+
+interface NotificationsStepProps {
+  isEditMode?: boolean;
+}
+
+const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = false }) => {
+  const { 
+    watch, 
+    setValue,
+    getValues,
+    formState: { errors }
+  } = useFormContext();
+  
+  // Watch plan type and currencies
+  const watchPlanType = watch('planType');
+  const watchSupportedCurrencies = watch('supportedCurrencies') || [];
+  const watchDefaultCurrency = watch('defaultCurrencyCode');
+  
+  // State for notifications
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  
+  // State for dropdowns
+  const [methodDropdownOpen, setMethodDropdownOpen] = useState<number | null>(null);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<number | null>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('');
+  
+  // Initialize selected currency
+  useEffect(() => {
+    if (watchSupportedCurrencies.length > 0 && !selectedCurrency) {
+      setSelectedCurrency(watchDefaultCurrency || watchSupportedCurrencies[0]);
+    }
+  }, [watchSupportedCurrencies, watchDefaultCurrency, selectedCurrency]);
+  
+  // Initialize notifications from form values or defaults
+  useEffect(() => {
+    const formNotifications = getValues('notifications');
+    
+    if (Array.isArray(formNotifications) && formNotifications.length > 0) {
+      setNotifications(formNotifications.map(notification => ({
+        ...notification,
+        prices: notification.prices || {}
+      })));
+    } else if (!isEditMode) {
+      // Add default notification if none exists and not in edit mode
+      const defaultNotif: NotificationRow = {
+        notif_type: DEFAULT_VALUES.DEFAULT_NOTIFICATION.METHOD,
+        category: DEFAULT_VALUES.DEFAULT_NOTIFICATION.CATEGORY,
+        enabled: DEFAULT_VALUES.DEFAULT_NOTIFICATION.ENABLED,
+        credits_per_unit: DEFAULT_VALUES.DEFAULT_NOTIFICATION.CREDITS_PER_UNIT,
+        prices: {}
+      };
+      
+      // Initialize prices for all currencies
+      if (watchSupportedCurrencies?.length) {
+        watchSupportedCurrencies.forEach(currency => {
+          const methodDetails = notificationItems.find(
+            item => item.method === defaultNotif.notif_type
+          );
+          defaultNotif.prices[currency] = methodDetails?.unitPrice || 0;
+        });
+      }
+      
+      setNotifications([defaultNotif]);
+    }
+  }, [isEditMode]); // Only run once on mount or when edit mode changes
+  
+  // Update form whenever notifications change - immediate sync
+  useEffect(() => {
+    if (notifications.length > 0) {
+      setValue('notifications', notifications, { shouldDirty: true, shouldValidate: true });
+      console.log('Updated form with notifications:', notifications);
+    }
+  }, [notifications, setValue]);
+  
+  // Update prices when supported currencies change
+  useEffect(() => {
+    if (watchSupportedCurrencies?.length && notifications.length > 0) {
+      const updatedNotifications = notifications.map(notification => {
+        const prices = { ...notification.prices };
+        
+        // Add missing currencies
+        watchSupportedCurrencies.forEach(currency => {
+          if (prices[currency] === undefined) {
+            const methodDetails = notificationItems.find(
+              item => item.method === notification.notif_type
+            );
+            prices[currency] = methodDetails?.unitPrice || 0;
+          }
+        });
+        
+        // Remove unsupported currencies
+        Object.keys(prices).forEach(currency => {
+          if (!watchSupportedCurrencies.includes(currency)) {
+            delete prices[currency];
+          }
+        });
+        
+        return {
+          ...notification,
+          prices
+        };
+      });
+      
+      setNotifications(updatedNotifications);
+    }
+  }, [watchSupportedCurrencies]);
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!(event.target as Element).closest('[data-dropdown]') && 
+          !(event.target as Element).closest('[data-dropdown-trigger]')) {
+        setMethodDropdownOpen(null);
+        setCategoryDropdownOpen(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  // Helper function to check for duplicate notification combinations
+  const isDuplicateNotification = useCallback((notifType: string, category: string, excludeIndex?: number) => {
+    return notifications.some((notif, index) => {
+      if (excludeIndex !== undefined && index === excludeIndex) return false;
+      return notif.notif_type === notifType && notif.category === category;
+    });
+  }, [notifications]);
+  
+  // Handle currency tab click
+  const handleCurrencyTabClick = useCallback((e: React.MouseEvent, currencyCode: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedCurrency(currencyCode);
+  }, []);
+  
+  // Toggle method dropdown
+  const toggleMethodDropdown = useCallback((index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (methodDropdownOpen === index) {
+      setMethodDropdownOpen(null);
+    } else {
+      setMethodDropdownOpen(index);
+      setCategoryDropdownOpen(null);
+    }
+  }, [methodDropdownOpen]);
+  
+  // Toggle category dropdown
+  const toggleCategoryDropdown = useCallback((index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (categoryDropdownOpen === index) {
+      setCategoryDropdownOpen(null);
+    } else {
+      setCategoryDropdownOpen(index);
+      setMethodDropdownOpen(null);
+    }
+  }, [categoryDropdownOpen]);
+  
+  // Select notification method with duplicate check
+  const selectMethod = useCallback((index: number, method: NotificationMethodType, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const notification = notifications[index];
+    
+    // Check if this would create a duplicate
+    if (isDuplicateNotification(method, notification.category, index)) {
+      toast.error(`A ${method} notification with ${notification.category} category already exists`);
+      setMethodDropdownOpen(null);
+      return;
+    }
+    
+    const methodItem = notificationItems.find(item => item.method === method);
+    if (methodItem) {
+      setNotifications(prev => {
+        const updated = [...prev];
+        const prices: Record<string, number> = {};
+        
+        // Set unit price for all supported currencies
+        if (watchSupportedCurrencies?.length) {
+          watchSupportedCurrencies.forEach(currency => {
+            prices[currency] = methodItem.unitPrice || 0;
+          });
+        }
+        
+        updated[index] = {
+          ...updated[index],
+          notif_type: method,
+          credits_per_unit: methodItem.defaultBaseCredits,
+          prices
+        };
+        
+        return updated;
+      });
+    }
+    
+    setMethodDropdownOpen(null);
+  }, [watchSupportedCurrencies, notifications, isDuplicateNotification]);
+  
+  // Select notification category with duplicate check
+  const selectCategory = useCallback((index: number, category: NotificationCategoryType, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const notification = notifications[index];
+    
+    // Check if this would create a duplicate
+    if (isDuplicateNotification(notification.notif_type, category, index)) {
+      toast.error(`A ${notification.notif_type} notification with ${category} category already exists`);
+      setCategoryDropdownOpen(null);
+      return;
+    }
+    
+    setNotifications(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        category
+      };
+      return updated;
+    });
+    
+    setCategoryDropdownOpen(null);
+  }, [notifications, isDuplicateNotification]);
+  
+  // Update notification field
+  const updateNotification = useCallback((index: number, field: keyof NotificationRow, value: any) => {
+    setNotifications(prev => {
+      const updated = [...prev];
+      
+      if (field === 'prices' && typeof value === 'object') {
+        updated[index] = { 
+          ...updated[index], 
+          prices: { ...updated[index].prices, ...value }
+        };
+      } else {
+        updated[index] = { ...updated[index], [field]: value };
+      }
+      
+      return updated;
+    });
+  }, []);
+  
+  // Update notification price for a specific currency
+  const updateNotificationPrice = useCallback((index: number, currency: string, price: number) => {
+    console.log(`Setting notification ${index} price for ${currency}: ${price}`);
+    
+    setNotifications(prev => {
+      const updated = [...prev];
+      const notification = { ...updated[index] };
+      
+      if (!notification.prices) {
+        notification.prices = {};
+      }
+      
+      // CRITICAL: Create completely new prices object to ensure independence
+      const newPrices = { ...notification.prices };
+      newPrices[currency] = price;
+      notification.prices = newPrices;
+      
+      updated[index] = notification;
+      
+      console.log(`Updated notification ${index}:`, notification);
+      return updated;
+    });
+  }, []);
+  
+  // Get notification price for the selected currency
+  const getNotificationPrice = useCallback((notification: NotificationRow, currency: string): number => {
+    return notification.prices?.[currency] ?? 0;
+  }, []);
+  
+  // Add new notification with duplicate check
+  const addNotification = useCallback((e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
+    // Find a method/category combination that doesn't exist yet
+    let defaultMethod = notificationItems[0]?.method || 'Email';
+    let defaultCategory: NotificationCategoryType = 'Transactional';
+    
+    // Try to find an unused combination
+    for (const item of notificationItems) {
+      for (const cat of ['Transactional', 'Direct'] as NotificationCategoryType[]) {
+        if (!isDuplicateNotification(item.method, cat)) {
+          defaultMethod = item.method;
+          defaultCategory = cat;
+          break;
+        }
+      }
+      if (defaultMethod) break;
+    }
+    
+    // If all combinations are used, show error
+    if (isDuplicateNotification(defaultMethod, defaultCategory)) {
+      toast.error('All notification method and category combinations have been added');
+      return;
+    }
+    
+    const methodItem = notificationItems.find(item => item.method === defaultMethod);
+    
+    const newNotification: NotificationRow = {
+      notif_type: defaultMethod,
+      category: defaultCategory,
+      enabled: true,
+      credits_per_unit: methodItem?.defaultBaseCredits || 25,
+      prices: {}
+    };
+    
+    // Set unit price for all supported currencies
+    if (watchSupportedCurrencies?.length) {
+      watchSupportedCurrencies.forEach(currency => {
+        newNotification.prices[currency] = methodItem?.unitPrice || 0;
+      });
+    }
+    
+    setNotifications(prev => [...prev, newNotification]);
+  }, [watchSupportedCurrencies, isDuplicateNotification]);
+  
+  // Remove notification
+  const removeNotification = useCallback((index: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (notifications.length > 1) {
+      setNotifications(prev => prev.filter((_, i) => i !== index));
+    }
+  }, [notifications.length]);
+  
+  // Toggle notification enable/disable
+  const toggleEnabled = useCallback((index: number, enabled: boolean) => {
+    updateNotification(index, 'enabled', enabled);
+  }, [updateNotification]);
+  
+  // Get method details
+  const getMethodDetails = useCallback((method: string) => {
+    return notificationItems.find(item => item.method === method);
+  }, []);
+  
+  return (
+    <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
+      {/* Edit Mode Notice */}
+      {isEditMode && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-900/20">
+          <div className="flex items-start">
+            <Bell className="h-5 w-5 mr-3 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+                Editing Notification Configuration
+              </p>
+              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                Changes to notification credits and pricing will create a new plan version. 
+                You can modify credit allocations and unit prices for different notification methods.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <p className="text-sm text-muted-foreground">
+          Configure notification credits included in this plan. Each {watchPlanType === 'Per User' ? 'user' : 'contract'} will receive these credits as part of the plan.
+          {isEditMode && ' Changes will create a new version of this plan.'}
+        </p>
+      </div>
+      
+      {/* Currency Tabs */}
+      {watchSupportedCurrencies?.length > 0 && (
+        <div className="border-b border-border mb-4">
+          <div className="flex overflow-x-auto">
+            {watchSupportedCurrencies.map(currencyCode => {
+              const isActive = selectedCurrency === currencyCode;
+              const isDefault = watchDefaultCurrency === currencyCode;
+              
+              return (
+                <button
+                  key={currencyCode}
+                  type="button"
+                  className={`px-4 py-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
+                    isActive 
+                      ? 'border-primary text-primary' 
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                  }`}
+                  onClick={(e) => handleCurrencyTabClick(e, currencyCode)}
+                >
+                  {getCurrencySymbol(currencyCode)} {currencyCode}
+                  {isDefault && <span className="ml-1 text-xs">(Default)</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Notifications Table Header */}
+      <div className="grid grid-cols-5 gap-4 px-4 py-2 bg-muted/10 rounded-t-md border border-border">
+        <div className="col-span-1 font-medium text-sm">Method</div>
+        <div className="col-span-1 font-medium text-sm">Category</div>
+        <div className="col-span-1 font-medium text-sm">Enabled</div>
+        <div className="col-span-1 font-medium text-sm">
+          Credits ({watchPlanType === 'Per User' ? 'per user' : 'per contract'})
+        </div>
+        <div className="col-span-1 font-medium text-sm">Unit Price</div>
+      </div>
+      
+      {/* Notification Rows */}
+      <div className="space-y-2">
+        {notifications.map((notification, index) => {
+          const methodDetails = getMethodDetails(notification.notif_type);
+          
+          return (
+            <div key={index} className="grid grid-cols-5 gap-4 px-4 py-2 bg-card rounded-md border border-border">
+              {/* Method Selection */}
+              <div className="col-span-1 relative">
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left border border-input rounded-md bg-background flex items-center justify-between"
+                  onClick={(e) => toggleMethodDropdown(index, e)}
+                  data-dropdown-trigger="method"
+                >
+                  <span>{notification.notif_type}</span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </button>
+                
+                {methodDropdownOpen === index && (
+                  <div 
+                    className="absolute left-0 right-0 mt-1 bg-card rounded-md shadow-lg border border-border z-50"
+                    data-dropdown="method"
+                  >
+                    <div className="py-1 max-h-48 overflow-y-auto">
+                      {notificationItems.map(item => (
+                        <button
+                          key={item.method}
+                          type="button"
+                          onClick={(e) => selectMethod(index, item.method, e)}
+                          className="flex items-center px-4 py-2 text-sm w-full hover:bg-muted/50 text-left"
+                        >
+                          <span>{item.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Category Selection */}
+              <div className="col-span-1 relative">
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left border border-input rounded-md bg-background flex items-center justify-between"
+                  onClick={(e) => toggleCategoryDropdown(index, e)}
+                  data-dropdown-trigger="category"
+                >
+                  <span>{notification.category}</span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </button>
+                
+                {categoryDropdownOpen === index && (
+                  <div 
+                    className="absolute left-0 right-0 mt-1 bg-card rounded-md shadow-lg border border-border z-50"
+                    data-dropdown="category"
+                  >
+                    <div className="py-1">
+                      {['Transactional', 'Direct'].map(category => (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={(e) => selectCategory(index, category as NotificationCategoryType, e)}
+                          className="block px-4 py-2 text-sm w-full hover:bg-muted/50 text-left"
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Enabled Toggle */}
+              <div className="col-span-1 flex items-center">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only"
+                    checked={notification.enabled}
+                    onChange={(e) => toggleEnabled(index, e.target.checked)}
+                  />
+                  <div className={`w-11 h-6 rounded-full transition-colors ${
+                    notification.enabled ? 'bg-primary' : 'bg-muted'
+                  }`}>
+                    <div className={`absolute h-5 w-5 rounded-full bg-white transition-transform ${
+                      notification.enabled ? 'transform translate-x-5' : 'transform translate-x-0.5'
+                    } top-0.5 shadow-sm`}></div>
+                  </div>
+                </label>
+              </div>
+              
+              {/* Credits Per Unit */}
+              <div className="col-span-1">
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  value={notification.credits_per_unit}
+                  onChange={(e) => updateNotification(index, 'credits_per_unit', parseInt(e.target.value) || 0)}
+                  disabled={!notification.enabled}
+                  min={0}
+                />
+              </div>
+              
+              {/* Unit Price and Delete */}
+              <div className="col-span-1 flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="text-muted-foreground mr-1">{getCurrencySymbol(selectedCurrency)}</span>
+                  <input
+                    type="number"
+                    className="w-20 px-2 py-1 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    value={getNotificationPrice(notification, selectedCurrency)}
+                    onChange={(e) => updateNotificationPrice(index, selectedCurrency, parseFloat(e.target.value) || 0)}
+                    min={0}
+                    step={0.01}
+                  />
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={(e) => removeNotification(index, e)}
+                  className="p-1 ml-2 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-full"
+                  title="Remove notification"
+                  disabled={notifications.length === 1}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Add Notification Button */}
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={addNotification}
+          className={`px-4 py-2 rounded-md transition-colors inline-flex items-center text-sm border ${
+            isEditMode 
+              ? 'bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+              : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/30'
+          }`}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Notification
+        </button>
+      </div>
+      
+      {/* Info Box */}
+      <div className={`p-4 rounded-md border ${
+        isEditMode 
+          ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
+          : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
+      }`}>
+        <div className="flex items-start">
+          <Info className={`h-4 w-4 mt-0.5 mr-2 flex-shrink-0 ${
+            isEditMode 
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-blue-600 dark:text-blue-400'
+          }`} />
+          <div>
+            <p className={`text-sm font-medium ${
+              isEditMode 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-blue-700 dark:text-blue-300'
+            }`}>
+              {isEditMode ? 'Editing Notification Credits' : 'Notification Credits'}
+            </p>
+            <p className={`mt-1 text-sm ${
+              isEditMode 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-blue-700 dark:text-blue-300'
+            }`}>
+              Credits are allocated per {watchPlanType === 'Per User' ? 'user' : 'contract'} in the plan. 
+              Each notification method can only have one entry per category (Transactional or Direct).
+              {isEditMode && ' Changes will create a new plan version.'}
+            </p>
+            <p className={`mt-1 text-sm ${
+              isEditMode 
+                ? 'text-blue-700 dark:text-blue-300'
+                : 'text-blue-700 dark:text-blue-300'
+            }`}>
+              Users can purchase additional credits once their included credits are exhausted.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NotificationsStep;

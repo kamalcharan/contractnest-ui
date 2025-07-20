@@ -1,0 +1,540 @@
+{
+    "module": "contacts",
+    "version": "1.0.0",
+    "description": "Base context definition for Contacts module, derived from PRD",
+    "capabilities": {
+      "contactTypes": {
+        "individual": {
+          "enabled": true,
+          "description": "Individual person contacts",
+          "fields": {
+            "basic": {
+              "salutation": {
+                "type": "select",
+                "options": ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof."],
+                "required": false,
+                "description": "Formal title"
+              },
+              "firstName": {
+                "type": "text",
+                "required": true,
+                "description": "First/given name"
+              },
+              "lastName": {
+                "type": "text",
+                "required": true,
+                "description": "Last/family name"
+              },
+              "gender": {
+                "type": "select",
+                "options": ["Male", "Female", "Other", "Prefer not to say"],
+                "required": false,
+                "description": "Gender identity"
+              },
+              "photo": {
+                "type": "image",
+                "required": false,
+                "description": "Profile picture"
+              },
+              "jobTitle": {
+                "type": "text",
+                "required": false,
+                "description": "Professional title"
+              },
+              "workingCompany": {
+                "type": "text",
+                "required": false,
+                "description": "Company affiliation"
+              }
+            },
+            "communication": {
+              "email": {
+                "type": "email",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Email addresses"
+              },
+              "phone": {
+                "type": "phone",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Phone numbers"
+              },
+              "mobile": {
+                "type": "phone",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Mobile numbers"
+              },
+              "website": {
+                "type": "url",
+                "required": false,
+                "multiple": true,
+                "description": "Websites"
+              },
+              "socialProfiles": {
+                "type": "complex",
+                "required": false,
+                "multiple": true,
+                "fields": {
+                  "platform": {
+                    "type": "select",
+                    "options": ["LinkedIn", "Twitter", "Facebook", "Instagram", "Other"]
+                  },
+                  "url": {
+                    "type": "url"
+                  }
+                },
+                "description": "Social media profiles"
+              }
+            },
+            "address": {
+              "type": "complex",
+              "required": false,
+              "multiple": true,
+              "supportsPrimary": true,
+              "fields": {
+                "addressType": {
+                  "type": "select",
+                  "options": ["Home", "Work", "Other"],
+                  "required": true
+                },
+                "street": {
+                  "type": "text",
+                  "required": true
+                },
+                "city": {
+                  "type": "text",
+                  "required": true
+                },
+                "state": {
+                  "type": "text",
+                  "required": true
+                },
+                "postalCode": {
+                  "type": "text",
+                  "required": true
+                },
+                "country": {
+                  "type": "select",
+                  "options": ["countries-list"],
+                  "required": true
+                },
+                "landmark": {
+                  "type": "text",
+                  "required": false
+                }
+              },
+              "description": "Physical addresses"
+            },
+            "advanced": {
+              "notes": {
+                "type": "textarea",
+                "required": false,
+                "description": "General notes"
+              },
+              "tags": {
+                "type": "tags",
+                "required": false,
+                "multiple": true,
+                "description": "Categorization tags"
+              },
+              "birthday": {
+                "type": "date",
+                "required": false,
+                "description": "Date of birth"
+              },
+              "custom": {
+                "type": "dynamic",
+                "description": "Custom fields defined by tenant"
+              }
+            }
+          }
+        },
+        "corporate": {
+          "enabled": true,
+          "description": "Organization/company contacts",
+          "fields": {
+            "basic": {
+              "companyName": {
+                "type": "text",
+                "required": true,
+                "description": "Organization name"
+              },
+              "industry": {
+                "type": "select",
+                "options": ["Technology", "Healthcare", "Finance", "Education", "Manufacturing", "Retail", "Services", "Other"],
+                "required": false,
+                "description": "Industry category"
+              },
+              "logo": {
+                "type": "image",
+                "required": false,
+                "description": "Company logo"
+              },
+              "taxId": {
+                "type": "text",
+                "required": false,
+                "description": "Tax identifier"
+              },
+              "registrationNumber": {
+                "type": "text",
+                "required": false,
+                "description": "Business registration"
+              }
+            },
+            "communication": {
+              "email": {
+                "type": "email",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Email addresses"
+              },
+              "phone": {
+                "type": "phone",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Phone numbers"
+              },
+              "fax": {
+                "type": "phone",
+                "required": false,
+                "multiple": true,
+                "description": "Fax numbers"
+              },
+              "website": {
+                "type": "url",
+                "required": false,
+                "multiple": true,
+                "description": "Websites"
+              },
+              "socialProfiles": {
+                "type": "complex",
+                "required": false,
+                "multiple": true,
+                "fields": {
+                  "platform": {
+                    "type": "select",
+                    "options": ["LinkedIn", "Twitter", "Facebook", "Other"]
+                  },
+                  "url": {
+                    "type": "url"
+                  }
+                },
+                "description": "Social media profiles"
+              }
+            },
+            "address": {
+              "type": "complex",
+              "required": false,
+              "multiple": true,
+              "supportsPrimary": true,
+              "fields": {
+                "addressType": {
+                  "type": "select",
+                  "options": ["Headquarters", "Branch", "Registered", "Other"],
+                  "required": true
+                },
+                "street": {
+                  "type": "text",
+                  "required": true
+                },
+                "city": {
+                  "type": "text",
+                  "required": true
+                },
+                "state": {
+                  "type": "text",
+                  "required": true
+                },
+                "postalCode": {
+                  "type": "text",
+                  "required": true
+                },
+                "country": {
+                  "type": "select",
+                  "options": ["countries-list"],
+                  "required": true
+                },
+                "landmark": {
+                  "type": "text",
+                  "required": false
+                }
+              },
+              "description": "Physical addresses"
+            },
+            "advanced": {
+              "companySize": {
+                "type": "select",
+                "options": ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"],
+                "required": false,
+                "description": "Number of employees"
+              },
+              "foundedYear": {
+                "type": "number",
+                "required": false,
+                "description": "Year of establishment"
+              },
+              "annualRevenue": {
+                "type": "select",
+                "options": ["<$1M", "$1M-$10M", "$10M-$50M", "$50M-$100M", "$100M-$500M", "$500M+"],
+                "required": false,
+                "description": "Annual revenue range"
+              },
+              "notes": {
+                "type": "textarea",
+                "required": false,
+                "description": "General notes"
+              },
+              "tags": {
+                "type": "tags",
+                "required": false,
+                "multiple": true,
+                "description": "Categorization tags"
+              },
+              "custom": {
+                "type": "dynamic",
+                "description": "Custom fields defined by tenant"
+              }
+            }
+          }
+        },
+        "custom": {
+          "enabled": true,
+          "description": "Tenant-defined contact types",
+          "implementation": "dynamic",
+          "fields": {
+            "basic": {
+              "name": {
+                "type": "text",
+                "required": true,
+                "description": "Contact name"
+              }
+            },
+            "communication": {
+              "email": {
+                "type": "email",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "supportsVerification": true,
+                "description": "Email addresses"
+              },
+              "phone": {
+                "type": "phone",
+                "required": false,
+                "multiple": true,
+                "supportsPrimary": true,
+                "description": "Phone numbers"
+              }
+            },
+            "custom": {
+              "type": "dynamic",
+              "description": "Custom fields defined by tenant"
+            }
+          }
+        }
+      },
+      "relationships": {
+        "enabled": true,
+        "description": "Contact relationship tracking",
+        "types": {
+          "business": {
+            "enabled": true,
+            "relationships": [
+              { "name": "Employee", "inverse": "Employer", "directed": true },
+              { "name": "Colleague", "inverse": "Colleague", "directed": false },
+              { "name": "Manager", "inverse": "Reports To", "directed": true },
+              { "name": "Client", "inverse": "Service Provider", "directed": true },
+              { "name": "Vendor", "inverse": "Customer", "directed": true },
+              { "name": "Partner", "inverse": "Partner", "directed": false }
+            ]
+          },
+          "personal": {
+            "enabled": true,
+            "relationships": [
+              { "name": "Spouse", "inverse": "Spouse", "directed": false },
+              { "name": "Family Member", "inverse": "Family Member", "directed": false },
+              { "name": "Friend", "inverse": "Friend", "directed": false }
+            ]
+          }
+        }
+      },
+      "customFields": {
+        "enabled": true,
+        "description": "Tenant-defined custom fields",
+        "supportedTypes": [
+          { "type": "text", "name": "Text", "validations": ["maxLength", "regex"] },
+          { "type": "number", "name": "Number", "validations": ["min", "max"] },
+          { "type": "date", "name": "Date", "validations": ["minDate", "maxDate"] },
+          { "type": "select", "name": "Dropdown", "configuration": "options" },
+          { "type": "boolean", "name": "Checkbox" },
+          { "type": "url", "name": "URL", "validations": ["regex"] },
+          { "type": "email", "name": "Email", "validations": ["regex"] }
+        ]
+      },
+      "contactSources": {
+        "manual": {
+          "enabled": true,
+          "description": "Manual contact creation",
+          "features": {
+            "quickAdd": true,
+            "detailedForm": true,
+            "duplicateCheck": true
+          }
+        },
+        "import": {
+          "enabled": true,
+          "description": "Bulk import of contacts",
+          "formats": ["csv", "xlsx", "vcf"],
+          "features": {
+            "fieldMapping": true,
+            "validationRules": true,
+            "duplicateHandling": true,
+            "errorReporting": true
+          }
+        },
+        "api": {
+          "enabled": true,
+          "description": "API-based contact creation",
+          "features": {
+            "webhooks": true,
+            "oauth": true,
+            "apiKeys": true
+          }
+        }
+      },
+      "contactManagement": {
+        "merge": {
+          "enabled": true,
+          "description": "Merge duplicate contacts",
+          "features": {
+            "automaticDetection": true,
+            "manualMerge": true,
+            "fieldPrioritization": true
+          }
+        },
+        "history": {
+          "enabled": true,
+          "description": "Contact change history",
+          "features": {
+            "fieldChanges": true,
+            "relationshipChanges": true,
+            "activityLog": true
+          }
+        },
+        "archiving": {
+          "enabled": true,
+          "description": "Archive inactive contacts",
+          "features": {
+            "restore": true,
+            "bulkArchive": true
+          }
+        }
+      },
+      "privacy": {
+        "visibilityLevels": {
+          "private": {
+            "enabled": true,
+            "description": "Visible only to owner"
+          },
+          "team": {
+            "enabled": true,
+            "description": "Visible to specified team members"
+          },
+          "tenantWide": {
+            "enabled": true,
+            "description": "Visible to all tenant users"
+          }
+        },
+        "permissionLevels": {
+          "view": {
+            "enabled": true,
+            "description": "Can view contact details"
+          },
+          "edit": {
+            "enabled": true,
+            "description": "Can modify contact information"
+          },
+          "delete": {
+            "enabled": true,
+            "description": "Can delete contacts"
+          },
+          "share": {
+            "enabled": true,
+            "description": "Can change visibility and permissions"
+          }
+        },
+        "dataProtection": {
+          "gdprCompliance": {
+            "enabled": true,
+            "features": {
+              "consentTracking": true,
+              "dataMinimization": true,
+              "rightToBeDeleted": true,
+              "dataExport": true
+            }
+          }
+        }
+      },
+      "ui": {
+        "views": {
+          "list": {
+            "enabled": true,
+            "description": "List view of contacts",
+            "features": {
+              "columnCustomization": true,
+              "bulkActions": true,
+              "filtering": true,
+              "sorting": true
+            }
+          },
+          "grid": {
+            "enabled": true,
+            "description": "Grid/card view of contacts",
+            "features": {
+              "customCards": true,
+              "visualFilters": true
+            }
+          },
+          "kanban": {
+            "enabled": true,
+            "description": "Kanban board for contact status",
+            "features": {
+              "customColumns": true,
+              "dragAndDrop": true
+            }
+          },
+          "detail": {
+            "enabled": true,
+            "description": "Contact detail view",
+            "features": {
+              "tabs": true,
+              "timeline": true,
+              "relatedRecords": true,
+              "quickEdit": true
+            }
+          }
+        },
+        "mobile": {
+          "enabled": true,
+          "description": "Mobile-friendly interface",
+          "features": {
+            "offlineAccess": true,
+            "simplifiedForms": true,
+            "pushNotifications": true
+          }
+        }
+      }
+    }
+  }
