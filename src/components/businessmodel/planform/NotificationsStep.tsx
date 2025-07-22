@@ -1,4 +1,5 @@
 // src/components/businessmodel/planform/NotificationsStep.tsx
+// FIXED: Added proper typing for currency and currency array operations
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
@@ -33,10 +34,10 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     formState: { errors }
   } = useFormContext();
   
-  // Watch plan type and currencies
-  const watchPlanType = watch('planType');
-  const watchSupportedCurrencies = watch('supportedCurrencies') || [];
-  const watchDefaultCurrency = watch('defaultCurrencyCode');
+  // Watch plan type and currencies - FIXED: Added proper typing
+  const watchPlanType = watch('planType') as string;
+  const watchSupportedCurrencies = (watch('supportedCurrencies') || []) as string[];
+  const watchDefaultCurrency = watch('defaultCurrencyCode') as string;
   
   // State for notifications
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
@@ -58,7 +59,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     const formNotifications = getValues('notifications');
     
     if (Array.isArray(formNotifications) && formNotifications.length > 0) {
-      setNotifications(formNotifications.map(notification => ({
+      setNotifications(formNotifications.map((notification: any) => ({
         ...notification,
         prices: notification.prices || {}
       })));
@@ -74,7 +75,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       
       // Initialize prices for all currencies
       if (watchSupportedCurrencies?.length) {
-        watchSupportedCurrencies.forEach(currency => {
+        watchSupportedCurrencies.forEach((currency: string) => {
           const methodDetails = notificationItems.find(
             item => item.method === defaultNotif.notif_type
           );
@@ -94,14 +95,14 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     }
   }, [notifications, setValue]);
   
-  // Update prices when supported currencies change
+  // Update prices when supported currencies change - FIXED: Added proper typing
   useEffect(() => {
     if (watchSupportedCurrencies?.length && notifications.length > 0) {
       const updatedNotifications = notifications.map(notification => {
         const prices = { ...notification.prices };
         
         // Add missing currencies
-        watchSupportedCurrencies.forEach(currency => {
+        watchSupportedCurrencies.forEach((currency: string) => {
           if (prices[currency] === undefined) {
             const methodDetails = notificationItems.find(
               item => item.method === notification.notif_type
@@ -111,7 +112,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
         });
         
         // Remove unsupported currencies
-        Object.keys(prices).forEach(currency => {
+        Object.keys(prices).forEach((currency: string) => {
           if (!watchSupportedCurrencies.includes(currency)) {
             delete prices[currency];
           }
@@ -204,7 +205,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
         
         // Set unit price for all supported currencies
         if (watchSupportedCurrencies?.length) {
-          watchSupportedCurrencies.forEach(currency => {
+          watchSupportedCurrencies.forEach((currency: string) => {
             prices[currency] = methodItem.unitPrice || 0;
           });
         }
@@ -337,7 +338,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     
     // Set unit price for all supported currencies
     if (watchSupportedCurrencies?.length) {
-      watchSupportedCurrencies.forEach(currency => {
+      watchSupportedCurrencies.forEach((currency: string) => {
         newNotification.prices[currency] = methodItem?.unitPrice || 0;
       });
     }
@@ -396,7 +397,7 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       {watchSupportedCurrencies?.length > 0 && (
         <div className="border-b border-border mb-4">
           <div className="flex overflow-x-auto">
-            {watchSupportedCurrencies.map(currencyCode => {
+            {watchSupportedCurrencies.map((currencyCode: string) => {
               const isActive = selectedCurrency === currencyCode;
               const isDefault = watchDefaultCurrency === currencyCode;
               

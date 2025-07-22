@@ -5,7 +5,7 @@ import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Label } from '../../../components/ui/label';
 import { Textarea } from '../../../components/ui/textarea';
-import { ColorPicker } from '../../../components/ui/color-picker'; // You may need to create this component
+// import { ColorPicker } from '../../../components/ui/color-picker'; 
 
 interface AddNewValueModalProps {
   isOpen: boolean;

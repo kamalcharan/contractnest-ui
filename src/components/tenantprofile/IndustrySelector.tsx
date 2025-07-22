@@ -22,8 +22,8 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
   
   // Get icon component from name
   const getIconComponent = (iconName: string, isSelected: boolean) => {
-    const IconComponent = (LucideIcons as Record<string, React.ComponentType<any>>)[iconName] || 
-      LucideIcons.Circle;
+    const IconComponent = (LucideIcons as any)[iconName] || LucideIcons.Circle;
+
     
     return <IconComponent size={24} className={isSelected ? "text-primary" : "text-muted-foreground"} />;
   };

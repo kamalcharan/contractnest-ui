@@ -1,4 +1,4 @@
-// src/services/masterdata.ts (in web project)
+// src/services/masterdata.ts
 import api from './api';
 
 export interface CategoryMaster {
@@ -34,34 +34,37 @@ export interface CategoryDetail {
 // This is a client-side service that makes API calls
 export const masterdataService = {
   async getCategories(token: string, tenantId: string): Promise<CategoryMaster[]> {
-  try {
-    console.log("Making API request to fetch categories for tenant:", tenantId);
-    
-    const response = await api.get(`/api/masterdata/categories?tenantId=${tenantId}`);
-    console.log("API response for categories:", response.status, response.data);
-    
-    return response.data;
-  } catch (error) {
-    console.error('Error fetching categories:', error);
-    
-    // Log more detailed error information
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('Error response data:', error.response.data);
-      console.error('Error response status:', error.response.status);
-      console.error('Error response headers:', error.response.headers);
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('Error request:', error.request);
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('Error message:', error.message);
+    try {
+      console.log("Making API request to fetch categories for tenant:", tenantId);
+      
+      const response = await api.get(`/api/masterdata/categories?tenantId=${tenantId}`);
+      console.log("API response for categories:", response.status, response.data);
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      
+      // Type assertion for error handling
+      const axiosError = error as any;
+      
+      // Log more detailed error information
+      if (axiosError.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', axiosError.response.data);
+        console.error('Error response status:', axiosError.response.status);
+        console.error('Error response headers:', axiosError.response.headers);
+      } else if (axiosError.request) {
+        // The request was made but no response was received
+        console.error('Error request:', axiosError.request);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Error message:', axiosError.message);
+      }
+      
+      throw error;
     }
-    
-    throw error;
-  }
-},
+  },
 
   async getCategoryDetails(token: string, categoryId: string, tenantId: string): Promise<CategoryDetail[]> {
     try {

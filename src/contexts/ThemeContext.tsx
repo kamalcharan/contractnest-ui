@@ -1,12 +1,81 @@
 // src/contexts/ThemeContext.tsx
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 
-// Define available themes
-export type ThemeName = 'BharathaVarshaTheme' | 'ClassicElegantTheme' | 'PurpleToneTheme' | 'CorporateTheme';
+// ✅ FIXED: Import individual themes directly (same as utils/theme.ts)
+import { BharathaVarshaTheme } from '../config/theme/themes/bharathavarshaTheme';
+import { ClassicElegantTheme } from '../config/theme/themes/classicElegantTheme';
+import { PurpleToneTheme } from '../config/theme/themes/purpleToneTheme';
+import { ContractNestTheme } from '../config/theme/themes/contractNest';
+import { ModernBoldTheme } from '../config/theme/themes/modernBold';
+import { ModernBusinessTheme } from '../config/theme/themes/modernBusiness';
+import { ProfessionalRedefinedTheme } from '../config/theme/themes/professionalRedefined';
+import { SleekCoolTheme } from '../config/theme/themes/sleekCool';
+import { TechAITheme } from '../config/theme/themes/techAI';
+import { TechFutureTheme } from '../config/theme/themes/techFuture';
+import { TechySimpleTheme } from '../config/theme/themes/techySimple';
+
+// ✅ FIXED: Create themes object and types locally
+const themes = {
+  [BharathaVarshaTheme.id]: BharathaVarshaTheme,
+  [ClassicElegantTheme.id]: ClassicElegantTheme,
+  [PurpleToneTheme.id]: PurpleToneTheme,
+  [ContractNestTheme.id]: ContractNestTheme,
+  [ModernBoldTheme.id]: ModernBoldTheme,
+  [ModernBusinessTheme.id]: ModernBusinessTheme,
+  [ProfessionalRedefinedTheme.id]: ProfessionalRedefinedTheme,
+  [SleekCoolTheme.id]: SleekCoolTheme,
+  [TechAITheme.id]: TechAITheme,
+  [TechFutureTheme.id]: TechFutureTheme,
+  [TechySimpleTheme.id]: TechySimpleTheme,
+};
+
+// ✅ FIXED: Use BharathaVarshaTheme as default
+const defaultTheme = BharathaVarshaTheme;
+
+// ✅ FIXED: Define ThemeConfig type locally based on your theme structure
+interface ThemeColors {
+  brand: {
+    primary: string;
+    secondary: string;
+    tertiary: string;
+    alternate: string;
+  };
+  utility: {
+    primaryText: string;
+    secondaryText: string;
+    primaryBackground: string;
+    secondaryBackground: string;
+  };
+  accent: {
+    accent1: string;
+    accent2: string;
+    accent3: string;
+    accent4: string;
+  };
+  semantic: {
+    success: string;
+    error: string;
+    warning: string;
+    info: string;
+  };
+}
+
+interface ThemeConfig {
+  id: string;
+  name: string;
+  colors: ThemeColors;
+  darkMode: {
+    colors: ThemeColors;
+  };
+}
+
+// Define available theme IDs
+export type ThemeName = keyof typeof themes;
 
 interface ThemeContextType {
-  currentTheme: ThemeName;
-  setTheme: (theme: ThemeName) => void;
+  currentTheme: ThemeConfig;
+  currentThemeId: string;
+  setTheme: (themeId: string) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   setIsDarkMode: (darkMode: boolean) => void;
@@ -14,7 +83,8 @@ interface ThemeContextType {
 
 // Create context with default values
 const ThemeContext = createContext<ThemeContextType>({
-  currentTheme: 'ClassicElegantTheme',
+  currentTheme: defaultTheme,
+  currentThemeId: defaultTheme.id,
   setTheme: () => {},
   isDarkMode: false,
   toggleDarkMode: () => {},
@@ -23,22 +93,26 @@ const ThemeContext = createContext<ThemeContextType>({
 
 interface ThemeProviderProps {
   children: ReactNode;
-  defaultTheme?: ThemeName;
+  defaultThemeId?: string;
   defaultDarkMode?: boolean;
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ 
   children, 
-  defaultTheme = 'ClassicElegantTheme',
+  defaultThemeId = defaultTheme.id,
   defaultDarkMode = false 
 }) => {
   // State to track if we've initialized from user preferences
   const [hasInitialized, setHasInitialized] = useState(false);
   
   // Initialize state from localStorage or defaults
-  const [currentTheme, setCurrentTheme] = useState<ThemeName>(() => {
+  const [currentThemeId, setCurrentThemeId] = useState<string>(() => {
     const savedTheme = localStorage.getItem('contractnest-theme');
-    return (savedTheme as ThemeName) || defaultTheme;
+    // Validate that the saved theme exists in our themes object
+    if (savedTheme && themes[savedTheme]) {
+      return savedTheme;
+    }
+    return defaultThemeId;
   });
   
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(() => {
@@ -49,6 +123,9 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     }
     return savedDarkMode === 'true';
   });
+
+  // Get the current theme object
+  const currentTheme = themes[currentThemeId] || defaultTheme;
 
   // Initialize from user preferences on mount
   useEffect(() => {
@@ -87,8 +164,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
           darkMode: userData.is_dark_mode
         });
         
-        if (userData.preferred_theme) {
-          setCurrentTheme(userData.preferred_theme as ThemeName);
+        if (userData.preferred_theme && themes[userData.preferred_theme]) {
+          setCurrentThemeId(userData.preferred_theme);
           localStorage.setItem('contractnest-theme', userData.preferred_theme);
         }
         
@@ -119,11 +196,18 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   }, [hasInitialized]);
 
   // Set theme function
-  const setTheme = (theme: ThemeName) => {
-    console.log(`Setting theme to: ${theme}, isDarkMode: ${isDarkMode}`);
-    setCurrentTheme(theme);
-    localStorage.setItem('contractnest-theme', theme);
-    applyTheme(theme, isDarkMode);
+  const setTheme = (themeId: string) => {
+    console.log(`Setting theme to: ${themeId}, isDarkMode: ${isDarkMode}`);
+    
+    // Validate theme exists
+    if (!themes[themeId]) {
+      console.error(`Theme ${themeId} not found, falling back to default`);
+      themeId = defaultTheme.id;
+    }
+    
+    setCurrentThemeId(themeId);
+    localStorage.setItem('contractnest-theme', themeId);
+    applyTheme(themeId, isDarkMode);
   };
 
   // Toggle dark mode function
@@ -136,47 +220,83 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   const setIsDarkMode = (darkMode: boolean) => {
     setIsDarkModeState(darkMode);
     localStorage.setItem('contractnest-dark-mode', String(darkMode));
-    applyTheme(currentTheme, darkMode);
+    applyTheme(currentThemeId, darkMode);
   };
 
-  // Apply theme to document
-  const applyTheme = (theme: ThemeName, darkMode: boolean) => {
-    // Remove all theme classes
-    document.documentElement.classList.remove(
+  // Apply theme to document using CSS custom properties
+  const applyTheme = (themeId: string, darkMode: boolean) => {
+    console.log('Applying theme:', themeId, 'darkMode:', darkMode);
+    
+    const theme = themes[themeId] || defaultTheme;
+    const colors = darkMode ? theme.darkMode.colors : theme.colors;
+    
+    // Apply theme colors as CSS custom properties
+    const root = document.documentElement;
+    const style = root.style;
+    
+    // Brand colors
+    style.setProperty('--theme-brand-primary', colors.brand.primary);
+    style.setProperty('--theme-brand-secondary', colors.brand.secondary);
+    style.setProperty('--theme-brand-tertiary', colors.brand.tertiary);
+    style.setProperty('--theme-brand-alternate', colors.brand.alternate);
+    
+    // Utility colors
+    style.setProperty('--theme-primary-text', colors.utility.primaryText);
+    style.setProperty('--theme-secondary-text', colors.utility.secondaryText);
+    style.setProperty('--theme-primary-background', colors.utility.primaryBackground);
+    style.setProperty('--theme-secondary-background', colors.utility.secondaryBackground);
+    
+    // Accent colors
+    style.setProperty('--theme-accent-1', colors.accent.accent1);
+    style.setProperty('--theme-accent-2', colors.accent.accent2);
+    style.setProperty('--theme-accent-3', colors.accent.accent3);
+    style.setProperty('--theme-accent-4', colors.accent.accent4);
+    
+    // Semantic colors
+    style.setProperty('--theme-success', colors.semantic.success);
+    style.setProperty('--theme-error', colors.semantic.error);
+    style.setProperty('--theme-warning', colors.semantic.warning);
+    style.setProperty('--theme-info', colors.semantic.info);
+    
+    // Set theme metadata
+    root.setAttribute('data-theme', themeId);
+    root.setAttribute('data-theme-mode', darkMode ? 'dark' : 'light');
+    
+    // Also add the traditional classes for existing components that might depend on them
+    root.classList.remove(
       'theme-bharatha-varsha',
-      'theme-classic-elegant',
+      'theme-classic-elegant', 
       'theme-purple-tone',
       'theme-corporate',
       'dark',
       'light'
     );
-
-    // Add appropriate theme class
-    switch (theme) {
-      case 'BharathaVarshaTheme':
-        document.documentElement.classList.add('theme-bharatha-varsha');
-        break;
-      case 'ClassicElegantTheme':
-        document.documentElement.classList.add('theme-classic-elegant');
-        break;
-      case 'PurpleToneTheme':
-        document.documentElement.classList.add('theme-purple-tone');
-        break;
-      case 'CorporateTheme':
-        document.documentElement.classList.add('theme-corporate');
-        break;
-    }
-
-    // Add dark/light mode class
-    document.documentElement.classList.add(darkMode ? 'dark' : 'light');
     
-    console.log('Updated classList:', document.documentElement.className);
+    // Add basic mode class (many components rely on this)
+    root.classList.add(darkMode ? 'dark' : 'light');
+    
+    // Add legacy theme classes for existing themes that have CSS
+    const legacyThemeMap: { [key: string]: string } = {
+      'bharathavarsha': 'theme-bharatha-varsha',
+      'classic-elegant': 'theme-classic-elegant',
+      'purple-tone': 'theme-purple-tone',
+      'corporate': 'theme-corporate',
+    };
+    
+    const legacyClass = legacyThemeMap[themeId];
+    if (legacyClass) {
+      root.classList.add(legacyClass);
+    }
+    
+    console.log('Applied theme CSS variables for:', themeId);
+    console.log('Root element classes:', root.className);
+    console.log('Theme CSS variables applied');
   };
 
   // Apply theme on initial render and when dependencies change
   useEffect(() => {
-    applyTheme(currentTheme, isDarkMode);
-  }, [currentTheme, isDarkMode]);
+    applyTheme(currentThemeId, isDarkMode);
+  }, [currentThemeId, isDarkMode]);
 
   // Listen for system color scheme changes
   useEffect(() => {
@@ -202,7 +322,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 
   return (
     <ThemeContext.Provider value={{ 
-      currentTheme, 
+      currentTheme,
+      currentThemeId,
       setTheme, 
       isDarkMode, 
       toggleDarkMode,

@@ -69,11 +69,11 @@ export class UserIdentityManager {
   clearUserIdentity() {
     analyticsService.setUserId(null);
     analyticsService.setUserProperties({
-      user_id: null,
-      tenant_id: null,
-      workspace_name: null,
-      user_role: null,
-      subscription_plan: null
+      user_id: undefined,
+      tenant_id: undefined,
+      workspace_name: undefined,
+      user_role: undefined,
+      subscription_plan: undefined
     });
   }
   

@@ -1,8 +1,8 @@
 // src/components/tenantprofile/ProfileWizard.tsx
 import React from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext'; // Fixed import path
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button'; // Fixed casing - use uppercase Button
 import { Loader2, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import BusinessTypeSelector from './BusinessTypeSelector';
 import IndustrySelector from './IndustrySelector';

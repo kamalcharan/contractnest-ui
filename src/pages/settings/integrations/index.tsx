@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import IntegrationTypeSection from '@/components/integrations/IntegrationTypeSection';
 import StatusBadge from '@/components/integrations/StatusBadge';
-import ProviderLogo from '@/components/integrations/ProviderLogo';
+// import ProviderLogo from '@/components/integrations/ProviderLogo';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { 
   Integration, 

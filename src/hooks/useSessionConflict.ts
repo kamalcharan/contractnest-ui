@@ -74,8 +74,9 @@ export const useSessionConflict = () => {
       if (e.key === storageKey) {
         // If the storage was cleared, we can take over
         if (!e.newValue) {
-          localStorage.setItem(storageKey, sessionId);
-          localStorage.setItem(`session_timestamp_${user.id}`, Date.now().toString());
+if (sessionId) {
+  localStorage.setItem(storageKey, sessionId);
+}          localStorage.setItem(`session_timestamp_${user.id}`, Date.now().toString());
           setHasSessionConflict(false);
         } 
         // If a different session was set

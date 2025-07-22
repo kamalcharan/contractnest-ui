@@ -1,319 +1,411 @@
-// src/pages/settings/businessmodel/tenants/subscription/index.tsx
-
-import React, { useEffect, useState } from 'react';
+// src/pages/settings/businessmodel/tenants/Subscription/index.tsx
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowUp,
-  Bell,
-  Users,
-  CreditCard,
-  FileText,
-  RefreshCw,
-  AlertTriangle
+import { 
+  ArrowLeft, 
+  CreditCard, 
+  Calendar, 
+  DollarSign, 
+  User, 
+  CheckCircle, 
+  XCircle, 
+  AlertCircle,
+  Clock,
+  TrendingUp,
+  Package,
+  Settings,
+  Download,
+  ExternalLink
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 
-// Import components
-import SubscriptionDetails from '@/components/businessmodel/tenants/subscription/SubscriptionDetails';
-import UsageProgressBar from '@/components/businessmodel/tenants/subscription/UsageProgressBar';
-
-// Import types and fake data
-import { PricingPlan } from '@/lib/constants/pricing';
-import { fakePricingPlans, getPlanById } from '@/utils/fakejson/PricingPlans';
-import { getCurrencySymbol } from '@/utils/constants/currencies';
-
-// Define a mock subscription type
-interface SubscriptionData {
-  id: string;
-  planId: string;
-  plan: PricingPlan | null;
-  status: 'active' | 'trial' | 'canceled' | 'expired';
-  currentTier: any;
-  startDate: string;
-  renewalDate: string;
-  billingCycle: 'monthly' | 'quarterly' | 'annually';
-  currency: string;
-  units: number; // users or contracts depending on plan type
-  amountPerBilling: number;
-  trialEnds?: string;
+// Types
+interface Feature {
+  name: string;
+  included: boolean;
+  limit?: number | string;
+  additionalPrice?: number;
+  currency?: string;
 }
 
-// Define a mock usage type
-interface UsageData {
-  contacts: { used: number; limit: number };
-  contracts: { used: number; limit: number };
-  documents: { used: number; limit: number };
-  smsCredits: { used: number; limit: number };
-  emailCredits: { used: number; limit: number };
-  whatsappCredits: { used: number; limit: number };
+interface PricingTier {
+  name: string;
+  basePrice: number;
+  unitPrice?: number;
+  minUsers?: number;
+  maxUsers?: number | null;
+  currencyPrices?: Record<string, number>;
 }
 
-// Define a mock invoice type
-interface InvoiceData {
+interface PricingPlan {
   id: string;
-  amount: number;
-  status: 'paid' | 'pending' | 'overdue';
-  date: string;
+  name: string;
   description: string;
+  tiers: PricingTier[];
+  features: Feature[];
+  isPopular?: boolean;
+  currency: string;
+  billingPeriod: 'monthly' | 'annually';
 }
 
-const SubscriptionPage: React.FC = () => {
+interface Subscription {
+  id: string;
+  plan: PricingPlan;
+  status: 'active' | 'cancelled' | 'expired' | 'trial';
+  startDate: string;
+  endDate: string;
+  nextBillingDate: string;
+  amountPerBilling: number;
+  currency: string;
+  userCount: number;
+  isTrialActive: boolean;
+  trialEndDate?: string;
+  autoRenew: boolean;
+  paymentMethod?: {
+    type: string;
+    last4?: string;
+    expiryDate?: string;
+  };
+}
+
+interface UsageData {
+  feature: string;
+  used: number;
+  limit: number | string;
+  percentage: number;
+}
+
+// Mock data for demonstration
+const mockPlan: PricingPlan = {
+  id: 'plan_professional',
+  name: 'Professional Plan',
+  description: 'Perfect for growing businesses',
+  currency: 'INR',
+  billingPeriod: 'monthly',
+  isPopular: true,
+  tiers: [
+    {
+      name: 'Up to 10 users',
+      basePrice: 2500,
+      unitPrice: 250,
+      minUsers: 1,
+      maxUsers: 10,
+      currencyPrices: {
+        'INR': 2500,
+        'USD': 30,
+        'EUR': 28
+      }
+    }
+  ],
+  features: [
+    { name: 'Unlimited Contracts', included: true },
+    { name: 'Document Templates', included: true, limit: 50 },
+    { name: 'API Access', included: true },
+    { name: 'Priority Support', included: true },
+    { name: 'Advanced Analytics', included: true },
+    { name: 'Custom Branding', included: false, additionalPrice: 500, currency: 'INR' },
+    { name: 'SSO Integration', included: false, additionalPrice: 1000, currency: 'INR' },
+    { name: 'Audit Logs', included: true, limit: '6 months' }
+  ]
+};
+
+const mockSubscription: Subscription = {
+  id: 'sub_12345',
+  plan: mockPlan,
+  status: 'active',
+  startDate: '2024-01-15T00:00:00Z',
+  endDate: '2025-01-15T00:00:00Z',
+  nextBillingDate: '2024-12-15T00:00:00Z',
+  amountPerBilling: 8 * (mockPlan.tiers[0]?.currencyPrices?.['INR'] || mockPlan.tiers[0]?.basePrice || 0),
+  currency: 'INR',
+  userCount: 8,
+  isTrialActive: false,
+  autoRenew: true,
+  paymentMethod: {
+    type: 'credit_card',
+    last4: '4242',
+    expiryDate: '12/26'
+  }
+};
+
+const mockUsageData: UsageData[] = [
+  { feature: 'Active Users', used: 8, limit: 10, percentage: 80 },
+  { feature: 'Contracts Created', used: 145, limit: 'Unlimited', percentage: 0 },
+  { feature: 'Document Templates', used: 23, limit: 50, percentage: 46 },
+  { feature: 'API Calls (Monthly)', used: 2340, limit: 5000, percentage: 47 },
+  { feature: 'Storage Used', used: 2.3, limit: 10, percentage: 23 }
+];
+
+const SubscriptionIndexPage: React.FC = () => {
   const navigate = useNavigate();
-  
-  const [loading, setLoading] = useState(true);
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-  const [usageData, setUsageData] = useState<UsageData | null>(null);
-  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
-  
+  const { currentTenant, user } = useAuth();
+  const [subscription, setSubscription] = useState<Subscription>(mockSubscription);
+  const [usageData, setUsageData] = useState<UsageData[]>(mockUsageData);
+  const [isLoading, setIsLoading] = useState(false);
+
   // Track page view
   useEffect(() => {
-    analyticsService.trackPageView('businessmodel/tenants/subscription', 'Manage Subscription');
+    analyticsService.trackPageView(
+      'settings/businessmodel/tenants/subscription', 
+      'Tenant Subscription Management'
+    );
   }, []);
-  
-  // Fetch subscription data - in a real app this would be an API call
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // For demo purposes, use Premium Plan (plan_2)
-      const mockPlan = getPlanById('plan_2');
-      
-      if (mockPlan) {
-        // Mock subscription data
-        const mockSubscription: SubscriptionData = {
-          id: 'sub_12345',
-          planId: 'plan_2',
-          plan: mockPlan,
-          status: 'active',
-          currentTier: mockPlan.tiers[0],
-          startDate: '2025-03-15T00:00:00Z',
-          renewalDate: '2025-06-15T00:00:00Z',
-          billingCycle: 'monthly',
-          currency: 'INR',
-          units: 8, // 8 users
-          amountPerBilling: 8 * (mockPlan.tiers[0].currencyPrices['INR'] || mockPlan.tiers[0].basePrice),
-        };
-        
-        // Mock usage data
-        const mockUsage: UsageData = {
-          contacts: { used: 302, limit: 500 },
-          contracts: { used: 89, limit: 200 },
-          documents: { used: 36, limit: 50 },
-          smsCredits: { used: 30, limit: 50 },
-          emailCredits: { used: 115, limit: 200 },
-          whatsappCredits: { used: 15, limit: 20 },
-        };
-        
-        // Mock invoices
-        const mockInvoices: InvoiceData[] = [
-          {
-            id: 'INV-001',
-            amount: mockSubscription.amountPerBilling,
-            status: 'paid',
-            date: '2025-03-15T00:00:00Z',
-            description: `Monthly Subscription - ${mockPlan.name} (8 users)`,
-          },
-          {
-            id: 'INV-002',
-            amount: mockSubscription.amountPerBilling,
-            status: 'paid',
-            date: '2025-04-15T00:00:00Z',
-            description: `Monthly Subscription - ${mockPlan.name} (8 users)`,
-          },
-        ];
-        
-        setSubscription(mockSubscription);
-        setUsageData(mockUsage);
-        setInvoices(mockInvoices);
-      }
-      
-      setLoading(false);
-    };
-    
-    fetchData();
-  }, []);
-  
+
+  // Format currency
+  const formatCurrency = (amount: number, currency: string = 'INR'): string => {
+    const locale = currency === 'INR' ? 'en-IN' : 'en-US';
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: currency,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
   // Format date
   const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    return new Intl.DateTimeFormat('en-IN', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
-    });
+    }).format(new Date(dateString));
   };
-  
-  // Handle add users/contracts
-  const handleAddUnits = () => {
-    const unitType = subscription?.plan?.plan_type === 'Per User' ? 'users' : 'contracts';
-    navigate(`/businessmodel/tenants/subscription/add-${unitType.toLowerCase()}`);
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <CheckCircle className="h-4 w-4 mr-1" />
+            Active
+          </span>
+        );
+      case 'trial':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+            <Clock className="h-4 w-4 mr-1" />
+            Trial
+          </span>
+        );
+      case 'cancelled':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+            <XCircle className="h-4 w-4 mr-1" />
+            Cancelled
+          </span>
+        );
+      case 'expired':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+            <AlertCircle className="h-4 w-4 mr-1" />
+            Expired
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+            {status}
+          </span>
+        );
+    }
   };
-  
-  // Handle upgrade plan
-  const handleUpgradePlan = () => {
-    navigate('/businessmodel/tenants/pricing-plans');
+
+  // Get usage percentage color
+  const getUsageColor = (percentage: number) => {
+    if (percentage >= 90) return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30';
+    if (percentage >= 75) return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30';
+    return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30';
   };
-  
-  // Handle buy credits
-  const handleBuyCredits = (type: string) => {
-    navigate(`/businessmodel/tenants/subscription/credits/purchase?type=${type}`);
+
+  // Navigation handlers
+  const handleBack = () => {
+    navigate('/settings/businessmodel/tenants');
   };
-  
-  // Loading state
-  if (loading) {
-    return (
-      <div className="p-6 bg-muted/20">
-        <div className="h-8 bg-muted rounded w-48 mb-4 animate-pulse"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="col-span-2 space-y-4">
-            <div className="h-32 bg-muted rounded animate-pulse"></div>
-            <div className="h-64 bg-muted rounded animate-pulse"></div>
-          </div>
-          <div className="col-span-1 space-y-4">
-            <div className="h-48 bg-muted rounded animate-pulse"></div>
-            <div className="h-32 bg-muted rounded animate-pulse"></div>
-          </div>
-        </div>
-      </div>
+
+  const handleUpgrade = () => {
+    navigate('/settings/businessmodel/tenants/pricing-plans');
+  };
+
+  const handleManagePayment = () => {
+    navigate('/settings/businessmodel/tenants/subscription/payment');
+  };
+
+  const handleViewBilling = () => {
+    navigate('/settings/businessmodel/tenants/subscription/billing');
+  };
+
+  const handleDownloadInvoice = () => {
+    // In a real app, this would download the latest invoice
+    console.log('Downloading invoice...');
+  };
+
+  const handleCancelSubscription = () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to cancel your subscription? This action cannot be undone.'
     );
-  }
-  
-  // No subscription state
-  if (!subscription || !usageData) {
-    return (
-      <div className="p-6 bg-muted/20">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">Manage Subscription</h1>
-          <p className="text-muted-foreground">
-            View and manage your current subscription plan
-          </p>
-        </div>
-        
-        <div className="text-center py-12 bg-card rounded-lg border border-border">
-          <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-bold mb-2">No Active Subscription</h2>
-          <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            You don't have an active subscription yet. Choose a plan to get started with ContractNest.
-          </p>
-          <button
-            onClick={() => navigate('/businessmodel/tenants/pricing-plans')}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            View Plans
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
+    
+    if (confirmed) {
+      setIsLoading(true);
+      // In a real app, this would call the API
+      setTimeout(() => {
+        setSubscription(prev => ({ ...prev, status: 'cancelled', autoRenew: false }));
+        setIsLoading(false);
+      }, 1000);
+    }
+  };
+
+  const handleToggleAutoRenew = () => {
+    setIsLoading(true);
+    // In a real app, this would call the API
+    setTimeout(() => {
+      setSubscription(prev => ({ ...prev, autoRenew: !prev.autoRenew }));
+      setIsLoading(false);
+    }, 500);
+  };
+
   return (
     <div className="p-6 bg-muted/20">
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">Manage Subscription</h1>
-        <p className="text-muted-foreground">
-          View and manage your current subscription plan and usage
-        </p>
+      <div className="flex items-center mb-8">
+        <button 
+          onClick={handleBack} 
+          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold">Subscription Management</h1>
+          <p className="text-muted-foreground">
+            Manage your current plan, billing, and usage
+          </p>
+        </div>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
-          {/* Current Subscription Details */}
-          <SubscriptionDetails 
-            subscription={subscription}
-            onUpgrade={handleUpgradePlan}
-            onAddUnits={handleAddUnits}
-          />
-          
-          {/* Feature Usage */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Current Plan Overview */}
           <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/10 border-b border-border">
-              <h2 className="text-lg font-semibold">Feature Usage</h2>
+            <div className="px-6 py-4 bg-muted/20 border-b border-border">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Current Plan</h2>
+                {getStatusBadge(subscription.status)}
+              </div>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <h3 className="font-medium">Basic Features</h3>
-                  <UsageProgressBar 
-                    used={usageData.contacts.used} 
-                    limit={usageData.contacts.limit} 
-                    label="Contacts" 
-                  />
-                  <UsageProgressBar 
-                    used={usageData.contracts.used} 
-                    limit={usageData.contracts.limit} 
-                    label="Contracts" 
-                  />
-                  <UsageProgressBar 
-                    used={usageData.documents.used} 
-                    limit={usageData.documents.limit} 
-                    label="Documents" 
-                  />
+            
+            <div className="p-6">
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-primary mb-2">
+                    {subscription.plan.name}
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    {subscription.plan.description}
+                  </p>
+                  <div className="flex items-center space-x-6 text-sm">
+                    <div className="flex items-center">
+                      <User className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <span>{subscription.userCount} users</span>
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <span>Renews {formatDate(subscription.nextBillingDate)}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <span>{formatCurrency(subscription.amountPerBilling)} / month</span>
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="space-y-4">
-                  <h3 className="font-medium">Notification Credits</h3>
-                  <UsageProgressBar 
-                    used={usageData.smsCredits.used} 
-                    limit={usageData.smsCredits.limit} 
-                    label="SMS Credits" 
-                  />
-                  <UsageProgressBar 
-                    used={usageData.emailCredits.used} 
-                    limit={usageData.emailCredits.limit} 
-                    label="Email Credits" 
-                  />
-                  <UsageProgressBar 
-                    used={usageData.whatsappCredits.used} 
-                    limit={usageData.whatsappCredits.limit} 
-                    label="WhatsApp Credits" 
-                  />
-                  
-                  <button
-                    onClick={() => handleBuyCredits('all')}
-                    className="mt-2 px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
-                  >
-                    Buy More Credits
-                  </button>
+                <div className="text-right">
+                  <div className="text-2xl font-bold">
+                    {formatCurrency(subscription.amountPerBilling)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">per month</div>
+                  {subscription.plan.isPopular && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        Most Popular
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              {/* Special Features */}
-              {subscription.plan && subscription.plan.features.filter(f => f.additionalPrice).length > 0 && (
-                <div className="border-t border-border pt-4">
-                  <h3 className="font-medium mb-4">Special Features</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+              {/* Auto-renewal toggle */}
+              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <div className="font-medium">Auto-renewal</div>
+                  <div className="text-sm text-muted-foreground">
+                    {subscription.autoRenew 
+                      ? 'Your subscription will automatically renew' 
+                      : 'Your subscription will not renew automatically'
+                    }
+                  </div>
+                </div>
+                <button
+                  onClick={handleToggleAutoRenew}
+                  disabled={isLoading}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    subscription.autoRenew ? 'bg-primary' : 'bg-muted'
+                  } disabled:opacity-50`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    subscription.autoRenew ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Plan Features */}
+          <div className="bg-card rounded-lg border border-border overflow-hidden">
+            <div className="px-6 py-4 bg-muted/20 border-b border-border">
+              <h2 className="text-lg font-semibold">Plan Features</h2>
+            </div>
+            
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {subscription.plan.features
+                  .filter((feature: Feature) => feature.included)
+                  .map((feature: Feature, index: number) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      <div>
+                        <span className="font-medium">{feature.name}</span>
+                        {feature.limit && (
+                          <span className="text-sm text-muted-foreground ml-2">
+                            ({feature.limit})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              {/* Additional Features Available */}
+              {subscription.plan.features.filter((f: Feature) => !f.included && f.additionalPrice).length > 0 && (
+                <div className="mt-6 pt-6 border-t border-border">
+                  <h3 className="font-medium mb-4">Additional Features Available</h3>
+                  <div className="space-y-3">
                     {subscription.plan.features
-                      .filter(f => f.additionalPrice)
-                      .map((feature, index) => (
-                        <div 
-                          key={index} 
-                          className="bg-muted/10 p-4 rounded-md border border-border flex justify-between items-center"
-                        >
-                          <div>
-                            <div className="font-medium">
-                              {feature.featureId === 'vani' && 'VaNi AI Assistant'}
-                              {feature.featureId === 'marketplace' && 'Marketplace Access'}
-                              {feature.featureId === 'finance' && 'Financial Tools'}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Billed {feature.pricingPeriod}
-                            </div>
+                      .filter((f: Feature) => !f.included && f.additionalPrice)
+                      .map((feature: Feature, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                            <span className="font-medium">{feature.name}</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {getCurrencySymbol(subscription.currency)}
-                              {feature.currencyPrices[subscription.currency] || feature.additionalPrice}
-                            </div>
-                            <div className="text-xs text-green-600 dark:text-green-400">
-                              Active
-                            </div>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-sm font-medium">
+                              {formatCurrency(feature.additionalPrice || 0, feature.currency || 'INR')}/month
+                            </span>
+                            <button className="text-primary hover:text-primary/80 text-sm font-medium">
+                              Add
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -322,130 +414,178 @@ const SubscriptionPage: React.FC = () => {
               )}
             </div>
           </div>
-          
-          {/* Usage Charts - Placeholder */}
+
+          {/* Usage Statistics */}
           <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/10 border-b border-border flex justify-between items-center">
-              <h2 className="text-lg font-semibold">Usage Analytics</h2>
-              <button className="p-1 rounded-md hover:bg-muted transition-colors">
-                <RefreshCw className="h-4 w-4 text-muted-foreground" />
-              </button>
+            <div className="px-6 py-4 bg-muted/20 border-b border-border">
+              <h2 className="text-lg font-semibold">Usage Statistics</h2>
             </div>
+            
             <div className="p-6">
-              <div className="flex items-center justify-center h-48 bg-muted/20 rounded-md border border-dashed border-border">
-                <p className="text-muted-foreground">Usage analytics charts will appear here</p>
+              <div className="space-y-4">
+                {usageData.map((usage, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{usage.feature}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {usage.used} {usage.limit !== 'Unlimited' ? `/ ${usage.limit}` : ''}
+                      </span>
+                    </div>
+                    {usage.limit !== 'Unlimited' && (
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all ${
+                            usage.percentage >= 90 ? 'bg-red-500' : 
+                            usage.percentage >= 75 ? 'bg-amber-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+                        />
+                      </div>
+                    )}
+                    {usage.percentage >= 90 && usage.limit !== 'Unlimited' && (
+                      <div className="flex items-center space-x-2 text-sm text-red-600">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>Approaching limit - consider upgrading</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
-        
+
         {/* Sidebar */}
-        <div className="md:col-span-1 space-y-6">
+        <div className="space-y-6">
           {/* Quick Actions */}
           <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/10 border-b border-border">
+            <div className="px-6 py-4 bg-muted/20 border-b border-border">
               <h2 className="text-lg font-semibold">Quick Actions</h2>
             </div>
-            <div className="p-4">
-              <div className="space-y-2">
+            
+            <div className="p-6 space-y-3">
+              <button
+                onClick={handleUpgrade}
+                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center justify-center"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Upgrade Plan
+              </button>
+              
+              <button
+                onClick={handleManagePayment}
+                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Manage Payment
+              </button>
+              
+              <button
+                onClick={handleViewBilling}
+                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                View Billing History
+              </button>
+              
+              <button
+                onClick={handleDownloadInvoice}
+                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Invoice
+              </button>
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          {subscription.paymentMethod && (
+            <div className="bg-card rounded-lg border border-border overflow-hidden">
+              <div className="px-6 py-4 bg-muted/20 border-b border-border">
+                <h2 className="text-lg font-semibold">Payment Method</h2>
+              </div>
+              
+              <div className="p-6">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-md flex items-center justify-center">
+                    <CreditCard className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <div className="font-medium">
+                      •••• •••• •••• {subscription.paymentMethod.last4}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Expires {subscription.paymentMethod.expiryDate}
+                    </div>
+                  </div>
+                </div>
+                
                 <button
-                  onClick={handleUpgradePlan}
-                  className="w-full px-4 py-2 text-left border border-border rounded-md hover:bg-muted transition-colors flex items-center"
+                  onClick={handleManagePayment}
+                  className="mt-4 text-primary hover:text-primary/80 text-sm font-medium flex items-center"
                 >
-                  <ArrowUp className="h-4 w-4 mr-3 text-primary" />
-                  <span>Upgrade Plan</span>
+                  <Settings className="h-4 w-4 mr-1" />
+                  Update Payment Method
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Billing Information */}
+          <div className="bg-card rounded-lg border border-border overflow-hidden">
+            <div className="px-6 py-4 bg-muted/20 border-b border-border">
+              <h2 className="text-lg font-semibold">Billing Information</h2>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Current Period</span>
+                <span className="font-medium">
+                  {formatDate(subscription.startDate)} - {formatDate(subscription.endDate)}
+                </span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Next Billing</span>
+                <span className="font-medium">{formatDate(subscription.nextBillingDate)}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Amount</span>
+                <span className="font-medium">{formatCurrency(subscription.amountPerBilling)}</span>
+              </div>
+              
+              <div className="pt-4 border-t border-border">
                 <button
-                  onClick={handleAddUnits}
-                  className="w-full px-4 py-2 text-left border border-border rounded-md hover:bg-muted transition-colors flex items-center"
+                  onClick={handleViewBilling}
+                  className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
                 >
-                  <Users className="h-4 w-4 mr-3 text-primary" />
-                  <span>Add {subscription.plan?.plan_type === 'Per User' ? 'Users' : 'Contracts'}</span>
-                </button>
-                <button
-                  onClick={() => handleBuyCredits('sms')}
-                  className="w-full px-4 py-2 text-left border border-border rounded-md hover:bg-muted transition-colors flex items-center"
-                >
-                  <Bell className="h-4 w-4 mr-3 text-primary" />
-                  <span>Buy Notification Credits</span>
-                </button>
-                <button
-                  className="w-full px-4 py-2 text-left border border-border rounded-md hover:bg-muted transition-colors flex items-center"
-                >
-                  <CreditCard className="h-4 w-4 mr-3 text-primary" />
-                  <span>Update Billing Details</span>
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  View Full Billing History
                 </button>
               </div>
             </div>
           </div>
-          
-          {/* Billing History */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/10 border-b border-border">
-              <h2 className="text-lg font-semibold">Billing History</h2>
-            </div>
-            <div className="divide-y divide-border">
-              {invoices.length > 0 ? (
-                invoices.map((invoice, index) => (
-                  <div key={index} className="p-4">
-                    <div className="flex justify-between">
-                      <div>
-                        <div className="font-medium">{invoice.id}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDate(invoice.date)}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">
-                          {getCurrencySymbol(subscription.currency)}{invoice.amount.toFixed(2)}
-                        </div>
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-1 text-sm">
-                      {invoice.description}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-6 text-center">
-                  <FileText className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">No invoices yet</p>
-                </div>
-              )}
-            </div>
-            
-            <div className="p-4 border-t border-border">
-              <button
-                className="w-full px-4 py-2 text-sm bg-muted/50 hover:bg-muted transition-colors rounded-md"
-                onClick={() => navigate('/businessmodel/tenants/billing/invoices')}
-              >
-                View All Invoices
-              </button>
-            </div>
-          </div>
-          
-          {/* Alerts/Reminders */}
-          {usageData.whatsappCredits.used / usageData.whatsappCredits.limit > 0.75 && (
-            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-md border border-amber-100 dark:border-amber-900/20">
-              <div className="flex items-start">
-                <AlertTriangle className="h-5 w-5 mr-3 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
-                    WhatsApp Credits Running Low
-                  </p>
-                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                    You have only {usageData.whatsappCredits.limit - usageData.whatsappCredits.used} WhatsApp notification credits remaining. 
-                  </p>
-                  <button
-                    className="mt-2 px-3 py-1 text-xs bg-amber-600 text-white rounded-md hover:bg-amber-700"
-                    onClick={() => handleBuyCredits('whatsapp')}
-                  >
-                    Purchase Credits
-                  </button>
-                </div>
+
+          {/* Danger Zone */}
+          {subscription.status === 'active' && (
+            <div className="bg-card rounded-lg border border-destructive/20 overflow-hidden">
+              <div className="px-6 py-4 bg-destructive/5 border-b border-destructive/20">
+                <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+              </div>
+              
+              <div className="p-6">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Once you cancel your subscription, you will lose access to all paid features at the end of your current billing period.
+                </p>
+                
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={isLoading}
+                  className="w-full px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
+                </button>
               </div>
             </div>
           )}
@@ -455,4 +595,4 @@ const SubscriptionPage: React.FC = () => {
   );
 };
 
-export default SubscriptionPage;
+export default SubscriptionIndexPage;

@@ -468,7 +468,7 @@ const UserViewPage: React.FC = () => {
                       
                       <div className="flex-1">
                         <p className="font-medium">
-                          {activity.action.split('_').map(word => 
+{activity.action.split('_').map((word: string) =>
                             word.charAt(0).toUpperCase() + word.slice(1)
                           ).join(' ')}
                         </p>

@@ -24,7 +24,7 @@ const StorageSettingsPage: React.FC = () => {
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="flex items-center gap-2 mb-8">
         <Button 
-          variant="ghost" 
+          variant="outline" 
           size="sm" 
           onClick={handleBack}
           className="mr-2"
@@ -63,7 +63,7 @@ const StorageSettingsPage: React.FC = () => {
                     <h4 className="font-medium">Storage Provider</h4>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {currentTenant?.storage_provider || "Firebase Storage (Default)"}
+{(currentTenant as any)?.storage_provider || "Firebase Storage (Default)"}
                   </p>
                 </div>
                 

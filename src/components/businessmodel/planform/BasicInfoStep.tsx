@@ -1,15 +1,14 @@
-// src/components/businessmodel/planform/BasicInfoStep.tsx - UPDATED
+// src/components/businessmodel/planform/BasicInfoStep.tsx - CLEAN ERROR-FREE VERSION
 
 import React, { useState, useEffect } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Info, X, ChevronDown, Lock, Edit, GitBranch } from 'lucide-react';
-import { planTypes } from '@/utils/constants/pricing';
-import { currencyOptions, getDefaultCurrency } from '@/utils/constants/currencies';
 import { 
   DEFAULT_VALUES, 
   PLAN_TYPES,
   CONFIRMATION_MESSAGES 
 } from '@/utils/constants/businessModelConstants';
+import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '@/utils/constants/currencies';
 
 interface BasicInfoStepProps {
   isEditMode?: boolean;
@@ -59,7 +58,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
     setCurrencyDropdownOpen(false);
   };
   
-  // Handle removing a currency (disabled in edit mode)
+  // Handle removing a currency (disabled in edit mode) - FIXED: Added type annotation
   const removeCurrency = (currencyCode: string) => {
     if (isEditMode) return; // Prevent currency changes in edit mode
     
@@ -68,7 +67,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
       return;
     }
     
-    const updatedCurrencies = watchSupportedCurrencies.filter(code => code !== currencyCode);
+    const updatedCurrencies = watchSupportedCurrencies.filter((code: string) => code !== currencyCode);
     setValue('supportedCurrencies', updatedCurrencies);
   };
   
@@ -88,12 +87,12 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
   
   // Get available currencies for dropdown (ones that aren't already selected)
   const getAvailableCurrencies = () => {
-    return currencyOptions.filter(currency => !watchSupportedCurrencies.includes(currency.code));
+    return currencyOptions.filter((currency) => !watchSupportedCurrencies.includes(currency.code));
   };
   
   // Get currency name and symbol
   const getCurrencyInfo = (code: string) => {
-    const currency = currencyOptions.find(c => c.code === code);
+    const currency = currencyOptions.find((c) => c.code === code);
     return {
       name: currency?.name || '',
       symbol: currency?.symbol || ''
@@ -287,7 +286,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
             {isEditMode && <Lock className="inline h-3 w-3 ml-1 text-muted-foreground" />}
           </label>
           <div className="flex space-x-4">
-            {PLAN_TYPES.map(type => (
+            {PLAN_TYPES.map((type) => (
               <label key={type} className={`flex items-center space-x-2 ${
                 isEditMode ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'
               }`}>
@@ -400,7 +399,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
           </label>
           
           <div className="flex flex-wrap gap-2 mb-2">
-            {watchSupportedCurrencies.map(code => {
+            {watchSupportedCurrencies.map((code: string) => {
               const currencyInfo = getCurrencyInfo(code);
               const isDefault = code === watchDefaultCurrency;
               
@@ -472,7 +471,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
                           All currencies added
                         </div>
                       ) : (
-                        getAvailableCurrencies().map(currency => (
+                        getAvailableCurrencies().map((currency) => (
                           <button
                             key={currency.code}
                             type="button"

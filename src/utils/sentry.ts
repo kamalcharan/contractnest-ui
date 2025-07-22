@@ -21,7 +21,7 @@ export const initSentry = () => {
 };
 
 // Create a simplified version that doesn't rely on configureScope
-export const setUserContext = (user: any = null, tenant: any = null) => {
+export const setUserContext = (user: any, tenant: any, isLive: boolean) => {
   // Skip if Sentry isn't available
   if (!import.meta.env.VITE_SENTRY_DSN || !Sentry.setUser) {
     return;

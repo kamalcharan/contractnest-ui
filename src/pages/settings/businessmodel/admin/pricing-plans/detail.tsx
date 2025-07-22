@@ -305,8 +305,10 @@ const PlanDetailView: React.FC = () => {
               defaultCurrencyCode={planData.defaultCurrencyCode}
               createdAt={planData.createdAt}
               updatedAt={planData.updatedAt}
-              activeVersion={activeVersion}
-            />
+activeVersion={activeVersion && activeVersion.version_number && activeVersion.effective_date ? {
+  version_number: activeVersion.version_number,
+  effective_date: activeVersion.effective_date
+} : undefined}            />
             
             {/* Pricing Tiers */}
             <PricingTiersCard

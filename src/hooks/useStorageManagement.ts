@@ -190,7 +190,7 @@ export const useStorageManagement = () => {
           // Try to fetch current stats
           await fetchStorageStats();
           
-          toast.info('Storage is already set up');
+toast('Storage is already set up');
           return true;
         }
       }
@@ -453,7 +453,7 @@ export const useStorageManagement = () => {
       
       // Show appropriate message
       if (result.summary.failed > 0) {
-        toast.warning(result.message);
+toast(result.message, { icon: '⚠️' });
       } else {
         toast.success(result.message);
       }
@@ -566,7 +566,7 @@ export const useStorageManagement = () => {
       
       // Show appropriate message
       if (result.summary.failed > 0) {
-        toast.warning(result.message);
+toast(result.message, { icon: '⚠️' });
       } else {
         toast.success(result.message);
       }

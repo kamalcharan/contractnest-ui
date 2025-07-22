@@ -24,6 +24,7 @@ import NotificationsStep from '@/components/businessmodel/planform/Notifications
 
 // ✅ FIXED: Define PlanType locally
 type PlanType = typeof PLAN_TYPES[number];
+
 /**
  * ✅ FIXED: Updated form data interface
  */
@@ -39,7 +40,6 @@ interface PricingPlanFormData {
     tier_id?: string;
     minValue: number;
     maxValue: number | null;
-    // ❌ REMOVED: basePrice and unitPrice
     label?: string;
     prices: Record<string, number>;
   }>;
@@ -89,7 +89,6 @@ const CreatePricingPlanPage: React.FC = () => {
           tier_id: `tier_${Date.now()}`,
           minValue: 1, 
           maxValue: 10, 
-          // ❌ REMOVED: basePrice: 0, unitPrice: 0,
           prices: { [defaultCurrency.code]: 0 }
         }
       ],
@@ -226,17 +225,63 @@ const CreatePricingPlanPage: React.FC = () => {
       return `${minValue} - ${maxValue} ${unit}`;
     };
 
-    // ✅ FIXED: Transform to match new hook API expectations
+    // ✅ FIXED: Transform to match CreatePlanRequest interface exactly
     return {
       name: data.name,
       description: data.description,
-      // ✅ FIXED: Use API format field names
+      // ✅ Both camelCase and snake_case for API compatibility
+      planType: data.planType,
       plan_type: data.planType,
-      trial_duration: data.trialDuration,
-      is_visible: data.isVisible,
+      defaultCurrencyCode: data.defaultCurrencyCode,
       default_currency_code: data.defaultCurrencyCode,
+      supportedCurrencies: data.supportedCurrencies,
       supported_currencies: data.supportedCurrencies,
-      // ✅ FIXED: New hook expects initial_version structure
+      // ✅ Top-level tiers array (required by interface)
+      tiers: data.tiers.map((tier, index) => ({
+        tier_id: tier.tier_id || `tier_${Date.now()}_${index}`,
+        minValue: tier.minValue,
+        min_value: tier.minValue,
+        maxValue: tier.maxValue,
+        max_value: tier.maxValue,
+        basePrice: tier.prices[data.defaultCurrencyCode] || 0, // Required by PricingTier interface
+        base_price: tier.prices[data.defaultCurrencyCode] || 0,
+        unitPrice: tier.prices[data.defaultCurrencyCode] || 0, // Required by PricingTier interface
+        unit_price: tier.prices[data.defaultCurrencyCode] || 0,
+        label: tier.label || generateTierLabel(tier.minValue, tier.maxValue, data.planType),
+        prices: tier.prices || {}
+      })),
+      // ✅ Optional fields
+      isActive: true,
+      is_active: true,
+      isLive: true,
+      is_live: true,
+      trialPeriodDays: data.trialDuration,
+      trial_duration: data.trialDuration,
+      // ✅ Top-level features and notifications
+      features: data.features
+        .filter(feature => feature.feature_id)
+        .map(feature => ({
+          feature_id: feature.feature_id,
+          name: feature.name || '',
+          enabled: feature.enabled,
+          limit: feature.limit,
+          trial_limit: feature.trial_limit,
+          trial_enabled: feature.trial_enabled,
+          test_env_limit: feature.test_env_limit,
+          is_special_feature: feature.is_special_feature || false,
+          pricing_period: feature.pricing_period,
+          prices: feature.is_special_feature && feature.prices ? feature.prices : undefined
+        })),
+      notifications: data.notifications
+        .filter(notification => notification.notif_type)
+        .map(notification => ({
+          notif_type: notification.notif_type,
+          category: notification.category,
+          enabled: notification.enabled,
+          credits_per_unit: notification.credits_per_unit,
+          prices: notification.prices || {}
+        })),
+      // ✅ Optional initial_version (if your API uses it)
       initial_version: {
         version_number: '1.0',
         is_active: true,
@@ -250,7 +295,7 @@ const CreatePricingPlanPage: React.FC = () => {
           prices: tier.prices || {}
         })),
         features: data.features
-          .filter(feature => feature.feature_id) // Only include features that have been selected
+          .filter(feature => feature.feature_id)
           .map(feature => ({
             feature_id: feature.feature_id,
             name: feature.name || '',
@@ -264,7 +309,7 @@ const CreatePricingPlanPage: React.FC = () => {
             prices: feature.is_special_feature && feature.prices ? feature.prices : undefined
           })),
         notifications: data.notifications
-          .filter(notification => notification.notif_type) // Only include notifications with method
+          .filter(notification => notification.notif_type)
           .map(notification => ({
             notif_type: notification.notif_type,
             category: notification.category,

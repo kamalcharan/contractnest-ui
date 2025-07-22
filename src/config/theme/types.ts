@@ -1,3 +1,4 @@
+// src/config/theme/types.ts
 export interface ThemeColors {
   brand: {
     primary: string;

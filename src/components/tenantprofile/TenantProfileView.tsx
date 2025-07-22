@@ -1,7 +1,8 @@
 // src/components/tenantprofile/TenantProfileView.tsx
 import React from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext'; // Fixed import path
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button'; // Fixed casing - use uppercase Button
 import { 
   Building, 
   Phone, 
@@ -63,6 +64,10 @@ const TenantProfileView: React.FC<TenantProfileViewProps> = ({
     );
   }
   
+  const businessType = businessTypes.find(bt => bt.id === profile?.business_type_id);
+  const industry = industries.find(ind => ind.id === profile?.industry_id);
+  const country = countries.find(c => c.code === profile?.country_code);  
+
   return (
     <div className="space-y-8">
       {/* Header with Edit Button */}

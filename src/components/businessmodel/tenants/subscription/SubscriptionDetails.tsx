@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ArrowUp, Users, CheckCircle } from 'lucide-react';
-import { PricingPlan } from '@/lib/constants/pricing';
+import { PricingPlan } from '@/utils/constants/pricing';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 interface SubscriptionDetailsProps {

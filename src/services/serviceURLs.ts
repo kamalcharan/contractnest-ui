@@ -17,7 +17,7 @@ export const API_ENDPOINTS = {
     CHANGE_PASSWORD: '/api/auth/change-password',
     COMPLETE_REGISTRATION: '/api/auth/complete-registration',
     VERIFY_PASSWORD: '/api/auth/verify-password',
-    UPDATE_PREFERENCES: 'api/auth/preferences',
+    UPDATE_PREFERENCES: '/api/auth/preferences',
     
     // Google OAuth endpoints
     GOOGLE_AUTH: '/api/auth/google',

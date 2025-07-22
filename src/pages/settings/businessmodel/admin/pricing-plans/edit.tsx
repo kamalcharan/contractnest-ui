@@ -399,7 +399,11 @@ const EditPlanPage: React.FC = () => {
         next_version_number: data.next_version_number,
         effective_date: new Date().toISOString(),
         changelog: data.changelog.trim(),
-        tiers: data.tiers,
+        tiers: data.tiers.map(tier => ({
+                ...tier,
+                basePrice: tier.prices[data.defaultCurrencyCode] || 0,
+                unitPrice: tier.prices[data.defaultCurrencyCode] || 0
+                })),
         features: data.features.filter(f => f.feature_id),
         notifications: data.notifications.filter(n => n.notif_type)
       };

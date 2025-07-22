@@ -7,6 +7,16 @@ import api from '../../services/api';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { supabase } from '../../utils/supabase';
 
+// Constants - Import or define these constants
+const MAX_UNLOCK_ATTEMPTS = 5;
+const LOCK_BLOCK_DURATION = 60 * 1000; // 1 minute block after max attempts
+
+// Storage keys - Import from AuthContext or define locally
+const STORAGE_KEYS = {
+  FAILED_UNLOCK_ATTEMPTS: 'failed_unlock_attempts',
+  UNLOCK_BLOCKED_UNTIL: 'unlock_blocked_until'
+};
+
 interface LockScreenProps {
   onUnlock?: () => void;
 }
@@ -241,6 +251,9 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
+  // Check if unlock is currently blocked
+  const isUnlockBlocked = unlockBlockedUntil ? new Date() < unlockBlockedUntil : false;
+
   // Loading state while determining auth method
   if (isDetectingAuthMethod || primaryAuthMethod === null) {
     return (
@@ -341,29 +354,29 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={isUnlocking || (unlockBlockedUntil && new Date() < unlockBlockedUntil)}
+                    disabled={isUnlocking || isUnlockBlocked}
                     autoFocus
                   />
                 </div>
 
                 {/* Error/Warning Messages */}
-                {unlockBlockedUntil && new Date() < unlockBlockedUntil && (
+                {isUnlockBlocked && (
                   <div className="flex items-center gap-2 text-sm text-destructive">
                     <AlertCircle className="h-4 w-4" />
                     <span>Too many failed attempts. Try again in {formatTime(remainingBlockTime)}</span>
                   </div>
                 )}
                 
-                {failedUnlockAttempts > 0 && failedUnlockAttempts < 5 && !unlockBlockedUntil && (
+                {failedUnlockAttempts > 0 && failedUnlockAttempts < MAX_UNLOCK_ATTEMPTS && !isUnlockBlocked && (
                   <div className="flex items-center gap-2 text-sm text-warning">
                     <AlertCircle className="h-4 w-4" />
-                    <span>{5 - failedUnlockAttempts} attempt{5 - failedUnlockAttempts !== 1 ? 's' : ''} remaining</span>
+                    <span>{MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts} attempt{MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts !== 1 ? 's' : ''} remaining</span>
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  disabled={isUnlocking || (unlockBlockedUntil && new Date() < unlockBlockedUntil)}
+                  disabled={isUnlocking || isUnlockBlocked}
                   className="w-full py-2.5 px-4 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isUnlocking ? (

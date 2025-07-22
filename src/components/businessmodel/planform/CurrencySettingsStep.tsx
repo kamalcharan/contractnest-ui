@@ -1,4 +1,5 @@
-//src/components/businessmodel/planform/CurrencySettingsStep.tsx
+// src/components/businessmodel/planform/CurrencySettingsStep.tsx
+// FIXED: Added proper typing for currency codes
 
 import React from 'react';
 import { useFormContext } from 'react-hook-form';
@@ -13,17 +14,17 @@ const CurrencySettingsStep: React.FC = () => {
     formState: { errors } 
   } = useFormContext();
   
-  // Watch values for conditional rendering
-  const watchSupportedCurrencies = watch('supportedCurrencies');
-  const watchDefaultCurrency = watch('defaultCurrencyCode');
+  // Watch values for conditional rendering - FIXED: Added proper typing
+  const watchSupportedCurrencies = watch('supportedCurrencies') as string[];
+  const watchDefaultCurrency = watch('defaultCurrencyCode') as string;
   
-  // Handle currency toggle
+  // Handle currency toggle - FIXED: Added proper typing for currencyCode parameter
   const handleCurrencyToggle = (currencyCode: string) => {
-    const currentCurrencies = [...watchSupportedCurrencies];
+    const currentCurrencies = [...(watchSupportedCurrencies || [])];
     
     if (currentCurrencies.includes(currencyCode)) {
       // Remove currency
-      const updatedCurrencies = currentCurrencies.filter(code => code !== currencyCode);
+      const updatedCurrencies = currentCurrencies.filter((code: string) => code !== currencyCode);
       setValue('supportedCurrencies', updatedCurrencies);
       
       // Update default currency if needed
@@ -59,7 +60,7 @@ const CurrencySettingsStep: React.FC = () => {
               <input
                 type="checkbox"
                 id={`currency-${currency.code}`}
-                checked={watchSupportedCurrencies.includes(currency.code)}
+                checked={(watchSupportedCurrencies || []).includes(currency.code)}
                 onChange={() => handleCurrencyToggle(currency.code)}
                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
               />
@@ -72,7 +73,7 @@ const CurrencySettingsStep: React.FC = () => {
         {errors.supportedCurrencies && (
           <p className="mt-1 text-sm text-red-500">{errors.supportedCurrencies.message?.toString()}</p>
         )}
-        {watchSupportedCurrencies.length === 0 && (
+        {(!watchSupportedCurrencies || watchSupportedCurrencies.length === 0) && (
           <p className="mt-1 text-sm text-amber-500">At least one currency must be selected</p>
         )}
       </div>
@@ -84,15 +85,15 @@ const CurrencySettingsStep: React.FC = () => {
         <select
           id="defaultCurrencyCode"
           className="w-full max-w-xs px-4 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-          disabled={watchSupportedCurrencies.length === 0}
+          disabled={!watchSupportedCurrencies || watchSupportedCurrencies.length === 0}
           {...register('defaultCurrencyCode', { 
             required: 'Default currency is required'
           })}
         >
-          {watchSupportedCurrencies.length === 0 ? (
+          {(!watchSupportedCurrencies || watchSupportedCurrencies.length === 0) ? (
             <option value="">Select supported currencies first</option>
           ) : (
-            watchSupportedCurrencies.map(code => {
+            watchSupportedCurrencies.map((code: string) => {
               const currency = currencyOptions.find(c => c.code === code);
               return (
                 <option key={code} value={code}>

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import api from '@/services/api';
-import { API_ENDPOINTS } from '@/services/ServiceURLs';
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
 
@@ -413,8 +413,8 @@ const ListOfValuesPage = () => {
       {/* Header - Now without white background card as per Image 1 */}
       <div className="flex items-center mb-8">
         <Button
-          variant="ghost"
-          size="icon"
+          variant="outline"
+          size="sm"
           onClick={() => navigate('/settings/configure')}
           className="mr-4"
         >
@@ -547,7 +547,7 @@ const ListOfValuesPage = () => {
                             />
                             <div className="flex items-center ml-2">
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 onClick={() => setEditingId(null)}
                                 disabled={isProcessing}
                               >
@@ -583,8 +583,8 @@ const ListOfValuesPage = () => {
                             </span>
                             <div className="flex items-center gap-2">
                               <Button
-                                variant="ghost"
-                                size="icon"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setEditingId(detail.id)}
                                 disabled={isProcessing}
                                 className="text-primary hover:text-primary/80"
@@ -593,8 +593,8 @@ const ListOfValuesPage = () => {
                               </Button>
                               {detail.is_deletable && (
                                 <Button
-                                  variant="ghost"
-                                  size="icon"
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleDelete(detail.id)}
                                   disabled={isProcessing}
                                   className="text-destructive hover:text-destructive/80"
@@ -658,7 +658,7 @@ const ListOfValuesPage = () => {
                         />
                         <div className="flex items-center ml-2">
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             onClick={handleCancelAdd}
                             disabled={isProcessing}
                           >

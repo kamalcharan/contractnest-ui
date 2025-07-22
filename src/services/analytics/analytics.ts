@@ -1,7 +1,5 @@
-//src/services/analytics/analytics.ts
-
-
 import { AnalyticsEventName, AnalyticsEventParams } from './events';
+import { env } from '../../config/env';
 
 // Define the type for window.gtag
 declare global {
@@ -28,13 +26,13 @@ export class AnalyticsService {
   initGA() {
     if (this.initialized) return;
     
-    this.measurementId = import.meta.env.VITE_GA_MEASUREMENT_ID;
+    this.measurementId = env.VITE_GA_MEASUREMENT_ID;
     if (!this.measurementId) {
       console.warn('GA4 Measurement ID not found. Analytics will not be initialized.');
       return;
     }
 
-    this.debug = import.meta.env.DEV;
+    this.debug = env.DEV;
     
     // Add Google Analytics script
     const script = document.createElement('script');

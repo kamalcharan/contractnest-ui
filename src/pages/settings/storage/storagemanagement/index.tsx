@@ -184,7 +184,7 @@ const StorageManagementPage: React.FC = () => {
             setMultipleUploadMode(false);
           }}
           isUploading={isSubmitting}
-          multiple={multipleUploadMode}
+         // multiple={multipleUploadMode}
         />
       )}
       

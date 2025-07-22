@@ -6,6 +6,38 @@ import api from '../../services/api';
 import toast from 'react-hot-toast';
 import { analyticsService, AUTH_EVENTS } from '../../services/analytics';
 
+interface SupabaseUserTenant {
+  id: any;
+  tenant_id: any;
+  is_default: any;
+  status: any;
+  t_tenants: {
+    id: any;
+    name: any;
+    workspace_code: any;
+    domain: any;
+    status: any;
+    is_admin: any;
+    created_by: any;
+    storage_setup_complete: any;
+  }[]; // Add the array brackets
+}
+
+// Define Tenant interface to match AuthContext expectations
+interface Tenant {
+  id: string;
+  name: string;
+  workspace_code: string;
+  domain: string;
+  status: string;
+  is_admin: boolean;
+  storage_setup_complete: boolean;
+  is_default: boolean;
+  is_owner: boolean;
+  user_is_profile_admin: boolean;
+  is_explicitly_assigned: boolean;
+}
+
 const GoogleCallbackPage: React.FC = () => {
   const navigate = useNavigate();
   const { setGoogleAuthData, setAuthToken } = useAuth();
@@ -237,19 +269,35 @@ const GoogleCallbackPage: React.FC = () => {
         .eq('user_id', user.id)
         .eq('status', 'active');
 
-      const tenants = (userTenants || []).map(ut => ({
-        id: ut.t_tenants.id,
-        name: ut.t_tenants.name,
-        workspace_code: ut.t_tenants.workspace_code,
-        domain: ut.t_tenants.domain,
-        status: ut.t_tenants.status,
-        is_admin: ut.t_tenants.is_admin || false,
-        storage_setup_complete: ut.t_tenants.storage_setup_complete || false,
-        is_default: ut.is_default || false,
-        is_owner: ut.t_tenants.created_by === user.id,
-        user_is_profile_admin: profile?.is_admin || false,
-        is_explicitly_assigned: true
-      }));
+      // Fixed: Properly type and filter tenants array
+      const tenants: Tenant[] = ((userTenants || []) as any[])
+        .map((ut: any) => {
+          // Safe access to tenant data
+          const tenantData = ut.t_tenants;
+          
+          // Handle case where t_tenants might be null/undefined or not an object
+          if (!tenantData || typeof tenantData !== 'object') {
+            console.warn('Invalid tenant data structure:', ut);
+            return null;
+          }
+          
+          const isOwner = tenantData.created_by === user.id;
+          
+          return {
+            id: String(tenantData.id),
+            name: String(tenantData.name || ''),
+            workspace_code: String(tenantData.workspace_code || ''),
+            domain: String(tenantData.domain || ''),
+            status: String(tenantData.status || ''),
+            is_admin: Boolean(tenantData.is_admin),
+            storage_setup_complete: Boolean(tenantData.storage_setup_complete),
+            is_default: Boolean(ut.is_default),
+            is_owner: isOwner,
+            user_is_profile_admin: Boolean(profile?.is_admin),
+            is_explicitly_assigned: true
+          } as Tenant;
+        })
+        .filter((tenant): tenant is Tenant => tenant !== null); // Type guard to remove nulls
 
       // Prepare user data with registration status
       const userData = {
@@ -275,7 +323,7 @@ const GoogleCallbackPage: React.FC = () => {
       // Set auth data in context
       await setGoogleAuthData({
         user: userData,
-        tenants,
+        tenants, // Now properly typed as Tenant[] without nulls
         access_token: session.access_token,
         refresh_token: session.refresh_token || '',
         isNewUser: isNewUser || hasIncompleteRegistration
@@ -346,23 +394,23 @@ const GoogleCallbackPage: React.FC = () => {
         });
       } else {
         // For Google users with tenants, find appropriate tenant
-        let targetTenant = null;
+        let targetTenant: Tenant | null = null;
         
         // First priority: User's own workspace
-        targetTenant = tenants.find(t => t.is_owner === true);
+        targetTenant = tenants.find(t => t.is_owner === true) || null;
         
         // Second priority: Default workspace
         if (!targetTenant) {
-          targetTenant = tenants.find(t => t.is_default === true);
+          targetTenant = tenants.find(t => t.is_default === true) || null;
         }
         
         // Third priority: First non-admin workspace
         if (!targetTenant && !userData.is_admin) {
-          targetTenant = tenants.find(t => !t.is_admin);
+          targetTenant = tenants.find(t => !t.is_admin) || null;
         }
         
         // Last resort: First available workspace
-        if (!targetTenant) {
+        if (!targetTenant && tenants.length > 0) {
           targetTenant = tenants[0];
         }
         

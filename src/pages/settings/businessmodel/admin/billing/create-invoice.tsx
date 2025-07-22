@@ -166,8 +166,7 @@ const CreateInvoicePage: React.FC = () => {
         setItems(updatedItems);
         
         // Set currency
-        setCurrency(plan.defaultCurrencyCode);
-      }
+setCurrency(plan.defaultCurrencyCode || 'INR');      }
     }
   };
   

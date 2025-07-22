@@ -1,49 +1,45 @@
 // src/pages/settings/businessmodel/admin/billing/create-invoice.tsx
+// FIXED: Added proper type imports and handling
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, FileText } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Plus, 
+  Trash2, 
+  Save, 
+  FileText, 
+  Search, 
+  Check, 
+  ChevronDown,
+  CreditCard,
+  Clock,
+  AlertCircle
+} from 'lucide-react';
 import { analyticsService } from '@/services/analytics.service';
 
 // Import mock data
 import { fakeInvoices } from '@/utils/fakejson/BillingData';
 import { fakePricingPlans, getPlanById } from '@/utils/fakejson/PricingPlans';
+import { fakeTenants } from '@/utils/fakejson/TenantsData';
 
-interface InvoiceItem {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-}
+// FIXED: Import types from billing.ts
+import type { PlanOption, TenantOption, InvoiceItem } from '@/types/billing';
 
-interface TenantOption {
-  id: string;
-  name: string;
-}
+// FIXED: Get tenant options from fake data with proper typing
+const tenantOptions: TenantOption[] = fakeTenants.map((tenant: any) => ({
+  id: tenant.id,
+  name: tenant.name,
+  email: tenant.email || `${tenant.name.toLowerCase().replace(/\s+/g, '')}@example.com`
+}));
 
-interface PlanOption {
-  id: string;
-  name: string;
-  description: string;
-}
-
-// Mock tenant data - in a real app this would come from an API
-const tenantOptions: TenantOption[] = [
-  { id: 'tenant_1', name: 'Acme Inc.' },
-  { id: 'tenant_2', name: 'Globex Corp' },
-  { id: 'tenant_3', name: 'Initech' },
-  { id: 'tenant_4', name: 'Umbrella Corp' },
-  { id: 'tenant_5', name: 'Stark Industries' },
-  { id: 'tenant_6', name: 'Wayne Enterprises' }
-];
-
-// Get plans for dropdown
+// FIXED: Get plans for dropdown from fake data with proper handling
 const planOptions: PlanOption[] = fakePricingPlans
-  .filter(plan => !plan.isArchived)
-  .map(plan => ({
+  .filter((plan: any) => !plan.is_archived && !plan.isArchived)
+  .map((plan: any) => ({
     id: plan.id,
     name: plan.name,
-    description: plan.description
+    description: plan.description || 'No description available' // FIXED: Fallback for undefined
   }));
 
 const CreateInvoicePage: React.FC = () => {
@@ -61,6 +57,14 @@ const CreateInvoicePage: React.FC = () => {
     { description: '', quantity: 1, unitPrice: 0, amount: 0 }
   ]);
   
+  // State for tenant search
+  const [tenantSearchTerm, setTenantSearchTerm] = useState('');
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // State for tenant invoice history
+  const [tenantInvoices, setTenantInvoices] = useState<any[]>([]);
+  
   // Calculate totals
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
   const taxRate = 0.18; // 18% tax
@@ -71,6 +75,38 @@ const CreateInvoicePage: React.FC = () => {
   useEffect(() => {
     analyticsService.trackPageView('settings/businessmodel/admin/billing/create-invoice', 'Create Invoice');
   }, []);
+  
+  // Handle clicking outside the dropdown to close it
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(event.target as Node)) {
+        setIsSearchDropdownOpen(false);
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  // Fetch tenant invoices when tenant selection changes
+  useEffect(() => {
+    if (tenantId) {
+      // In a real implementation, this would be an API call
+      // For now, we'll filter the mock data
+      const invoicesForTenant = fakeInvoices.filter((invoice: any) => invoice.tenantId === tenantId);
+      setTenantInvoices(invoicesForTenant);
+    } else {
+      setTenantInvoices([]);
+    }
+  }, [tenantId]);
+  
+  // Filter tenants based on search term
+  const filteredTenants = tenantOptions.filter((tenant: TenantOption) => 
+    tenant.name.toLowerCase().includes(tenantSearchTerm.toLowerCase()) ||
+    tenant.id.toLowerCase().includes(tenantSearchTerm.toLowerCase())
+  ).slice(0, 10); // Limit to 10 results for performance
   
   // Handle Back
   const handleBack = () => {
@@ -103,6 +139,13 @@ const CreateInvoicePage: React.FC = () => {
     }
   };
   
+  // Handle tenant selection
+  const handleTenantSelect = (id: string, name: string) => {
+    setTenantId(id);
+    setTenantSearchTerm(name);
+    setIsSearchDropdownOpen(false);
+  };
+  
   // Auto-fill plan details when a plan is selected
   const handlePlanChange = (planId: string) => {
     setPlanId(planId);
@@ -112,16 +155,21 @@ const CreateInvoicePage: React.FC = () => {
       if (plan) {
         // Create an item based on the plan
         const updatedItems = [...items];
+        
+        // FIXED: Safe access to tier pricing with fallback
+        const firstTier = plan.tiers?.[0];
+        const tierPrice = firstTier?.base_price || firstTier?.basePrice || 0;
+        
         updatedItems[0] = {
           description: `${plan.name} Subscription`,
           quantity: 1,
-          unitPrice: plan.tiers[0]?.basePrice || 0,
-          amount: plan.tiers[0]?.basePrice || 0
+          unitPrice: tierPrice,
+          amount: tierPrice
         };
         setItems(updatedItems);
         
-        // Set currency
-        setCurrency(plan.defaultCurrencyCode);
+        // FIXED: Set currency with fallback
+        setCurrency(plan.default_currency_code || plan.defaultCurrencyCode || 'INR');
       }
     }
   };
@@ -140,13 +188,19 @@ const CreateInvoicePage: React.FC = () => {
     // Generate new invoice ID
     const invoiceId = `INV-${String(fakeInvoices.length + 1).padStart(3, '0')}`;
     
+    // Get tenant name from options
+    const tenantName = tenantOptions.find((t: TenantOption) => t.id === tenantId)?.name || '';
+    
+    // Get plan name from options
+    const planName = planOptions.find((p: PlanOption) => p.id === planId)?.name || '';
+    
     // Create new invoice object
     const newInvoice = {
       id: invoiceId,
       tenantId,
-      tenantName: tenantOptions.find(t => t.id === tenantId)?.name || '',
+      tenantName,
       planId,
-      planName: planOptions.find(p => p.id === planId)?.name || '',
+      planName,
       amount: total,
       currency,
       status: 'pending' as const,
@@ -169,12 +223,55 @@ const CreateInvoicePage: React.FC = () => {
   };
   
   // Format currency
-  const formatCurrency = (amount: number): string => {
+  const formatCurrency = (amount: number, currencyCode: string = currency): string => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: currency,
+      currency: currencyCode,
       maximumFractionDigits: 0
     }).format(amount);
+  };
+  
+  // Format date
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    }).format(date);
+  };
+  
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+            <Check className="h-3 w-3 mr-1" />
+            Paid
+          </span>
+        );
+      case 'pending':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+            <Clock className="h-3 w-3 mr-1" />
+            Pending
+          </span>
+        );
+      case 'overdue':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Overdue
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+            {status}
+          </span>
+        );
+    }
   };
   
   return (
@@ -205,25 +302,57 @@ const CreateInvoicePage: React.FC = () => {
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Tenant Select */}
-                  <div>
-                    <label htmlFor="tenant" className="block text-sm font-medium mb-1">
+                  {/* Tenant Search */}
+                  <div ref={searchDropdownRef} className="relative">
+                    <label htmlFor="tenantSearch" className="block text-sm font-medium mb-1">
                       Tenant <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      id="tenant"
-                      value={tenantId}
-                      onChange={(e) => setTenantId(e.target.value)}
-                      className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      required
-                    >
-                      <option value="">Select a tenant</option>
-                      {tenantOptions.map(tenant => (
-                        <option key={tenant.id} value={tenant.id}>
-                          {tenant.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <input
+                        id="tenantSearch"
+                        type="text"
+                        value={tenantSearchTerm}
+                        onChange={(e) => {
+                          setTenantSearchTerm(e.target.value);
+                          setIsSearchDropdownOpen(true);
+                          if (!e.target.value) {
+                            setTenantId('');
+                          }
+                        }}
+                        onFocus={() => setIsSearchDropdownOpen(true)}
+                        placeholder="Search tenant by name"
+                        className="w-full px-3 py-2 pl-10 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        required
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                    
+                    {/* Dropdown for tenant search */}
+                    {isSearchDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredTenants.length === 0 ? (
+                          <div className="py-2 px-3 text-sm text-muted-foreground">
+                            {tenantSearchTerm ? 'No tenants found' : 'Type to search'}
+                          </div>
+                        ) : (
+                          filteredTenants.map((tenant: TenantOption) => (
+                            <div
+                              key={tenant.id}
+                              className="py-2 px-3 hover:bg-muted cursor-pointer text-sm"
+                              onClick={() => handleTenantSelect(tenant.id, tenant.name)}
+                            >
+                              <div className="font-medium">{tenant.name}</div>
+                              <div className="text-xs text-muted-foreground">ID: {tenant.id}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Plan Select */}
@@ -239,7 +368,7 @@ const CreateInvoicePage: React.FC = () => {
                       required
                     >
                       <option value="">Select a plan</option>
-                      {planOptions.map(plan => (
+                      {planOptions.map((plan: PlanOption) => (
                         <option key={plan.id} value={plan.id}>
                           {plan.name}
                         </option>
@@ -282,6 +411,52 @@ const CreateInvoicePage: React.FC = () => {
                       required
                     />
                   </div>
+                </div>
+                
+                {/* Payment Method Section */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Payment Method
+                  </label>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        id="payment-bank"
+                        name="paymentMethod"
+                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                        defaultChecked
+                      />
+                      <label htmlFor="payment-bank" className="ml-2 text-sm">
+                        Bank Transfer
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        id="payment-gateway"
+                        name="paymentMethod"
+                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                      />
+                      <label htmlFor="payment-gateway" className="ml-2 text-sm">
+                        Payment Gateway
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        id="payment-manual"
+                        name="paymentMethod"
+                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                      />
+                      <label htmlFor="payment-manual" className="ml-2 text-sm">
+                        Manual/Other
+                      </label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Payment gateway integration allows tenants to pay online with credit card or other methods.
+                  </p>
                 </div>
               </div>
             </div>
@@ -469,6 +644,46 @@ const CreateInvoicePage: React.FC = () => {
                 </div>
               </div>
             </div>
+            
+            {/* Tenant Invoice History - only shown when a tenant is selected */}
+            {tenantId && (
+              <div className="bg-card rounded-lg border border-border overflow-hidden">
+                <div className="px-6 py-4 bg-muted/20 border-b border-border">
+                  <h2 className="text-lg font-semibold">Tenant Invoice History</h2>
+                </div>
+                
+                <div className="p-4">
+                  {tenantInvoices.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No previous invoices found for this tenant.
+                    </p>
+                  ) : (
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {tenantInvoices.map((invoice: any) => (
+                        <div key={invoice.id} className="border-b border-border pb-3 last:border-0 last:pb-0">
+                          <div className="flex justify-between">
+                            <div>
+                              <div className="font-medium">{invoice.id}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {formatDate(invoice.createdAt)}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">
+                                {formatCurrency(invoice.amount, invoice.currency)}
+                              </div>
+                              <div className="text-xs">
+                                {getStatusBadge(invoice.status)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </form>

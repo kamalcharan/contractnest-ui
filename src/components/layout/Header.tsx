@@ -22,6 +22,7 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { languages } from '../../utils/constants/languages';
+import { themes } from "../../utils/theme"
 import EnvironmentSwitchModal from "../EnvironmentSwitchModal";
 import TenantSwitcher from './TenantSwitcher';
 
@@ -48,8 +49,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState<boolean>(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState<boolean>(false);
-  const { isDarkMode, toggleDarkMode, currentTheme, setTheme } = useTheme();
-const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateUserPreferences } = useAuth();
+  const { isDarkMode, toggleDarkMode, currentThemeId, setTheme } = useTheme();
+  const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateUserPreferences } = useAuth();
 
   // Refs for click outside detection
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -57,13 +58,12 @@ const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateU
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
 
-  // Default themes array
-  const defaultThemes = [
-    { name: 'ClassicElegantTheme', label: 'Classic Elegant' },
-    { name: 'CorporateTheme', label: 'Corporate' },
-    { name: 'PurpleToneTheme', label: 'Purple Tone' },
-    { name: 'BharathaVarshaTheme', label: 'Bharatha Varsha' }
-  ];
+  // Convert themes object to array for the dropdown
+  const availableThemes = Object.values(themes).map(theme => ({
+    name: theme.id, // This matches what the context expects
+    label: theme.name, // This is the display name
+    id: theme.id
+  }));
 
   // Mock notification data
   const notifications: Notification[] = [
@@ -125,48 +125,47 @@ const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateU
   };
 
   // Update handleThemeChange
-const handleThemeChange = async (themeName: string): void => {
-  console.log('🎨 Theme change requested:', themeName);
-  
-  // First update the UI immediately
-  setTheme(themeName as any);
-  setThemeMenuOpen(false);
-  
-  // Then persist to backend if user is logged in
-  if (user && updateUserPreferences) {
-    try {
-      console.log('📤 Sending theme preference to backend...');
-      await updateUserPreferences({
-        preferred_theme: themeName
-      });
-      console.log('✅ Theme preference saved');
-    } catch (error) {
-      console.error('❌ Failed to save theme preference:', error);
+  const handleThemeChange = async (themeName: string): Promise<void> => {
+    console.log('🎨 Theme change requested:', themeName);
+    
+    // First update the UI immediately
+    setTheme(themeName as any);
+    setThemeMenuOpen(false);
+    
+    // Then persist to backend if user is logged in
+    if (user && updateUserPreferences) {
+      try {
+        console.log('📤 Sending theme preference to backend...');
+        await updateUserPreferences({
+          preferred_theme: themeName
+        });
+        console.log('✅ Theme preference saved');
+      } catch (error) {
+        console.error('❌ Failed to save theme preference:', error);
+      }
     }
-  }
-};
+  };
 
-
- // Update handleDarkModeToggle  
-const handleDarkModeToggle = async (): void => {
-  console.log('🌓 Dark mode toggle requested, current:', isDarkMode);
-  
-  // First update the UI immediately
-  toggleDarkMode();
-  
-  // Then persist to backend if user is logged in
-  if (user && updateUserPreferences) {
-    try {
-      console.log('📤 Sending dark mode preference to backend...');
-      await updateUserPreferences({
-        is_dark_mode: !isDarkMode
-      });
-      console.log('✅ Dark mode preference saved');
-    } catch (error) {
-      console.error('❌ Failed to save dark mode preference:', error);
+  // Update handleDarkModeToggle  
+  const handleDarkModeToggle = async (): Promise<void> => {
+    console.log('🌓 Dark mode toggle requested, current:', isDarkMode);
+    
+    // First update the UI immediately
+    toggleDarkMode();
+    
+    // Then persist to backend if user is logged in
+    if (user && updateUserPreferences) {
+      try {
+        console.log('📤 Sending dark mode preference to backend...');
+        await updateUserPreferences({
+          is_dark_mode: !isDarkMode
+        });
+        console.log('✅ Dark mode preference saved');
+      } catch (error) {
+        console.error('❌ Failed to save dark mode preference:', error);
+      }
     }
-  }
-};
+  };
   
   const handleLanguageChange = (languageCode: string): void => {
     console.log('Language changed to:', languageCode);
@@ -198,19 +197,28 @@ const handleDarkModeToggle = async (): void => {
   };
 
   // Function to get theme color indicator
-  const getThemeColor = (themeName: string): string => {
-    switch (themeName) {
-      case 'ClassicElegantTheme':
-        return 'bg-blue-500';
-      case 'CorporateTheme':
-        return 'bg-sky-500';
-      case 'PurpleToneTheme':
-        return 'bg-purple-500';
-      case 'BharathaVarshaTheme':
-        return 'bg-orange-500';
-      default:
-        return 'bg-primary';
-    }
+  const getThemeColor = (themeId: string): string => {
+    const theme = themes[themeId];
+    if (!theme) return 'bg-primary';
+    
+    // Use the theme's primary color for the indicator
+    const primaryColor = theme.colors.brand.primary;
+    
+    // Map common colors to Tailwind classes, or use inline style
+    const colorMap: { [key: string]: string } = {
+      '#e67e22': 'bg-orange-500', // BharathaVarsha
+      '#4b998c': 'bg-teal-500',   // ClassicElegant  
+      '#6f61ef': 'bg-purple-500', // PurpleTone
+      '#E53E3E': 'bg-red-500',    // ContractNest
+      '#19db8a': 'bg-emerald-500', // ModernBold
+      '#39d2c0': 'bg-cyan-500',   // ModernBusiness
+      '#507583': 'bg-slate-500',  // ProfessionalRedefined
+      '#2797ff': 'bg-blue-500',   // SleekCool & TechFuture
+      '#06d5cd': 'bg-teal-400',   // TechAI
+      '#f83b46': 'bg-rose-500',   // TechySimple
+    };
+    
+    return colorMap[primaryColor] || 'bg-primary';
   };
 
   // Get user's preferred language or default to English
@@ -474,21 +482,23 @@ const handleDarkModeToggle = async (): void => {
             </div>
             
             <p className="text-sm font-medium mb-2">Theme</p>
-            {defaultThemes.map((theme) => (
-              <button
-                key={theme.name}
-                onClick={() => handleThemeChange(theme.name)}
-                className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md hover:bg-muted transition-colors ${
-                  currentTheme === theme.name ? 'bg-muted' : ''
-                }`}
-              >
-                <div className={`h-3 w-3 rounded-full ${getThemeColor(theme.name)} mr-2`}></div>
-                <span>{theme.label}</span>
-                {currentTheme === theme.name && (
-                  <span className="ml-auto text-primary text-xs">Active</span>
-                )}
-              </button>
-            ))}
+            <div className="max-h-64 overflow-y-auto">
+              {availableThemes.map((theme) => (
+                <button
+                  key={theme.id}
+                  onClick={() => handleThemeChange(theme.name)}
+                  className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md hover:bg-muted transition-colors ${
+                    currentThemeId === theme.name ? 'bg-muted' : ''
+                  }`}
+                >
+                  <div className={`h-3 w-3 rounded-full ${getThemeColor(theme.id)} mr-2`}></div>
+                  <span className="flex-1 truncate">{theme.label}</span>
+                  {currentThemeId === theme.name && (
+                    <span className="ml-auto text-primary text-xs">Active</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -510,7 +520,7 @@ const handleDarkModeToggle = async (): void => {
                 }`}
               >
                 <span className="mr-2">{language.isRTL ? '←' : '→'}</span>
-                <span>{language.name} ({language.nativeName})</span>
+                <span className="flex-1 truncate">{language.name} ({language.nativeName})</span>
                 {userPreferredLanguage === language.code && (
                   <span className="ml-auto text-primary text-xs">Active</span>
                 )}

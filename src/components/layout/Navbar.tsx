@@ -1,7 +1,7 @@
 // src/components/layout/Navbar.tsx
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../contexts/ThemeContext'; // Fixed import path
 
 const Navbar: React.FC = () => {
   const { currentTheme, isDarkMode } = useTheme();

@@ -15,9 +15,13 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
   const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
   
-  // Dynamically get the icon from Lucide icons
-  const IconComponent = (LucideIcons as Record<string, React.ComponentType<any>>)[item.icon] || 
-    LucideIcons.Circle;
+  // Safely get the icon from Lucide icons with proper typing
+  const getIconComponent = (iconName: string) => {
+    const iconsMap = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number }>>;
+    return iconsMap[iconName] || LucideIcons.Circle;
+  };
+  
+  const IconComponent = getIconComponent(item.icon);
   
   const toggleSubmenu = (e: React.MouseEvent) => {
     if (item.hasSubmenu && item.submenuItems) {
@@ -70,27 +74,27 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
       
       {!collapsed && item.hasSubmenu && item.submenuItems && isSubmenuOpen && (
         <div className="ml-5 pl-4 border-l border-border space-y-1 mt-1">
-          {item.submenuItems.map((subItem) => (
-            <NavLink
-              key={subItem.id}
-              to={subItem.path}
-              className={({ isActive }) => `
-                flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all
-                ${isActive 
-                  ? 'bg-primary/10 text-primary font-medium' 
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
-              `}
-            >
-              <div className="relative">
-                {(LucideIcons as Record<string, React.ComponentType<any>>)[subItem.icon] ? (
-                  React.createElement((LucideIcons as Record<string, React.ComponentType<any>>)[subItem.icon], { size: 16 })
-                ) : (
-                  <LucideIcons.Circle size={16} />
-                )}
-              </div>
-              <span>{subItem.label}</span>
-            </NavLink>
-          ))}
+          {item.submenuItems.map((subItem) => {
+            const SubIconComponent = getIconComponent(subItem.icon);
+            
+            return (
+              <NavLink
+                key={subItem.id}
+                to={subItem.path}
+                className={({ isActive }) => `
+                  flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all
+                  ${isActive 
+                    ? 'bg-primary/10 text-primary font-medium' 
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}
+                `}
+              >
+                <div className="relative">
+                  <SubIconComponent size={16} />
+                </div>
+                <span>{subItem.label}</span>
+              </NavLink>
+            );
+          })}
         </div>
       )}
     </div>

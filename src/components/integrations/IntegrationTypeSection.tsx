@@ -30,7 +30,7 @@ const IntegrationTypeSection: React.FC<IntegrationTypeSectionProps> = ({
     try {
       // Use the icon_name from the type data to get the Lucide icon
       const IconComponent = type.icon_name && 
-        (LucideIcons as Record<string, React.ComponentType<any>>)[type.icon_name];
+(LucideIcons as any)[type.icon_name];
       
       if (IconComponent) {
         return <IconComponent className="h-5 w-5 text-primary" />;

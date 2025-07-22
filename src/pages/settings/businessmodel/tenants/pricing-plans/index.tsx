@@ -9,7 +9,7 @@ import { analyticsService } from '@/services/analytics.service';
 import PlanCard from '@/components/businessmodel/tenants/pricing/PlanCard';
 
 // Import types and fake data
-import { PricingPlan } from '@/lib/constants/pricing';
+import { PricingPlan } from '@/utils/constants/pricing';
 import { fakePricingPlans } from '@/utils/fakejson/PricingPlans';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
@@ -41,8 +41,8 @@ const PricingPlansPage: React.FC = () => {
         plan => plan.isVisible && !plan.isArchived
       );
       
-      setPlans(visiblePlans);
-      
+      setPlans(visiblePlans as PricingPlan[]);
+
       // Simulate active plan (would come from user's subscription info)
       // For demo, let's pretend the user has the Premium Plan
       setActivePlanId('plan_2');

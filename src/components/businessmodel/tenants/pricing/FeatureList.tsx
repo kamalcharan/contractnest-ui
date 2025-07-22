@@ -1,109 +1,111 @@
 // src/components/businessmodel/tenants/pricing/FeatureList.tsx
+// FIXED: Added proper handling for missing properties with safe access
 
 import React from 'react';
-import { CheckCircle, X } from 'lucide-react';
-import { PlanFeature, PlanNotification } from '@/lib/constants/pricing';
+import { Check, X } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+
+// FIXED: Updated interface to match actual usage
+interface PlanFeature {
+  feature_id?: string;
+  featureId?: string;
+  name?: string;
+  enabled?: boolean;
+  limit?: number;
+  trial_limit?: number;
+  trialLimit?: number;
+  trial_enabled?: boolean;
+  trialEnabled?: boolean;
+  test_env_limit?: number;
+  testEnvironmentLimit?: number;
+  is_special_feature?: boolean;
+  pricing_period?: 'monthly' | 'quarterly' | 'annually';
+  pricingPeriod?: 'monthly' | 'quarterly' | 'annually';
+  prices?: Record<string, number>;
+  currencyPrices?: Record<string, number>; // FIXED: Added this property
+  additionalPrice?: number;
+}
 
 interface FeatureListProps {
   features: PlanFeature[];
-  notifications: PlanNotification[];
   currency: string;
-  compact?: boolean;
+  planType: 'Per User' | 'Per Contract';
+  isCurrentPlan?: boolean;
 }
 
 const FeatureList: React.FC<FeatureListProps> = ({
   features,
-  notifications,
   currency,
-  compact = false
+  planType,
+  isCurrentPlan = false
 }) => {
-  // Helper to get feature name from ID
-  const getFeatureName = (featureId: string): string => {
-    switch (featureId) {
-      case 'contacts':
-        return 'Contacts';
-      case 'contracts':
-        return 'Contracts';
-      case 'documents':
-        return 'Document Storage';
-      case 'vani':
-        return 'VaNi AI Assistant';
-      case 'marketplace':
-        return 'Marketplace Access';
-      case 'finance':
-        return 'Finance Tools';
-      case 'appointments':
-        return 'Appointments';
-      default:
-        return featureId.charAt(0).toUpperCase() + featureId.slice(1);
-    }
+  // FIXED: Safe accessor for feature price with fallback handling
+  const getFeaturePrice = (feature: PlanFeature, currency: string): number => {
+    // Try multiple property paths for backward compatibility
+    return feature.currencyPrices?.[currency] ?? 
+           feature.prices?.[currency] ?? 
+           feature.additionalPrice ?? 
+           0;
   };
-  
+
+  // FIXED: Safe accessor for enabled status
+  const isFeatureEnabled = (feature: PlanFeature): boolean => {
+    return feature.enabled ?? true; // Default to true if not specified
+  };
+
+  // FIXED: Safe accessor for pricing period
+  const getFeaturePricingPeriod = (feature: PlanFeature): string => {
+    return feature.pricingPeriod ?? feature.pricing_period ?? 'monthly';
+  };
+
   // Format currency
-  const formatPrice = (price: number | undefined): string => {
-    if (!price) return '';
-    return `${getCurrencySymbol(currency)}${price.toFixed(2)}`;
+  const formatCurrency = (amount: number, currencyCode: string): string => {
+    return `${getCurrencySymbol(currencyCode)}${amount.toFixed(2)}`;
   };
-  
-  // Get special feature price
-  const getFeaturePrice = (feature: PlanFeature): number | undefined => {
-    if (!feature.additionalPrice) return undefined;
-    return feature.currencyPrices && feature.currencyPrices[currency] 
-      ? feature.currencyPrices[currency] 
-      : feature.additionalPrice;
-  };
-  
+
   return (
-    <div className={`space-y-${compact ? '1' : '2'}`}>
-      {/* Standard Features */}
-      {features.map((feature, index) => (
-        <div key={index} className="flex items-start">
-          {feature.enabled ? (
-            <CheckCircle className={`h-4 w-4 mr-2 text-green-500 ${compact ? '' : 'mt-0.5'}`} />
-          ) : (
-            <X className={`h-4 w-4 mr-2 text-muted-foreground ${compact ? '' : 'mt-0.5'}`} />
-          )}
-          <div>
-            <span className={`${compact ? 'text-xs' : 'text-sm'}`}>
-              {getFeatureName(feature.featureId)}
-            </span>
-            <span className={`${compact ? 'text-xs' : 'text-sm'} text-muted-foreground ml-1`}>
-              ({feature.limit})
-            </span>
-            
-            {/* Special feature price */}
-            {feature.additionalPrice && (
-              <span className={`block ${compact ? 'text-xs' : 'text-xs'} text-amber-600 dark:text-amber-400`}>
-                +{formatPrice(getFeaturePrice(feature))}
-                /{feature.pricingPeriod}
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-      
-      {/* Notification Credits - show just a few in standard view */}
-      <div className="border-t border-border pt-2 mt-2">
-        <div className={`${compact ? 'text-xs' : 'text-sm'} font-medium mb-1`}>
-          Included Credits:
-        </div>
+    <div className="space-y-3">
+      {features.map((feature, index) => {
+        const featurePrice = getFeaturePrice(feature, currency);
+        const enabled = isFeatureEnabled(feature);
+        const pricingPeriod = getFeaturePricingPeriod(feature);
         
-        {notifications.slice(0, compact ? 2 : 3).map((notification, index) => (
-          <div key={index} className="flex items-start">
-            <CheckCircle className={`h-4 w-4 mr-2 text-green-500 ${compact ? '' : 'mt-0.5'}`} />
-            <div className={`${compact ? 'text-xs' : 'text-sm'}`}>
-              {notification.creditsPerUnit} {notification.method} Credits
+        return (
+          <div key={feature.feature_id || feature.featureId || index} className="flex items-center justify-between py-2">
+            <div className="flex items-center">
+              {enabled ? (
+                <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+              ) : (
+                <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+              )}
+              <div>
+                <span className={`text-sm ${enabled ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                  {feature.name || 'Unnamed Feature'}
+                </span>
+                {feature.limit && (
+                  <div className="text-xs text-muted-foreground">
+                    Limit: {feature.limit} per {planType === 'Per User' ? 'user' : 'contract'}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="text-right">
+              {feature.is_special_feature && featurePrice > 0 ? (
+                <div className="text-sm">
+                  <div className="font-medium">
+                    {formatCurrency(featurePrice, currency)}
+                    /{pricingPeriod}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Additional</div>
+                </div>
+              ) : (
+                <span className="text-sm text-muted-foreground">Included</span>
+              )}
             </div>
           </div>
-        ))}
-        
-        {notifications.length > 3 && !compact && (
-          <div className="text-xs text-muted-foreground mt-1">
-            +{notifications.length - 3} more notification types
-          </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 };

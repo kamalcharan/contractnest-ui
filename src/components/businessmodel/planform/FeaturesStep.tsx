@@ -1,4 +1,5 @@
 // src/components/businessmodel/planform/FeaturesStep.tsx
+// FIXED: Added proper typing for currency and currency array operations
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
@@ -36,10 +37,10 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
     formState: { errors }
   } = useFormContext();
   
-  // Watch form values
-  const watchPlanType = watch('planType');
-  const watchSupportedCurrencies = watch('supportedCurrencies') || [];
-  const watchDefaultCurrency = watch('defaultCurrencyCode');
+  // Watch form values - FIXED: Added proper typing
+  const watchPlanType = watch('planType') as string;
+  const watchSupportedCurrencies = (watch('supportedCurrencies') || []) as string[];
+  const watchDefaultCurrency = watch('defaultCurrencyCode') as string;
   
   // State for features
   const [features, setFeatures] = useState<FeatureRow[]>([]);
@@ -60,7 +61,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
   useEffect(() => {
     const formFeatures = getValues('features');
     if (Array.isArray(formFeatures) && formFeatures.length > 0) {
-      const featuresWithPrices = formFeatures.map(feature => ({
+      const featuresWithPrices = formFeatures.map((feature: any) => ({
         ...feature,
         prices: feature.prices || {}
       }));
@@ -77,7 +78,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
     }
   }, [features, setValue]);
   
-  // Update prices when supported currencies change
+  // Update prices when supported currencies change - FIXED: Added proper typing
   useEffect(() => {
     if (watchSupportedCurrencies.length > 0 && features.length > 0) {
       let hasChanges = false;
@@ -86,7 +87,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
         
         // Add missing currencies for special features only - DON'T copy values
         if (feature.is_special_feature) {
-          watchSupportedCurrencies.forEach(currency => {
+          watchSupportedCurrencies.forEach((currency: string) => {
             if (prices[currency] === undefined) {
               prices[currency] = 0; // Start with 0, not copied value
               hasChanges = true;
@@ -95,7 +96,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
         }
         
         // Remove unsupported currencies
-        Object.keys(prices).forEach(currency => {
+        Object.keys(prices).forEach((currency: string) => {
           if (!watchSupportedCurrencies.includes(currency)) {
             delete prices[currency];
             hasChanges = true;
@@ -193,7 +194,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
       
       // For special features, add price entries for all currencies - BUT KEEP THEM SEPARATE
       if (feature.isSpecialFeature && watchSupportedCurrencies?.length) {
-        watchSupportedCurrencies.forEach(currency => {
+        watchSupportedCurrencies.forEach((currency: string) => {
           // Don't copy the same value - let users set different prices per currency
           newFeature.prices[currency] = 0; // Start with 0, not the base price
         });
@@ -338,7 +339,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
       {watchSupportedCurrencies?.length > 0 && (
         <div className="border-b border-border mb-4">
           <div className="flex overflow-x-auto">
-            {watchSupportedCurrencies.map(currencyCode => {
+            {watchSupportedCurrencies.map((currencyCode: string) => {
               const isActive = selectedCurrency === currencyCode;
               const isDefault = watchDefaultCurrency === currencyCode;
               

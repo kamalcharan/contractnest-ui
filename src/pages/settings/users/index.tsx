@@ -210,7 +210,7 @@ const UsersPage: React.FC = () => {
   // Handle resend invitation from users list
   const handleResendFromUsersList = async (userId: string) => {
     const user = users.find(u => u.user_id === userId);
-    if (user?.invitation) {
+if (user?.status === 'invited') {
       // Find corresponding invitation
       const invitation = invitations.find(inv => 
         inv.email === user.email || inv.mobile_number === user.mobile_number

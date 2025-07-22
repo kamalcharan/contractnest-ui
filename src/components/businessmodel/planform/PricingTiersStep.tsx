@@ -1,5 +1,3 @@
-// src/components/businessmodel/planform/PricingTiersStep.tsx
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Plus, Trash2, DollarSign, Edit, AlertCircle } from 'lucide-react';
@@ -60,7 +58,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     
     if (Array.isArray(formTiers) && formTiers.length > 0) {
       // Load existing tiers from form and ensure they have proper structure
-      const tiersWithPrices = formTiers.map(tier => ({
+      const tiersWithPrices = formTiers.map((tier: any) => ({
         ...tier,
         prices: tier.prices || {}
       }));
@@ -79,7 +77,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       
       // Initialize prices for all supported currencies
       if (watchedValues.supportedCurrencies.length > 0) {
-        watchedValues.supportedCurrencies.forEach(currency => {
+        watchedValues.supportedCurrencies.forEach((currency: string) => {
           defaultTier.prices[currency] = 0;
         });
       }
@@ -109,22 +107,22 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     if (!isInitialized || watchedValues.supportedCurrencies.length === 0 || tiers.length === 0) return;
     
     let hasChanges = false;
-    const updatedTiers = tiers.map(tier => {
+    const updatedTiers = tiers.map((tier) => {
       const currentCurrencies = Object.keys(tier.prices || {});
       const supportedSet = new Set(watchedValues.supportedCurrencies);
       const currentSet = new Set(currentCurrencies);
       
       // Check if currencies actually changed
       const needsUpdate = 
-        currentCurrencies.some(c => !supportedSet.has(c)) || 
-        watchedValues.supportedCurrencies.some(c => !currentSet.has(c));
+        currentCurrencies.some((c: string) => !supportedSet.has(c)) || 
+        watchedValues.supportedCurrencies.some((c: string) => !currentSet.has(c));
       
       if (!needsUpdate) return tier;
       
       const prices = { ...tier.prices };
       
       // Add missing currencies (initialize to 0, don't copy from other currencies)
-      watchedValues.supportedCurrencies.forEach(currency => {
+      watchedValues.supportedCurrencies.forEach((currency: string) => {
         if (prices[currency] === undefined) {
           prices[currency] = 0;
           hasChanges = true;
@@ -132,7 +130,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       });
       
       // Remove unsupported currencies
-      Object.keys(prices).forEach(currency => {
+      Object.keys(prices).forEach((currency: string) => {
         if (!watchedValues.supportedCurrencies.includes(currency)) {
           delete prices[currency];
           hasChanges = true;
@@ -176,7 +174,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     
     // Initialize prices for all supported currencies
     const prices: Record<string, number> = {};
-    watchedValues.supportedCurrencies.forEach(currency => {
+    watchedValues.supportedCurrencies.forEach((currency: string) => {
       prices[currency] = 0;
     });
     
@@ -225,7 +223,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
           field === 'maxValue' ? value : tier.maxValue
         );
       } else {
-        tier[field] = value;
+        (tier as any)[field] = value;
       }
       
       updated[index] = tier;
@@ -270,7 +268,7 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     return (
       <div className="border-b border-border">
         <div className="flex overflow-x-auto">
-          {watchedValues.supportedCurrencies.map(currencyCode => {
+          {watchedValues.supportedCurrencies.map((currencyCode: string) => {
             const isActive = selectedCurrency === currencyCode;
             const isDefault = watchedValues.defaultCurrency === currencyCode;
             

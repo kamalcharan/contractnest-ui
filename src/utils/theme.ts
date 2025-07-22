@@ -1,9 +1,38 @@
 // src/utils/theme.ts
 
-import { BharathaVarshaTheme } from '@/config/theme/themes/BharathaVarshaTheme';
-import { ClassicElegantTheme } from '@/config/theme/themes/ClassicElegantTheme';
-import { PurpleToneTheme } from '@/config/theme/themes/PurpleToneTheme';
-import { ThemeName } from '@/contexts/ThemeContext';
+// ✅ SIMPLE: Just import what we need from existing theme config
+import { BharathaVarshaTheme } from '@/config/theme/themes/bharathavarshaTheme';
+import { ClassicElegantTheme } from '@/config/theme/themes/classicElegantTheme';
+import { PurpleToneTheme } from '@/config/theme/themes/purpleToneTheme';
+import { ContractNestTheme } from '@/config/theme/themes/contractNest';
+import { ModernBoldTheme } from '@/config/theme/themes/modernBold';
+import { ModernBusinessTheme } from '@/config/theme/themes/modernBusiness';
+import { ProfessionalRedefinedTheme } from '@/config/theme/themes/professionalRedefined';
+import { SleekCoolTheme } from '@/config/theme/themes/sleekCool';
+import { TechAITheme } from '@/config/theme/themes/techAI';
+import { TechFutureTheme } from '@/config/theme/themes/techFuture';
+import { TechySimpleTheme } from '@/config/theme/themes/techySimple';
+
+// ✅ SIMPLE: Define theme registry matching your config/theme/index.ts
+const themes = {
+  [BharathaVarshaTheme.id]: BharathaVarshaTheme,
+  [ClassicElegantTheme.id]: ClassicElegantTheme,
+  [PurpleToneTheme.id]: PurpleToneTheme,
+  [ContractNestTheme.id]: ContractNestTheme,
+  [ModernBoldTheme.id]: ModernBoldTheme,
+  [ModernBusinessTheme.id]: ModernBusinessTheme,
+  [ProfessionalRedefinedTheme.id]: ProfessionalRedefinedTheme,
+  [SleekCoolTheme.id]: SleekCoolTheme,
+  [TechAITheme.id]: TechAITheme,
+  [TechFutureTheme.id]: TechFutureTheme,
+  [TechySimpleTheme.id]: TechySimpleTheme,
+};
+
+// ✅ SIMPLE: Default theme
+const defaultTheme = BharathaVarshaTheme;
+
+// ✅ SIMPLE: Type for theme names
+export type ThemeName = string;
 
 /**
  * Get colors for the current theme and mode
@@ -11,24 +40,9 @@ import { ThemeName } from '@/contexts/ThemeContext';
  * @param isDarkMode Whether dark mode is enabled
  * @returns Theme colors object
  */
-export function getThemeColors(themeName: ThemeName, isDarkMode: boolean): any {
-  let themeConfig;
-  
-  switch (themeName) {
-    case 'BharathaVarshaTheme':
-      themeConfig = BharathaVarshaTheme;
-      break;
-    case 'ClassicElegantTheme':
-      themeConfig = ClassicElegantTheme;
-      break;
-    case 'PurpleToneTheme':
-      themeConfig = PurpleToneTheme;
-      break;
-    default:
-      themeConfig = ClassicElegantTheme; // Default fallback
-  }
-  
-  return isDarkMode ? themeConfig.darkMode.colors : themeConfig.colors;
+export function getThemeColors(themeName: string, isDarkMode: boolean): any {
+  const theme = themes[themeName] || defaultTheme;
+  return isDarkMode ? (theme.darkMode?.colors || theme.colors) : theme.colors;
 }
 
 /**
@@ -37,7 +51,7 @@ export function getThemeColors(themeName: ThemeName, isDarkMode: boolean): any {
  * @param isDarkMode Whether dark mode is enabled
  * @returns Object with styled toast variants
  */
-export function getToastStyles(themeName: ThemeName, isDarkMode: boolean) {
+export function getToastStyles(themeName: string, isDarkMode: boolean) {
   const colors = getThemeColors(themeName, isDarkMode);
   
   // Common style attributes
@@ -52,28 +66,28 @@ export function getToastStyles(themeName: ThemeName, isDarkMode: boolean) {
   return {
     error: {
       ...baseStyle,
-      background: colors.semantic.error,
+      background: colors.semantic?.error || '#EF4444',
       color: '#FFFFFF'
     },
     success: {
       ...baseStyle,
-      background: colors.semantic.success,
+      background: colors.semantic?.success || '#10B981',
       color: '#FFFFFF'
     },
     warning: {
       ...baseStyle,
-      background: colors.semantic.warning,
-      color: isDarkMode ? '#000000' : '#000000' // Usually black text on yellow
+      background: colors.semantic?.warning || '#F59E0B',
+      color: isDarkMode ? '#000000' : '#000000'
     },
     info: {
       ...baseStyle,
-      background: colors.semantic.info,
+      background: colors.semantic?.info || '#3B82F6',
       color: '#FFFFFF'
     },
     loading: {
       ...baseStyle,
-      background: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-      color: colors.utility.primaryText
+      background: isDarkMode ? (colors.utility?.secondaryBackground || '#1F2937') : '#FFFFFF',
+      color: colors.utility?.primaryText || (isDarkMode ? '#FFFFFF' : '#000000')
     }
   };
 }
@@ -82,32 +96,48 @@ export function getToastStyles(themeName: ThemeName, isDarkMode: boolean) {
  * Get a specific semantic color from the current theme
  * @param themeName Current theme name
  * @param isDarkMode Whether dark mode is enabled
- * @param colorName Name of the semantic color to get (success, error, warning, info)
+ * @param colorName Name of the semantic color to get
  * @returns The color value as hex string
  */
 export function getSemanticColor(
-  themeName: ThemeName, 
+  themeName: string, 
   isDarkMode: boolean, 
   colorName: 'success' | 'error' | 'warning' | 'info'
 ): string {
   const colors = getThemeColors(themeName, isDarkMode);
-  return colors.semantic[colorName];
+  
+  const fallbackColors = {
+    success: '#10B981',
+    error: '#EF4444',
+    warning: '#F59E0B',
+    info: '#3B82F6'
+  };
+  
+  return colors.semantic?.[colorName] || fallbackColors[colorName];
 }
 
 /**
  * Get a specific brand color from the current theme
  * @param themeName Current theme name
  * @param isDarkMode Whether dark mode is enabled
- * @param colorName Name of the brand color to get (primary, secondary, tertiary, alternate)
+ * @param colorName Name of the brand color to get
  * @returns The color value as hex string
  */
 export function getBrandColor(
-  themeName: ThemeName,
+  themeName: string,
   isDarkMode: boolean,
   colorName: 'primary' | 'secondary' | 'tertiary' | 'alternate'
 ): string {
   const colors = getThemeColors(themeName, isDarkMode);
-  return colors.brand[colorName];
+  
+  const fallbackColors = {
+    primary: '#2563EB',
+    secondary: '#7C3AED',
+    tertiary: '#059669',
+    alternate: '#DC2626'
+  };
+  
+  return colors.brand?.[colorName] || fallbackColors[colorName];
 }
 
 /**
@@ -116,16 +146,29 @@ export function getBrandColor(
  * @returns Boolean indicating if the color is light
  */
 export function isLightColor(color: string): boolean {
+  if (!color || typeof color !== 'string') {
+    return false;
+  }
+  
   // Remove the hash if it exists
   const hex = color.replace('#', '');
+  
+  // Convert 3-digit hex to 6-digit
+  if (hex.length === 3) {
+    return isLightColor('#' + hex.split('').map(char => char + char).join(''));
+  }
+  
+  // Validate hex format
+  if (!/^[0-9A-Fa-f]{6}$/.test(hex)) {
+    return false;
+  }
   
   // Convert to RGB
   const r = parseInt(hex.substr(0, 2), 16);
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
   
-  // Calculate perceived brightness using the sRGB formula
-  // https://www.w3.org/TR/AERT/#color-contrast
+  // Calculate perceived brightness
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
   
   // Return true if the color is light (brightness > 125)
@@ -139,4 +182,42 @@ export function isLightColor(color: string): boolean {
  */
 export function getContrastColor(bgColor: string): string {
   return isLightColor(bgColor) ? '#000000' : '#FFFFFF';
+}
+
+/**
+ * Get all available theme IDs
+ * @returns Array of theme IDs
+ */
+export function getAvailableThemes(): string[] {
+  return Object.keys(themes);
+}
+
+/**
+ * Check if a theme exists
+ * @param themeName Theme name to check
+ * @returns Boolean indicating if theme exists
+ */
+export function isValidTheme(themeName: string): boolean {
+  return themeName in themes;
+}
+
+/**
+ * Get theme configuration
+ * @param themeName Theme name
+ * @returns Theme configuration
+ */
+export function getThemeConfig(themeName: string) {
+  return themes[themeName] || defaultTheme;
+}
+
+export { themes };
+export { defaultTheme };
+// Define ThemeConfig interface
+export interface ThemeConfig {
+  id: string;
+  name: string;
+  colors: any;
+  darkMode: {
+    colors: any;
+  };
 }
