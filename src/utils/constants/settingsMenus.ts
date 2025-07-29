@@ -52,16 +52,7 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Users',
     adminOnly: false
   },
-  {
-    id: 'team-invitations',
-    settings_type: 'Invitations',
-    parent_type: GROUP_TEAM,
-    description_short: 'Send and manage invitations',
-    description_long: 'Invite new team members to join your workspace and track invitation status',
-    route_path: '/settings/users?tab=invitations',
-    card_icon_name: 'UserPlus',
-    adminOnly: false
-  },
+
   {
     id: 'team-roles',
     settings_type: 'Roles',
@@ -138,48 +129,9 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'HardDrive',
     adminOnly: false
   },
-  {
-    id: 'storage-setup',
-    settings_type: 'Storage Setup',
-    parent_type: GROUP_STORAGE_SPACE,
-    description_short: 'Configure cloud storage',
-    description_long: 'Set up cloud storage for your organization',
-    route_path: '/settings/storage/storagesetup',
-    card_icon_name: 'Cloud',
-    adminOnly: false
-  },
-  {
-    id: 'firebase-diagnostics',
-    settings_type: 'Firebase Diagnostics',
-    parent_type: GROUP_STORAGE_SPACE,
-    description_short: 'Firebase settings',
-    description_long: 'Test and troubleshoot Firebase Storage integration',
-    route_path: '/settings/configure/storage/firebase',
-    card_icon_name: 'Activity',
-    adminOnly: true
-  },
+
+
   
-  // Payment Gateway
-  {
-    id: 'payment-gateway',
-    settings_type: GROUP_PAYMENT_GATEWAY,
-    parent_type: null,
-    description_short: 'Payment settings',
-    description_long: 'Integrate your payment gateway',
-    route_path: '/settings/configure/payment',
-    card_icon_name: 'CreditCard',
-    adminOnly: false
-  },
-  {
-    id: 'razor-pay',
-    settings_type: 'Razor Pay',
-    parent_type: GROUP_PAYMENT_GATEWAY,
-    description_short: 'Razor Pay integration',
-    description_long: 'Connect to your RazorPay account',
-    route_path: '/settings/configure/payment/razorpay',
-    card_icon_name: 'CreditCard',
-    adminOnly: false
-  },
   
   // Customer Channels
   {
@@ -239,9 +191,9 @@ export const settingsMenuItems: SettingsItem[] = [
     settings_type: 'Tax',
     parent_type: GROUP_BUSINESS_PROFILE,
     description_short: 'Tax settings',
-    description_long: 'Configure taxes',
-    route_path: '/settings/configure/business/tax',
-    card_icon_name: 'FileText',
+    description_long: 'Configure tax display and manage tax rates',
+    route_path: '/settings/tax-settings',
+    card_icon_name: 'Percent',
     adminOnly: false
   },
   {

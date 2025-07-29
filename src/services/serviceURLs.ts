@@ -1,4 +1,4 @@
-// src/services/serviceURLs.ts - Updated with User Management endpoints
+// src/services/serviceURLs.ts - Updated with Catalog endpoints
 
 export const API_ENDPOINTS = {
   MASTERDATA: {
@@ -109,6 +109,37 @@ export const API_ENDPOINTS = {
     BILLING_OVERVIEW: '/api/business-model/billing',
     BILLING_PLAN: (id: string) => `/api/business-model/billing/plans/${id}`
   },
+  // CATALOG MANAGEMENT ENDPOINTS
+  // CATALOG MANAGEMENT ENDPOINTS
+  CATALOG: {
+    // Main catalog operations
+    LIST: '/api/catalog',
+    CREATE: '/api/catalog',
+    GET: (id: string) => `/api/catalog/${id}`,
+    UPDATE: (id: string) => `/api/catalog/${id}`,
+    DELETE: (id: string) => `/api/catalog/${id}`,
+    
+    // Special operations
+    RESTORE: (id: string) => `/api/catalog/restore/${id}`,
+    VERSIONS: (id: string) => `/api/catalog/versions/${id}`,
+    
+    // Currency management (NEW)
+    CURRENCIES: '/api/catalog/currencies/list',
+    
+    // Pricing management - Legacy endpoints (backward compatibility)
+    PRICING: {
+      UPSERT: (catalogId: string) => `/api/catalog/pricing/${catalogId}`,
+      GET: (catalogId: string) => `/api/catalog/pricing/${catalogId}`,
+      DELETE: (catalogId: string, pricingId: string) => `/api/catalog/pricing/${catalogId}/${pricingId}`,
+      
+      // Multi-currency endpoints (NEW)
+      GET_MULTI: (catalogId: string) => `/api/catalog/pricing/${catalogId}?detailed=true`,
+      UPSERT_MULTI: '/api/catalog/pricing', // POST with multi-currency data
+      UPDATE_CURRENCY: (catalogId: string, currency: string) => `/api/catalog/pricing/${catalogId}/currency/${currency}`,
+      DELETE_CURRENCY: (catalogId: string, currency: string) => `/api/catalog/pricing/${catalogId}/currency/${currency}`
+    }
+  },
+  
   // Error maintenance
   SYSTEM: {
     MAINTENANCE_STATUS: '/api/system/maintenance/status',
@@ -122,5 +153,11 @@ export const API_ENDPOINTS = {
     CATEGORIES: '/api/storage/categories',
     UPLOAD_MULTIPLE: '/api/storage/files/multiple',
     DELETE_BATCH: '/api/storage/files/delete-batch'
-  }
+  },
+  TAX_SETTINGS: {
+  BASE: '/api/tax-settings',
+  SETTINGS: '/api/tax-settings/settings',
+  RATES: '/api/tax-settings/rates',
+  RATE_DETAIL: (id: string) => `/api/tax-settings/rates/${id}`,
+}
 };

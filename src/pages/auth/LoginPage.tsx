@@ -1,11 +1,10 @@
+// src/pages/auth/LoginPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '../../services/api';
-import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { supabase } from '../../utils/supabase'; 
 // Import analytics
 import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analytics';
@@ -13,7 +12,6 @@ import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analyti
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -24,6 +22,9 @@ const LoginPage: React.FC = () => {
   
   // Ref to prevent duplicate Google login attempts
   const googleLoginInProgress = useRef(false);
+
+  // Check if Google OAuth is enabled
+  const isGoogleAuthEnabled = import.meta.env.VITE_ENABLE_GOOGLE_AUTH !== 'false';
 
   // Track page view when component mounts
   useEffect(() => {
@@ -92,7 +93,7 @@ const LoginPage: React.FC = () => {
     });
     
     try {
-      await login(email, password, rememberMe);
+      await login(email, password, false); // Remember me removed - always false
       // Track successful login
       analyticsService.trackEvent(AUTH_EVENTS.LOGIN_SUCCESS, {
         method: 'email'
@@ -125,8 +126,8 @@ const LoginPage: React.FC = () => {
     });
     
     try {
-      // Store remember me preference before OAuth redirect
-      localStorage.setItem('remember_me', String(rememberMe));
+      // Store remember me preference before OAuth redirect (always false now)
+      localStorage.setItem('remember_me', 'false');
       
       // Use Supabase's built-in OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -187,61 +188,196 @@ const LoginPage: React.FC = () => {
     analyticsService.trackEvent(AUTH_EVENTS.PASSWORD_RESET_REQUEST, {
       source: 'login_page'
     });
+    navigate('/forgot-password');
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Branding and illustration */}
-      <div className="hidden md:flex md:w-1/2 flex-col items-center justify-center p-10 bg-gray-50">
-        <div className="max-w-md">
-          <img src="/assets/images/logo.png" alt="ContractNest" className="h-16 mb-10" />
-          
-          <div className="w-full">
-            <img src="/assets/images/authentication.png" alt="Login illustration" className="w-full shadow-lg rounded-lg" />
-          </div>
-        </div>
-      </div>
+    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-200 ${
+      isDarkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-indigo-900' 
+        : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'
+    }`}>
+      {/* Background Pattern */}
+      <div className={`absolute inset-0 opacity-5 ${
+        isDarkMode ? 'opacity-10' : 'opacity-5'
+      }`} style={{
+        backgroundImage: `
+          linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
+          linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
+        `,
+        backgroundSize: '20px 20px'
+      }}></div>
       
-      {/* Right side - Login form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center px-8 py-12">
-        <div className="w-full max-w-md">
-          {/* Mobile view logo */}
-          <div className="md:hidden flex justify-center mb-8">
-            <img src="/assets/images/logo.png" alt="ContractNest" className="h-16" />
-          </div>
-          
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome Back!
-          </h1>
-          <p className="text-gray-600 text-center mb-10">
-            Enter your credentials to access your account and manage your service contracts with ease.
-          </p>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
+      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative z-10">
+        
+        {/* Left Side - Branding & Features */}
+        <div className="hidden lg:block space-y-8">
+          {/* Logo & Brand */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Shield className="w-7 h-7 text-white" />
+              </div>
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your email"
-                  disabled={isLoading || isGoogleLoading}
-                />
+                <h1 className={`text-3xl font-bold transition-colors ${
+                  isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>ContractNest</h1>
+                <p className={`text-sm transition-colors ${
+                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                }`}>Contract Management Made Simple</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Value Proposition */}
+          <div className="space-y-6">
+            <h2 className={`text-2xl font-semibold transition-colors ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
+              Welcome back to your contract hub
+            </h2>
+            
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mt-0.5">
+                  <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className={`font-medium transition-colors ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Track All Contracts</h3>
+                  <p className={`text-sm transition-colors ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>Centralized dashboard for all your service contracts</p>
+                </div>
               </div>
               
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mt-0.5">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className={`font-medium transition-colors ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Never Miss Renewals</h3>
+                  <p className={`text-sm transition-colors ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>Smart notifications for upcoming deadlines</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start space-x-3">
+                <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mt-0.5">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                </div>
+                <div>
+                  <h3 className={`font-medium transition-colors ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Team Collaboration</h3>
+                  <p className={`text-sm transition-colors ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>Work together seamlessly with your team</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Free Contracts Banner */}
+            <div className={`rounded-lg p-4 border transition-colors ${
+              isDarkMode 
+                ? 'bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-green-700' 
+                : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
+            }`}>
+              <div className={`flex items-center space-x-2 transition-colors ${
+                isDarkMode ? 'text-green-400' : 'text-green-700'
+              }`}>
+                <Shield className="w-4 h-4" />
+                <span className="text-sm font-medium">Your first 3 contracts are free!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side - Login Form */}
+        <div className="w-full max-w-md mx-auto lg:mx-0">
+          {/* Mobile Logo */}
+          <div className="lg:hidden text-center mb-8">
+            <div className="flex items-center justify-center space-x-3 mb-2">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <h1 className={`text-2xl font-bold transition-colors ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>ContractNest</h1>
+            </div>
+            <p className={`text-sm transition-colors ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            }`}>Contract Management Made Simple</p>
+          </div>
+
+          {/* Login Card */}
+          <div className={`backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors ${
+            isDarkMode 
+              ? 'bg-gray-800/70 border-gray-700/20' 
+              : 'bg-white/70 border-white/20'
+          }`}>
+            <div className="text-center mb-8">
+              <h2 className={`text-2xl font-bold mb-2 transition-colors ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>Welcome Back</h2>
+              <p className={`transition-colors ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>Sign in to manage your contracts</p>
+            </div>
+
+            {/* Success Message */}
+            {message && (
+              <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>
+              </div>
+            )}
+
+            <div onSubmit={handleSubmit} className="space-y-6">
+              {/* Email Field */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                }`}>
+                  Email Address
+                </label>
+                <div className="relative">
+                  <Mail className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
+                  }`} />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                      isDarkMode 
+                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
+                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
+                    }`}
+                    placeholder="Enter your email"
+                    disabled={isLoading || isGoogleLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <label htmlFor="password" className={`block text-sm font-medium mb-2 transition-colors ${
+                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
+                }`}>
                   Password
                 </label>
                 <div className="relative">
+                  <Lock className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
+                  }`} />
                   <input
                     id="password"
                     name="password"
@@ -250,87 +386,94 @@ const LoginPage: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 pr-10"
+                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                      isDarkMode 
+                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
+                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
+                    }`}
                     placeholder="Enter your password"
                     disabled={isLoading || isGoogleLoading}
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500"
+                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors ${
+                      isDarkMode 
+                        ? 'text-gray-400 hover:text-gray-200' 
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
                     onClick={togglePasswordVisibility}
                     disabled={isLoading || isGoogleLoading}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled={isLoading || isGoogleLoading}
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                  Remember me
-                </label>
-              </div>
-              
-              <div className="text-sm">
-                <Link 
-                  to="/forgot-password" 
-                  className="font-medium text-blue-500 hover:text-blue-600"
+
+              {/* Forgot Password */}
+              <div className="text-right">
+                <button
+                  type="button"
                   onClick={handleForgotPasswordClick}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
                 >
                   Forgot password?
-                </Link>
+                </button>
               </div>
-            </div>
-            
-            <div>
+
+              {/* Sign In Button */}
               <button
                 type="submit"
+                onClick={handleSubmit}
                 disabled={isLoading || isGoogleLoading}
-                className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
               >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
-            
-            {/* Divider */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+
+            {/* Divider - Only show if Google OAuth is enabled */}
+            {isGoogleAuthEnabled && (
+              <div className="my-6">
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className={`w-full border-t transition-colors ${
+                      isDarkMode ? 'border-gray-600' : 'border-gray-300'
+                    }`}></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className={`px-2 transition-colors ${
+                      isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'
+                    }`}>Or continue with</span>
+                  </div>
+                </div>
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with</span>
-              </div>
-            </div>
-            
-            {/* Google Sign-in Button */}
-            <div>
+            )}
+
+            {/* Google Sign-in Button - Only show if Google OAuth is enabled */}
+            {isGoogleAuthEnabled && (
               <button
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={isGoogleLoading || isLoading}
-                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className={`w-full flex items-center justify-center px-4 py-3 border rounded-lg shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ${
+                  isDarkMode
+                    ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 {isGoogleLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
                     Connecting to Google...
                   </>
                 ) : (
@@ -345,21 +488,34 @@ const LoginPage: React.FC = () => {
                   </>
                 )}
               </button>
-            </div>
-            
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
+            )}
+
+            {/* Sign Up Link */}
+            <div className="mt-6 text-center">
+              <p className={`text-sm transition-colors ${
+                isDarkMode ? 'text-gray-300' : 'text-gray-600'
+              }`}>
                 Don't have an account?{' '}
                 <Link 
                   to="/register" 
-                  className="font-medium text-blue-500 hover:text-blue-600"
+                  className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                   onClick={() => analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_START, { source: 'login_page' })}
                 >
-                  Create one
+                  Start your free trial
                 </Link>
               </p>
             </div>
-          </form>
+          </div>
+
+          {/* Security Note */}
+          <div className="mt-6 text-center">
+            <p className={`text-xs flex items-center justify-center space-x-1 transition-colors ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}>
+              <Shield className="w-3 h-3" />
+              <span>Your data is secured with enterprise-grade encryption</span>
+            </p>
+          </div>
         </div>
       </div>
     </div>

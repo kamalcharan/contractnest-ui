@@ -29,29 +29,45 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   {
-  id: 'contacts',
-  label: 'Contacts',
-  icon: 'Users',
-  path: '/contacts',
-  hasSubmenu: true,
-  submenuItems: [
-    {
-      id: 'contacts-list',
-      label: 'All Contacts',
-      icon: 'List',
-      path: '/contacts'
-    },
-    {
-      id: 'contacts-create',
-      label: 'Add Contact',
-      icon: 'UserPlus',
-      path: '/contacts/create'  // Changed from /contacts/new
-    },
-    
-  ]
-},
-
- {
+    id: 'contacts',
+    label: 'Contacts',
+    icon: 'Users',
+    path: '/contacts',
+    hasSubmenu: true,
+    submenuItems: [
+      {
+        id: 'contacts-all',
+        label: 'All Contacts',
+        icon: 'Users',
+        path: '/contacts'
+      },
+      {
+        id: 'contacts-buyers',
+        label: 'Buyers',
+        icon: 'ShoppingCart',
+        path: '/contacts?filter=buyers'
+      },
+      {
+        id: 'contacts-partners',
+        label: 'Partners',
+        icon: 'Handshake',
+        path: '/contacts?filter=partners'
+      },
+      {
+        id: 'contacts-service-providers',
+        label: 'Service Providers',
+        icon: 'Wrench',
+        path: '/contacts?filter=service_providers'
+      },
+      {
+        id: 'contacts-create',
+        label: 'Add Contact',
+        icon: 'UserPlus',
+        path: '/contacts/create'
+      }
+    ]
+  },
+  {
     id: 'contracts',
     label: 'Contracts',
     icon: 'FileText',
@@ -94,6 +110,40 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   {
+    id: 'catalog',
+    label: 'Catalog',
+    icon: 'catalog',
+    path: '/catalog',
+    hasSubmenu: true,
+    submenuItems: [
+      {
+        id: 'Services',
+        label: 'Services',
+        icon: 'Package',
+        path: '/catalog/services'
+      },
+      {
+        id: 'equipments',
+        label: 'Equipments',
+        icon: 'Settings',
+        path: '/catalog/equipments'
+      },
+      {
+        id: 'Assets',
+        label: 'Assets',
+        icon: 'Box',
+        path: '/catalog/assets'
+      },
+      {
+        id: 'Spare-Parts',
+        label: 'Spare Parts',
+        icon: 'Wrench',
+        path: '/catalog/spare-parts'
+      },
+      
+    ]
+  },
+  {
     id: 'marketplace',
     label: 'Marketplace',
     icon: 'ShoppingBag',
@@ -121,19 +171,19 @@ export const defaultMenuItems: MenuItem[] = [
         path: '/settings/templates'
       },
       {
-  id: 'pricing-plans',
-  label: 'Pricing Plans',
-  icon: 'CreditCard',
-  path: '/businessmodel/tenants/pricing-plans',
-  hasSubmenu: false
-},
-{
-  id: 'my-subscription',
-  label: 'My Subscription',
-  icon: 'Package',
-  path: '/businessmodel/tenants/subscription',
-  hasSubmenu: false
-}
+        id: 'pricing-plans',
+        label: 'Pricing Plans',
+        icon: 'CreditCard',
+        path: '/businessmodel/tenants/pricing-plans',
+        hasSubmenu: false
+      },
+      {
+        id: 'my-subscription',
+        label: 'My Subscription',
+        icon: 'Package',
+        path: '/businessmodel/tenants/subscription',
+        hasSubmenu: false
+      }
     ]
   },
   // Admin menus below
@@ -175,12 +225,12 @@ export const defaultMenuItems: MenuItem[] = [
         icon: 'CreditCard',
         path: '/implementation/subscription-management'
       },
-       {
-      id: 'billing-dashboard',
-      label: 'Billing Dashboard',
-      icon: 'CreditCard',
-      path: '/settings/businessmodel/admin/billing'
-    },
+      {
+        id: 'billing-dashboard',
+        label: 'Billing Dashboard',
+        icon: 'CreditCard',
+        path: '/settings/businessmodel/admin/billing'
+      },
     ]
   },
   {
@@ -204,27 +254,39 @@ export const defaultMenuItems: MenuItem[] = [
 // Industry-specific menu overrides
 export const industryMenuOverrides: Record<string, Partial<Record<string, { label: string, icon?: string }>>> = {
   healthcare: {
+    contacts: { label: 'Patients & Staff', icon: 'Users' },
+    'contacts-buyers': { label: 'Patients', icon: 'Users' },
+    'contacts-partners': { label: 'Medical Partners', icon: 'Stethoscope' },
+    'contacts-service-providers': { label: 'Healthcare Providers', icon: 'UserCheck' },
     contracts: { label: 'Care Packages', icon: 'Stethoscope' },
     appointments: { label: 'Patient Appointments', icon: 'Stethoscope' },
-    contacts: { label: 'Patients & Staff', icon: 'Users' },
     'implementation-toolkit': { label: 'Clinical Implementation Tools', icon: 'Stethoscope' }
   },
   financial_services: {
+    contacts: { label: 'Clients & Partners', icon: 'Users' },
+    'contacts-buyers': { label: 'Clients', icon: 'DollarSign' },
+    'contacts-partners': { label: 'Financial Partners', icon: 'Handshake' },
+    'contacts-service-providers': { label: 'Service Providers', icon: 'Building2' },
     contracts: { label: 'Financial Agreements', icon: 'DollarSign' },
     appointments: { label: 'Client Meetings', icon: 'Calendar' },
-    contacts: { label: 'Clients & Partners', icon: 'Users' },
     'implementation-toolkit': { label: 'Financial Implementation Suite', icon: 'DollarSign' }
   },
   education: {
+    contacts: { label: 'Students & Faculty', icon: 'Users' },
+    'contacts-buyers': { label: 'Students', icon: 'GraduationCap' },
+    'contacts-partners': { label: 'Education Partners', icon: 'Handshake' },
+    'contacts-service-providers': { label: 'Faculty & Staff', icon: 'UserCheck' },
     contracts: { label: 'Learning Programs', icon: 'GraduationCap' },
     appointments: { label: 'Sessions', icon: 'Calendar' },
-    contacts: { label: 'Students & Faculty', icon: 'Users' },
     'implementation-toolkit': { label: 'Education Implementation Tools', icon: 'GraduationCap' }
   },
   construction: {
+    contacts: { label: 'Contractors & Clients', icon: 'Users' },
+    'contacts-buyers': { label: 'Clients', icon: 'Building2' },
+    'contacts-partners': { label: 'Construction Partners', icon: 'Handshake' },
+    'contacts-service-providers': { label: 'Contractors', icon: 'Hammer' },
     contracts: { label: 'Project Contracts', icon: 'Hammer' },
     appointments: { label: 'Site Visits', icon: 'MapPin' },
-    contacts: { label: 'Contractors & Clients', icon: 'Users' },
     'implementation-toolkit': { label: 'Construction Implementation Kit', icon: 'Hammer' }
   },
   // Add more industries as needed
