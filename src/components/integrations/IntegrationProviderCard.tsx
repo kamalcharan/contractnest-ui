@@ -7,6 +7,7 @@ import StatusBadge from './StatusBadge';
 import IntegrationSetupModal from './IntegrationSetupModal';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface IntegrationProviderCardProps {
   provider: IntegrationProvider;
@@ -27,6 +28,10 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
 }) => {
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Format last verified date
   const formatLastVerified = (dateString: string | null) => {
@@ -108,11 +113,23 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
   
   return (
     <>
-      <div className="bg-card rounded-lg border border-border shadow-sm p-4">
+      <div 
+        className="rounded-lg border shadow-sm p-4 transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: `${colors.utility.primaryText}20`
+        }}
+      >
         <div className="flex items-start justify-between">
           {/* Provider Logo & Info */}
           <div className="flex items-start">
-            <div className="w-10 h-10 rounded overflow-hidden border border-border mr-3 bg-card flex-shrink-0 flex items-center justify-center">
+            <div 
+              className="w-10 h-10 rounded overflow-hidden border mr-3 flex-shrink-0 flex items-center justify-center transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            >
               {provider.logo_url && !logoError ? (
                 <img 
                   src={provider.logo_url} 
@@ -125,15 +142,31 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
                 />
               ) : (
                 // Show initials as fallback
-                <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground text-xs font-medium">
+                <div 
+                  className="w-full h-full flex items-center justify-center text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: `${colors.utility.secondaryText}20`,
+                    color: colors.utility.secondaryText
+                  }}
+                >
                   {getInitials()}
                 </div>
               )}
             </div>
             
             <div className="flex-1">
-              <h3 className="font-medium">{provider.display_name}</h3>
-              <p className="text-sm text-muted-foreground">{provider.description}</p>
+              <h3 
+                className="font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {provider.display_name}
+              </h3>
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {provider.description}
+              </p>
               
               {/* Show status badge inline for better visibility */}
               <div className="mt-1">
@@ -148,16 +181,34 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
         
         {/* Integration Details (if configured) */}
         {isConfigured && tenantIntegration && (
-          <div className="mt-4 pt-4 border-t border-border">
+          <div 
+            className="mt-4 pt-4 border-t transition-colors"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          >
             <div className="flex justify-between items-center">
               <div className="text-sm">
-                <p className="text-muted-foreground">Last verified: {formatLastVerified(tenantIntegration.last_verified)}</p>
-                <p className="text-muted-foreground">{tenantIntegration.is_live ? 'Live mode' : 'Test mode'}</p>
+                <p 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Last verified: {formatLastVerified(tenantIntegration.last_verified)}
+                </p>
+                <p 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  {tenantIntegration.is_live ? 'Live mode' : 'Test mode'}
+                </p>
               </div>
               
               {/* Toggle Switch */}
               <div className="flex items-center">
-                <span className="text-sm mr-2">{tenantIntegration.is_active ? 'Active' : 'Inactive'}</span>
+                <span 
+                  className="text-sm mr-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {tenantIntegration.is_active ? 'Active' : 'Inactive'}
+                </span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -165,7 +216,12 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
                     onChange={handleToggleStatus}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+                  <div 
+                    className="w-11 h-6 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 transition-colors"
+                    style={{
+                      backgroundColor: tenantIntegration.is_active ? colors.brand.primary : colors.utility.secondaryText + '40'
+                    }}
+                  />
                 </label>
               </div>
             </div>
@@ -180,7 +236,8 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
               href={provider.metadata.documentation_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-primary hover:underline flex items-center"
+              className="text-sm hover:underline flex items-center transition-colors"
+              style={{ color: colors.brand.primary }}
               onClick={() => {
                 try {
                   if (analyticsService && typeof analyticsService.trackPageView === 'function') {
@@ -203,11 +260,23 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
           <button
             onClick={handleSetupClick}
             className={cn(
-              "px-4 py-2 rounded-md text-sm ml-auto",
+              "px-4 py-2 rounded-md text-sm ml-auto transition-all duration-200",
               isConfigured
-                ? "text-primary border border-primary hover:bg-primary/5"
-                : "bg-primary text-primary-foreground hover:bg-primary/90"
+                ? "border hover:opacity-80"
+                : "text-white hover:opacity-90"
             )}
+            style={
+              isConfigured
+                ? {
+                    color: colors.brand.primary,
+                    borderColor: colors.brand.primary,
+                    backgroundColor: `${colors.brand.primary}05`
+                  }
+                : {
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                    color: 'white'
+                  }
+            }
           >
             {isConfigured ? (
               <>

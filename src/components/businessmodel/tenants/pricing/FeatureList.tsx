@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Check, X } from 'lucide-react';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 // FIXED: Updated interface to match actual usage
@@ -39,6 +40,9 @@ const FeatureList: React.FC<FeatureListProps> = ({
   planType,
   isCurrentPlan = false
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // FIXED: Safe accessor for feature price with fallback handling
   const getFeaturePrice = (feature: PlanFeature, currency: string): number => {
     // Try multiple property paths for backward compatibility
@@ -74,16 +78,30 @@ const FeatureList: React.FC<FeatureListProps> = ({
           <div key={feature.feature_id || feature.featureId || index} className="flex items-center justify-between py-2">
             <div className="flex items-center">
               {enabled ? (
-                <Check className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                <Check 
+                  className="h-4 w-4 mr-3 flex-shrink-0"
+                  style={{ color: colors.semantic.success }}
+                />
               ) : (
-                <X className="h-4 w-4 text-red-500 mr-3 flex-shrink-0" />
+                <X 
+                  className="h-4 w-4 mr-3 flex-shrink-0"
+                  style={{ color: colors.semantic.error }}
+                />
               )}
               <div>
-                <span className={`text-sm ${enabled ? 'text-foreground' : 'text-muted-foreground line-through'}`}>
+                <span 
+                  className={`text-sm transition-colors ${enabled ? '' : 'line-through'}`}
+                  style={{ 
+                    color: enabled ? colors.utility.primaryText : colors.utility.secondaryText
+                  }}
+                >
                   {feature.name || 'Unnamed Feature'}
                 </span>
                 {feature.limit && (
-                  <div className="text-xs text-muted-foreground">
+                  <div 
+                    className="text-xs transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Limit: {feature.limit} per {planType === 'Per User' ? 'user' : 'contract'}
                   </div>
                 )}
@@ -93,14 +111,27 @@ const FeatureList: React.FC<FeatureListProps> = ({
             <div className="text-right">
               {feature.is_special_feature && featurePrice > 0 ? (
                 <div className="text-sm">
-                  <div className="font-medium">
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {formatCurrency(featurePrice, currency)}
                     /{pricingPeriod}
                   </div>
-                  <div className="text-xs text-muted-foreground">Additional</div>
+                  <div 
+                    className="text-xs transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Additional
+                  </div>
                 </div>
               ) : (
-                <span className="text-sm text-muted-foreground">Included</span>
+                <span 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Included
+                </span>
               )}
             </div>
           </div>

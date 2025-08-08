@@ -36,7 +36,8 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
   onSubmit,
   onCancel
 }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Helper to check if a step is active, completed, or pending
   const getStepStatus = (step: WizardStep) => {
@@ -48,11 +49,52 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
     if (currentIndex > stepIndex) return 'completed';
     return 'pending';
   };
+
+  const getStepStyles = (step: WizardStep) => {
+    const status = getStepStatus(step);
+    
+    switch (status) {
+      case 'active':
+        return {
+          circle: {
+            background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+            color: '#ffffff'
+          },
+          text: {
+            color: colors.utility.primaryText,
+            fontWeight: '500'
+          }
+        };
+      case 'completed':
+        return {
+          circle: {
+            backgroundColor: colors.brand.primary + '20',
+            color: colors.brand.primary
+          },
+          text: {
+            color: colors.brand.primary
+          }
+        };
+      default: // pending
+        return {
+          circle: {
+            backgroundColor: colors.utility.secondaryText + '20',
+            color: colors.utility.secondaryText
+          },
+          text: {
+            color: colors.utility.secondaryText
+          }
+        };
+    }
+  };
   
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <Loader2 
+          className="w-8 h-8 animate-spin"
+          style={{ color: colors.brand.primary }}
+        />
       </div>
     );
   }
@@ -65,26 +107,20 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
           <React.Fragment key={step}>
             {/* Step Indicator */}
             <div className="flex flex-col items-center space-y-2">
-              <div className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center",
-                getStepStatus(step as WizardStep) === 'active' && "bg-primary text-primary-foreground",
-                getStepStatus(step as WizardStep) === 'completed' && "bg-primary/20 text-primary",
-                getStepStatus(step as WizardStep) === 'pending' && (
-                  isDarkMode ? "bg-muted text-muted-foreground" : "bg-muted/50 text-muted-foreground"
-                )
-              )}>
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200"
+                style={getStepStyles(step as WizardStep).circle}
+              >
                 {getStepStatus(step as WizardStep) === 'completed' ? (
                   <Check size={20} />
                 ) : (
                   <span>{index + 1}</span>
                 )}
               </div>
-              <span className={cn(
-                "text-sm",
-                getStepStatus(step as WizardStep) === 'active' && "font-medium text-foreground",
-                getStepStatus(step as WizardStep) === 'completed' && "text-primary",
-                getStepStatus(step as WizardStep) === 'pending' && "text-muted-foreground"
-              )}>
+              <span 
+                className="text-sm transition-colors"
+                style={getStepStyles(step as WizardStep).text}
+              >
                 {step === 'business-type' && "Business Type"}
                 {step === 'industry' && "Industry"}
                 {step === 'organization-details' && "Organization Details"}
@@ -93,12 +129,14 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
             
             {/* Connector Line */}
             {index < 2 && (
-              <div className={cn(
-                "flex-1 h-0.5 mx-4",
-                getStepStatus(('industry' as WizardStep)) === 'completed' && index === 0 
-                  ? "bg-primary/40" 
-                  : (isDarkMode ? "bg-muted" : "bg-muted/70")
-              )} />
+              <div 
+                className="flex-1 h-0.5 mx-4 transition-colors"
+                style={{
+                  backgroundColor: getStepStatus('industry' as WizardStep) === 'completed' && index === 0 
+                    ? colors.brand.primary + '40' 
+                    : colors.utility.secondaryText + '30'
+                }}
+              />
             )}
           </React.Fragment>
         ))}
@@ -109,8 +147,16 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
         {currentStep === 'business-type' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold">What type of business are you?</h2>
-              <p className="text-muted-foreground mt-2">
+              <h2 
+                className="text-2xl font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                What type of business are you?
+              </h2>
+              <p 
+                className="mt-2 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 This helps us tailor our features to your specific needs.
               </p>
             </div>
@@ -126,8 +172,16 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
         {currentStep === 'industry' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold">What industry are you in?</h2>
-              <p className="text-muted-foreground mt-2">
+              <h2 
+                className="text-2xl font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                What industry are you in?
+              </h2>
+              <p 
+                className="mt-2 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Select the industry that best describes your business.
               </p>
             </div>
@@ -143,8 +197,16 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
         {currentStep === 'organization-details' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-2xl font-semibold">Tell us about your organization</h2>
-              <p className="text-muted-foreground mt-2">
+              <h2 
+                className="text-2xl font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Tell us about your organization
+              </h2>
+              <p 
+                className="mt-2 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Provide your organization details to complete your profile.
               </p>
             </div>
@@ -160,7 +222,10 @@ const ProfileWizard: React.FC<ProfileWizardProps> = ({
       </div>
       
       {/* Navigation Buttons */}
-      <div className="flex justify-between pt-6 border-t">
+      <div 
+        className="flex justify-between pt-6 border-t transition-colors"
+        style={{ borderColor: colors.utility.secondaryText + '20' }}
+      >
         <div>
           {currentStep !== 'business-type' ? (
             <Button

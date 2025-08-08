@@ -13,6 +13,7 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Invoice } from '@/utils/fakejson/BillingData';
 
 interface InvoiceListProps {
@@ -26,6 +27,8 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   onViewInvoice,
   isLoading = false
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
   // State for filtering, sorting and dropdown menus
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
@@ -34,6 +37,9 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     direction: 'desc'
   });
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Format currency
   const formatCurrency = (amount: number, currency: string): string => {
@@ -116,28 +122,52 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     switch (status) {
       case 'paid':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <span 
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.success}20`,
+              color: colors.semantic.success
+            }}
+          >
             <CheckCircle className="h-3 w-3 mr-1" />
             Paid
           </span>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          <span 
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.warning}20`,
+              color: colors.semantic.warning
+            }}
+          >
             <Clock className="h-3 w-3 mr-1" />
             Pending
           </span>
         );
       case 'overdue':
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <span 
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.error}20`,
+              color: colors.semantic.error
+            }}
+          >
             <AlertCircle className="h-3 w-3 mr-1" />
             Overdue
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+          <span 
+            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
+          >
             {status}
           </span>
         );
@@ -152,18 +182,43 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   // Loading skeleton
   if (isLoading) {
     return (
-      <div className="bg-card border border-border rounded-lg overflow-hidden animate-pulse">
-        <div className="p-4 border-b border-border">
-          <div className="h-8 bg-muted rounded w-64"></div>
+      <div 
+        className="border border-opacity-20 rounded-lg overflow-hidden animate-pulse transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText
+        }}
+      >
+        <div 
+          className="p-4 border-b border-opacity-20 transition-colors"
+          style={{ borderColor: colors.utility.primaryText }}
+        >
+          <div 
+            className="h-8 rounded w-64"
+            style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+          ></div>
         </div>
         {Array(5).fill(0).map((_, index) => (
-          <div key={index} className="border-b border-border p-4">
+          <div 
+            key={index} 
+            className="border-b border-opacity-20 p-4 transition-colors"
+            style={{ borderColor: colors.utility.primaryText }}
+          >
             <div className="flex justify-between">
               <div className="space-y-2">
-                <div className="h-4 bg-muted rounded w-24"></div>
-                <div className="h-4 bg-muted rounded w-32"></div>
+                <div 
+                  className="h-4 rounded w-24"
+                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                ></div>
+                <div 
+                  className="h-4 rounded w-32"
+                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                ></div>
               </div>
-              <div className="h-8 bg-muted rounded w-20"></div>
+              <div 
+                className="h-8 rounded w-20"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+              ></div>
             </div>
           </div>
         ))}
@@ -172,9 +227,18 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
   }
   
   return (
-    <div className="bg-card border border-border rounded-lg overflow-hidden">
+    <div 
+      className="border border-opacity-20 rounded-lg overflow-hidden transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText
+      }}
+    >
       {/* Search and Filter Bar */}
-      <div className="p-4 border-b border-border">
+      <div 
+        className="p-4 border-b border-opacity-20 transition-colors"
+        style={{ borderColor: colors.utility.primaryText }}
+      >
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <div className="relative flex-1 min-w-[200px]">
             <input
@@ -182,51 +246,92 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               placeholder="Search invoices..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 pl-10 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              className="w-full px-4 py-2 pl-10 rounded-md border border-opacity-20 text-sm focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+              style={{
+                borderColor: colors.utility.primaryText,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
             />
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-muted-foreground" />
+              <Search 
+                className="h-4 w-4"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </div>
           </div>
           
           <div className="flex space-x-2">
             <button
               onClick={() => handleStatusFilter('all')}
-              className={`px-3 py-1.5 rounded-md text-sm ${
+              className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                 statusFilter === 'all'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted/50 hover:bg-muted text-foreground'
+                  ? 'text-white'
+                  : 'hover:opacity-80'
               }`}
+              style={{
+                backgroundColor: statusFilter === 'all' 
+                  ? colors.brand.primary 
+                  : `${colors.utility.primaryText}10`,
+                color: statusFilter === 'all' 
+                  ? 'white' 
+                  : colors.utility.primaryText
+              }}
             >
               All
             </button>
             <button
               onClick={() => handleStatusFilter('paid')}
-              className={`px-3 py-1.5 rounded-md text-sm ${
+              className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                 statusFilter === 'paid'
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                  : 'bg-muted/50 hover:bg-muted text-foreground'
+                  ? ''
+                  : 'hover:opacity-80'
               }`}
+              style={{
+                backgroundColor: statusFilter === 'paid'
+                  ? `${colors.semantic.success}20`
+                  : `${colors.utility.primaryText}10`,
+                color: statusFilter === 'paid'
+                  ? colors.semantic.success
+                  : colors.utility.primaryText
+              }}
             >
               Paid
             </button>
             <button
               onClick={() => handleStatusFilter('pending')}
-              className={`px-3 py-1.5 rounded-md text-sm ${
+              className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                 statusFilter === 'pending'
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                  : 'bg-muted/50 hover:bg-muted text-foreground'
+                  ? ''
+                  : 'hover:opacity-80'
               }`}
+              style={{
+                backgroundColor: statusFilter === 'pending'
+                  ? `${colors.semantic.warning}20`
+                  : `${colors.utility.primaryText}10`,
+                color: statusFilter === 'pending'
+                  ? colors.semantic.warning
+                  : colors.utility.primaryText
+              }}
             >
               Pending
             </button>
             <button
               onClick={() => handleStatusFilter('overdue')}
-              className={`px-3 py-1.5 rounded-md text-sm ${
+              className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
                 statusFilter === 'overdue'
-                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  : 'bg-muted/50 hover:bg-muted text-foreground'
+                  ? ''
+                  : 'hover:opacity-80'
               }`}
+              style={{
+                backgroundColor: statusFilter === 'overdue'
+                  ? `${colors.semantic.error}20`
+                  : `${colors.utility.primaryText}10`,
+                color: statusFilter === 'overdue'
+                  ? colors.semantic.error
+                  : colors.utility.primaryText
+              }}
             >
               Overdue
             </button>
@@ -235,7 +340,13 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       </div>
       
       {/* Table Header */}
-      <div className="hidden md:flex text-xs font-medium text-muted-foreground uppercase tracking-wider border-b border-border">
+      <div 
+        className="hidden md:flex text-xs font-medium uppercase tracking-wider border-b border-opacity-20 transition-colors"
+        style={{
+          color: colors.utility.secondaryText,
+          borderColor: colors.utility.primaryText
+        }}
+      >
         <div className="px-6 py-3 w-1/6 cursor-pointer" onClick={() => toggleSort('id')}>
           <div className="flex items-center">
             Invoice ID
@@ -293,55 +404,123 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
       {/* Invoices List */}
       {sortedInvoices.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-muted-foreground">No invoices found matching your criteria</p>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            No invoices found matching your criteria
+          </p>
         </div>
       ) : (
         <>
           {sortedInvoices.map(invoice => (
-            <div key={invoice.id} className="border-b border-border">
+            <div 
+              key={invoice.id} 
+              className="border-b border-opacity-20 transition-colors"
+              style={{ borderColor: colors.utility.primaryText }}
+            >
               {/* Desktop View */}
               <div className="hidden md:flex items-center">
                 <div className="px-6 py-4 w-1/6">
-                  <div className="font-medium">{invoice.id}</div>
-                  <div className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invoice.id}
+                  </div>
+                  <div 
+                    className="text-xs transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {formatDate(invoice.createdAt)}
+                  </div>
                 </div>
-                <div className="px-6 py-4 w-1/5 truncate">{invoice.tenantName}</div>
-                <div className="px-6 py-4 w-1/5 truncate">{invoice.planName}</div>
-                <div className="px-6 py-4 w-1/6 font-medium">
+                <div 
+                  className="px-6 py-4 w-1/5 truncate transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {invoice.tenantName}
+                </div>
+                <div 
+                  className="px-6 py-4 w-1/5 truncate transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {invoice.planName}
+                </div>
+                <div 
+                  className="px-6 py-4 w-1/6 font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {formatCurrency(invoice.amount, invoice.currency)}
                 </div>
-                <div className="px-6 py-4 w-1/6 text-sm">{formatDate(invoice.dueDate)}</div>
+                <div 
+                  className="px-6 py-4 w-1/6 text-sm transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatDate(invoice.dueDate)}
+                </div>
                 <div className="px-6 py-4 w-1/6 text-center">
                   {getStatusBadge(invoice.status)}
                 </div>
                 <div className="px-6 py-4 w-20 text-center relative">
                   <button 
                     onClick={() => toggleDropdown(invoice.id)}
-                    className="p-1 rounded-full hover:bg-muted transition-colors"
+                    className="p-1 rounded-full hover:opacity-80 transition-colors"
+                    style={{ backgroundColor: `${colors.utility.primaryText}10` }}
                   >
-                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                    <MoreHorizontal 
+                      className="h-4 w-4"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
                   </button>
                   
                   {/* Dropdown Menu */}
                   {dropdownOpen === invoice.id && (
-                    <div className="absolute right-4 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-border">
+                    <div 
+                      className="absolute right-4 mt-2 w-48 rounded-md shadow-lg z-10 border border-opacity-20 transition-colors"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: colors.utility.primaryText
+                      }}
+                    >
                       <div className="py-1">
                         <button
                           onClick={() => onViewInvoice(invoice.id)}
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="flex items-center w-full px-4 py-2 text-sm hover:opacity-80 transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
                         >
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
                         </button>
                         <button
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="flex items-center w-full px-4 py-2 text-sm hover:opacity-80 transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Download PDF
                         </button>
                         {invoice.status !== 'paid' && (
                           <button
-                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="flex items-center w-full px-4 py-2 text-sm hover:opacity-80 transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'transparent';
+                            }}
                           >
                             <Mail className="h-4 w-4 mr-2" />
                             Send Reminder
@@ -357,9 +536,24 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
               <div className="md:hidden p-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-medium">{invoice.id}</div>
-                    <div className="text-sm">{invoice.tenantName}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{formatDate(invoice.createdAt)}</div>
+                    <div 
+                      className="font-medium transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {invoice.id}
+                    </div>
+                    <div 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {invoice.tenantName}
+                    </div>
+                    <div 
+                      className="text-xs mt-1 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {formatDate(invoice.createdAt)}
+                    </div>
                   </div>
                   <div>
                     {getStatusBadge(invoice.status)}
@@ -367,36 +561,78 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
                 </div>
                 
                 <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-1 text-sm">
-                  <div className="text-muted-foreground">Plan:</div>
-                  <div>{invoice.planName}</div>
+                  <div 
+                    className="transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Plan:
+                  </div>
+                  <div 
+                    className="transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invoice.planName}
+                  </div>
                   
-                  <div className="text-muted-foreground">Amount:</div>
-                  <div className="font-medium">{formatCurrency(invoice.amount, invoice.currency)}</div>
+                  <div 
+                    className="transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Amount:
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {formatCurrency(invoice.amount, invoice.currency)}
+                  </div>
                   
-                  <div className="text-muted-foreground">Due Date:</div>
-                  <div>{formatDate(invoice.dueDate)}</div>
+                  <div 
+                    className="transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Due Date:
+                  </div>
+                  <div 
+                    className="transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {formatDate(invoice.dueDate)}
+                  </div>
                 </div>
                 
                 <div className="mt-3 flex justify-end space-x-2">
                   <button
                     onClick={() => onViewInvoice(invoice.id)}
-                    className="p-2 rounded-md hover:bg-muted transition-colors"
+                    className="p-2 rounded-md hover:opacity-80 transition-colors"
+                    style={{ backgroundColor: `${colors.utility.primaryText}10` }}
                     title="View Details"
                   >
-                    <Eye className="h-4 w-4 text-muted-foreground" />
+                    <Eye 
+                      className="h-4 w-4"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
                   </button>
                   <button
-                    className="p-2 rounded-md hover:bg-muted transition-colors"
+                    className="p-2 rounded-md hover:opacity-80 transition-colors"
+                    style={{ backgroundColor: `${colors.utility.primaryText}10` }}
                     title="Download PDF"
                   >
-                    <Download className="h-4 w-4 text-muted-foreground" />
+                    <Download 
+                      className="h-4 w-4"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
                   </button>
                   {invoice.status !== 'paid' && (
                     <button
-                      className="p-2 rounded-md hover:bg-muted transition-colors"
+                      className="p-2 rounded-md hover:opacity-80 transition-colors"
+                      style={{ backgroundColor: `${colors.utility.primaryText}10` }}
                       title="Send Reminder"
                     >
-                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <Mail 
+                        className="h-4 w-4"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
                     </button>
                   )}
                 </div>

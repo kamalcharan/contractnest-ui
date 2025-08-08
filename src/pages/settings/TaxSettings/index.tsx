@@ -27,8 +27,11 @@ import { TAX_SECTIONS } from '@/types/taxSettings';
 const TaxSettingsPage = () => {
   const navigate = useNavigate();
   const { currentTenant } = useAuth();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Local state for section navigation
   const [activeSection, setActiveSection] = useState<TaxSection>('tax-display');
@@ -92,37 +95,70 @@ const TaxSettingsPage = () => {
   // Show initial loading spinner
   if (initialLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div 
+        className="flex items-center justify-center min-h-[400px] transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <Loader2 
+          className="h-8 w-8 animate-spin transition-colors" 
+          style={{ color: colors.brand.primary }}
+        />
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors duration-200 min-h-screen"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
       {/* Header - Following LOV pattern */}
       <div className="flex items-center mb-8">
         <Button
           variant="outline"
           size="sm"
           onClick={handleGoBack}
-          className="mr-4"
+          className="mr-4 transition-colors"
+          style={{
+            borderColor: colors.utility.secondaryText + '40',
+            backgroundColor: colors.utility.secondaryBackground,
+            color: colors.utility.primaryText
+          }}
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Tax Settings
           </h1>
-          <p className="text-muted-foreground">
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             Configure tax display and manage tax rates
           </p>
         </div>
         
         {/* Save indicator */}
         {isSaving && (
-          <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div 
+            className="ml-auto flex items-center gap-2 text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <Loader2 
+              className="h-4 w-4 animate-spin transition-colors"
+              style={{ color: colors.brand.primary }}
+            />
             Saving...
           </div>
         )}
@@ -132,7 +168,13 @@ const TaxSettingsPage = () => {
       <div className="flex gap-6">
         {/* Left Panel - Section Navigation */}
         <div className="w-64 shrink-0">
-          <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+          <div 
+            className="rounded-lg shadow-sm border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             {TAX_SECTIONS.map((section, index) => {
               const isSelected = activeSection === section.id;
               const isFirst = index === 0;
@@ -142,19 +184,32 @@ const TaxSettingsPage = () => {
                   key={section.id}
                   onClick={() => handleSectionChange(section.id)}
                   className={cn(
-                    "w-full px-4 py-3 text-left border-b border-border last:border-0 transition-colors",
+                    "w-full px-4 py-3 text-left border-b last:border-0 transition-colors",
                     isSelected 
-                      ? "bg-primary text-primary-foreground font-medium" 
-                      : "hover:bg-muted",
-                    // Apply special styles for the first item
-                    isFirst && !isSelected && "bg-muted/50"
+                      ? "font-medium" 
+                      : "hover:opacity-80"
                   )}
+                  style={{
+                    borderColor: colors.utility.primaryText + '20',
+                    backgroundColor: isSelected 
+                      ? colors.brand.primary
+                      : isFirst && !isSelected 
+                      ? colors.utility.primaryBackground + '50'
+                      : 'transparent',
+                    color: isSelected 
+                      ? '#FFFFFF'
+                      : colors.utility.primaryText
+                  }}
                 >
                   <div className="font-medium">{section.label}</div>
-                  <div className={cn(
-                    "text-sm mt-1",
-                    isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
-                  )}>
+                  <div 
+                    className="text-sm mt-1 transition-colors"
+                    style={{
+                      color: isSelected 
+                        ? '#FFFFFF80'
+                        : colors.utility.secondaryText
+                    }}
+                  >
                     {section.description}
                   </div>
                 </button>
@@ -164,11 +219,23 @@ const TaxSettingsPage = () => {
 
           {/* Error indicator in left panel */}
           {hasErrors && (
-            <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
-              <div className="text-sm text-destructive font-medium">
+            <div 
+              className="mt-4 p-3 border rounded-lg transition-colors"
+              style={{
+                backgroundColor: colors.semantic.error + '10',
+                borderColor: colors.semantic.error + '20'
+              }}
+            >
+              <div 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
                 Configuration Error
               </div>
-              <div className="text-xs text-destructive/80 mt-1">
+              <div 
+                className="text-xs mt-1 transition-colors"
+                style={{ color: colors.semantic.error + '80' }}
+              >
                 Please check the settings and try again
               </div>
             </div>
@@ -205,7 +272,10 @@ const TaxSettingsPage = () => {
 
       {/* Debug information (only in development) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="mt-8 p-4 bg-muted rounded-lg">
+        <div 
+          className="mt-8 p-4 rounded-lg transition-colors"
+          style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+        >
         
          
         </div>

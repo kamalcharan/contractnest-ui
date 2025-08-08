@@ -3,6 +3,7 @@
 import React from 'react';
 import { Settings, Check, X, Edit } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { useTheme } from '../../../../../contexts/ThemeContext';
 
 interface Feature {
   feature_id?: string;
@@ -32,6 +33,11 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
   isArchived = false,
   onEdit
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Format price with currency symbol
   const formatPrice = (price: number | null | undefined, currencyCode: string) => {
     if (price === null || price === undefined) return 'N/A';
@@ -65,12 +71,24 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
   // Status badge component
   const StatusBadge: React.FC<{ enabled: boolean }> = ({ enabled }) => (
     enabled ? (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+      <span 
+        className="inline-flex items-center px-2 py-1 rounded-full text-xs transition-colors"
+        style={{
+          backgroundColor: colors.semantic.success + '20',
+          color: colors.semantic.success
+        }}
+      >
         <Check className="h-3 w-3 mr-1" />
         Enabled
       </span>
     ) : (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+      <span 
+        className="inline-flex items-center px-2 py-1 rounded-full text-xs transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '80',
+          color: colors.utility.secondaryText
+        }}
+      >
         <X className="h-3 w-3 mr-1" />
         Disabled
       </span>
@@ -78,18 +96,37 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
   );
 
   return (
-    <div className="bg-card rounded-lg border border-border overflow-hidden">
-      <div className="px-6 py-4 bg-muted/20 border-b border-border flex items-center justify-between">
+    <div 
+      className="rounded-lg border overflow-hidden transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <div 
+        className="px-6 py-4 border-b flex items-center justify-between transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '20',
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
         <div className="flex items-center">
-          <Settings className="h-5 w-5 mr-2 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">
+          <Settings 
+            className="h-5 w-5 mr-2 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Features ({getCurrencySymbol(selectedCurrency)} {selectedCurrency})
           </h2>
         </div>
         {!isArchived && onEdit && (
           <button
             onClick={onEdit}
-            className="text-sm text-primary hover:text-primary/80 flex items-center"
+            className="text-sm flex items-center transition-colors hover:opacity-80"
+            style={{ color: colors.brand.primary }}
           >
             <Edit className="h-4 w-4 mr-1" />
             Edit
@@ -101,27 +138,83 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="px-4 py-2 text-left font-medium">Feature</th>
-                  <th className="px-4 py-2 text-left font-medium">Enabled</th>
-                  <th className="px-4 py-2 text-left font-medium">
+                <tr 
+                  className="border-b transition-colors"
+                  style={{ borderColor: colors.utility.primaryText + '20' }}
+                >
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Feature
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Enabled
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Paid Limit ({planType === 'Per User' ? 'per user' : 'per contract'})
                   </th>
-                  <th className="px-4 py-2 text-left font-medium">Trial</th>
-                  <th className="px-4 py-2 text-left font-medium">Trial Limit</th>
-                  <th className="px-4 py-2 text-left font-medium">Test Env. Limit</th>
-                  <th className="px-4 py-2 text-left font-medium">Pricing Period</th>
-                  <th className="px-4 py-2 text-left font-medium">Additional Price</th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Trial
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Trial Limit
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Test Env. Limit
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Pricing Period
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Additional Price
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {features.map((feature, index) => (
-                  <tr key={feature.feature_id || index} className="border-b border-border">
+                  <tr 
+                    key={feature.feature_id || index} 
+                    className="border-b transition-colors"
+                    style={{ borderColor: colors.utility.primaryText + '20' }}
+                  >
                     <td className="px-4 py-3">
                       <div>
-                        <span className="font-medium">{feature.name || 'Unnamed Feature'}</span>
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {feature.name || 'Unnamed Feature'}
+                        </span>
                         {feature.is_special_feature && (
-                          <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded">
+                          <span 
+                            className="ml-2 px-1.5 py-0.5 text-xs rounded transition-colors"
+                            style={{
+                              backgroundColor: colors.brand.primary + '10',
+                              color: colors.brand.primary
+                            }}
+                          >
                             Special
                           </span>
                         )}
@@ -130,34 +223,59 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
                     <td className="px-4 py-3">
                       <StatusBadge enabled={feature.enabled ?? false} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td 
+                      className="px-4 py-3 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {feature.limit ?? 0}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge enabled={feature.trial_enabled ?? false} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td 
+                      className="px-4 py-3 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {feature.trial_limit ?? 0}
                     </td>
-                    <td className="px-4 py-3">
+                    <td 
+                      className="px-4 py-3 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {feature.test_env_limit ?? 0}
                     </td>
                     <td className="px-4 py-3">
                       {feature.is_special_feature ? (
-                        <span className="capitalize">
+                        <span 
+                          className="capitalize transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatPricingPeriod(feature.pricing_period)}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">-</span>
+                        <span 
+                          className="transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          -
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {feature.is_special_feature ? (
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatPrice(getFeaturePrice(feature, selectedCurrency), selectedCurrency)}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">Included</span>
+                        <span 
+                          className="transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          Included
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -166,14 +284,29 @@ const FeaturesCard: React.FC<FeaturesCardProps> = ({
             </table>
           </div>
         ) : (
-          <div className="text-center p-8 text-muted-foreground">
-            <Settings className="h-12 w-12 mx-auto opacity-50 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Features</h3>
+          <div 
+            className="text-center p-8 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <Settings 
+              className="h-12 w-12 mx-auto opacity-50 mb-4" 
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <h3 
+              className="text-lg font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              No Features
+            </h3>
             <p>No features have been configured for this plan.</p>
             {!isArchived && onEdit && (
               <button
                 onClick={onEdit}
-                className="mt-4 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="mt-4 px-4 py-2 rounded-md transition-colors hover:opacity-90"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                  color: '#FFFFFF'
+                }}
               >
                 Add Features
               </button>

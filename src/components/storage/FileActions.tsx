@@ -1,6 +1,7 @@
 // src/components/storage/FileActions.tsx
 import React, { useState } from 'react';
 import { Download, Trash2, Eye, MoreHorizontal, FileText, Copy, Share2 } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface FileActionsProps {
   file: {
@@ -26,6 +27,10 @@ const FileActions: React.FC<FileActionsProps> = ({
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Handle download
   const handleDownload = () => {
@@ -106,14 +111,16 @@ const FileActions: React.FC<FileActionsProps> = ({
       <div className="flex space-x-2 items-center">
         <button
           onClick={handleConfirmedDelete}
-          className="text-red-500 hover:text-red-600 text-xs font-medium"
+          className="text-xs font-medium transition-colors hover:opacity-80"
+          style={{ color: colors.semantic.error }}
         >
           Confirm
         </button>
-        <span className="text-muted-foreground">|</span>
+        <span style={{ color: colors.utility.secondaryText }}>|</span>
         <button
           onClick={handleCancelDelete}
-          className="text-muted-foreground hover:text-foreground text-xs"
+          className="text-xs transition-colors hover:opacity-80"
+          style={{ color: colors.utility.secondaryText }}
         >
           Cancel
         </button>
@@ -127,7 +134,8 @@ const FileActions: React.FC<FileActionsProps> = ({
       <div className="flex space-x-3">
         <button
           onClick={handleDownload}
-          className="text-primary hover:text-primary/80 transition-colors"
+          className="transition-colors hover:opacity-80"
+          style={{ color: colors.brand.primary }}
           title="Download file"
         >
           <Download className="w-5 h-5" />
@@ -136,7 +144,8 @@ const FileActions: React.FC<FileActionsProps> = ({
         {showPreview && isPreviewable() && (
           <button
             onClick={handlePreview}
-            className="text-primary hover:text-primary/80 transition-colors"
+            className="transition-colors hover:opacity-80"
+            style={{ color: colors.brand.primary }}
             title="Preview file"
           >
             <Eye className="w-5 h-5" />
@@ -145,7 +154,8 @@ const FileActions: React.FC<FileActionsProps> = ({
         
         <button
           onClick={handleDeleteClick}
-          className="text-red-500 hover:text-red-600 transition-colors"
+          className="transition-colors hover:opacity-80"
+          style={{ color: colors.semantic.error }}
           title="Delete file"
         >
           <Trash2 className="w-5 h-5" />
@@ -156,7 +166,8 @@ const FileActions: React.FC<FileActionsProps> = ({
             e.stopPropagation();
             setShowDropdown(!showDropdown);
           }}
-          className="text-muted-foreground hover:text-foreground transition-colors"
+          className="transition-colors hover:opacity-80"
+          style={{ color: colors.utility.secondaryText }}
           title="More options"
         >
           <MoreHorizontal className="w-5 h-5" />
@@ -166,16 +177,36 @@ const FileActions: React.FC<FileActionsProps> = ({
       {/* Dropdown Menu */}
       {showDropdown && (
         <div 
-          className="absolute right-0 mt-1 py-2 w-48 bg-card rounded-md shadow-lg border border-border z-10"
+          className="absolute right-0 mt-1 py-2 w-48 rounded-md shadow-lg border z-10 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-b border-border mb-1">
+          <div 
+            className="px-3 py-1 text-xs font-semibold uppercase tracking-wide border-b mb-1 transition-colors"
+            style={{
+              color: colors.utility.secondaryText,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
             Actions
           </div>
           
           <button
             onClick={handleDownload}
-            className="w-full px-4 py-2 text-sm text-left flex items-center hover:bg-muted transition-colors"
+            className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
+            style={{ 
+              color: colors.utility.primaryText,
+              backgroundColor: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Download className="w-4 h-4 mr-2" />
             Download
@@ -184,7 +215,17 @@ const FileActions: React.FC<FileActionsProps> = ({
           {isPreviewable() && (
             <button
               onClick={handlePreview}
-              className="w-full px-4 py-2 text-sm text-left flex items-center hover:bg-muted transition-colors"
+              className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
+              style={{ 
+                color: colors.utility.primaryText,
+                backgroundColor: 'transparent'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
               <Eye className="w-4 h-4 mr-2" />
               Preview
@@ -193,7 +234,17 @@ const FileActions: React.FC<FileActionsProps> = ({
           
           <button
             onClick={handleCopyLink}
-            className="w-full px-4 py-2 text-sm text-left flex items-center hover:bg-muted transition-colors"
+            className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
+            style={{ 
+              color: colors.utility.primaryText,
+              backgroundColor: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Copy className="w-4 h-4 mr-2" />
             Copy Link
@@ -202,18 +253,41 @@ const FileActions: React.FC<FileActionsProps> = ({
           {showShare && (
             <button
               onClick={() => alert('Share functionality coming soon')}
-              className="w-full px-4 py-2 text-sm text-left flex items-center hover:bg-muted transition-colors"
+              className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
+              style={{ 
+                color: colors.utility.primaryText,
+                backgroundColor: 'transparent'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
             >
               <Share2 className="w-4 h-4 mr-2" />
               Share
             </button>
           )}
           
-          <div className="border-t border-border my-1"></div>
+          <div 
+            className="border-t my-1 transition-colors"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          />
           
           <button
             onClick={handleDeleteClick}
-            className="w-full px-4 py-2 text-sm text-left flex items-center text-red-500 hover:bg-red-50 transition-colors"
+            className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
+            style={{ 
+              color: colors.semantic.error,
+              backgroundColor: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${colors.semantic.error}10`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             <Trash2 className="w-4 h-4 mr-2" />
             Delete

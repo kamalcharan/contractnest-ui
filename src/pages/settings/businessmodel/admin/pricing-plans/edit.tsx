@@ -6,6 +6,7 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { ArrowLeft, Save, Loader2, GitBranch, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel, EditPlanData } from '@/hooks/useBusinessModel';
 
@@ -61,6 +62,7 @@ interface EditPlanFormData {
 const EditPlanPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { isDarkMode, currentTheme } = useTheme();
   
   const { currentTenant, isAuthenticated, isLoading: authLoading } = useAuth();
   
@@ -77,6 +79,9 @@ const EditPlanPage: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showVersionWarning, setShowVersionWarning] = useState(true);
   const isMounted = useRef(true);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const methods = useForm<EditPlanFormData>({
     mode: 'onBlur'
@@ -455,24 +460,45 @@ const EditPlanPage: React.FC = () => {
   // Loading state
   if (authLoading || loadingEdit || !isInitialized) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+      >
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
             type="button"
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <div className="h-7 bg-muted rounded-md w-40 animate-pulse"></div>
-            <div className="h-4 bg-muted rounded-md w-60 mt-2 animate-pulse"></div>
+            <div 
+              className="h-7 rounded-md w-40 animate-pulse"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
+            ></div>
+            <div 
+              className="h-4 rounded-md w-60 mt-2 animate-pulse"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
+            ></div>
           </div>
         </div>
         
         <div className="flex justify-center items-center min-h-[300px]">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          <span className="ml-2 text-muted-foreground">Loading plan for editing...</span>
+          <Loader2 
+            className="h-8 w-8 animate-spin transition-colors"
+            style={{ color: colors.brand.primary }}
+          />
+          <span 
+            className="ml-2 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Loading plan for editing...
+          </span>
         </div>
       </div>
     );
@@ -481,29 +507,63 @@ const EditPlanPage: React.FC = () => {
   // Plan not found
   if (!currentEditData) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+      >
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
             type="button"
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Unable to Edit Plan</h1>
-            <p className="text-muted-foreground">The plan could not be loaded for editing.</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Unable to Edit Plan
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              The plan could not be loaded for editing.
+            </p>
           </div>
         </div>
         
-        <div className="bg-card rounded-lg border border-border p-8 text-center">
-          <h3 className="text-lg font-medium">Plan Not Available for Editing</h3>
-          <p className="text-muted-foreground mt-2 mb-4">
+        <div 
+          className="rounded-lg border p-8 text-center transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <h3 
+            className="text-lg font-medium transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Plan Not Available for Editing
+          </h3>
+          <p 
+            className="mt-2 mb-4 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             The plan may be archived, or there may be no active version to edit.
           </p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 rounded-md text-white hover:opacity-90 transition-colors"
+            style={{
+              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
           >
             Back to Plan Details
           </button>
@@ -513,19 +573,34 @@ const EditPlanPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+    >
       {/* Page Header */}
       <div className="flex items-center mb-8">
         <button 
           onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.utility.secondaryBackground }}
           type="button"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Edit Pricing Plan</h1>
-          <p className="text-muted-foreground">
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Edit Pricing Plan
+          </h1>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {currentEditData.name} - Creating Version {currentEditData.next_version_number}
           </p>
         </div>
@@ -533,26 +608,51 @@ const EditPlanPage: React.FC = () => {
       
       {/* Version Creation Notice */}
       {showVersionWarning && (
-        <div className="mb-6 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/20 p-4">
+        <div 
+          className="mb-6 rounded-lg border p-4 transition-colors"
+          style={{
+            backgroundColor: `${colors.brand.primary}10`,
+            borderColor: `${colors.brand.primary}40`
+          }}
+        >
           <div className="flex items-start">
-            <GitBranch className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <GitBranch 
+              className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 transition-colors"
+              style={{ color: colors.brand.primary }}
+            />
             <div className="flex-1">
-              <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+              <p 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.brand.primary }}
+              >
                 Creating New Version
               </p>
-              <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+              <p 
+                className="mt-1 text-sm transition-colors"
+                style={{ color: colors.brand.primary }}
+              >
                 You are editing version {currentEditData.current_version_number}. 
                 Saving will create version {currentEditData.next_version_number} as a draft.
               </p>
               <div className="mt-3 flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <label htmlFor="version-number" className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  <label 
+                    htmlFor="version-number" 
+                    className="text-sm font-medium transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
                     Version Number:
                   </label>
                   <input
                     id="version-number"
                     type="text"
-                    className="px-2 py-1 text-sm border border-blue-200 dark:border-blue-800 rounded-md bg-white dark:bg-gray-800"
+                    className="px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: colors.utility.secondaryText + '40',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     {...methods.register('next_version_number', { 
                       required: 'Version number is required',
                       pattern: {
@@ -565,13 +665,17 @@ const EditPlanPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowVersionWarning(false)}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-xs hover:underline transition-colors"
+                  style={{ color: colors.brand.primary }}
                 >
                   Hide this message
                 </button>
               </div>
               {methods.formState.errors.next_version_number && (
-                <p className="mt-1 text-xs text-red-500">
+                <p 
+                  className="mt-1 text-xs transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
                   {methods.formState.errors.next_version_number.message}
                 </p>
               )}
@@ -593,9 +697,26 @@ const EditPlanPage: React.FC = () => {
       </div>
       
       {/* Main Form Container */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="px-6 py-4 bg-muted/20 border-b border-border">
-          <h2 className="text-lg font-semibold">{wizardSteps[currentStep].title}</h2>
+      <div 
+        className="rounded-lg border overflow-hidden transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.secondaryText + '40'
+        }}
+      >
+        <div 
+          className="px-6 py-4 border-b transition-colors"
+          style={{
+            backgroundColor: `${colors.utility.primaryBackground}20`,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {wizardSteps[currentStep].title}
+          </h2>
         </div>
         
         <div className="p-6">
@@ -603,29 +724,54 @@ const EditPlanPage: React.FC = () => {
           
           {/* Changelog Input on Final Step */}
           {currentStep === wizardSteps.length - 1 && (
-            <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-md border border-amber-100 dark:border-amber-900/20">
+            <div 
+              className="mt-6 p-4 rounded-md border transition-colors"
+              style={{
+                backgroundColor: `${colors.semantic.warning}10`,
+                borderColor: `${colors.semantic.warning}40`
+              }}
+            >
               <div className="flex items-start">
-                <AlertCircle className="h-5 w-5 mr-3 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle 
+                  className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 transition-colors"
+                  style={{ color: colors.semantic.warning }}
+                />
                 <div className="flex-1">
-                  <label htmlFor="changelog" className="block text-sm font-medium text-amber-700 dark:text-amber-300 mb-2">
-                    What changed in this version? <span className="text-red-500">*</span>
+                  <label 
+                    htmlFor="changelog" 
+                    className="block text-sm font-medium mb-2 transition-colors"
+                    style={{ color: colors.semantic.warning }}
+                  >
+                    What changed in this version? <span style={{ color: colors.semantic.error }}>*</span>
                   </label>
                   <textarea
                     id="changelog"
                     rows={3}
                     placeholder="Describe what has changed in this version (e.g., Updated pricing tiers, Added new features, Modified notification credits)..."
-                    className="w-full px-3 py-2 border border-amber-200 dark:border-amber-800 rounded-md bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: colors.utility.secondaryText + '40',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.semantic.warning
+                    } as React.CSSProperties}
                     {...methods.register('changelog', { 
                       required: 'Changelog is required',
                       minLength: { value: 5, message: 'Please provide a more detailed description' }
                     })}
                   />
                   {methods.formState.errors.changelog && (
-                    <p className="mt-1 text-sm text-red-500">
+                    <p 
+                      className="mt-1 text-sm transition-colors"
+                      style={{ color: colors.semantic.error }}
+                    >
                       {methods.formState.errors.changelog.message}
                     </p>
                   )}
-                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  <p 
+                    className="mt-1 text-xs transition-colors"
+                    style={{ color: colors.semantic.warning }}
+                  >
                     This changelog will help track changes between versions and inform users about updates.
                   </p>
                 </div>
@@ -639,7 +785,12 @@ const EditPlanPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-md border hover:opacity-80 transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 Cancel
               </button>
@@ -647,7 +798,12 @@ const EditPlanPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handlePrevious}
-                className="px-4 py-2 rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-md border hover:opacity-80 transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 Previous
               </button>
@@ -658,7 +814,10 @@ const EditPlanPage: React.FC = () => {
                 type="button"
                 onClick={handleNext}
                 disabled={submitting}
-                className="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70"
+                className="px-6 py-2 rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-70"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
               >
                 Next
               </button>
@@ -667,11 +826,14 @@ const EditPlanPage: React.FC = () => {
                 type="button"
                 onClick={handleFinalSubmit}
                 disabled={submitting}
-                className="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70 flex items-center"
+                className="px-6 py-2 rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-70 flex items-center"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground" />
+                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
                     Creating Version...
                   </>
                 ) : (

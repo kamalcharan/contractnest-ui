@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Check, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   SUPPORTED_CURRENCIES,
   CURRENCY_SYMBOLS,
@@ -36,6 +37,9 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
   taxRates = [],
   className = ''
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [currencies, setCurrencies] = useState<CurrencyFormData[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -113,7 +117,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -143,7 +147,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -158,7 +162,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -202,7 +206,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -218,7 +222,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#10B981',
+          background: colors.semantic.success,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -229,7 +233,7 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         style: {
           padding: '12px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -249,14 +253,23 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
   };
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg ${className}`}>
+    <div 
+      className={`rounded-lg transition-colors ${className}`}
+      style={{ backgroundColor: colors.utility.secondaryBackground }}
+    >
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            <h3 
+              className="text-lg font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Currency Pricing
             </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Set prices in multiple currencies for {priceType.toLowerCase()} pricing
             </p>
           </div>
@@ -265,7 +278,12 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
               type="button"
               onClick={handleAddCurrency}
               disabled={isLoading || isSaving}
-              className="inline-flex items-center px-3 py-2 text-sm font-medium text-indigo-600 bg-white border border-indigo-600 rounded-md hover:bg-indigo-50 dark:bg-gray-700 dark:border-indigo-500 dark:text-indigo-400 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                color: colors.brand.primary,
+                backgroundColor: colors.utility.secondaryBackground,
+                border: `1px solid ${colors.brand.primary}`
+              }}
             >
               <Plus className="w-4 h-4 mr-1" />
               Add Currency
@@ -277,10 +295,25 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
         {Object.entries(errors).filter(([key]) => 
           key === 'general' || key === 'base' || key === 'duplicate'
         ).map(([key, message]) => (
-          <div key={key} className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <div 
+            key={key} 
+            className="mb-4 p-3 border rounded-md transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.error}10`,
+              borderColor: `${colors.semantic.error}40`
+            }}
+          >
             <div className="flex">
-              <AlertCircle className="w-5 h-5 text-red-400 mr-2 flex-shrink-0" />
-              <p className="text-sm text-red-600 dark:text-red-400">{message}</p>
+              <AlertCircle 
+                className="w-5 h-5 mr-2 flex-shrink-0 transition-colors"
+                style={{ color: colors.semantic.error }}
+              />
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
+                {message}
+              </p>
             </div>
           </div>
         ))}
@@ -290,32 +323,38 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
           {currencies.map((currency, index) => (
             <div 
               key={index}
-              className={`
-                p-4 border rounded-lg transition-colors
-                ${currency.is_base_currency 
-                  ? 'border-indigo-300 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-900/20' 
-                  : 'border-gray-200 dark:border-gray-700'
-                }
-              `}
+              className="p-4 border rounded-lg transition-colors"
+              style={{
+                borderColor: currency.is_base_currency 
+                  ? `${colors.brand.primary}40` 
+                  : `${colors.utility.secondaryText}40`,
+                backgroundColor: currency.is_base_currency 
+                  ? `${colors.brand.primary}10` 
+                  : colors.utility.primaryBackground
+              }}
             >
               <div className="flex items-start space-x-4">
                 {/* Currency selector */}
                 <div className="flex-shrink-0">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Currency
                   </label>
                   <select
                     value={currency.currency}
                     onChange={(e) => handleCurrencyChange(index, 'currency', e.target.value)}
                     disabled={isLoading || isSaving}
-                    className={`
-                      w-32 px-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500
-                      ${errors[`currency_${index}`] 
-                        ? 'border-red-300' 
-                        : 'border-gray-300 dark:border-gray-600'
-                      }
-                      dark:bg-gray-700 dark:text-white disabled:opacity-50
-                    `}
+                    className="w-32 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors disabled:opacity-50"
+                    style={{
+                      borderColor: errors[`currency_${index}`] 
+                        ? colors.semantic.error 
+                        : `${colors.utility.secondaryText}40`,
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                   >
                     {SUPPORTED_CURRENCIES.map(curr => (
                       <option key={curr} value={curr}>
@@ -324,7 +363,10 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                     ))}
                   </select>
                   {errors[`currency_${index}`] && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                    <p 
+                      className="mt-1 text-xs transition-colors"
+                      style={{ color: colors.semantic.error }}
+                    >
                       {errors[`currency_${index}`]}
                     </p>
                   )}
@@ -332,11 +374,17 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
 
                 {/* Price input */}
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {getPriceLabel()}
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
+                    <span 
+                      className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       {CURRENCY_SYMBOLS[currency.currency as SupportedCurrency]}
                     </span>
                     <input
@@ -344,21 +392,25 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                       value={currency.price}
                       onChange={(e) => handleCurrencyChange(index, 'price', parseFloat(e.target.value) || 0)}
                       disabled={isLoading || isSaving}
-                      className={`
-                        w-full pl-8 pr-3 py-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500
-                        ${errors[`price_${index}`] 
-                          ? 'border-red-300' 
-                          : 'border-gray-300 dark:border-gray-600'
-                        }
-                        dark:bg-gray-700 dark:text-white disabled:opacity-50
-                      `}
+                      className="w-full pl-8 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors disabled:opacity-50"
+                      style={{
+                        borderColor: errors[`price_${index}`] 
+                          ? colors.semantic.error 
+                          : `${colors.utility.secondaryText}40`,
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       placeholder="0.00"
                       min="0"
                       step="0.01"
                     />
                   </div>
                   {errors[`price_${index}`] && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                    <p 
+                      className="mt-1 text-xs transition-colors"
+                      style={{ color: colors.semantic.error }}
+                    >
                       {errors[`price_${index}`]}
                     </p>
                   )}
@@ -366,7 +418,10 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
 
                 {/* Tax settings */}
                 <div className="flex-shrink-0">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Tax
                   </label>
                   <div className="flex items-center space-x-2">
@@ -376,9 +431,17 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                         checked={currency.tax_included}
                         onChange={(e) => handleCurrencyChange(index, 'tax_included', e.target.checked)}
                         disabled={isLoading || isSaving}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                        className="w-4 h-4 rounded focus:ring-2 transition-colors"
+                        style={{
+                          color: colors.brand.primary,
+                          borderColor: `${colors.utility.secondaryText}40`,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                       />
-                      <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                      <span 
+                        className="ml-2 text-sm transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         Tax included
                       </span>
                     </label>
@@ -391,14 +454,15 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                     type="button"
                     onClick={() => handleSetBaseCurrency(index)}
                     disabled={isLoading || isSaving || currency.is_base_currency}
-                    className={`
-                      px-3 py-2 text-sm font-medium rounded-md transition-colors
-                      ${currency.is_base_currency
-                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 cursor-default'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                      }
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                    `}
+                    className="px-3 py-2 text-sm font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: currency.is_base_currency
+                        ? `${colors.brand.primary}20`
+                        : `${colors.utility.primaryBackground}50`,
+                      color: currency.is_base_currency
+                        ? colors.brand.primary
+                        : colors.utility.primaryText
+                    }}
                   >
                     {currency.is_base_currency ? (
                       <Check className="w-4 h-4" />
@@ -412,7 +476,11 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                       type="button"
                       onClick={() => handleRemoveCurrency(index)}
                       disabled={isLoading || isSaving}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-md dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 rounded-md hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{
+                        color: colors.semantic.error,
+                        backgroundColor: `${colors.semantic.error}10`
+                      }}
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -421,7 +489,10 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
               </div>
 
               {currency.is_base_currency && (
-                <p className="mt-2 text-xs text-indigo-600 dark:text-indigo-400">
+                <p 
+                  className="mt-2 text-xs transition-colors"
+                  style={{ color: colors.brand.primary }}
+                >
                   This is the base currency for price calculations
                 </p>
               )}
@@ -431,8 +502,14 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
 
         {/* Quick add buttons */}
         {currencies.length < SUPPORTED_CURRENCIES.length && (
-          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <div 
+            className="mt-4 pt-4 border-t transition-colors"
+            style={{ borderColor: `${colors.utility.secondaryText}40` }}
+          >
+            <p 
+              className="text-sm font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Quick add:
             </p>
             <div className="flex flex-wrap gap-2">
@@ -455,7 +532,12 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
                       ]);
                     }}
                     disabled={isLoading || isSaving}
-                    className="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
+                    className="inline-flex items-center px-2 py-1 text-xs font-medium border rounded hover:opacity-80 transition-colors disabled:opacity-50"
+                    style={{
+                      color: colors.utility.primaryText,
+                      backgroundColor: `${colors.utility.primaryBackground}50`,
+                      borderColor: `${colors.utility.secondaryText}40`
+                    }}
                   >
                     <Plus className="w-3 h-3 mr-1" />
                     {curr}
@@ -467,14 +549,25 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
       </div>
 
       {/* Footer actions */}
-      <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 rounded-b-lg">
+      <div 
+        className="px-6 py-4 border-t rounded-b-lg transition-colors"
+        style={{
+          backgroundColor: `${colors.utility.primaryBackground}50`,
+          borderColor: `${colors.utility.secondaryText}40`
+        }}
+      >
         <div className="flex items-center justify-end space-x-3">
           {onCancel && (
             <button
               type="button"
               onClick={onCancel}
               disabled={isLoading || isSaving}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium border rounded-md hover:opacity-80 transition-colors disabled:opacity-50"
+              style={{
+                color: colors.utility.primaryText,
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.secondaryText}40`
+              }}
             >
               Cancel
             </button>
@@ -483,7 +576,10 @@ export const CurrencyPricingForm: React.FC<CurrencyPricingFormProps> = ({
             type="button"
             onClick={handleSubmit}
             disabled={isLoading || isSaving}
-            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
           >
             {isSaving ? (
               <>

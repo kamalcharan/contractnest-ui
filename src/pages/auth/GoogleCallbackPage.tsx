@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../utils/supabase';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -10,9 +11,13 @@ import { analyticsService, AUTH_EVENTS } from '../../services/analytics';
 const GoogleCallbackPage: React.FC = () => {
   const navigate = useNavigate();
   const { setGoogleAuthData, setAuthToken } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
   const [isProcessing, setIsProcessing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasProcessed, setHasProcessed] = useState(false);
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   useEffect(() => {
     // Prevent multiple executions
@@ -48,7 +53,7 @@ const GoogleCallbackPage: React.FC = () => {
             style: {
               padding: '16px',
               borderRadius: '8px',
-              background: '#EF4444',
+              background: colors.semantic.error,
               color: '#FFF',
               fontSize: '16px',
               minWidth: '300px'
@@ -61,7 +66,7 @@ const GoogleCallbackPage: React.FC = () => {
             style: {
               padding: '16px',
               borderRadius: '8px',
-              background: '#EF4444',
+              background: colors.semantic.error,
               color: '#FFF',
               fontSize: '16px',
               minWidth: '300px'
@@ -410,7 +415,7 @@ const GoogleCallbackPage: React.FC = () => {
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#10B981',
+            background: colors.semantic.success,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -422,7 +427,7 @@ const GoogleCallbackPage: React.FC = () => {
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#10B981',
+            background: colors.semantic.success,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -434,7 +439,7 @@ const GoogleCallbackPage: React.FC = () => {
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#10B981',
+            background: colors.semantic.success,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -487,7 +492,7 @@ const GoogleCallbackPage: React.FC = () => {
           api.defaults.headers.common['x-tenant-id'] = targetTenant.id;
         }
         
-        navigate('/dashboard', { replace: true });
+        navigate('dashboard', { replace: true });
       }
       
     } catch (error: any) {
@@ -528,7 +533,7 @@ const GoogleCallbackPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -542,53 +547,92 @@ const GoogleCallbackPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div 
+      className="min-h-screen flex items-center justify-center transition-colors duration-200"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
       <div className="max-w-md w-full">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div 
+          className="rounded-lg shadow-lg p-8 transition-colors"
+          style={{ backgroundColor: colors.utility.secondaryBackground }}
+        >
           <div className="flex flex-col items-center">
             {isProcessing ? (
               <>
                 <div className="w-16 h-16 mb-4">
-                  <svg className="animate-spin h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg 
+                    className="animate-spin h-16 w-16" 
+                    style={{ color: colors.brand.primary }}
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24"
+                  >
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 
+                  className="text-xl font-semibold mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Completing Google Sign-in
                 </h2>
-                <p className="text-gray-600 text-center">
+                <p 
+                  className="text-center transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Please wait while we complete your authentication...
                 </p>
               </>
             ) : error ? (
               <>
-                <div className="w-16 h-16 mb-4 text-red-500">
+                <div 
+                  className="w-16 h-16 mb-4"
+                  style={{ color: colors.semantic.error }}
+                >
                   <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 
+                  className="text-xl font-semibold mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Authentication Failed
                 </h2>
-                <p className="text-gray-600 text-center mb-4">
+                <p 
+                  className="text-center mb-4 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   {error}
                 </p>
-                <p className="text-sm text-gray-500 text-center">
+                <p 
+                  className="text-sm text-center transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Redirecting to login page...
                 </p>
               </>
             ) : (
               <>
-                <div className="w-16 h-16 mb-4 text-green-500">
+                <div 
+                  className="w-16 h-16 mb-4"
+                  style={{ color: colors.semantic.success }}
+                >
                   <svg className="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 
+                  className="text-xl font-semibold mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Success!
                 </h2>
-                <p className="text-gray-600 text-center">
+                <p 
+                  className="text-center transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Redirecting...
                 </p>
               </>

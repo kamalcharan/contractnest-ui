@@ -1,4 +1,4 @@
-// src/components/services/ServicesStatsGrid.tsx
+// src/components/services/ServicesStatsGrid.tsx - Theme Enabled Version
 import React from 'react';
 import { Play, RefreshCw, CheckCircle, Pause, Calendar, Archive } from 'lucide-react';
 
@@ -29,10 +29,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.active,
       description: 'Currently running',
       icon: Play,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
-      borderColor: 'border-green-200',
-      hoverColor: 'hover:bg-green-100',
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-50 dark:bg-green-900/20',
+      borderColor: 'border-green-200 dark:border-green-800',
+      hoverColor: 'hover:bg-green-100 dark:hover:bg-green-900/30',
+      iconBg: 'bg-white/80 dark:bg-green-950/50',
       priority: 'success',
       alwaysShow: true
     },
@@ -42,10 +43,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.renewalDue,
       description: 'Expiring soon',
       icon: RefreshCw,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      borderColor: 'border-orange-200',
-      hoverColor: 'hover:bg-orange-100',
+      color: 'text-orange-600 dark:text-orange-400',
+      bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      borderColor: 'border-orange-200 dark:border-orange-800',
+      hoverColor: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+      iconBg: 'bg-white/80 dark:bg-orange-950/50',
       priority: 'high',
       alwaysShow: true
     },
@@ -55,10 +57,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.completed,
       description: 'Successfully finished',
       icon: CheckCircle,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-      hoverColor: 'hover:bg-blue-100',
+      color: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      borderColor: 'border-blue-200 dark:border-blue-800',
+      hoverColor: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+      iconBg: 'bg-white/80 dark:bg-blue-950/50',
       priority: 'normal',
       alwaysShow: true
     },
@@ -68,10 +71,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.paused,
       description: 'Temporarily stopped',
       icon: Pause,
-      color: 'text-yellow-600',
-      bgColor: 'bg-yellow-50',
-      borderColor: 'border-yellow-200',
-      hoverColor: 'hover:bg-yellow-100',
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
+      borderColor: 'border-yellow-200 dark:border-yellow-800',
+      hoverColor: 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30',
+      iconBg: 'bg-white/80 dark:bg-yellow-950/50',
       priority: 'medium',
       alwaysShow: true
     },
@@ -81,10 +85,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.upcoming,
       description: 'Scheduled to start',
       icon: Calendar,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
-      borderColor: 'border-purple-200',
-      hoverColor: 'hover:bg-purple-100',
+      color: 'text-purple-600 dark:text-purple-400',
+      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+      borderColor: 'border-purple-200 dark:border-purple-800',
+      hoverColor: 'hover:bg-purple-100 dark:hover:bg-purple-900/30',
+      iconBg: 'bg-white/80 dark:bg-purple-950/50',
       priority: 'normal',
       alwaysShow: false,
       showCondition: showUpcoming
@@ -95,10 +100,11 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       count: servicesStats.inactive,
       description: 'Ended or cancelled',
       icon: Archive,
-      color: 'text-gray-600',
-      bgColor: 'bg-gray-50',
-      borderColor: 'border-gray-200',
-      hoverColor: 'hover:bg-gray-100',
+      color: 'text-muted-foreground',
+      bgColor: 'bg-muted',
+      borderColor: 'border-border',
+      hoverColor: 'hover:bg-muted/80',
+      iconBg: 'bg-background',
       priority: 'low',
       alwaysShow: false,
       showCondition: showInactive
@@ -117,13 +123,13 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
     <div className="bg-card rounded-lg shadow-sm border border-border p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-semibold">Services Overview</h3>
+          <h3 className="text-lg font-semibold text-foreground">Services Overview</h3>
           <p className="text-sm text-muted-foreground">
             {totalServices} total services • {activeServices} currently active
           </p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {servicesStats.active}
           </div>
           <div className="text-xs text-muted-foreground">Active Now</div>
@@ -144,7 +150,7 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
               `}
             >
               <div className="flex items-center justify-between mb-3">
-                <div className={`p-2 rounded-lg bg-white/80 ${stat.color}`}>
+                <div className={`p-2 rounded-lg ${stat.iconBg} ${stat.color}`}>
                   <IconComponent className="h-4 w-4" />
                 </div>
                 <span className="text-2xl font-bold text-foreground">
@@ -163,14 +169,14 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
               
               {/* Priority indicators */}
               {stat.priority === 'high' && stat.count > 0 && (
-                <div className="flex items-center gap-1 text-xs text-orange-600 font-medium">
+                <div className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium">
                   <RefreshCw className="h-3 w-3" />
                   Action Required
                 </div>
               )}
               
               {stat.priority === 'success' && stat.count > 0 && (
-                <div className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
                   <Play className="h-3 w-3" />
                   Running Well
                 </div>
@@ -179,11 +185,17 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
               {/* Progress indicator */}
               {totalServices > 0 && (
                 <div className="mt-3">
-                  <div className="w-full bg-gray-200 rounded-full h-1">
+                  <div className="w-full bg-muted rounded-full h-1">
                     <div 
-                      className={`h-1 rounded-full transition-all duration-300 ${stat.color.replace('text-', 'bg-')}`}
+                      className={`h-1 rounded-full transition-all duration-300 ${stat.color.includes('green') ? 'bg-green-600 dark:bg-green-500' : 
+                        stat.color.includes('orange') ? 'bg-orange-600 dark:bg-orange-500' :
+                        stat.color.includes('blue') ? 'bg-blue-600 dark:bg-blue-500' :
+                        stat.color.includes('yellow') ? 'bg-yellow-600 dark:bg-yellow-500' :
+                        stat.color.includes('purple') ? 'bg-purple-600 dark:bg-purple-500' :
+                        'bg-muted-foreground'
+                      }`}
                       style={{ width: `${(stat.count / totalServices) * 100}%` }}
-                    ></div>
+                    />
                   </div>
                 </div>
               )}
@@ -196,25 +208,25 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       <div className="mt-6 pt-4 border-t border-border">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
           <div>
-            <div className="text-lg font-semibold text-green-600">
+            <div className="text-lg font-semibold text-green-600 dark:text-green-400">
               {servicesStats.active}
             </div>
             <div className="text-xs text-muted-foreground">Running</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-orange-600">
+            <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">
               {servicesStats.renewalDue}
             </div>
             <div className="text-xs text-muted-foreground">Due Soon</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-blue-600">
+            <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
               {servicesStats.completed}
             </div>
             <div className="text-xs text-muted-foreground">Completed</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-yellow-600">
+            <div className="text-lg font-semibold text-yellow-600 dark:text-yellow-400">
               {servicesStats.paused}
             </div>
             <div className="text-xs text-muted-foreground">Paused</div>
@@ -226,17 +238,17 @@ const ServicesStatsGrid: React.FC<ServicesStatsGridProps> = ({
       <div className="mt-4 pt-4 border-t border-border">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Service Success Rate</span>
-          <span className="font-medium">
+          <span className="font-medium text-foreground">
             {Math.round((servicesStats.completed / Math.max(servicesStats.completed + servicesStats.paused + servicesStats.inactive, 1)) * 100)}%
           </span>
         </div>
-        <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+        <div className="mt-2 w-full bg-muted rounded-full h-2">
           <div 
-            className="bg-green-600 h-2 rounded-full transition-all duration-300"
+            className="bg-green-600 dark:bg-green-500 h-2 rounded-full transition-all duration-300"
             style={{ 
               width: `${Math.min((servicesStats.completed / Math.max(servicesStats.completed + servicesStats.paused + servicesStats.inactive, 1)) * 100, 100)}%` 
             }}
-          ></div>
+          />
         </div>
       </div>
     </div>

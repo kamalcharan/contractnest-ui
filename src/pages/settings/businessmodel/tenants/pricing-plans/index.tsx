@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HelpCircle } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 
 // Import components
@@ -15,6 +16,8 @@ import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 const PricingPlansPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // State for plans and filters
   const [loading, setLoading] = useState(true);
@@ -87,16 +90,41 @@ const PricingPlansPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="p-6 bg-muted/20">
-        <div className="h-8 bg-muted rounded w-48 mb-4 animate-pulse"></div>
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
+      >
+        <div 
+          className="h-8 rounded w-48 mb-4 animate-pulse"
+          style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+        ></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-card rounded-lg border border-border overflow-hidden animate-pulse">
-              <div className="h-12 bg-muted"></div>
+            <div 
+              key={i} 
+              className="rounded-lg border overflow-hidden animate-pulse"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <div 
+                className="h-12"
+                style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+              ></div>
               <div className="p-6 space-y-4">
-                <div className="h-6 bg-muted rounded w-32"></div>
-                <div className="h-24 bg-muted rounded"></div>
-                <div className="h-8 bg-muted rounded"></div>
+                <div 
+                  className="h-6 rounded w-32"
+                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+                ></div>
+                <div 
+                  className="h-24 rounded"
+                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+                ></div>
+                <div 
+                  className="h-8 rounded"
+                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+                ></div>
               </div>
             </div>
           ))}
@@ -106,11 +134,22 @@ const PricingPlansPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+    >
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Choose Your Plan</h1>
-        <p className="text-muted-foreground">
+        <h1 
+          className="text-2xl font-bold transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Choose Your Plan
+        </h1>
+        <p 
+          className="transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
           Select the pricing plan that best fits your needs
         </p>
       </div>
@@ -122,22 +161,52 @@ const PricingPlansPage: React.FC = () => {
           <button
             type="button"
             onClick={() => handlePlanTypeChange('Per User')}
-            className={`px-4 py-2 text-sm font-medium ${
-              selectedPlanType === 'Per User'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-            } rounded-l-md border border-gray-200 dark:border-gray-600`}
+            className="px-4 py-2 text-sm font-medium rounded-l-md border transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: selectedPlanType === 'Per User' 
+                ? colors.brand.primary 
+                : colors.utility.primaryBackground,
+              color: selectedPlanType === 'Per User' 
+                ? 'white' 
+                : colors.utility.primaryText,
+              borderColor: `${colors.utility.primaryText}30`
+            }}
+            onMouseEnter={(e) => {
+              if (selectedPlanType !== 'Per User') {
+                e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (selectedPlanType !== 'Per User') {
+                e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+              }
+            }}
           >
             User-based
           </button>
           <button
             type="button"
             onClick={() => handlePlanTypeChange('Per Contract')}
-            className={`px-4 py-2 text-sm font-medium ${
-              selectedPlanType === 'Per Contract'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'
-            } rounded-r-md border border-gray-200 dark:border-gray-600`}
+            className="px-4 py-2 text-sm font-medium rounded-r-md border transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: selectedPlanType === 'Per Contract' 
+                ? colors.brand.primary 
+                : colors.utility.primaryBackground,
+              color: selectedPlanType === 'Per Contract' 
+                ? 'white' 
+                : colors.utility.primaryText,
+              borderColor: `${colors.utility.primaryText}30`
+            }}
+            onMouseEnter={(e) => {
+              if (selectedPlanType !== 'Per Contract') {
+                e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (selectedPlanType !== 'Per Contract') {
+                e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+              }
+            }}
           >
             Contract-based
           </button>
@@ -145,11 +214,22 @@ const PricingPlansPage: React.FC = () => {
         
         {/* Currency Selector */}
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">Currency:</span>
+          <span 
+            className="text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Currency:
+          </span>
           <select
             value={selectedCurrency}
             onChange={(e) => handleCurrencyChange(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
+            className="px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
           >
             <option value="INR">₹ INR</option>
             <option value="USD">$ USD</option>
@@ -175,12 +255,19 @@ const PricingPlansPage: React.FC = () => {
           ))
         ) : (
           <div className="col-span-3 py-12 text-center">
-            <p className="text-muted-foreground">
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               No plans available for the selected criteria.
             </p>
             <button
               onClick={() => handlePlanTypeChange(selectedPlanType === 'Per User' ? 'Per Contract' : 'Per User')}
-              className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              className="mt-4 px-4 py-2 rounded-md transition-colors hover:opacity-90"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: 'white'
+              }}
             >
               View {selectedPlanType === 'Per User' ? 'Contract' : 'User'}-based Plans
             </button>
@@ -189,18 +276,39 @@ const PricingPlansPage: React.FC = () => {
       </div>
       
       {/* Help Section */}
-      <div className="mt-12 bg-blue-50 dark:bg-blue-900/10 p-6 rounded-lg border border-blue-100 dark:border-blue-900/20">
+      <div 
+        className="mt-12 p-6 rounded-lg border transition-colors"
+        style={{
+          backgroundColor: `${colors.brand.primary}10`,
+          borderColor: `${colors.brand.primary}20`
+        }}
+      >
         <div className="flex items-start">
-          <HelpCircle className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <HelpCircle 
+            className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5"
+            style={{ color: colors.brand.primary }}
+          />
           <div>
-            <h3 className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+            <h3 
+              className="font-medium mb-1 transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Need Help Choosing?
             </h3>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+            <p 
+              className="text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Our team can help you select the right plan for your business needs. 
               Contact us for a personalized consultation.
             </p>
-            <button className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
+            <button 
+              className="mt-3 px-4 py-2 rounded-md transition-colors hover:opacity-90 text-sm"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: 'white'
+              }}
+            >
               Contact Sales
             </button>
           </div>

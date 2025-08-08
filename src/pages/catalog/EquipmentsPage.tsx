@@ -1,4 +1,6 @@
 // src/pages/catalog/EquipmentsPage.tsx
+// UPDATED: Simplified to match ServicesPage pattern
+
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import CatalogContainer from '../../components/catalog/shared/CatalogContainer';

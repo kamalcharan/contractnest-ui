@@ -262,12 +262,20 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     root.setAttribute('data-theme', themeId);
     root.setAttribute('data-theme-mode', darkMode ? 'dark' : 'light');
     
-    // Also add the traditional classes for existing components that might depend on them
+    // Remove all existing theme classes
     root.classList.remove(
       'theme-bharatha-varsha',
       'theme-classic-elegant', 
       'theme-purple-tone',
       'theme-corporate',
+      'theme-contract-nest',
+      'theme-modern-bold',
+      'theme-modern-business',
+      'theme-professional-redefined',
+      'theme-sleek-cool',
+      'theme-tech-ai',
+      'theme-tech-future',
+      'theme-techy-simple',
       'dark',
       'light'
     );
@@ -275,12 +283,23 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
     // Add basic mode class (many components rely on this)
     root.classList.add(darkMode ? 'dark' : 'light');
     
-    // Add legacy theme classes for existing themes that have CSS
+    // ✅ FIXED: Complete legacy theme map for ALL themes
     const legacyThemeMap: { [key: string]: string } = {
+      // Original themes
       'bharathavarsha': 'theme-bharatha-varsha',
       'classic-elegant': 'theme-classic-elegant',
       'purple-tone': 'theme-purple-tone',
       'corporate': 'theme-corporate',
+      
+      // New themes - ALL ADDED
+      'contract-nest': 'theme-contract-nest',
+      'modern-bold': 'theme-modern-bold',
+      'modern-business': 'theme-modern-business',
+      'professional-redefined': 'theme-professional-redefined',
+      'sleek-cool': 'theme-sleek-cool',
+      'tech-ai': 'theme-tech-ai',
+      'tech-future': 'theme-tech-future',
+      'techy-simple': 'theme-techy-simple',
     };
     
     const legacyClass = legacyThemeMap[themeId];

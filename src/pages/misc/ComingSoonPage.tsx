@@ -1,8 +1,9 @@
-//src/pages/misc/ComingSoonPage.tsx
+//src/pages/misc/ComingSoonPage.tsx - Theme Integrated Version
 
-    import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Rocket, Bell, ArrowLeft } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 import MiscPageLayout from '../../components/misc/MiscPageLayout';
 import { analyticsService } from '../../services/analytics.service';
 import toast from 'react-hot-toast';
@@ -17,8 +18,12 @@ const ComingSoonPage: React.FC<ComingSoonPageProps> = ({
   estimatedDate
 }) => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   useEffect(() => {
     analyticsService.trackMiscPageView('coming-soon', 'Coming Soon', { feature });
@@ -33,7 +38,12 @@ const ComingSoonPage: React.FC<ComingSoonPageProps> = ({
     e.preventDefault();
     
     if (!email) {
-      toast.error('Please enter your email');
+      toast.error('Please enter your email', {
+        style: {
+          background: colors.semantic.error,
+          color: '#fff',
+        },
+      });
       return;
     }
 
@@ -41,12 +51,17 @@ const ComingSoonPage: React.FC<ComingSoonPageProps> = ({
     
     // In a real app, this would call an API
     setSubscribed(true);
-    toast.success('You\'ll be notified when this feature launches!');
+    toast.success('You\'ll be notified when this feature launches!', {
+      style: {
+        background: colors.semantic.success,
+        color: '#fff',
+      },
+    });
   };
 
   return (
     <MiscPageLayout
-      icon={<Rocket className="h-16 w-16" />}
+      icon={<Rocket className="h-16 w-16" style={{ color: colors.brand.primary }} />}
       title={`${feature} is Coming Soon!`}
       description="We're working hard to bring you this exciting new feature."
       illustration="coming-soon"
@@ -61,16 +76,27 @@ const ComingSoonPage: React.FC<ComingSoonPageProps> = ({
     >
       <div className="mt-8 max-w-md mx-auto">
         {estimatedDate && (
-          <p className="text-sm text-muted-foreground text-center mb-6">
-            Expected launch: <strong>{estimatedDate}</strong>
+          <p 
+            className="text-sm text-center mb-6 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Expected launch: <strong style={{ color: colors.utility.primaryText }}>{estimatedDate}</strong>
           </p>
         )}
         
         {!subscribed ? (
           <form onSubmit={handleSubscribe} className="space-y-4">
             <div className="flex items-center space-x-2">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="text-sm font-medium">Get notified when it's ready</span>
+              <Bell 
+                className="h-5 w-5"
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <span 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Get notified when it's ready
+              </span>
             </div>
             <div className="flex space-x-2">
               <input
@@ -78,19 +104,38 @@ const ComingSoonPage: React.FC<ComingSoonPageProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="flex-1 px-3 py-2 border border-border rounded-md bg-background"
+                className="flex-1 px-3 py-2 border rounded-md transition-colors focus:outline-none focus:ring-2"
+                style={{
+                  borderColor: colors.utility.primaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary + '40'
+                } as React.CSSProperties}
               />
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                className="px-4 py-2 rounded-md hover:opacity-90 transition-colors font-medium"
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: '#ffffff'
+                }}
               >
                 Notify Me
               </button>
             </div>
           </form>
         ) : (
-          <div className="text-center p-4 bg-primary/10 rounded-md">
-            <p className="text-sm text-primary font-medium">
+          <div 
+            className="text-center p-4 rounded-md transition-colors"
+            style={{
+              backgroundColor: colors.brand.primary + '20',
+              borderColor: colors.brand.primary + '40'
+            }}
+          >
+            <p 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               ✓ You're on the list! We'll notify you at {email}
             </p>
           </div>

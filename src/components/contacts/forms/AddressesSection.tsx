@@ -1,84 +1,109 @@
-// Updated AddressesSection.tsx - Fixed Modal Scrolling
+// src/components/contacts/forms/AddressesSection.tsx - Without Google Maps
 import React, { useState } from 'react';
 import { 
   Plus, 
   MapPin, 
-  Edit2, 
   Trash2, 
-  Star, 
-  Copy, 
-  ExternalLink,
-  Home,
-  Building2,
-  CreditCard,
-  Package,
+  Edit2, 
+  Check, 
+  X, 
+  Home, 
+  Building, 
+  Package, 
+  Truck,
   Factory,
-  Warehouse
+  Warehouse,
+  Star,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { useToast } from '@/components/ui/use-toast';
+import { captureException } from '@/utils/sentry';
+import { analyticsService } from '@/services/analytics.service';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import { countries } from '@/utils/constants/countries';
 import { 
-  ADDRESS_TYPES,
+  ADDRESS_TYPES, 
   ADDRESS_TYPE_LABELS,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
   PLACEHOLDER_TEXTS,
-  ERROR_MESSAGES
-} from '../../../utils/constants/contacts';
-import { countries } from '../../../utils/constants/countries';
+  VALIDATION_RULES,
+  DEFAULT_COUNTRY_CODE
+} from '@/utils/constants/contacts';
 
-// Types
-interface ContactAddress {
+// Types matching API structure
+interface Address {
   id?: string;
-  type: 'billing' | 'shipping' | 'office' | 'home' | 'factory' | 'warehouse' | 'other';
-  label?: string;
-  address_line1: string;
-  address_line2?: string;
+  address_type: string;
+  line1: string;
+  line2?: string;
+  line3?: string;
   city: string;
-  state_code?: string;
-  country_code: string;
-  postal_code?: string;
-  google_pin?: string;
+  state: string;
+  country: string;
+  postal_code: string;
   is_primary: boolean;
+  is_verified: boolean;
+  latitude?: number;
+  longitude?: number;
   notes?: string;
 }
 
 interface AddressesSectionProps {
-  value: ContactAddress[];
-  onChange: (addresses: ContactAddress[]) => void;
+  value: Address[];
+  onChange: (addresses: Address[]) => void;
   disabled?: boolean;
-  mode?: 'create' | 'edit' | 'view';
-  compact?: boolean;
+  mode?: 'create' | 'edit';
 }
+
+// Icon mapping for address types
+const ADDRESS_TYPE_ICONS = {
+  [ADDRESS_TYPES.HOME]: Home,
+  [ADDRESS_TYPES.OFFICE]: Building,
+  [ADDRESS_TYPES.BILLING]: Package,
+  [ADDRESS_TYPES.SHIPPING]: Truck,
+  [ADDRESS_TYPES.FACTORY]: Factory,
+  [ADDRESS_TYPES.WAREHOUSE]: Warehouse,
+  [ADDRESS_TYPES.OTHER]: MapPin
+} as const;
 
 const AddressesSection: React.FC<AddressesSectionProps> = ({
   value,
   onChange,
   disabled = false,
-  mode = 'create',
-  compact = false
+  mode = 'create'
 }) => {
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const { isDarkMode } = useTheme();
+  const { toast } = useToast();
+  
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
-  // Icon mapping for address types
-  const getAddressIcon = (addressType: string) => {
-    switch (addressType) {
-      case 'home': return Home;
-      case 'office': 
-      case 'work': return Building2;
-      case 'billing': return CreditCard;
-      case 'shipping': return Package;
-      case 'factory': return Factory;
-      case 'warehouse': return Warehouse;
-      default: return MapPin;
+  // Get default country and state
+  const defaultCountry = countries.find(c => c.code === DEFAULT_COUNTRY_CODE) || countries[0];
+  const defaultState = defaultCountry?.states?.[0]?.name || '';
+
+  // Track analytics
+  React.useEffect(() => {
+    if (value.length > 0) {
+      analyticsService.trackPageView(
+        `contacts/${mode}/addresses-count`,
+        `Contact Addresses: ${value.length}`
+      );
     }
-  };
+  }, [value.length, mode]);
 
   // Add new address
-  const addAddress = (newAddress: Omit<ContactAddress, 'id'>) => {
+  const addAddress = (newAddress: Omit<Address, 'id'>) => {
     if (disabled) return;
-    
-    const addressWithId: ContactAddress = {
+
+    const addressWithId: Address = {
       ...newAddress,
-      id: `temp_${Date.now()}`,
-      is_primary: value.length === 0 ? true : newAddress.is_primary
+      id: `temp_${Date.now()}`
     };
 
     // If marking as primary, unset others
@@ -88,615 +113,661 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     }
 
     onChange([...updatedAddresses, addressWithId]);
-    setIsAddModalOpen(false);
+    setIsAddingAddress(false);
+    
+    toast({
+      title: "Success",
+      description: `${ADDRESS_TYPE_LABELS[addressWithId.address_type as keyof typeof ADDRESS_TYPE_LABELS]?.label || 'Address'} added successfully`
+    });
   };
 
   // Remove address
   const removeAddress = (index: number) => {
     if (disabled) return;
     
+    const removedAddress = value[index];
     const newAddresses = value.filter((_, i) => i !== index);
     
-    // If we removed the primary address, make the first remaining address primary
-    if (value[index].is_primary && newAddresses.length > 0) {
+    // If removed address was primary, make first remaining address primary
+    if (removedAddress.is_primary && newAddresses.length > 0) {
       newAddresses[0] = { ...newAddresses[0], is_primary: true };
     }
     
     onChange(newAddresses);
+    setShowDeleteDialog(false);
+    setDeleteIndex(null);
+    
+    toast({
+      title: "Success",
+      description: "Address removed successfully"
+    });
   };
 
-  // Update address
-  const updateAddress = (index: number, updates: Partial<ContactAddress>) => {
+  // Update existing address
+  const updateAddress = (index: number, updates: Partial<Address>) => {
     if (disabled) return;
     
-    const newAddresses = [...value];
+    const updatedAddresses = [...value];
     
-    // If setting this address as primary, unset others
+    // If setting as primary, unset others
     if (updates.is_primary) {
-      newAddresses.forEach((address, i) => {
+      updatedAddresses.forEach((addr, i) => {
         if (i !== index) {
-          newAddresses[i] = { ...address, is_primary: false };
+          updatedAddresses[i] = { ...addr, is_primary: false };
         }
       });
     }
     
-    newAddresses[index] = { ...newAddresses[index], ...updates };
-    onChange(newAddresses);
+    updatedAddresses[index] = { ...updatedAddresses[index], ...updates };
+    onChange(updatedAddresses);
+  };
+
+  // Handle delete click
+  const handleDeleteClick = (index: number) => {
+    setDeleteIndex(index);
+    setShowDeleteDialog(true);
   };
 
   // Format address for display
-  const formatAddress = (address: ContactAddress): string => {
+  const formatAddress = (address: Address): string => {
     const parts = [
-      address.address_line1,
-      address.address_line2,
+      address.line1,
+      address.line2,
+      address.line3,
       address.city,
-      address.state_code,
-      address.postal_code
+      address.state,
+      address.postal_code,
+      address.country
     ].filter(Boolean);
+    
     return parts.join(', ');
   };
 
-  // Copy address to clipboard
-  const copyAddress = (address: ContactAddress) => {
-    const formattedAddress = formatAddress(address);
-    navigator.clipboard.writeText(formattedAddress);
-  };
-
-  // Get address type label
-  const getAddressTypeLabel = (type: string): { label: string; icon: string; description: string } => {
-    return ADDRESS_TYPE_LABELS[type as keyof typeof ADDRESS_TYPE_LABELS] || 
-           { label: 'Other', icon: '📍', description: 'Other address type' };
+  // Get address type info
+  const getAddressTypeInfo = (addressType: string) => {
+    const typeKey = addressType as keyof typeof ADDRESS_TYPE_LABELS;
+    return ADDRESS_TYPE_LABELS[typeKey] || ADDRESS_TYPE_LABELS[ADDRESS_TYPES.OTHER];
   };
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border p-6">
+    <div className="rounded-lg shadow-sm border p-6 bg-card border-border">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Addresses</h2>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          disabled={disabled}
-          className="flex items-center px-3 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add
-        </button>
+        <h2 className="text-lg font-semibold text-foreground">Addresses</h2>
+        {!isAddingAddress && (
+          <button
+            onClick={() => setIsAddingAddress(true)}
+            disabled={disabled}
+            className="flex items-center px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Address
+          </button>
+        )}
       </div>
 
-      {/* Address Cards */}
-      {value.length === 0 ? (
-        <div className="text-center p-8 border-2 border-dashed border-border rounded-lg">
-          <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground mb-4">No addresses added yet</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            Add office, home, or other location addresses
+      {/* Add Address Form */}
+      {isAddingAddress && (
+        <div className="mb-4">
+          <AddAddressForm
+            onAdd={addAddress}
+            onCancel={() => setIsAddingAddress(false)}
+            defaultCountry={defaultCountry}
+            defaultState={defaultState}
+            isPrimary={value.length === 0}
+          />
+        </div>
+      )}
+
+      {/* Existing Addresses */}
+      {value.length === 0 && !isAddingAddress ? (
+        <div className="text-center p-8 border-2 border-dashed rounded-lg border-border">
+          <MapPin className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+          <p className="mb-4 text-muted-foreground">No addresses added yet</p>
+          <p className="text-sm mb-4 text-muted-foreground">
+            Add office, billing, or shipping addresses for this contact
           </p>
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => setIsAddingAddress(true)}
             disabled={disabled}
-            className="flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center px-4 py-2 rounded-md hover:bg-primary/90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Address
           </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      ) : value.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {value.map((address, index) => {
-            const IconComponent = getAddressIcon(address.type);
-            const typeInfo = getAddressTypeLabel(address.type);
-            const formattedAddress = formatAddress(address);
+            const addressTypeInfo = getAddressTypeInfo(address.address_type);
+            const IconComponent = ADDRESS_TYPE_ICONS[address.address_type as keyof typeof ADDRESS_TYPE_ICONS] || MapPin;
+            const isEditing = editingIndex === index;
             
             return (
               <div 
                 key={address.id || index} 
-                className="relative p-4 rounded-lg border border-border bg-card hover:border-primary/50 hover:shadow-md transition-all"
+                className="relative p-4 rounded-lg border hover:shadow-md transition-all border-border bg-card"
               >
-                {/* Primary Badge */}
-                {address.is_primary && (
-                  <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                    <Star className="h-3 w-3" />
-                    Primary
-                  </div>
-                )}
-
-                {/* Address Header */}
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <IconComponent className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">
-                        {address.label || typeInfo.label}
-                      </span>
-                      <span className="text-xs px-2 py-1 bg-secondary text-secondary-foreground rounded-full">
-                        {typeInfo.label}
-                      </span>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-primary/20 text-primary">
+                      <IconComponent className="h-4 w-4" />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {typeInfo.description}
-                    </p>
+                    <div>
+                      <span className="font-medium text-sm text-foreground">
+                        {addressTypeInfo.label}
+                      </span>
+                      <div className="flex items-center gap-2 mt-1">
+                        {address.is_primary && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary border border-primary/20">
+                            <Star className="h-3 w-3" />
+                            Primary
+                          </span>
+                        )}
+                        {address.is_verified && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                            <CheckCircle className="h-3 w-3" />
+                            Verified
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {/* Address Content */}
-                <div className="mb-4">
-                  <p className="text-sm text-foreground leading-relaxed">
-                    {address.address_line1}
-                    {address.address_line2 && (
-                      <>
-                        <br />
-                        {address.address_line2}
-                      </>
-                    )}
-                    <br />
-                    {address.city}
-                    {address.state_code && `, ${address.state_code}`}
-                    {address.postal_code && ` ${address.postal_code}`}
-                  </p>
-                  
-                  {address.notes && (
-                    <p className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded">
-                      💡 {address.notes}
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-3 border-t border-border">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => copyAddress(address)}
-                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                      title="Copy address"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                    {address.google_pin && (
-                      <button
-                        onClick={() => window.open(address.google_pin, '_blank')}
-                        className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                        title="Open in Google Maps"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </button>
-                    )}
+                  <div className="flex items-center gap-1">
                     {!address.is_primary && (
                       <button
                         onClick={() => updateAddress(index, { is_primary: true })}
                         disabled={disabled}
-                        className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
-                        title="Make primary"
+                        className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                        title="Set as primary"
                       >
-                        <Star className="h-3 w-3" />
+                        <Star className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
-                  </div>
-                  
-                  <div className="flex gap-1">
                     <button
-                      onClick={() => setEditingIndex(index)}
+                      onClick={() => setEditingIndex(isEditing ? null : index)}
                       disabled={disabled}
-                      className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
                       title="Edit address"
                     >
-                      <Edit2 className="h-3 w-3" />
+                      <Edit2 className="h-4 w-4 text-muted-foreground" />
                     </button>
                     <button
-                      onClick={() => removeAddress(index)}
+                      onClick={() => handleDeleteClick(index)}
                       disabled={disabled}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
                       title="Remove address"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </button>
                   </div>
                 </div>
+
+                {isEditing ? (
+                  <EditAddressForm
+                    address={address}
+                    onSave={(updates) => {
+                      updateAddress(index, updates);
+                      setEditingIndex(null);
+                    }}
+                    onCancel={() => setEditingIndex(null)}
+                  />
+                ) : (
+                  <div>
+                    <p className="text-sm text-foreground mb-2">
+                      {formatAddress(address)}
+                    </p>
+                    
+                    {address.notes && (
+                      <p className="text-xs text-muted-foreground italic">
+                        💡 {address.notes}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
-      )}
+      ) : null}
 
-      {/* Summary Info */}
+      {/* Summary */}
       {value.length > 0 && (
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md dark:bg-blue-900/20 dark:border-blue-800">
-          <div className="text-sm text-blue-800 dark:text-blue-400">
-            <strong>{value.length}</strong> address{value.length !== 1 ? 'es' : ''} added
+        <div className="mt-4 p-3 rounded-md border bg-muted/50 border-border">
+          <div className="text-sm text-muted-foreground">
+            <strong className="text-foreground">{value.length}</strong> address{value.length !== 1 ? 'es' : ''} added
             {value.filter(addr => addr.is_primary).length > 0 && (
-              <>
-                {' '} • <strong>1</strong> primary address set
-              </>
+              <span>
+                {' '} • <strong className="text-foreground">1</strong> primary address
+              </span>
             )}
-            {value.filter(addr => addr.google_pin).length > 0 && (
-              <>
-                {' '} • <strong>{value.filter(addr => addr.google_pin).length}</strong> with map pins
-              </>
+            {value.filter(addr => addr.is_verified).length > 0 && (
+              <span>
+                {' '} • <strong className="text-foreground">{value.filter(addr => addr.is_verified).length}</strong> verified
+              </span>
             )}
           </div>
         </div>
       )}
 
-      {/* Validation Messages */}
-      {value.length > 0 && !value.some(addr => addr.is_primary) && (
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md dark:bg-yellow-900/20 dark:border-yellow-800">
-          <p className="text-sm text-yellow-800 dark:text-yellow-400">
-            💡 Tip: Mark one address as "Primary" for main business location.
-          </p>
-        </div>
-      )}
-
-      {/* Add Address Modal - FIXED SCROLLING */}
-      {isAddModalOpen && (
-        <AddAddressModal
-          onAdd={addAddress}
-          onClose={() => setIsAddModalOpen(false)}
-          existingAddresses={value}
-        />
-      )}
-
-      {/* Edit Address Modal */}
-      {editingIndex !== null && (
-        <EditAddressModal
-          address={value[editingIndex]}
-          onSave={(updates) => {
-            updateAddress(editingIndex, updates);
-            setEditingIndex(null);
-          }}
-          onClose={() => setEditingIndex(null)}
-          existingAddresses={value}
-        />
-      )}
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          setShowDeleteDialog(false);
+          setDeleteIndex(null);
+        }}
+        onConfirm={() => {
+          if (deleteIndex !== null) {
+            removeAddress(deleteIndex);
+          }
+        }}
+        title="Remove Address"
+        description="Are you sure you want to remove this address?"
+        confirmText="Remove"
+        type="danger"
+        icon={<Trash2 className="h-6 w-6" />}
+      />
     </div>
   );
 };
 
-// FIXED Add Address Modal Component - No Scrolling
-interface AddAddressModalProps {
-  onAdd: (address: Omit<ContactAddress, 'id'>) => void;
-  onClose: () => void;
-  existingAddresses: ContactAddress[];
+// Add Address Form Component
+interface AddAddressFormProps {
+  onAdd: (address: Omit<Address, 'id'>) => void;
+  onCancel: () => void;
+  defaultCountry: any;
+  defaultState: string;
+  isPrimary: boolean;
 }
 
-const AddAddressModal: React.FC<AddAddressModalProps> = ({ onAdd, onClose, existingAddresses }) => {
-  const [addressData, setAddressData] = useState({
-    type: 'office' as ContactAddress['type'],
-    label: '',
-    address_line1: '',
-    address_line2: '',
+const AddAddressForm: React.FC<AddAddressFormProps> = ({
+  onAdd,
+  onCancel,
+  defaultCountry,
+  defaultState,
+  isPrimary
+}) => {
+  const { toast } = useToast();
+  const [selectedCountry, setSelectedCountry] = useState<string>(defaultCountry.code);
+  const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
+    address_type: ADDRESS_TYPES.OFFICE,
+    line1: '',
+    line2: '',
+    line3: '',
     city: '',
-    state_code: '',
-    country_code: 'IN',
+    state: defaultState,
+    country: defaultCountry.name,
     postal_code: '',
-    google_pin: '',
-    is_primary: existingAddresses.length === 0,
+    is_primary: isPrimary,
+    is_verified: false,
     notes: ''
   });
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
 
+  // Get states for selected country
+  const getStatesForCountry = (countryCode: string) => {
+    const country = countries.find(c => c.code === countryCode);
+    return country?.states || [];
+  };
+
+  // Handle country change
+  const handleCountryChange = (countryCode: string) => {
+    const country = countries.find(c => c.code === countryCode);
+    if (country) {
+      setSelectedCountry(countryCode);
+      const firstState = country.states?.[0]?.name || '';
+      setNewAddress(prev => ({
+        ...prev,
+        country: country.name,
+        state: firstState
+      }));
+    }
+  };
+
+  // Validate address
+  const validateAddress = (address: typeof newAddress): Record<string, string> => {
+    const errors: Record<string, string> = {};
+
+    if (!address.line1?.trim()) {
+      errors.line1 = ERROR_MESSAGES.REQUIRED_FIELD;
+    } else if (address.line1.length > VALIDATION_RULES.ADDRESS_MAX_LENGTH) {
+      errors.line1 = ERROR_MESSAGES.MAX_LENGTH(VALIDATION_RULES.ADDRESS_MAX_LENGTH);
+    }
+
+    if (!address.city?.trim()) {
+      errors.city = ERROR_MESSAGES.REQUIRED_FIELD;
+    }
+
+    if (!address.state?.trim()) {
+      errors.state = ERROR_MESSAGES.REQUIRED_FIELD;
+    }
+
+    if (!address.postal_code?.trim()) {
+      errors.postal_code = ERROR_MESSAGES.REQUIRED_FIELD;
+    } else if (address.postal_code.length > VALIDATION_RULES.POSTAL_CODE_MAX_LENGTH) {
+      errors.postal_code = ERROR_MESSAGES.MAX_LENGTH(VALIDATION_RULES.POSTAL_CODE_MAX_LENGTH);
+    }
+
+    // Country-specific postal code validation
+    if (address.country === 'India' && !/^\d{6}$/.test(address.postal_code)) {
+      errors.postal_code = 'Invalid postal code (6 digits required for India)';
+    }
+
+    return errors;
+  };
+
+  // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addressData.address_line1.trim() || !addressData.city.trim()) return;
+    const errors = validateAddress(newAddress);
+    
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: Object.values(errors)[0]
+      });
+      return;
+    }
 
-    onAdd(addressData);
+    onAdd(newAddress);
+  };
+
+  // Mark field as touched
+  const markFieldTouched = (fieldId: string) => {
+    setTouchedFields(prev => new Set(prev).add(fieldId));
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      {/* FIXED: Adjusted modal to fit screen without scrolling */}
-      <div className="bg-card rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
-        {/* Fixed Header */}
-        <div className="p-6 border-b border-border flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Add Address</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-muted rounded-md transition-colors"
-            >
-              ×
-            </button>
+    <div className="p-4 rounded-lg border bg-muted/30 border-border">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Address Type */}
+        <div>
+          <label className="block text-sm font-medium mb-2 text-foreground">Address Type</label>
+          <select
+            value={newAddress.address_type}
+            onChange={(e) => setNewAddress({ ...newAddress, address_type: e.target.value })}
+            className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+          >
+            {Object.entries(ADDRESS_TYPE_LABELS).map(([value, config]) => (
+              <option key={value} value={value}>
+                {config.icon} {config.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Address Lines */}
+        <div className="grid grid-cols-1 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">
+              Address Line 1 *
+            </label>
+            <input
+              type="text"
+              value={newAddress.line1}
+              onChange={(e) => {
+                setNewAddress({ ...newAddress, line1: e.target.value });
+                if (validationErrors.line1) {
+                  setValidationErrors(prev => ({ ...prev, line1: '' }));
+                }
+              }}
+              onBlur={() => markFieldTouched('line1')}
+              placeholder="House/Flat No, Building Name"
+              className={`w-full p-2 border rounded-md bg-background text-foreground ${
+                validationErrors.line1 && touchedFields.has('line1')
+                  ? 'border-destructive' 
+                  : 'border-input'
+              }`}
+            />
+            {validationErrors.line1 && touchedFields.has('line1') && (
+              <p className="text-xs text-destructive mt-1">{validationErrors.line1}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">
+              Address Line 2
+            </label>
+            <input
+              type="text"
+              value={newAddress.line2}
+              onChange={(e) => setNewAddress({ ...newAddress, line2: e.target.value })}
+              placeholder={PLACEHOLDER_TEXTS.STREET}
+              className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">
+              Address Line 3
+            </label>
+            <input
+              type="text"
+              value={newAddress.line3}
+              onChange={(e) => setNewAddress({ ...newAddress, line3: e.target.value })}
+              placeholder="Landmark (Optional)"
+              className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+            />
           </div>
         </div>
-        
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Address Type */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Address Type</label>
-                <select
-                  value={addressData.type}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, type: e.target.value as ContactAddress['type'] }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                >
-                  {Object.entries(ADDRESS_TYPE_LABELS).map(([key, value]) => (
-                    <option key={key} value={key}>
-                      {value.icon} {value.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              {/* Label */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Label (Optional)</label>
-                <input
-                  type="text"
-                  value={addressData.label}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, label: e.target.value }))}
-                  placeholder="e.g., Head Office, Mumbai Branch"
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* Address Line 1 */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Address Line 1 *</label>
-                <input
-                  type="text"
-                  value={addressData.address_line1}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, address_line1: e.target.value }))}
-                  placeholder={PLACEHOLDER_TEXTS.STREET}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                  required
-                />
-              </div>
-
-              {/* Address Line 2 */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Address Line 2</label>
-                <input
-                  type="text"
-                  value={addressData.address_line2}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, address_line2: e.target.value }))}
-                  placeholder="Apartment, suite, unit, floor (optional)"
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* City & State */}
-              <div>
-                <label className="block text-sm font-medium mb-2">City *</label>
-                <input
-                  type="text"
-                  value={addressData.city}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, city: e.target.value }))}
-                  placeholder={PLACEHOLDER_TEXTS.CITY}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">State/Province</label>
-                <input
-                  type="text"
-                  value={addressData.state_code}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, state_code: e.target.value }))}
-                  placeholder={PLACEHOLDER_TEXTS.STATE}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* Country & Postal */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Country</label>
-                <select
-                  value={addressData.country_code}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, country_code: e.target.value }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                >
-                  {countries.slice(0, 10).map(country => (
-                    <option key={country.code} value={country.code}>
-                      {country.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Postal Code</label>
-                <input
-                  type="text"
-                  value={addressData.postal_code}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, postal_code: e.target.value }))}
-                  placeholder={PLACEHOLDER_TEXTS.POSTAL_CODE}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* Google Maps Pin */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Google Maps Pin (Optional)</label>
-                <input
-                  type="url"
-                  value={addressData.google_pin}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, google_pin: e.target.value }))}
-                  placeholder="Paste Google Maps link or coordinates"
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* Notes */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
-                <input
-                  type="text"
-                  value={addressData.notes}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Add any special instructions or notes..."
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              {/* Primary Checkbox */}
-              <div className="md:col-span-2">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="is_primary_add"
-                    checked={addressData.is_primary}
-                    onChange={(e) => setAddressData(prev => ({ ...prev, is_primary: e.target.checked }))}
-                    className="mr-2"
-                  />
-                  <label htmlFor="is_primary_add" className="text-sm">Make this the primary address</label>
-                </div>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        {/* Fixed Footer */}
-        <div className="p-6 border-t border-border flex-shrink-0">
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-primary rounded-md hover:bg-muted transition-colors text-primary"
+        {/* Country, State, City, Postal Code */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">Country</label>
+            <select
+              value={selectedCountry}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              className="w-full p-2 border rounded-md bg-background border-input text-foreground"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              Add Address
-            </button>
+              {countries.map(country => (
+                <option key={country.code} value={country.code}>
+                  {country.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">State *</label>
+            {getStatesForCountry(selectedCountry).length > 0 ? (
+              <select
+                value={newAddress.state}
+                onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+              >
+                {getStatesForCountry(selectedCountry).map(state => (
+                  <option key={state.code} value={state.name}>{state.name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={newAddress.state}
+                onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                onBlur={() => markFieldTouched('state')}
+                placeholder={PLACEHOLDER_TEXTS.STATE}
+                className={`w-full p-2 border rounded-md bg-background text-foreground ${
+                  validationErrors.state && touchedFields.has('state')
+                    ? 'border-destructive' 
+                    : 'border-input'
+                }`}
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">City *</label>
+            <input
+              type="text"
+              value={newAddress.city}
+              onChange={(e) => {
+                setNewAddress({ ...newAddress, city: e.target.value });
+                if (validationErrors.city) {
+                  setValidationErrors(prev => ({ ...prev, city: '' }));
+                }
+              }}
+              onBlur={() => markFieldTouched('city')}
+              placeholder={PLACEHOLDER_TEXTS.CITY}
+              className={`w-full p-2 border rounded-md bg-background text-foreground ${
+                validationErrors.city && touchedFields.has('city')
+                  ? 'border-destructive' 
+                  : 'border-input'
+              }`}
+            />
+            {validationErrors.city && touchedFields.has('city') && (
+              <p className="text-xs text-destructive mt-1">{validationErrors.city}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-foreground">
+              Postal Code *
+            </label>
+            <input
+              type="text"
+              value={newAddress.postal_code}
+              onChange={(e) => {
+                setNewAddress({ ...newAddress, postal_code: e.target.value });
+                if (validationErrors.postal_code) {
+                  setValidationErrors(prev => ({ ...prev, postal_code: '' }));
+                }
+              }}
+              onBlur={() => markFieldTouched('postal_code')}
+              placeholder={PLACEHOLDER_TEXTS.POSTAL_CODE}
+              maxLength={VALIDATION_RULES.POSTAL_CODE_MAX_LENGTH}
+              className={`w-full p-2 border rounded-md bg-background text-foreground ${
+                validationErrors.postal_code && touchedFields.has('postal_code')
+                  ? 'border-destructive' 
+                  : 'border-input'
+              }`}
+            />
+            {validationErrors.postal_code && touchedFields.has('postal_code') && (
+              <p className="text-xs text-destructive mt-1">{validationErrors.postal_code}</p>
+            )}
           </div>
         </div>
-      </div>
+
+        {/* Notes */}
+        <div>
+          <label className="block text-sm font-medium mb-2 text-foreground">
+            Notes (Optional)
+          </label>
+          <textarea
+            value={newAddress.notes || ''}
+            onChange={(e) => setNewAddress({ ...newAddress, notes: e.target.value })}
+            placeholder="Delivery instructions, landmarks, etc."
+            rows={2}
+            className="w-full p-2 border rounded-md bg-background border-input text-foreground resize-none"
+          />
+        </div>
+
+        {/* Primary Toggle */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="new_is_primary"
+            checked={newAddress.is_primary}
+            onChange={(e) => setNewAddress({ ...newAddress, is_primary: e.target.checked })}
+            className="mr-2 accent-primary"
+          />
+          <label htmlFor="new_is_primary" className="text-sm text-foreground">
+            Set as primary address
+          </label>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+          >
+            <Check className="mr-2 h-4 w-4 inline" />
+            Add Address
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+          >
+            <X className="mr-2 h-4 w-4 inline" />
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
 
-// Similar fix for Edit Address Modal
-interface EditAddressModalProps {
-  address: ContactAddress;
-  onSave: (updates: Partial<ContactAddress>) => void;
-  onClose: () => void;
-  existingAddresses: ContactAddress[];
+// Edit Address Form Component
+interface EditAddressFormProps {
+  address: Address;
+  onSave: (updates: Partial<Address>) => void;
+  onCancel: () => void;
 }
 
-const EditAddressModal: React.FC<EditAddressModalProps> = ({ address, onSave, onClose }) => {
-  const [addressData, setAddressData] = useState({
-    type: address.type,
-    label: address.label || '',
-    address_line1: address.address_line1,
-    address_line2: address.address_line2 || '',
-    city: address.city,
-    state_code: address.state_code || '',
-    country_code: address.country_code,
-    postal_code: address.postal_code || '',
-    google_pin: address.google_pin || '',
-    is_primary: address.is_primary,
-    notes: address.notes || ''
-  });
+const EditAddressForm: React.FC<EditAddressFormProps> = ({
+  address,
+  onSave,
+  onCancel
+}) => {
+  const [editedAddress, setEditedAddress] = useState(address);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addressData.address_line1.trim() || !addressData.city.trim()) return;
-
-    onSave(addressData);
+  const handleSave = () => {
+    onSave(editedAddress);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-lg shadow-xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
-        <div className="p-6 border-b border-border flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Edit Address</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-muted rounded-md transition-colors"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit} className="p-6">
-            {/* Similar form structure as Add Modal - shortened for brevity */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Address Type</label>
-                <select
-                  value={addressData.type}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, type: e.target.value as ContactAddress['type'] }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                >
-                  {Object.entries(ADDRESS_TYPE_LABELS).map(([key, value]) => (
-                    <option key={key} value={key}>
-                      {value.icon} {value.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Label</label>
-                <input
-                  type="text"
-                  value={addressData.label}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, label: e.target.value }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-2">Address Line 1 *</label>
-                <input
-                  type="text"
-                  value={addressData.address_line1}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, address_line1: e.target.value }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">City *</label>
-                <input
-                  type="text"
-                  value={addressData.city}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, city: e.target.value }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">State</label>
-                <input
-                  type="text"
-                  value={addressData.state_code}
-                  onChange={(e) => setAddressData(prev => ({ ...prev, state_code: e.target.value }))}
-                  className="w-full p-2 border border-border rounded-md bg-background"
-                />
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div className="p-6 border-t border-border flex-shrink-0">
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-primary rounded-md hover:bg-muted transition-colors text-primary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
+    <div className="space-y-3">
+      <input
+        type="text"
+        value={editedAddress.line1}
+        onChange={(e) => setEditedAddress({ ...editedAddress, line1: e.target.value })}
+        placeholder="Address Line 1"
+        className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
+      />
+      <input
+        type="text"
+        value={editedAddress.line2 || ''}
+        onChange={(e) => setEditedAddress({ ...editedAddress, line2: e.target.value })}
+        placeholder="Address Line 2"
+        className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="text"
+          value={editedAddress.city}
+          onChange={(e) => setEditedAddress({ ...editedAddress, city: e.target.value })}
+          placeholder="City"
+          className="p-2 border rounded-md bg-background border-input text-foreground text-sm"
+        />
+        <input
+          type="text"
+          value={editedAddress.postal_code}
+          onChange={(e) => setEditedAddress({ ...editedAddress, postal_code: e.target.value })}
+          placeholder="Postal Code"
+          className="p-2 border rounded-md bg-background border-input text-foreground text-sm"
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          className="flex-1 px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+        >
+          <Check className="mr-2 h-4 w-4 inline" />
+          Save
+        </button>
+        <button
+          onClick={onCancel}
+          className="flex-1 px-3 py-1.5 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+        >
+          <X className="mr-2 h-4 w-4 inline" />
+          Cancel
+        </button>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import React from 'react';
 import { Bell, Check, X, Edit } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { useTheme } from '../../../../../contexts/ThemeContext';
 
 interface NotificationConfig {
   notif_type?: string;
@@ -28,6 +29,11 @@ const NotificationCreditsCard: React.FC<NotificationCreditsCardProps> = ({
   isArchived = false,
   onEdit
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Format price with currency symbol
   const formatPrice = (price: number | null | undefined, currencyCode: string) => {
     if (price === null || price === undefined) return 'N/A';
@@ -50,12 +56,24 @@ const NotificationCreditsCard: React.FC<NotificationCreditsCardProps> = ({
   // Status badge component
   const StatusBadge: React.FC<{ enabled: boolean }> = ({ enabled }) => (
     enabled ? (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+      <span 
+        className="inline-flex items-center px-2 py-1 rounded-full text-xs transition-colors"
+        style={{
+          backgroundColor: colors.semantic.success + '20',
+          color: colors.semantic.success
+        }}
+      >
         <Check className="h-3 w-3 mr-1" />
         Enabled
       </span>
     ) : (
-      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+      <span 
+        className="inline-flex items-center px-2 py-1 rounded-full text-xs transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '80',
+          color: colors.utility.secondaryText
+        }}
+      >
         <X className="h-3 w-3 mr-1" />
         Disabled
       </span>
@@ -63,18 +81,37 @@ const NotificationCreditsCard: React.FC<NotificationCreditsCardProps> = ({
   );
 
   return (
-    <div className="bg-card rounded-lg border border-border overflow-hidden">
-      <div className="px-6 py-4 bg-muted/20 border-b border-border flex items-center justify-between">
+    <div 
+      className="rounded-lg border overflow-hidden transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <div 
+        className="px-6 py-4 border-b flex items-center justify-between transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '20',
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
         <div className="flex items-center">
-          <Bell className="h-5 w-5 mr-2 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">
+          <Bell 
+            className="h-5 w-5 mr-2 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Notification Credits ({getCurrencySymbol(selectedCurrency)} {selectedCurrency})
           </h2>
         </div>
         {!isArchived && onEdit && (
           <button
             onClick={onEdit}
-            className="text-sm text-primary hover:text-primary/80 flex items-center"
+            className="text-sm flex items-center transition-colors hover:opacity-80"
+            style={{ color: colors.brand.primary }}
           >
             <Edit className="h-4 w-4 mr-1" />
             Edit
@@ -86,43 +123,92 @@ const NotificationCreditsCard: React.FC<NotificationCreditsCardProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="px-4 py-2 text-left font-medium">Method</th>
-                  <th className="px-4 py-2 text-left font-medium">Category</th>
-                  <th className="px-4 py-2 text-left font-medium">Enabled</th>
-                  <th className="px-4 py-2 text-left font-medium">
+                <tr 
+                  className="border-b transition-colors"
+                  style={{ borderColor: colors.utility.primaryText + '20' }}
+                >
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Method
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Category
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Enabled
+                  </th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Credits per {planType === 'Per User' ? 'User' : 'Contract'}
                   </th>
-                  <th className="px-4 py-2 text-left font-medium">Unit Price</th>
+                  <th 
+                    className="px-4 py-2 text-left font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Unit Price
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {notifications.map((notification, index) => (
-                  <tr key={index} className="border-b border-border">
+                  <tr 
+                    key={index} 
+                    className="border-b transition-colors"
+                    style={{ borderColor: colors.utility.primaryText + '20' }}
+                  >
                     <td className="px-4 py-3">
                       <div>
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {getNotificationMethod(notification)}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span>{notification.category || 'Unknown'}</span>
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {notification.category || 'Unknown'}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge enabled={notification.enabled ?? false} />
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-medium">
+                      <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         {notification.credits_per_unit ?? 0}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center">
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatPrice(getNotificationUnitPrice(notification, selectedCurrency), selectedCurrency)}
                         </span>
-                        <span className="ml-1 text-muted-foreground">per credit</span>
+                        <span 
+                          className="ml-1 transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          per credit
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -131,14 +217,29 @@ const NotificationCreditsCard: React.FC<NotificationCreditsCardProps> = ({
             </table>
           </div>
         ) : (
-          <div className="text-center p-8 text-muted-foreground">
-            <Bell className="h-12 w-12 mx-auto opacity-50 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Notification Configuration</h3>
+          <div 
+            className="text-center p-8 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <Bell 
+              className="h-12 w-12 mx-auto opacity-50 mb-4" 
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <h3 
+              className="text-lg font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              No Notification Configuration
+            </h3>
             <p>No notification credits have been configured for this plan.</p>
             {!isArchived && onEdit && (
               <button
                 onClick={onEdit}
-                className="mt-4 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="mt-4 px-4 py-2 rounded-md transition-colors hover:opacity-90"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                  color: '#FFFFFF'
+                }}
               >
                 Add Notifications
               </button>

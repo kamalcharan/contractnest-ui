@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { File, FileText, Image, Video, Download, Trash2, Eye, Calendar, HardDrive, Search, SortDesc, SortAsc, CheckSquare, Square, Loader2 } from 'lucide-react';
 import { formatFileSize } from '@/utils/constants/storageConstants';
 import FileActions from './FileActions';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export interface FileItem {
   id: string;
@@ -42,21 +43,25 @@ const FileList: React.FC<FileListProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Get file icon based on type
   const getFileIcon = (fileType: string) => {
     const extension = fileType.toLowerCase();
     
     if (['jpg', 'jpeg', 'png', 'gif', 'svg'].includes(extension)) {
-      return <Image className="w-5 h-5 text-blue-500" />;
+      return <Image className="w-5 h-5" style={{ color: colors.brand.primary }} />;
     } else if (['mp4', 'mov', 'avi', 'webm'].includes(extension)) {
-      return <Video className="w-5 h-5 text-purple-500" />;
+      return <Video className="w-5 h-5" style={{ color: colors.brand.tertiary }} />;
     } else if (['pdf'].includes(extension)) {
-      return <FileText className="w-5 h-5 text-red-500" />;
+      return <FileText className="w-5 h-5" style={{ color: colors.semantic.error }} />;
     } else if (['doc', 'docx'].includes(extension)) {
-      return <FileText className="w-5 h-5 text-blue-700" />;
+      return <FileText className="w-5 h-5" style={{ color: colors.brand.secondary }} />;
     } else {
-      return <File className="w-5 h-5 text-gray-500" />;
+      return <File className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />;
     }
   };
   
@@ -100,8 +105,8 @@ const FileList: React.FC<FileListProps> = ({
     if (sortField !== field) return null;
     
     return sortDirection === 'asc' 
-      ? <SortAsc className="w-4 h-4 inline ml-1" />
-      : <SortDesc className="w-4 h-4 inline ml-1" />;
+      ? <SortAsc className="w-4 h-4 inline ml-1" style={{ color: colors.brand.primary }} />
+      : <SortDesc className="w-4 h-4 inline ml-1" style={{ color: colors.brand.primary }} />;
   };
   
   // Toggle file selection
@@ -145,27 +150,54 @@ const FileList: React.FC<FileListProps> = ({
   
   if (isLoading) {
     return (
-      <div className={`bg-card border border-border rounded-lg ${className}`}>
+      <div 
+        className={`border rounded-lg transition-colors ${className}`}
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: `${colors.utility.primaryText}20`
+        }}
+      >
         <div className="flex justify-center py-12">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+          <div 
+            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full"
+            style={{ borderColor: `${colors.brand.primary}40`, borderTopColor: 'transparent' }}
+          />
         </div>
       </div>
     );
   }
   
   return (
-    <div className={`bg-card border border-border rounded-lg ${className}`}>
+    <div 
+      className={`border rounded-lg transition-colors ${className}`}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: `${colors.utility.primaryText}20`
+      }}
+    >
       {/* Search Bar */}
-      <div className="p-4 border-b border-border">
+      <div 
+        className="p-4 border-b transition-colors"
+        style={{ borderColor: `${colors.utility.primaryText}20` }}
+      >
         <div className="flex items-center justify-between gap-4">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-muted-foreground" />
+              <Search 
+                className="h-4 w-4 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </div>
             <input
               type="text"
               placeholder="Search files..."
-              className="pl-10 w-full p-2 rounded-md border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+              className="pl-10 w-full p-2 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                borderColor: `${colors.utility.primaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -175,7 +207,8 @@ const FileList: React.FC<FileListProps> = ({
             <button
               onClick={handleBatchDelete}
               disabled={isBatchDeleting}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors flex items-center disabled:opacity-50"
+              className="px-4 py-2 text-white rounded-md transition-all duration-200 flex items-center disabled:opacity-50 hover:opacity-80"
+              style={{ backgroundColor: colors.semantic.error }}
             >
               {isBatchDeleting ? (
                 <>
@@ -195,24 +228,44 @@ const FileList: React.FC<FileListProps> = ({
       
       {sortedFiles.length === 0 ? (
         <div className="text-center py-12">
-          <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <File className="w-8 h-8 text-muted-foreground" />
+          <div 
+            className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors"
+            style={{ backgroundColor: `${colors.utility.primaryText}10` }}
+          >
+            <File 
+              className="w-8 h-8 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </div>
-          <h3 className="text-lg font-medium mb-2">No files found</h3>
-          <p className="text-muted-foreground">
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            No files found
+          </h3>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {searchTerm ? `No files match your search "${searchTerm}"` : emptyMessage}
           </p>
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50">
+            <thead 
+              style={{ backgroundColor: `${colors.utility.primaryText}05` }}
+            >
               <tr>
                 {enableBatchOperations && (
                   <th className="px-4 py-3 text-left">
                     <button
                       onClick={toggleAllSelection}
-                      className="p-1 hover:bg-muted rounded"
+                      className="p-1 rounded transition-all duration-200 hover:opacity-80"
+                      style={{ 
+                        backgroundColor: `${colors.utility.primaryText}10`,
+                        color: colors.utility.primaryText
+                      }}
                     >
                       {selectedFiles.size === sortedFiles.length ? (
                         <CheckSquare className="w-4 h-4" />
@@ -223,7 +276,8 @@ const FileList: React.FC<FileListProps> = ({
                   </th>
                 )}
                 <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer"
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
                   onClick={() => toggleSort('file_name')}
                 >
                   <span className="flex items-center">
@@ -231,7 +285,8 @@ const FileList: React.FC<FileListProps> = ({
                   </span>
                 </th>
                 <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer"
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
                   onClick={() => toggleSort('file_type')}
                 >
                   <span className="flex items-center">
@@ -239,7 +294,8 @@ const FileList: React.FC<FileListProps> = ({
                   </span>
                 </th>
                 <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer"
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
                   onClick={() => toggleSort('file_size')}
                 >
                   <span className="flex items-center">
@@ -247,26 +303,47 @@ const FileList: React.FC<FileListProps> = ({
                   </span>
                 </th>
                 <th 
-                  className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider cursor-pointer"
+                  className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider cursor-pointer transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
                   onClick={() => toggleSort('created_at')}
                 >
                   <span className="flex items-center">
                     Uploaded {renderSortIcon('created_at')}
                   </span>
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <th 
+                  className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody 
+              className="divide-y transition-colors"
+              style={{ '--tw-divide-opacity': '0.2', backgroundColor: 'transparent' }}
+            >
               {sortedFiles.map((file) => (
-                <tr key={file.id} className="hover:bg-muted/20">
+                <tr 
+                  key={file.id} 
+                  className="transition-all duration-200 hover:opacity-80"
+                  style={{ backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}05`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
                   {enableBatchOperations && (
                     <td className="px-4 py-4">
                       <button
                         onClick={() => toggleFileSelection(file.id)}
-                        className="p-1 hover:bg-muted rounded"
+                        className="p-1 rounded transition-all duration-200 hover:opacity-80"
+                        style={{ 
+                          backgroundColor: `${colors.utility.primaryText}10`,
+                          color: colors.utility.primaryText
+                        }}
                       >
                         {selectedFiles.has(file.id) ? (
                           <CheckSquare className="w-4 h-4" />
@@ -282,17 +359,31 @@ const FileList: React.FC<FileListProps> = ({
                         {getFileIcon(file.file_type)}
                       </div>
                       <div className="truncate max-w-xs">
-                        <div className="text-sm font-medium">{file.file_name}</div>
+                        <div 
+                          className="text-sm font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {file.file_name}
+                        </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap text-sm transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {file.file_type.toUpperCase()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap text-sm transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {formatFileSize(file.file_size)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td 
+                    className="px-6 py-4 whitespace-nowrap text-sm transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {new Date(file.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
@@ -309,7 +400,13 @@ const FileList: React.FC<FileListProps> = ({
       )}
       
       {/* File Count Footer */}
-      <div className="p-3 border-t border-border text-sm text-muted-foreground flex items-center justify-between">
+      <div 
+        className="p-3 border-t text-sm flex items-center justify-between transition-colors"
+        style={{
+          borderColor: `${colors.utility.primaryText}20`,
+          color: colors.utility.secondaryText
+        }}
+      >
         <div className="flex items-center">
           <HardDrive className="w-4 h-4 mr-2" />
           <span>

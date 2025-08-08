@@ -3,6 +3,7 @@
 import React from 'react';
 import { DollarSign, Edit } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface PricingTier {
   tier_id?: string;
@@ -33,6 +34,11 @@ const PricingTiersCard: React.FC<PricingTiersCardProps> = ({
   isArchived = false,
   onEdit
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Format price with currency symbol
   const formatPrice = (price: number | null | undefined, currencyCode: string) => {
     if (price === null || price === undefined) return 'N/A';
@@ -70,18 +76,37 @@ const PricingTiersCard: React.FC<PricingTiersCardProps> = ({
   };
 
   return (
-    <div className="bg-card rounded-lg border border-border overflow-hidden">
-      <div className="px-6 py-4 bg-muted/20 border-b border-border flex items-center justify-between">
+    <div 
+      className="rounded-lg border overflow-hidden transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <div 
+        className="px-6 py-4 border-b flex items-center justify-between transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '20',
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
         <div className="flex items-center">
-          <DollarSign className="h-5 w-5 mr-2 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">
+          <DollarSign 
+            className="h-5 w-5 mr-2 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Pricing Tiers ({getCurrencySymbol(selectedCurrency)} {selectedCurrency})
           </h2>
         </div>
         {!isArchived && onEdit && (
           <button
             onClick={onEdit}
-            className="text-sm text-primary hover:text-primary/80 flex items-center"
+            className="text-sm flex items-center transition-colors hover:opacity-80"
+            style={{ color: colors.brand.primary }}
           >
             <Edit className="h-4 w-4 mr-1" />
             Edit
@@ -93,14 +118,26 @@ const PricingTiersCard: React.FC<PricingTiersCardProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border">
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                <tr 
+                  className="border-b transition-colors"
+                  style={{ borderColor: colors.utility.primaryText + '20' }}
+                >
+                  <th 
+                    className="px-4 py-3 text-left text-sm font-medium transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Range
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                  <th 
+                    className="px-4 py-3 text-left text-sm font-medium transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Base Price
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
+                  <th 
+                    className="px-4 py-3 text-left text-sm font-medium transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Unit Price
                   </th>
                 </tr>
@@ -111,19 +148,32 @@ const PricingTiersCard: React.FC<PricingTiersCardProps> = ({
                   const unitPrice = getUnitPrice(tier);
                   
                   return (
-                    <tr key={tier.tier_id || index} className="border-b border-border">
+                    <tr 
+                      key={tier.tier_id || index} 
+                      className="border-b transition-colors"
+                      style={{ borderColor: colors.utility.primaryText + '20' }}
+                    >
                       <td className="px-4 py-3">
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {getTierLabel(tier)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatPrice(tierPrice, selectedCurrency)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-medium">
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatPrice(unitPrice, selectedCurrency)}
                         </span>
                       </td>
@@ -134,14 +184,29 @@ const PricingTiersCard: React.FC<PricingTiersCardProps> = ({
             </table>
           </div>
         ) : (
-          <div className="text-center p-8 text-muted-foreground">
-            <DollarSign className="h-12 w-12 mx-auto opacity-50 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Pricing Tiers</h3>
+          <div 
+            className="text-center p-8 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <DollarSign 
+              className="h-12 w-12 mx-auto opacity-50 mb-4" 
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <h3 
+              className="text-lg font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              No Pricing Tiers
+            </h3>
             <p>No pricing tiers have been configured for this plan.</p>
             {!isArchived && onEdit && (
               <button
                 onClick={onEdit}
-                className="mt-4 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="mt-4 px-4 py-2 rounded-md transition-colors hover:opacity-90"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                  color: '#FFFFFF'
+                }}
               >
                 Add Pricing Tiers
               </button>

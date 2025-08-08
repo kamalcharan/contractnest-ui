@@ -1,4 +1,4 @@
-// src/components/services/RecentServicesCard.tsx
+// src/components/services/RecentServicesCard.tsx - Theme Enabled Version
 import React from 'react';
 import { Clock, Play, Pause, CheckCircle, RefreshCw, Calendar, Archive, Eye, Edit } from 'lucide-react';
 
@@ -119,50 +119,57 @@ const RecentServicesCard: React.FC<RecentServicesCardProps> = ({
       case 'active':
         return { 
           label: 'Active', 
-          color: 'text-green-600', 
-          bgColor: 'bg-green-100',
+          color: 'text-green-600 dark:text-green-400', 
+          bgColor: 'bg-green-100 dark:bg-green-900/20',
+          borderColor: 'border-green-200 dark:border-green-800',
           icon: Play 
         };
       case 'renewalDue':
         return { 
           label: 'Renewal Due', 
-          color: 'text-orange-600', 
-          bgColor: 'bg-orange-100',
+          color: 'text-orange-600 dark:text-orange-400', 
+          bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+          borderColor: 'border-orange-200 dark:border-orange-800',
           icon: RefreshCw 
         };
       case 'completed':
         return { 
           label: 'Completed', 
-          color: 'text-blue-600', 
-          bgColor: 'bg-blue-100',
+          color: 'text-blue-600 dark:text-blue-400', 
+          bgColor: 'bg-blue-100 dark:bg-blue-900/20',
+          borderColor: 'border-blue-200 dark:border-blue-800',
           icon: CheckCircle 
         };
       case 'paused':
         return { 
           label: 'Paused', 
-          color: 'text-yellow-600', 
-          bgColor: 'bg-yellow-100',
+          color: 'text-yellow-600 dark:text-yellow-400', 
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
+          borderColor: 'border-yellow-200 dark:border-yellow-800',
           icon: Pause 
         };
       case 'upcoming':
         return { 
           label: 'Upcoming', 
-          color: 'text-purple-600', 
-          bgColor: 'bg-purple-100',
+          color: 'text-purple-600 dark:text-purple-400', 
+          bgColor: 'bg-purple-100 dark:bg-purple-900/20',
+          borderColor: 'border-purple-200 dark:border-purple-800',
           icon: Calendar 
         };
       case 'inactive':
         return { 
           label: 'Inactive', 
-          color: 'text-gray-600', 
-          bgColor: 'bg-gray-100',
+          color: 'text-muted-foreground', 
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           icon: Archive 
         };
       default:
         return { 
           label: 'Unknown', 
-          color: 'text-gray-600', 
-          bgColor: 'bg-gray-100',
+          color: 'text-muted-foreground', 
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           icon: Play 
         };
     }
@@ -206,7 +213,7 @@ const RecentServicesCard: React.FC<RecentServicesCardProps> = ({
     <div className="bg-card rounded-lg shadow-sm border border-border p-6">
       <div className="flex items-center gap-2 mb-4">
         <Clock className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-lg font-semibold">Recent Service Activity</h3>
+        <h3 className="text-lg font-semibold text-foreground">Recent Service Activity</h3>
       </div>
       
       <div className="space-y-4">
@@ -223,20 +230,20 @@ const RecentServicesCard: React.FC<RecentServicesCardProps> = ({
                       {service.title}
                     </h4>
                     <span className={`
-                      inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-                      ${statusConfig.color} ${statusConfig.bgColor}
+                      inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border
+                      ${statusConfig.color} ${statusConfig.bgColor} ${statusConfig.borderColor}
                     `}>
                       <StatusIcon className="h-3 w-3" />
                       {statusConfig.label}
                     </span>
-                    <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded-full text-xs">
+                    <span className="px-2 py-1 bg-secondary text-secondary-foreground rounded-full text-xs border border-border">
                       {service.type.charAt(0).toUpperCase() + service.type.slice(1)}
                     </span>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2 text-sm">
                     <div>
-                      <span className="font-semibold text-green-600">
+                      <span className="font-semibold text-green-600 dark:text-green-400">
                         {formatAmount(service.value, service.currency)}
                       </span>
                     </div>
@@ -263,13 +270,13 @@ const RecentServicesCard: React.FC<RecentServicesCardProps> = ({
                 
                 <div className="flex gap-1 ml-4">
                   <button 
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                     title="View service details"
                   >
                     <Eye className="h-4 w-4" />
                   </button>
                   <button 
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                     title="Edit service"
                   >
                     <Edit className="h-4 w-4" />
@@ -279,8 +286,8 @@ const RecentServicesCard: React.FC<RecentServicesCardProps> = ({
               
               {/* Renewal warning */}
               {service.status === 'renewalDue' && (
-                <div className="mt-3 p-2 bg-orange-50 border border-orange-200 rounded-md">
-                  <div className="flex items-center gap-2 text-sm text-orange-700">
+                <div className="mt-3 p-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-md">
+                  <div className="flex items-center gap-2 text-sm text-orange-700 dark:text-orange-300">
                     <RefreshCw className="h-4 w-4" />
                     <span>
                       Renewal due in {Math.ceil((new Date(service.renewalDate!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days

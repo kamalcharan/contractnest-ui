@@ -1,7 +1,7 @@
-// Updated InvitationRegisterPage.tsx with proper Step 1 and Step 2 for existing users
-
+// src/pages/auth/InvitationRegisterPage.tsx
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Eye, EyeOff, Building, ArrowLeft, CheckCircle, X, UserCheck, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -33,6 +33,10 @@ const InvitationRegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user: currentUser } = useAuth(); // Get current logged-in user if any
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Get invitation codes from URL
   const userCode = searchParams.get('code');
@@ -119,7 +123,16 @@ const InvitationRegisterPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('Invitation validation error:', error);
-      toast.error(error.response?.data?.error || error.message || 'Invalid invitation');
+      toast.error(error.response?.data?.error || error.message || 'Invalid invitation', {
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: colors.semantic.error,
+          color: '#FFF',
+          fontSize: '16px',
+          minWidth: '300px'
+        },
+      });
       navigate('/login');
     } finally {
       setLoading(false);
@@ -209,7 +222,16 @@ const InvitationRegisterPage: React.FC = () => {
           localStorage.setItem('current_tenant', JSON.stringify(authData.tenant));
         }
         
-        toast.success(`Welcome to ${authData.tenant?.name || invitation.tenant.name}!`);
+        toast.success(`Welcome to ${authData.tenant?.name || invitation.tenant.name}!`, {
+          style: {
+            padding: '16px',
+            borderRadius: '8px',
+            background: colors.semantic.success,
+            color: '#FFF',
+            fontSize: '16px',
+            minWidth: '300px'
+          },
+        });
         
         // Navigate to dashboard
         navigate('/dashboard');
@@ -220,7 +242,16 @@ const InvitationRegisterPage: React.FC = () => {
     } catch (error: any) {
       console.error('Registration error:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create account';
-      toast.error(errorMessage);
+      toast.error(errorMessage, {
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: colors.semantic.error,
+          color: '#FFF',
+          fontSize: '16px',
+          minWidth: '300px'
+        },
+      });
     } finally {
       setSubmitting(false);
     }
@@ -240,7 +271,16 @@ const InvitationRegisterPage: React.FC = () => {
         // If we don't have user_id, we need to get it from the backend
         // This is a fallback - ideally the invitation validation should return it
         console.error('User ID not available in invitation data');
-        toast.error('Unable to process invitation. Please try again.');
+        toast.error('Unable to process invitation. Please try again.', {
+          style: {
+            padding: '16px',
+            borderRadius: '8px',
+            background: colors.semantic.error,
+            color: '#FFF',
+            fontSize: '16px',
+            minWidth: '300px'
+          },
+        });
         return;
       }
       
@@ -253,7 +293,15 @@ const InvitationRegisterPage: React.FC = () => {
       
       toast.success(`Successfully accepted invitation to ${invitation.tenant.name}!`, {
         duration: 3000,
-        icon: '🎉'
+        icon: '🎉',
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: colors.semantic.success,
+          color: '#FFF',
+          fontSize: '16px',
+          minWidth: '300px'
+        },
       });
       
       // Redirect to login page after successful acceptance
@@ -267,7 +315,16 @@ const InvitationRegisterPage: React.FC = () => {
       
     } catch (error: any) {
       console.error('Failed to accept invitation:', error);
-      toast.error(error.response?.data?.error || 'Failed to accept invitation');
+      toast.error(error.response?.data?.error || 'Failed to accept invitation', {
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: colors.semantic.error,
+          color: '#FFF',
+          fontSize: '16px',
+          minWidth: '300px'
+        },
+      });
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +337,7 @@ const InvitationRegisterPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#6B7280',
+          background: colors.utility.secondaryText,
           color: '#FFF',
         },
       });
@@ -290,8 +347,14 @@ const InvitationRegisterPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div 
+        className="min-h-screen flex items-center justify-center transition-colors duration-200"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div 
+          className="animate-spin rounded-full h-12 w-12 border-b-2"
+          style={{ borderColor: colors.brand.primary }}
+        ></div>
       </div>
     );
   }
@@ -303,20 +366,39 @@ const InvitationRegisterPage: React.FC = () => {
   // Step 1: Preview/Confirmation step
   if (currentStep === 'preview') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 py-6 px-4">
+      <div 
+        className="min-h-screen flex items-center justify-center py-6 px-4 transition-colors duration-200"
+        style={{
+          background: isDarkMode 
+            ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}20)`
+            : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}10)`
+        }}
+      >
         <div className="w-full max-w-lg">
           {/* Back button */}
           <button
             onClick={() => navigate('/login')}
-            className="mb-3 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+            className="mb-3 flex items-center gap-2 text-sm transition-colors hover:opacity-80"
+            style={{ color: colors.utility.secondaryText }}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to login
           </button>
 
-          <div className="bg-card rounded-xl shadow-xl border border-border overflow-hidden">
+          <div 
+            className="rounded-xl shadow-xl border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             {/* Header */}
-            <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-6 text-white">
+            <div 
+              className="px-6 py-6 text-white"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
+            >
               <div className="flex items-center gap-3">
                 <div className="w-14 h-14 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
                   <Building className="h-7 w-7" />
@@ -332,18 +414,45 @@ const InvitationRegisterPage: React.FC = () => {
               {/* Invitation details */}
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                  <CheckCircle 
+                    className="h-5 w-5 flex-shrink-0"
+                    style={{ color: colors.brand.primary }}
+                  />
                   <div>
-                    <p className="text-sm text-muted-foreground">You're invited to join:</p>
-                    <h2 className="text-2xl font-bold">{invitation.tenant.name}</h2>
-                    <p className="text-sm text-muted-foreground">Workspace Code: {invitation.tenant.workspace_code}</p>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      You're invited to join:
+                    </p>
+                    <h2 
+                      className="text-2xl font-bold transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {invitation.tenant.name}
+                    </h2>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Workspace Code: {invitation.tenant.workspace_code}
+                    </p>
                   </div>
                 </div>
 
                 {(invitation.email || invitation.mobile_number) && (
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <p className="text-sm text-muted-foreground">
-                      Invitation sent to: <span className="font-medium text-foreground">
+                  <div 
+                    className="rounded-lg p-4 transition-colors"
+                    style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+                  >
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Invitation sent to: <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         {invitation.email || invitation.mobile_number}
                       </span>
                     </p>
@@ -352,13 +461,22 @@ const InvitationRegisterPage: React.FC = () => {
               </div>
 
               {/* Message based on user existence */}
-              <div className="bg-primary/10 rounded-lg p-4">
+              <div 
+                className="rounded-lg p-4 transition-colors"
+                style={{ backgroundColor: `${colors.brand.primary}10` }}
+              >
                 {invitation.user_exists ? (
-                  <p className="text-sm">
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     You already have an account. Click below to accept the invitation and join this workspace.
                   </p>
                 ) : (
-                  <p className="text-sm">
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     You'll need to create an account to join this workspace.
                   </p>
                 )}
@@ -369,16 +487,22 @@ const InvitationRegisterPage: React.FC = () => {
                 {invitation.user_exists ? (
                   <button
                     onClick={() => setCurrentStep('form')}
-                    className="w-full py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 
-                             transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 rounded-md font-medium transition-all duration-200 hover:opacity-90"
+                    style={{
+                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                      color: '#FFF'
+                    }}
                   >
                     Accept
                   </button>
                 ) : (
                   <button
                     onClick={() => setCurrentStep('form')}
-                    className="w-full py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 
-                             transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 rounded-md font-medium transition-all duration-200 hover:opacity-90"
+                    style={{
+                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                      color: '#FFF'
+                    }}
                   >
                     Create Account & Join
                   </button>
@@ -386,8 +510,12 @@ const InvitationRegisterPage: React.FC = () => {
 
                 <button
                   onClick={handleDecline}
-                  className="w-full py-3 border border-border text-muted-foreground rounded-md 
-                           hover:bg-muted transition-colors font-medium"
+                  className="w-full py-3 border rounded-md font-medium transition-colors hover:opacity-80"
+                  style={{
+                    borderColor: colors.utility.secondaryText + '40',
+                    color: colors.utility.secondaryText,
+                    backgroundColor: 'transparent'
+                  }}
                 >
                   Decline
                 </button>
@@ -399,24 +527,42 @@ const InvitationRegisterPage: React.FC = () => {
     );
   }
 
-  // Step 2: Form step
+  // Step 2: Form step for existing users
   if (invitation.user_exists) {
-    // Existing user - simplified UI (NO LOGIN REQUIRED)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 py-6 px-4">
+      <div 
+        className="min-h-screen flex items-center justify-center py-6 px-4 transition-colors duration-200"
+        style={{
+          background: isDarkMode 
+            ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}20)`
+            : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}10)`
+        }}
+      >
         <div className="w-full max-w-lg">
           {/* Back button */}
           <button
             onClick={() => setCurrentStep('preview')}
-            className="mb-3 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+            className="mb-3 flex items-center gap-2 text-sm transition-colors hover:opacity-80"
+            style={{ color: colors.utility.secondaryText }}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
 
-          <div className="bg-card rounded-xl shadow-xl border border-border overflow-hidden">
+          <div 
+            className="rounded-xl shadow-xl border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             {/* Header */}
-            <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-4 text-white">
+            <div 
+              className="px-6 py-4 text-white"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
+            >
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
                   <Building className="h-6 w-6" />
@@ -430,48 +576,35 @@ const InvitationRegisterPage: React.FC = () => {
 
             <div className="p-6 space-y-6">
               {/* User exists message */}
-              <div className="bg-muted/50 rounded-lg p-4">
+              <div 
+                className="rounded-lg p-4 transition-colors"
+                style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
-                    <User className="h-6 w-6 text-primary" />
+                  <div 
+                    className="w-12 h-12 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: `${colors.brand.primary}20` }}
+                  >
+                    <User 
+                      className="h-6 w-6"
+                      style={{ color: colors.brand.primary }}
+                    />
                   </div>
                   <div>
-                    <h3 className="font-medium">Account Found</h3>
-                    <p className="text-sm text-muted-foreground">{invitation.email || invitation.mobile_number}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Info message */}
-              <div className="bg-primary/10 rounded-lg p-4">
-                <div className="flex gap-3">
-                  <UserCheck className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-sm">Your account already exists!</p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      No need to create a new account. Simply accept the invitation to join the <span className="font-medium">{invitation.tenant.name}</span> workspace.
+                    <h3 
+                      className="font-medium transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Account Found
+                    </h3>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {invitation.email || invitation.mobile_number}
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* What happens next */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium">What happens next?</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5" />
-                    <span>The invitation will be accepted</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5" />
-                    <span>You'll be added to the {invitation.tenant.name} workspace</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 text-primary mt-0.5" />
-                    <span>You'll be redirected to login to access the workspace</span>
-                  </li>
-                </ul>
               </div>
 
               {/* Action buttons */}
@@ -479,8 +612,11 @@ const InvitationRegisterPage: React.FC = () => {
                 <button
                   onClick={handleExistingUserAccept}
                   disabled={submitting}
-                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 
-                           transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-2.5 rounded-md font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                  style={{
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                    color: '#FFF'
+                  }}
                 >
                   {submitting ? 'Accepting Invitation...' : 'Accept & Join Workspace'}
                 </button>
@@ -488,9 +624,12 @@ const InvitationRegisterPage: React.FC = () => {
                 <button
                   onClick={handleDecline}
                   disabled={submitting}
-                  className="w-full py-2.5 border border-border text-muted-foreground rounded-md 
-                           hover:bg-muted transition-colors font-medium disabled:opacity-50 
-                           disabled:cursor-not-allowed"
+                  className="w-full py-2.5 border rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+                  style={{
+                    borderColor: colors.utility.secondaryText + '40',
+                    color: colors.utility.secondaryText,
+                    backgroundColor: 'transparent'
+                  }}
                 >
                   Decline Invitation
                 </button>
@@ -502,22 +641,41 @@ const InvitationRegisterPage: React.FC = () => {
     );
   }
 
-  // New user registration form (existing form code remains the same)
+  // New user registration form
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10 py-6 px-4">
+    <div 
+      className="min-h-screen flex items-center justify-center py-6 px-4 transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}20)`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.brand.primary}10)`
+      }}
+    >
       <div className="w-full max-w-6xl">
         {/* Back button */}
         <button
           onClick={() => setCurrentStep('preview')}
-          className="mb-3 flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-sm"
+          className="mb-3 flex items-center gap-2 text-sm transition-colors hover:opacity-80"
+          style={{ color: colors.utility.secondaryText }}
         >
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
 
-        <div className="bg-card rounded-xl shadow-xl border border-border overflow-hidden">
+        <div 
+          className="rounded-xl shadow-xl border overflow-hidden transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.primaryText + '20'
+          }}
+        >
           {/* Compact header */}
-          <div className="bg-gradient-to-r from-primary to-primary/80 px-6 py-3 text-white">
+          <div 
+            className="px-6 py-3 text-white"
+            style={{
+              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
+          >
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
                 <Building className="h-6 w-6" />
@@ -534,51 +692,83 @@ const InvitationRegisterPage: React.FC = () => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               {/* First column - Personal Information */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Personal Information</h3>
+                <h3 
+                  className="text-sm font-semibold mb-3 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Personal Information
+                </h3>
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium mb-1">
-                      First Name <span className="text-destructive">*</span>
+                    <label 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      First Name <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <input
                       type="text"
                       name="firstName"
                       value={formData.firstName}
                       onChange={handleChange}
-                      className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        errors.firstName ? 'border-destructive' : 'border-border'
-                      }`}
+                      className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: errors.firstName ? colors.semantic.error : colors.utility.secondaryText + '40',
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       placeholder="John"
                     />
                     {errors.firstName && (
-                      <p className="text-xs text-destructive mt-0.5">{errors.firstName}</p>
+                      <p 
+                        className="text-xs mt-0.5"
+                        style={{ color: colors.semantic.error }}
+                      >
+                        {errors.firstName}
+                      </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Last Name <span className="text-destructive">*</span>
+                    <label 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Last Name <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <input
                       type="text"
                       name="lastName"
                       value={formData.lastName}
                       onChange={handleChange}
-                      className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        errors.lastName ? 'border-destructive' : 'border-border'
-                      }`}
+                      className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: errors.lastName ? colors.semantic.error : colors.utility.secondaryText + '40',
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       placeholder="Doe"
                     />
                     {errors.lastName && (
-                      <p className="text-xs text-destructive mt-0.5">{errors.lastName}</p>
+                      <p 
+                        className="text-xs mt-0.5"
+                        style={{ color: colors.semantic.error }}
+                      >
+                        {errors.lastName}
+                      </p>
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Email Address <span className="text-destructive">*</span>
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Email Address <span style={{ color: colors.semantic.error }}>*</span>
                   </label>
                   <input
                     type="email"
@@ -586,43 +776,42 @@ const InvitationRegisterPage: React.FC = () => {
                     value={invitation.email || formData.email}
                     onChange={handleChange}
                     readOnly={!!invitation.email}
-                    className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                      invitation.email ? 'bg-muted cursor-not-allowed' : ''
-                    } ${errors.email ? 'border-destructive' : 'border-border'}`}
+                    className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: errors.email ? colors.semantic.error : colors.utility.secondaryText + '40',
+                      backgroundColor: invitation.email ? colors.utility.secondaryText + '20' : colors.utility.primaryBackground,
+                      color: colors.utility.primaryText,
+                      cursor: invitation.email ? 'not-allowed' : 'text',
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     placeholder="john.doe@example.com"
                   />
                   {errors.email && (
-                    <p className="text-xs text-destructive mt-0.5">{errors.email}</p>
+                    <p 
+                      className="text-xs mt-0.5"
+                      style={{ color: colors.semantic.error }}
+                    >
+                      {errors.email}
+                    </p>
                   )}
                 </div>
-
-                {(invitation.mobile_number || !invitation.email) && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Mobile Number
-                    </label>
-                    <input
-                      type="tel"
-                      name="mobileNumber"
-                      value={invitation.mobile_number || formData.mobileNumber}
-                      onChange={handleChange}
-                      readOnly={!!invitation.mobile_number}
-                      className={`w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        invitation.mobile_number ? 'bg-muted cursor-not-allowed' : ''
-                      } border-border`}
-                      placeholder="+1 234 567 8900"
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Second column - Security */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Security</h3>
+                <h3 
+                  className="text-sm font-semibold mb-3 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Security
+                </h3>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Password <span className="text-destructive">*</span>
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Password <span style={{ color: colors.semantic.error }}>*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -630,27 +819,40 @@ const InvitationRegisterPage: React.FC = () => {
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        errors.password ? 'border-destructive' : 'border-border'
-                      }`}
+                      className="w-full px-3 py-1.5 pr-10 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: errors.password ? colors.semantic.error : colors.utility.secondaryText + '40',
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       placeholder="Create a password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors hover:opacity-80"
+                      style={{ color: colors.utility.secondaryText }}
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-xs text-destructive mt-0.5">{errors.password}</p>
+                    <p 
+                      className="text-xs mt-0.5"
+                      style={{ color: colors.semantic.error }}
+                    >
+                      {errors.password}
+                    </p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Confirm Password <span className="text-destructive">*</span>
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Confirm Password <span style={{ color: colors.semantic.error }}>*</span>
                   </label>
                   <div className="relative">
                     <input
@@ -658,45 +860,65 @@ const InvitationRegisterPage: React.FC = () => {
                       name="confirmPassword"
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      className={`w-full px-3 py-1.5 pr-10 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                        errors.confirmPassword ? 'border-destructive' : 'border-border'
-                      }`}
+                      className="w-full px-3 py-1.5 pr-10 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: errors.confirmPassword ? colors.semantic.error : colors.utility.secondaryText + '40',
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       placeholder="Confirm your password"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 transition-colors hover:opacity-80"
+                      style={{ color: colors.utility.secondaryText }}
                     >
                       {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                   {errors.confirmPassword && (
-                    <p className="text-xs text-destructive mt-0.5">{errors.confirmPassword}</p>
+                    <p 
+                      className="text-xs mt-0.5"
+                      style={{ color: colors.semantic.error }}
+                    >
+                      {errors.confirmPassword}
+                    </p>
                   )}
-                </div>
-
-                {/* Password requirements */}
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p>Password must:</p>
-                  <ul className="list-disc list-inside space-y-0.5 ml-2">
-                    <li>Be at least 6 characters long</li>
-                    <li>Match the confirmation password</li>
-                  </ul>
                 </div>
               </div>
 
               {/* Third column - Info and Actions */}
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground mb-3">Invitation Details</h3>
+                <h3 
+                  className="text-sm font-semibold mb-3 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Invitation Details
+                </h3>
                 
                 {/* Info box */}
-                <div className="bg-primary/10 rounded-lg p-3">
+                <div 
+                  className="rounded-lg p-3 transition-colors"
+                  style={{ backgroundColor: `${colors.brand.primary}10` }}
+                >
                   <div className="flex gap-2">
-                    <CheckCircle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                    <CheckCircle 
+                      className="h-4 w-4 flex-shrink-0 mt-0.5"
+                      style={{ color: colors.brand.primary }}
+                    />
                     <div className="text-xs">
-                      <p className="font-medium mb-1">What happens next?</p>
-                      <p className="text-muted-foreground leading-relaxed">
+                      <p 
+                        className="font-medium mb-1 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        What happens next?
+                      </p>
+                      <p 
+                        className="leading-relaxed transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         After creating your account, you'll automatically join{' '}
                         <span className="font-medium">{invitation.tenant.name}</span> workspace
                         and have access to all shared resources.
@@ -705,21 +927,16 @@ const InvitationRegisterPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Expiration notice */}
-                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3">
-                  <p className="text-xs text-orange-700 dark:text-orange-400 leading-relaxed">
-                    This invitation will expire in 48 hours. If you have any questions, 
-                    please contact the workspace administrator.
-                  </p>
-                </div>
-
                 {/* Action buttons */}
                 <div className="space-y-2 pt-2">
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 
-                             transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-2 rounded-md font-medium text-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+                    style={{
+                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                      color: '#FFF'
+                    }}
                   >
                     {submitting ? 'Creating Account...' : 'Accept & Join Workspace'}
                   </button>
@@ -728,9 +945,12 @@ const InvitationRegisterPage: React.FC = () => {
                     type="button"
                     onClick={handleDecline}
                     disabled={submitting}
-                    className="w-full py-2 border border-border text-muted-foreground rounded-md 
-                             hover:bg-muted transition-colors font-medium text-sm disabled:opacity-50 
-                             disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full py-2 border rounded-md font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:opacity-80"
+                    style={{
+                      borderColor: colors.utility.secondaryText + '40',
+                      color: colors.utility.secondaryText,
+                      backgroundColor: 'transparent'
+                    }}
                   >
                     <X size={16} />
                     Decline Invitation
@@ -738,11 +958,15 @@ const InvitationRegisterPage: React.FC = () => {
                 </div>
 
                 {/* Login link */}
-                <p className="text-center text-xs text-muted-foreground pt-2">
+                <p 
+                  className="text-center text-xs pt-2 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Already have an account?{' '}
                   <Link 
                     to={`/login?invitation=${userCode}&secret=${secretCode}`}
-                    className="text-primary hover:underline font-medium"
+                    className="font-medium transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
                   >
                     Sign in instead
                   </Link>

@@ -3,6 +3,7 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, DollarSign, FileText, Clock, AlertCircle } from 'lucide-react';
 import { BillingSummaryData } from '@/utils/fakejson/BillingData';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface BillingSummaryProps {
   data: BillingSummaryData;
@@ -15,6 +16,11 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
   period,
   isLoading = false
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Format currency
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-IN', {
@@ -53,44 +59,104 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
   // Loading state
   if (isLoading) {
     return (
-      <div className="bg-card rounded-lg border border-border overflow-hidden animate-pulse">
-        <div className="px-6 py-4 bg-muted/20 border-b border-border">
-          <div className="h-6 bg-muted rounded w-48"></div>
+      <div 
+        className="rounded-lg border overflow-hidden animate-pulse transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        <div 
+          className="px-6 py-4 border-b transition-colors"
+          style={{
+            backgroundColor: colors.utility.primaryBackground + '20',
+            borderColor: colors.utility.primaryText + '20'
+          }}
+        >
+          <div 
+            className="h-6 rounded w-48"
+            style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+          ></div>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="h-24 bg-muted rounded"></div>
-            <div className="h-24 bg-muted rounded"></div>
-            <div className="h-24 bg-muted rounded"></div>
+            <div 
+              className="h-24 rounded"
+              style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+            ></div>
+            <div 
+              className="h-24 rounded"
+              style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+            ></div>
+            <div 
+              className="h-24 rounded"
+              style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+            ></div>
           </div>
-          <div className="mt-6 h-12 bg-muted rounded"></div>
+          <div 
+            className="mt-6 h-12 rounded"
+            style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+          ></div>
         </div>
       </div>
     );
   }
   
   return (
-    <div className="bg-card rounded-lg border border-border overflow-hidden">
-      <div className="px-6 py-4 bg-muted/20 border-b border-border flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Billing Summary ({periodLabel()})</h2>
+    <div 
+      className="rounded-lg border overflow-hidden transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <div 
+        className="px-6 py-4 border-b flex justify-between items-center transition-colors"
+        style={{
+          backgroundColor: colors.utility.primaryBackground + '20',
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        <h2 
+          className="text-lg font-semibold transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Billing Summary ({periodLabel()})
+        </h2>
         
         <div className="flex items-center">
-          <span className="mr-2 text-sm text-muted-foreground">Health:</span>
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            healthStatus === 'good'
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-              : healthStatus === 'warning'
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-          }`}>
+          <span 
+            className="mr-2 text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Health:
+          </span>
+          <div 
+            className="px-2 py-1 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: healthStatus === 'good'
+                ? colors.semantic.success + '20'
+                : healthStatus === 'warning'
+                ? (colors.semantic.warning || '#f59e0b') + '20'
+                : colors.semantic.error + '20',
+              color: healthStatus === 'good'
+                ? colors.semantic.success
+                : healthStatus === 'warning'
+                ? colors.semantic.warning || '#f59e0b'
+                : colors.semantic.error
+            }}
+          >
             <div className="flex items-center">
-              <div className={`w-2 h-2 rounded-full mr-1.5 ${
-                healthStatus === 'good'
-                  ? 'bg-green-500'
-                  : healthStatus === 'warning'
-                  ? 'bg-amber-500'
-                  : 'bg-red-500'
-              }`}></div>
+              <div 
+                className="w-2 h-2 rounded-full mr-1.5"
+                style={{
+                  backgroundColor: healthStatus === 'good'
+                    ? colors.semantic.success
+                    : healthStatus === 'warning'
+                    ? colors.semantic.warning || '#f59e0b'
+                    : colors.semantic.error
+                }}
+              ></div>
               {healthStatus === 'good' ? 'Good' : healthStatus === 'warning' ? 'Warning' : 'Critical'}
             </div>
           </div>
@@ -101,23 +167,48 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Total Revenue */}
-          <div className="bg-muted/10 p-4 rounded-lg border border-border">
+          <div 
+            className="p-4 rounded-lg border transition-colors"
+            style={{
+              backgroundColor: colors.utility.primaryBackground + '10',
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <h3 className="text-2xl font-bold mt-1">{formatCurrency(data.totalRevenue)}</h3>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Total Revenue
+                </p>
+                <h3 
+                  className="text-2xl font-bold mt-1 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatCurrency(data.totalRevenue)}
+                </h3>
               </div>
-              <div className="p-2 bg-green-100 rounded-full dark:bg-green-900/30">
-                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div 
+                className="p-2 rounded-full transition-colors"
+                style={{ backgroundColor: colors.semantic.success + '20' }}
+              >
+                <DollarSign 
+                  className="h-5 w-5 transition-colors" 
+                  style={{ color: colors.semantic.success }}
+                />
               </div>
             </div>
             <div className="mt-2 flex items-center">
               {data.percentageChange && data.percentageChange.revenue !== 0 && (
-                <div className={`flex items-center text-xs font-medium ${
-                  data.percentageChange.revenue > 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
+                <div 
+                  className="flex items-center text-xs font-medium transition-colors"
+                  style={{
+                    color: data.percentageChange.revenue > 0 
+                      ? colors.semantic.success
+                      : colors.semantic.error
+                  }}
+                >
                   {data.percentageChange.revenue > 0 ? (
                     <ArrowUp className="h-3 w-3 mr-1" />
                   ) : (
@@ -130,23 +221,48 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
           </div>
           
           {/* Outstanding Amount */}
-          <div className="bg-muted/10 p-4 rounded-lg border border-border">
+          <div 
+            className="p-4 rounded-lg border transition-colors"
+            style={{
+              backgroundColor: colors.utility.primaryBackground + '10',
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-muted-foreground">Outstanding Amount</p>
-                <h3 className="text-2xl font-bold mt-1">{formatCurrency(data.outstandingAmount)}</h3>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Outstanding Amount
+                </p>
+                <h3 
+                  className="text-2xl font-bold mt-1 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatCurrency(data.outstandingAmount)}
+                </h3>
               </div>
-              <div className="p-2 bg-amber-100 rounded-full dark:bg-amber-900/30">
-                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <div 
+                className="p-2 rounded-full transition-colors"
+                style={{ backgroundColor: (colors.semantic.warning || '#f59e0b') + '20' }}
+              >
+                <Clock 
+                  className="h-5 w-5 transition-colors" 
+                  style={{ color: colors.semantic.warning || '#f59e0b' }}
+                />
               </div>
             </div>
             <div className="mt-2 flex items-center">
               {data.percentageChange && data.percentageChange.outstanding !== 0 && (
-                <div className={`flex items-center text-xs font-medium ${
-                  data.percentageChange.outstanding < 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
+                <div 
+                  className="flex items-center text-xs font-medium transition-colors"
+                  style={{
+                    color: data.percentageChange.outstanding < 0 
+                      ? colors.semantic.success
+                      : colors.semantic.error
+                  }}
+                >
                   {data.percentageChange.outstanding < 0 ? (
                     <ArrowDown className="h-3 w-3 mr-1" />
                   ) : (
@@ -159,28 +275,80 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
           </div>
           
           {/* Invoices Status */}
-          <div className="bg-muted/10 p-4 rounded-lg border border-border">
+          <div 
+            className="p-4 rounded-lg border transition-colors"
+            style={{
+              backgroundColor: colors.utility.primaryBackground + '10',
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-muted-foreground">Invoices</p>
-                <h3 className="text-2xl font-bold mt-1">{data.invoicesCount} total</h3>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Invoices
+                </p>
+                <h3 
+                  className="text-2xl font-bold mt-1 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {data.invoicesCount} total
+                </h3>
               </div>
-              <div className="p-2 bg-blue-100 rounded-full dark:bg-blue-900/30">
-                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div 
+                className="p-2 rounded-full transition-colors"
+                style={{ backgroundColor: colors.brand.primary + '20' }}
+              >
+                <FileText 
+                  className="h-5 w-5 transition-colors" 
+                  style={{ color: colors.brand.primary }}
+                />
               </div>
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
               <div className="flex flex-col items-center">
-                <span className="font-medium text-green-600 dark:text-green-400">{data.paidInvoicesCount}</span>
-                <span className="text-muted-foreground">Paid</span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.semantic.success }}
+                >
+                  {data.paidInvoicesCount}
+                </span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Paid
+                </span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="font-medium text-amber-600 dark:text-amber-400">{data.pendingInvoicesCount}</span>
-                <span className="text-muted-foreground">Pending</span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.semantic.warning || '#f59e0b' }}
+                >
+                  {data.pendingInvoicesCount}
+                </span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Pending
+                </span>
               </div>
               <div className="flex flex-col items-center">
-                <span className="font-medium text-red-600 dark:text-red-400">{data.overdueInvoicesCount}</span>
-                <span className="text-muted-foreground">Overdue</span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
+                  {data.overdueInvoicesCount}
+                </span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Overdue
+                </span>
               </div>
             </div>
           </div>
@@ -189,41 +357,75 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
         {/* Invoice Status Bar */}
         <div className="mt-6">
           <div className="flex justify-between items-center mb-2">
-            <h4 className="text-sm font-medium">Invoice Status Distribution</h4>
-            <span className="text-xs text-muted-foreground">{data.invoicesCount} invoices total</span>
+            <h4 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Invoice Status Distribution
+            </h4>
+            <span 
+              className="text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              {data.invoicesCount} invoices total
+            </span>
           </div>
           
-          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-2 w-full rounded-full overflow-hidden"
+            style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+          >
             <div className="flex h-full">
               <div 
-                className="bg-green-500 h-full" 
-                style={{ width: `${paidPercentage}%` }}
+                className="h-full" 
+                style={{ 
+                  width: `${paidPercentage}%`,
+                  backgroundColor: colors.semantic.success
+                }}
                 title={`Paid: ${data.paidInvoicesCount} (${paidPercentage}%)`}
               ></div>
               <div 
-                className="bg-amber-500 h-full" 
-                style={{ width: `${pendingPercentage}%` }}
+                className="h-full" 
+                style={{ 
+                  width: `${pendingPercentage}%`,
+                  backgroundColor: colors.semantic.warning || '#f59e0b'
+                }}
                 title={`Pending: ${data.pendingInvoicesCount} (${pendingPercentage}%)`}
               ></div>
               <div 
-                className="bg-red-500 h-full" 
-                style={{ width: `${overduePercentage}%` }}
+                className="h-full" 
+                style={{ 
+                  width: `${overduePercentage}%`,
+                  backgroundColor: colors.semantic.error
+                }}
                 title={`Overdue: ${data.overdueInvoicesCount} (${overduePercentage}%)`}
               ></div>
             </div>
           </div>
           
-          <div className="flex justify-between mt-2 text-xs">
+          <div 
+            className="flex justify-between mt-2 text-xs transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             <div className="flex items-center">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-1"></div>
+              <div 
+                className="w-3 h-3 rounded-full mr-1"
+                style={{ backgroundColor: colors.semantic.success }}
+              ></div>
               <span>Paid ({paidPercentage}%)</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 bg-amber-500 rounded-full mr-1"></div>
+              <div 
+                className="w-3 h-3 rounded-full mr-1"
+                style={{ backgroundColor: colors.semantic.warning || '#f59e0b' }}
+              ></div>
               <span>Pending ({pendingPercentage}%)</span>
             </div>
             <div className="flex items-center">
-              <div className="w-3 h-3 bg-red-500 rounded-full mr-1"></div>
+              <div 
+                className="w-3 h-3 rounded-full mr-1"
+                style={{ backgroundColor: colors.semantic.error }}
+              ></div>
               <span>Overdue ({overduePercentage}%)</span>
             </div>
           </div>
@@ -231,10 +433,22 @@ const BillingSummary: React.FC<BillingSummaryProps> = ({
         
         {/* Overdue Warning */}
         {data.overdueInvoicesCount > 0 && data.overdueDays && (
-          <div className="mt-4 p-3 rounded-md bg-red-50 border border-red-200 flex items-start dark:bg-red-900/20 dark:border-red-800">
-            <AlertCircle className="h-4 w-4 mr-2 mt-0.5 text-red-600 dark:text-red-400" />
+          <div 
+            className="mt-4 p-3 rounded-md border flex items-start transition-colors"
+            style={{
+              backgroundColor: colors.semantic.error + '10',
+              borderColor: colors.semantic.error + '40'
+            }}
+          >
+            <AlertCircle 
+              className="h-4 w-4 mr-2 mt-0.5 transition-colors" 
+              style={{ color: colors.semantic.error }}
+            />
             <div>
-              <p className="text-sm text-red-700 dark:text-red-300">
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
                 <span className="font-medium">Warning:</span> {data.overdueInvoicesCount} invoice{data.overdueInvoicesCount > 1 ? 's are' : ' is'} overdue by an average of {data.overdueDays} days.
               </p>
             </div>

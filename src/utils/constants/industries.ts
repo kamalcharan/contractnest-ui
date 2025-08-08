@@ -1,4 +1,4 @@
-// src/lib/constants/industries.ts
+// src/utils/constants/industries.ts
 export interface Industry {
   id: string;
   name: string;

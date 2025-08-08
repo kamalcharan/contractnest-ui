@@ -18,6 +18,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 
 // Types
@@ -140,6 +141,9 @@ const mockUsageData: UsageData[] = [
 const SubscriptionIndexPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentTenant, user } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [subscription, setSubscription] = useState<Subscription>(mockSubscription);
   const [usageData, setUsageData] = useState<UsageData[]>(mockUsageData);
   const [isLoading, setIsLoading] = useState(false);
@@ -176,46 +180,69 @@ const SubscriptionIndexPage: React.FC = () => {
     switch (status) {
       case 'active':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.semantic.success}20`,
+              color: colors.semantic.success
+            }}
+          >
             <CheckCircle className="h-4 w-4 mr-1" />
             Active
           </span>
         );
       case 'trial':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.brand.primary}20`,
+              color: colors.brand.primary
+            }}
+          >
             <Clock className="h-4 w-4 mr-1" />
             Trial
           </span>
         );
       case 'cancelled':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.semantic.error}20`,
+              color: colors.semantic.error
+            }}
+          >
             <XCircle className="h-4 w-4 mr-1" />
             Cancelled
           </span>
         );
       case 'expired':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
+          >
             <AlertCircle className="h-4 w-4 mr-1" />
             Expired
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
+          >
             {status}
           </span>
         );
     }
-  };
-
-  // Get usage percentage color
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= 90) return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30';
-    if (percentage >= 75) return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30';
-    return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30';
   };
 
   // Navigation handlers
@@ -265,18 +292,33 @@ const SubscriptionIndexPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+    >
       {/* Page Header */}
       <div className="flex items-center mb-8">
         <button 
           onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+          style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Subscription Management</h1>
-          <p className="text-muted-foreground">
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Subscription Management
+          </h1>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             Manage your current plan, billing, and usage
           </p>
         </div>
@@ -286,10 +328,27 @@ const SubscriptionIndexPage: React.FC = () => {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Current Plan Overview */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Current Plan</h2>
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Current Plan
+                </h2>
                 {getStatusBadge(subscription.status)}
               </div>
             </div>
@@ -297,36 +356,80 @@ const SubscriptionIndexPage: React.FC = () => {
             <div className="p-6">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-bold text-primary mb-2">
+                  <h3 
+                    className="text-xl font-bold mb-2 transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
                     {subscription.plan.name}
                   </h3>
-                  <p className="text-muted-foreground mb-4">
+                  <p 
+                    className="mb-4 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     {subscription.plan.description}
                   </p>
                   <div className="flex items-center space-x-6 text-sm">
                     <div className="flex items-center">
-                      <User className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>{subscription.userCount} users</span>
+                      <User 
+                        className="h-4 w-4 mr-2"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {subscription.userCount} users
+                      </span>
                     </div>
                     <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>Renews {formatDate(subscription.nextBillingDate)}</span>
+                      <Calendar 
+                        className="h-4 w-4 mr-2"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Renews {formatDate(subscription.nextBillingDate)}
+                      </span>
                     </div>
                     <div className="flex items-center">
-                      <DollarSign className="h-4 w-4 mr-2 text-muted-foreground" />
-                      <span>{formatCurrency(subscription.amountPerBilling)} / month</span>
+                      <DollarSign 
+                        className="h-4 w-4 mr-2"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {formatCurrency(subscription.amountPerBilling)} / month
+                      </span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="text-right">
-                  <div className="text-2xl font-bold">
+                  <div 
+                    className="text-2xl font-bold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {formatCurrency(subscription.amountPerBilling)}
                   </div>
-                  <div className="text-sm text-muted-foreground">per month</div>
+                  <div 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    per month
+                  </div>
                   {subscription.plan.isPopular && (
                     <div className="mt-2">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      <span 
+                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                        style={{
+                          backgroundColor: `${colors.brand.primary}20`,
+                          color: colors.brand.primary
+                        }}
+                      >
                         <TrendingUp className="h-3 w-3 mr-1" />
                         Most Popular
                       </span>
@@ -336,10 +439,21 @@ const SubscriptionIndexPage: React.FC = () => {
               </div>
 
               {/* Auto-renewal toggle */}
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+              <div 
+                className="flex items-center justify-between p-4 rounded-lg transition-colors"
+                style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
+              >
                 <div>
-                  <div className="font-medium">Auto-renewal</div>
-                  <div className="text-sm text-muted-foreground">
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Auto-renewal
+                  </div>
+                  <div 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     {subscription.autoRenew 
                       ? 'Your subscription will automatically renew' 
                       : 'Your subscription will not renew automatically'
@@ -349,22 +463,42 @@ const SubscriptionIndexPage: React.FC = () => {
                 <button
                   onClick={handleToggleAutoRenew}
                   disabled={isLoading}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    subscription.autoRenew ? 'bg-primary' : 'bg-muted'
-                  } disabled:opacity-50`}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50`}
+                  style={{
+                    backgroundColor: subscription.autoRenew ? colors.brand.primary : `${colors.utility.secondaryText}40`
+                  }}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    subscription.autoRenew ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
+                  <span 
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      subscription.autoRenew ? 'translate-x-6' : 'translate-x-1'
+                    }`} 
+                  />
                 </button>
               </div>
             </div>
           </div>
 
           {/* Plan Features */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Plan Features</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Plan Features
+              </h2>
             </div>
             
             <div className="p-6">
@@ -373,11 +507,22 @@ const SubscriptionIndexPage: React.FC = () => {
                   .filter((feature: Feature) => feature.included)
                   .map((feature: Feature, index: number) => (
                     <div key={index} className="flex items-center space-x-3">
-                      <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      <CheckCircle 
+                        className="h-5 w-5 flex-shrink-0"
+                        style={{ color: colors.semantic.success }}
+                      />
                       <div>
-                        <span className="font-medium">{feature.name}</span>
+                        <span 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {feature.name}
+                        </span>
                         {feature.limit && (
-                          <span className="text-sm text-muted-foreground ml-2">
+                          <span 
+                            className="text-sm ml-2 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
                             ({feature.limit})
                           </span>
                         )}
@@ -388,22 +533,48 @@ const SubscriptionIndexPage: React.FC = () => {
 
               {/* Additional Features Available */}
               {subscription.plan.features.filter((f: Feature) => !f.included && f.additionalPrice).length > 0 && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <h3 className="font-medium mb-4">Additional Features Available</h3>
+                <div 
+                  className="mt-6 pt-6 border-t transition-colors"
+                  style={{ borderTopColor: `${colors.utility.primaryText}20` }}
+                >
+                  <h3 
+                    className="font-medium mb-4 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Additional Features Available
+                  </h3>
                   <div className="space-y-3">
                     {subscription.plan.features
                       .filter((f: Feature) => !f.included && f.additionalPrice)
                       .map((feature: Feature, index: number) => (
-                        <div key={index} className="flex items-center justify-between p-3 border border-border rounded-lg">
+                        <div 
+                          key={index} 
+                          className="flex items-center justify-between p-3 border rounded-lg transition-colors"
+                          style={{ borderColor: `${colors.utility.primaryText}20` }}
+                        >
                           <div className="flex items-center space-x-3">
-                            <Package className="h-5 w-5 text-muted-foreground" />
-                            <span className="font-medium">{feature.name}</span>
+                            <Package 
+                              className="h-5 w-5"
+                              style={{ color: colors.utility.secondaryText }}
+                            />
+                            <span 
+                              className="font-medium transition-colors"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              {feature.name}
+                            </span>
                           </div>
                           <div className="flex items-center space-x-3">
-                            <span className="text-sm font-medium">
+                            <span 
+                              className="text-sm font-medium transition-colors"
+                              style={{ color: colors.utility.primaryText }}
+                            >
                               {formatCurrency(feature.additionalPrice || 0, feature.currency || 'INR')}/month
                             </span>
-                            <button className="text-primary hover:text-primary/80 text-sm font-medium">
+                            <button 
+                              className="text-sm font-medium transition-colors hover:opacity-80"
+                              style={{ color: colors.brand.primary }}
+                            >
                               Add
                             </button>
                           </div>
@@ -416,9 +587,26 @@ const SubscriptionIndexPage: React.FC = () => {
           </div>
 
           {/* Usage Statistics */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Usage Statistics</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Usage Statistics
+              </h2>
             </div>
             
             <div className="p-6">
@@ -426,26 +614,49 @@ const SubscriptionIndexPage: React.FC = () => {
                 {usageData.map((usage, index) => (
                   <div key={index} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{usage.feature}</span>
-                      <span className="text-sm text-muted-foreground">
+                      <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {usage.feature}
+                      </span>
+                      <span 
+                        className="text-sm transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         {usage.used} {usage.limit !== 'Unlimited' ? `/ ${usage.limit}` : ''}
                       </span>
                     </div>
                     {usage.limit !== 'Unlimited' && (
-                      <div className="w-full bg-muted rounded-full h-2">
+                      <div 
+                        className="w-full rounded-full h-2"
+                        style={{ backgroundColor: `${colors.utility.secondaryText}30` }}
+                      >
                         <div 
-                          className={`h-2 rounded-full transition-all ${
-                            usage.percentage >= 90 ? 'bg-red-500' : 
-                            usage.percentage >= 75 ? 'bg-amber-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+                          className="h-2 rounded-full transition-all"
+                          style={{
+                            backgroundColor: usage.percentage >= 90 
+                              ? colors.semantic.error 
+                              : usage.percentage >= 75 
+                                ? (colors.semantic.warning || '#F59E0B')
+                                : colors.semantic.success,
+                            width: `${Math.min(usage.percentage, 100)}%`
+                          }}
                         />
                       </div>
                     )}
                     {usage.percentage >= 90 && usage.limit !== 'Unlimited' && (
-                      <div className="flex items-center space-x-2 text-sm text-red-600">
-                        <AlertCircle className="h-4 w-4" />
-                        <span>Approaching limit - consider upgrading</span>
+                      <div className="flex items-center space-x-2 text-sm">
+                        <AlertCircle 
+                          className="h-4 w-4"
+                          style={{ color: colors.semantic.error }}
+                        />
+                        <span 
+                          className="transition-colors"
+                          style={{ color: colors.semantic.error }}
+                        >
+                          Approaching limit - consider upgrading
+                        </span>
                       </div>
                     )}
                   </div>
@@ -458,15 +669,36 @@ const SubscriptionIndexPage: React.FC = () => {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Quick Actions */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Quick Actions</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Quick Actions
+              </h2>
             </div>
             
             <div className="p-6 space-y-3">
               <button
                 onClick={handleUpgrade}
-                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center justify-center"
+                className="w-full px-4 py-2 rounded-md transition-colors hover:opacity-90 flex items-center justify-center"
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: 'white'
+                }}
               >
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Upgrade Plan
@@ -474,7 +706,18 @@ const SubscriptionIndexPage: React.FC = () => {
               
               <button
                 onClick={handleManagePayment}
-                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+                className="w-full px-4 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center justify-center"
+                style={{
+                  borderColor: `${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                }}
               >
                 <CreditCard className="h-4 w-4 mr-2" />
                 Manage Payment
@@ -482,7 +725,18 @@ const SubscriptionIndexPage: React.FC = () => {
               
               <button
                 onClick={handleViewBilling}
-                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+                className="w-full px-4 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center justify-center"
+                style={{
+                  borderColor: `${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                }}
               >
                 <Calendar className="h-4 w-4 mr-2" />
                 View Billing History
@@ -490,7 +744,18 @@ const SubscriptionIndexPage: React.FC = () => {
               
               <button
                 onClick={handleDownloadInvoice}
-                className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md flex items-center justify-center"
+                className="w-full px-4 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center justify-center"
+                style={{
+                  borderColor: `${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                }}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Download Invoice
@@ -500,9 +765,26 @@ const SubscriptionIndexPage: React.FC = () => {
 
           {/* Payment Method */}
           {subscription.paymentMethod && (
-            <div className="bg-card rounded-lg border border-border overflow-hidden">
-              <div className="px-6 py-4 bg-muted/20 border-b border-border">
-                <h2 className="text-lg font-semibold">Payment Method</h2>
+            <div 
+              className="rounded-lg border overflow-hidden transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <div 
+                className="px-6 py-4 border-b transition-colors"
+                style={{
+                  backgroundColor: `${colors.utility.secondaryText}10`,
+                  borderBottomColor: `${colors.utility.primaryText}20`
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Payment Method
+                </h2>
               </div>
               
               <div className="p-6">
@@ -511,10 +793,16 @@ const SubscriptionIndexPage: React.FC = () => {
                     <CreditCard className="h-4 w-4 text-white" />
                   </div>
                   <div>
-                    <div className="font-medium">
+                    <div 
+                      className="font-medium transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       •••• •••• •••• {subscription.paymentMethod.last4}
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       Expires {subscription.paymentMethod.expiryDate}
                     </div>
                   </div>
@@ -522,7 +810,8 @@ const SubscriptionIndexPage: React.FC = () => {
                 
                 <button
                   onClick={handleManagePayment}
-                  className="mt-4 text-primary hover:text-primary/80 text-sm font-medium flex items-center"
+                  className="mt-4 text-sm font-medium flex items-center transition-colors hover:opacity-80"
+                  style={{ color: colors.brand.primary }}
                 >
                   <Settings className="h-4 w-4 mr-1" />
                   Update Payment Method
@@ -532,33 +821,82 @@ const SubscriptionIndexPage: React.FC = () => {
           )}
 
           {/* Billing Information */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Billing Information</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Billing Information
+              </h2>
             </div>
             
             <div className="p-6 space-y-4">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Current Period</span>
-                <span className="font-medium">
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Current Period
+                </span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {formatDate(subscription.startDate)} - {formatDate(subscription.endDate)}
                 </span>
               </div>
               
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Next Billing</span>
-                <span className="font-medium">{formatDate(subscription.nextBillingDate)}</span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Next Billing
+                </span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatDate(subscription.nextBillingDate)}
+                </span>
               </div>
               
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Amount</span>
-                <span className="font-medium">{formatCurrency(subscription.amountPerBilling)}</span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Amount
+                </span>
+                <span 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatCurrency(subscription.amountPerBilling)}
+                </span>
               </div>
               
-              <div className="pt-4 border-t border-border">
+              <div 
+                className="pt-4 border-t transition-colors"
+                style={{ borderTopColor: `${colors.utility.primaryText}20` }}
+              >
                 <button
                   onClick={handleViewBilling}
-                  className="text-primary hover:text-primary/80 text-sm font-medium flex items-center"
+                  className="text-sm font-medium flex items-center transition-colors hover:opacity-80"
+                  style={{ color: colors.brand.primary }}
                 >
                   <ExternalLink className="h-4 w-4 mr-1" />
                   View Full Billing History
@@ -569,20 +907,44 @@ const SubscriptionIndexPage: React.FC = () => {
 
           {/* Danger Zone */}
           {subscription.status === 'active' && (
-            <div className="bg-card rounded-lg border border-destructive/20 overflow-hidden">
-              <div className="px-6 py-4 bg-destructive/5 border-b border-destructive/20">
-                <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+            <div 
+              className="rounded-lg border overflow-hidden transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.semantic.error}20`
+              }}
+            >
+              <div 
+                className="px-6 py-4 border-b transition-colors"
+                style={{
+                  backgroundColor: `${colors.semantic.error}10`,
+                  borderBottomColor: `${colors.semantic.error}20`
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
+                  Danger Zone
+                </h2>
               </div>
               
               <div className="p-6">
-                <p className="text-sm text-muted-foreground mb-4">
+                <p 
+                  className="text-sm mb-4 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Once you cancel your subscription, you will lose access to all paid features at the end of your current billing period.
                 </p>
                 
                 <button
                   onClick={handleCancelSubscription}
                   disabled={isLoading}
-                  className="w-full px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                  className="w-full px-4 py-2 rounded-md transition-colors disabled:opacity-50 hover:opacity-90"
+                  style={{
+                    backgroundColor: colors.semantic.error,
+                    color: 'white'
+                  }}
                 >
                   {isLoading ? 'Cancelling...' : 'Cancel Subscription'}
                 </button>

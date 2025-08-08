@@ -14,6 +14,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTheme } from '@/contexts/ThemeContext';
 import api from '../../services/api';
 import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { SimpleTableSkeleton } from '../common/skeletons';
@@ -56,6 +57,9 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
   showActions = true,
   className = ''
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [versions, setVersions] = useState<VersionInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
@@ -167,7 +171,7 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#10B981',
+          background: colors.semantic.success,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -181,7 +185,7 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '14px',
         },
@@ -232,8 +236,16 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
   if (versions.length === 0) {
     return (
       <div className={`text-center py-12 ${className}`}>
-        <Clock className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-        <p className="text-gray-500 dark:text-gray-400">No version history available</p>
+        <Clock 
+          className="w-12 h-12 mx-auto mb-4 transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        />
+        <p 
+          className="transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          No version history available
+        </p>
       </div>
     );
   }
@@ -244,22 +256,39 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
     <div className={`space-y-4 ${className}`}>
       {/* Compare toolbar */}
       {versions.length > 1 && (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+        <div 
+          className="rounded-lg p-4 transition-colors"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <GitBranch className="w-5 h-5 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              <GitBranch 
+                className="w-5 h-5 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <span 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
                 Compare Versions
               </span>
               {selectedVersions.filter(Boolean).length > 0 && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
+                <span 
+                  className="text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   ({selectedVersions.filter(Boolean).length} selected)
                 </span>
               )}
             </div>
             {canCompare && (
               <button
-                className="flex items-center px-3 py-1.5 text-sm font-medium text-indigo-600 bg-white border border-indigo-600 rounded-md hover:bg-indigo-50 dark:bg-gray-700 dark:border-indigo-500 dark:text-indigo-400 dark:hover:bg-gray-600"
+                className="flex items-center px-3 py-1.5 text-sm font-medium border rounded-md hover:opacity-80 transition-colors"
+                style={{
+                  color: colors.brand.primary,
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.brand.primary
+                }}
               >
                 Compare
                 <ArrowRight className="w-4 h-4 ml-1" />
@@ -272,52 +301,69 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
       {/* Version timeline */}
       <div className="relative">
         {/* Timeline line */}
-        <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-600" />
+        <div 
+          className="absolute left-8 top-0 bottom-0 w-0.5 transition-colors"
+          style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+        />
 
         {/* Version items */}
         <div className="space-y-6">
           {versions.map((version, index) => (
             <div key={version.id} className="relative">
               {/* Timeline dot */}
-              <div className={`
-                absolute left-6 w-4 h-4 rounded-full border-2 bg-white dark:bg-gray-800
-                ${version.is_current 
-                  ? 'border-indigo-500 bg-indigo-500' 
-                  : 'border-gray-300 dark:border-gray-600'
-                }
-              `} />
+              <div 
+                className="absolute left-6 w-4 h-4 rounded-full border-2 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: version.is_current ? colors.brand.primary : `${colors.utility.secondaryText}40`,
+                  ...(version.is_current && { backgroundColor: colors.brand.primary })
+                }}
+              />
 
               {/* Version card */}
-              <div className={`
-                ml-16 bg-white dark:bg-gray-800 rounded-lg shadow-sm border
-                ${version.is_current 
-                  ? 'border-indigo-300 dark:border-indigo-700' 
-                  : 'border-gray-200 dark:border-gray-700'
-                }
-              `}>
+              <div 
+                className="ml-16 rounded-lg shadow-sm border transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: version.is_current 
+                    ? `${colors.brand.primary}60` 
+                    : `${colors.utility.secondaryText}40`
+                }}
+              >
                 {/* Version header */}
                 <div className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3">
-                        <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+                        <h4 
+                          className="text-lg font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           Version {version.version}
                         </h4>
                         {version.is_current && (
-                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full dark:bg-indigo-900 dark:text-indigo-200">
+                          <span 
+                            className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full transition-colors"
+                            style={{
+                              backgroundColor: `${colors.brand.primary}20`,
+                              color: colors.brand.primary
+                            }}
+                          >
                             Current
                           </span>
                         )}
                         {versions.length > 1 && (
                           <button
                             onClick={() => toggleVersionSelection(version.id)}
-                            className={`
-                              p-1 rounded transition-colors
-                              ${selectedVersions.includes(version.id)
-                                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400'
-                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                              }
-                            `}
+                            className="p-1 rounded transition-colors"
+                            style={{
+                              backgroundColor: selectedVersions.includes(version.id)
+                                ? `${colors.brand.primary}20`
+                                : 'transparent',
+                              color: selectedVersions.includes(version.id)
+                                ? colors.brand.primary
+                                : colors.utility.secondaryText
+                            }}
                           >
                             {selectedVersions.includes(version.id) ? (
                               <Check className="w-4 h-4" />
@@ -328,11 +374,17 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                         )}
                       </div>
                       
-                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                      <p 
+                        className="mt-1 text-sm transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         {version.version_reason || 'No description provided'}
                       </p>
 
-                      <div className="mt-3 flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                      <div 
+                        className="mt-3 flex items-center space-x-4 text-xs transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         <div className="flex items-center">
                           <User className="w-3 h-3 mr-1" />
                           {version.created_by.name}
@@ -349,11 +401,19 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                         <button
                           onClick={() => handleRestore(version.id)}
                           disabled={restoringVersion === version.id}
-                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
+                          className="inline-flex items-center px-3 py-1.5 text-sm font-medium border rounded-md hover:opacity-80 transition-colors disabled:opacity-50"
+                          style={{
+                            color: colors.utility.primaryText,
+                            backgroundColor: colors.utility.secondaryBackground,
+                            borderColor: `${colors.utility.secondaryText}40`
+                          }}
                         >
                           {restoringVersion === version.id ? (
                             <>
-                              <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-700 dark:border-gray-300 mr-2" />
+                              <span 
+                                className="animate-spin rounded-full h-3 w-3 border-b-2 mr-2"
+                                style={{ borderColor: colors.utility.primaryText }}
+                              />
                               Restoring...
                             </>
                           ) : (
@@ -367,7 +427,8 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                       
                       <button
                         onClick={() => toggleExpanded(version.id)}
-                        className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        className="p-1.5 hover:opacity-80 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
                       >
                         {expandedVersions.has(version.id) ? (
                           <ChevronUp className="w-4 h-4" />
@@ -381,9 +442,15 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
 
                 {/* Expanded details */}
                 {expandedVersions.has(version.id) && (
-                  <div className="px-4 pb-4 border-t border-gray-200 dark:border-gray-700">
+                  <div 
+                    className="px-4 pb-4 border-t transition-colors"
+                    style={{ borderColor: `${colors.utility.secondaryText}40` }}
+                  >
                     <div className="mt-4 space-y-3">
-                      <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <h5 
+                        className="text-sm font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         Changes in this version:
                       </h5>
                       
@@ -392,21 +459,31 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                           {version.changes.map((change, idx) => (
                             <div 
                               key={idx}
-                              className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-md"
+                              className="flex items-start space-x-3 p-3 rounded-md transition-colors"
+                              style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
                             >
                               <span className="text-lg">
                                 {getChangeIcon(change.field)}
                               </span>
                               <div className="flex-1 text-sm">
-                                <span className="font-medium text-gray-700 dark:text-gray-300">
+                                <span 
+                                  className="font-medium transition-colors"
+                                  style={{ color: colors.utility.primaryText }}
+                                >
                                   {change.field}:
                                 </span>
-                                <div className="mt-1 flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+                                <div 
+                                  className="mt-1 flex items-center space-x-2 transition-colors"
+                                  style={{ color: colors.utility.secondaryText }}
+                                >
                                   <span className="line-through">
                                     {JSON.stringify(change.old_value)}
                                   </span>
                                   <ArrowRight className="w-3 h-3" />
-                                  <span className="font-medium text-gray-900 dark:text-white">
+                                  <span 
+                                    className="font-medium transition-colors"
+                                    style={{ color: colors.utility.primaryText }}
+                                  >
                                     {JSON.stringify(change.new_value)}
                                   </span>
                                 </div>
@@ -415,29 +492,54 @@ export const VersionHistory: React.FC<VersionHistoryProps> = ({
                           ))}
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p 
+                          className="text-sm transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
                           Initial version - no changes to display
                         </p>
                       )}
 
-                      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <div 
+                        className="mt-4 pt-4 border-t transition-colors"
+                        style={{ borderColor: `${colors.utility.secondaryText}40` }}
+                      >
                         <dl className="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <dt className="text-gray-500 dark:text-gray-400">Name</dt>
-                            <dd className="mt-1 font-medium text-gray-900 dark:text-white">
+                            <dt 
+                              className="transition-colors"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              Name
+                            </dt>
+                            <dd 
+                              className="mt-1 font-medium transition-colors"
+                              style={{ color: colors.utility.primaryText }}
+                            >
                               {version.name}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-gray-500 dark:text-gray-400">Status</dt>
+                            <dt 
+                              className="transition-colors"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              Status
+                            </dt>
                             <dd className="mt-1">
                               {version.is_active ? (
-                                <span className="inline-flex items-center text-green-700 dark:text-green-400">
+                                <span 
+                                  className="inline-flex items-center transition-colors"
+                                  style={{ color: colors.semantic.success }}
+                                >
                                   <Check className="w-3 h-3 mr-1" />
                                   Active
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center text-gray-500 dark:text-gray-400">
+                                <span 
+                                  className="inline-flex items-center transition-colors"
+                                  style={{ color: colors.utility.secondaryText }}
+                                >
                                   <AlertCircle className="w-3 h-3 mr-1" />
                                   Inactive
                                 </span>
@@ -464,15 +566,21 @@ export const VersionBadge: React.FC<{
   isCurrent?: boolean;
   className?: string;
 }> = ({ version, isCurrent = false, className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   return (
-    <span className={`
-      inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full
-      ${isCurrent 
-        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' 
-        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-      }
-      ${className}
-    `}>
+    <span 
+      className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full transition-colors ${className}`}
+      style={{
+        backgroundColor: isCurrent 
+          ? `${colors.brand.primary}20` 
+          : `${colors.utility.primaryBackground}50`,
+        color: isCurrent 
+          ? colors.brand.primary 
+          : colors.utility.primaryText
+      }}
+    >
       <Clock className="w-3 h-3 mr-1" />
       v{version}
     </span>

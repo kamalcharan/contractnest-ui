@@ -1,6 +1,7 @@
 // src/components/auth/LockScreen.tsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Lock, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -23,6 +24,11 @@ interface LockScreenProps {
 
 const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   const { user, logout, failedUnlockAttempts, unlockBlockedUntil } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [password, setPassword] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [remainingBlockTime, setRemainingBlockTime] = useState(0);
@@ -257,11 +263,25 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   // Loading state while determining auth method
   if (isDetectingAuthMethod || primaryAuthMethod === null) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <div className="bg-card rounded-lg shadow-lg p-8">
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
+        style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+      >
+        <div 
+          className="rounded-lg shadow-lg p-8"
+          style={{ backgroundColor: colors.utility.secondaryBackground }}
+        >
           <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-sm text-muted-foreground">Checking authentication method...</p>
+            <div 
+              className="animate-spin rounded-full h-12 w-12 border-b-2 mb-4"
+              style={{ borderColor: colors.brand.primary }}
+            ></div>
+            <p 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Checking authentication method...
+            </p>
           </div>
         </div>
       </div>
@@ -269,23 +289,49 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
+      style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
+    >
       <div className="w-full max-w-md">
-        <div className="bg-card rounded-lg shadow-lg">
+        <div 
+          className="rounded-lg shadow-lg"
+          style={{ backgroundColor: colors.utility.secondaryBackground }}
+        >
           {/* Header */}
-          <div className="p-6 pb-4 text-center border-b">
-            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <Lock className="h-8 w-8 text-primary" />
+          <div 
+            className="p-6 pb-4 text-center border-b"
+            style={{ borderColor: colors.utility.primaryText + '20' }}
+          >
+            <div 
+              className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4"
+              style={{ backgroundColor: colors.brand.primary + '10' }}
+            >
+              <Lock 
+                className="h-8 w-8"
+                style={{ color: colors.brand.primary }}
+              />
             </div>
-            <h2 className="text-2xl font-semibold">Session Locked</h2>
-            <p className="text-sm text-muted-foreground mt-2">
+            <h2 
+              className="text-2xl font-semibold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Session Locked
+            </h2>
+            <p 
+              className="text-sm mt-2 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {primaryAuthMethod === 'google' 
                 ? 'Please re-authenticate with Google to continue'
                 : 'Enter your password to unlock'
               }
             </p>
             {user?.email && (
-              <p className="text-sm text-muted-foreground mt-1">
+              <p 
+                className="text-sm mt-1 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 {user.email}
               </p>
             )}
@@ -297,7 +343,10 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
             <div className="p-6">
               <div className="space-y-4">
                 <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p 
+                    className="text-sm mb-4 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Your session has been locked due to inactivity. Since you signed in with Google, 
                     you'll need to re-authenticate with Google to unlock.
                   </p>
@@ -306,7 +355,13 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 <button
                   onClick={handleGoogleUnlock}
                   disabled={isUnlocking}
-                  className="w-full py-2.5 px-4 bg-white border border-gray-300 rounded-md font-medium hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-4 border rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 hover:opacity-90"
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderColor: colors.utility.primaryText + '40',
+                    color: '#374151',
+                    '--tw-ring-color': colors.brand.primary
+                  } as React.CSSProperties}
                 >
                   {isUnlocking ? (
                     <>
@@ -332,7 +387,8 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 <div className="text-center">
                   <button
                     onClick={handleSignOut}
-                    className="text-sm text-muted-foreground hover:text-foreground underline"
+                    className="text-sm underline transition-colors hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
                   >
                     Sign out instead
                   </button>
@@ -353,7 +409,13 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                    style={{
+                      borderColor: colors.utility.primaryText + '40',
+                      backgroundColor: colors.utility.primaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     disabled={isUnlocking || isUnlockBlocked}
                     autoFocus
                   />
@@ -361,14 +423,20 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
 
                 {/* Error/Warning Messages */}
                 {isUnlockBlocked && (
-                  <div className="flex items-center gap-2 text-sm text-destructive">
+                  <div 
+                    className="flex items-center gap-2 text-sm transition-colors"
+                    style={{ color: colors.semantic.error }}
+                  >
                     <AlertCircle className="h-4 w-4" />
                     <span>Too many failed attempts. Try again in {formatTime(remainingBlockTime)}</span>
                   </div>
                 )}
                 
                 {failedUnlockAttempts > 0 && failedUnlockAttempts < MAX_UNLOCK_ATTEMPTS && !isUnlockBlocked && (
-                  <div className="flex items-center gap-2 text-sm text-warning">
+                  <div 
+                    className="flex items-center gap-2 text-sm transition-colors"
+                    style={{ color: colors.semantic.warning || '#f59e0b' }}
+                  >
                     <AlertCircle className="h-4 w-4" />
                     <span>{MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts} attempt{MAX_UNLOCK_ATTEMPTS - failedUnlockAttempts !== 1 ? 's' : ''} remaining</span>
                   </div>
@@ -377,7 +445,12 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                 <button
                   type="submit"
                   disabled={isUnlocking || isUnlockBlocked}
-                  className="w-full py-2.5 px-4 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full py-2.5 px-4 rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:opacity-90"
+                  style={{
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                    color: '#FFFFFF',
+                    '--tw-ring-color': colors.brand.primary
+                  } as React.CSSProperties}
                 >
                   {isUnlocking ? (
                     <span className="flex items-center justify-center gap-2">
@@ -396,7 +469,8 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
                   <button
                     type="button"
                     onClick={handleSignOut}
-                    className="text-sm text-muted-foreground hover:text-foreground underline"
+                    className="text-sm underline transition-colors hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
                   >
                     Sign out instead
                   </button>
@@ -406,8 +480,14 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           )}
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-muted/50 rounded-b-lg">
-            <p className="text-xs text-muted-foreground text-center">
+          <div 
+            className="px-6 py-4 rounded-b-lg"
+            style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
+          >
+            <p 
+              className="text-xs text-center transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Your session was locked after 5 minutes of inactivity for security.
             </p>
           </div>

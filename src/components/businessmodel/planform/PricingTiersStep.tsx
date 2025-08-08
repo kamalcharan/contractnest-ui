@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Plus, Trash2, DollarSign, Edit, AlertCircle } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { currencyOptions, getCurrencySymbol } from '@/utils/constants/currencies';
 import { DEFAULT_VALUES } from '@/utils/constants/businessModelConstants';
 
@@ -25,6 +26,9 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     getValues,
     formState: { errors }
   } = useFormContext();
+  
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Watch values for conditional rendering - memoized to prevent unnecessary re-renders
   const watchedValues = useMemo(() => ({
@@ -266,7 +270,10 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     if (!watchedValues.supportedCurrencies?.length) return null;
     
     return (
-      <div className="border-b border-border">
+      <div 
+        className="border-b transition-colors"
+        style={{ borderColor: `${colors.utility.primaryText}20` }}
+      >
         <div className="flex overflow-x-auto">
           {watchedValues.supportedCurrencies.map((currencyCode: string) => {
             const isActive = selectedCurrency === currencyCode;
@@ -276,12 +283,24 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
               <button
                 key={currencyCode}
                 type="button"
-                className={`px-4 py-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                  isActive 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-                }`}
+                className="px-4 py-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors"
+                style={{
+                  borderBottomColor: isActive ? colors.brand.primary : 'transparent',
+                  color: isActive ? colors.brand.primary : colors.utility.secondaryText
+                }}
                 onClick={(e) => handleCurrencyTabClick(e, currencyCode)}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = colors.utility.primaryText;
+                    e.currentTarget.style.borderBottomColor = `${colors.utility.primaryText}20`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = colors.utility.secondaryText;
+                    e.currentTarget.style.borderBottomColor = 'transparent';
+                  }
+                }}
               >
                 {getCurrencySymbol(currencyCode)} {currencyCode}
                 {isDefault && <span className="ml-1 text-xs">(Default)</span>}
@@ -291,14 +310,22 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
         </div>
       </div>
     );
-  }, [watchedValues.supportedCurrencies, watchedValues.defaultCurrency, selectedCurrency, handleCurrencyTabClick]);
+  }, [watchedValues.supportedCurrencies, watchedValues.defaultCurrency, selectedCurrency, handleCurrencyTabClick, colors]);
   
   if (!isInitialized) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-sm text-muted-foreground">Loading pricing tiers...</p>
+          <div 
+            className="animate-spin rounded-full h-8 w-8 border-b-2 mx-auto mb-2"
+            style={{ borderColor: colors.brand.primary }}
+          ></div>
+          <p 
+            className="text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Loading pricing tiers...
+          </p>
         </div>
       </div>
     );
@@ -308,14 +335,29 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
     <div className="space-y-6">
       {/* Edit Mode Notice */}
       {isEditMode && (
-        <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-900/20">
+        <div 
+          className="p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: `${colors.semantic.warning || '#F59E0B'}10`,
+            borderColor: `${colors.semantic.warning || '#F59E0B'}20`
+          }}
+        >
           <div className="flex items-start">
-            <Edit className="h-5 w-5 mr-3 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <Edit 
+              className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5"
+              style={{ color: colors.semantic.warning || '#F59E0B' }}
+            />
             <div>
-              <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+              <p 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.semantic.warning || '#F59E0B' }}
+              >
                 Editing Pricing Tiers
               </p>
-              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+              <p 
+                className="mt-1 text-sm transition-colors"
+                style={{ color: colors.semantic.warning || '#F59E0B' }}
+              >
                 Changes to pricing tiers will create a new plan version. 
                 Existing subscribers will remain on their current version unless migrated.
               </p>
@@ -325,8 +367,11 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       )}
 
       <div className="mb-4">
-        <p className="text-sm text-muted-foreground">
-          Define pricing tiers for your {watchedValues.planType?.toLowerCase()} plan. Each tier represents a range of 
+        <p 
+          className="text-sm transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          Define pricing tiers for your {watchedValues.planType?.toLowerCase()} plan. Each tier represents a range of
           {watchedValues.planType === 'Per User' ? ' users' : ' contracts'} and has associated pricing.
         </p>
       </div>
@@ -336,16 +381,17 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       
       {/* Current Currency Display */}
       {selectedCurrency && (
-        <div className={`p-3 rounded-md border ${
-          isEditMode 
-            ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
-            : 'bg-primary/5 border-primary/10'
-        }`}>
-          <p className={`text-sm font-medium ${
-            isEditMode 
-              ? 'text-blue-700 dark:text-blue-300'
-              : 'text-primary'
-          }`}>
+        <div 
+          className="p-3 rounded-md border transition-colors"
+          style={{
+            backgroundColor: `${colors.brand.primary}10`,
+            borderColor: `${colors.brand.primary}20`
+          }}
+        >
+          <p 
+            className="text-sm font-medium transition-colors"
+            style={{ color: colors.brand.primary }}
+          >
             {isEditMode ? 'Editing prices for: ' : 'Setting prices for: '}
             {getCurrencySymbol(selectedCurrency)} {selectedCurrency}
             {selectedCurrency === watchedValues.defaultCurrency && " (Default Currency)"}
@@ -357,34 +403,66 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left font-medium">
+            <tr 
+              className="border-b transition-colors"
+              style={{ borderColor: `${colors.utility.primaryText}20` }}
+            >
+              <th 
+                className="px-4 py-2 text-left font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
                 {watchedValues.planType === 'Per User' ? 'Users Range' : 'Contracts Range'}
               </th>
-              <th className="px-4 py-2 text-left font-medium">
+              <th 
+                className="px-4 py-2 text-left font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
                 Base Price ({getCurrencySymbol(selectedCurrency)} {selectedCurrency})
               </th>
-              <th className="px-4 py-2 text-center font-medium" style={{ width: '60px' }}>
+              <th 
+                className="px-4 py-2 text-center font-medium transition-colors"
+                style={{ width: '60px', color: colors.utility.primaryText }}
+              >
                 Actions
               </th>
             </tr>
           </thead>
           <tbody>
             {tiers.map((tier, index) => (
-              <tr key={tier.tier_id || index} className="border-b border-border">
+              <tr 
+                key={tier.tier_id || index} 
+                className="border-b transition-colors"
+                style={{ borderColor: `${colors.utility.primaryText}20` }}
+              >
                 <td className="px-4 py-3">
                   <div className="flex items-center space-x-2">
                     <input
                       type="number"
-                      className="w-20 px-2 py-1 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      className="w-20 px-2 py-1 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: `${colors.utility.secondaryText}40`,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       value={tier.minValue}
                       onChange={(e) => updateTier(index, 'minValue', parseInt(e.target.value) || 1)}
                       min={1}
                     />
-                    <span>to</span>
+                    <span 
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      to
+                    </span>
                     <input
                       type="number"
-                      className="w-20 px-2 py-1 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      className="w-20 px-2 py-1 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: `${colors.utility.secondaryText}40`,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       value={tier.maxValue || ''}
                       placeholder="∞"
                       onChange={(e) => {
@@ -397,14 +475,23 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center">
-                    <span className="text-muted-foreground mr-2">
+                    <span 
+                      className="mr-2"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       {getCurrencySymbol(selectedCurrency)}
                     </span>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
-                      className="w-24 px-2 py-1 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      className="w-24 px-2 py-1 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                      style={{
+                        borderColor: `${colors.utility.secondaryText}40`,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       value={getTierPrice(tier, selectedCurrency)}
                       onChange={(e) => setTierPrice(index, selectedCurrency, parseFloat(e.target.value) || 0)}
                       placeholder="0.00"
@@ -416,9 +503,20 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
                     <button
                       type="button"
                       onClick={(e) => removeTier(e, index)}
-                      className="p-1 text-muted-foreground hover:text-red-500 transition-colors"
+                      className="p-1 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
                       title="Remove tier"
                       disabled={tiers.length === 1}
+                      onMouseEnter={(e) => {
+                        if (!e.currentTarget.disabled) {
+                          e.currentTarget.style.color = colors.semantic.error;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!e.currentTarget.disabled) {
+                          e.currentTarget.style.color = colors.utility.secondaryText;
+                        }
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -435,11 +533,18 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
         <button
           type="button"
           onClick={addTier}
-          className={`px-4 py-2 rounded-md transition-colors inline-flex items-center text-sm border ${
-            isEditMode 
-              ? 'bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-              : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/30'
-          }`}
+          className="px-4 py-2 rounded-md transition-colors inline-flex items-center text-sm border"
+          style={{
+            backgroundColor: `${colors.brand.primary}10`,
+            color: colors.brand.primary,
+            borderColor: `${colors.brand.primary}30`
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = `${colors.brand.primary}20`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = `${colors.brand.primary}10`;
+          }}
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Tier
@@ -448,46 +553,54 @@ const PricingTiersStep: React.FC<PricingTiersStepProps> = ({ isEditMode = false 
       
       {/* Validation Messages */}
       {tiers.length === 0 && (
-        <div className="text-center p-4 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
-          <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+        <div 
+          className="text-center p-4 rounded-md border"
+          style={{
+            color: colors.semantic.error,
+            backgroundColor: `${colors.semantic.error}10`,
+            borderColor: `${colors.semantic.error}30`
+          }}
+        >
+          <AlertCircle 
+            className="h-5 w-5 mx-auto mb-2"
+            style={{ color: colors.semantic.error }}
+          />
           At least one pricing tier is required
         </div>
       )}
       
       {/* Info Box */}
-      <div className={`p-4 rounded-md border ${
-        isEditMode 
-          ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
-          : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
-      }`}>
+      <div 
+        className="p-4 rounded-md border transition-colors"
+        style={{
+          backgroundColor: `${colors.brand.primary}10`,
+          borderColor: `${colors.brand.primary}20`
+        }}
+      >
         <div className="flex items-start">
-          <DollarSign className={`h-4 w-4 mt-0.5 mr-2 flex-shrink-0 ${
-            isEditMode 
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-blue-600 dark:text-blue-400'
-          }`} />
+          <DollarSign 
+            className="h-4 w-4 mt-0.5 mr-2 flex-shrink-0"
+            style={{ color: colors.brand.primary }}
+          />
           <div>
-            <p className={`text-sm font-medium ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               {isEditMode ? 'Editing Multi-Currency Pricing' : 'Multi-Currency Pricing'}
             </p>
-            <p className={`mt-1 text-sm ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Set different prices for each supported currency using the tabs above. 
               Base price is charged once per account per billing period.
               {isEditMode && ' Changes will create a new plan version.'}
             </p>
-            <p className={`mt-1 text-sm ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Leave max {watchedValues.planType === 'Per User' ? 'users' : 'contracts'} empty for unlimited.
             </p>
           </div>

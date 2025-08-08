@@ -1,4 +1,4 @@
-// src/components/billing/BillingScheduleCard.tsx
+// src/components/billing/BillingScheduleCard.tsx - Theme Enabled Version
 import React from 'react';
 import { Calendar, Clock, RefreshCw, AlertCircle, Settings } from 'lucide-react';
 
@@ -79,22 +79,25 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
       case 'confirmed':
         return {
           label: 'Confirmed',
-          color: 'text-green-600',
-          bgColor: 'bg-green-100',
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'bg-green-100 dark:bg-green-900/20',
+          borderColor: 'border-green-200 dark:border-green-800',
           icon: Clock
         };
       case 'pending_confirmation':
         return {
           label: 'Pending',
-          color: 'text-orange-600',
-          bgColor: 'bg-orange-100',
+          color: 'text-orange-600 dark:text-orange-400',
+          bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+          borderColor: 'border-orange-200 dark:border-orange-800',
           icon: AlertCircle
         };
       default:
         return {
           label: 'Unknown',
-          color: 'text-gray-600',
-          bgColor: 'bg-gray-100',
+          color: 'text-muted-foreground',
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           icon: Clock
         };
     }
@@ -104,7 +107,7 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
     <div className="bg-card rounded-lg shadow-sm border border-border p-4">
       <div className="flex items-center gap-2 mb-4">
         <Calendar className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-base font-semibold">Billing Schedule</h3>
+        <h3 className="text-base font-semibold text-foreground">Billing Schedule</h3>
       </div>
       
       <p className="text-sm text-muted-foreground mb-4">
@@ -127,7 +130,7 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
                     {billing.title}
                   </h4>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">
                       {formatAmount(billing.amount, billing.currency)}
                     </span>
                     {billing.type === 'recurring' && (
@@ -140,8 +143,8 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
                 </div>
                 
                 <span className={`
-                  inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-                  ${statusConfig.color} ${statusConfig.bgColor}
+                  inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border
+                  ${statusConfig.color} ${statusConfig.bgColor} ${statusConfig.borderColor}
                 `}>
                   <StatusIcon className="h-3 w-3" />
                   {statusConfig.label}
@@ -150,7 +153,7 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
               
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>Due: {formatDate(billing.dueDate)}</span>
-                <span>
+                <span className={daysUntil < 0 ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                   {daysUntil > 0 ? `${daysUntil} days` : daysUntil === 0 ? 'Today' : `${Math.abs(daysUntil)} days overdue`}
                 </span>
               </div>
@@ -179,7 +182,7 @@ const BillingScheduleCard: React.FC<BillingScheduleCardProps> = ({ contactId }) 
             <div className="text-xs text-muted-foreground">Confirmed</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-orange-600">
+            <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">
               {upcomingBilling.filter(b => b.status === 'pending_confirmation').length}
             </div>
             <div className="text-xs text-muted-foreground">Pending</div>

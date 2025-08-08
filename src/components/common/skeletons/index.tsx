@@ -28,7 +28,7 @@ export {
   DescriptionListSkeleton
 } from './DetailsSkeleton';
 
-// Re-export types
+// Re-export types if needed
 export type { 
   // You can add skeleton prop types here if needed
 };

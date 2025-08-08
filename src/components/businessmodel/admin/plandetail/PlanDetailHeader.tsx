@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface PlanDetailHeaderProps {
   planName: string;
@@ -20,11 +21,22 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
   isLive,
   onBack
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Determine status badge
   const getStatusBadge = () => {
     if (isArchived) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+        <span 
+          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+          style={{
+            backgroundColor: colors.utility.primaryBackground + '80',
+            color: colors.utility.secondaryText
+          }}
+        >
           Archived
         </span>
       );
@@ -32,14 +44,26 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
     
     if (isVisible) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        <span 
+          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+          style={{
+            backgroundColor: colors.semantic.success + '20',
+            color: colors.semantic.success
+          }}
+        >
           Visible
         </span>
       );
     }
     
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+      <span 
+        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+        style={{
+          backgroundColor: (colors.semantic.warning || '#f59e0b') + '20',
+          color: colors.semantic.warning || '#f59e0b'
+        }}
+      >
         Hidden
       </span>
     );
@@ -47,14 +71,25 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
 
   // Environment badge
   const getEnvironmentBadge = () => (
-    <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${
-      isLive 
-        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-        : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-    }`}>
-      <div className={`w-2 h-2 rounded-full mr-2 ${
-        isLive ? 'bg-green-500' : 'bg-amber-500'
-      }`}></div>
+    <div 
+      className="inline-flex items-center px-3 py-1 rounded-full text-sm transition-colors"
+      style={{
+        backgroundColor: isLive 
+          ? colors.semantic.success + '20' 
+          : (colors.semantic.warning || '#f59e0b') + '20',
+        color: isLive 
+          ? colors.semantic.success 
+          : colors.semantic.warning || '#f59e0b'
+      }}
+    >
+      <div 
+        className="w-2 h-2 rounded-full mr-2"
+        style={{
+          backgroundColor: isLive 
+            ? colors.semantic.success 
+            : colors.semantic.warning || '#f59e0b'
+        }}
+      ></div>
       {isLive ? 'Live Environment' : 'Test Environment'}
     </div>
   );
@@ -65,21 +100,35 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
       <div className="flex items-center">
         <button 
           onClick={onBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+          style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
           type="button"
           aria-label="Go back to plans list"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div className="flex-1">
           <div className="flex items-center">
-            <h1 className="text-2xl font-bold">{planName}</h1>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              {planName}
+            </h1>
             <div className="ml-4">
               {getStatusBadge()}
             </div>
           </div>
           {planDescription && (
-            <p className="text-muted-foreground mt-1">{planDescription}</p>
+            <p 
+              className="mt-1 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              {planDescription}
+            </p>
           )}
         </div>
       </div>

@@ -5,6 +5,7 @@ import { FormProvider, useForm } from 'react-hook-form';
 import { ArrowLeft, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 
 // ✅ FIXED: Updated imports
@@ -67,9 +68,13 @@ interface PricingPlanFormData {
 const CreatePricingPlanPage: React.FC = () => {
   const navigate = useNavigate();
   const { isLive } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
   const { createPlan, submitting } = useBusinessModel();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Get default currency for form initialization
   const defaultCurrency = getDefaultCurrency();
@@ -424,20 +429,37 @@ const CreatePricingPlanPage: React.FC = () => {
   };
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+    >
       {/* Page Header */}
       <div className="flex items-center mb-8">
         <button 
           onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.utility.secondaryBackground }}
           type="button"
           aria-label="Go back to plans list"
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Create Pricing Plan</h1>
-          <p className="text-muted-foreground">Configure a new pricing plan for your tenants</p>
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Create Pricing Plan
+          </h1>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Configure a new pricing plan for your tenants
+          </p>
         </div>
       </div>
       
@@ -451,9 +473,26 @@ const CreatePricingPlanPage: React.FC = () => {
       </div>
       
       {/* Main Form Container */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="px-6 py-4 bg-muted/20 border-b border-border">
-          <h2 className="text-lg font-semibold">{wizardSteps[currentStep].title}</h2>
+      <div 
+        className="rounded-lg border overflow-hidden transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.secondaryText + '40'
+        }}
+      >
+        <div 
+          className="px-6 py-4 border-b transition-colors"
+          style={{
+            backgroundColor: `${colors.utility.primaryBackground}20`,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {wizardSteps[currentStep].title}
+          </h2>
         </div>
         
         <div className="p-6">
@@ -467,7 +506,12 @@ const CreatePricingPlanPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-md border hover:opacity-80 transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 Cancel
               </button>
@@ -475,7 +519,12 @@ const CreatePricingPlanPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handlePrevious}
-                className="px-4 py-2 rounded-md border border-border bg-background text-foreground hover:bg-muted transition-colors"
+                className="px-4 py-2 rounded-md border hover:opacity-80 transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 Previous
               </button>
@@ -487,7 +536,10 @@ const CreatePricingPlanPage: React.FC = () => {
                 type="button"
                 onClick={handleNext}
                 disabled={submitting || isSubmitting}
-                className="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70"
+                className="px-6 py-2 rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-70"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
               >
                 Next
               </button>
@@ -496,12 +548,15 @@ const CreatePricingPlanPage: React.FC = () => {
                 type="button"
                 onClick={handleFinalSubmit}
                 disabled={submitting || isSubmitting}
-                className="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-70 flex items-center"
+                className="px-6 py-2 rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-70 flex items-center"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
               >
                 {submitting || isSubmitting ? (
                   <>
                     <svg 
-                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground" 
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" 
                       xmlns="http://www.w3.org/2000/svg" 
                       fill="none" 
                       viewBox="0 0 24 24"
@@ -536,8 +591,17 @@ const CreatePricingPlanPage: React.FC = () => {
       
       {/* Environment Warning for Test Mode */}
       {!isLive && (
-        <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-md text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-400">
-          <p className="text-sm flex items-center">
+        <div 
+          className="mt-8 p-4 border rounded-md transition-colors"
+          style={{
+            backgroundColor: `${colors.semantic.warning}10`,
+            borderColor: `${colors.semantic.warning}40`
+          }}
+        >
+          <p 
+            className="text-sm flex items-center transition-colors"
+            style={{ color: colors.semantic.warning }}
+          >
             <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>

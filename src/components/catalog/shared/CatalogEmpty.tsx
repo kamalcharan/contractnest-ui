@@ -1,6 +1,7 @@
 // src/components/catalog/shared/CatalogEmpty.tsx
 import React from 'react';
 import { Plus, Package, Wrench, Box, FileText, Settings } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   CATALOG_ITEM_TYPES,
   CATALOG_TYPE_LABELS,
@@ -21,6 +22,11 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
   onClearFilters,
   onAddNew 
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors - EXACT same pattern as LoginPage
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Icon mapping
   const iconMap = {
     [CATALOG_ITEM_TYPES.SERVICE]: Package,
@@ -56,7 +62,7 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
       case CATALOG_ITEM_TYPES.SERVICE:
         return [
           "Maintenance contracts",
-          "Consulting services",
+          "Consulting services", 
           "Support packages",
           "Training programs"
         ];
@@ -64,7 +70,7 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
         return [
           "Vehicles",
           "Real estate",
-          "Machinery",
+          "Machinery", 
           "IT equipment"
         ];
       case CATALOG_ITEM_TYPES.SPARE_PART:
@@ -87,35 +93,60 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+    <div 
+      className="rounded-lg shadow-sm border transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: `${colors.utility.primaryText}20`
+      }}
+    >
       <div className="px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
         <div className="text-center">
           {/* Icon */}
-          <div className="mx-auto h-24 w-24 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-            <Icon className="h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <div 
+            className="mx-auto h-24 w-24 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: `${colors.utility.primaryText}10` }}
+          >
+            <Icon 
+              className="h-12 w-12"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </div>
           
           {/* Title */}
-          <h3 className="mt-6 text-lg font-medium text-gray-900 dark:text-white">
+          <h3 
+            className="mt-6 text-lg font-medium"
+            style={{ color: colors.utility.primaryText }}
+          >
             {hasFilters ? `No ${label} Found` : `No ${label} Yet`}
           </h3>
           
           {/* Description */}
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+          <p 
+            className="mt-2 text-sm max-w-md mx-auto"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {getEmptyMessage()}
           </p>
 
           {/* Suggestions - only show if no filters */}
           {!hasFilters && getSuggestions().length > 0 && (
             <div className="mt-6">
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              <p 
+                className="text-xs mb-2"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Common examples:
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {getSuggestions().map((suggestion, index) => (
                   <span
                     key={index}
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    style={{
+                      backgroundColor: `${colors.utility.primaryText}10`,
+                      color: colors.utility.secondaryText
+                    }}
                   >
                     {suggestion}
                   </span>
@@ -130,17 +161,30 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
               <>
                 <button
                   onClick={onClearFilters}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
+                  className="inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md hover:opacity-80 transition-all"
+                  style={{
+                    borderColor: `${colors.utility.primaryText}20`,
+                    color: colors.utility.primaryText,
+                    backgroundColor: 'transparent'
+                  }}
                 >
                   Clear Filters
                 </button>
-                <span className="text-sm text-gray-500 dark:text-gray-400">or</span>
+                <span 
+                  className="text-sm"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  or
+                </span>
               </>
             ) : null}
             
             <button
               onClick={onAddNew}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              className="inline-flex items-center px-6 py-3 text-base font-medium rounded-md shadow-sm text-white hover:opacity-90 transition-all"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
             >
               <Plus className="h-5 w-5 mr-2 flex-shrink-0" />
               <span className="whitespace-nowrap">Add First {label.slice(0, -1)}</span>
@@ -149,11 +193,17 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
             {/* Secondary actions - only show if no filters */}
             {!hasFilters && (
               <div className="flex items-center space-x-4 text-sm">
-                <button className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                <button 
+                  className="hover:opacity-80 transition-all"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Import from CSV
                 </button>
-                <span className="text-gray-300 dark:text-gray-600">•</span>
-                <button className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                <span style={{ color: `${colors.utility.primaryText}20` }}>•</span>
+                <button 
+                  className="hover:opacity-80 transition-all"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   View sample
                 </button>
               </div>
@@ -162,16 +212,28 @@ const CatalogEmpty: React.FC<CatalogEmptyProps> = ({
 
           {/* Help text - only show if no filters */}
           {!hasFilters && (
-            <div className="mt-12 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-lg mx-auto">
+            <div 
+              className="mt-12 rounded-lg p-4 max-w-lg mx-auto"
+              style={{ backgroundColor: `${colors.utility.primaryText}05` }}
+            >
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <FileText className="h-5 w-5 text-blue-400" />
+                  <FileText 
+                    className="h-5 w-5"
+                    style={{ color: colors.brand.primary }}
+                  />
                 </div>
                 <div className="ml-3 text-left">
-                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  <h4 
+                    className="text-sm font-medium"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Multi-currency support
                   </h4>
-                  <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                  <p 
+                    className="mt-1 text-sm"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Set prices in multiple currencies for global business. Your first 3 contracts are free!
                   </p>
                 </div>

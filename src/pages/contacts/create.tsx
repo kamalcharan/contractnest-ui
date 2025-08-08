@@ -1,5 +1,5 @@
-// src/pages/contacts/create.tsx - Batch 1 Improvements
-import React, { useState, useEffect } from 'react';
+// src/pages/contacts/create.tsx - Theme Integrated Version
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -7,23 +7,45 @@ import {
   X, 
   HelpCircle,
   AlertCircle,
-  CheckCircle,
   Loader2,
-  UserPlus,
   Send,
-  FileText,
   User,
   Building2,
   Archive,
   AlertTriangle
 } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { captureException } from '@/utils/sentry';
+import { analyticsService } from '@/services/analytics.service';
 
-// Import redesigned components
+// Import Skeletons
+import { FormSkeleton } from '@/components/common/skeletons';
+
+// Import Confirmation Dialog
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+
+// Import API hooks
+import { 
+  useCreateContact, 
+  useUpdateContact, 
+  useContact,
+  useCheckDuplicates,
+  useSendInvitation,
+  useUpdateContactStatus 
+} from '../../hooks/useContacts';
+
+// Import form components
 import ContactClassificationSelector from '../../components/contacts/forms/ContactClassificationSelector';
 import ContactChannelsSection from '../../components/contacts/forms/ContactChannelsSection';
 import AddressesSection from '../../components/contacts/forms/AddressesSection';
 import ComplianceNumbersSection from '../../components/contacts/forms/ComplianceNumbersSection';
 import ContactPersonsSection from '../../components/contacts/forms/ContactPersonsSection';
+import ContactTagsSection from '../../components/contacts/forms/ContactTagsSection';
+
+// Import types
+import { CreateContactRequest, UpdateContactRequest } from '../../types/contact';
 
 // Import constants
 import {
@@ -36,81 +58,26 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   PLACEHOLDER_TEXTS,
+  DOMAIN_CLASSIFICATIONS,
   getClassificationsForIndustry
 } from '../../utils/constants/contacts';
 
-// Types (same as before)
-type ContactClassificationType = string;
-
-interface ContactChannel {
-  id?: string;
-  channel_code: string;
-  value: string;
-  country_code?: string;
-  is_primary: boolean;
-  is_verified: boolean;
-  notes?: string;
-}
-
-interface ContactAddress {
-  id?: string;
-  type: 'billing' | 'shipping' | 'office' | 'home' | 'factory' | 'warehouse' | 'other';
-  label?: string;
-  address_line1: string;
-  address_line2?: string;
-  city: string;
-  state_code?: string;
-  country_code: string;
-  postal_code?: string;
-  google_pin?: string;
-  is_primary: boolean;
-  notes?: string;
-}
-
-interface ComplianceNumber {
-  id?: string;
-  type: 'gst' | 'pan' | 'cin' | 'tax_id' | 'vat' | 'other';
-  number: string;
-  issuing_authority?: string;
-  valid_from?: string;
-  valid_to?: string;
-  is_verified: boolean;
-  notes?: string;
-}
-
-interface ContactPerson {
-  id?: string;
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
-  first_name: string;
-  last_name: string;
-  designation?: string;
-  department?: string;
-  is_primary: boolean;
-  contact_channels: ContactChannel[];
-  notes?: string;
-}
-
+// Define ContactFormData interface
 interface ContactFormData {
   type: 'individual' | 'corporate';
-  classification: ContactClassificationType[];
+  classifications: string[];
   status: 'active' | 'inactive' | 'archived';
-  
-  // Individual fields
   salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
   name?: string;
-  
-  // Corporate fields (removed website and company_size)
   company_name?: string;
   company_registration_number?: string;
   industry?: string;
-  
-  // Common fields
-  contact_channels: ContactChannel[];
-  addresses: ContactAddress[];
-  compliance_numbers: ComplianceNumber[];
-  contact_persons: ContactPerson[];
+  contact_channels: any[];
+  addresses: any[];
+  compliance_numbers: any[];
+  contact_persons: any[];
   notes?: string;
-  tags?: string[];
+  tags: any[];
 }
 
 interface ContactFormProps {
@@ -121,80 +88,190 @@ interface ContactFormProps {
   onCancel?: () => void;
 }
 
-// New Tab-Style Contact Type Selector Component
+// Contact Type Tab Selector Component - Theme Aware
 const ContactTypeTabSelector: React.FC<{
   value: 'individual' | 'corporate';
   onChange: (type: 'individual' | 'corporate') => void;
   disabled?: boolean;
-}> = ({ value, onChange, disabled = false }) => {
+  hasUnsavedChanges?: boolean;
+}> = ({ value, onChange, disabled = false, hasUnsavedChanges = false }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+  const [pendingType, setPendingType] = useState<'individual' | 'corporate' | null>(null);
+
+  const handleTypeChange = (newType: 'individual' | 'corporate') => {
+    if (disabled || newType === value) return;
+    
+    if (hasUnsavedChanges) {
+      setPendingType(newType);
+      setShowSwitchConfirm(true);
+    } else {
+      onChange(newType);
+    }
+  };
+
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border">
-      <div className="border-b border-border">
-        <div className="flex">
-          <button
-            onClick={() => !disabled && onChange(CONTACT_FORM_TYPES.INDIVIDUAL)}
-            disabled={disabled}
-            className={`
-              flex items-center gap-2 px-6 py-3 font-medium text-sm border-b-2 transition-colors
-              ${value === CONTACT_FORM_TYPES.INDIVIDUAL
-                ? 'border-primary text-primary bg-primary/5'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-              }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-            `}
-          >
-            <User className="h-4 w-4" />
-            Individual
-          </button>
-          <button
-            onClick={() => !disabled && onChange(CONTACT_FORM_TYPES.CORPORATE)}
-            disabled={disabled}
-            className={`
-              flex items-center gap-2 px-6 py-3 font-medium text-sm border-b-2 transition-colors
-              ${value === CONTACT_FORM_TYPES.CORPORATE
-                ? 'border-primary text-primary bg-primary/5'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-              }
-              ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-            `}
-          >
-            <Building2 className="h-4 w-4" />
-            Corporate
-          </button>
+    <>
+      <div 
+        className="rounded-lg shadow-sm border transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        <div 
+          className="border-b"
+          style={{ borderColor: colors.utility.primaryText + '20' }}
+        >
+          <div className="flex">
+            <button
+              onClick={() => handleTypeChange(CONTACT_FORM_TYPES.INDIVIDUAL)}
+              disabled={disabled}
+              className={`
+                flex items-center gap-2 px-6 py-3 font-medium text-sm border-b-2 transition-colors
+                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+              style={{
+                borderBottomColor: value === CONTACT_FORM_TYPES.INDIVIDUAL 
+                  ? colors.brand.primary 
+                  : 'transparent',
+                color: value === CONTACT_FORM_TYPES.INDIVIDUAL 
+                  ? colors.brand.primary 
+                  : colors.utility.secondaryText,
+                backgroundColor: value === CONTACT_FORM_TYPES.INDIVIDUAL 
+                  ? colors.brand.primary + '10' 
+                  : 'transparent'
+              }}
+            >
+              <User className="h-4 w-4" />
+              Individual
+            </button>
+            <button
+              onClick={() => handleTypeChange(CONTACT_FORM_TYPES.CORPORATE)}
+              disabled={disabled}
+              className={`
+                flex items-center gap-2 px-6 py-3 font-medium text-sm border-b-2 transition-colors
+                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+              style={{
+                borderBottomColor: value === CONTACT_FORM_TYPES.CORPORATE 
+                  ? colors.brand.primary 
+                  : 'transparent',
+                color: value === CONTACT_FORM_TYPES.CORPORATE 
+                  ? colors.brand.primary 
+                  : colors.utility.secondaryText,
+                backgroundColor: value === CONTACT_FORM_TYPES.CORPORATE 
+                  ? colors.brand.primary + '10' 
+                  : 'transparent'
+              }}
+            >
+              <Building2 className="h-4 w-4" />
+              Corporate
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Switch Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showSwitchConfirm}
+        onClose={() => {
+          setShowSwitchConfirm(false);
+          setPendingType(null);
+        }}
+        onConfirm={() => {
+          if (pendingType) {
+            onChange(pendingType);
+          }
+          setShowSwitchConfirm(false);
+          setPendingType(null);
+        }}
+        title="Unsaved Changes"
+        description="Switching contact type will reset some fields. Are you sure you want to continue?"
+        confirmText="Switch Type"
+        cancelText="Cancel"
+        type="warning"
+      />
+    </>
   );
 };
 
-// New Contact Status Component with Toggle + Separate Archive
+// Contact Status Section Component - Theme Aware
 const ContactStatusSection: React.FC<{
   status: 'active' | 'inactive' | 'archived';
   onChange: (status: 'active' | 'inactive' | 'archived') => void;
   disabled?: boolean;
-}> = ({ status, onChange, disabled = false }) => {
+  isEditMode?: boolean;
+  contactId?: string;
+}> = ({ status, onChange, disabled = false, isEditMode = false, contactId }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const updateStatusHook = useUpdateContactStatus();
+  const { toast } = useToast();
+
+  // Handle status change with immediate save in edit mode
+  const handleStatusChange = async (newStatus: 'active' | 'inactive' | 'archived') => {
+    if (isEditMode && contactId) {
+      try {
+        setIsUpdating(true);
+        await updateStatusHook.mutate(contactId, newStatus);
+        onChange(newStatus);
+        toast({
+          title: "Success",
+          description: `Contact ${newStatus === 'active' ? 'activated' : newStatus === 'inactive' ? 'deactivated' : 'archived'} successfully`
+        });
+      } catch (error) {
+        console.error('Failed to update status:', error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to update contact status"
+        });
+      } finally {
+        setIsUpdating(false);
+      }
+    } else {
+      onChange(newStatus);
+    }
+  };
 
   const handleArchive = () => {
-    if (showArchiveConfirm) {
-      onChange('archived');
-      setShowArchiveConfirm(false);
-    } else {
-      setShowArchiveConfirm(true);
-    }
+    setShowArchiveConfirm(true);
   };
 
   return (
     <div className="space-y-4">
       {/* Active/Inactive Toggle Card */}
-      <div className="bg-card rounded-lg shadow-sm border border-border p-4">
-        <h3 className="text-base font-semibold mb-4">Contact Status</h3>
+      <div 
+        className="rounded-lg shadow-sm border p-4 transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        <h3 
+          className="text-base font-semibold mb-4 transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Contact Status
+        </h3>
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium text-sm">
+            <p 
+              className="font-medium text-sm transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               {status === 'active' ? 'Active' : status === 'inactive' ? 'Inactive' : 'Archived'}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p 
+              className="text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {status === 'active' ? 'Contact is available for business' : 
                status === 'inactive' ? 'Contact is temporarily disabled' : 
                'Contact is permanently archived'}
@@ -205,58 +282,135 @@ const ContactStatusSection: React.FC<{
               <input
                 type="checkbox"
                 checked={status === 'active'}
-                onChange={(e) => onChange(e.target.checked ? 'active' : 'inactive')}
-                disabled={disabled}
+                onChange={(e) => handleStatusChange(e.target.checked ? 'active' : 'inactive')}
+                disabled={disabled || isUpdating}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div 
+                className={`
+                  w-11 h-6 peer-focus:outline-none peer-focus:ring-4 
+                  rounded-full peer 
+                  peer-checked:after:translate-x-full peer-checked:after:border-white 
+                  after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
+                  after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
+                  ${isUpdating ? 'opacity-50' : ''}
+                `}
+                style={{
+                  backgroundColor: status === 'active' ? colors.brand.primary : colors.utility.secondaryText + '40',
+                  '--tw-ring-color': colors.brand.primary + '40'
+                } as React.CSSProperties}
+              ></div>
             </label>
           )}
         </div>
+        {isUpdating && (
+          <div 
+            className="mt-2 flex items-center text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            Updating status...
+          </div>
+        )}
       </div>
 
-      {/* Archive Card (only show if not already archived) */}
+      {/* Archive Card */}
       {status !== 'archived' && (
-        <div className="bg-red-50 rounded-lg shadow-sm border border-red-200 p-4 dark:bg-red-900/20 dark:border-red-800">
+        <div 
+          className="rounded-lg shadow-sm border p-4 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.semantic.error + '40'
+          }}
+        >
           <div className="flex items-start gap-3">
-            <Archive className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <Archive 
+              className="h-5 w-5 flex-shrink-0 mt-0.5"
+              style={{ color: colors.semantic.error }}
+            />
             <div className="flex-1">
-              <h3 className="text-base font-semibold text-red-800 dark:text-red-400 mb-2">Archive Contact</h3>
-              <p className="text-sm text-red-700 dark:text-red-300 mb-3">
+              <h3 
+                className="text-base font-semibold mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Archive Contact
+              </h3>
+              <p 
+                className="text-sm mb-3 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Once a contact is archived, it cannot be reverted back. The contact will be permanently disabled.
               </p>
               
-              {showArchiveConfirm ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleArchive}
-                    disabled={disabled}
-                    className="flex items-center px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
-                  >
-                    <AlertTriangle className="mr-2 h-4 w-4" />
-                    Confirm Archive
-                  </button>
-                  <button
-                    onClick={() => setShowArchiveConfirm(false)}
-                    className="px-3 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-100 transition-colors text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleArchive}
-                  disabled={disabled}
-                  className="flex items-center px-3 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-100 transition-colors text-sm disabled:opacity-50"
-                >
-                  <Archive className="mr-2 h-4 w-4" />
-                  Archive Contact
-                </button>
-              )}
+              <button
+                onClick={handleArchive}
+                disabled={disabled || isUpdating}
+                className="flex items-center px-3 py-2 rounded-md transition-colors text-sm disabled:opacity-50"
+                style={{
+                  backgroundColor: colors.semantic.error,
+                  color: '#ffffff'
+                }}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Archive Contact
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Archive Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        onConfirm={() => {
+          handleStatusChange('archived');
+          setShowArchiveConfirm(false);
+        }}
+        title="Archive Contact"
+        description="Are you sure you want to archive this contact? This action cannot be undone."
+        confirmText="Archive"
+        type="danger"
+        icon={<Archive className="h-6 w-6" />}
+      />
+    </div>
+  );
+};
+
+// Full Page Skeleton Loader Component - Theme Aware
+const FullPageSaveLoader: React.FC<{ message?: string }> = ({ message = "Saving contact..." }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  return (
+    <div 
+      className="fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center"
+      style={{ backgroundColor: colors.utility.primaryBackground + 'CC' }}
+    >
+      <div 
+        className="p-8 rounded-lg shadow-xl border text-center transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        <Loader2 
+          className="h-12 w-12 animate-spin mx-auto mb-4"
+          style={{ color: colors.brand.primary }}
+        />
+        <p 
+          className="text-lg font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          {message}
+        </p>
+        <p 
+          className="text-sm mt-2 transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          Please wait while we process your request...
+        </p>
+      </div>
     </div>
   );
 };
@@ -270,17 +424,69 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
 }) => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { isDarkMode, currentTheme } = useTheme();
+  const { isAuthenticated, currentTenant } = useAuth();
+  const { toast } = useToast();
   const isEditMode = mode === 'edit' || !!id;
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
+  // Track initial data for change detection
+  const initialFormDataRef = useRef<ContactFormData | null>(null);
 
-  // Get current industry (this would come from business profile/settings)
+  // Track page view
+  useEffect(() => {
+    try {
+      analyticsService.trackPageView(
+        isEditMode ? `contacts/edit/${contactId || id}` : 'contacts/create',
+        isEditMode ? 'Edit Contact' : 'Create Contact'
+      );
+    } catch (error) {
+      console.error('Analytics error:', error);
+    }
+  }, [isEditMode, contactId, id]);
+
+  // API Hooks
+  const createContactHook = useCreateContact();
+  const updateContactHook = useUpdateContact();
+  const { data: existingContact, loading: isLoadingContact, error: loadError } = useContact(contactId || id || '');
+  const checkDuplicatesHook = useCheckDuplicates();
+  const sendInvitationHook = useSendInvitation();
+
+  // Combine loading states
+  const isSaving = createContactHook.loading || updateContactHook.loading;
+  const isCheckingDuplicates = checkDuplicatesHook.loading;
+
+  // State for dialogs
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateContacts, setDuplicateContacts] = useState<any[]>([]);
+  const [showFullPageLoader, setShowFullPageLoader] = useState(false);
+
+  // Add authentication check
+  if (!isAuthenticated || !currentTenant) {
+    return (
+      <div 
+        className="p-4 md:p-6 min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div className="flex items-center justify-center py-12">
+          <FormSkeleton />
+        </div>
+      </div>
+    );
+  }
+  
+  // Get current industry
   const [currentIndustry, setCurrentIndustry] = useState<string>('default');
   
   // Form state
   const [formData, setFormData] = useState<ContactFormData>({
     type: CONTACT_FORM_TYPES.INDIVIDUAL,
-    classification: [],
+    classifications: [],
     status: CONTACT_STATUS.ACTIVE,
-    contact_channels: [], // Now starts empty
+    contact_channels: [],
     addresses: [],
     compliance_numbers: [],
     contact_persons: [],
@@ -289,138 +495,117 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
   });
 
   // UI state
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [showVideoHelp, setShowVideoHelp] = useState<boolean>(false);
-  const [duplicateWarnings, setDuplicateWarnings] = useState<string[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
-  
-  // User account status (mock - would come from API)
   const [userAccountStatus, setUserAccountStatus] = useState<string>(USER_ACCOUNT_STATUS.NO_ACCOUNT);
 
-  // Track form changes for unsaved changes warning
+  // Initialize form data ref
   useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [formData]);
-
-  // Load existing contact data (for edit mode)
-  useEffect(() => {
-    if (isEditMode && (contactId || id)) {
-      loadContactData(contactId || id!);
+    if (!initialFormDataRef.current) {
+      initialFormDataRef.current = { ...formData };
     }
-  }, [isEditMode, contactId, id]);
+  }, []);
 
-  // Mock function to load contact data
-  const loadContactData = async (contactId: string) => {
-    setIsLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockData: ContactFormData = {
-        type: CONTACT_FORM_TYPES.CORPORATE,
-        classification: ['buyer', 'partner'],
-        status: CONTACT_STATUS.ACTIVE,
-        company_name: 'Acme Corporation',
-        company_registration_number: 'CIN123456789',
-        industry: 'Technology',
-        contact_channels: [
-          {
-            id: '1',
-            channel_code: 'email',
-            value: 'contact@acme.com',
-            is_primary: true,
-            is_verified: true
-          }
-        ],
-        addresses: [
-          {
-            id: '1',
-            type: 'office',
-            label: 'Head Office',
-            address_line1: '123 Business Park',
-            city: 'Mumbai',
-            country_code: 'IN',
-            is_primary: true
-          }
-        ],
-        compliance_numbers: [
-          {
-            id: '1',
-            type: 'gst',
-            number: '27AAAAA0000A1Z5',
-            is_verified: true
-          }
-        ],
-        contact_persons: [
-          {
-            id: '1',
-            first_name: 'John',
-            last_name: 'Smith',
-            designation: 'CEO',
-            is_primary: true,
-            contact_channels: [
-              {
-                id: '2',
-                channel_code: 'email',
-                value: 'john@acme.com',
-                is_primary: true,
-                is_verified: true
-              }
-            ]
-          }
-        ],
-        notes: 'Important corporate client with multiple locations.',
-        tags: ['enterprise', 'technology']
+  // Load existing contact data in edit mode
+  useEffect(() => {
+    if (isEditMode && existingContact) {
+      const loadedData = {
+        type: existingContact.type as 'individual' | 'corporate',
+        classifications: existingContact.classifications || [],
+        status: existingContact.status as 'active' | 'inactive' | 'archived',
+        salutation: existingContact.salutation as any,
+        name: existingContact.name,
+        company_name: existingContact.company_name,
+        company_registration_number: existingContact.company_registration_number,
+        industry: existingContact.industry,
+        contact_channels: existingContact.contact_channels || [],
+        addresses: existingContact.addresses || [],
+        compliance_numbers: existingContact.compliance_numbers || [],
+        contact_persons: existingContact.contact_persons || [],
+        notes: existingContact.notes,
+        tags: existingContact.tags || []
       };
       
-      setFormData(mockData);
+      setFormData(loadedData);
+      initialFormDataRef.current = { ...loadedData };
       setHasUnsavedChanges(false);
-      setUserAccountStatus(USER_ACCOUNT_STATUS.HAS_ACCOUNT);
-    } catch (error) {
-      console.error('Error loading contact:', error);
-    } finally {
-      setIsLoading(false);
+      
+      if (existingContact.user_account_status) {
+        setUserAccountStatus(existingContact.user_account_status);
+      }
     }
+  }, [isEditMode, existingContact]);
+
+  // Check if form has actual changes
+  const checkForChanges = (currentData: ContactFormData, initialData: ContactFormData | null): boolean => {
+    if (!initialData) return false;
+    
+    const simpleFields = ['type', 'status', 'salutation', 'name', 'company_name', 'company_registration_number', 'industry', 'notes'];
+    for (const field of simpleFields) {
+      if (currentData[field as keyof ContactFormData] !== initialData[field as keyof ContactFormData]) {
+        return true;
+      }
+    }
+    
+    const arrayFields = ['classifications', 'contact_channels', 'addresses', 'compliance_numbers', 'contact_persons', 'tags'];
+    for (const field of arrayFields) {
+      const current = currentData[field as keyof ContactFormData] as any[];
+      const initial = initialData[field as keyof ContactFormData] as any[];
+      if (current.length !== initial.length) return true;
+    }
+    
+    return false;
   };
 
   // Form validation
   const validateForm = (): boolean => {
     const errors: string[] = [];
 
-    if (formData.classification.length === 0) {
+    if (formData.classifications.length === 0) {
       errors.push('Please select at least one contact classification.');
+      toast({
+        variant: "destructive",
+        title: "Classification Required",
+        description: "Please select at least one contact classification",
+        duration: 5000
+      });
     }
 
     if (formData.type === CONTACT_FORM_TYPES.INDIVIDUAL) {
       if (!formData.name?.trim()) {
         errors.push('Name is required for individual contacts.');
+        toast({
+          variant: "destructive",
+          title: "Name Required",
+          description: "Please enter the name for individual contact",
+          duration: 5000
+        });
       }
     } else {
       if (!formData.company_name?.trim()) {
         errors.push('Company name is required for corporate contacts.');
+        toast({
+          variant: "destructive",
+          title: "Company Name Required",
+          description: "Please enter the company name for corporate contact",
+          duration: 5000
+        });
       }
     }
 
     if (formData.contact_channels.length === 0) {
       errors.push('At least one contact channel is required.');
+      toast({
+        variant: "destructive",
+        title: "Contact Channel Required",
+        description: "Please add at least one contact channel (email, phone, etc.)",
+        duration: 5000
+      });
     }
 
     setValidationErrors(errors);
     return errors.length === 0;
-  };
-
-  // Mock duplicate detection
-  const checkForDuplicates = async () => {
-    const warnings: string[] = [];
-    
-    formData.contact_channels.forEach(channel => {
-      if (channel.channel_code === 'email' && channel.value === 'test@example.com') {
-        warnings.push(`Email "${channel.value}" is already used by John Smith (Individual)`);
-      }
-    });
-
-    setDuplicateWarnings(warnings);
   };
 
   // Handle form submission
@@ -429,106 +614,228 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
       return;
     }
 
-    setIsSaving(true);
-    
     try {
-      await checkForDuplicates();
+      setShowFullPageLoader(true);
       
-      if (onSave) {
-        const success = await onSave(formData);
-        if (success) {
-          setHasUnsavedChanges(false);
+      analyticsService.trackPageView(
+        isEditMode ? 'contacts/edit/save' : 'contacts/create/save',
+        'Contact Save Attempt'
+      );
+
+      // Check for duplicates first (only in create mode)
+      if (!isEditMode) {
+        const duplicateCheck = await checkDuplicatesHook.check({
+          contact_channels: formData.contact_channels,
+          type: formData.type,
+          name: formData.name,
+          company_name: formData.company_name,
+          classifications: formData.classifications
+        });
+        
+        if (duplicateCheck.hasDuplicates) {
+          setDuplicateContacts(duplicateCheck.duplicates);
+          setShowDuplicateDialog(true);
+          setShowFullPageLoader(false);
+          return;
+        }
+      }
+
+      const contactData: CreateContactRequest = {
+        ...formData,
+        name: formData.type === 'individual' ? formData.name! : undefined,
+        company_name: formData.type === 'corporate' ? formData.company_name! : undefined,
+      };
+
+      let savedContactId: string;
+      
+      if (isEditMode && (contactId || id)) {
+        const result = await updateContactHook.mutate({ 
+          contactId: contactId || id!, 
+          updates: contactData as UpdateContactRequest 
+        });
+        savedContactId = result.id;
+        
+        toast({
+          title: "Success!",
+          description: "Contact updated successfully",
+          duration: 3000
+        });
+      } else {
+        const result = await createContactHook.mutate(contactData);
+        savedContactId = result.id;
+        
+        toast({
+          title: "Success!",
+          description: "Contact created successfully",
+          duration: 3000
+        });
+      }
+      
+      analyticsService.trackPageView(
+        isEditMode ? 'contacts/edit/success' : 'contacts/create/success',
+        'Contact Save Success'
+      );
+
+      setHasUnsavedChanges(false);
+      
+      setTimeout(() => {
+        navigate(`/contacts/${savedContactId}`);
+      }, 500);
+      
+    } catch (error: any) {
+      console.error('Failed to save contact:', error);
+      setShowFullPageLoader(false);
+      
+      if (error.message?.includes('auditLogger')) {
+        toast({
+          title: "Success",
+          description: `Contact ${isEditMode ? 'updated' : 'created'} successfully`,
+          duration: 3000
+        });
+        
+        setHasUnsavedChanges(false);
+        
+        const redirectId = existingContact?.id || contactId || id;
+        if (redirectId) {
+          setTimeout(() => {
+            navigate(`/contacts/${redirectId}`);
+          }, 500);
+        } else {
           navigate('/contacts');
         }
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        console.log('Saving contact:', formData);
-        setHasUnsavedChanges(false);
-        navigate('/contacts');
+        return;
       }
-    } catch (error) {
-      console.error('Error saving contact:', error);
-    } finally {
-      setIsSaving(false);
+      
+      captureException(error, {
+        tags: { 
+          component: 'ContactCreateForm', 
+          action: isEditMode ? 'updateContact' : 'createContact' 
+        },
+        extra: { 
+          contactData: formData, 
+          tenantId: currentTenant?.id,
+          mode: isEditMode ? 'edit' : 'create'
+        }
+      });
+
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to ${isEditMode ? 'update' : 'create'} contact. Please try again.`
+      });
     }
   };
 
-  // Handle cancel with unsaved changes warning
+  // Handle cancel
   const handleCancel = () => {
     if (hasUnsavedChanges) {
-      const confirmLeave = window.confirm('You have unsaved changes. Are you sure you want to leave?');
-      if (!confirmLeave) return;
-    }
-    
-    if (onCancel) {
-      onCancel();
+      setShowCancelDialog(true);
     } else {
-      navigate('/contacts');
+      if (onCancel) {
+        onCancel();
+      } else {
+        navigate('/contacts');
+      }
     }
   };
 
   // Update form data helper
   const updateFormData = (updates: Partial<ContactFormData>) => {
-    setFormData(prev => ({ ...prev, ...updates }));
+    setFormData(prev => {
+      if (updates.type && updates.type !== prev.type) {
+        const resetData = {
+          ...prev,
+          ...updates,
+          salutation: undefined,
+          name: undefined,
+          company_name: undefined,
+          company_registration_number: undefined,
+          compliance_numbers: [],
+          contact_persons: [],
+          contact_channels: [],
+          addresses: [],
+          tags: [],
+          notes: '',
+          classifications: prev.classifications,
+          status: prev.status
+        };
+        
+        const hasChanges = checkForChanges(resetData, initialFormDataRef.current);
+        setHasUnsavedChanges(hasChanges);
+        
+        return resetData;
+      }
+      
+      const newData = { ...prev, ...updates };
+      
+      const hasChanges = checkForChanges(newData, initialFormDataRef.current);
+      setHasUnsavedChanges(hasChanges);
+      
+      return newData;
+    });
   };
 
-  // Handle user action (invite/elevate)
-  const handleUserAction = async () => {
-    if (userAccountStatus === USER_ACCOUNT_STATUS.HAS_ACCOUNT) {
-      console.log('Navigate to create contract for:', formData);
-    } else {
-      setUserAccountStatus(USER_ACCOUNT_STATUS.INVITATION_SENT);
-      console.log('Sending invitation to:', formData);
-    }
-  };
+  const userStatusInfo = USER_STATUS_MESSAGES[userAccountStatus as keyof typeof USER_STATUS_MESSAGES];
 
-  // Get contact display name for user status
-  const getContactDisplayName = (): string => {
-    if (formData.type === CONTACT_FORM_TYPES.INDIVIDUAL) {
-      return formData.name || 'Contact';
-    } else {
-      return formData.company_name || 'Company';
-    }
-  };
-
-  if (isLoading) {
+  // Show loading state while fetching existing contact
+  if (isEditMode && isLoadingContact) {
     return (
-      <div className="p-4 md:p-6 bg-muted/20 min-h-screen">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading contact information...</p>
-          </div>
-        </div>
+      <div 
+        className="p-4 md:p-6 min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <FormSkeleton 
+          title={true}
+          subtitle={true}
+          sections={3}
+          showActions={true}
+        />
       </div>
     );
   }
 
-  const userStatusInfo = USER_STATUS_MESSAGES[userAccountStatus as keyof typeof USER_STATUS_MESSAGES];
-
   return (
-    <div className="p-4 md:p-6 bg-muted/20 min-h-screen">
+    <div 
+      className="p-4 md:p-6 min-h-screen transition-colors"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
+      {/* Full Page Save Loader */}
+      {showFullPageLoader && <FullPageSaveLoader message={isEditMode ? "Updating contact..." : "Creating contact..."} />}
+      
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
           <button 
             onClick={handleCancel}
-            className="p-2 rounded-full hover:bg-muted transition-colors"
+            className="p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 
+              className="text-2xl font-bold flex items-center gap-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               {isEditMode ? 'Edit Contact' : 'Create Contact'}
               <button
                 onClick={() => setShowVideoHelp(true)}
-                className="p-1 rounded-full hover:bg-muted transition-colors"
+                className="p-1 rounded-full hover:opacity-80 transition-colors"
                 title="Help & tutorials"
               >
-                <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                <HelpCircle 
+                  className="h-5 w-5"
+                  style={{ color: colors.utility.secondaryText }}
+                />
               </button>
             </h1>
-            <p className="text-muted-foreground">
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {isEditMode 
                 ? 'Update contact information and details' 
                 : 'Add a new contact to your directory'
@@ -541,7 +848,12 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
           <button 
             onClick={handleCancel}
             disabled={isSaving}
-            className="flex items-center px-4 py-2 border border-primary rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-primary"
+            className="flex items-center px-4 py-2 border rounded-md hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              borderColor: colors.utility.primaryText + '40',
+              color: colors.utility.primaryText,
+              backgroundColor: 'transparent'
+            }}
           >
             <X className="mr-2 h-4 w-4" />
             Cancel
@@ -549,7 +861,11 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
           <button 
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+            className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             {isSaving ? (
               <>
@@ -568,31 +884,31 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg dark:bg-red-900/20 dark:border-red-800">
+        <div 
+          className="mb-6 p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: colors.semantic.error + '10',
+            borderColor: colors.semantic.error + '40'
+          }}
+        >
           <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle 
+              className="h-5 w-5 flex-shrink-0 mt-0.5"
+              style={{ color: colors.semantic.error }}
+            />
             <div>
-              <h3 className="font-medium text-red-800 dark:text-red-400">Please fix the following errors:</h3>
-              <ul className="mt-2 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+              <h3 
+                className="font-medium"
+                style={{ color: colors.semantic.error }}
+              >
+                Please fix the following errors:
+              </h3>
+              <ul 
+                className="mt-2 text-sm list-disc list-inside"
+                style={{ color: colors.semantic.error }}
+              >
                 {validationErrors.map((error, index) => (
                   <li key={index}>{error}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Duplicate Warnings */}
-      {duplicateWarnings.length > 0 && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg dark:bg-yellow-900/20 dark:border-yellow-800">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-medium text-yellow-800 dark:text-yellow-400">Duplicate Contact Information Detected</h3>
-              <ul className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                {duplicateWarnings.map((warning, index) => (
-                  <li key={index}>• {warning}</li>
                 ))}
               </ul>
             </div>
@@ -604,29 +920,52 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
         {/* Left Content Area (3/4 width) */}
         <div className="xl:col-span-3 space-y-6">
-          {/* Contact Type Selection - Tab Style */}
+          {/* Contact Type Selection */}
           <ContactTypeTabSelector
             value={formData.type}
             onChange={(type) => updateFormData({ type })}
             disabled={isSaving}
+            hasUnsavedChanges={hasUnsavedChanges}
           />
 
-          {/* Contact Info + Contact Channels - Side by Side (40-60) */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* Contact Information (40% - 2/5) */}
-            <div className="lg:col-span-2">
-              <div className="bg-card rounded-lg shadow-sm border border-border p-6 h-fit">
-                <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
+          {/* Contact Info + Contact Channels - Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Contact Information + Tags */}
+            <div className="space-y-6">
+              {/* Contact Information */}
+              <div 
+                className="rounded-lg shadow-sm border p-6 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText + '20'
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold mb-4 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Contact Information
+                </h2>
                 
                 {formData.type === CONTACT_FORM_TYPES.INDIVIDUAL ? (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Salutation</label>
+                      <label 
+                        className="block text-sm font-medium mb-2 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Salutation
+                      </label>
                       <select 
                         value={formData.salutation || ''}
                         onChange={(e) => updateFormData({ salutation: e.target.value as any || undefined })}
                         disabled={isSaving}
-                        className="w-full p-2 border border-border rounded-md bg-background disabled:opacity-50"
+                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: colors.utility.primaryText + '40',
+                          color: colors.utility.primaryText
+                        }}
                       >
                         <option value="">Select</option>
                         {SALUTATIONS.map(option => (
@@ -637,13 +976,23 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Name *</label>
+                      <label 
+                        className="block text-sm font-medium mb-2 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Name *
+                      </label>
                       <input
                         type="text"
                         value={formData.name || ''}
                         onChange={(e) => updateFormData({ name: e.target.value })}
                         disabled={isSaving}
-                        className="w-full p-2 border border-border rounded-md bg-background disabled:opacity-50"
+                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: colors.utility.primaryText + '40',
+                          color: colors.utility.primaryText
+                        }}
                         placeholder={PLACEHOLDER_TEXTS.FULL_NAME}
                       />
                     </div>
@@ -651,45 +1000,70 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                 ) : (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Company Name *</label>
+                      <label 
+                        className="block text-sm font-medium mb-2 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Company Name *
+                      </label>
                       <input
                         type="text"
                         value={formData.company_name || ''}
                         onChange={(e) => updateFormData({ company_name: e.target.value })}
                         disabled={isSaving}
-                        className="w-full p-2 border border-border rounded-md bg-background disabled:opacity-50"
+                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: colors.utility.primaryText + '40',
+                          color: colors.utility.primaryText
+                        }}
                         placeholder={PLACEHOLDER_TEXTS.COMPANY_NAME}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">Registration Number</label>
+                      <label 
+                        className="block text-sm font-medium mb-2 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Registration Number
+                      </label>
                       <input
                         type="text"
                         value={formData.company_registration_number || ''}
                         onChange={(e) => updateFormData({ company_registration_number: e.target.value })}
                         disabled={isSaving}
-                        className="w-full p-2 border border-border rounded-md bg-background disabled:opacity-50"
+                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: colors.utility.primaryText + '40',
+                          color: colors.utility.primaryText
+                        }}
                         placeholder="Company registration number"
                       />
                     </div>
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Contact Channels (60% - 3/5) */}
-            <div className="lg:col-span-3">
-              <ContactChannelsSection
-                value={formData.contact_channels}
-                onChange={(contact_channels) => updateFormData({ contact_channels })}
+              {/* Tags Section */}
+              <ContactTagsSection
+                value={formData.tags || []}
+                onChange={(tags) => updateFormData({ tags })}
                 disabled={isSaving}
-                duplicateWarnings={duplicateWarnings}
-                mode={isEditMode ? 'edit' : 'create'}
               />
             </div>
+
+            {/* Right Column: Contact Channels */}
+            <ContactChannelsSection
+              value={formData.contact_channels}
+              onChange={(contact_channels) => updateFormData({ contact_channels })}
+              disabled={isSaving}
+              duplicateWarnings={[]}
+              mode={isEditMode ? 'edit' : 'create'}
+            />
           </div>
 
-          {/* Addresses - Card Based */}
+          {/* Addresses */}
           <AddressesSection
             value={formData.addresses}
             onChange={(addresses) => updateFormData({ addresses })}
@@ -717,102 +1091,176 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
           )}
 
           {/* Notes */}
-          <div className="bg-card rounded-lg shadow-sm border border-border p-6">
-            <h2 className="text-lg font-semibold mb-4">Notes</h2>
+          <div 
+            className="rounded-lg shadow-sm border p-6 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
+            <h2 
+              className="text-lg font-semibold mb-4 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Notes
+            </h2>
             <textarea
               value={formData.notes || ''}
               onChange={(e) => updateFormData({ notes: e.target.value })}
               disabled={isSaving}
               placeholder={PLACEHOLDER_TEXTS.NOTES}
               rows={4}
-              className="w-full p-3 border border-border rounded-md bg-background resize-none disabled:opacity-50"
+              className="w-full p-3 border rounded-md resize-none disabled:opacity-50 transition-colors"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderColor: colors.utility.primaryText + '40',
+                color: colors.utility.primaryText
+              }}
             />
           </div>
         </div>
 
         {/* Right Sidebar (1/4 width) */}
         <div className="xl:col-span-1 space-y-6">
-          {/* User Status Info - Enhanced Background */}
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg shadow-sm border border-blue-200 dark:border-blue-800 p-4">
+          {/* User Status Info */}
+          <div 
+            className="rounded-lg shadow-sm border p-4 transition-colors"
+            style={{
+              backgroundColor: colors.brand.primary + '10',
+              borderColor: colors.brand.primary + '40'
+            }}
+          >
             <div className="text-center">
               <div className="text-2xl mb-2">{userStatusInfo.icon}</div>
-              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                @{getContactDisplayName().toLowerCase().replace(/\s+/g, '')} {userStatusInfo.text}
-              </p>
-              <button
-                onClick={handleUserAction}
-                className={`
-                  w-full flex items-center justify-center px-4 py-2 rounded-md transition-colors text-sm font-medium
-                  ${userStatusInfo.actionType === 'primary' 
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                  }
-                `}
+              <p 
+                className="text-sm mb-3"
+                style={{ color: colors.brand.primary }}
               >
-                {userStatusInfo.actionType === 'primary' ? (
-                  <FileText className="mr-2 h-4 w-4" />
-                ) : (
+                {isEditMode ? 'Contact Status' : 'New Contact'}
+              </p>
+              <p 
+                className="text-xs mb-3"
+                style={{ color: colors.brand.primary }}
+              >
+                {isEditMode ? userStatusInfo.text : 'User account will be created after saving'}
+              </p>
+              {isEditMode && (
+                <button
+                  className="w-full flex items-center justify-center px-4 py-2 rounded-md transition-colors text-sm font-medium"
+                  style={{
+                    backgroundColor: colors.brand.primary,
+                    color: '#ffffff'
+                  }}
+                >
                   <Send className="mr-2 h-4 w-4" />
-                )}
-                {userStatusInfo.action}
-              </button>
+                  {userStatusInfo.action}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Contact Classification - Right Sidebar */}
+          {/* Contact Classification */}
           <ContactClassificationSelector
-            value={formData.classification}
-            onChange={(classification) => updateFormData({ classification })}
+            value={formData.classifications}
+            onChange={(classifications) => updateFormData({ classifications })}
             disabled={isSaving}
             industry={currentIndustry}
           />
 
-          {/* Contact Status - New Toggle + Archive Design */}
+          {/* Contact Status */}
           <ContactStatusSection
             status={formData.status}
             onChange={(status) => updateFormData({ status })}
             disabled={isSaving}
+            isEditMode={isEditMode}
+            contactId={contactId || id}
           />
         </div>
       </div>
 
-      {/* Sticky Save Bar for Mobile */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-card border-t border-border xl:hidden">
-        <div className="flex gap-3">
-          <button 
-            onClick={handleCancel}
-            disabled={isSaving}
-            className="flex-1 flex items-center justify-center px-4 py-2 border border-primary rounded-md hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-primary"
-          >
-            Cancel
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1 flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              isEditMode ? 'Update Contact' : 'Save Contact'
-            )}
-          </button>
-        </div>
-      </div>
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={() => {
+          setShowCancelDialog(false);
+          if (onCancel) {
+            onCancel();
+          } else {
+            navigate('/contacts');
+          }
+        }}
+        title="Unsaved Changes"
+        description="You have unsaved changes. Are you sure you want to leave?"
+        confirmText="Leave"
+        cancelText="Stay"
+        type="warning"
+      />
 
-      {/* Bottom padding for mobile sticky bar */}
-      <div className="h-20 xl:h-0" />
+      {/* Duplicate Contacts Dialog */}
+      <ConfirmationDialog
+        isOpen={showDuplicateDialog}
+        onClose={() => setShowDuplicateDialog(false)}
+        onConfirm={async () => {
+          setShowDuplicateDialog(false);
+          setShowFullPageLoader(true);
+          try {
+            const contactData: CreateContactRequest = {
+              ...formData,
+              name: formData.type === 'individual' ? formData.name! : undefined,
+              company_name: formData.type === 'corporate' ? formData.company_name! : undefined,
+            };
+            const result = await createContactHook.mutate(contactData);
+            
+            toast({
+              title: "Success!",
+              description: "Contact created successfully",
+              duration: 3000
+            });
+            
+            setHasUnsavedChanges(false);
+            
+            setTimeout(() => {
+              navigate(`/contacts/${result.id}`);
+            }, 500);
+          } catch (error) {
+            setShowFullPageLoader(false);
+            captureException(error, {
+              tags: { component: 'ContactCreateForm', action: 'createContactWithDuplicates' },
+              extra: { contactData: formData, tenantId: currentTenant?.id }
+            });
+          }
+        }}
+        title="Potential Duplicates Found"
+        description={`Found ${duplicateContacts.length} potential duplicate contact(s). Do you want to continue creating this contact?`}
+        confirmText="Create Anyway"
+        cancelText="Review Duplicates"
+        type="warning"
+        icon={<AlertTriangle className="h-6 w-6" />}
+      />
 
       {/* Video Help Modal */}
       {showVideoHelp && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-border">
+          <div 
+            className="rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
+          >
+            <div 
+              className="p-6 border-b transition-colors"
+              style={{ borderColor: colors.utility.primaryText + '20' }}
+            >
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold">Contact Creation Help</h2>
+                <h2 
+                  className="text-xl font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Contact Management Help
+                </h2>
                 <button
                   onClick={() => setShowVideoHelp(false)}
-                  className="p-2 hover:bg-muted rounded-md transition-colors"
+                  className="p-2 hover:opacity-80 rounded-md transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
                 >
                   ×
                 </button>
@@ -820,21 +1268,56 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
             </div>
             <div className="p-6">
               <div className="space-y-4">
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h3 className="font-medium mb-2">📹 Individual vs Corporate Contacts</h3>
-                  <p className="text-sm text-muted-foreground">Learn when to use individual or corporate contact types and their key differences.</p>
+                <div 
+                  className="p-4 rounded-lg transition-colors"
+                  style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+                >
+                  <h3 
+                    className="font-medium mb-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    📹 Getting Started with Contacts
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Learn how to add, organize, and manage your business contacts effectively.
+                  </p>
                 </div>
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h3 className="font-medium mb-2">📹 Contact Classifications Explained</h3>
-                  <p className="text-sm text-muted-foreground">Understanding industry-specific contact types with real-world examples.</p>
+                <div 
+                  className="p-4 rounded-lg transition-colors"
+                  style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+                >
+                  <h3 
+                    className="font-medium mb-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    📹 Contact Classifications & Filtering
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Understanding how to categorize contacts and use advanced filtering options.
+                  </p>
                 </div>
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h3 className="font-medium mb-2">📹 Managing Contact Channels & Addresses</h3>
-                  <p className="text-sm text-muted-foreground">Best practices for adding multiple contact methods and locations.</p>
-                </div>
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <h3 className="font-medium mb-2">📹 User Invitations & Relationship Management</h3>
-                  <p className="text-sm text-muted-foreground">How to invite contacts and elevate business relationships.</p>
+                <div 
+                  className="p-4 rounded-lg transition-colors"
+                  style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+                >
+                  <h3 
+                    className="font-medium mb-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    📹 Search & Discovery
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Master the search functionality to quickly find the contacts you need.
+                  </p>
                 </div>
               </div>
             </div>

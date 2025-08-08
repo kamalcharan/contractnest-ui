@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, GitBranch, Calendar, User, Eye, Activity, Clock, AlertCircle } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel } from '@/hooks/useBusinessModel';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
@@ -10,6 +11,7 @@ import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 const VersionHistoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { isDarkMode, currentTheme } = useTheme();
   const { 
     isLoading, 
     selectedPlan,
@@ -24,6 +26,9 @@ const VersionHistoryPage: React.FC = () => {
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [selectedVersionForActivation, setSelectedVersionForActivation] = useState<any>(null);
   const isMounted = useRef(true);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Set up mounting status
   useEffect(() => {
@@ -100,23 +105,44 @@ const VersionHistoryPage: React.FC = () => {
   // Loading state
   if (isLoading && !isInitialized) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+      >
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <div className="h-7 bg-muted rounded-md w-40 animate-pulse"></div>
-            <div className="h-4 bg-muted rounded-md w-60 mt-2 animate-pulse"></div>
+            <div 
+              className="h-7 rounded-md w-40 animate-pulse"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
+            ></div>
+            <div 
+              className="h-4 rounded-md w-60 mt-2 animate-pulse"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
+            ></div>
           </div>
         </div>
         
         <div className="flex justify-center items-center min-h-[300px]">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-          <span className="ml-2 text-muted-foreground">Loading version history...</span>
+          <div 
+            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full"
+            style={{ borderColor: colors.brand.primary }}
+          ></div>
+          <span 
+            className="ml-2 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Loading version history...
+          </span>
         </div>
       </div>
     );
@@ -125,17 +151,34 @@ const VersionHistoryPage: React.FC = () => {
   // Error state
   if (!selectedPlan && isInitialized) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+      >
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Plan Not Found</h1>
-            <p className="text-muted-foreground">The requested pricing plan could not be found.</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Plan Not Found
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              The requested pricing plan could not be found.
+            </p>
           </div>
         </div>
       </div>
@@ -143,32 +186,64 @@ const VersionHistoryPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+    >
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Version History</h1>
-            <p className="text-muted-foreground">{selectedPlan?.name}</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Version History
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              {selectedPlan?.name}
+            </p>
           </div>
         </div>
       </div>
       
       {/* Version Creation Notice */}
-      <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/20">
+      <div 
+        className="mb-6 p-4 rounded-lg border transition-colors"
+        style={{
+          backgroundColor: `${colors.brand.primary}10`,
+          borderColor: `${colors.brand.primary}40`
+        }}
+      >
         <div className="flex items-start">
-          <GitBranch className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <GitBranch 
+            className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5 transition-colors"
+            style={{ color: colors.brand.primary }}
+          />
           <div>
-            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+            <p 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               How to Create a New Version
             </p>
-            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               To create a new version, go back to the plan details and click "Edit Plan". 
               Any changes you save will automatically create a new version.
             </p>
@@ -177,22 +252,66 @@ const VersionHistoryPage: React.FC = () => {
       </div>
       
       {/* Versions List */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
-        <div className="px-6 py-4 bg-muted/20 border-b border-border">
-          <h2 className="text-lg font-semibold">All Versions</h2>
+      <div 
+        className="rounded-lg border overflow-hidden transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.secondaryText + '40'
+        }}
+      >
+        <div 
+          className="px-6 py-4 border-b transition-colors"
+          style={{
+            backgroundColor: `${colors.utility.primaryBackground}20`,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <h2 
+            className="text-lg font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            All Versions
+          </h2>
         </div>
         
-        <div className="divide-y divide-border">
+        <div 
+          className="divide-y transition-colors"
+          style={{ borderColor: colors.utility.secondaryText + '40' }}
+        >
           {planVersions.length > 0 ? (
             planVersions.map((version) => (
-              <div key={version.version_id} className="p-6 hover:bg-muted/10 transition-colors">
+              <div 
+                key={version.version_id} 
+                className="p-6 hover:opacity-80 transition-colors"
+                style={{ backgroundColor: colors.utility.secondaryBackground }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${colors.utility.primaryBackground}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center">
-                      <GitBranch className="h-5 w-5 text-muted-foreground mr-2" />
-                      <span className="font-medium">Version {version.version_number}</span>
+                      <GitBranch 
+                        className="h-5 w-5 mr-2 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Version {version.version_number}
+                      </span>
                       {version.is_active && (
-                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                        <span 
+                          className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+                          style={{
+                            backgroundColor: `${colors.semantic.success}20`,
+                            color: colors.semantic.success
+                          }}
+                        >
                           <Activity className="h-3 w-3 mr-1" />
                           Active
                         </span>
@@ -205,11 +324,14 @@ const VersionHistoryPage: React.FC = () => {
                       <button
                         onClick={() => handleActivateClick(version)}
                         disabled={activatingVersionId === version.version_id}
-                        className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        className="px-3 py-1.5 text-sm text-white rounded-md hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        style={{
+                          background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                        }}
                       >
                         {activatingVersionId === version.version_id ? (
                           <>
-                            <div className="animate-spin -ml-1 mr-2 h-3 w-3 border-2 border-primary-foreground border-t-transparent rounded-full"></div>
+                            <div className="animate-spin -ml-1 mr-2 h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                             Activating...
                           </>
                         ) : (
@@ -220,7 +342,7 @@ const VersionHistoryPage: React.FC = () => {
                   </div>
                 </div>
                 
-                <div className="mt-2 flex items-center space-x-4 text-sm text-muted-foreground">
+                <div className="mt-2 flex items-center space-x-4 text-sm transition-colors" style={{ color: colors.utility.secondaryText }}>
                   <div className="flex items-center">
                     <Calendar className="h-4 w-4 mr-1" />
                     {new Date(version.effective_date!).toLocaleDateString()}
@@ -236,14 +358,27 @@ const VersionHistoryPage: React.FC = () => {
                 </div>
                 
                 {version.changelog && (
-                  <div className="mt-3 p-3 bg-muted/50 rounded-md">
-                    <p className="text-sm font-medium mb-1">Changes in this version:</p>
-                    <p className="text-sm text-muted-foreground">{version.changelog}</p>
+                  <div 
+                    className="mt-3 p-3 rounded-md transition-colors"
+                    style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+                  >
+                    <p 
+                      className="text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Changes in this version:
+                    </p>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {version.changelog}
+                    </p>
                   </div>
                 )}
                 
                 {/* Version Stats */}
-                <div className="mt-3 flex items-center space-x-6 text-xs text-muted-foreground">
+                <div className="mt-3 flex items-center space-x-6 text-xs transition-colors" style={{ color: colors.utility.secondaryText }}>
                   <span>{version.tiers?.length || 0} pricing tiers</span>
                   <span>{version.features?.length || 0} features</span>
                   <span>{version.notifications?.length || 0} notification types</span>
@@ -251,10 +386,23 @@ const VersionHistoryPage: React.FC = () => {
               </div>
             ))
           ) : (
-            <div className="p-6 text-center text-muted-foreground">
-              <GitBranch className="h-12 w-12 mx-auto opacity-50 mb-4" />
-              <h3 className="text-lg font-medium">No Versions Found</h3>
-              <p className="mt-2">This plan doesn't have any versions yet.</p>
+            <div className="p-6 text-center">
+              <GitBranch 
+                className="h-12 w-12 mx-auto opacity-50 mb-4 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <h3 
+                className="text-lg font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                No Versions Found
+              </h3>
+              <p 
+                className="mt-2 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                This plan doesn't have any versions yet.
+              </p>
             </div>
           )}
         </div>

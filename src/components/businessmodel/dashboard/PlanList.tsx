@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Eye, Archive, Tag, Calendar, Users, FileText } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 export interface PricingPlanSummary {
   id: string;
@@ -29,6 +30,8 @@ const PlanList: React.FC<PlanListProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState(true);
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Filter plans based on search and active filter
   const filteredPlans = plans.filter(plan => {
@@ -42,18 +45,43 @@ const PlanList: React.FC<PlanListProps> = ({
     return (
       <div className="space-y-4">
         {Array(3).fill(0).map((_, i) => (
-          <div key={i} className="bg-card border border-border rounded-lg p-6 animate-pulse">
+          <div 
+            key={i} 
+            className="rounded-lg p-6 animate-pulse"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`
+            }}
+          >
             <div className="flex justify-between">
               <div className="space-y-2">
-                <div className="h-6 bg-muted rounded w-48"></div>
-                <div className="h-4 bg-muted rounded w-24"></div>
+                <div 
+                  className="h-6 rounded w-48"
+                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                ></div>
+                <div 
+                  className="h-4 rounded w-24"
+                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                ></div>
               </div>
-              <div className="h-8 bg-muted rounded w-20"></div>
+              <div 
+                className="h-8 rounded w-20"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+              ></div>
             </div>
             <div className="mt-4 flex space-x-6">
-              <div className="h-4 bg-muted rounded w-24"></div>
-              <div className="h-4 bg-muted rounded w-24"></div>
-              <div className="h-4 bg-muted rounded w-40"></div>
+              <div 
+                className="h-4 rounded w-24"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+              ></div>
+              <div 
+                className="h-4 rounded w-24"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+              ></div>
+              <div 
+                className="h-4 rounded w-40"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+              ></div>
             </div>
           </div>
         ))}
@@ -64,10 +92,27 @@ const PlanList: React.FC<PlanListProps> = ({
   // Render no plans found
   if (filteredPlans.length === 0) {
     return (
-      <div className="bg-card border border-border rounded-lg p-8 text-center">
-        <FileText className="h-12 w-12 mx-auto text-muted-foreground opacity-50 mb-4" />
-        <h3 className="text-lg font-medium">No Plans Found</h3>
-        <p className="text-muted-foreground mt-2 mb-4">
+      <div 
+        className="rounded-lg p-8 text-center"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          border: `1px solid ${colors.utility.primaryText}20`
+        }}
+      >
+        <FileText 
+          className="h-12 w-12 mx-auto opacity-50 mb-4"
+          style={{ color: colors.utility.secondaryText }}
+        />
+        <h3 
+          className="text-lg font-medium"
+          style={{ color: colors.utility.primaryText }}
+        >
+          No Plans Found
+        </h3>
+        <p 
+          className="mt-2 mb-4"
+          style={{ color: colors.utility.secondaryText }}
+        >
           {searchTerm 
             ? 'No plans match your search criteria.' 
             : 'You haven\'t created any pricing plans yet.'}
@@ -86,10 +131,23 @@ const PlanList: React.FC<PlanListProps> = ({
             placeholder="Search plans..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 pl-10 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="w-full px-4 py-2 pl-10 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
           />
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-4 w-4"
+              style={{ color: colors.utility.secondaryText }}
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -101,9 +159,18 @@ const PlanList: React.FC<PlanListProps> = ({
             id="filter-active"
             checked={filterActive}
             onChange={() => setFilterActive(!filterActive)}
-            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            className="h-4 w-4 rounded focus:ring-2"
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              '--tw-ring-color': colors.brand.primary,
+              accentColor: colors.brand.primary
+            } as React.CSSProperties}
           />
-          <label htmlFor="filter-active" className="ml-2 text-sm">
+          <label 
+            htmlFor="filter-active" 
+            className="ml-2 text-sm transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Show active plans only
           </label>
         </div>
@@ -112,25 +179,52 @@ const PlanList: React.FC<PlanListProps> = ({
       {/* Plans list */}
       <div className="space-y-4">
         {filteredPlans.map(plan => (
-          <div key={plan.id} className="bg-card border border-border rounded-lg p-6">
+          <div 
+            key={plan.id} 
+            className="rounded-lg p-6"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.utility.primaryText}20`
+            }}
+          >
             <div className="flex flex-wrap justify-between items-start gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold">{plan.name}</h3>
-                  <div className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                  <h3 
+                    className="text-lg font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {plan.name}
+                  </h3>
+                  <div 
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      backgroundColor: `${colors.utility.primaryText}20`,
+                      color: colors.utility.secondaryText
+                    }}
+                  >
                     v{plan.version}
                   </div>
-                  <div className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    plan.isActive 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                      : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                  }`}>
+                  <div 
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      backgroundColor: plan.isActive 
+                        ? `${colors.semantic.success}20` 
+                        : `${colors.semantic.error}20`,
+                      color: plan.isActive 
+                        ? colors.semantic.success 
+                        : colors.semantic.error
+                    }}
+                  >
                     {plan.isActive ? 'active' : 'inactive'}
                   </div>
                 </div>
                 
-                <div className="text-sm text-muted-foreground mt-1">
-                  <span className="inline-flex items-center">
+                <div className="text-sm mt-1">
+                  <span 
+                    className="inline-flex items-center transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     <Tag className="h-3.5 w-3.5 mr-1" />
                     {plan.planType}
                   </span>
@@ -140,7 +234,18 @@ const PlanList: React.FC<PlanListProps> = ({
               <div className="flex space-x-2">
                 <button 
                   onClick={() => onViewPlan(plan.id)}
-                  className="px-3 py-1.5 rounded-md border border-input bg-background hover:bg-muted text-sm flex items-center"
+                  className="px-3 py-1.5 rounded-md border text-sm flex items-center transition-colors hover:opacity-80"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                  }}
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   View
@@ -148,7 +253,18 @@ const PlanList: React.FC<PlanListProps> = ({
                 
                 <button 
                   onClick={() => onArchivePlan(plan.id)}
-                  className="px-3 py-1.5 rounded-md border border-input bg-background hover:bg-muted text-sm flex items-center"
+                  className="px-3 py-1.5 rounded-md border text-sm flex items-center transition-colors hover:opacity-80"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                  }}
                 >
                   <Archive className="h-4 w-4 mr-1" />
                   Archive
@@ -156,18 +272,27 @@ const PlanList: React.FC<PlanListProps> = ({
               </div>
             </div>
             
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-muted-foreground">
-              <div className="flex items-center">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+              <div 
+                className="flex items-center transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 <Users className="h-4 w-4 mr-2" />
                 {plan.userCount} active users
               </div>
               
-              <div className="flex items-center">
+              <div 
+                className="flex items-center transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 <FileText className="h-4 w-4 mr-2" />
                 {plan.featuresCount} features
               </div>
               
-              <div className="flex items-center">
+              <div 
+                className="flex items-center transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 <Calendar className="h-4 w-4 mr-2" />
                 Last updated: {plan.lastUpdated}
               </div>

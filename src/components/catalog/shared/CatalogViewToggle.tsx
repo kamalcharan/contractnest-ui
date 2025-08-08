@@ -1,7 +1,7 @@
 // src/components/catalog/shared/CatalogViewToggle.tsx
 import React from 'react';
 import { Grid3X3, List, LayoutGrid, TableProperties } from 'lucide-react';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface CatalogViewToggleProps {
   viewMode: 'grid' | 'list';
@@ -14,7 +14,10 @@ const CatalogViewToggle: React.FC<CatalogViewToggleProps> = ({
   onChange,
   className = ''
 }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors - EXACT same pattern as LoginPage
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const viewOptions = [
     {
@@ -34,19 +37,21 @@ const CatalogViewToggle: React.FC<CatalogViewToggleProps> = ({
   return (
     <div className={`inline-flex items-center ${className}`}>
       {/* Toggle Container */}
-      <div className={`relative inline-flex items-center p-1 rounded-lg ${
-        isDarkMode 
-          ? 'bg-gray-800 border border-gray-700' 
-          : 'bg-gray-100 border border-gray-200'
-      }`}>
+      <div 
+        className="relative inline-flex items-center p-1 rounded-lg border"
+        style={{
+          backgroundColor: `${colors.utility.primaryText}10`,
+          borderColor: `${colors.utility.primaryText}20`
+        }}
+      >
         {/* Sliding Background */}
         <div
-          className={`absolute inset-y-1 transition-all duration-200 ease-out rounded-md ${
-            isDarkMode ? 'bg-gray-700' : 'bg-white'
-          } shadow-sm`}
+          className="absolute inset-y-1 transition-all duration-200 ease-out rounded-md shadow-sm border"
           style={{
             width: 'calc(50% - 4px)',
-            transform: `translateX(${viewMode === 'grid' ? '0' : '100%'})`
+            transform: `translateX(${viewMode === 'grid' ? '0' : '100%'})`,
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
           }}
         />
         
@@ -59,15 +64,12 @@ const CatalogViewToggle: React.FC<CatalogViewToggleProps> = ({
             <button
               key={option.value}
               onClick={() => onChange(option.value)}
-              className={`relative z-10 flex items-center justify-center w-10 h-8 rounded-md transition-all duration-200 ${
-                isActive
-                  ? isDarkMode
-                    ? 'text-white'
-                    : 'text-gray-900'
-                  : isDarkMode
-                    ? 'text-gray-400 hover:text-gray-300'
-                    : 'text-gray-500 hover:text-gray-700'
-              }`}
+              className="relative z-10 flex items-center justify-center w-10 h-8 rounded-md transition-all duration-200"
+              style={{
+                color: isActive
+                  ? colors.utility.primaryText
+                  : colors.utility.secondaryText
+              }}
               aria-label={option.label}
               title={option.description}
             >
@@ -78,9 +80,10 @@ const CatalogViewToggle: React.FC<CatalogViewToggleProps> = ({
       </div>
       
       {/* View Mode Label (Optional - hidden on mobile) */}
-      <span className={`ml-3 text-sm font-medium hidden sm:inline-block ${
-        isDarkMode ? 'text-gray-300' : 'text-gray-700'
-      }`}>
+      <span 
+        className="ml-3 text-sm font-medium hidden sm:inline-block"
+        style={{ color: colors.utility.primaryText }}
+      >
         {viewMode === 'grid' ? 'Grid' : 'List'} View
       </span>
     </div>

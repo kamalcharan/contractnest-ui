@@ -12,6 +12,7 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
+import { useMasterDataContext } from '@/contexts/MasterDataContext';
 
 // Define interfaces for the component
 interface CategoryMaster {
@@ -55,12 +56,17 @@ interface DetailFormData {
 const ListOfValuesPage = () => {
   const navigate = useNavigate();
   const { currentTenant } = useAuth();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
+  const { invalidateCategory } = useMasterDataContext();
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryMaster[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategoryName, setSelectedCategoryName] = useState<string>('');
   const [categoryDetails, setCategoryDetails] = useState<CategoryDetail[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -91,7 +97,6 @@ const ListOfValuesPage = () => {
         setLoading(true);
         console.log("Fetching categories for tenant:", currentTenant.id);
         
-        // Call your backend API using the centralized endpoint
         const response = await api.get(
           `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
         );
@@ -104,6 +109,7 @@ const ListOfValuesPage = () => {
         if (data.length > 0 && !selectedCategory) {
           console.log("Auto-selecting first category:", data[0].id);
           setSelectedCategory(data[0].id);
+          setSelectedCategoryName(data[0].DisplayName || data[0].CategoryName);
         }
       } catch (error) {
         console.error('Error fetching categories:', error);
@@ -132,7 +138,6 @@ const ListOfValuesPage = () => {
       try {
         console.log("Fetching details for category:", selectedCategory);
         
-        // Call your backend API using the centralized endpoint
         const response = await api.get(
           `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}?categoryId=${selectedCategory}&tenantId=${currentTenant.id}`
         );
@@ -174,7 +179,9 @@ const ListOfValuesPage = () => {
 
   const handleCategoryChange = (categoryId: string) => {
     console.log("Changing category to:", categoryId);
+    const category = categories.find(c => c.id === categoryId);
     setSelectedCategory(categoryId);
+    setSelectedCategoryName(category?.DisplayName || category?.CategoryName || '');
     setIsAdding(false);  
     setEditingId(null);
     
@@ -222,6 +229,9 @@ const ListOfValuesPage = () => {
       
       // Add to state
       setCategoryDetails(prev => [...prev, response.data]);
+      
+      // Invalidate cache for this category
+      invalidateCategory(selectedCategoryName);
       
       toast({
         title: "Success",
@@ -339,6 +349,9 @@ const ListOfValuesPage = () => {
         return rest;
       });
       
+      // Invalidate cache for this category
+      invalidateCategory(selectedCategoryName);
+      
       toast({
         title: "Success",
         description: "Value updated successfully"
@@ -375,6 +388,9 @@ const ListOfValuesPage = () => {
       
       setCategoryDetails(prev => prev.filter(d => d.id !== id));
       
+      // Invalidate cache for this category
+      invalidateCategory(selectedCategoryName);
+      
       toast({
         title: "Success",
         description: "Value deleted successfully"
@@ -399,32 +415,56 @@ const ListOfValuesPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div 
+        className="flex items-center justify-center min-h-[400px] transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <Loader2 
+          className="h-8 w-8 animate-spin transition-colors" 
+          style={{ color: colors.brand.primary }}
+        />
       </div>
     );
   }
 
-  // Get selected category name
-  const selectedCategoryName = categories.find(c => c.id === selectedCategory)?.DisplayName || '';
-
   return (
-    <div className="p-6 bg-muted/20">
-      {/* Header - Now without white background card as per Image 1 */}
+    <div 
+      className="p-6 transition-colors duration-200 min-h-screen"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
+      {/* Header */}
       <div className="flex items-center mb-8">
         <Button
           variant="outline"
           size="sm"
           onClick={() => navigate('/settings/configure')}
-          className="mr-4"
+          className="mr-4 transition-colors"
+          style={{
+            borderColor: colors.utility.secondaryText + '40',
+            backgroundColor: colors.utility.secondaryBackground,
+            color: colors.utility.primaryText
+          }}
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             List of Values
           </h1>
-          <p className="text-muted-foreground">
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             Manage your custom values and categories
           </p>
         </div>
@@ -433,7 +473,13 @@ const ListOfValuesPage = () => {
       <div className="flex gap-6">
         {/* Category list */}
         <div className="w-64 shrink-0">
-          <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+          <div 
+            className="rounded-lg shadow-sm border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             {categories.length > 0 ? (
               categories.map((category, index) => {
                 const isSelected = selectedCategory === category.id;
@@ -444,20 +490,32 @@ const ListOfValuesPage = () => {
                     key={category.id}
                     onClick={() => handleCategoryChange(category.id)}
                     className={cn(
-                      "w-full px-4 py-3 text-left border-b border-border last:border-0 transition-colors",
+                      "w-full px-4 py-3 text-left border-b last:border-0 transition-colors",
                       isSelected 
-                        ? "bg-primary text-primary-foreground font-medium" 
-                        : "hover:bg-muted",
-                      // Apply special styles for the first item (Lead Type in Image 2)
-                      isFirst && !isSelected && "bg-muted/50"
+                        ? "font-medium" 
+                        : "hover:opacity-80"
                     )}
+                    style={{
+                      borderColor: colors.utility.primaryText + '20',
+                      backgroundColor: isSelected 
+                        ? colors.brand.primary
+                        : isFirst && !isSelected 
+                        ? colors.utility.primaryBackground + '50'
+                        : 'transparent',
+                      color: isSelected 
+                        ? '#FFFFFF'
+                        : colors.utility.primaryText
+                    }}
                   >
                     {category.DisplayName}
                   </button>
                 );
               })
             ) : (
-              <div className="p-4 text-center text-muted-foreground">
+              <div 
+                className="p-4 text-center transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 No categories found.
               </div>
             )}
@@ -470,13 +528,20 @@ const ListOfValuesPage = () => {
             <div>
               {/* Category Title and Add Button */}
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold">
+                <h2 
+                  className="text-xl font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {selectedCategoryName}
                 </h2>
                 {!isAdding && (
                   <Button 
                     onClick={handleAddClick}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    className="transition-colors hover:opacity-90"
+                    style={{
+                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                      color: '#FFFFFF'
+                    }}
                     disabled={isProcessing}
                   >
                     <Plus className="mr-2 h-4 w-4" />
@@ -485,24 +550,59 @@ const ListOfValuesPage = () => {
                 )}
               </div>
 
-              {/* Column Headers as in Image 3 */}
-              <div className="bg-card rounded-lg shadow-sm border border-border mb-4">
+              {/* Column Headers */}
+              <div 
+                className="rounded-lg shadow-sm border mb-4 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText + '20'
+                }}
+              >
                 <div className="grid grid-cols-5 gap-4 px-4 py-3">
-                  <div className="font-medium">Name</div>
-                  <div className="font-medium">Display Name</div>
-                  <div className="font-medium">Color</div>
-                  <div className="font-medium">Sequence</div>
-                  <div className="font-medium">Description</div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Name
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Display Name
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Color
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Sequence
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Description
+                  </div>
                 </div>
               </div>
 
-              {/* Items List - Each as a separate card as in Image 3 */}
+              {/* Items List */}
               <div className="space-y-4">
                 {/* Existing Items */}
                 {categoryDetails.map((detail) => (
                   <div
                     key={detail.id}
-                    className="bg-card rounded-lg shadow-sm border border-border"
+                    className="rounded-lg shadow-sm border transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.utility.primaryText + '20'
+                    }}
                   >
                     <div className="grid grid-cols-5 gap-4 px-4 py-3 items-center">
                       {editingId === detail.id ? (
@@ -512,11 +612,21 @@ const ListOfValuesPage = () => {
                             value={editedValues[detail.id]?.SubCatName ?? detail.SubCatName}
                             onChange={(e) => handleInputChange(detail.id, 'SubCatName', e.target.value)}
                             disabled={!detail.is_deletable || isProcessing}
+                            style={{
+                              borderColor: colors.utility.secondaryText + '40',
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText
+                            }}
                           />
                           <Input
                             value={editedValues[detail.id]?.DisplayName ?? detail.DisplayName}
                             onChange={(e) => handleInputChange(detail.id, 'DisplayName', e.target.value)}
                             disabled={isProcessing}
+                            style={{
+                              borderColor: colors.utility.secondaryText + '40',
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText
+                            }}
                           />
                           <div className="flex items-center gap-2">
                             <div 
@@ -538,25 +648,44 @@ const ListOfValuesPage = () => {
                               e.target.value ? parseInt(e.target.value) : null
                             )}
                             disabled={isProcessing}
+                            style={{
+                              borderColor: colors.utility.secondaryText + '40',
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText
+                            }}
                           />
                           <div className="flex items-center justify-between">
                             <Input
                               value={editedValues[detail.id]?.Description ?? detail.Description ?? ''}
                               onChange={(e) => handleInputChange(detail.id, 'Description', e.target.value)}
                               disabled={isProcessing}
+                              style={{
+                                borderColor: colors.utility.secondaryText + '40',
+                                backgroundColor: colors.utility.primaryBackground,
+                                color: colors.utility.primaryText
+                              }}
                             />
                             <div className="flex items-center ml-2">
                               <Button
                                 variant="outline"
                                 onClick={() => setEditingId(null)}
                                 disabled={isProcessing}
+                                style={{
+                                  borderColor: colors.utility.secondaryText + '40',
+                                  backgroundColor: colors.utility.secondaryBackground,
+                                  color: colors.utility.primaryText
+                                }}
                               >
                                 Cancel
                               </Button>
                               <Button
                                 onClick={() => handleSaveEdit(detail.id)}
                                 disabled={isProcessing}
-                                className="ml-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                                className="ml-2 hover:opacity-90"
+                                style={{
+                                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                                  color: '#FFFFFF'
+                                }}
                               >
                                 Save
                               </Button>
@@ -566,8 +695,18 @@ const ListOfValuesPage = () => {
                       ) : (
                         // View Mode
                         <>
-                          <div>{detail.SubCatName}</div>
-                          <div>{detail.DisplayName}</div>
+                          <div 
+                            className="transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {detail.SubCatName}
+                          </div>
+                          <div 
+                            className="transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {detail.DisplayName}
+                          </div>
                           <div>
                             {detail.hexcolor && (
                               <div
@@ -576,9 +715,17 @@ const ListOfValuesPage = () => {
                               />
                             )}
                           </div>
-                          <div>{detail.Sequence_no}</div>
+                          <div 
+                            className="transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {detail.Sequence_no}
+                          </div>
                           <div className="flex items-center justify-between">
-                            <span className="truncate">
+                            <span 
+                              className="truncate transition-colors"
+                              style={{ color: colors.utility.primaryText }}
+                            >
                               {detail.Description}
                             </span>
                             <div className="flex items-center gap-2">
@@ -587,7 +734,12 @@ const ListOfValuesPage = () => {
                                 size="sm"
                                 onClick={() => setEditingId(detail.id)}
                                 disabled={isProcessing}
-                                className="text-primary hover:text-primary/80"
+                                className="transition-colors hover:opacity-80"
+                                style={{
+                                  borderColor: colors.brand.primary + '40',
+                                  backgroundColor: colors.utility.secondaryBackground,
+                                  color: colors.brand.primary
+                                }}
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -597,7 +749,12 @@ const ListOfValuesPage = () => {
                                   size="sm"
                                   onClick={() => handleDelete(detail.id)}
                                   disabled={isProcessing}
-                                  className="text-destructive hover:text-destructive/80"
+                                  className="transition-colors hover:opacity-80"
+                                  style={{
+                                    borderColor: colors.semantic.error + '40',
+                                    backgroundColor: colors.utility.secondaryBackground,
+                                    color: colors.semantic.error
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -612,19 +769,35 @@ const ListOfValuesPage = () => {
 
                 {/* Add Form */}
                 {isAdding && (
-                  <div className="bg-card rounded-lg shadow-sm border-2 border-primary">
+                  <div 
+                    className="rounded-lg shadow-sm border-2 transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.brand.primary
+                    }}
+                  >
                     <div className="grid grid-cols-5 gap-4 px-4 py-3 items-center">
                       <Input
                         placeholder="Name"
                         value={newDetail.SubCatName}
                         onChange={(e) => setNewDetail(prev => ({ ...prev, SubCatName: e.target.value }))}
                         disabled={isProcessing}
+                        style={{
+                          borderColor: colors.utility.secondaryText + '40',
+                          backgroundColor: colors.utility.primaryBackground,
+                          color: colors.utility.primaryText
+                        }}
                       />
                       <Input
                         placeholder="Display Name"
                         value={newDetail.DisplayName}
                         onChange={(e) => setNewDetail(prev => ({ ...prev, DisplayName: e.target.value }))}
                         disabled={isProcessing}
+                        style={{
+                          borderColor: colors.utility.secondaryText + '40',
+                          backgroundColor: colors.utility.primaryBackground,
+                          color: colors.utility.primaryText
+                        }}
                       />
                       <div className="flex items-center gap-2">
                         <div 
@@ -648,6 +821,11 @@ const ListOfValuesPage = () => {
                           Sequence_no: e.target.value ? parseInt(e.target.value) : null 
                         }))}
                         disabled={isProcessing}
+                        style={{
+                          borderColor: colors.utility.secondaryText + '40',
+                          backgroundColor: colors.utility.primaryBackground,
+                          color: colors.utility.primaryText
+                        }}
                       />
                       <div className="flex items-center justify-between">
                         <Input
@@ -655,19 +833,33 @@ const ListOfValuesPage = () => {
                           value={newDetail.Description}
                           onChange={(e) => setNewDetail(prev => ({ ...prev, Description: e.target.value }))}
                           disabled={isProcessing}
+                          style={{
+                            borderColor: colors.utility.secondaryText + '40',
+                            backgroundColor: colors.utility.primaryBackground,
+                            color: colors.utility.primaryText
+                          }}
                         />
                         <div className="flex items-center ml-2">
                           <Button
                             variant="outline"
                             onClick={handleCancelAdd}
                             disabled={isProcessing}
+                            style={{
+                              borderColor: colors.utility.secondaryText + '40',
+                              backgroundColor: colors.utility.secondaryBackground,
+                              color: colors.utility.primaryText
+                            }}
                           >
                             Cancel
                           </Button>
                           <Button
                             onClick={handleSaveNew}
                             disabled={isProcessing}
-                            className="ml-2 bg-primary text-primary-foreground hover:bg-primary/90"
+                            className="ml-2 hover:opacity-90"
+                            style={{
+                              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                              color: '#FFFFFF'
+                            }}
                           >
                             Save
                           </Button>
@@ -679,8 +871,17 @@ const ListOfValuesPage = () => {
 
                 {/* Empty State */}
                 {categoryDetails.length === 0 && !isAdding && (
-                  <div className="bg-card rounded-lg shadow-sm border border-border p-8 text-center">
-                    <p className="text-muted-foreground">
+                  <div 
+                    className="rounded-lg shadow-sm border p-8 text-center transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.utility.primaryText + '20'
+                    }}
+                  >
+                    <p 
+                      className="transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       No values found for this category. Click "Add New Value" to create one.
                     </p>
                   </div>
@@ -688,8 +889,17 @@ const ListOfValuesPage = () => {
               </div>
             </div>
           ) : (
-            <div className="bg-card rounded-lg shadow-sm border border-border p-8 text-center">
-              <p className="text-muted-foreground">
+            <div 
+              className="rounded-lg shadow-sm border p-8 text-center transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.primaryText + '20'
+              }}
+            >
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Select a category from the left to view its values.
               </p>
             </div>

@@ -1,4 +1,4 @@
-// src/components/services/ServiceActionsCard.tsx
+// src/components/services/ServiceActionsCard.tsx - Theme Enabled Version
 import React, { useState } from 'react';
 import { Settings, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react';
 
@@ -34,14 +34,14 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
     <div className="bg-card rounded-lg shadow-sm border border-border p-4">
       <div className="flex items-center gap-2 mb-4">
         <Settings className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-base font-semibold">Service Actions</h3>
+        <h3 className="text-base font-semibold text-foreground">Service Actions</h3>
       </div>
       
       <div className="space-y-4">
         {/* Show Inactive Services Toggle */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Show inactive services</span>
+            <span className="text-sm font-medium text-foreground">Show inactive services</span>
             <button
               onClick={() => setShowInactiveServices(!showInactiveServices)}
               className="text-muted-foreground hover:text-foreground transition-colors"
@@ -61,7 +61,7 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
         {/* Show Upcoming Services Toggle */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Show upcoming services</span>
+            <span className="text-sm font-medium text-foreground">Show upcoming services</span>
             <button
               onClick={() => setShowUpcomingServices(!showUpcomingServices)}
               className="text-muted-foreground hover:text-foreground transition-colors"
@@ -81,8 +81,8 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
         {/* End All Services Section */}
         <div className="pt-4 border-t border-border">
           <div className="mb-3">
-            <h4 className="text-sm font-medium mb-1 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <h4 className="text-sm font-medium mb-1 flex items-center gap-2 text-foreground">
+              <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               End all services
             </h4>
             <p className="text-xs text-muted-foreground mb-3">
@@ -93,14 +93,14 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
           
           {showEndAllConfirmation ? (
             <div className="space-y-3">
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-red-800">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">
                       Are you sure?
                     </p>
-                    <p className="text-xs text-red-700 mt-1">
+                    <p className="text-xs text-red-700 dark:text-red-300 mt-1">
                       This will end all active services and stop recurring billing. 
                       This action cannot be undone.
                     </p>
@@ -117,7 +117,7 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
                 </button>
                 <button
                   onClick={() => setShowEndAllConfirmation(false)}
-                  className="flex-1 px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors text-sm"
+                  className="flex-1 px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors text-sm text-foreground"
                 >
                   Cancel
                 </button>
@@ -126,7 +126,7 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
           ) : (
             <button 
               onClick={handleEndAllServices}
-              className="w-full px-4 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors text-sm font-medium"
+              className="w-full px-4 py-2 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-sm font-medium"
             >
               End all services
             </button>
@@ -135,19 +135,19 @@ const ServiceActionsCard: React.FC<ServiceActionsCardProps> = ({
         
         {/* Service Statistics Summary */}
         <div className="pt-4 border-t border-border">
-          <h4 className="text-sm font-medium mb-3">Current Status</h4>
+          <h4 className="text-sm font-medium mb-3 text-foreground">Current Status</h4>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Active Services:</span>
-              <span className="font-medium text-green-600">5 running</span>
+              <span className="font-medium text-green-600 dark:text-green-400">5 running</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Renewal Due:</span>
-              <span className="font-medium text-orange-600">2 expiring</span>
+              <span className="font-medium text-orange-600 dark:text-orange-400">2 expiring</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Monthly Revenue:</span>
-              <span className="font-medium text-blue-600">₹45,000</span>
+              <span className="font-medium text-blue-600 dark:text-blue-400">₹45,000</span>
             </div>
           </div>
         </div>

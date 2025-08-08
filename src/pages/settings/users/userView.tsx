@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 type TabType = 'overview' | 'activity' | 'permissions';
 
@@ -32,6 +33,11 @@ const UserViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user: currentUser, currentTenant } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const { 
     getUser, 
     suspendUser, 
@@ -157,24 +163,34 @@ const UserViewPage: React.FC = () => {
   // Get action icon and color
   const getActionIcon = (action: string) => {
     const icons = {
-      login: { icon: Activity, color: 'text-green-600' },
-      logout: { icon: Activity, color: 'text-gray-600' },
-      password_changed: { icon: Key, color: 'text-blue-600' },
-      profile_updated: { icon: User, color: 'text-purple-600' },
-      failed_login: { icon: Shield, color: 'text-red-600' },
-      user_suspended: { icon: UserX, color: 'text-red-600' },
-      user_activated: { icon: Shield, color: 'text-green-600' },
-      role_assigned: { icon: Shield, color: 'text-blue-600' },
-      role_removed: { icon: Shield, color: 'text-orange-600' }
+      login: { icon: Activity, color: colors.semantic.success },
+      logout: { icon: Activity, color: colors.utility.secondaryText },
+      password_changed: { icon: Key, color: colors.brand.primary },
+      profile_updated: { icon: User, color: colors.brand.tertiary || colors.brand.primary },
+      failed_login: { icon: Shield, color: colors.semantic.error },
+      user_suspended: { icon: UserX, color: colors.semantic.error },
+      user_activated: { icon: Shield, color: colors.semantic.success },
+      role_assigned: { icon: Shield, color: colors.brand.primary },
+      role_removed: { icon: Shield, color: colors.semantic.warning || '#f59e0b' }
     };
-    return icons[action as keyof typeof icons] || { icon: Activity, color: 'text-gray-600' };
+    return icons[action as keyof typeof icons] || { icon: Activity, color: colors.utility.secondaryText };
   };
   
   if (loading) {
     return (
-      <div className="p-6 bg-muted/20 min-h-screen">
+      <div 
+        className="p-6 min-h-screen transition-colors duration-200"
+        style={{
+          background: isDarkMode 
+            ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+            : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+        }}
+      >
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 
+            className="h-8 w-8 animate-spin transition-colors" 
+            style={{ color: colors.brand.primary }}
+          />
         </div>
       </div>
     );
@@ -182,13 +198,30 @@ const UserViewPage: React.FC = () => {
   
   if (!user) {
     return (
-      <div className="p-6 bg-muted/20 min-h-screen">
+      <div 
+        className="p-6 min-h-screen transition-colors duration-200"
+        style={{
+          background: isDarkMode 
+            ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+            : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+        }}
+      >
         <div className="text-center py-12">
-          <User size={48} className="mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">User not found</h3>
+          <User 
+            size={48} 
+            className="mx-auto mb-4 transition-colors" 
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            User not found
+          </h3>
           <button
             onClick={handleBack}
-            className="text-primary hover:underline"
+            className="transition-colors hover:underline"
+            style={{ color: colors.brand.primary }}
           >
             Back to users
           </button>
@@ -198,20 +231,39 @@ const UserViewPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20 min-h-screen">
+    <div 
+      className="p-6 min-h-screen transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <button 
               onClick={handleBack} 
-              className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+              className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+              style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
             >
-              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+              <ArrowLeft 
+                className="h-5 w-5 transition-colors" 
+                style={{ color: colors.utility.secondaryText }}
+              />
             </button>
             <div>
-              <h1 className="text-2xl font-bold">User Profile</h1>
-              <p className="text-muted-foreground">
+              <h1 
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                User Profile
+              </h1>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 View and manage user information
               </p>
             </div>
@@ -220,7 +272,12 @@ const UserViewPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               onClick={handleExportData}
-              className="px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
+              className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
+              style={{
+                borderColor: colors.utility.primaryText + '40',
+                backgroundColor: colors.utility.secondaryBackground,
+                color: colors.utility.primaryText
+              }}
             >
               <Download size={16} />
               Export
@@ -230,7 +287,12 @@ const UserViewPage: React.FC = () => {
               <>
                 <button
                   onClick={handleEdit}
-                  className="px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
+                  className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
+                  style={{
+                    borderColor: colors.utility.primaryText + '40',
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText
+                  }}
                 >
                   <Edit size={16} />
                   Edit
@@ -240,7 +302,12 @@ const UserViewPage: React.FC = () => {
                   <button
                     onClick={handleSuspend}
                     disabled={submitting}
-                    className="px-3 py-2 border border-destructive text-destructive rounded-md hover:bg-destructive/10 transition-colors flex items-center gap-2"
+                    className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
+                    style={{
+                      borderColor: colors.semantic.error,
+                      color: colors.semantic.error,
+                      backgroundColor: colors.semantic.error + '10'
+                    }}
                   >
                     <UserX size={16} />
                     Suspend
@@ -251,7 +318,12 @@ const UserViewPage: React.FC = () => {
                   <button
                     onClick={handleActivate}
                     disabled={submitting}
-                    className="px-3 py-2 border border-green-600 text-green-600 rounded-md hover:bg-green-600/10 transition-colors flex items-center gap-2"
+                    className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
+                    style={{
+                      borderColor: colors.semantic.success,
+                      color: colors.semantic.success,
+                      backgroundColor: colors.semantic.success + '10'
+                    }}
                   >
                     <Shield size={16} />
                     Activate
@@ -263,23 +335,41 @@ const UserViewPage: React.FC = () => {
         </div>
         
         {/* User Info Header */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+        <div 
+          className="border rounded-lg p-6 mb-6 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.primaryText + '20'
+          }}
+        >
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-4">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl font-medium">
+              <div 
+                className="h-16 w-16 rounded-full flex items-center justify-center text-xl font-medium"
+                style={{
+                  backgroundColor: colors.brand.primary + '10',
+                  color: colors.brand.primary
+                }}
+              >
                 {user.first_name.charAt(0)}{user.last_name.charAt(0)}
               </div>
               
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-xl font-semibold">
+                  <h2 
+                    className="text-xl font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {user.first_name} {user.last_name}
                   </h2>
                   <UserStatusBadge status={user.status} size="sm" />
                   {user.role && <UserRoleBadge role={user.role} size="sm" />}
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div 
+                  className="flex items-center gap-4 text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   <span className="flex items-center gap-1">
                     <Mail size={14} />
                     {user.email}
@@ -293,7 +383,10 @@ const UserViewPage: React.FC = () => {
                   <span>Code: {user.user_code}</span>
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
+                <div 
+                  className="flex items-center gap-4 text-sm mt-2 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   <span className="flex items-center gap-1">
                     <Calendar size={14} />
                     Joined {formatDistanceToNow(new Date(user.created_at), { addSuffix: true })}
@@ -312,7 +405,12 @@ const UserViewPage: React.FC = () => {
               <button
                 onClick={handleResetPassword}
                 disabled={submitting}
-                className="px-3 py-1.5 text-sm border border-border rounded-md hover:bg-muted transition-colors"
+                className="px-3 py-1.5 text-sm border rounded-md transition-colors hover:opacity-80"
+                style={{
+                  borderColor: colors.utility.primaryText + '40',
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 Reset Password
               </button>
@@ -321,7 +419,10 @@ const UserViewPage: React.FC = () => {
         </div>
         
         {/* Tabs */}
-        <div className="border-b border-border">
+        <div 
+          className="border-b transition-colors"
+          style={{ borderColor: colors.utility.primaryText + '20' }}
+        >
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', label: 'Overview' },
@@ -334,9 +435,17 @@ const UserViewPage: React.FC = () => {
                 className={cn(
                   "py-2 px-1 border-b-2 font-medium text-sm transition-colors",
                   activeTab === tab.id
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "border-primary"
+                    : "border-transparent hover:opacity-80"
                 )}
+                style={{
+                  color: activeTab === tab.id 
+                    ? colors.brand.primary 
+                    : colors.utility.secondaryText,
+                  borderColor: activeTab === tab.id 
+                    ? colors.brand.primary 
+                    : 'transparent'
+                }}
               >
                 {tab.label}
               </button>
@@ -346,84 +455,207 @@ const UserViewPage: React.FC = () => {
       </div>
       
       {/* Tab Content */}
-      <div className="bg-card border border-border rounded-lg p-6">
+      <div 
+        className="border rounded-lg p-6 transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Profile Information */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Profile Information</h3>
+              <h3 
+                className="text-lg font-semibold mb-4 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Profile Information
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-                    <p className="mt-1">{user.first_name} {user.last_name}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Full Name
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.first_name} {user.last_name}
+                    </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Email Address</label>
-                    <p className="mt-1">{user.email}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Email Address
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.email}
+                    </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Mobile Number</label>
-                    <p className="mt-1">{user.mobile_number || 'Not provided'}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Mobile Number
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.mobile_number || 'Not provided'}
+                    </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">User Code</label>
-                    <p className="mt-1 font-mono">{user.user_code}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      User Code
+                    </label>
+                    <p 
+                      className="mt-1 font-mono transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.user_code}
+                    </p>
                   </div>
                 </div>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Department</label>
-                    <p className="mt-1">{user.department || 'Not assigned'}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Department
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.department || 'Not assigned'}
+                    </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Employee ID</label>
-                    <p className="mt-1">{user.employee_id || 'Not assigned'}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Employee ID
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.employee_id || 'Not assigned'}
+                    </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Location</label>
-                    <p className="mt-1 flex items-center gap-1">
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Location
+                    </label>
+                    <p 
+                      className="mt-1 flex items-center gap-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       <Globe size={14} />
                       {user.country_code || 'Not set'} • {user.timezone || 'Not set'}
                     </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Preferred Language</label>
-                    <p className="mt-1">{user.preferred_language?.toUpperCase() || 'EN'}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Preferred Language
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.preferred_language?.toUpperCase() || 'EN'}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
             
             {/* Security Information */}
-            <div className="pt-6 border-t border-border">
-              <h3 className="text-lg font-semibold mb-4">Security Information</h3>
+            <div 
+              className="pt-6 border-t transition-colors"
+              style={{ borderColor: colors.utility.primaryText + '20' }}
+            >
+              <h3 
+                className="text-lg font-semibold mb-4 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Security Information
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Last Login</label>
-                    <p className="mt-1">
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Last Login
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {user.last_login ? format(new Date(user.last_login), 'PPpp') : 'Never'}
                     </p>
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Total Logins</label>
-                    <p className="mt-1">{user.stats?.total_logins || 0}</p>
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Total Logins
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {user.stats?.total_logins || 0}
+                    </p>
                   </div>
                 </div>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Last Password Change</label>
-                    <p className="mt-1">
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Last Password Change
+                    </label>
+                    <p 
+                      className="mt-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {user.stats?.last_password_change 
                         ? format(new Date(user.stats.last_password_change), 'PP')
                         : 'Never'
@@ -432,11 +664,22 @@ const UserViewPage: React.FC = () => {
                   </div>
                   
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Failed Login Attempts</label>
-                    <p className="mt-1 flex items-center gap-2">
+                    <label 
+                      className="text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Failed Login Attempts
+                    </label>
+                    <p 
+                      className="mt-1 flex items-center gap-2 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
                       {user.stats?.failed_login_attempts || 0}
                       {user.stats?.last_failed_login && (
-                        <span className="text-sm text-muted-foreground">
+                        <span 
+                          className="text-sm transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
                           (Last: {formatDistanceToNow(new Date(user.stats.last_failed_login), { addSuffix: true })})
                         </span>
                       )}
@@ -450,10 +693,18 @@ const UserViewPage: React.FC = () => {
         
         {activeTab === 'activity' && (
           <div>
-            <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+            <h3 
+              className="text-lg font-semibold mb-4 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Recent Activity
+            </h3>
             {activityLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <Loader2 
+                  className="h-6 w-6 animate-spin transition-colors" 
+                  style={{ color: colors.brand.primary }}
+                />
               </div>
             ) : activityLog.length > 0 ? (
               <div className="space-y-3">
@@ -461,24 +712,43 @@ const UserViewPage: React.FC = () => {
                   const { icon: Icon, color } = getActionIcon(activity.action);
                   
                   return (
-                    <div key={activity.id} className="flex items-start space-x-3 py-3 border-b border-border last:border-0">
-                      <div className={cn("p-2 rounded-full bg-muted", color)}>
+                    <div 
+                      key={activity.id} 
+                      className="flex items-start space-x-3 py-3 border-b last:border-0 transition-colors"
+                      style={{ borderColor: colors.utility.primaryText + '20' }}
+                    >
+                      <div 
+                        className="p-2 rounded-full transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground + '80',
+                          color: color
+                        }}
+                      >
                         <Icon size={16} />
                       </div>
                       
                       <div className="flex-1">
-                        <p className="font-medium">
+                        <p 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
 {activity.action.split('_').map((word: string) =>
                             word.charAt(0).toUpperCase() + word.slice(1)
                           ).join(' ')}
                         </p>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                        <div 
+                          className="flex items-center gap-4 text-sm mt-1 transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
                           <span>{format(new Date(activity.timestamp || activity.created_at), 'PPpp')}</span>
                           {activity.ip_address && <span>IP: {activity.ip_address}</span>}
                           {activity.user_agent && <span>{activity.user_agent.split('/')[0]}</span>}
                         </div>
                         {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                          <div className="mt-2 text-sm text-muted-foreground">
+                          <div 
+                            className="mt-2 text-sm transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
                             {JSON.stringify(activity.metadata)}
                           </div>
                         )}
@@ -488,7 +758,10 @@ const UserViewPage: React.FC = () => {
                 })}
               </div>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
+              <div 
+                className="text-center py-8 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 No activity recorded
               </div>
             )}
@@ -497,14 +770,34 @@ const UserViewPage: React.FC = () => {
         
         {activeTab === 'permissions' && (
           <div>
-            <h3 className="text-lg font-semibold mb-4">User Permissions</h3>
+            <h3 
+              className="text-lg font-semibold mb-4 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              User Permissions
+            </h3>
             <div className="space-y-4">
-              <div className="p-4 bg-muted/50 rounded-lg">
+              <div 
+                className="p-4 rounded-lg transition-colors"
+                style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
+              >
                 <div className="flex items-center gap-2 mb-2">
-                  <Shield size={20} className="text-primary" />
-                  <span className="font-medium">Role: {user.role || 'No role assigned'}</span>
+                  <Shield 
+                    size={20} 
+                    className="transition-colors" 
+                    style={{ color: colors.brand.primary }}
+                  />
+                  <span 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Role: {user.role || 'No role assigned'}
+                  </span>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   {user.role 
                     ? `This user has ${user.role.toLowerCase()} privileges in the workspace.`
                     : 'This user has not been assigned any role yet.'
@@ -514,22 +807,50 @@ const UserViewPage: React.FC = () => {
               
               {user.assigned_roles && user.assigned_roles.length > 0 && (
                 <div>
-                  <h4 className="font-medium mb-3">Assigned Roles</h4>
+                  <h4 
+                    className="font-medium mb-3 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Assigned Roles
+                  </h4>
                   <div className="space-y-2">
                     {user.assigned_roles.map((role: any) => (
-                      <div key={role.id} className="p-3 bg-muted/30 rounded-md">
-                        <div className="font-medium">{role.name}</div>
+                      <div 
+                        key={role.id} 
+                        className="p-3 rounded-md transition-colors"
+                        style={{ backgroundColor: colors.utility.primaryBackground + '30' }}
+                      >
+                        <div 
+                          className="font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {role.name}
+                        </div>
                         {role.description && (
-                          <p className="text-sm text-muted-foreground mt-1">{role.description}</p>
+                          <p 
+                            className="text-sm mt-1 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
+                            {role.description}
+                          </p>
                         )}
                         {role.permissions && role.permissions.length > 0 && (
                           <div className="mt-2">
-                            <p className="text-sm font-medium mb-1">Permissions:</p>
+                            <p 
+                              className="text-sm font-medium mb-1 transition-colors"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              Permissions:
+                            </p>
                             <div className="flex flex-wrap gap-2">
                               {role.permissions.map((permission: string) => (
                                 <span
                                   key={permission}
-                                  className="text-xs px-2 py-1 bg-muted rounded-md font-mono"
+                                  className="text-xs px-2 py-1 rounded-md font-mono transition-colors"
+                                  style={{
+                                    backgroundColor: colors.utility.primaryBackground + '80',
+                                    color: colors.utility.primaryText
+                                  }}
                                 >
                                   {permission}
                                 </span>
@@ -544,7 +865,10 @@ const UserViewPage: React.FC = () => {
               )}
               
               {(!user.assigned_roles || user.assigned_roles.length === 0) && (
-                <div className="text-center py-8 text-muted-foreground">
+                <div 
+                  className="text-center py-8 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   No roles or permissions assigned
                 </div>
               )}

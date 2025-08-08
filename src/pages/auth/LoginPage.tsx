@@ -16,7 +16,7 @@ const LoginPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -26,6 +26,9 @@ const LoginPage: React.FC = () => {
   // Check if Google OAuth is enabled
   const isGoogleAuthEnabled = import.meta.env.VITE_ENABLE_GOOGLE_AUTH !== 'false';
 
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Track page view when component mounts
   useEffect(() => {
     analyticsService.trackEvent(AUTH_EVENTS.LOGIN, {
@@ -34,7 +37,7 @@ const LoginPage: React.FC = () => {
     });
   }, []);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated - UPDATED TO /dashboard
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
@@ -50,7 +53,7 @@ const LoginPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#10B981',
+          background: colors.semantic.success,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -59,7 +62,7 @@ const LoginPage: React.FC = () => {
       // Clear the state to prevent showing the message again on refresh
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, navigate, location.pathname]);
+  }, [location.state, navigate, location.pathname, colors.semantic.success]);
 
   // Show error toast when error is present
   useEffect(() => {
@@ -69,14 +72,14 @@ const LoginPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
         },
       });
     }
-  }, [error]);
+  }, [error, colors.semantic.error]);
 
   // Clear any errors when form changes
   useEffect(() => {
@@ -159,7 +162,7 @@ const LoginPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -192,104 +195,161 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-200 ${
-      isDarkMode 
-        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-indigo-900' 
-        : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'
-    }`}>
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
+      }}
+    >
       {/* Background Pattern */}
-      <div className={`absolute inset-0 opacity-5 ${
-        isDarkMode ? 'opacity-10' : 'opacity-5'
-      }`} style={{
-        backgroundImage: `
-          linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
-          linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
-        `,
-        backgroundSize: '20px 20px'
-      }}></div>
+      <div 
+        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+        style={{
+          backgroundImage: `
+            linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
+            linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px'
+        }}
+      />
       
       <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative z-10">
         
         {/* Left Side - Branding & Features */}
         <div className="hidden lg:block space-y-8">
-          {/* Logo & Brand */}
+          {/* Logo & Brand - UPDATED: Link to landing page */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Shield className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className={`text-3xl font-bold transition-colors ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>ContractNest</h1>
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>Contract Management Made Simple</p>
-              </div>
+              <Link to="/" className="flex items-center space-x-3">
+                <div 
+                  className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                  style={{
+                    background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                  }}
+                >
+                  <Shield className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 
+                    className="text-3xl font-bold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    ContractNest
+                  </h1>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Contract Management Made Simple
+                  </p>
+                </div>
+              </Link>
             </div>
           </div>
 
           {/* Value Proposition */}
           <div className="space-y-6">
-            <h2 className={`text-2xl font-semibold transition-colors ${
-              isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <h2 
+              className="text-2xl font-semibold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Welcome back to your contract hub
             </h2>
             
             <div className="space-y-4">
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                <div 
+                  className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
+                  style={{ backgroundColor: `${colors.semantic.success}20` }}
+                >
+                  <div 
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: colors.semantic.success }}
+                  />
                 </div>
                 <div>
-                  <h3 className={`font-medium transition-colors ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>Track All Contracts</h3>
-                  <p className={`text-sm transition-colors ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>Centralized dashboard for all your service contracts</p>
+                  <h3 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Track All Contracts
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Centralized dashboard for all your service contracts
+                  </p>
                 </div>
               </div>
               
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                <div 
+                  className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
+                  style={{ backgroundColor: `${colors.brand.primary}20` }}
+                >
+                  <div 
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: colors.brand.primary }}
+                  />
                 </div>
                 <div>
-                  <h3 className={`font-medium transition-colors ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>Never Miss Renewals</h3>
-                  <p className={`text-sm transition-colors ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>Smart notifications for upcoming deadlines</p>
+                  <h3 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Never Miss Renewals
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Smart notifications for upcoming deadlines
+                  </p>
                 </div>
               </div>
               
               <div className="flex items-start space-x-3">
-                <div className="w-6 h-6 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mt-0.5">
-                  <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                <div 
+                  className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
+                  style={{ backgroundColor: `${colors.brand.tertiary}20` }}
+                >
+                  <div 
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: colors.brand.tertiary }}
+                  />
                 </div>
                 <div>
-                  <h3 className={`font-medium transition-colors ${
-                    isDarkMode ? 'text-white' : 'text-gray-900'
-                  }`}>Team Collaboration</h3>
-                  <p className={`text-sm transition-colors ${
-                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                  }`}>Work together seamlessly with your team</p>
+                  <h3 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Team Collaboration
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Work together seamlessly with your team
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Free Contracts Banner */}
-            <div className={`rounded-lg p-4 border transition-colors ${
-              isDarkMode 
-                ? 'bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-green-700' 
-                : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
-            }`}>
-              <div className={`flex items-center space-x-2 transition-colors ${
-                isDarkMode ? 'text-green-400' : 'text-green-700'
-              }`}>
+            <div 
+              className="rounded-lg p-4 border transition-colors"
+              style={{
+                background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
+                borderColor: `${colors.semantic.success}40`
+              }}
+            >
+              <div 
+                className="flex items-center space-x-2 transition-colors"
+                style={{ color: colors.semantic.success }}
+              >
                 <Shield className="w-4 h-4" />
                 <span className="text-sm font-medium">Your first 3 contracts are free!</span>
               </div>
@@ -299,55 +359,88 @@ const LoginPage: React.FC = () => {
 
         {/* Right Side - Login Form */}
         <div className="w-full max-w-md mx-auto lg:mx-0">
-          {/* Mobile Logo */}
+          {/* Mobile Logo - UPDATED: Link to landing page */}
           <div className="lg:hidden text-center mb-8">
-            <div className="flex items-center justify-center space-x-3 mb-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+            <Link to="/" className="flex items-center justify-center space-x-3 mb-2">
+              <div 
+                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                style={{
+                  background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
+              >
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <h1 className={`text-2xl font-bold transition-colors ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>ContractNest</h1>
-            </div>
-            <p className={`text-sm transition-colors ${
-              isDarkMode ? 'text-gray-300' : 'text-gray-600'
-            }`}>Contract Management Made Simple</p>
+              <h1 
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                ContractNest
+              </h1>
+            </Link>
+            <p 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Contract Management Made Simple
+            </p>
           </div>
 
           {/* Login Card */}
-          <div className={`backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors ${
-            isDarkMode 
-              ? 'bg-gray-800/70 border-gray-700/20' 
-              : 'bg-white/70 border-white/20'
-          }`}>
+          <div 
+            className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryBackground}70`,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
             <div className="text-center mb-8">
-              <h2 className={`text-2xl font-bold mb-2 transition-colors ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>Welcome Back</h2>
-              <p className={`transition-colors ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-              }`}>Sign in to manage your contracts</p>
+              <h2 
+                className="text-2xl font-bold mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Welcome Back
+              </h2>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Sign in to manage your contracts
+              </p>
             </div>
 
             {/* Success Message */}
             {message && (
-              <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
-                <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>
+              <div 
+                className="mb-6 p-3 border rounded-lg"
+                style={{
+                  backgroundColor: `${colors.semantic.success}10`,
+                  borderColor: `${colors.semantic.success}40`
+                }}
+              >
+                <p 
+                  className="text-sm"
+                  style={{ color: colors.semantic.success }}
+                >
+                  {message}
+                </p>
               </div>
             )}
 
-            <div onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div>
-                <label htmlFor="email" className={`block text-sm font-medium mb-2 transition-colors ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                }`}>
+                <label 
+                  htmlFor="email" 
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                  }`} />
+                  <Mail 
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                   <input
                     id="email"
                     name="email"
@@ -356,11 +449,13 @@ const LoginPage: React.FC = () => {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                      isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                    }`}
+                    className="w-full pl-10 pr-3 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: colors.utility.secondaryText + '40',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     placeholder="Enter your email"
                     disabled={isLoading || isGoogleLoading}
                   />
@@ -369,15 +464,18 @@ const LoginPage: React.FC = () => {
 
               {/* Password Field */}
               <div>
-                <label htmlFor="password" className={`block text-sm font-medium mb-2 transition-colors ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                }`}>
+                <label 
+                  htmlFor="password" 
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                  }`} />
+                  <Lock 
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                   <input
                     id="password"
                     name="password"
@@ -386,21 +484,20 @@ const LoginPage: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                      isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                    }`}
+                    className="w-full pl-10 pr-12 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: colors.utility.secondaryText + '40',
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     placeholder="Enter your password"
                     disabled={isLoading || isGoogleLoading}
                   />
                   <button
                     type="button"
-                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors ${
-                      isDarkMode 
-                        ? 'text-gray-400 hover:text-gray-200' 
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
                     onClick={togglePasswordVisibility}
                     disabled={isLoading || isGoogleLoading}
                   >
@@ -414,7 +511,8 @@ const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleForgotPasswordClick}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium transition-colors"
+                  className="text-sm font-medium transition-colors hover:opacity-80"
+                  style={{ color: colors.brand.primary }}
                 >
                   Forgot password?
                 </button>
@@ -423,9 +521,12 @@ const LoginPage: React.FC = () => {
               {/* Sign In Button */}
               <button
                 type="submit"
-                onClick={handleSubmit}
                 disabled={isLoading || isGoogleLoading}
-                className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
+                className="w-full py-3 px-4 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2 hover:opacity-90"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
               >
                 {isLoading ? (
                   <>
@@ -439,21 +540,28 @@ const LoginPage: React.FC = () => {
                   </>
                 )}
               </button>
-            </div>
+            </form>
 
             {/* Divider - Only show if Google OAuth is enabled */}
             {isGoogleAuthEnabled && (
               <div className="my-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div className={`w-full border-t transition-colors ${
-                      isDarkMode ? 'border-gray-600' : 'border-gray-300'
-                    }`}></div>
+                    <div 
+                      className="w-full border-t transition-colors"
+                      style={{ borderColor: colors.utility.secondaryText + '40' }}
+                    />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className={`px-2 transition-colors ${
-                      isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'
-                    }`}>Or continue with</span>
+                    <span 
+                      className="px-2 transition-colors"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.secondaryText
+                      }}
+                    >
+                      Or continue with
+                    </span>
                   </div>
                 </div>
               </div>
@@ -465,15 +573,20 @@ const LoginPage: React.FC = () => {
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={isGoogleLoading || isLoading}
-                className={`w-full flex items-center justify-center px-4 py-3 border rounded-lg shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ${
-                  isDarkMode
-                    ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                }`}
+                className="w-full flex items-center justify-center px-4 py-3 border rounded-lg shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:opacity-90"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
               >
                 {isGoogleLoading ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                    <div 
+                      className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                      style={{ borderColor: colors.utility.secondaryText }}
+                    />
                     Connecting to Google...
                   </>
                 ) : (
@@ -492,13 +605,15 @@ const LoginPage: React.FC = () => {
 
             {/* Sign Up Link */}
             <div className="mt-6 text-center">
-              <p className={`text-sm transition-colors ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-              }`}>
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Don't have an account?{' '}
                 <Link 
                   to="/register" 
-                  className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                  className="font-medium transition-colors hover:opacity-80"
+                  style={{ color: colors.brand.primary }}
                   onClick={() => analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_START, { source: 'login_page' })}
                 >
                   Start your free trial
@@ -509,9 +624,10 @@ const LoginPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p className={`text-xs flex items-center justify-center space-x-1 transition-colors ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-            }`}>
+            <p 
+              className="text-xs flex items-center justify-center space-x-1 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               <Shield className="w-3 h-3" />
               <span>Your data is secured with enterprise-grade encryption</span>
             </p>

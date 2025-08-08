@@ -1,6 +1,6 @@
-// src/components/contracts/RecentContractsCard.tsx
+// src/components/contracts/RecentContractsCard.tsx - Theme Enabled Version
 import React from 'react';
-import { Clock, FileText, Send, MessageSquare, CheckCircle, Eye, Edit } from 'lucide-react';
+import { Clock, FileText, Send, MessageSquare, CheckCircle, Eye, Edit, ExternalLink } from 'lucide-react';
 
 interface RecentContractsCardProps {
   contactId: string;
@@ -61,43 +61,49 @@ const RecentContractsCard: React.FC<RecentContractsCardProps> = ({ contactId }) 
       case 'draft':
         return { 
           label: 'Draft', 
-          color: 'text-gray-600', 
-          bgColor: 'bg-gray-100',
+          textColor: 'text-gray-700 dark:text-gray-300', 
+          bgColor: 'bg-gray-100 dark:bg-gray-900/30',
+          borderColor: 'border-gray-200 dark:border-gray-700',
           icon: FileText 
         };
       case 'sent':
         return { 
           label: 'Sent', 
-          color: 'text-blue-600', 
-          bgColor: 'bg-blue-100',
+          textColor: 'text-blue-700 dark:text-blue-300', 
+          bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+          borderColor: 'border-blue-200 dark:border-blue-700',
           icon: Send 
         };
       case 'negotiation':
         return { 
           label: 'Negotiation', 
-          color: 'text-orange-600', 
-          bgColor: 'bg-orange-100',
+          textColor: 'text-orange-700 dark:text-orange-300', 
+          bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+          borderColor: 'border-orange-200 dark:border-orange-700',
           icon: MessageSquare 
         };
       case 'inForce':
         return { 
           label: 'In Force', 
-          color: 'text-green-600', 
-          bgColor: 'bg-green-100',
+          textColor: 'text-green-700 dark:text-green-300', 
+          bgColor: 'bg-green-100 dark:bg-green-900/30',
+          borderColor: 'border-green-200 dark:border-green-700',
           icon: CheckCircle 
         };
       case 'completed':
         return { 
           label: 'Completed', 
-          color: 'text-purple-600', 
-          bgColor: 'bg-purple-100',
+          textColor: 'text-purple-700 dark:text-purple-300', 
+          bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+          borderColor: 'border-purple-200 dark:border-purple-700',
           icon: CheckCircle 
         };
       default:
         return { 
           label: 'Unknown', 
-          color: 'text-gray-600', 
-          bgColor: 'bg-gray-100',
+          textColor: 'text-muted-foreground', 
+          bgColor: 'bg-muted',
+          borderColor: 'border-border',
           icon: FileText 
         };
     }
@@ -119,70 +125,110 @@ const RecentContractsCard: React.FC<RecentContractsCardProps> = ({ contactId }) 
   };
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border p-6">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="bg-card rounded-lg shadow-sm border border-border p-6 hover:shadow-md transition-shadow">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-6">
         <Clock className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-lg font-semibold">Recent Contract Activity</h3>
+        <h3 className="text-lg font-semibold text-foreground">Recent Contract Activity</h3>
       </div>
       
-      <div className="space-y-4">
-        {recentContracts.map((contract) => {
-          const statusConfig = getStatusConfig(contract.status);
-          const StatusIcon = statusConfig.icon;
-          
-          return (
-            <div key={contract.id} className="p-4 rounded-lg border border-border hover:border-primary/50 hover:shadow-md transition-all">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h4 className="font-medium text-foreground truncate">
-                      {contract.title}
-                    </h4>
-                    <span className={`
-                      inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-                      ${statusConfig.color} ${statusConfig.bgColor}
-                    `}>
-                      <StatusIcon className="h-3 w-3" />
-                      {statusConfig.label}
-                    </span>
+      {/* Contracts List */}
+      {recentContracts.length === 0 ? (
+        // Empty state
+        <div className="text-center py-8">
+          <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground mb-2">No recent contract activity</p>
+          <p className="text-xs text-muted-foreground">
+            Contract activities will appear here as they occur
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {recentContracts.map((contract, index) => {
+            const statusConfig = getStatusConfig(contract.status);
+            const StatusIcon = statusConfig.icon;
+            
+            return (
+              <div 
+                key={contract.id} 
+                className="group p-4 rounded-lg border border-border hover:border-primary/50 hover:shadow-md transition-all duration-200"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    {/* Title and Status */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <h4 className="font-medium text-foreground truncate flex-1">
+                        {contract.title}
+                      </h4>
+                      <span className={`
+                        inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border
+                        ${statusConfig.textColor} ${statusConfig.bgColor} ${statusConfig.borderColor}
+                      `}>
+                        <StatusIcon className="h-3 w-3" />
+                        {statusConfig.label}
+                      </span>
+                    </div>
+                    
+                    {/* Value and Time */}
+                    <div className="flex items-center gap-4 mb-2">
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        {contract.value}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatRelativeTime(contract.lastActivity)}
+                      </span>
+                    </div>
+                    
+                    {/* Description */}
+                    <p className="text-sm text-muted-foreground">
+                      {contract.description}
+                    </p>
+                    
+                    {/* Timeline indicator */}
+                    {index < recentContracts.length - 1 && (
+                      <div className="absolute left-8 top-16 w-px h-8 bg-border opacity-50" />
+                    )}
                   </div>
-                  <div className="flex items-center gap-4 mb-2">
-                    <span className="text-sm font-semibold text-green-600">
-                      {contract.value}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatRelativeTime(contract.lastActivity)}
-                    </span>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-1 ml-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      className="p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      title="View contract"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                    <button 
+                      className="p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      title="Edit contract"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button 
+                      className="p-2 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {contract.description}
-                  </p>
-                </div>
-                
-                <div className="flex gap-1 ml-4">
-                  <button 
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="View contract"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                  <button 
-                    className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="Edit contract"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
       
-      <div className="mt-4 pt-4 border-t border-border">
-        <button className="text-sm text-primary hover:underline">
-          View all contracts
-        </button>
+      {/* Footer Actions */}
+      <div className="mt-6 pt-4 border-t border-border">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            {recentContracts.length} recent activities
+          </div>
+          <button className="text-sm text-primary hover:underline transition-colors flex items-center gap-1">
+            View all contracts
+            <ExternalLink className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     </div>
   );

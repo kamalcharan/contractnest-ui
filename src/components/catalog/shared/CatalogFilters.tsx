@@ -1,7 +1,7 @@
 // src/components/catalog/shared/CatalogFilters.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { Filter, ChevronDown, Check, Calendar, DollarSign, Tag } from 'lucide-react';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   CATALOG_ITEM_STATUS,
   CATALOG_ITEM_STATUS_LABELS,
@@ -26,7 +26,6 @@ interface FilterSection {
   options: Array<{
     value: string;
     label: string;
-    count?: number;
   }>;
 }
 
@@ -35,7 +34,11 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
   onChange,
   catalogType
 }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors - EXACT same pattern as LoginPage
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -68,17 +71,17 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
   // Get recommended pricing types for current catalog type
   const recommendedPricingTypes = RECOMMENDED_PRICING_BY_TYPE[catalogType] || [];
   
-  // Build filter sections
+  // Build filter sections - no mock counts, API-ready
   const filterSections: FilterSection[] = [
     {
       id: 'status',
       label: 'Status',
       icon: Tag,
       options: [
-        { value: 'all', label: 'All Statuses', count: 150 },
-        { value: CATALOG_ITEM_STATUS.ACTIVE, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.ACTIVE], count: 120 },
-        { value: CATALOG_ITEM_STATUS.INACTIVE, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.INACTIVE], count: 25 },
-        { value: CATALOG_ITEM_STATUS.DRAFT, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.DRAFT], count: 5 }
+        { value: 'all', label: 'All Statuses' },
+        { value: CATALOG_ITEM_STATUS.ACTIVE, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.ACTIVE] },
+        { value: CATALOG_ITEM_STATUS.INACTIVE, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.INACTIVE] },
+        { value: CATALOG_ITEM_STATUS.DRAFT, label: CATALOG_ITEM_STATUS_LABELS[CATALOG_ITEM_STATUS.DRAFT] }
       ]
     },
     {
@@ -86,11 +89,10 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
       label: 'Pricing Type',
       icon: DollarSign,
       options: [
-        { value: '', label: 'All Pricing Types', count: 150 },
+        { value: '', label: 'All Pricing Types' },
         ...recommendedPricingTypes.map(type => ({
           value: type,
-          label: PRICING_TYPE_LABELS[type],
-          count: Math.floor(Math.random() * 50) + 10
+          label: PRICING_TYPE_LABELS[type]
         }))
       ]
     },
@@ -99,9 +101,9 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
       label: 'Billing Mode',
       icon: Calendar,
       options: [
-        { value: '', label: 'All Billing Modes', count: 150 },
-        { value: BILLING_MODES.AUTOMATIC, label: BILLING_MODE_LABELS[BILLING_MODES.AUTOMATIC], count: 80 },
-        { value: BILLING_MODES.MANUAL, label: BILLING_MODE_LABELS[BILLING_MODES.MANUAL], count: 70 }
+        { value: '', label: 'All Billing Modes' },
+        { value: BILLING_MODES.AUTOMATIC, label: BILLING_MODE_LABELS[BILLING_MODES.AUTOMATIC] },
+        { value: BILLING_MODES.MANUAL, label: BILLING_MODE_LABELS[BILLING_MODES.MANUAL] }
       ]
     }
   ];
@@ -141,20 +143,23 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
       {/* Filter Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
-          isDarkMode
-            ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700'
-            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-        } ${isOpen ? 'ring-2 ring-blue-500/20 border-blue-500' : ''}`}
+        className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 border ${
+          isOpen ? 'ring-2' : ''
+        }`}
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: isOpen ? colors.brand.primary : `${colors.utility.primaryText}20`,
+          color: colors.utility.primaryText,
+          '--tw-ring-color': `${colors.brand.primary}20`
+        } as React.CSSProperties}
       >
         <Filter className="w-4 h-4" />
         <span>Filters</span>
         {activeFilterCount > 0 && (
-          <span className={`px-2 py-0.5 text-xs rounded-full ${
-            isDarkMode 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-blue-100 text-blue-700'
-          }`}>
+          <span 
+            className="px-2 py-0.5 text-xs rounded-full text-white"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
             {activeFilterCount}
           </span>
         )}
@@ -163,27 +168,30 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
       
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className={`absolute right-0 mt-2 w-80 rounded-lg shadow-xl z-50 ${
-          isDarkMode ? 'bg-gray-800 border border-gray-700' : 'bg-white border border-gray-200'
-        }`}>
+        <div 
+          className="absolute right-0 mt-2 w-80 rounded-lg shadow-xl z-50 border"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
+        >
           {/* Header */}
-          <div className={`px-4 py-3 border-b ${
-            isDarkMode ? 'border-gray-700' : 'border-gray-200'
-          }`}>
+          <div 
+            className="px-4 py-3 border-b"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          >
             <div className="flex items-center justify-between">
-              <h3 className={`text-sm font-semibold ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <h3 
+                className="text-sm font-semibold"
+                style={{ color: colors.utility.primaryText }}
+              >
                 Filter Options
               </h3>
               {activeFilterCount > 0 && (
                 <button
                   onClick={clearAllFilters}
-                  className={`text-xs font-medium ${
-                    isDarkMode 
-                      ? 'text-blue-400 hover:text-blue-300' 
-                      : 'text-blue-600 hover:text-blue-700'
-                  }`}
+                  className="text-xs font-medium hover:opacity-80 transition-all"
+                  style={{ color: colors.brand.primary }}
                 >
                   Clear all
                 </button>
@@ -203,11 +211,11 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
                   {/* Section Header */}
                   <button
                     onClick={() => handleSectionClick(section.id)}
-                    className={`w-full px-4 py-2 flex items-center justify-between transition-colors ${
-                      isDarkMode 
-                        ? 'hover:bg-gray-700 text-gray-300' 
-                        : 'hover:bg-gray-50 text-gray-700'
-                    }`}
+                    className="w-full px-4 py-2 flex items-center justify-between transition-all hover:opacity-80"
+                    style={{ 
+                      backgroundColor: 'transparent',
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <div className="flex items-center space-x-3">
                       <Icon className="w-4 h-4" />
@@ -220,9 +228,10 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
                   
                   {/* Section Options */}
                   {isActive && (
-                    <div className={`px-4 py-2 space-y-1 ${
-                      isDarkMode ? 'bg-gray-750' : 'bg-gray-50'
-                    }`}>
+                    <div 
+                      className="px-4 py-2 space-y-1"
+                      style={{ backgroundColor: `${colors.utility.primaryText}05` }}
+                    >
                       {section.options.map((option) => {
                         const isSelected = currentValue === option.value || 
                           (!currentValue && option.value === 'all') ||
@@ -232,27 +241,26 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
                           <button
                             key={option.value}
                             onClick={() => handleFilterChange(section.id, option.value)}
-                            className={`w-full px-3 py-2 text-left text-sm rounded-md flex items-center justify-between transition-colors ${
+                            className={`w-full px-3 py-2 text-left text-sm rounded-md flex items-center justify-between transition-all`}
+                            style={
                               isSelected
-                                ? isDarkMode 
-                                  ? 'bg-gray-700 text-white' 
-                                  : 'bg-blue-50 text-blue-700'
-                                : isDarkMode
-                                  ? 'hover:bg-gray-700 text-gray-300'
-                                  : 'hover:bg-gray-100 text-gray-700'
-                            }`}
+                                ? {
+                                    backgroundColor: `${colors.brand.primary}10`,
+                                    color: colors.brand.primary
+                                  }
+                                : {
+                                    backgroundColor: 'transparent',
+                                    color: colors.utility.primaryText
+                                  }
+                            }
                           >
                             <span>{option.label}</span>
-                            <div className="flex items-center space-x-2">
-                              {option.count !== undefined && (
-                                <span className={`text-xs ${
-                                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                                }`}>
-                                  {option.count}
-                                </span>
-                              )}
-                              {isSelected && <Check className="w-4 h-4" />}
-                            </div>
+                            {isSelected && (
+                              <Check 
+                                className="w-4 h-4"
+                                style={{ color: colors.brand.primary }}
+                              />
+                            )}
                           </button>
                         );
                       })}
@@ -264,14 +272,14 @@ const CatalogFilters: React.FC<CatalogFiltersProps> = ({
           </div>
           
           {/* Advanced Filters Link */}
-          <div className={`px-4 py-3 border-t ${
-            isDarkMode ? 'border-gray-700' : 'border-gray-200'
-          }`}>
-            <button className={`text-sm font-medium ${
-              isDarkMode 
-                ? 'text-blue-400 hover:text-blue-300' 
-                : 'text-blue-600 hover:text-blue-700'
-            }`}>
+          <div 
+            className="px-4 py-3 border-t"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          >
+            <button 
+              className="text-sm font-medium hover:opacity-80 transition-all"
+              style={{ color: colors.brand.primary }}
+            >
               Advanced filters →
             </button>
           </div>

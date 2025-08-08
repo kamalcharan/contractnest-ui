@@ -1,7 +1,8 @@
-// src/pages/settings/integrations/index.tsx
+// src/pages/settings/integrations/index.tsx - Theme Integrated Version
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { useIntegrations } from '@/hooks/useIntegrations';
 import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
@@ -20,6 +21,7 @@ import {
 
 const IntegrationsPage = () => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
   const { isLive } = useAuth();
   const { 
     loading, 
@@ -31,6 +33,9 @@ const IntegrationsPage = () => {
     testConnection,
     toggleIntegrationStatus
   } = useIntegrations();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const [groupedData, setGroupedData] = useState<Record<string, any>>({});
   const [loadingTypes, setLoadingTypes] = useState<Set<string>>(new Set());
@@ -241,18 +246,35 @@ const IntegrationsPage = () => {
   };
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+    >
       {/* Page Header */}
       <div className="flex items-center mb-8">
         <button 
           onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.utility.secondaryText + '20' }}
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Integrations</h1>
-          <p className="text-muted-foreground">Configure and manage your third-party integrations</p>
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Integrations
+          </h1>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Configure and manage your third-party integrations
+          </p>
         </div>
       </div>
       
@@ -263,7 +285,12 @@ const IntegrationsPage = () => {
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
               <LoadingSpinner size="lg" color="primary" />
-              <p className="mt-4 text-muted-foreground">Loading integrations...</p>
+              <p 
+                className="mt-4 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Loading integrations...
+              </p>
             </div>
           </div>
         ) : (
@@ -275,10 +302,26 @@ const IntegrationsPage = () => {
               return (
                 <div key={typeData.integration_type} className="space-y-4">
                   <div>
-                    <h2 className="text-xl font-bold">{typeData.display_name}</h2>
-                    <p className="text-sm text-muted-foreground">{typeData.description}</p>
+                    <h2 
+                      className="text-xl font-bold transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {typeData.display_name}
+                    </h2>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {typeData.description}
+                    </p>
                   </div>
-                  <div className="flex items-center justify-center py-8 bg-card rounded-lg border border-border">
+                  <div 
+                    className="flex items-center justify-center py-8 rounded-lg border transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.utility.primaryText + '20'
+                    }}
+                  >
                     <LoadingSpinner size="md" color="primary" />
                   </div>
                 </div>
@@ -309,9 +352,23 @@ const IntegrationsPage = () => {
         )}
         
         {!loading && integrationTypes.length === 0 && (
-          <div className="bg-card rounded-lg shadow-sm border border-border p-10 text-center">
-            <h3 className="text-lg font-medium mb-2">No Integrations Available</h3>
-            <p className="text-muted-foreground mb-6">
+          <div 
+            className="rounded-lg shadow-sm border p-10 text-center transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
+            <h3 
+              className="text-lg font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              No Integrations Available
+            </h3>
+            <p 
+              className="mb-6 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               There are currently no integrations available. Please check back later.
             </p>
           </div>

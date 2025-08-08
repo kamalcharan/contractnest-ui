@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { Plus, Trash2, Info, ChevronDown, Bell, Edit } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { 
   notificationItems, 
   NotificationMethodType,
@@ -33,6 +34,9 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     getValues,
     formState: { errors }
   } = useFormContext();
+  
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Watch plan type and currencies - FIXED: Added proper typing
   const watchPlanType = watch('planType') as string;
@@ -370,14 +374,29 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
     <div className="space-y-6" onClick={(e) => e.stopPropagation()}>
       {/* Edit Mode Notice */}
       {isEditMode && (
-        <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-900/20">
+        <div 
+          className="p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: `${colors.semantic.warning || '#F59E0B'}10`,
+            borderColor: `${colors.semantic.warning || '#F59E0B'}20`
+          }}
+        >
           <div className="flex items-start">
-            <Bell className="h-5 w-5 mr-3 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <Bell 
+              className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5"
+              style={{ color: colors.semantic.warning || '#F59E0B' }}
+            />
             <div>
-              <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
+              <p 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.semantic.warning || '#F59E0B' }}
+              >
                 Editing Notification Configuration
               </p>
-              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+              <p 
+                className="mt-1 text-sm transition-colors"
+                style={{ color: colors.semantic.warning || '#F59E0B' }}
+              >
                 Changes to notification credits and pricing will create a new plan version. 
                 You can modify credit allocations and unit prices for different notification methods.
               </p>
@@ -387,7 +406,10 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       )}
 
       <div className="mb-4">
-        <p className="text-sm text-muted-foreground">
+        <p 
+          className="text-sm transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
           Configure notification credits included in this plan. Each {watchPlanType === 'Per User' ? 'user' : 'contract'} will receive these credits as part of the plan.
           {isEditMode && ' Changes will create a new version of this plan.'}
         </p>
@@ -395,7 +417,10 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       
       {/* Currency Tabs */}
       {watchSupportedCurrencies?.length > 0 && (
-        <div className="border-b border-border mb-4">
+        <div 
+          className="border-b mb-4 transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
           <div className="flex overflow-x-auto">
             {watchSupportedCurrencies.map((currencyCode: string) => {
               const isActive = selectedCurrency === currencyCode;
@@ -405,12 +430,24 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
                 <button
                   key={currencyCode}
                   type="button"
-                  className={`px-4 py-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                    isActive 
-                      ? 'border-primary text-primary' 
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-                  }`}
+                  className="px-4 py-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors"
+                  style={{
+                    borderBottomColor: isActive ? colors.brand.primary : 'transparent',
+                    color: isActive ? colors.brand.primary : colors.utility.secondaryText
+                  }}
                   onClick={(e) => handleCurrencyTabClick(e, currencyCode)}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = colors.utility.primaryText;
+                      e.currentTarget.style.borderBottomColor = `${colors.utility.primaryText}20`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.color = colors.utility.secondaryText;
+                      e.currentTarget.style.borderBottomColor = 'transparent';
+                    }
+                  }}
                 >
                   {getCurrencySymbol(currencyCode)} {currencyCode}
                   {isDefault && <span className="ml-1 text-xs">(Default)</span>}
@@ -422,14 +459,43 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       )}
       
       {/* Notifications Table Header */}
-      <div className="grid grid-cols-5 gap-4 px-4 py-2 bg-muted/10 rounded-t-md border border-border">
-        <div className="col-span-1 font-medium text-sm">Method</div>
-        <div className="col-span-1 font-medium text-sm">Category</div>
-        <div className="col-span-1 font-medium text-sm">Enabled</div>
-        <div className="col-span-1 font-medium text-sm">
+      <div 
+        className="grid grid-cols-5 gap-4 px-4 py-2 rounded-t-md border transition-colors"
+        style={{
+          backgroundColor: `${colors.utility.secondaryText}10`,
+          borderColor: `${colors.utility.primaryText}20`
+        }}
+      >
+        <div 
+          className="col-span-1 font-medium text-sm transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Method
+        </div>
+        <div 
+          className="col-span-1 font-medium text-sm transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Category
+        </div>
+        <div 
+          className="col-span-1 font-medium text-sm transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Enabled
+        </div>
+        <div 
+          className="col-span-1 font-medium text-sm transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
           Credits ({watchPlanType === 'Per User' ? 'per user' : 'per contract'})
         </div>
-        <div className="col-span-1 font-medium text-sm">Unit Price</div>
+        <div 
+          className="col-span-1 font-medium text-sm transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Unit Price
+        </div>
       </div>
       
       {/* Notification Rows */}
@@ -438,31 +504,65 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
           const methodDetails = getMethodDetails(notification.notif_type);
           
           return (
-            <div key={index} className="grid grid-cols-5 gap-4 px-4 py-2 bg-card rounded-md border border-border">
+            <div 
+              key={index} 
+              className="grid grid-cols-5 gap-4 px-4 py-2 rounded-md border transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            >
               {/* Method Selection */}
               <div className="col-span-1 relative">
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left border border-input rounded-md bg-background flex items-center justify-between"
+                  className="w-full px-3 py-2 text-left border rounded-md flex items-center justify-between transition-colors"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText
+                  }}
                   onClick={(e) => toggleMethodDropdown(index, e)}
                   data-dropdown-trigger="method"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                  }}
                 >
                   <span>{notification.notif_type}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown 
+                    className="h-4 w-4"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                 </button>
                 
                 {methodDropdownOpen === index && (
                   <div 
-                    className="absolute left-0 right-0 mt-1 bg-card rounded-md shadow-lg border border-border z-50"
+                    className="absolute left-0 right-0 mt-1 rounded-md shadow-lg border z-50"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: `${colors.utility.primaryText}20`,
+                      maxHeight: '192px',
+                      overflowY: 'auto'
+                    }}
                     data-dropdown="method"
                   >
-                    <div className="py-1 max-h-48 overflow-y-auto">
+                    <div className="py-1">
                       {notificationItems.map(item => (
                         <button
                           key={item.method}
                           type="button"
                           onClick={(e) => selectMethod(index, item.method, e)}
-                          className="flex items-center px-4 py-2 text-sm w-full hover:bg-muted/50 text-left"
+                          className="flex items-center px-4 py-2 text-sm w-full text-left transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
                         >
                           <span>{item.name}</span>
                         </button>
@@ -476,17 +576,35 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
               <div className="col-span-1 relative">
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left border border-input rounded-md bg-background flex items-center justify-between"
+                  className="w-full px-3 py-2 text-left border rounded-md flex items-center justify-between transition-colors"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText
+                  }}
                   onClick={(e) => toggleCategoryDropdown(index, e)}
                   data-dropdown-trigger="category"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                  }}
                 >
                   <span>{notification.category}</span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  <ChevronDown 
+                    className="h-4 w-4"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                 </button>
                 
                 {categoryDropdownOpen === index && (
                   <div 
-                    className="absolute left-0 right-0 mt-1 bg-card rounded-md shadow-lg border border-border z-50"
+                    className="absolute left-0 right-0 mt-1 rounded-md shadow-lg border z-50"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: `${colors.utility.primaryText}20`
+                    }}
                     data-dropdown="category"
                   >
                     <div className="py-1">
@@ -495,7 +613,14 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
                           key={category}
                           type="button"
                           onClick={(e) => selectCategory(index, category as NotificationCategoryType, e)}
-                          className="block px-4 py-2 text-sm w-full hover:bg-muted/50 text-left"
+                          className="block px-4 py-2 text-sm w-full text-left transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }}
                         >
                           {category}
                         </button>
@@ -514,12 +639,18 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
                     checked={notification.enabled}
                     onChange={(e) => toggleEnabled(index, e.target.checked)}
                   />
-                  <div className={`w-11 h-6 rounded-full transition-colors ${
-                    notification.enabled ? 'bg-primary' : 'bg-muted'
-                  }`}>
-                    <div className={`absolute h-5 w-5 rounded-full bg-white transition-transform ${
-                      notification.enabled ? 'transform translate-x-5' : 'transform translate-x-0.5'
-                    } top-0.5 shadow-sm`}></div>
+                  <div 
+                    className="w-11 h-6 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: notification.enabled ? colors.brand.primary : `${colors.utility.secondaryText}40`
+                    }}
+                  >
+                    <div 
+                      className="absolute h-5 w-5 rounded-full bg-white transition-transform top-0.5 shadow-sm"
+                      style={{
+                        transform: notification.enabled ? 'translateX(1.25rem)' : 'translateX(0.125rem)'
+                      }}
+                    ></div>
                   </div>
                 </label>
               </div>
@@ -528,7 +659,13 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
               <div className="col-span-1">
                 <input
                   type="number"
-                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  className="w-full px-3 py-2 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText,
+                    '--tw-ring-color': colors.brand.primary
+                  } as React.CSSProperties}
                   value={notification.credits_per_unit}
                   onChange={(e) => updateNotification(index, 'credits_per_unit', parseInt(e.target.value) || 0)}
                   disabled={!notification.enabled}
@@ -539,10 +676,21 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
               {/* Unit Price and Delete */}
               <div className="col-span-1 flex items-center justify-between">
                 <div className="flex items-center">
-                  <span className="text-muted-foreground mr-1">{getCurrencySymbol(selectedCurrency)}</span>
+                  <span 
+                    className="mr-1"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {getCurrencySymbol(selectedCurrency)}
+                  </span>
                   <input
                     type="number"
-                    className="w-20 px-2 py-1 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    className="w-20 px-2 py-1 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                    style={{
+                      borderColor: `${colors.utility.secondaryText}40`,
+                      backgroundColor: colors.utility.primaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     value={getNotificationPrice(notification, selectedCurrency)}
                     onChange={(e) => updateNotificationPrice(index, selectedCurrency, parseFloat(e.target.value) || 0)}
                     min={0}
@@ -553,9 +701,22 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
                 <button
                   type="button"
                   onClick={(e) => removeNotification(index, e)}
-                  className="p-1 ml-2 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-full"
+                  className="p-1 ml-2 transition-colors rounded-full"
+                  style={{ color: colors.utility.secondaryText }}
                   title="Remove notification"
                   disabled={notifications.length === 1}
+                  onMouseEnter={(e) => {
+                    if (!e.currentTarget.disabled) {
+                      e.currentTarget.style.color = colors.semantic.error;
+                      e.currentTarget.style.backgroundColor = `${colors.semantic.error}10`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!e.currentTarget.disabled) {
+                      e.currentTarget.style.color = colors.utility.secondaryText;
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -570,11 +731,18 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
         <button
           type="button"
           onClick={addNotification}
-          className={`px-4 py-2 rounded-md transition-colors inline-flex items-center text-sm border ${
-            isEditMode 
-              ? 'bg-blue-50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-              : 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/30'
-          }`}
+          className="px-4 py-2 rounded-md transition-colors inline-flex items-center text-sm border"
+          style={{
+            backgroundColor: `${colors.brand.primary}10`,
+            color: colors.brand.primary,
+            borderColor: `${colors.brand.primary}30`
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = `${colors.brand.primary}20`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = `${colors.brand.primary}10`;
+          }}
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Notification
@@ -582,39 +750,37 @@ const NotificationsStep: React.FC<NotificationsStepProps> = ({ isEditMode = fals
       </div>
       
       {/* Info Box */}
-      <div className={`p-4 rounded-md border ${
-        isEditMode 
-          ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
-          : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/20'
-      }`}>
+      <div 
+        className="p-4 rounded-md border transition-colors"
+        style={{
+          backgroundColor: `${colors.brand.primary}10`,
+          borderColor: `${colors.brand.primary}20`
+        }}
+      >
         <div className="flex items-start">
-          <Info className={`h-4 w-4 mt-0.5 mr-2 flex-shrink-0 ${
-            isEditMode 
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-blue-600 dark:text-blue-400'
-          }`} />
+          <Info 
+            className="h-4 w-4 mt-0.5 mr-2 flex-shrink-0"
+            style={{ color: colors.brand.primary }}
+          />
           <div>
-            <p className={`text-sm font-medium ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               {isEditMode ? 'Editing Notification Credits' : 'Notification Credits'}
             </p>
-            <p className={`mt-1 text-sm ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Credits are allocated per {watchPlanType === 'Per User' ? 'user' : 'contract'} in the plan. 
               Each notification method can only have one entry per category (Transactional or Direct).
               {isEditMode && ' Changes will create a new plan version.'}
             </p>
-            <p className={`mt-1 text-sm ${
-              isEditMode 
-                ? 'text-blue-700 dark:text-blue-300'
-                : 'text-blue-700 dark:text-blue-300'
-            }`}>
+            <p 
+              className="mt-1 text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               Users can purchase additional credits once their included credits are exhausted.
             </p>
           </div>

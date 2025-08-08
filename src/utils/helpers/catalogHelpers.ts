@@ -1,10 +1,8 @@
 // src/utils/helpers/catalogHelpers.ts
-// Add this to the existing catalogHelpers.ts file
+// Clean minimal helper functions for catalog
 
 /**
  * Format a date as relative time (e.g., "2 hours ago", "3 days ago")
- * @param date - The date to format
- * @returns Formatted relative time string
  */
 export const formatRelativeTime = (date: string | Date): string => {
   const dateObject = typeof date === 'string' ? new Date(date) : date;
@@ -34,3 +32,6 @@ export const formatRelativeTime = (date: string | Date): string => {
     return `${diffInYears} year${diffInYears > 1 ? 's' : ''} ago`;
   }
 };
+
+// Alias for compatibility with existing imports
+export const formatDistanceToNow = formatRelativeTime;

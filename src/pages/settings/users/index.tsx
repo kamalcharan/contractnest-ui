@@ -14,6 +14,7 @@ import {
 import { useInvitations } from '@/hooks/useInvitations';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import UsersList from '@/components/users/UsersList';
 import InvitationsList from '@/components/users/InvitationsList';
 import InviteUserModal from '@/components/users/InviteUserModal';
@@ -27,6 +28,10 @@ type TabType = 'all' | 'active' | 'pending';
 const UsersPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentTenant, user: currentUser } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Use the hooks for real data with autoLoad false for lazy loading
   const {
@@ -254,19 +259,38 @@ if (user?.status === 'invited') {
   const showUsersList = activeTab !== 'pending' || (activeTab === 'pending' && !showInvitationsList);
 
   return (
-    <div className="p-6 bg-muted/20 min-h-screen">
+    <div 
+      className="p-6 min-h-screen transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center mb-6">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+            style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors" 
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">Team Management</h1>
-            <p className="text-muted-foreground">
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Team Management
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Manage team members and invitations for {currentTenant?.name}
             </p>
           </div>
@@ -274,61 +298,142 @@ if (user?.status === 'invited') {
             onClick={handleRefresh}
             disabled={isRefreshing}
             className={cn(
-              "p-2 rounded-md hover:bg-muted transition-colors",
+              "p-2 rounded-md transition-colors hover:opacity-80",
               isRefreshing && "animate-spin"
             )}
+            style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
           >
-            <RefreshCw size={20} />
+            <RefreshCw 
+              size={20} 
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
         </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div 
+            className="border rounded-lg p-4 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Team</p>
-                <p className="text-2xl font-semibold">{tabCounts.all}</p>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Total Team
+                </p>
+                <p 
+                  className="text-2xl font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {tabCounts.all}
+                </p>
               </div>
-              <Users className="h-8 w-8 text-muted-foreground" />
+              <Users 
+                className="h-8 w-8 transition-colors" 
+                style={{ color: colors.utility.secondaryText }}
+              />
             </div>
           </div>
           
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div 
+            className="border rounded-lg p-4 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Active Team</p>
-                <p className="text-2xl font-semibold text-green-600">{tabCounts.active}</p>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Active Team
+                </p>
+                <p 
+                  className="text-2xl font-semibold transition-colors"
+                  style={{ color: colors.semantic.success }}
+                >
+                  {tabCounts.active}
+                </p>
               </div>
-              <Shield className="h-8 w-8 text-green-600" />
+              <Shield 
+                className="h-8 w-8 transition-colors" 
+                style={{ color: colors.semantic.success }}
+              />
             </div>
           </div>
           
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div 
+            className="border rounded-lg p-4 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Invites</p>
-                <p className="text-2xl font-semibold text-yellow-600">{tabCounts.pending}</p>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Pending Invites
+                </p>
+                <p 
+                  className="text-2xl font-semibold transition-colors"
+                  style={{ color: colors.semantic.warning || '#f59e0b' }}
+                >
+                  {tabCounts.pending}
+                </p>
               </div>
-              <UserPlus className="h-8 w-8 text-yellow-600" />
+              <UserPlus 
+                className="h-8 w-8 transition-colors" 
+                style={{ color: colors.semantic.warning || '#f59e0b' }}
+              />
             </div>
           </div>
           
-          <div className="bg-card border border-border rounded-lg p-4">
+          <div 
+            className="border rounded-lg p-4 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Team Limit</p>
-                <p className="text-2xl font-semibold">
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Team Limit
+                </p>
+                <p 
+                  className="text-2xl font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {tabCounts.all}/{teamLimit}
                 </p>
               </div>
-              <AlertCircle className="h-8 w-8 text-muted-foreground" />
+              <AlertCircle 
+                className="h-8 w-8 transition-colors" 
+                style={{ color: colors.utility.secondaryText }}
+              />
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-border">
+        <div 
+          className="border-b transition-colors"
+          style={{ borderColor: colors.utility.primaryText + '20' }}
+        >
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'all', label: 'All Team', count: tabCounts.all },
@@ -341,18 +446,33 @@ if (user?.status === 'invited') {
                 className={cn(
                   "py-2 px-1 border-b-2 font-medium text-sm transition-colors",
                   activeTab === tab.id
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? "border-primary"
+                    : "border-transparent hover:opacity-80"
                 )}
+                style={{
+                  color: activeTab === tab.id 
+                    ? colors.brand.primary 
+                    : colors.utility.secondaryText,
+                  borderColor: activeTab === tab.id 
+                    ? colors.brand.primary 
+                    : 'transparent'
+                }}
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span className={cn(
-                    "ml-2 px-2 py-0.5 text-xs rounded-full",
-                    activeTab === tab.id
-                      ? "bg-primary/10 text-primary"
-                      : "bg-muted text-muted-foreground"
-                  )}>
+                  <span 
+                    className={cn(
+                      "ml-2 px-2 py-0.5 text-xs rounded-full transition-colors"
+                    )}
+                    style={{
+                      backgroundColor: activeTab === tab.id
+                        ? colors.brand.primary + '10'
+                        : colors.utility.primaryBackground + '80',
+                      color: activeTab === tab.id
+                        ? colors.brand.primary
+                        : colors.utility.secondaryText
+                    }}
+                  >
                     {tab.count}
                   </span>
                 )}
@@ -363,13 +483,31 @@ if (user?.status === 'invited') {
       </div>
 
       {/* Content */}
-      <div className="bg-card border border-border rounded-lg">
+      <div 
+        className="border rounded-lg transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
         <div className="p-6">
           {!canManageTeam ? (
             <div className="text-center py-12">
-              <Shield size={48} className="mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">Access Restricted</h3>
-              <p className="text-muted-foreground">
+              <Shield 
+                size={48} 
+                className="mx-auto mb-4 transition-colors" 
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <h3 
+                className="text-lg font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Access Restricted
+              </h3>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 You don't have permission to manage team
               </p>
             </div>
@@ -378,7 +516,12 @@ if (user?.status === 'invited') {
               {/* Show invitations list for pending tab */}
               {showInvitationsList && (
                 <div className="mb-6">
-                  <h2 className="text-lg font-semibold mb-4">Pending Invitations</h2>
+                  <h2 
+                    className="text-lg font-semibold mb-4 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Pending Invitations
+                  </h2>
                   <InvitationsList
                     invitations={invitations.filter(inv => 
                       ['pending', 'sent', 'resent'].includes(inv.status)

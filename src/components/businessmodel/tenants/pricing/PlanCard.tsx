@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Check, Star } from 'lucide-react';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 // FIXED: Updated interfaces to match actual usage
@@ -89,6 +90,9 @@ const PlanCard: React.FC<PlanCardProps> = ({
   onStartTrial,
   onManagePlan
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // FIXED: Safe accessor for plan tier price
   const getPlanPrice = (plan: PricingPlan, currency: string): number => {
     const firstTier = plan.tiers?.[0];
@@ -122,14 +126,34 @@ const PlanCard: React.FC<PlanCardProps> = ({
   const planType = getPlanType(plan);
 
   return (
-    <div className={`relative bg-card rounded-lg border-2 p-6 ${
-      isActive 
-        ? 'border-primary shadow-lg' 
-        : 'border-border hover:border-primary/50'
-    } transition-all`}>
+    <div 
+      className={`relative rounded-lg border-2 p-6 transition-all ${
+        isActive ? 'shadow-lg' : ''
+      }`}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: isActive ? colors.brand.primary : `${colors.utility.primaryText}20`
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.borderColor = `${colors.brand.primary}50`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
+        }
+      }}
+    >
       {isActive && (
         <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-          <div className="bg-primary text-primary-foreground px-3 py-1 rounded-full text-xs font-medium flex items-center">
+          <div 
+            className="px-3 py-1 rounded-full text-xs font-medium flex items-center"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: 'white'
+            }}
+          >
             <Star className="h-3 w-3 mr-1" />
             Current Plan
           </div>
@@ -137,38 +161,73 @@ const PlanCard: React.FC<PlanCardProps> = ({
       )}
       
       <div className="text-center">
-        <h3 className="text-xl font-bold">{plan.name}</h3>
+        <h3 
+          className="text-xl font-bold transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          {plan.name}
+        </h3>
         {plan.description && (
-          <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
+          <p 
+            className="text-sm mt-1 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {plan.description}
+          </p>
         )}
         
         <div className="mt-4">
-          <div className="text-3xl font-bold">
+          <div 
+            className="text-3xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             {formatCurrency(planPrice, currency)}
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div 
+            className="text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             per {planType === 'Per User' ? 'user' : 'contract'} / month
           </div>
         </div>
         
         {trialDuration > 0 && (
-          <div className="mt-2 text-sm text-primary font-medium">
+          <div 
+            className="mt-2 text-sm font-medium transition-colors"
+            style={{ color: colors.brand.primary }}
+          >
             {trialDuration} day free trial
           </div>
         )}
       </div>
       
       <div className="mt-6">
-        <h4 className="font-medium mb-3">Features included:</h4>
+        <h4 
+          className="font-medium mb-3 transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Features included:
+        </h4>
         <div className="space-y-2">
           {plan.features?.slice(0, 5).map((feature, index) => (
             <div key={feature.feature_id || feature.featureId || index} className="flex items-center text-sm">
-              <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-              <span>{feature.name || 'Unnamed Feature'}</span>
+              <Check 
+                className="h-4 w-4 mr-2 flex-shrink-0"
+                style={{ color: colors.semantic.success }}
+              />
+              <span 
+                className="transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {feature.name || 'Unnamed Feature'}
+              </span>
             </div>
           ))}
           {plan.features?.length > 5 && (
-            <div className="text-sm text-muted-foreground">
+            <div 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               +{plan.features.length - 5} more features
             </div>
           )}
@@ -179,7 +238,11 @@ const PlanCard: React.FC<PlanCardProps> = ({
         {isActive ? (
           <button
             onClick={onManagePlan}
-            className="w-full px-4 py-2 bg-muted text-muted-foreground rounded-md hover:bg-muted/80 transition-colors"
+            className="w-full px-4 py-2 rounded-md transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
           >
             Manage Plan
           </button>
@@ -187,14 +250,29 @@ const PlanCard: React.FC<PlanCardProps> = ({
           <>
             <button
               onClick={onSubscribe}
-              className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+              className="w-full px-4 py-2 rounded-md transition-colors hover:opacity-90"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: 'white'
+              }}
             >
               Subscribe Now
             </button>
             {trialDuration > 0 && (
               <button
                 onClick={onStartTrial}
-                className="w-full px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors"
+                className="w-full px-4 py-2 border rounded-md transition-colors hover:opacity-80"
+                style={{
+                  borderColor: `${colors.utility.primaryText}20`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                }}
               >
                 Start Free Trial
               </button>

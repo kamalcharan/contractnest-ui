@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, ArrowLeft } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel } from '@/hooks/useBusinessModel';
 
@@ -12,6 +13,7 @@ import PlanList, { PricingPlanSummary } from '@/components/businessmodel/dashboa
 
 const PricingPlansAdminPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
   
   const { 
     isLoading,
@@ -20,6 +22,9 @@ const PricingPlansAdminPage: React.FC = () => {
     archivePlan,
     error
   } = useBusinessModel();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Filter type for summary cards
   const [activeFilter, setActiveFilter] = useState<'all' | 'plans' | 'users' | 'renewals' | 'trials'>('all');
@@ -209,28 +214,64 @@ const PricingPlansAdminPage: React.FC = () => {
   // Handle error state from hook
   if (error) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+      >
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center">
             <button 
               onClick={handleBack} 
-              className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+              className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
             >
-              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+              <ArrowLeft 
+                className="h-5 w-5 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </button>
             <div>
-              <h1 className="text-2xl font-bold">Plan Configuration</h1>
-              <p className="text-muted-foreground">Error loading plans</p>
+              <h1 
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Plan Configuration
+              </h1>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Error loading plans
+              </p>
             </div>
           </div>
         </div>
         
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-6 text-center">
-          <h3 className="text-lg font-medium text-destructive mb-2">Error Loading Plans</h3>
-          <p className="text-muted-foreground mb-4">{error}</p>
+        <div 
+          className="border rounded-lg p-6 text-center transition-colors"
+          style={{
+            backgroundColor: `${colors.semantic.error}10`,
+            borderColor: `${colors.semantic.error}20`
+          }}
+        >
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.semantic.error }}
+          >
+            Error Loading Plans
+          </h3>
+          <p 
+            className="mb-4 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {error}
+          </p>
           <button
             onClick={() => loadPlans()}
-            className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 rounded-md text-white hover:opacity-90 transition-colors"
+            style={{
+              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
           >
             Retry
           </button>
@@ -240,25 +281,45 @@ const PricingPlansAdminPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.primaryBackground}20` }}
+    >
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Plan Configuration</h1>
-            <p className="text-muted-foreground">Manage subscription plans and pricing structure</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Plan Configuration
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Manage subscription plans and pricing structure
+            </p>
           </div>
         </div>
         
         <button
           onClick={handleCreatePlan}
-          className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors inline-flex items-center"
+          className="px-4 py-2 rounded-md text-white hover:opacity-90 transition-colors inline-flex items-center"
+          style={{
+            background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+          }}
         >
           <PlusCircle className="h-4 w-4 mr-2" />
           Create New Plan
@@ -277,13 +338,20 @@ const PricingPlansAdminPage: React.FC = () => {
       {/* Active Filter Indicator */}
       {activeFilter !== 'all' && (
         <div className="mb-4">
-          <div className="inline-flex items-center px-3 py-1.5 bg-primary/10 text-primary rounded-md">
+          <div 
+            className="inline-flex items-center px-3 py-1.5 rounded-md transition-colors"
+            style={{
+              backgroundColor: `${colors.brand.primary}10`,
+              color: colors.brand.primary
+            }}
+          >
             <span className="text-sm font-medium mr-2">
               Filtered by: {activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
             </span>
             <button 
               onClick={() => setActiveFilter('all')}
-              className="h-4 w-4 rounded-full hover:bg-primary/20 flex items-center justify-center"
+              className="h-4 w-4 rounded-full hover:opacity-80 flex items-center justify-center transition-colors"
+              style={{ backgroundColor: `${colors.brand.primary}20` }}
             >
               <span className="sr-only">Clear filter</span>
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -297,7 +365,12 @@ const PricingPlansAdminPage: React.FC = () => {
       
       {/* Subscription Plans Section */}
       <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-4">Subscription Plans</h2>
+        <h2 
+          className="text-xl font-semibold mb-4 transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Subscription Plans
+        </h2>
         <PlanList
           plans={filteredPlans}
           onViewPlan={handleViewPlan}
@@ -308,9 +381,23 @@ const PricingPlansAdminPage: React.FC = () => {
       
       {/* Debug info during development */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="mt-8 p-4 bg-muted/10 rounded-lg border border-border">
-          <h3 className="text-sm font-medium mb-2">Debug Info</h3>
-          <div className="text-xs text-muted-foreground space-y-1">
+        <div 
+          className="mt-8 p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: `${colors.utility.primaryBackground}10`,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <h3 
+            className="text-sm font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Debug Info
+          </h3>
+          <div 
+            className="text-xs space-y-1 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             <div>Plans loaded: {plans.length}</div>
             <div>Processed plans: {processedPlans.length}</div>
             <div>Filtered plans: {filteredPlans.length}</div>

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Search, CheckCircle, Users, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel } from '@/hooks/useBusinessModel';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
@@ -23,6 +24,7 @@ const AssignPlanPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const currency = searchParams.get('currency') || 'USD';
+  const { isDarkMode, currentTheme } = useTheme();
   
   const { selectedPlan, loadPlanDetails } = useBusinessModel();
   
@@ -32,6 +34,9 @@ const AssignPlanPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Track page view
   useEffect(() => {
@@ -111,24 +116,45 @@ const AssignPlanPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div 
+        className="min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="p-6">
           <div className="flex items-center mb-8">
             <button 
               onClick={handleBack} 
-              className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+              className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
             >
-              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+              <ArrowLeft 
+                className="h-5 w-5 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </button>
             <div>
-              <div className="h-7 bg-muted rounded-md w-48 animate-pulse"></div>
-              <div className="h-4 bg-muted rounded-md w-64 mt-2 animate-pulse"></div>
+              <div 
+                className="h-7 rounded-md w-48 animate-pulse"
+                style={{ backgroundColor: colors.utility.secondaryBackground }}
+              ></div>
+              <div 
+                className="h-4 rounded-md w-64 mt-2 animate-pulse"
+                style={{ backgroundColor: colors.utility.secondaryBackground }}
+              ></div>
             </div>
           </div>
           
           <div className="flex justify-center items-center min-h-[300px]">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            <span className="ml-2 text-muted-foreground">Loading tenants...</span>
+            <Loader2 
+              className="h-8 w-8 animate-spin transition-colors"
+              style={{ color: colors.brand.primary }}
+            />
+            <span 
+              className="ml-2 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Loading tenants...
+            </span>
           </div>
         </div>
       </div>
@@ -138,18 +164,35 @@ const AssignPlanPage: React.FC = () => {
   // 404 state
   if (!selectedPlan) {
     return (
-      <div className="min-h-screen bg-background">
+      <div 
+        className="min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="p-6">
           <div className="flex items-center mb-8">
             <button 
               onClick={() => navigate('/settings/businessmodel/admin/pricing-plans')} 
-              className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+              className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+              style={{ backgroundColor: colors.utility.secondaryBackground }}
             >
-              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+              <ArrowLeft 
+                className="h-5 w-5 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </button>
             <div>
-              <h1 className="text-2xl font-bold">Plan Not Found</h1>
-              <p className="text-muted-foreground">The requested pricing plan does not exist or has been deleted</p>
+              <h1 
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Plan Not Found
+              </h1>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                The requested pricing plan does not exist or has been deleted
+              </p>
             </div>
           </div>
         </div>
@@ -162,34 +205,79 @@ const AssignPlanPage: React.FC = () => {
   const planType = selectedPlan.planType || selectedPlan.plan_type || 'Per User';
   
   return (
-    <div className="min-h-screen bg-background">
+    <div 
+      className="min-h-screen transition-colors"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
       <div className="p-6">
         {/* Page Header */}
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Assign Plan to Tenants</h1>
-            <p className="text-muted-foreground">Select tenants to assign the {planName} plan ({currency})</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Assign Plan to Tenants
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Select tenants to assign the {planName} plan ({currency})
+            </p>
           </div>
         </div>
         
         {/* Plan Summary */}
-        <div className="bg-card rounded-lg border border-border mb-6 p-4">
+        <div 
+          className="rounded-lg border mb-6 p-4 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">{planName}</h2>
-              <p className="text-muted-foreground">{planDescription}</p>
+              <h2 
+                className="text-xl font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {planName}
+              </h2>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {planDescription}
+              </p>
             </div>
             <div className="mt-2 md:mt-0 flex items-center space-x-2">
-              <span className="bg-muted/50 px-3 py-1 rounded-md text-sm">
+              <span 
+                className="px-3 py-1 rounded-md text-sm transition-colors"
+                style={{
+                  backgroundColor: `${colors.utility.primaryBackground}50`,
+                  color: colors.utility.primaryText
+                }}
+              >
                 {planType}
               </span>
-              <span className="bg-primary/10 text-primary px-3 py-1 rounded-md text-sm font-medium">
+              <span 
+                className="px-3 py-1 rounded-md text-sm font-medium transition-colors"
+                style={{
+                  backgroundColor: `${colors.brand.primary}10`,
+                  color: colors.brand.primary
+                }}
+              >
                 {currency}
               </span>
             </div>
@@ -199,40 +287,98 @@ const AssignPlanPage: React.FC = () => {
         {/* Search */}
         <div className="mb-6 relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-muted-foreground" />
+            <Search 
+              className="h-5 w-5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </div>
           <input
             type="text"
             placeholder="Search tenants..."
-            className="w-full pl-10 pr-4 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+            className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+            style={{
+              borderColor: colors.utility.secondaryText + '40',
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
         
         {/* Tenants List */}
-        <div className="bg-card rounded-lg border border-border overflow-hidden mb-6">
-          <div className="divide-y divide-border">
+        <div 
+          className="rounded-lg border overflow-hidden mb-6 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <div 
+            className="divide-y transition-colors"
+            style={{ borderColor: colors.utility.secondaryText + '40' }}
+          >
             {filteredTenants.length === 0 ? (
               <div className="py-8 text-center">
-                <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-                <p className="text-muted-foreground">No tenants found</p>
+                <Users 
+                  className="h-12 w-12 mx-auto opacity-50 mb-4 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                />
+                <p 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  No tenants found
+                </p>
               </div>
             ) : (
               filteredTenants.map(tenant => (
-                <div key={tenant.id} className="p-4 flex items-center hover:bg-muted/50 transition-colors">
+                <div 
+                  key={tenant.id} 
+                  className="p-4 flex items-center hover:opacity-80 transition-colors"
+                  style={{ backgroundColor: colors.utility.secondaryBackground }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `${colors.utility.primaryBackground}50`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
+                  }}
+                >
                   <div className="flex-1">
-                    <h3 className="font-medium">{tenant.name}</h3>
-                    <p className="text-sm text-muted-foreground">{tenant.email}</p>
+                    <h3 
+                      className="font-medium transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {tenant.name}
+                    </h3>
+                    <p 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {tenant.email}
+                    </p>
                   </div>
                   <div className="flex items-center">
                     {tenant.currentPlanId === id ? (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 mr-4">
+                      <span 
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium mr-4 transition-colors"
+                        style={{
+                          backgroundColor: `${colors.semantic.success}20`,
+                          color: colors.semantic.success
+                        }}
+                      >
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Current Plan
                       </span>
                     ) : tenant.currentPlanId ? (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 mr-4">
+                      <span 
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium mr-4 transition-colors"
+                        style={{
+                          backgroundColor: `${colors.brand.primary}20`,
+                          color: colors.brand.primary
+                        }}
+                      >
                         Has Other Plan
                       </span>
                     ) : null}
@@ -240,7 +386,12 @@ const AssignPlanPage: React.FC = () => {
                       <input
                         id={`tenant-${tenant.id}`}
                         type="checkbox"
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded focus:ring-2 transition-colors"
+                        style={{
+                          borderColor: colors.utility.secondaryText + '40',
+                          color: colors.brand.primary,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                         checked={selectedTenants.includes(tenant.id)}
                         onChange={() => toggleTenantSelection(tenant.id)}
                         disabled={tenant.currentPlanId === id || submitting}
@@ -261,7 +412,12 @@ const AssignPlanPage: React.FC = () => {
           <button
             onClick={handleBack}
             disabled={submitting}
-            className="px-4 py-2 rounded-md border border-border bg-background hover:bg-muted transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-md border hover:opacity-80 transition-colors disabled:opacity-50"
+            style={{
+              borderColor: colors.utility.secondaryText + '40',
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText
+            }}
           >
             Cancel
           </button>
@@ -269,7 +425,10 @@ const AssignPlanPage: React.FC = () => {
           <button
             onClick={handleAssignClick}
             disabled={selectedTenants.length === 0 || submitting}
-            className="px-6 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center"
+            className="px-6 py-2 rounded-md text-white hover:opacity-90 transition-colors disabled:opacity-50 flex items-center"
+            style={{
+              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
           >
             {submitting ? (
               <>

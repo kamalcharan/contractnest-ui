@@ -1,6 +1,8 @@
+// src/pages/auth/CreateTenantPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { Building2, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 import { supabase } from '../../utils/supabase'; 
 import toast from 'react-hot-toast';
@@ -19,6 +21,7 @@ const CreateTenantPage: React.FC = () => {
     tenants,
     setTenants 
   } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
   const hasCheckedAuth = useRef(false);
   const isSubmitting = useRef(false);
   
@@ -26,6 +29,9 @@ const CreateTenantPage: React.FC = () => {
   const fromGoogleAuth = location.state?.fromGoogleAuth || false;
   const isNewUser = location.state?.isNewUser || false;
   const resumingRegistration = location.state?.resumingRegistration || false;
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Form state
   const [formData, setFormData] = useState({
@@ -189,7 +195,7 @@ const CreateTenantPage: React.FC = () => {
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#10B981',
+            background: colors.semantic.success,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -223,7 +229,7 @@ const CreateTenantPage: React.FC = () => {
             style: {
               padding: '16px',
               borderRadius: '8px',
-              background: '#EF4444',
+              background: colors.semantic.error,
               color: '#FFF',
               fontSize: '16px',
               minWidth: '300px'
@@ -236,7 +242,7 @@ const CreateTenantPage: React.FC = () => {
             style: {
               padding: '16px',
               borderRadius: '8px',
-              background: '#EF4444',
+              background: colors.semantic.error,
               color: '#FFF',
               fontSize: '16px',
               minWidth: '300px'
@@ -250,7 +256,7 @@ const CreateTenantPage: React.FC = () => {
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#EF4444',
+            background: colors.semantic.error,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -266,8 +272,14 @@ const CreateTenantPage: React.FC = () => {
   // Don't show loading if coming from Google OAuth
   if (!fromGoogleAuth && authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div 
+        className="min-h-screen flex items-center justify-center transition-colors duration-200"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div 
+          className="animate-spin rounded-full h-12 w-12 border-b-2"
+          style={{ borderColor: colors.brand.primary }}
+        ></div>
       </div>
     );
   }
@@ -294,30 +306,64 @@ const CreateTenantPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div 
+      className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
       <div className="max-w-md w-full space-y-8">
         <div>
-          <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100">
-            <Building2 className="h-6 w-6 text-blue-600" />
+          <div 
+            className="mx-auto h-12 w-12 flex items-center justify-center rounded-full"
+            style={{ backgroundColor: `${colors.brand.primary}20` }}
+          >
+            <Building2 
+              className="h-6 w-6"
+              style={{ color: colors.brand.primary }}
+            />
           </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 
+            className="mt-6 text-center text-3xl font-extrabold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             {getPageTitle()}
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p 
+            className="mt-2 text-center text-sm transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {getPageSubtitle()}
           </p>
           {user?.email && (
-            <p className="mt-2 text-center text-sm text-gray-500">
+            <p 
+              className="mt-2 text-center text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Signed in as {user.email}
             </p>
           )}
           
           {/* Show retry indicator if there have been failures */}
           {retryCount > 0 && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <div 
+              className="mt-4 p-3 border rounded-md transition-colors"
+              style={{
+                backgroundColor: `${colors.semantic.warning}10`,
+                borderColor: `${colors.semantic.warning}40`
+              }}
+            >
               <div className="flex items-center">
-                <RefreshCw className="h-5 w-5 text-yellow-600 mr-2" />
-                <p className="text-sm text-yellow-800">
+                <RefreshCw 
+                  className="h-5 w-5 mr-2"
+                  style={{ color: colors.semantic.warning }}
+                />
+                <p 
+                  className="text-sm"
+                  style={{ color: colors.semantic.warning }}
+                >
                   Attempt {retryCount + 1} of 3. The system is experiencing high load.
                 </p>
               </div>
@@ -327,7 +373,11 @@ const CreateTenantPage: React.FC = () => {
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="workspaceName" className="block text-sm font-medium text-gray-700">
+            <label 
+              htmlFor="workspaceName" 
+              className="block text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Workspace Name
             </label>
             <div className="mt-1 relative">
@@ -337,12 +387,22 @@ const CreateTenantPage: React.FC = () => {
                 type="text"
                 value={formData.workspaceName}
                 onChange={handleWorkspaceNameChange}
-                className={`appearance-none block w-full px-3 py-2 pr-10 border ${
+                className={`appearance-none block w-full px-3 py-2 pr-10 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 sm:text-sm transition-colors ${
                   errors.workspaceName ? 'border-red-300' : 
                   nameAvailable === false ? 'border-red-300' :
                   nameAvailable === true ? 'border-green-300' :
-                  'border-gray-300'
-                } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                  ''
+                }`}
+                style={{
+                  borderColor: errors.workspaceName || nameAvailable === false 
+                    ? colors.semantic.error
+                    : nameAvailable === true
+                    ? colors.semantic.success
+                    : colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
                 placeholder="My Company"
                 autoFocus
                 disabled={isLoading}
@@ -351,27 +411,46 @@ const CreateTenantPage: React.FC = () => {
               {/* Availability indicator */}
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                 {isCheckingAvailability && (
-                  <svg className="animate-spin h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24">
+                  <svg 
+                    className="animate-spin h-5 w-5"
+                    style={{ color: colors.utility.secondaryText }}
+                    fill="none" 
+                    viewBox="0 0 24 24"
+                  >
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                   </svg>
                 )}
                 {!isCheckingAvailability && nameAvailable === true && (
-                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <CheckCircle2 
+                    className="h-5 w-5"
+                    style={{ color: colors.semantic.success }}
+                  />
                 )}
                 {!isCheckingAvailability && nameAvailable === false && (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
+                  <AlertCircle 
+                    className="h-5 w-5"
+                    style={{ color: colors.semantic.error }}
+                  />
                 )}
               </div>
             </div>
             
             {errors.workspaceName && (
-              <p className="mt-1 text-sm text-red-600">{errors.workspaceName}</p>
+              <p 
+                className="mt-1 text-sm"
+                style={{ color: colors.semantic.error }}
+              >
+                {errors.workspaceName}
+              </p>
             )}
             
             {/* Workspace code preview */}
             {formData.workspaceCode && (
-              <p className="mt-1 text-sm text-gray-500">
+              <p 
+                className="mt-1 text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Workspace code: <span className="font-mono">{formData.workspaceCode}</span>
               </p>
             )}
@@ -381,7 +460,11 @@ const CreateTenantPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || isCheckingAvailability || nameAvailable === false}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
             >
               {isLoading ? (
                 <>
@@ -399,7 +482,10 @@ const CreateTenantPage: React.FC = () => {
             {/* Show alternative actions for resuming users */}
             {resumingRegistration && !isLoading && (
               <div className="text-center">
-                <p className="text-sm text-gray-600">
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Having trouble?{' '}
                   <button
                     type="button"
@@ -408,12 +494,17 @@ const CreateTenantPage: React.FC = () => {
                       setErrors({});
                       setNameAvailable(null);
                     }}
-                    className="font-medium text-blue-600 hover:text-blue-500"
+                    className="font-medium transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
                   >
                     Try a different name
                   </button>
                   {' or '}
-                  <a href="/support" className="font-medium text-blue-600 hover:text-blue-500">
+                  <a 
+                    href="/support" 
+                    className="font-medium transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
+                  >
                     contact support
                   </a>
                 </p>
@@ -426,14 +517,28 @@ const CreateTenantPage: React.FC = () => {
         <div className="mt-6">
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
+              <div 
+                className="w-full border-t"
+                style={{ borderColor: colors.utility.secondaryText + '40' }}
+              />
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-gray-50 text-gray-500">Need help?</span>
+              <span 
+                className="px-2 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.secondaryText
+                }}
+              >
+                Need help?
+              </span>
             </div>
           </div>
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Your workspace is where your team will collaborate on contracts and documents.
               You can invite team members after creating your workspace.
             </p>

@@ -6,6 +6,7 @@ import { ConnectIntegrationParams, IntegrationProvider, TenantIntegration, TestC
 import DynamicFormField from './DynamicFormField';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface IntegrationSetupModalProps {
   provider: IntegrationProvider;
@@ -28,6 +29,10 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Load initial data from existing integration
   useEffect(() => {
@@ -270,13 +275,25 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
   
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-card rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div 
+        className="rounded-lg shadow-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col transition-colors"
+        style={{ backgroundColor: colors.utility.secondaryBackground }}
+      >
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="text-xl font-semibold">{provider.display_name} Integration</h2>
+        <div 
+          className="px-6 py-4 border-b flex items-center justify-between transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
+          <h2 
+            className="text-xl font-semibold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {provider.display_name} Integration
+          </h2>
           <button 
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
+            className="transition-colors hover:opacity-80"
+            style={{ color: colors.utility.secondaryText }}
           >
             <X size={20} />
           </button>
@@ -284,33 +301,72 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
         
         {/* Modal Content */}
         <div className="px-6 py-4 overflow-y-auto flex-grow">
-          <p className="text-muted-foreground mb-6">{provider.description}</p>
+          <p 
+            className="mb-6 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {provider.description}
+          </p>
           
           {/* Test Results */}
           {testResult && (
-            <div className={cn(
-              "p-4 rounded-md mb-6 flex items-start",
-              testResult.success
-                ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-            )}>
+            <div 
+              className="p-4 rounded-md mb-6 flex items-start border transition-colors"
+              style={{
+                backgroundColor: testResult.success 
+                  ? `${colors.semantic.success}10` 
+                  : `${colors.semantic.error}10`,
+                borderColor: testResult.success 
+                  ? `${colors.semantic.success}40` 
+                  : `${colors.semantic.error}40`
+              }}
+            >
               {testResult.success ? (
-                <CheckCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+                <CheckCircle 
+                  className="h-5 w-5 mr-3 flex-shrink-0" 
+                  style={{ color: colors.semantic.success }}
+                />
               ) : (
-                <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+                <AlertCircle 
+                  className="h-5 w-5 mr-3 flex-shrink-0" 
+                  style={{ color: colors.semantic.error }}
+                />
               )}
               <div>
-                <p className="font-medium">
+                <p 
+                  className="font-medium transition-colors"
+                  style={{ 
+                    color: testResult.success 
+                      ? colors.semantic.success 
+                      : colors.semantic.error 
+                  }}
+                >
                   {testResult.success ? 'Connection successful' : 'Connection failed'}
                 </p>
-                <p>{testResult.message}</p>
+                <p 
+                  className="transition-colors"
+                  style={{ 
+                    color: testResult.success 
+                      ? colors.semantic.success 
+                      : colors.semantic.error 
+                  }}
+                >
+                  {testResult.message}
+                </p>
               </div>
             </div>
           )}
           
           {/* Note for existing integrations */}
           {tenantIntegration && (
-            <div className="p-4 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-md mb-6">
+            <div 
+              className="p-4 rounded-md mb-6 border transition-colors"
+              style={{
+                backgroundColor: `${colors.brand.primary}10`,
+                borderColor: `${colors.brand.primary}40`,
+                color: colors.brand.primary
+              }}
+            >
               <p className="text-sm">
                 <strong>Note:</strong> For security reasons, sensitive fields like API keys are not shown. 
                 Leave them blank to keep existing values, or enter new values to update them.
@@ -332,15 +388,22 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
         </div>
         
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-border flex justify-between">
+        <div 
+          className="px-6 py-4 border-t flex justify-between transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
           <button
             onClick={handleTestConnection}
             disabled={isTestDisabled()}
             className={cn(
-              "px-4 py-2 rounded-md text-sm",
-              "border border-border hover:bg-muted transition-colors",
+              "px-4 py-2 rounded-md text-sm border transition-all duration-200",
               isTestDisabled() && "opacity-50 cursor-not-allowed"
             )}
+            style={{
+              borderColor: `${colors.utility.primaryText}40`,
+              backgroundColor: colors.utility.primaryBackground,
+              color: colors.utility.primaryText
+            }}
           >
             {isTestingConnection ? (
               <>
@@ -355,7 +418,12 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
           <div className="flex space-x-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-md text-sm border border-primary text-primary hover:bg-primary/5 transition-colors"
+              className="px-4 py-2 rounded-md text-sm border transition-all duration-200 hover:opacity-80"
+              style={{
+                color: colors.brand.primary,
+                borderColor: colors.brand.primary,
+                backgroundColor: `${colors.brand.primary}05`
+              }}
             >
               Cancel
             </button>
@@ -364,10 +432,12 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={cn(
-                "px-4 py-2 rounded-md text-sm",
-                "bg-primary text-primary-foreground hover:bg-primary/90 transition-colors",
+                "px-4 py-2 rounded-md text-sm text-white transition-all duration-200 hover:opacity-90",
                 isSubmitting && "opacity-50 cursor-not-allowed"
               )}
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
             >
               {isSubmitting ? (
                 <>

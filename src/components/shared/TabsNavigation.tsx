@@ -1,5 +1,6 @@
 // src/components/shared/TabsNavigation.tsx
 import React from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface Tab {
   id: string;
@@ -26,59 +27,104 @@ const TabsNavigation: React.FC<TabsNavigationProps> = ({
   size = 'md',
   className = ''
 }) => {
-  const getTabClasses = (tab: Tab, isActive: boolean) => {
-    const baseClasses = `
-      flex items-center gap-2 font-medium transition-colors cursor-pointer
-      ${size === 'sm' ? 'px-3 py-2 text-sm' : 
-        size === 'lg' ? 'px-6 py-4 text-base' : 
-        'px-4 py-3 text-sm'}
-    `;
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  const getSizeClasses = () => {
+    switch (size) {
+      case 'sm':
+        return 'px-3 py-2 text-sm';
+      case 'lg':
+        return 'px-6 py-4 text-base';
+      default:
+        return 'px-4 py-3 text-sm';
+    }
+  };
+
+  const getTabStyles = (tab: Tab, isActive: boolean) => {
+    const baseStyle = {
+      transition: 'all 0.2s ease',
+      cursor: 'pointer'
+    };
 
     if (variant === 'underline') {
-      return `
-        ${baseClasses}
-        border-b-2 transition-colors
-        ${isActive
-          ? 'border-primary text-primary bg-primary/5'
-          : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-        }
-      `;
+      return {
+        ...baseStyle,
+        borderBottom: `2px solid ${isActive ? colors.brand.primary : 'transparent'}`,
+        color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+        backgroundColor: isActive ? colors.brand.primary + '05' : 'transparent'
+      };
     }
 
     if (variant === 'pills') {
-      return `
-        ${baseClasses}
-        rounded-md
-        ${isActive
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-        }
-      `;
+      return {
+        ...baseStyle,
+        borderRadius: '6px',
+        color: isActive ? '#ffffff' : colors.utility.secondaryText,
+        background: isActive 
+          ? `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+          : 'transparent'
+      };
     }
 
     // Default variant
-    return `
-      ${baseClasses}
-      ${isActive
-        ? 'text-primary'
-        : 'text-muted-foreground hover:text-foreground'
-      }
-    `;
+    return {
+      ...baseStyle,
+      color: isActive ? colors.brand.primary : colors.utility.secondaryText
+    };
   };
 
-  const getCountClasses = (tab: Tab, isActive: boolean) => {
-    const baseClasses = 'text-xs font-medium';
-    
+  const handleTabHover = (e: React.MouseEvent<HTMLButtonElement>, tab: Tab, isActive: boolean) => {
+    if (isActive) return;
+
+    if (variant === 'underline') {
+      e.currentTarget.style.color = colors.utility.primaryText;
+      e.currentTarget.style.borderBottomColor = colors.utility.secondaryText + '50';
+    } else if (variant === 'pills') {
+      e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
+      e.currentTarget.style.color = colors.utility.primaryText;
+    } else {
+      e.currentTarget.style.color = colors.utility.primaryText;
+    }
+  };
+
+  const handleTabLeave = (e: React.MouseEvent<HTMLButtonElement>, tab: Tab, isActive: boolean) => {
+    if (isActive) return;
+
+    const styles = getTabStyles(tab, false);
+    Object.assign(e.currentTarget.style, styles);
+  };
+
+  const getCountStyles = (tab: Tab, isActive: boolean) => {
     if (variant === 'pills' && isActive) {
-      return `${baseClasses} text-primary-foreground/80`;
+      return {
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontSize: '0.75rem',
+        fontWeight: '500'
+      };
     }
     
-    return `${baseClasses} text-muted-foreground`;
+    return {
+      color: colors.utility.secondaryText,
+      fontSize: '0.75rem',
+      fontWeight: '500'
+    };
   };
 
   return (
-    <div className={`bg-card rounded-lg shadow-sm border border-border ${className}`}>
-      <div className={variant === 'underline' ? 'border-b border-border' : 'p-1'}>
+    <div 
+      className={`rounded-lg shadow-sm border transition-colors ${className}`}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.secondaryText + '20'
+      }}
+    >
+      <div 
+        className={variant === 'underline' ? 'border-b' : 'p-1'}
+        style={{
+          borderColor: variant === 'underline' ? colors.utility.secondaryText + '20' : 'transparent'
+        }}
+      >
         <div className="flex">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -88,14 +134,17 @@ const TabsNavigation: React.FC<TabsNavigationProps> = ({
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={getTabClasses(tab, isActive)}
+                className={`flex items-center gap-2 font-medium ${getSizeClasses()}`}
+                style={getTabStyles(tab, isActive)}
+                onMouseEnter={(e) => handleTabHover(e, tab, isActive)}
+                onMouseLeave={(e) => handleTabLeave(e, tab, isActive)}
               >
                 {IconComponent && (
                   <IconComponent className="h-4 w-4" />
                 )}
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
-                  <span className={getCountClasses(tab, isActive)}>
+                  <span style={getCountStyles(tab, isActive)}>
                     {tab.count}
                   </span>
                 )}

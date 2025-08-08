@@ -1,6 +1,7 @@
 // src/components/integrations/StatusBadge.tsx
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface StatusBadgeProps {
   status: string;
@@ -15,24 +16,44 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
   size = 'md',
   className 
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   // Get badge color based on status
   const getStatusStyles = () => {
     if (!isActive) {
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+      return {
+        backgroundColor: `${colors.utility.secondaryText}20`,
+        color: colors.utility.secondaryText
+      };
     }
     
     switch (status.toLowerCase()) {
       case 'connected':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+        return {
+          backgroundColor: `${colors.semantic.success}20`,
+          color: colors.semantic.success
+        };
       case 'failed':
       case 'configuration error':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+        return {
+          backgroundColor: `${colors.semantic.error}20`,
+          color: colors.semantic.error
+        };
       case 'pending':
       case 'pending verification':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+        return {
+          backgroundColor: `${colors.semantic.warning}20`,
+          color: colors.semantic.warning
+        };
       case 'not configured':
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
+        return {
+          backgroundColor: `${colors.utility.secondaryText}20`,
+          color: colors.utility.secondaryText
+        };
     }
   };
   
@@ -60,14 +81,16 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({
       .join(' ');
   };
   
+  const statusStyles = getStatusStyles();
+  
   return (
     <span 
       className={cn(
-        'inline-flex items-center rounded-full font-medium',
-        getStatusStyles(),
+        'inline-flex items-center rounded-full font-medium transition-colors',
         getSizeClasses(),
         className
       )}
+      style={statusStyles}
     >
       {formatStatus()}
     </span>

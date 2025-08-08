@@ -1,4 +1,3 @@
-// src/pages/catalog/ServicesPage.tsx
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import CatalogContainer from '../../components/catalog/shared/CatalogContainer';
@@ -9,7 +8,7 @@ const ServicesPage: React.FC = () => {
     <>
       <Helmet>
         <title>Services Catalog | ContractNest</title>
-        <meta name="description" content="Manage your service catalog items including professional services, maintenance packages, and consulting offerings." />
+        <meta name="description" content="Manage your service catalog items..." />
       </Helmet>
       
       <CatalogContainer catalogType={CATALOG_ITEM_TYPES.SERVICE} />

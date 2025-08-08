@@ -33,11 +33,14 @@ const RegisterPage: React.FC = () => {
   
   // Auth context
   const { register, isAuthenticated, isLoading, error, clearError } = useAuth();
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
   
   // Ref to prevent duplicate Google signup attempts
   const googleSignupInProgress = useRef(false);
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Track page view when component mounts
   useEffect(() => {
@@ -67,14 +70,14 @@ const RegisterPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
         },
       });
     }
-  }, [error]);
+  }, [error, colors.semantic.error]);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -146,7 +149,7 @@ const RegisterPage: React.FC = () => {
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -269,156 +272,170 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-200 ${
-      isDarkMode 
-        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-indigo-900' 
-        : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'
-    }`}>
+    <div 
+      className="min-h-screen flex transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
+      }}
+    >
       {/* Background Pattern */}
-      <div className={`absolute inset-0 transition-opacity ${
-        isDarkMode ? 'opacity-10' : 'opacity-5'
-      }`} style={{
-        backgroundImage: `
-          linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
-          linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
-        `,
-        backgroundSize: '20px 20px'
-      }}></div>
+      <div 
+        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+        style={{
+          backgroundImage: `
+            linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
+            linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px'
+        }}
+      />
 
       {/* Left Side - Value Proposition (Hidden on mobile) */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-12 relative z-10">
         <div className="max-w-md">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-3 mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+            <div 
+              className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+              style={{
+                background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
+            >
               <Shield className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className={`text-3xl font-bold transition-colors ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>ContractNest</h1>
-              <p className={`text-sm transition-colors ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-              }`}>Contract Management Made Simple</p>
+              <h1 
+                className="text-3xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                ContractNest
+              </h1>
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Contract Management Made Simple
+              </p>
             </div>
           </div>
 
           {/* Main Headline */}
-          <h2 className={`text-4xl font-bold mb-6 transition-colors ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>
+          <h2 
+            className="text-4xl font-bold mb-6 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             Start Managing Contracts Like a Pro
           </h2>
 
-          <p className={`text-xl mb-8 transition-colors ${
-            isDarkMode ? 'text-gray-300' : 'text-gray-600'
-          }`}>
+          <p 
+            className="text-xl mb-8 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             Join thousands of businesses who trust ContractNest to streamline their contract management.
           </p>
 
           {/* Free Trial Banner */}
-          <div className={`rounded-2xl p-6 mb-8 border-2 transition-colors ${
-            isDarkMode 
-              ? 'bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-green-400' 
-              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-400'
-          }`}>
+          <div 
+            className="rounded-2xl p-6 mb-8 border-2 transition-colors"
+            style={{
+              background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
+              borderColor: colors.semantic.success
+            }}
+          >
             <div className="flex items-center space-x-3 mb-4">
-              <Gift className={`w-8 h-8 transition-colors ${
-                isDarkMode ? 'text-green-400' : 'text-green-600'
-              }`} />
+              <Gift 
+                className="w-8 h-8 transition-colors"
+                style={{ color: colors.semantic.success }}
+              />
               <div>
-                <h3 className={`text-lg font-bold transition-colors ${
-                  isDarkMode ? 'text-green-400' : 'text-green-700'
-                }`}>Start Free Today!</h3>
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-green-300' : 'text-green-600'
-                }`}>Your first 3 contracts are completely free</p>
+                <h3 
+                  className="text-lg font-bold transition-colors"
+                  style={{ color: colors.semantic.success }}
+                >
+                  Start Free Today!
+                </h3>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.semantic.success }}
+                >
+                  Your first 3 contracts are completely free
+                </p>
               </div>
             </div>
             <div className="space-y-2">
-              <div className={`flex items-center space-x-2 text-sm transition-colors ${
-                isDarkMode ? 'text-green-300' : 'text-green-600'
-              }`}>
-                <Check className="w-4 h-4" />
-                <span>No credit card required</span>
-              </div>
-              <div className={`flex items-center space-x-2 text-sm transition-colors ${
-                isDarkMode ? 'text-green-300' : 'text-green-600'
-              }`}>
-                <Check className="w-4 h-4" />
-                <span>Full feature access</span>
-              </div>
-              <div className={`flex items-center space-x-2 text-sm transition-colors ${
-                isDarkMode ? 'text-green-300' : 'text-green-600'
-              }`}>
-                <Check className="w-4 h-4" />
-                <span>Setup in under 5 minutes</span>
-              </div>
+              {['No credit card required', 'Full feature access', 'Setup in under 5 minutes'].map((feature, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center space-x-2 text-sm transition-colors"
+                  style={{ color: colors.semantic.success }}
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{feature}</span>
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Feature Highlights */}
           <div className="space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mt-1">
-                <Shield className="w-5 h-5 text-blue-600" />
+            {[
+              { icon: Shield, title: 'Enterprise Security', desc: 'Bank-level encryption and SOC 2 compliance', color: colors.brand.primary },
+              { icon: Users, title: 'Team Collaboration', desc: 'Invite unlimited team members to work together', color: colors.brand.tertiary },
+              { icon: Clock, title: 'Smart Reminders', desc: 'Never miss a renewal or important deadline again', color: colors.semantic.success }
+            ].map((feature, index) => (
+              <div key={index} className="flex items-start space-x-3">
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center mt-1"
+                  style={{ backgroundColor: `${feature.color}20` }}
+                >
+                  <feature.icon 
+                    className="w-5 h-5"
+                    style={{ color: feature.color }}
+                  />
+                </div>
+                <div>
+                  <h3 
+                    className="font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {feature.title}
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {feature.desc}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className={`font-semibold transition-colors ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>Enterprise Security</h3>
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>Bank-level encryption and SOC 2 compliance</p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mt-1">
-                <Users className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <h3 className={`font-semibold transition-colors ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>Team Collaboration</h3>
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>Invite unlimited team members to work together</p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-3">
-              <div className="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mt-1">
-                <Clock className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <h3 className={`font-semibold transition-colors ${
-                  isDarkMode ? 'text-white' : 'text-gray-900'
-                }`}>Smart Reminders</h3>
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>Never miss a renewal or important deadline again</p>
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Social Proof */}
-          <div className={`mt-8 p-4 rounded-lg border transition-colors ${
-            isDarkMode 
-              ? 'bg-gray-800/50 border-gray-700' 
-              : 'bg-white/50 border-gray-200'
-          }`}>
+          <div 
+            className="mt-8 p-4 rounded-lg border transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryBackground}50`,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
             <div className="flex items-center space-x-2 mb-2">
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
               ))}
-              <span className={`text-sm font-medium transition-colors ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-              }`}>5.0 from 500+ users</span>
+              <span 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                5.0 from 500+ users
+              </span>
             </div>
-            <p className={`text-sm transition-colors ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-            }`}>
+            <p 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               "ContractNest transformed how we manage our vendor contracts. Setup was incredibly easy!"
             </p>
           </div>
@@ -431,23 +448,34 @@ const RegisterPage: React.FC = () => {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="flex items-center justify-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+              <div 
+                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+                style={{
+                  background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
+              >
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <h1 className={`text-2xl font-bold transition-colors ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>ContractNest</h1>
+              <h1 
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                ContractNest
+              </h1>
             </div>
             
             {/* Mobile Free Trial Banner */}
-            <div className={`rounded-lg p-4 mb-6 border transition-colors ${
-              isDarkMode 
-                ? 'bg-gradient-to-r from-green-900/20 to-emerald-900/20 border-green-700' 
-                : 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200'
-            }`}>
-              <div className={`flex items-center justify-center space-x-2 transition-colors ${
-                isDarkMode ? 'text-green-400' : 'text-green-700'
-              }`}>
+            <div 
+              className="rounded-lg p-4 mb-6 border transition-colors"
+              style={{
+                background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
+                borderColor: `${colors.semantic.success}40`
+              }}
+            >
+              <div 
+                className="flex items-center justify-center space-x-2 transition-colors"
+                style={{ color: colors.semantic.success }}
+              >
                 <Gift className="w-5 h-5" />
                 <span className="text-sm font-medium">Your first 3 contracts are free!</span>
               </div>
@@ -455,18 +483,26 @@ const RegisterPage: React.FC = () => {
           </div>
 
           {/* Registration Card */}
-          <div className={`backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors ${
-            isDarkMode 
-              ? 'bg-gray-800/70 border-gray-700/20' 
-              : 'bg-white/70 border-white/20'
-          }`}>
+          <div 
+            className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryBackground}70`,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
             <div className="text-center mb-8">
-              <h2 className={`text-2xl font-bold mb-2 transition-colors ${
-                isDarkMode ? 'text-white' : 'text-gray-900'
-              }`}>Create Your Account</h2>
-              <p className={`transition-colors ${
-                isDarkMode ? 'text-gray-300' : 'text-gray-600'
-              }`}>Start managing contracts in minutes</p>
+              <h2 
+                className="text-2xl font-bold mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Create Your Account
+              </h2>
+              <p 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Start managing contracts in minutes
+              </p>
             </div>
 
             {/* Google Sign-up Button - Only show if Google OAuth is enabled */}
@@ -476,15 +512,20 @@ const RegisterPage: React.FC = () => {
                   type="button"
                   onClick={handleGoogleSignup}
                   disabled={isGoogleLoading || isLoading}
-                  className={`w-full flex items-center justify-center px-4 py-3 border rounded-lg shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 ${
-                    isDarkMode
-                      ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
-                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className="w-full flex items-center justify-center px-4 py-3 border rounded-lg shadow-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:opacity-90"
+                  style={{
+                    borderColor: `${colors.utility.secondaryText}40`,
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText,
+                    '--tw-ring-color': colors.brand.primary
+                  } as React.CSSProperties}
                 >
                   {isGoogleLoading ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
+                      <div 
+                        className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mr-2"
+                        style={{ borderColor: colors.utility.secondaryText }}
+                      />
                       Connecting to Google...
                     </>
                   ) : (
@@ -507,109 +548,102 @@ const RegisterPage: React.FC = () => {
               <div className="mb-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div className={`w-full border-t transition-colors ${
-                      isDarkMode ? 'border-gray-600' : 'border-gray-300'
-                    }`}></div>
+                    <div 
+                      className="w-full border-t transition-colors"
+                      style={{ borderColor: `${colors.utility.secondaryText}40` }}
+                    />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className={`px-2 transition-colors ${
-                      isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'
-                    }`}>Or sign up with email</span>
+                    <span 
+                      className="px-2 transition-colors"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.secondaryText
+                      }}
+                    >
+                      Or sign up with email
+                    </span>
                   </div>
                 </div>
               </div>
             )}
 
-            <div onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Name fields in two columns */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="firstName" className={`block text-sm font-medium mb-2 transition-colors ${
-                    isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                  }`}>
-                    First Name
-                  </label>
-                  <div className="relative">
-                    <User className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                    }`} />
-                    <input
-                      id="firstName"
-                      name="firstName"
-                      type="text"
-                      autoComplete="given-name"
-                      required
-                      className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                        isDarkMode 
-                          ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                          : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                      } ${errors.firstName ? 'border-red-500' : ''}`}
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      placeholder="John"
-                      disabled={isLoading || isGoogleLoading}
-                    />
+                {[
+                  { name: 'firstName', placeholder: 'John', label: 'First Name' },
+                  { name: 'lastName', placeholder: 'Doe', label: 'Last Name' }
+                ].map((field) => (
+                  <div key={field.name}>
+                    <label 
+                      htmlFor={field.name} 
+                      className="block text-sm font-medium mb-2 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {field.label}
+                    </label>
+                    <div className="relative">
+                      <User 
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <input
+                        id={field.name}
+                        name={field.name}
+                        type="text"
+                        required
+                        className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          errors[field.name] ? 'border-red-500' : ''
+                        }`}
+                        style={{
+                          borderColor: errors[field.name] ? '#ef4444' : `${colors.utility.secondaryText}40`,
+                          backgroundColor: colors.utility.secondaryBackground,
+                          color: colors.utility.primaryText,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
+                        value={formData[field.name as keyof typeof formData]}
+                        onChange={handleChange}
+                        placeholder={field.placeholder}
+                        disabled={isLoading || isGoogleLoading}
+                      />
+                    </div>
+                    {errors[field.name] && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors[field.name]}</p>
+                    )}
                   </div>
-                  {errors.firstName && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.firstName}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="lastName" className={`block text-sm font-medium mb-2 transition-colors ${
-                    isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                  }`}>
-                    Last Name
-                  </label>
-                  <div className="relative">
-                    <User className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors ${
-                      isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                    }`} />
-                    <input
-                      id="lastName"
-                      name="lastName"
-                      type="text"
-                      autoComplete="family-name"
-                      required
-                      className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                        isDarkMode 
-                          ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                          : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                      } ${errors.lastName ? 'border-red-500' : ''}`}
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      placeholder="Doe"
-                      disabled={isLoading || isGoogleLoading}
-                    />
-                  </div>
-                  {errors.lastName && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.lastName}</p>
-                  )}
-                </div>
+                ))}
               </div>
               
               {/* Email */}
               <div>
-                <label htmlFor="email" className={`block text-sm font-medium mb-2 transition-colors ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                }`}>
+                <label 
+                  htmlFor="email" 
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                  }`} />
+                  <Mail 
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                   <input
                     id="email"
                     name="email"
                     type="email"
                     autoComplete="email"
                     required
-                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                      isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                    } ${errors.email ? 'border-red-500' : ''}`}
+                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                      errors.email ? 'border-red-500' : ''
+                    }`}
+                    style={{
+                      borderColor: errors.email ? '#ef4444' : `${colors.utility.secondaryText}40`,
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="Enter your email"
@@ -623,25 +657,32 @@ const RegisterPage: React.FC = () => {
               
               {/* Workspace Name */}
               <div>
-                <label htmlFor="workspaceName" className={`block text-sm font-medium mb-2 transition-colors ${
-                  isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                }`}>
+                <label 
+                  htmlFor="workspaceName" 
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   Workspace Name
                 </label>
                 <div className="relative">
-                  <Building className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-400'
-                  }`} />
+                  <Building 
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
                   <input
                     id="workspaceName"
                     name="workspaceName"
                     type="text"
                     required
-                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                      isDarkMode 
-                        ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                    } ${errors.workspaceName ? 'border-red-500' : ''}`}
+                    className={`w-full pl-9 pr-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                      errors.workspaceName ? 'border-red-500' : ''
+                    }`}
+                    style={{
+                      borderColor: errors.workspaceName ? '#ef4444' : `${colors.utility.secondaryText}40`,
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary
+                    } as React.CSSProperties}
                     placeholder="my-company"
                     value={formData.workspaceName}
                     onChange={handleChange}
@@ -651,105 +692,76 @@ const RegisterPage: React.FC = () => {
                 {errors.workspaceName && (
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.workspaceName}</p>
                 )}
-                <p className={`mt-1 text-xs transition-colors ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`}>
+                <p 
+                  className="mt-1 text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Use only letters, numbers, hyphens, and underscores (3-50 characters)
                 </p>
               </div>
               
               {/* Password fields in two columns */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="password" className={`block text-sm font-medium mb-2 transition-colors ${
-                    isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                  }`}>
-                    Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      className={`w-full pl-3 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                        isDarkMode 
-                          ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                          : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                      } ${errors.password ? 'border-red-500' : ''}`}
-                      value={formData.password}
-                      onChange={handleChange}
-                      placeholder="Create password"
-                      disabled={isLoading || isGoogleLoading}
-                    />
-                    <button
-                      type="button"
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors ${
-                        isDarkMode 
-                          ? 'text-gray-400 hover:text-gray-200' 
-                          : 'text-gray-400 hover:text-gray-600'
-                      }`}
-                      onClick={togglePasswordVisibility}
-                      disabled={isLoading || isGoogleLoading}
+                {[
+                  { name: 'password', show: showPassword, toggle: togglePasswordVisibility, placeholder: 'Create password', label: 'Password' },
+                  { name: 'confirmPassword', show: showConfirmPassword, toggle: toggleConfirmPasswordVisibility, placeholder: 'Confirm password', label: 'Confirm Password' }
+                ].map((field) => (
+                  <div key={field.name}>
+                    <label 
+                      htmlFor={field.name} 
+                      className="block text-sm font-medium mb-2 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                      {field.label}
+                    </label>
+                    <div className="relative">
+                      <input
+                        id={field.name}
+                        name={field.name}
+                        type={field.show ? "text" : "password"}
+                        autoComplete="new-password"
+                        required
+                        className={`w-full pl-3 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          errors[field.name] ? 'border-red-500' : ''
+                        }`}
+                        style={{
+                          borderColor: errors[field.name] ? '#ef4444' : `${colors.utility.secondaryText}40`,
+                          backgroundColor: colors.utility.secondaryBackground,
+                          color: colors.utility.primaryText,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
+                        value={formData[field.name as keyof typeof formData]}
+                        onChange={handleChange}
+                        placeholder={field.placeholder}
+                        disabled={isLoading || isGoogleLoading}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors hover:opacity-80"
+                        style={{ color: colors.utility.secondaryText }}
+                        onClick={field.toggle}
+                        disabled={isLoading || isGoogleLoading}
+                      >
+                        {field.show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {errors[field.name] && (
+                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors[field.name]}</p>
+                    )}
                   </div>
-                  {errors.password && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.password}</p>
-                  )}
-                </div>
-                
-                <div>
-                  <label htmlFor="confirmPassword" className={`block text-sm font-medium mb-2 transition-colors ${
-                    isDarkMode ? 'text-gray-200' : 'text-gray-700'
-                  }`}>
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      className={`w-full pl-3 pr-10 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
-                        isDarkMode 
-                          ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
-                          : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'
-                      } ${errors.confirmPassword ? 'border-red-500' : ''}`}
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Confirm password"
-                      disabled={isLoading || isGoogleLoading}
-                    />
-                    <button
-                      type="button"
-                      className={`absolute right-3 top-1/2 transform -translate-y-1/2 transition-colors ${
-                        isDarkMode 
-                          ? 'text-gray-400 hover:text-gray-200' 
-                          : 'text-gray-400 hover:text-gray-600'
-                      }`}
-                      onClick={toggleConfirmPasswordVisibility}
-                      disabled={isLoading || isGoogleLoading}
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {errors.confirmPassword && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.confirmPassword}</p>
-                  )}
-                </div>
+                ))}
               </div>
 
               {/* Create Account Button */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  onClick={handleSubmit}
                   disabled={isLoading || isGoogleLoading}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2"
+                  className="w-full py-3 px-4 text-white font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center space-x-2 hover:opacity-90"
+                  style={{
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                    '--tw-ring-color': colors.brand.primary
+                  } as React.CSSProperties}
                 >
                   {isLoading ? (
                     <>
@@ -764,18 +776,20 @@ const RegisterPage: React.FC = () => {
                   )}
                 </button>
               </div>
-            </div>
+            </form>
             
             {/* Terms and Sign In Link */}
             <div className="mt-6 space-y-4">
               <div className="text-center">
-                <p className={`text-xs transition-colors ${
-                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                }`}>
+                <p 
+                  className="text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   By signing up, you agree to our{' '}
                   <Link 
                     to="/terms" 
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    className="transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, { menu_item: 'terms_link' })}
                   >
                     Terms of Service
@@ -783,7 +797,8 @@ const RegisterPage: React.FC = () => {
                   and{' '}
                   <Link 
                     to="/privacy" 
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    className="transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, { menu_item: 'privacy_link' })}
                   >
                     Privacy Policy
@@ -792,13 +807,15 @@ const RegisterPage: React.FC = () => {
               </div>
               
               <div className="text-center">
-                <p className={`text-sm transition-colors ${
-                  isDarkMode ? 'text-gray-300' : 'text-gray-600'
-                }`}>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Already have an account?{' '}
                   <Link 
                     to="/login" 
-                    className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                    className="font-medium transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(AUTH_EVENTS.LOGIN, { source: 'register_page' })}
                   >
                     Sign in instead
@@ -810,9 +827,10 @@ const RegisterPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p className={`text-xs flex items-center justify-center space-x-1 transition-colors ${
-              isDarkMode ? 'text-gray-400' : 'text-gray-500'
-            }`}>
+            <p 
+              className="text-xs flex items-center justify-center space-x-1 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               <Shield className="w-3 h-3" />
               <span>Your data is secured with enterprise-grade encryption</span>
             </p>

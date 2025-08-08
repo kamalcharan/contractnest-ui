@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { 
   Building2, 
   Search, 
@@ -19,15 +20,16 @@ interface TenantCardProps {
   tenant: any;
   onSelect: (tenant: any) => void;
   isSelected?: boolean;
+  colors: any;
 }
 
-const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected }) => {
+const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected, colors }) => {
   const getBadges = () => {
     const badges = [];
-    if (tenant.is_default) badges.push({ label: 'Default', color: 'bg-blue-100 text-blue-700' });
-    if (tenant.is_admin) badges.push({ label: 'Admin Workspace', color: 'bg-purple-100 text-purple-700' });
-    if (tenant.is_owner) badges.push({ label: 'Owner', color: 'bg-green-100 text-green-700' });
-    if (tenant.is_explicitly_assigned) badges.push({ label: 'Assigned', color: 'bg-gray-100 text-gray-700' });
+    if (tenant.is_default) badges.push({ label: 'Default', color: `${colors.brand.primary}20`, textColor: colors.brand.primary });
+    if (tenant.is_admin) badges.push({ label: 'Admin Workspace', color: `${colors.brand.tertiary}20`, textColor: colors.brand.tertiary });
+    if (tenant.is_owner) badges.push({ label: 'Owner', color: `${colors.semantic.success}20`, textColor: colors.semantic.success });
+    if (tenant.is_explicitly_assigned) badges.push({ label: 'Assigned', color: `${colors.utility.secondaryText}20`, textColor: colors.utility.secondaryText });
     return badges;
   };
 
@@ -36,32 +38,39 @@ const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected })
   return (
     <button
       onClick={() => onSelect(tenant)}
-      className={`
-        w-full text-left p-6 rounded-xl border-2 transition-all duration-200
-        ${isSelected 
-          ? 'border-primary bg-primary/5 shadow-lg scale-[1.02]' 
-          : 'border-gray-200 hover:border-gray-300 hover:shadow-md hover:scale-[1.01]'
-        }
-      `}
+      className="w-full text-left p-6 rounded-xl border-2 transition-all duration-200 hover:scale-[1.01]"
+      style={{
+        borderColor: isSelected ? colors.brand.primary : colors.utility.secondaryText + '40',
+        backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.secondaryBackground,
+        boxShadow: isSelected ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : undefined
+      }}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-4">
-          <div className={`
-            w-14 h-14 rounded-xl flex items-center justify-center font-bold text-xl
-            ${tenant.is_admin 
-              ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg' 
-              : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700'
-            }
-          `}>
+          <div 
+            className="w-14 h-14 rounded-xl flex items-center justify-center font-bold text-xl shadow-lg"
+            style={{
+              background: tenant.is_admin 
+                ? `linear-gradient(to bottom right, ${colors.brand.tertiary}, ${colors.brand.secondary})` 
+                : `linear-gradient(to bottom right, ${colors.utility.secondaryText}20, ${colors.utility.secondaryText}40)`,
+              color: tenant.is_admin ? '#FFF' : colors.utility.primaryText
+            }}
+          >
             {tenant.is_admin ? <Crown size={24} /> : tenant.name.substring(0, 2).toUpperCase()}
           </div>
           
           <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h3 
+              className="text-lg font-semibold flex items-center gap-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               {tenant.name}
-              {tenant.is_default && <Star size={16} className="text-yellow-500 fill-yellow-500" />}
+              {tenant.is_default && <Star size={16} style={{ color: colors.semantic.warning }} className="fill-current" />}
             </h3>
-            <p className="text-sm text-gray-500 mt-1">
+            <p 
+              className="text-sm mt-1 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               Workspace Code: <span className="font-mono">{tenant.workspace_code}</span>
             </p>
             
@@ -71,7 +80,11 @@ const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected })
                 {badges.map((badge, idx) => (
                   <span
                     key={idx}
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}
+                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                    style={{
+                      backgroundColor: badge.color,
+                      color: badge.textColor
+                    }}
                   >
                     {badge.label}
                   </span>
@@ -83,10 +96,11 @@ const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected })
         
         <ArrowRight 
           size={20} 
-          className={`
-            text-gray-400 transition-all
-            ${isSelected ? 'text-primary translate-x-1' : ''}
-          `}
+          className="transition-all"
+          style={{ 
+            color: isSelected ? colors.brand.primary : colors.utility.secondaryText,
+            transform: isSelected ? 'translateX(4px)' : 'translateX(0)'
+          }}
         />
       </div>
     </button>
@@ -95,10 +109,14 @@ const TenantCard: React.FC<TenantCardProps> = ({ tenant, onSelect, isSelected })
 
 const SelectTenantPage: React.FC = () => {
   const { tenants, setCurrentTenant, isLoading, user } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'admin' | 'assigned' | 'recent'>('all');
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Mock recent tenants - in production, this would come from localStorage or API
   const [recentTenantIds] = useState<string[]>([]);
@@ -128,10 +146,21 @@ const SelectTenantPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div 
+        className="min-h-screen flex items-center justify-center transition-colors duration-200"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading workspaces...</p>
+          <div 
+            className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 mx-auto"
+            style={{ borderColor: colors.brand.primary }}
+          />
+          <p 
+            className="mt-4 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Loading workspaces...
+          </p>
         </div>
       </div>
     );
@@ -167,18 +196,42 @@ const SelectTenantPage: React.FC = () => {
   const hasMultipleTenants = tenants.length > 5;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <div 
+      className="min-h-screen transition-colors duration-200"
+      style={{
+        background: isDarkMode 
+          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+      }}
+    >
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div 
+        className="shadow-sm border-b transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.secondaryText + '20'
+        }}
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Building2 className="h-8 w-8 text-primary" />
+              <Building2 
+                className="h-8 w-8"
+                style={{ color: colors.brand.primary }}
+              />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Select Workspace</h1>
-                <p className="text-sm text-gray-600">
+                <h1 
+                  className="text-2xl font-bold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Select Workspace
+                </h1>
+                <p 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Welcome back, {user?.first_name || user?.email}
-                  {isAdmin && <span className="ml-2 text-purple-600">• System Admin</span>}
+                  {isAdmin && <span style={{ color: colors.brand.tertiary }}>• System Admin</span>}
                 </p>
               </div>
             </div>
@@ -192,13 +245,23 @@ const SelectTenantPage: React.FC = () => {
           <div className="mb-8 space-y-4">
             {/* Search bar */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Search 
+                className="absolute left-3 top-1/2 transform -translate-y-1/2"
+                style={{ color: colors.utility.secondaryText }}
+                size={20} 
+              />
               <input
                 type="text"
                 placeholder="Search workspaces by name or code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
               />
             </div>
 
@@ -206,42 +269,42 @@ const SelectTenantPage: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setSelectedCategory('all')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedCategory === 'all'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className="px-4 py-2 rounded-lg font-medium transition-colors"
+                style={{
+                  backgroundColor: selectedCategory === 'all' ? colors.brand.primary : `${colors.utility.secondaryText}20`,
+                  color: selectedCategory === 'all' ? '#FFF' : colors.utility.primaryText
+                }}
               >
                 All ({tenants.length})
               </button>
               <button
                 onClick={() => setSelectedCategory('admin')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedCategory === 'admin'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className="px-4 py-2 rounded-lg font-medium transition-colors"
+                style={{
+                  backgroundColor: selectedCategory === 'admin' ? colors.brand.primary : `${colors.utility.secondaryText}20`,
+                  color: selectedCategory === 'admin' ? '#FFF' : colors.utility.primaryText
+                }}
               >
                 Admin ({adminWorkspaces.length})
               </button>
               <button
                 onClick={() => setSelectedCategory('assigned')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  selectedCategory === 'assigned'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className="px-4 py-2 rounded-lg font-medium transition-colors"
+                style={{
+                  backgroundColor: selectedCategory === 'assigned' ? colors.brand.primary : `${colors.utility.secondaryText}20`,
+                  color: selectedCategory === 'assigned' ? '#FFF' : colors.utility.primaryText
+                }}
               >
                 Assigned ({assignedWorkspaces.length})
               </button>
               {recentTenantIds.length > 0 && (
                 <button
                   onClick={() => setSelectedCategory('recent')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    selectedCategory === 'recent'
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className="px-4 py-2 rounded-lg font-medium transition-colors"
+                  style={{
+                    backgroundColor: selectedCategory === 'recent' ? colors.brand.primary : `${colors.utility.secondaryText}20`,
+                    color: selectedCategory === 'recent' ? '#FFF' : colors.utility.primaryText
+                  }}
                 >
                   Recent ({recentTenantIds.length})
                 </button>
@@ -253,15 +316,33 @@ const SelectTenantPage: React.FC = () => {
         {/* Tenant grid/list */}
         <div className="space-y-6">
           {filteredTenants.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-xl border-2 border-dashed border-gray-300">
-              <Building2 className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-900">No workspaces found</h3>
-              <p className="mt-2 text-sm text-gray-600">
+            <div 
+              className="text-center py-12 rounded-xl border-2 border-dashed transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.secondaryText + '40'
+              }}
+            >
+              <Building2 
+                className="mx-auto h-12 w-12"
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <h3 
+                className="mt-4 text-lg font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                No workspaces found
+              </h3>
+              <p 
+                className="mt-2 text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 {searchTerm ? 'Try adjusting your search terms' : 'You don\'t have access to any workspaces yet'}
               </p>
               <button
                 onClick={handleCreateTenant}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90"
+                className="mt-4 inline-flex items-center px-4 py-2 border-transparent text-sm font-medium rounded-md text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: colors.brand.primary }}
               >
                 Create New Workspace
               </button>
@@ -271,8 +352,11 @@ const SelectTenantPage: React.FC = () => {
             <div>
               {adminWorkspaces.length > 0 && (
                 <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Shield className="text-purple-600" size={20} />
+                  <h3 
+                    className="text-lg font-semibold mb-4 flex items-center gap-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    <Shield style={{ color: colors.brand.tertiary }} size={20} />
                     Admin Workspaces
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -282,6 +366,7 @@ const SelectTenantPage: React.FC = () => {
                         tenant={tenant}
                         onSelect={handleSelectTenant}
                         isSelected={selectedTenant?.id === tenant.id}
+                        colors={colors}
                       />
                     ))}
                   </div>
@@ -290,8 +375,11 @@ const SelectTenantPage: React.FC = () => {
 
               {assignedWorkspaces.length > 0 && (
                 <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Users className="text-blue-600" size={20} />
+                  <h3 
+                    className="text-lg font-semibold mb-4 flex items-center gap-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    <Users style={{ color: colors.brand.primary }} size={20} />
                     Assigned Workspaces
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -301,6 +389,7 @@ const SelectTenantPage: React.FC = () => {
                         tenant={tenant}
                         onSelect={handleSelectTenant}
                         isSelected={selectedTenant?.id === tenant.id}
+                        colors={colors}
                       />
                     ))}
                   </div>
@@ -309,8 +398,11 @@ const SelectTenantPage: React.FC = () => {
 
               {otherWorkspaces.length > 0 && (
                 <div className="mb-8">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <Building2 className="text-gray-600" size={20} />
+                  <h3 
+                    className="text-lg font-semibold mb-4 flex items-center gap-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    <Building2 style={{ color: colors.utility.secondaryText }} size={20} />
                     Other Workspaces
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -320,6 +412,7 @@ const SelectTenantPage: React.FC = () => {
                         tenant={tenant}
                         onSelect={handleSelectTenant}
                         isSelected={selectedTenant?.id === tenant.id}
+                        colors={colors}
                       />
                     ))}
                   </div>
@@ -335,6 +428,7 @@ const SelectTenantPage: React.FC = () => {
                   tenant={tenant}
                   onSelect={handleSelectTenant}
                   isSelected={selectedTenant?.id === tenant.id}
+                  colors={colors}
                 />
               ))}
             </div>
@@ -345,7 +439,8 @@ const SelectTenantPage: React.FC = () => {
         <div className="mt-8 flex justify-between items-center max-w-2xl mx-auto">
           <button
             onClick={handleCreateTenant}
-            className="text-gray-600 hover:text-gray-900 font-medium text-sm"
+            className="font-medium text-sm transition-colors hover:opacity-80"
+            style={{ color: colors.utility.secondaryText }}
           >
             Create New Workspace
           </button>
@@ -353,13 +448,11 @@ const SelectTenantPage: React.FC = () => {
           <button
             onClick={handleContinue}
             disabled={!selectedTenant}
-            className={`
-              px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all
-              ${selectedTenant
-                ? 'bg-primary text-white hover:bg-primary/90'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }
-            `}
+            className="px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
+            style={{
+              backgroundColor: selectedTenant ? colors.brand.primary : colors.utility.secondaryText + '40',
+              color: selectedTenant ? '#FFF' : colors.utility.secondaryText
+            }}
           >
             Continue to {selectedTenant?.name || 'Workspace'}
             <ArrowRight size={20} />
@@ -368,12 +461,30 @@ const SelectTenantPage: React.FC = () => {
 
         {/* Info section for admin users */}
         {isAdmin && (
-          <div className="mt-12 p-6 bg-purple-50 rounded-xl border border-purple-200">
+          <div 
+            className="mt-12 p-6 rounded-xl border transition-colors"
+            style={{
+              backgroundColor: `${colors.brand.tertiary}10`,
+              borderColor: `${colors.brand.tertiary}40`
+            }}
+          >
             <div className="flex items-start gap-4">
-              <Sparkles className="text-purple-600 mt-1" size={24} />
+              <Sparkles 
+                className="mt-1"
+                style={{ color: colors.brand.tertiary }}
+                size={24} 
+              />
               <div>
-                <h3 className="text-lg font-semibold text-purple-900">System Admin Access</h3>
-                <p className="text-purple-700 mt-1">
+                <h3 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.brand.tertiary }}
+                >
+                  System Admin Access
+                </h3>
+                <p 
+                  className="mt-1 transition-colors"
+                  style={{ color: colors.brand.tertiary }}
+                >
                   As a system administrator, you have access to all workspaces in the platform. 
                   Admin workspaces are marked with a crown icon and purple highlight.
                 </p>

@@ -1,7 +1,7 @@
 // src/components/catalog/shared/CatalogPagination.tsx
 import React, { useMemo } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreHorizontal } from 'lucide-react';
-import { useTheme } from '../../../contexts/ThemeContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface CatalogPaginationProps {
   currentPage: number;
@@ -22,7 +22,10 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
   pageSize = 20,
   onPageSizeChange
 }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors - EXACT same pattern as LoginPage
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Calculate page numbers to display
   const pageNumbers = useMemo(() => {
@@ -62,23 +65,39 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
     return rangeWithDots;
   }, [currentPage, totalPages]);
   
-  // Button styles
+  // Button styles - Themed version
   const getButtonStyles = (isActive: boolean = false, isDisabled: boolean = false) => {
+    const baseClasses = 'transition-all duration-200';
+    
     if (isDisabled) {
-      return isDarkMode
-        ? 'bg-gray-800 text-gray-600 cursor-not-allowed border border-gray-700'
-        : 'bg-gray-50 text-gray-400 cursor-not-allowed border border-gray-200';
+      return {
+        className: `${baseClasses} cursor-not-allowed border opacity-50`,
+        style: {
+          backgroundColor: colors.utility.secondaryBackground,
+          color: colors.utility.secondaryText,
+          borderColor: `${colors.utility.primaryText}20`
+        }
+      };
     }
     
     if (isActive) {
-      return isDarkMode
-        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border border-transparent shadow-md'
-        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border border-transparent shadow-md';
+      return {
+        className: `${baseClasses} border shadow-md text-white`,
+        style: {
+          background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+          borderColor: colors.brand.primary
+        }
+      };
     }
     
-    return isDarkMode
-      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-700 hover:border-gray-600'
-      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 hover:border-gray-400';
+    return {
+      className: `${baseClasses} hover:opacity-80 border`,
+      style: {
+        backgroundColor: colors.utility.secondaryBackground,
+        color: colors.utility.primaryText,
+        borderColor: `${colors.utility.primaryText}20`
+      }
+    };
   };
   
   const pageSizeOptions = [10, 20, 50, 100];
@@ -88,17 +107,22 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
       {/* Page Size Selector */}
       {showPageSize && onPageSizeChange && (
         <div className="flex items-center space-x-2">
-          <label className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <label 
+            className="text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
             Show
           </label>
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-              isDarkMode
-                ? 'bg-gray-800 text-white border-gray-700 hover:border-gray-600'
-                : 'bg-white text-gray-900 border-gray-300 hover:border-gray-400'
-            } focus:outline-none focus:ring-2 focus:ring-blue-500/20`}
+            className="px-3 py-1.5 rounded-lg text-sm border transition-all hover:opacity-80 focus:outline-none focus:ring-2"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              borderColor: `${colors.utility.primaryText}20`,
+              '--tw-ring-color': `${colors.brand.primary}20`
+            } as React.CSSProperties}
           >
             {pageSizeOptions.map((size) => (
               <option key={size} value={size}>
@@ -106,7 +130,10 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
               </option>
             ))}
           </select>
-          <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          <span 
+            className="text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
             per page
           </span>
         </div>
@@ -118,7 +145,9 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className={`p-2 rounded-lg transition-all duration-200 ${getButtonStyles(false, currentPage === 1)}`}
+          {...getButtonStyles(false, currentPage === 1)}
+          className={`p-2 rounded-lg ${getButtonStyles(false, currentPage === 1).className}`}
+          style={getButtonStyles(false, currentPage === 1).style}
           aria-label="First page"
           title="Go to first page"
         >
@@ -129,7 +158,8 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className={`p-2 rounded-lg transition-all duration-200 ${getButtonStyles(false, currentPage === 1)}`}
+          className={`p-2 rounded-lg ${getButtonStyles(false, currentPage === 1).className}`}
+          style={getButtonStyles(false, currentPage === 1).style}
           aria-label="Previous page"
           title="Go to previous page"
         >
@@ -143,7 +173,8 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
               return (
                 <span
                   key={`dots-${index}`}
-                  className={`px-2 py-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}
+                  className="px-2 py-1"
+                  style={{ color: colors.utility.secondaryText }}
                 >
                   <MoreHorizontal className="w-4 h-4" />
                 </span>
@@ -152,14 +183,14 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
             
             const page = pageNum as number;
             const isActive = page === currentPage;
+            const buttonStyle = getButtonStyles(isActive);
             
             return (
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`min-w-[2.5rem] px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                  getButtonStyles(isActive)
-                }`}
+                className={`min-w-[2.5rem] px-3 py-1.5 text-sm font-medium rounded-lg ${buttonStyle.className}`}
+                style={buttonStyle.style}
               >
                 {page}
               </button>
@@ -171,7 +202,8 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className={`p-2 rounded-lg transition-all duration-200 ${getButtonStyles(false, currentPage === totalPages)}`}
+          className={`p-2 rounded-lg ${getButtonStyles(false, currentPage === totalPages).className}`}
+          style={getButtonStyles(false, currentPage === totalPages).style}
           aria-label="Next page"
           title="Go to next page"
         >
@@ -182,7 +214,8 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className={`p-2 rounded-lg transition-all duration-200 ${getButtonStyles(false, currentPage === totalPages)}`}
+          className={`p-2 rounded-lg ${getButtonStyles(false, currentPage === totalPages).className}`}
+          style={getButtonStyles(false, currentPage === totalPages).style}
           aria-label="Last page"
           title="Go to last page"
         >
@@ -191,9 +224,18 @@ const CatalogPagination: React.FC<CatalogPaginationProps> = ({
       </div>
       
       {/* Page Info */}
-      <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-        Page <span className="font-medium">{currentPage}</span> of{' '}
-        <span className="font-medium">{totalPages}</span>
+      <div 
+        className="text-sm"
+        style={{ color: colors.utility.secondaryText }}
+      >
+        Page <span 
+          className="font-medium"
+          style={{ color: colors.utility.primaryText }}
+        >{currentPage}</span> of{' '}
+        <span 
+          className="font-medium"
+          style={{ color: colors.utility.primaryText }}
+        >{totalPages}</span>
       </div>
     </div>
   );

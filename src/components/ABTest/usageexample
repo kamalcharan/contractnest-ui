@@ -1,0 +1,349 @@
+// src/components/Landing/HeroSection.tsx - A/B Test Implementation Example
+import React from 'react';
+import { ExperimentComponent } from '../ABTest/ExperimentComponent';
+import { useABTest } from '../../contexts/ABTestContext';
+
+// Original Hero Component (Control)
+const OriginalHero: React.FC<{ buttonText?: string; color?: string }> = ({ 
+  buttonText = 'Get Early Access', 
+  color = 'red' 
+}) => {
+  const { trackConversion } = useABTest();
+
+  const handleCTAClick = () => {
+    trackConversion('hero_cta_test', 'demo_request');
+    // Handle demo request logic
+  };
+
+  return (
+    <section className="py-20 px-4">
+      <div className="max-w-4xl mx-auto text-center">
+        <h1 className="text-5xl font-bold mb-6">
+          Untangle Your Commitments with ContractNest
+        </h1>
+        <p className="text-xl mb-8 text-gray-600">
+          Transform service agreements into automated, collaborative digital contracts.
+        </p>
+        <button
+          onClick={handleCTAClick}
+          className={`px-8 py-4 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transition-all ${
+            color === 'red' ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'
+          }`}
+        >
+          {buttonText}
+        </button>
+      </div>
+    </section>
+  );
+};
+
+// Main Hero Section with A/B Testing
+export const HeroSection: React.FC = () => {
+  return (
+    <ExperimentComponent
+      experimentId="hero_cta_test"
+      fallback={<OriginalHero />}
+    >
+      {(variant) => (
+        <OriginalHero 
+          buttonText={variant.metadata.buttonText}
+          color={variant.metadata.color}
+        />
+      )}
+    </ExperimentComponent>
+  );
+};
+
+// src/components/Landing/PricingSection.tsx - Pricing Display A/B Test
+import React from 'react';
+import { ExperimentComponent } from '../ABTest/ExperimentComponent';
+import { useABTest } from '../../contexts/ABTestContext';
+
+const StandardPricing: React.FC = () => {
+  const { trackConversion } = useABTest();
+
+  const handlePricingClick = () => {
+    trackConversion('pricing_display_test', 'pricing_click');
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-lg border border-gray-200">
+      <div className="text-center">
+        <div className="text-4xl font-bold text-red-500 mb-2">₹250</div>
+        <div className="text-gray-600 mb-4">per contract</div>
+        <div className="text-sm text-gray-500 mb-6">No user limits • 100% OpEx</div>
+        <button 
+          onClick={handlePricingClick}
+          className="w-full bg-red-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-red-600"
+        >
+          Get Started
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const SavingsFocusedPricing: React.FC<{ comparisonText?: string }> = ({ 
+  comparisonText = 'vs ₹2000/user/month traditional software' 
+}) => {
+  const { trackConversion } = useABTest();
+
+  const handlePricingClick = () => {
+    trackConversion('pricing_display_test', 'pricing_click');
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-lg border-2 border-green-500 relative">
+      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+        <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+          Save 87%
+        </span>
+      </div>
+      <div className="text-center pt-4">
+        <div className="flex items-center justify-center mb-2">
+          <div className="text-2xl text-gray-400 line-through mr-3">₹2000</div>
+          <div className="text-4xl font-bold text-green-500">₹250</div>
+        </div>
+        <div className="text-gray-600 mb-2">per contract (not per user!)</div>
+        <div className="text-sm text-green-600 font-medium mb-4">{comparisonText}</div>
+        <div className="text-sm text-gray-500 mb-6">No user limits • 100% OpEx</div>
+        <button 
+          onClick={handlePricingClick}
+          className="w-full bg-green-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-600"
+        >
+          Start Saving Today
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export const PricingSection: React.FC = () => {
+  return (
+    <section className="py-20 px-4">
+      <div className="max-w-4xl mx-auto">
+        <h2 className="text-3xl font-bold text-center mb-12">Simple, Transparent Pricing</h2>
+        
+        <div className="max-w-md mx-auto">
+          <ExperimentComponent
+            experimentId="pricing_display_test"
+            fallback={<StandardPricing />}
+          >
+            {(variant) => {
+              if (variant.metadata.format === 'savings') {
+                return <SavingsFocusedPricing comparisonText={variant.metadata.comparisonText} />;
+              }
+              return <StandardPricing />;
+            }}
+          </ExperimentComponent>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// src/components/Forms/LeadCaptureForm.tsx - Form Fields A/B Test
+import React, { useState } from 'react';
+import { ExperimentComponent } from '../ABTest/ExperimentComponent';
+import { useABTest } from '../../contexts/ABTestContext';
+import { ConversionFormData } from '../../types/cro.types';
+
+interface FormFieldsConfig {
+  fields: string[];
+  optional: string[];
+  layout: 'vertical' | 'grid';
+}
+
+const LeadForm: React.FC<FormFieldsConfig> = ({ fields, optional, layout }) => {
+  const { trackConversion } = useABTest();
+  const [formData, setFormData] = useState<ConversionFormData>({
+    email: '',
+    companyName: '',
+    phone: '',
+    industry: ''
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // Track form submission
+      trackConversion('form_fields_test', 'form_submit');
+
+      // Submit form logic here
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+
+      // Track successful conversion
+      trackConversion('form_fields_test', 'demo_request', 100);
+      
+      alert('Thank you! We\'ll be in touch soon.');
+    } catch (error) {
+      console.error('Form submission failed:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isFieldRequired = (field: string) => !optional.includes(field);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className={layout === 'grid' ? 'grid grid-cols-2 gap-4' : 'space-y-4'}>
+        {fields.includes('email') && (
+          <div className={layout === 'grid' ? 'col-span-2' : ''}>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address {isFieldRequired('email') && '*'}
+            </label>
+            <input
+              type="email"
+              required={isFieldRequired('email')}
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="you@company.com"
+            />
+          </div>
+        )}
+
+        {fields.includes('company') && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Company Name {isFieldRequired('company') && '*'}
+            </label>
+            <input
+              type="text"
+              required={isFieldRequired('company')}
+              value={formData.companyName}
+              onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="Your Company"
+            />
+          </div>
+        )}
+
+        {fields.includes('phone') && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone {isFieldRequired('phone') ? '*' : '(Optional)'}
+            </label>
+            <input
+              type="tel"
+              required={isFieldRequired('phone')}
+              value={formData.phone}
+              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              placeholder="+91 9876543210"
+            />
+          </div>
+        )}
+
+        {fields.includes('industry') && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Industry {isFieldRequired('industry') ? '*' : '(Optional)'}
+            </label>
+            <select
+              required={isFieldRequired('industry')}
+              value={formData.industry}
+              onChange={(e) => setFormData(prev => ({ ...prev, industry: e.target.value }))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            >
+              <option value="">Select Industry</option>
+              <option value="healthcare">Healthcare</option>
+              <option value="manufacturing">Manufacturing</option>
+              <option value="hvac">HVAC</option>
+              <option value="consulting">Consulting</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full bg-red-500 text-white py-4 px-6 rounded-lg font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+      >
+        {isSubmitting ? 'Submitting...' : 'Get Free Demo'}
+      </button>
+    </form>
+  );
+};
+
+export const LeadCaptureForm: React.FC = () => {
+  return (
+    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-lg">
+      <h3 className="text-xl font-bold mb-4">Get Your Free Demo</h3>
+      
+      <ExperimentComponent
+        experimentId="form_fields_test"
+        fallback={<LeadForm fields={['email', 'company']} optional={[]} layout="vertical" />}
+      >
+        {(variant) => (
+          <LeadForm
+            fields={variant.metadata.fields}
+            optional={variant.metadata.optional}
+            layout={variant.metadata.layout}
+          />
+        )}
+      </ExperimentComponent>
+    </div>
+  );
+};
+
+// src/App.tsx - Main App Integration
+import React from 'react';
+import { ABTestProvider } from './contexts/ABTestContext';
+import { ABTestDebugPanel } from './components/ABTest/ABTestDebugPanel';
+import { HeroSection } from './components/Landing/HeroSection';
+import { PricingSection } from './components/Landing/PricingSection';
+import { LeadCaptureForm } from './components/Forms/LeadCaptureForm';
+
+function App() {
+  return (
+    <ABTestProvider enableAnalytics={true}>
+      <div className="min-h-screen bg-gray-50">
+        {/* Your existing components */}
+        <HeroSection />
+        <PricingSection />
+        <LeadCaptureForm />
+        
+        {/* Debug panel for development */}
+        <ABTestDebugPanel />
+      </div>
+    </ABTestProvider>
+  );
+}
+
+export default App;
+
+// Usage Example: Manual A/B Test Hook
+/*
+// In any component
+import { useABTest } from '../contexts/ABTestContext';
+
+const MyComponent = () => {
+  const { getVariant, trackConversion } = useABTest();
+  
+  const heroVariant = getVariant('hero_cta_test');
+  
+  const handleButtonClick = () => {
+    trackConversion('hero_cta_test', 'demo_request', 100);
+    // Handle click logic
+  };
+  
+  return (
+    <button 
+      onClick={handleButtonClick}
+      className={`px-6 py-3 rounded-lg ${
+        heroVariant?.metadata.color === 'blue' ? 'bg-blue-500' : 'bg-red-500'
+      }`}
+    >
+      {heroVariant?.metadata.buttonText || 'Default Text'}
+    </button>
+  );
+};
+*/

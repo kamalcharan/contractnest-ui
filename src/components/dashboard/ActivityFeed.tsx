@@ -9,6 +9,7 @@ import {
   Mail,
   ChevronRight
 } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface ActivityItem {
   id: string | number;
@@ -27,6 +28,9 @@ interface ActivityFeedProps {
 }
 
 const ActivityFeed: React.FC<ActivityFeedProps> = ({ className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Mock activity data
   const activities: ActivityItem[] = [
     {
@@ -93,21 +97,23 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ className = '' }) => {
 
   // Icon mapping for activity types
   const getActivityIcon = (type: ActivityItem['type']) => {
+    const iconProps = { size: 16 };
+    
     switch (type) {
       case 'contract':
-        return <FileText size={16} className="text-primary" />;
+        return <FileText {...iconProps} style={{ color: colors.brand.primary }} />;
       case 'appointment':
-        return <Calendar size={16} className="text-indigo-500" />;
+        return <Calendar {...iconProps} style={{ color: colors.brand.secondary }} />;
       case 'contact':
-        return <Users size={16} className="text-orange-500" />;
+        return <Users {...iconProps} style={{ color: colors.brand.tertiary }} />;
       case 'task':
-        return <CheckCircle size={16} className="text-green-500" />;
+        return <CheckCircle {...iconProps} style={{ color: colors.semantic.success }} />;
       case 'message':
-        return <MessageSquare size={16} className="text-blue-500" />;
+        return <MessageSquare {...iconProps} style={{ color: colors.brand.primary }} />;
       case 'email':
-        return <Mail size={16} className="text-purple-500" />;
+        return <Mail {...iconProps} style={{ color: colors.brand.secondary }} />;
       default:
-        return <FileText size={16} className="text-gray-500" />;
+        return <FileText {...iconProps} style={{ color: colors.utility.secondaryText }} />;
     }
   };
 
@@ -115,71 +121,155 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ className = '' }) => {
   const getActivityColor = (type: ActivityItem['type']) => {
     switch (type) {
       case 'contract':
-        return 'bg-primary/10';
+        return colors.brand.primary + '10';
       case 'appointment':
-        return 'bg-indigo-100 dark:bg-indigo-900/20';
+        return colors.brand.secondary + '10';
       case 'contact':
-        return 'bg-orange-100 dark:bg-orange-900/20';
+        return colors.brand.tertiary + '10';
       case 'task':
-        return 'bg-green-100 dark:bg-green-900/20';
+        return colors.semantic.success + '10';
       case 'message':
-        return 'bg-blue-100 dark:bg-blue-900/20';
+        return colors.brand.primary + '10';
       case 'email':
-        return 'bg-purple-100 dark:bg-purple-900/20';
+        return colors.brand.secondary + '10';
       default:
-        return 'bg-gray-100 dark:bg-gray-800';
+        return colors.utility.secondaryText + '10';
     }
   };
 
   return (
-    <div className={`bg-card rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow overflow-hidden ${className}`}>
-      <div className="p-4 border-b border-border">
-        <h3 className="font-medium">Recent Activity</h3>
+    <div 
+      className={`rounded-lg border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${className}`}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.secondaryText + '20'
+      }}
+    >
+      <div 
+        className="p-4 border-b transition-colors"
+        style={{ borderColor: colors.utility.secondaryText + '20' }}
+      >
+        <h3 
+          className="font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Recent Activity
+        </h3>
       </div>
       
-      <div className="divide-y divide-border max-h-96 overflow-y-auto">
-        {activities.map((activity) => (
-          <div key={activity.id} className="p-4 hover:bg-muted/50 transition-colors cursor-pointer">
-            <div className="flex items-start">
-              <div className={`h-10 w-10 rounded-full ${getActivityColor(activity.type)} flex items-center justify-center mr-3 flex-shrink-0`}>
-                {getActivityIcon(activity.type)}
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start">
-                  <p className="font-medium text-sm truncate">{activity.title}</p>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-2 bg-muted/50 px-2 py-0.5 rounded-full">{activity.time}</span>
+      <div className="max-h-96 overflow-y-auto">
+        {activities.map((activity, index) => (
+          <div key={activity.id}>
+            <div 
+              className="p-4 transition-colors cursor-pointer hover:opacity-80"
+              style={{ backgroundColor: 'transparent' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '05';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <div className="flex items-start">
+                <div 
+                  className="h-10 w-10 rounded-full flex items-center justify-center mr-3 flex-shrink-0 transition-colors"
+                  style={{ backgroundColor: getActivityColor(activity.type) }}
+                >
+                  {getActivityIcon(activity.type)}
                 </div>
                 
-                <p className="text-sm text-muted-foreground mt-1 truncate">{activity.description}</p>
-                
-                {activity.user && (
-                  <div className="flex items-center mt-2 justify-between">
-                    <div className="flex items-center">
-                      <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-xs text-primary mr-1 flex-shrink-0">
-                        {activity.user.avatar ? (
-                          <img 
-                            src={activity.user.avatar} 
-                            alt={activity.user.name} 
-                            className="h-5 w-5 rounded-full"
-                          />
-                        ) : (
-                          activity.user.name.charAt(0)
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">{activity.user.name}</span>
-                    </div>
-                    <ChevronRight size={14} className="text-muted-foreground" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <p 
+                      className="font-medium text-sm truncate transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {activity.title}
+                    </p>
+                    <span 
+                      className="text-xs whitespace-nowrap ml-2 px-2 py-0.5 rounded-full transition-colors"
+                      style={{
+                        color: colors.utility.secondaryText,
+                        backgroundColor: colors.utility.secondaryText + '10'
+                      }}
+                    >
+                      {activity.time}
+                    </span>
                   </div>
-                )}
+                  
+                  <p 
+                    className="text-sm mt-1 truncate transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {activity.description}
+                  </p>
+                  
+                  {activity.user && (
+                    <div className="flex items-center mt-2 justify-between">
+                      <div className="flex items-center">
+                        <div 
+                          className="h-5 w-5 rounded-full flex items-center justify-center text-xs mr-1 flex-shrink-0 transition-colors"
+                          style={{
+                            backgroundColor: colors.brand.primary + '10',
+                            color: colors.brand.primary
+                          }}
+                        >
+                          {activity.user.avatar ? (
+                            <img 
+                              src={activity.user.avatar} 
+                              alt={activity.user.name} 
+                              className="h-5 w-5 rounded-full"
+                            />
+                          ) : (
+                            activity.user.name.charAt(0)
+                          )}
+                        </div>
+                        <span 
+                          className="text-xs transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          {activity.user.name}
+                        </span>
+                      </div>
+                      <ChevronRight 
+                        size={14} 
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
+            {index < activities.length - 1 && (
+              <div 
+                className="border-t"
+                style={{ borderColor: colors.utility.secondaryText + '20' }}
+              />
+            )}
           </div>
         ))}
       </div>
       
-      <div className="p-3 border-t border-border bg-muted/10">
-        <button className="text-sm text-primary hover:underline w-full text-center py-1 rounded-md hover:bg-muted/50 transition-colors">
+      <div 
+        className="p-3 border-t transition-colors"
+        style={{
+          borderColor: colors.utility.secondaryText + '20',
+          backgroundColor: colors.utility.secondaryText + '05'
+        }}
+      >
+        <button 
+          className="text-sm w-full text-center py-1 rounded-md transition-colors hover:opacity-80"
+          style={{
+            color: colors.brand.primary,
+            backgroundColor: 'transparent'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+        >
           View all activity
         </button>
       </div>

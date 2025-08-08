@@ -1,4 +1,4 @@
-// src/components/services/ServiceRenewalCard.tsx
+// src/components/services/ServiceRenewalCard.tsx - Theme Enabled Version
 import React from 'react';
 import { RefreshCw, AlertTriangle, Calendar, CheckCircle, Clock } from 'lucide-react';
 
@@ -82,12 +82,32 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
     return diffDays;
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityConfig = (priority: string) => {
     switch (priority) {
-      case 'high': return 'text-red-600 bg-red-50 border-red-200';
-      case 'medium': return 'text-orange-600 bg-orange-50 border-orange-200';
-      case 'low': return 'text-green-600 bg-green-50 border-green-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'high': 
+        return {
+          color: 'text-red-600 dark:text-red-400',
+          bgColor: 'bg-red-100 dark:bg-red-900/20',
+          borderColor: 'border-red-200 dark:border-red-800'
+        };
+      case 'medium': 
+        return {
+          color: 'text-orange-600 dark:text-orange-400',
+          bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+          borderColor: 'border-orange-200 dark:border-orange-800'
+        };
+      case 'low': 
+        return {
+          color: 'text-green-600 dark:text-green-400',
+          bgColor: 'bg-green-100 dark:bg-green-900/20',
+          borderColor: 'border-green-200 dark:border-green-800'
+        };
+      default: 
+        return {
+          color: 'text-muted-foreground',
+          bgColor: 'bg-muted',
+          borderColor: 'border-border'
+        };
     }
   };
 
@@ -95,7 +115,7 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
     <div className="bg-card rounded-lg shadow-sm border border-border p-4">
       <div className="flex items-center gap-2 mb-4">
         <RefreshCw className="h-5 w-5 text-muted-foreground" />
-        <h3 className="text-base font-semibold">Service Renewals</h3>
+        <h3 className="text-base font-semibold text-foreground">Service Renewals</h3>
       </div>
       
       <div className="space-y-6">
@@ -103,45 +123,48 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
         {renewalData.dueThisWeek.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <h4 className="font-medium text-sm text-red-600">Due This Week</h4>
+              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <h4 className="font-medium text-sm text-red-600 dark:text-red-400">Due This Week</h4>
             </div>
             <div className="space-y-2">
-              {renewalData.dueThisWeek.map((service) => (
-                <div key={service.id} className="p-3 rounded-lg bg-red-50 border border-red-200">
-                  <div className="flex items-start justify-between mb-2">
-                    <h5 className="font-medium text-sm text-foreground truncate">
-                      {service.title}
-                    </h5>
-                    <div className="flex items-center gap-2">
-                      {!service.autoRenewal && (
-                        <span className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full font-medium">
-                          MANUAL
+              {renewalData.dueThisWeek.map((service) => {
+                const priorityConfig = getPriorityConfig(service.priority);
+                return (
+                  <div key={service.id} className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <div className="flex items-start justify-between mb-2">
+                      <h5 className="font-medium text-sm text-foreground truncate">
+                        {service.title}
+                      </h5>
+                      <div className="flex items-center gap-2">
+                        {!service.autoRenewal && (
+                          <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-400 text-xs rounded-full font-medium border border-orange-200 dark:border-orange-800">
+                            MANUAL
+                          </span>
+                        )}
+                        <span className={`
+                          px-2 py-1 rounded-full text-xs font-medium border
+                          ${priorityConfig.color} ${priorityConfig.bgColor} ${priorityConfig.borderColor}
+                        `}>
+                          {service.priority.toUpperCase()}
                         </span>
-                      )}
-                      <span className={`
-                        px-2 py-1 rounded-full text-xs font-medium border
-                        ${getPriorityColor(service.priority)}
-                      `}>
-                        {service.priority.toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        {formatAmount(service.value, service.currency)}
                       </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-green-600">
-                      {formatAmount(service.value, service.currency)}
-                    </span>
-                    <div className="text-right">
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(service.renewalDate)}
-                      </div>
-                      <div className="text-xs text-red-600 font-medium">
-                        {getDaysUntilRenewal(service.renewalDate)} days left
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(service.renewalDate)}
+                        </div>
+                        <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                          {getDaysUntilRenewal(service.renewalDate)} days left
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -150,45 +173,48 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
         {renewalData.dueNextMonth.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <Calendar className="h-4 w-4 text-orange-600" />
-              <h4 className="font-medium text-sm text-orange-600">Due Next Month</h4>
+              <Calendar className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <h4 className="font-medium text-sm text-orange-600 dark:text-orange-400">Due Next Month</h4>
             </div>
             <div className="space-y-2">
-              {renewalData.dueNextMonth.map((service) => (
-                <div key={service.id} className="p-3 rounded-lg bg-orange-50 border border-orange-200">
-                  <div className="flex items-start justify-between mb-2">
-                    <h5 className="font-medium text-sm text-foreground truncate">
-                      {service.title}
-                    </h5>
-                    <div className="flex items-center gap-2">
-                      {service.autoRenewal && (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                          AUTO
+              {renewalData.dueNextMonth.map((service) => {
+                const priorityConfig = getPriorityConfig(service.priority);
+                return (
+                  <div key={service.id} className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                    <div className="flex items-start justify-between mb-2">
+                      <h5 className="font-medium text-sm text-foreground truncate">
+                        {service.title}
+                      </h5>
+                      <div className="flex items-center gap-2">
+                        {service.autoRenewal && (
+                          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 text-xs rounded-full font-medium border border-green-200 dark:border-green-800">
+                            AUTO
+                          </span>
+                        )}
+                        <span className={`
+                          px-2 py-1 rounded-full text-xs font-medium border
+                          ${priorityConfig.color} ${priorityConfig.bgColor} ${priorityConfig.borderColor}
+                        `}>
+                          {service.priority.toUpperCase()}
                         </span>
-                      )}
-                      <span className={`
-                        px-2 py-1 rounded-full text-xs font-medium border
-                        ${getPriorityColor(service.priority)}
-                      `}>
-                        {service.priority.toUpperCase()}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        {formatAmount(service.value, service.currency)}
                       </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-green-600">
-                      {formatAmount(service.value, service.currency)}
-                    </span>
-                    <div className="text-right">
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(service.renewalDate)}
-                      </div>
-                      <div className="text-xs text-orange-600 font-medium">
-                        {getDaysUntilRenewal(service.renewalDate)} days left
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">
+                          {formatDate(service.renewalDate)}
+                        </div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                          {getDaysUntilRenewal(service.renewalDate)} days left
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -197,29 +223,29 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
         {renewalData.autoRenewing.length > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <h4 className="font-medium text-sm text-green-600">Auto-Renewing</h4>
+              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <h4 className="font-medium text-sm text-green-600 dark:text-green-400">Auto-Renewing</h4>
             </div>
             <div className="space-y-2">
               {renewalData.autoRenewing.map((service) => (
-                <div key={service.id} className="p-3 rounded-lg bg-green-50 border border-green-200">
+                <div key={service.id} className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <div className="flex items-start justify-between mb-2">
                     <h5 className="font-medium text-sm text-foreground truncate">
                       {service.title}
                     </h5>
-                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                    <span className="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400 text-xs rounded-full font-medium border border-green-200 dark:border-green-800">
                       AUTO-RENEW
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-green-600">
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">
                       {formatAmount(service.value, service.currency)}
                     </span>
                     <div className="text-right">
                       <div className="text-xs text-muted-foreground">
                         Next: {formatDate(service.renewalDate)}
                       </div>
-                      <div className="text-xs text-green-600">
+                      <div className="text-xs text-green-600 dark:text-green-400">
                         Last renewed: {formatDate(service.lastRenewal)}
                       </div>
                     </div>
@@ -247,13 +273,13 @@ const ServiceRenewalCard: React.FC<ServiceRenewalCardProps> = ({ contactId }) =>
       <div className="mt-4 pt-4 border-t border-border">
         <div className="grid grid-cols-2 gap-4 text-center">
           <div>
-            <div className="text-lg font-semibold text-red-600">
+            <div className="text-lg font-semibold text-red-600 dark:text-red-400">
               {renewalData.dueThisWeek.length}
             </div>
             <div className="text-xs text-muted-foreground">Urgent</div>
           </div>
           <div>
-            <div className="text-lg font-semibold text-green-600">
+            <div className="text-lg font-semibold text-green-600 dark:text-green-400">
               {renewalData.autoRenewing.length}
             </div>
             <div className="text-xs text-muted-foreground">Auto-Renew</div>

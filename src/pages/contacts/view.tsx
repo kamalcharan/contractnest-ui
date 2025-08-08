@@ -1,4 +1,4 @@
-// src/pages/contacts/view.tsx - Complete with Polished Header
+// src/pages/contacts/view.tsx - Theme Integrated Version
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -9,32 +9,58 @@ import {
   FileText,
   DollarSign,
   Settings,
-  Archive,
-  Trash2,
-  Loader2,
   Building2,
+  Loader2,
+  AlertCircle,
   Plus,
   Mail,
   Phone,
-  MapPin
+  MapPin,
+  Star,
+  CheckCircle,
+  Archive,
+  Trash2,
+  ExternalLink,
+  Copy,
+  Send,
+  UserPlus,
+  Activity,
+  Clock,
+  Shield,
+  Globe,
+  MessageSquare
 } from 'lucide-react';
-import { useTheme } from '../../contexts/ThemeContext'; // Import theme hook
+import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '@/components/ui/use-toast';
+import { captureException } from '@/utils/sentry';
+import { analyticsService } from '@/services/analytics.service';
+
+// Import API Hooks
+import { useContact, useUpdateContactStatus, useSendInvitation } from '../../hooks/useContacts';
 
 // Import Shared Components
 import TabsNavigation from '../../components/shared/TabsNavigation';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
-// Import Summary Tab (implemented)
+// Import Tab Components
 import ContactSummaryTab from '../../components/contacts/view/ContactSummaryTab';
-
-// Import Fully Implemented Tab Components
-import ContractTab from '../../components/contracts/ContractTab';
 import BillingTab from '../../components/billing/BillingTab';
 import ServicesTab from '../../components/services/ServicesTab';
+import ContractTab from '../../components/contracts/ContractTab';
 
-// Types
+// Import Constants
+import { 
+  CONTACT_STATUS,
+  CONTACT_STATUS_LABELS,
+  getStatusColor,
+  USER_STATUS_MESSAGES,
+  BUSINESS_RULES
+} from '@/utils/constants/contacts';
+
+// Complete Type Definitions
 interface ContactChannel {
   id: string;
-  channel_code: string;
+  channel_type: string;
   value: string;
   country_code?: string;
   is_primary: boolean;
@@ -44,34 +70,38 @@ interface ContactChannel {
 
 interface ContactAddress {
   id: string;
-  type: 'billing' | 'shipping' | 'office' | 'home' | 'factory' | 'warehouse';
+  address_type: 'billing' | 'shipping' | 'office' | 'home' | 'factory' | 'warehouse' | 'other';
   label?: string;
-  address_line1: string;
-  address_line2?: string;
+  line1: string;
+  line2?: string;
+  line3?: string;
   city: string;
-  state_code?: string;
-  country_code: string;
+  state: string;
+  country: string;
   postal_code?: string;
   google_pin?: string;
   is_primary: boolean;
+  is_verified: boolean;
   notes?: string;
 }
 
 interface ComplianceNumber {
   id: string;
-  type: 'gst' | 'pan' | 'cin' | 'tax_id' | 'vat' | 'other';
+  type_value: string;
+  type_label: string;
   number: string;
   issuing_authority?: string;
   valid_from?: string;
   valid_to?: string;
   is_verified: boolean;
+  hexcolor?: string;
   notes?: string;
 }
 
 interface ContactPerson {
   id: string;
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
   name: string;
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
   designation?: string;
   department?: string;
   is_primary: boolean;
@@ -79,240 +109,288 @@ interface ContactPerson {
   notes?: string;
 }
 
+interface Tag {
+  id: string;
+  tag_value: string;
+  tag_label: string;
+  tag_color?: string;
+}
+
+interface Classification {
+  id: string;
+  classification_value: string;
+  classification_label: string;
+}
+
 interface Contact {
   id: string;
   type: 'individual' | 'corporate';
-  classification: ('buyer' | 'partner' | 'service_provider')[];
+  status: 'active' | 'inactive' | 'archived';
   
   // Individual fields
+  name?: string;
   salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
-  first_name?: string;
-  last_name?: string;
   
   // Corporate fields
   company_name?: string;
-  company_registration_number?: string;
+  registration_number?: string;
   website?: string;
   industry?: string;
-  company_size?: 'startup' | 'small' | 'medium' | 'large' | 'enterprise';
   
-  // Common fields
+  // Arrays
+  classifications: Classification[];
+  tags: Tag[];
+  compliance_numbers: ComplianceNumber[];
   contact_channels: ContactChannel[];
   addresses: ContactAddress[];
-  compliance_numbers: ComplianceNumber[];
   contact_persons: ContactPerson[];
-  notes?: string;
-  tags?: string[];
   
-  // Status fields
-  status: 'active' | 'inactive' | 'lead' | 'archived';
+  // Other fields
+  notes?: string;
+  user_account_status?: string;
+  potential_duplicate?: boolean;
+  duplicate_reasons?: string[];
+  
+  // Metadata
   created_at: string;
   updated_at: string;
   last_contact_date?: string;
+  created_by?: {
+    id: string;
+    name: string;
+  };
 }
+
+// Temporary placeholder for tabs not yet implemented
+const PlaceholderTab: React.FC<{ 
+  icon: React.ComponentType<any>; 
+  title: string; 
+  description: string; 
+  contactId: string;
+  phase: string;
+}> = ({ icon: Icon, title, description, contactId, phase }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  return (
+    <div 
+      className="rounded-lg border p-12 text-center transition-colors"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <Icon 
+        className="h-16 w-16 mx-auto mb-4"
+        style={{ color: colors.utility.secondaryText }}
+      />
+      <h3 
+        className="text-xl font-medium mb-3 transition-colors"
+        style={{ color: colors.utility.primaryText }}
+      >
+        {title}
+      </h3>
+      <p 
+        className="mb-2 transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
+        {description}
+      </p>
+      <p 
+        className="text-sm transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
+        Contact ID: {contactId}
+      </p>
+      <div 
+        className="mt-4 inline-flex items-center px-3 py-1 rounded-full text-xs transition-colors"
+        style={{
+          backgroundColor: colors.brand.primary + '20',
+          color: colors.brand.primary
+        }}
+      >
+        Coming in {phase}
+      </div>
+    </div>
+  );
+};
 
 type ActiveTab = 'summary' | 'contracts' | 'billing' | 'services';
 
 const ContactViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isDarkMode } = useTheme(); // Get current theme (only isDarkMode available)
+  const { isDarkMode, currentTheme } = useTheme();
+  const { toast } = useToast();
   
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
+  // State
   const [activeTab, setActiveTab] = useState<ActiveTab>('summary');
   const [showMoreActions, setShowMoreActions] = useState<boolean>(false);
+  const [showArchiveDialog, setShowArchiveDialog] = useState<boolean>(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
 
-  // Load contact data
+  // API Integration
+  const { data: contact, loading, error, refetch } = useContact(id || '');
+  const updateStatusHook = useUpdateContactStatus();
+  const sendInvitationHook = useSendInvitation();
+
+  // Track page view
   useEffect(() => {
-    const loadContact = async () => {
-      setIsLoading(true);
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Mock contact data
-        const mockContact: Contact = {
-          id: id || '1',
-          type: 'corporate',
-          classification: ['buyer', 'partner'],
-          company_name: 'Acme Corporation',
-          company_registration_number: 'CIN123456789',
-          website: 'https://acme.com',
-          industry: 'Technology',
-          company_size: 'medium',
-          contact_channels: [
-            {
-              id: '1',
-              channel_code: 'email',
-              value: 'contact@acme.com',
-              is_primary: true,
-              is_verified: true
-            },
-            {
-              id: '2',
-              channel_code: 'mobile',
-              value: '9999988888',
-              country_code: 'IN',
-              is_primary: false,
-              is_verified: true
-            },
-            {
-              id: '3',
-              channel_code: 'whatsapp',
-              value: '9999977777',
-              country_code: 'IN',
-              is_primary: false,
-              is_verified: false,
-              notes: 'Business WhatsApp number'
-            }
-          ],
-          addresses: [
-            {
-              id: '1',
-              type: 'office',
-              label: 'Head Office',
-              address_line1: '123 Business Park, Sector 18',
-              address_line2: 'Tower A, 5th Floor',
-              city: 'Gurugram',
-              state_code: 'HR',
-              country_code: 'IN',
-              postal_code: '122015',
-              is_primary: true,
-              google_pin: 'https://maps.google.com/sample-link'
-            },
-            {
-              id: '2',
-              type: 'billing',
-              label: 'Billing Address',
-              address_line1: '456 Financial District',
-              city: 'Mumbai',
-              state_code: 'MH',
-              country_code: 'IN',
-              postal_code: '400001',
-              is_primary: false
-            }
-          ],
-          compliance_numbers: [
-            {
-              id: '1',
-              type: 'gst',
-              number: '27AAAAA0000A1Z5',
-              is_verified: true,
-              issuing_authority: 'GST Department'
-            },
-            {
-              id: '2',
-              type: 'pan',
-              number: 'AAAAA0000A',
-              is_verified: true,
-              issuing_authority: 'Income Tax Department'
-            }
-          ],
-          contact_persons: [
-            {
-              id: '1',
-              name: 'John Smith',
-              designation: 'CEO',
-              department: 'Executive',
-              is_primary: true,
-              contact_channels: [
-                {
-                  id: '4',
-                  channel_code: 'email',
-                  value: 'john.smith@acme.com',
-                  is_primary: true,
-                  is_verified: true
-                },
-                {
-                  id: '5',
-                  channel_code: 'mobile',
-                  value: '9999966666',
-                  country_code: 'IN',
-                  is_primary: false,
-                  is_verified: true
-                }
-              ]
-            },
-            {
-              id: '2',
-              name: 'Sarah Wilson',
-              designation: 'CTO',
-              department: 'Technology',
-              is_primary: false,
-              contact_channels: [
-                {
-                  id: '6',
-                  channel_code: 'email',
-                  value: 'sarah.wilson@acme.com',
-                  is_primary: true,
-                  is_verified: true
-                }
-              ]
-            }
-          ],
-          notes: 'Important corporate client with multiple projects. Prefers email communication for formal matters. Has been with us for 3+ years.',
-          tags: ['enterprise', 'technology', 'priority', 'long-term'],
-          status: 'active',
-          created_at: '2024-01-01T10:00:00Z',
-          updated_at: '2024-01-15T14:30:00Z',
-          last_contact_date: '2024-01-15'
-        };
-        
-        setContact(mockContact);
-      } catch (error) {
-        console.error('Error loading contact:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (id) {
-      loadContact();
+      analyticsService.trackPageView('contact-view', `Contact View: ${id}`);
     }
   }, [id]);
 
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      toast({
+        variant: "destructive",
+        title: "Error loading contact",
+        description: error,
+        duration: 5000
+      });
+    }
+  }, [error, toast]);
+
   // Get contact display name
-  const getContactDisplayName = (contact: Contact): string => {
+  const getContactDisplayName = (): string => {
+    if (!contact) return '';
+    
     if (contact.type === 'corporate') {
       return contact.company_name || 'Unnamed Company';
     } else {
-      const salutation = contact.salutation ? contact.salutation.charAt(0).toUpperCase() + contact.salutation.slice(1) + '. ' : '';
-      return `${salutation}${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Unnamed Contact';
+      const salutation = contact.salutation ? `${contact.salutation}. ` : '';
+      return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
     }
   };
 
   // Get primary contact channel
-  const getPrimaryChannel = (channels: ContactChannel[], type: string) => {
-    return channels.find(ch => ch.channel_code === type && ch.is_primary) || 
-           channels.find(ch => ch.channel_code === type);
+  const getPrimaryChannel = (channels: ContactChannel[], type: string): ContactChannel | null => {
+    if (!channels || channels.length === 0) return null;
+    return channels.find(ch => ch.channel_type === type && ch.is_primary) || 
+           channels.find(ch => ch.channel_type === type) ||
+           null;
   };
 
-  // Get theme-aware button styles with fallback colors
-  const getThemeButtonStyle = (type: 'contract' | 'billing' | 'service') => {
-    const baseStyle = "flex items-center gap-2 px-4 py-2 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm font-medium";
-    
-    // Fallback colors that work well in both light and dark modes
-    const fallbackColors = {
-      contract: isDarkMode ? '#2ecc71' : '#27ae60', // Green
-      billing: isDarkMode ? '#3498db' : '#2980b9',   // Blue  
-      service: isDarkMode ? '#9b59b6' : '#8e44ad'    // Purple
+  // Get primary address
+  const getPrimaryAddress = (): ContactAddress | null => {
+    if (!contact?.addresses || contact.addresses.length === 0) return null;
+    return contact.addresses.find(addr => addr.is_primary) || contact.addresses[0] || null;
+  };
+
+  // Format phone number with country code
+  const formatPhoneNumber = (channel: ContactChannel): string => {
+    if (channel.channel_type === 'mobile' && channel.country_code && channel.country_code !== 'IN') {
+      return `+${channel.country_code} ${channel.value}`;
+    } else if (channel.channel_type === 'mobile' && channel.country_code === 'IN') {
+      return `+91 ${channel.value}`;
+    }
+    return channel.value;
+  };
+
+  // Get theme-aware button styles
+  const getActionButtonStyle = (type: 'contract' | 'billing' | 'service') => {
+    const baseColors = {
+      contract: { bg: '#059669', hover: '#047857' }, // green
+      billing: { bg: '#2563eb', hover: '#1d4ed8' },   // blue
+      service: { bg: '#7c3aed', hover: '#6d28d9' }    // purple
     };
     
-    return `${baseStyle} hover:opacity-90`;
-  };
-
-  // Get button background color
-  const getButtonColor = (type: 'contract' | 'billing' | 'service') => {
-    const colors = {
-      contract: isDarkMode ? '#2ecc71' : '#27ae60', // Green
-      billing: isDarkMode ? '#3498db' : '#2980b9',   // Blue  
-      service: isDarkMode ? '#9b59b6' : '#8e44ad'    // Purple
+    return {
+      backgroundColor: baseColors[type].bg,
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '6px',
+      padding: '8px 16px',
+      fontSize: '14px',
+      fontWeight: '500',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
+      ':hover': {
+        backgroundColor: baseColors[type].hover,
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
+        opacity: 0.9
+      },
+      ':disabled': {
+        opacity: 0.5,
+        cursor: 'not-allowed'
+      }
     };
-    return colors[type];
   };
 
-  // Tab configuration
+  // Handle status updates
+  const handleStatusUpdate = async (newStatus: 'active' | 'inactive' | 'archived') => {
+    if (!contact) return;
+    
+    try {
+      await updateStatusHook.mutate(contact.id, newStatus);
+      setShowMoreActions(false);
+      refetch();
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    }
+  };
+
+  // Handle send invitation
+  const handleSendInvitation = async () => {
+    if (!contact) return;
+    
+    try {
+      await sendInvitationHook.mutate(contact.id);
+      setShowMoreActions(false);
+    } catch (error) {
+      console.error('Failed to send invitation:', error);
+    }
+  };
+
+  // Copy contact info to clipboard
+  const copyContactInfo = async () => {
+    if (!contact) return;
+    
+    const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
+    const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
+    
+    const info = `${getContactDisplayName()}
+${primaryEmail ? `Email: ${primaryEmail.value}` : ''}
+${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
+    
+    try {
+      await navigator.clipboard.writeText(info);
+      toast({
+        title: "Copied",
+        description: "Contact information copied to clipboard",
+        duration: 3000
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to copy contact information"
+      });
+    }
+    setShowMoreActions(false);
+  };
+
+  // Mock data for quick stats
+  const getQuickStats = () => {
+    return {
+      contracts: 20,
+      revenue: 510000,
+      services: 8,
+      relationshipYears: contact?.created_at ? 
+        Math.floor((new Date().getTime() - new Date(contact.created_at).getTime()) / (1000 * 60 * 60 * 24 * 365)) : 0
+    };
+  };
+
+  // Tab configuration with real counts
   const tabs = [
     { 
       id: 'summary', 
@@ -336,7 +414,7 @@ const ContactViewPage: React.FC = () => {
       id: 'services', 
       label: 'Services', 
       icon: Settings,
-      count: 25
+      count: 8
     }
   ];
 
@@ -348,41 +426,193 @@ const ContactViewPage: React.FC = () => {
       case 'summary':
         return <ContactSummaryTab contact={contact} />;
       case 'contracts':
-        return <ContractTab contactId={contact.id} />;
+        return (
+          <ContractTab 
+            contactId={contact.id}
+            contactStatus={contact.status}
+          />
+        );
       case 'billing':
-        return <BillingTab contactId={contact.id} />;
+        return (
+          <BillingTab 
+            contactId={contact.id}
+            contactStatus={contact.status}
+          />
+        );
       case 'services':
-        return <ServicesTab contactId={contact.id} />;
+        return (
+          <ServicesTab 
+            contactId={contact.id}
+            contactStatus={contact.status}
+          />
+        );
       default:
         return <ContactSummaryTab contact={contact} />;
     }
   };
 
-  if (isLoading) {
+  // Loading State
+  if (loading) {
     return (
-      <div className="p-4 md:p-6 bg-muted/20 min-h-screen">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading contact details...</p>
+      <div 
+        className="p-4 md:p-6 min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div className="animate-pulse">
+          {/* Header Skeleton */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-8 h-8 rounded-full"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-4 rounded w-48"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            </div>
+            <div className="flex gap-3">
+              <div 
+                className="h-10 rounded w-24"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-10 rounded w-24"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-10 rounded w-24"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            </div>
+          </div>
+          
+          {/* Tabs Skeleton */}
+          <div className="flex gap-6 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div 
+                key={i} 
+                className="h-10 rounded w-24"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            ))}
+          </div>
+          
+          {/* Content Skeleton */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 space-y-6">
+              <div 
+                className="h-64 rounded-lg"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-48 rounded-lg"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            </div>
+            <div className="space-y-6">
+              <div 
+                className="h-32 rounded-lg"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-40 rounded-lg"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+              <div 
+                className="h-24 rounded-lg"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!contact) {
+  // Error State
+  if (error && !contact) {
     return (
-      <div className="p-4 md:p-6 bg-muted/20 min-h-screen">
+      <div 
+        className="p-4 md:p-6 min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="text-center py-12">
-          <User className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">Contact not found</h3>
-          <p className="text-muted-foreground mb-6">
+          <AlertCircle 
+            className="h-16 w-16 mx-auto mb-4"
+            style={{ color: colors.semantic.error }}
+          />
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Failed to load contact
+          </h3>
+          <p 
+            className="mb-6 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {error}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button 
+              onClick={refetch}
+              className="px-4 py-2 rounded-md transition-colors"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: '#ffffff'
+              }}
+            >
+              Try Again
+            </button>
+            <button 
+              onClick={() => navigate('/contacts')}
+              className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors"
+              style={{
+                borderColor: colors.utility.primaryText + '40',
+                color: colors.utility.primaryText,
+                backgroundColor: 'transparent'
+              }}
+            >
+              Back to Contacts
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Not Found State
+  if (!loading && !contact) {
+    return (
+      <div 
+        className="p-4 md:p-6 min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div className="text-center py-12">
+          <User 
+            className="h-16 w-16 mx-auto mb-4"
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Contact not found
+          </h3>
+          <p 
+            className="mb-6 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             The contact you're looking for doesn't exist or has been removed.
           </p>
           <button 
             onClick={() => navigate('/contacts')}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 rounded-md transition-colors"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             Back to Contacts
           </button>
@@ -391,223 +621,514 @@ const ContactViewPage: React.FC = () => {
     );
   }
 
+  if (!contact) return null;
+
+  // Get user status info
+  const userStatusInfo = contact.user_account_status ? 
+    USER_STATUS_MESSAGES[contact.user_account_status as keyof typeof USER_STATUS_MESSAGES] : null;
+  
   const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
   const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
+  const primaryAddress = getPrimaryAddress();
+  const quickStats = getQuickStats();
 
   return (
-    <div className="p-4 md:p-6 bg-muted/20 min-h-screen">
-      {/* Header with Breadcrumb and Action Buttons */}
+    <div 
+      className="p-4 md:p-6 min-h-screen transition-colors"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
+      {/* Header Section */}
       <div className="flex items-center justify-between mb-6">
         {/* Left Side - Breadcrumb Navigation */}
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate('/contacts')}
-            className="p-2 rounded-full hover:bg-muted transition-colors"
+            className="p-2 rounded-full hover:opacity-80 transition-colors"
+            style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft 
+              className="h-5 w-5"
+              style={{ color: colors.utility.primaryText }}
+            />
           </button>
-          <div className="text-sm text-muted-foreground">
-            <span className="hover:text-primary cursor-pointer transition-colors">Contacts</span>
+          <div 
+            className="text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            <button 
+              onClick={() => navigate('/contacts')}
+              className="hover:opacity-80 cursor-pointer transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
+              Contacts
+            </button>
             <span className="mx-2">/</span>
-            <span className="text-foreground font-medium">{getContactDisplayName(contact)}</span>
+            <span 
+              className="font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              {getContactDisplayName()}
+            </span>
           </div>
         </div>
 
-        {/* Right Side - Theme-Enabled Action Buttons */}
+        {/* Right Side - Action Buttons */}
         <div className="flex items-center gap-3">
           <button 
-            className={getThemeButtonStyle('contract')}
-            style={{
-              backgroundColor: getButtonColor('contract')
-            }}
+            style={getActionButtonStyle('contract')}
+            onClick={() => navigate(`/contracts/create?contactId=${contact.id}`)}
+            disabled={contact.status === 'archived'}
           >
             <FileText className="h-4 w-4" />
             Contract
           </button>
           <button 
-            className={getThemeButtonStyle('billing')}
-            style={{
-              backgroundColor: getButtonColor('billing')
-            }}
+            style={getActionButtonStyle('billing')}
+            onClick={() => navigate(`/billing/create?contactId=${contact.id}`)}
+            disabled={contact.status === 'archived'}
           >
             <DollarSign className="h-4 w-4" />
             Billing
           </button>
           <button 
-            className={getThemeButtonStyle('service')}
-            style={{
-              backgroundColor: getButtonColor('service')
-            }}
+            style={getActionButtonStyle('service')}
+            onClick={() => navigate(`/services/create?contactId=${contact.id}`)}
+            disabled={contact.status === 'archived'}
           >
             <Settings className="h-4 w-4" />
             Service
           </button>
+          
+          {/* Edit Button */}
+          <button 
+            onClick={() => navigate(`/contacts/${contact.id}/edit`)}
+            className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:opacity-80 transition-colors text-sm"
+            disabled={contact.status === 'archived'}
+            style={{
+              borderColor: colors.utility.primaryText + '40',
+              color: colors.utility.primaryText,
+              backgroundColor: 'transparent'
+            }}
+          >
+            <Edit className="h-4 w-4" />
+            Edit
+          </button>
+          
+          {/* More Actions Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowMoreActions(!showMoreActions)}
+              className="p-2 border rounded-lg hover:opacity-80 transition-colors"
+              style={{
+                borderColor: colors.utility.primaryText + '40',
+                backgroundColor: colors.utility.secondaryBackground
+              }}
+            >
+              <MoreHorizontal 
+                className="h-4 w-4"
+                style={{ color: colors.utility.primaryText }}
+              />
+            </button>
+            
+            {showMoreActions && (
+              <div 
+                className="absolute right-0 top-full mt-2 w-56 border rounded-lg shadow-lg z-20"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText + '20'
+                }}
+              >
+                <div className="py-1">
+                  <button 
+                    onClick={copyContactInfo}
+                    className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy Contact Info
+                  </button>
+                  
+                  {userStatusInfo && (
+                    <button 
+                      onClick={handleSendInvitation}
+                      disabled={sendInvitationHook.loading}
+                      className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3 disabled:opacity-50"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      <Send className="h-4 w-4" />
+                      {sendInvitationHook.loading ? 'Sending...' : userStatusInfo.action}
+                    </button>
+                  )}
+                  
+                  <button 
+                    className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Export Contact
+                  </button>
+                  
+                  <hr 
+                    className="my-1"
+                    style={{ borderColor: colors.utility.primaryText + '20' }}
+                  />
+                  
+                  {contact.status === 'active' && (
+                    <button 
+                      onClick={() => handleStatusUpdate('inactive')}
+                      disabled={updateStatusHook.loading}
+                      className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3"
+                      style={{ color: colors.semantic.warning }}
+                    >
+                      <Archive className="h-4 w-4" />
+                      Deactivate Contact
+                    </button>
+                  )}
+                  
+                  {contact.status === 'inactive' && (
+                    <button 
+                      onClick={() => handleStatusUpdate('active')}
+                      disabled={updateStatusHook.loading}
+                      className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3"
+                      style={{ color: colors.semantic.success }}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Activate Contact
+                    </button>
+                  )}
+                  
+                  {contact.status !== 'archived' && (
+                    <button 
+                      onClick={() => setShowArchiveDialog(true)}
+                      className="w-full px-4 py-2 text-left hover:opacity-80 transition-colors text-sm flex items-center gap-3"
+                      style={{ color: colors.semantic.error }}
+                    >
+                      <Archive className="h-4 w-4" />
+                      Archive Contact
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* 
-        COMMENTED OUT - Polished Header Card (for future use)
-        
-        <div className="bg-card rounded-xl shadow-sm border border-border overflow-hidden mb-6">
-          Main Header Content
-          <div className="p-6">
-            <div className="flex items-start justify-between gap-6">
-              Left Section - Contact Info
-              <div className="flex items-start gap-4 flex-1 min-w-0">
-                Enhanced Avatar
-                <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/20 to-primary/30 text-primary flex items-center justify-center font-bold text-xl border-2 border-primary/20 shadow-sm">
-                  {contact.type === 'corporate' 
-                    ? contact.company_name?.substring(0, 2).toUpperCase()
-                    : `${contact.first_name?.charAt(0) || ''}${contact.last_name?.charAt(0) || ''}`
-                  }
-                </div>
-                
-                Contact Details
-                <div className="flex-1 min-w-0">
-                  Name and Type
-                  <div className="flex items-center gap-3 mb-2">
-                    <h1 className="text-2xl font-bold text-foreground truncate">
-                      {getContactDisplayName(contact)}
-                    </h1>
-                    {contact.type === 'corporate' ? (
-                      <Building2 className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    ) : (
-                      <User className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    )}
-                  </div>
-                  
-                  Status and Classifications
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <span className={`
-                      inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border
-                      ${contact.status === 'active' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' :
-                        contact.status === 'lead' ? 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800' :
-                        contact.status === 'inactive' ? 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800' :
-                        'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'}
-                    `}>
-                      <div className={`w-2 h-2 rounded-full ${
-                        contact.status === 'active' ? 'bg-green-600' :
-                        contact.status === 'lead' ? 'bg-yellow-600' :
-                        contact.status === 'inactive' ? 'bg-gray-600' : 'bg-red-600'
-                      }`} />
-                      {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
-                    </span>
-                    
-                    {contact.classification.map((cls) => (
-                      <span
-                        key={cls}
-                        className={`
-                          px-2 py-1 rounded-full text-xs font-medium border
-                          ${cls === 'buyer' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' :
-                            cls === 'partner' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
-                            'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800'}
-                        `}
-                      >
-                        {cls === 'service_provider' ? 'Service Provider' : cls.charAt(0).toUpperCase() + cls.slice(1)}
-                      </span>
-                    ))}
-                  </div>
-                  
-                  Quick Contact Info
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    {primaryEmail && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Mail className="h-4 w-4 flex-shrink-0" />
-                        <span className="truncate hover:text-primary cursor-pointer transition-colors">
-                          {primaryEmail.value}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {primaryPhone && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Phone className="h-4 w-4 flex-shrink-0" />
-                        <span className="hover:text-primary cursor-pointer transition-colors">
-                          +91 {primaryPhone.value}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              Right Section - Action Buttons
-              <div className="flex flex-col gap-3 flex-shrink-0">
-                Primary Action Buttons
-                <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-sm hover:shadow-md text-sm font-medium">
-                    <FileText className="h-4 w-4" />
-                    Contract
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-sm hover:shadow-md text-sm font-medium">
-                    <DollarSign className="h-4 w-4" />
-                    Billing
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-sm hover:shadow-md text-sm font-medium">
-                    <Settings className="h-4 w-4" />
-                    Service
-                  </button>
-                </div>
-                
-                Secondary Actions
-                <div className="flex items-center gap-2 justify-end">
-                  <button 
-                    onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                    className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-sm"
-                  >
-                    <Edit className="h-4 w-4" />
-                    Edit
-                  </button>
-                  
-                  <div className="relative">
-                    <button 
-                      onClick={() => setShowMoreActions(!showMoreActions)}
-                      className="p-2 border border-border rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
-                    
-                    {showMoreActions && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-10">
-                        <button className="w-full px-4 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2 rounded-t-lg">
-                          <Archive className="h-4 w-4" />
-                          Archive Contact
-                        </button>
-                        <button className="w-full px-4 py-2 text-left hover:bg-muted transition-colors flex items-center gap-2 text-red-600 rounded-b-lg">
-                          <Trash2 className="h-4 w-4" />
-                          Delete Contact
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+      {/* Status Warnings */}
+      {contact.status === 'inactive' && (
+        <div 
+          className="mb-6 p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: colors.semantic.warning + '10',
+            borderColor: colors.semantic.warning + '40'
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <AlertCircle 
+              className="h-5 w-5"
+              style={{ color: colors.semantic.warning }}
+            />
+            <div>
+              <p 
+                className="text-sm font-medium"
+                style={{ color: colors.semantic.warning }}
+              >
+                Contact is Inactive
+              </p>
+              <p 
+                className="text-sm"
+                style={{ color: colors.semantic.warning }}
+              >
+                {BUSINESS_RULES.INACTIVE_CONTACT_RESTRICTIONS.join(' • ')}
+              </p>
             </div>
           </div>
-          
-          Stats Bar
-          <div className="border-t border-border bg-muted/30 px-6 py-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="text-center">
-                <div className="text-lg font-semibold text-foreground">20</div>
-                <div className="text-xs text-muted-foreground">Contracts</div>
+        </div>
+      )}
+
+      {contact.status === 'archived' && (
+        <div 
+          className="mb-6 p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryText + '10',
+            borderColor: colors.utility.secondaryText + '40'
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <Archive 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <div>
+              <p 
+                className="text-sm font-medium"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Contact is Archived
+              </p>
+              <p 
+                className="text-sm"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {BUSINESS_RULES.ARCHIVED_CONTACT_RESTRICTIONS.join(' • ')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Account Status */}
+      {userStatusInfo && (
+        <div 
+          className="mb-6 p-4 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: colors.brand.primary + '10',
+            borderColor: colors.brand.primary + '40'
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{userStatusInfo.icon}</span>
+              <span 
+                className="text-sm"
+                style={{ color: colors.brand.primary }}
+              >
+                {userStatusInfo.text}
+              </span>
+            </div>
+            <button
+              onClick={handleSendInvitation}
+              disabled={sendInvitationHook.loading}
+              className="px-3 py-1 text-sm rounded-md transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: userStatusInfo.actionType === 'primary' 
+                  ? colors.brand.primary 
+                  : 'transparent',
+                color: userStatusInfo.actionType === 'primary' 
+                  ? '#ffffff' 
+                  : colors.brand.primary,
+                border: userStatusInfo.actionType === 'primary' 
+                  ? 'none' 
+                  : `1px solid ${colors.brand.primary}`
+              }}
+            >
+              {sendInvitationHook.loading ? 'Sending...' : userStatusInfo.action}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Header Card with Quick Stats */}
+      <div 
+        className="rounded-xl shadow-sm border overflow-hidden mb-6 transition-colors"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20'
+        }}
+      >
+        {/* Main Header Content */}
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-6">
+            {/* Left Section - Contact Info */}
+            <div className="flex items-start gap-4 flex-1 min-w-0">
+              {/* Enhanced Avatar */}
+              <div 
+                className="w-16 h-16 rounded-xl flex items-center justify-center font-bold text-xl border-2 shadow-sm"
+                style={{
+                  background: `linear-gradient(to bottom right, ${colors.brand.primary}40, ${colors.brand.primary}60)`,
+                  color: colors.brand.primary,
+                  borderColor: colors.brand.primary + '40'
+                }}
+              >
+                {contact.type === 'corporate' 
+                  ? contact.company_name?.substring(0, 2).toUpperCase()
+                  : contact.name?.substring(0, 2).toUpperCase()
+                }
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-green-600">₹2.4L</div>
-                <div className="text-xs text-muted-foreground">Revenue</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-blue-600">25</div>
-                <div className="text-xs text-muted-foreground">Services</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-purple-600">3+</div>
-                <div className="text-xs text-muted-foreground">Years</div>
+              
+              {/* Contact Details */}
+              <div className="flex-1 min-w-0">
+                {/* Name and Type */}
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 
+                    className="text-2xl font-bold truncate transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {getContactDisplayName()}
+                  </h1>
+                  {contact.type === 'corporate' ? (
+                    <Building2 
+                      className="h-5 w-5 flex-shrink-0"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                  ) : (
+                    <User 
+                      className="h-5 w-5 flex-shrink-0"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                  )}
+                </div>
+                
+                {/* Status and Classifications */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span 
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border"
+                    style={{
+                      backgroundColor: contact.status === 'active' 
+                        ? colors.semantic.success + '20'
+                        : contact.status === 'inactive' 
+                        ? colors.semantic.warning + '20'
+                        : colors.utility.secondaryText + '20',
+                      borderColor: contact.status === 'active' 
+                        ? colors.semantic.success + '40'
+                        : contact.status === 'inactive' 
+                        ? colors.semantic.warning + '40'
+                        : colors.utility.secondaryText + '40',
+                      color: contact.status === 'active' 
+                        ? colors.semantic.success
+                        : contact.status === 'inactive' 
+                        ? colors.semantic.warning
+                        : colors.utility.secondaryText
+                    }}
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full"
+                      style={{
+                        backgroundColor: contact.status === 'active' 
+                          ? colors.semantic.success
+                          : contact.status === 'inactive' 
+                          ? colors.semantic.warning
+                          : colors.utility.secondaryText
+                      }}
+                    />
+                    {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
+                  </span>
+                  
+                  {contact.classifications.map((classification) => (
+                    <span
+                      key={classification.id}
+                      className="px-2 py-1 rounded-full text-xs font-medium border"
+                      style={{
+                        backgroundColor: colors.utility.secondaryText + '20',
+                        borderColor: colors.utility.secondaryText + '40',
+                        color: colors.utility.secondaryText
+                      }}
+                    >
+                      {classification.classification_label}
+                    </span>
+                  ))}
+                </div>
+                
+                {/* Quick Contact Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {primaryEmail && (
+                    <div 
+                      className="flex items-center gap-2"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      <Mail className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`mailto:${primaryEmail.value}`}
+                        className="truncate hover:opacity-80 cursor-pointer transition-colors"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        {primaryEmail.value}
+                      </a>
+                      {primaryEmail.is_verified && (
+                        <CheckCircle 
+                          className="h-3 w-3"
+                          style={{ color: colors.semantic.success }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  
+                  {primaryPhone && (
+                    <div 
+                      className="flex items-center gap-2"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      <Phone className="h-4 w-4 flex-shrink-0" />
+                      <a 
+                        href={`tel:${formatPhoneNumber(primaryPhone)}`}
+                        className="hover:opacity-80 cursor-pointer transition-colors"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        {formatPhoneNumber(primaryPhone)}
+                      </a>
+                      {primaryPhone.is_verified && (
+                        <CheckCircle 
+                          className="h-3 w-3"
+                          style={{ color: colors.semantic.success }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  
+                  {primaryAddress && (
+                    <div 
+                      className="flex items-center gap-2 md:col-span-2"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      <MapPin className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">
+                        {primaryAddress.line1}, {primaryAddress.city}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      */}
+        
+        {/* Enhanced Stats Bar with Real Data */}
+        <div 
+          className="border-t px-6 py-4 transition-colors"
+          style={{
+            borderColor: colors.utility.primaryText + '20',
+            backgroundColor: colors.utility.secondaryText + '10'
+          }}
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { key: 'contracts', value: quickStats.contracts, label: 'Contracts' },
+              { 
+                key: 'revenue', 
+                value: quickStats.revenue >= 100000 
+                  ? `₹${(quickStats.revenue / 100000).toFixed(1)}L`
+                  : quickStats.revenue >= 1000
+                  ? `₹${(quickStats.revenue / 1000).toFixed(1)}K`
+                  : `₹${quickStats.revenue.toLocaleString()}`, 
+                label: 'Revenue', 
+                color: colors.semantic.success
+              },
+              { key: 'services', value: quickStats.services, label: 'Services', color: colors.brand.primary },
+              { 
+                key: 'years', 
+                value: quickStats.relationshipYears > 0 ? `${quickStats.relationshipYears}+` : '<1', 
+                label: 'Years', 
+                color: colors.brand.tertiary 
+              }
+            ].map((stat) => (
+              <div key={stat.key} className="text-center">
+                <div 
+                  className="text-lg font-semibold"
+                  style={{ color: stat.color || colors.utility.primaryText }}
+                >
+                  {stat.value}
+                </div>
+                <div 
+                  className="text-xs"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  {stat.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Tabs Navigation */}
       <TabsNavigation
@@ -626,10 +1147,40 @@ const ContactViewPage: React.FC = () => {
 
       {/* Mobile Floating Action Button */}
       <div className="fixed bottom-6 right-6 md:hidden">
-        <button className="w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-all flex items-center justify-center">
-          <Plus className="h-6 w-6" />
+        <button 
+          onClick={() => navigate(`/contacts/${contact.id}/edit`)}
+          className="w-14 h-14 rounded-full shadow-lg hover:opacity-90 transition-all flex items-center justify-center"
+          style={{
+            backgroundColor: colors.brand.primary,
+            color: '#ffffff'
+          }}
+        >
+          <Edit className="h-6 w-6" />
         </button>
       </div>
+
+      {/* Click outside handler for dropdowns */}
+      {showMoreActions && (
+        <div 
+          className="fixed inset-0 z-10" 
+          onClick={() => setShowMoreActions(false)}
+        />
+      )}
+
+      {/* Archive Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showArchiveDialog}
+        onClose={() => setShowArchiveDialog(false)}
+        onConfirm={() => {
+          handleStatusUpdate('archived');
+          setShowArchiveDialog(false);
+        }}
+        title="Archive Contact"
+        description="Are you sure you want to archive this contact? This action cannot be undone."
+        confirmText="Archive"
+        type="danger"
+        icon={<Archive className="h-6 w-6" />}
+      />
     </div>
   );
 };

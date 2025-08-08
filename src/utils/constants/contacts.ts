@@ -1,5 +1,5 @@
-// src/utils/constants/contacts.ts - Complete Version 3
-// Contact-specific constants that extend the global constants
+// src/utils/constants/contacts.ts - Complete Clean Version
+// Contact-specific constants for the first release
 
 export const CONTACT_FORM_TYPES = {
   INDIVIDUAL: 'individual',
@@ -8,7 +8,6 @@ export const CONTACT_FORM_TYPES = {
 
 export const ADDRESS_TYPES = {
   HOME: 'home',
-  WORK: 'work', 
   OFFICE: 'office',
   BILLING: 'billing',
   SHIPPING: 'shipping',
@@ -21,159 +20,90 @@ export const SALUTATIONS = [
   { value: 'mr', label: 'Mr.' },
   { value: 'mrs', label: 'Mrs.' },
   { value: 'ms', label: 'Ms.' },
-  { value: 'miss', label: 'Miss' },
   { value: 'dr', label: 'Dr.' },
   { value: 'prof', label: 'Prof.' }
-];
+] as const;
 
-// Contact Status Management
+// Contact Status Management (requirement #4, #7)
 export const CONTACT_STATUS = {
   ACTIVE: 'active',
-  INACTIVE: 'inactive', 
-  LEAD: 'lead',
+  INACTIVE: 'inactive',
   ARCHIVED: 'archived'
 } as const;
 
 export const CONTACT_STATUS_LABELS = {
   [CONTACT_STATUS.ACTIVE]: 'Active',
   [CONTACT_STATUS.INACTIVE]: 'Inactive',
-  [CONTACT_STATUS.LEAD]: 'Lead',  
   [CONTACT_STATUS.ARCHIVED]: 'Archived'
 } as const;
 
-// Domain-Specific Classifications (Aligned with industries.ts)
-export const DOMAIN_CLASSIFICATIONS = {
-  healthcare: [
-    { id: 'patient', label: 'Patient', description: 'Receives medical services', color: 'blue' },
-    { id: 'provider', label: 'Healthcare Provider', description: 'Doctors, nurses, medical staff', color: 'green' },
-    { id: 'vendor', label: 'Medical Vendor', description: 'Supplies medical equipment/pharmaceuticals', color: 'purple' },
-    { id: 'insurance', label: 'Insurance Provider', description: 'Health insurance companies', color: 'orange' }
-  ],
-  financial_services: [
-    { id: 'client', label: 'Client', description: 'Receives financial services', color: 'blue' },
-    { id: 'advisor', label: 'Financial Advisor', description: 'Provides financial guidance', color: 'green' },
-    { id: 'institution', label: 'Financial Institution', description: 'Banks, credit unions, etc.', color: 'purple' },
-    { id: 'vendor', label: 'Service Provider', description: 'Financial service vendors', color: 'orange' }
-  ],
-  manufacturing: [
-    { id: 'customer', label: 'Customer', description: 'Purchases manufactured goods', color: 'blue' },
-    { id: 'supplier', label: 'Supplier', description: 'Provides raw materials/components', color: 'green' },
-    { id: 'distributor', label: 'Distributor', description: 'Distributes manufactured products', color: 'purple' },
-    { id: 'contractor', label: 'Contractor', description: 'Manufacturing service providers', color: 'orange' }
-  ],
-  retail: [
-    { id: 'customer', label: 'Customer', description: 'Purchases retail products', color: 'blue' },
-    { id: 'supplier', label: 'Supplier', description: 'Provides products for retail', color: 'green' },
-    { id: 'vendor', label: 'Vendor', description: 'Retail service providers', color: 'purple' },
-    { id: 'partner', label: 'Retail Partner', description: 'Business collaboration partners', color: 'orange' }
-  ],
-  technology: [
-    { id: 'client', label: 'Client', description: 'Receives technology services', color: 'blue' },
-    { id: 'developer', label: 'Developer', description: 'Software/hardware developers', color: 'green' },
-    { id: 'vendor', label: 'Tech Vendor', description: 'Technology service providers', color: 'purple' },
-    { id: 'partner', label: 'Tech Partner', description: 'Technology collaboration partners', color: 'orange' }
-  ],
-  education: [
-    { id: 'student', label: 'Student', description: 'Receives educational services', color: 'blue' },
-    { id: 'educator', label: 'Educator', description: 'Teachers, professors, trainers', color: 'green' },
-    { id: 'vendor', label: 'Education Vendor', description: 'Educational service providers', color: 'purple' },
-    { id: 'institution', label: 'Institution', description: 'Schools, universities, training centers', color: 'orange' }
-  ],
-  government: [
-    { id: 'citizen', label: 'Citizen', description: 'Receives government services', color: 'blue' },
-    { id: 'official', label: 'Government Official', description: 'Government employees/representatives', color: 'green' },
-    { id: 'contractor', label: 'Government Contractor', description: 'Provides services to government', color: 'purple' },
-    { id: 'agency', label: 'Government Agency', description: 'Government departments/agencies', color: 'orange' }
-  ],
-  nonprofit: [
-    { id: 'beneficiary', label: 'Beneficiary', description: 'Receives nonprofit services', color: 'blue' },
-    { id: 'volunteer', label: 'Volunteer', description: 'Provides volunteer services', color: 'green' },
-    { id: 'donor', label: 'Donor', description: 'Provides funding/donations', color: 'purple' },
-    { id: 'partner', label: 'Partner Organization', description: 'Collaborative nonprofit partners', color: 'orange' }
-  ],
-  professional_services: [
-    { id: 'client', label: 'Client', description: 'Receives professional services', color: 'blue' },
-    { id: 'consultant', label: 'Consultant', description: 'Provides professional consulting', color: 'green' },
-    { id: 'vendor', label: 'Service Vendor', description: 'Professional service providers', color: 'purple' },
-    { id: 'partner', label: 'Professional Partner', description: 'Professional collaboration partners', color: 'orange' }
-  ],
-  telecommunications: [
-    { id: 'subscriber', label: 'Subscriber', description: 'Uses telecommunication services', color: 'blue' },
-    { id: 'provider', label: 'Service Provider', description: 'Provides telecom services', color: 'green' },
-    { id: 'vendor', label: 'Telecom Vendor', description: 'Telecom equipment/service vendors', color: 'purple' },
-    { id: 'partner', label: 'Network Partner', description: 'Telecom collaboration partners', color: 'orange' }
-  ],
-  transportation: [
-    { id: 'customer', label: 'Customer', description: 'Uses transportation services', color: 'blue' },
-    { id: 'carrier', label: 'Carrier', description: 'Provides transportation services', color: 'green' },
-    { id: 'supplier', label: 'Logistics Supplier', description: 'Transportation service providers', color: 'purple' },
-    { id: 'partner', label: 'Logistics Partner', description: 'Transportation collaboration partners', color: 'orange' }
-  ],
-  energy: [
-    { id: 'consumer', label: 'Consumer', description: 'Uses energy/utility services', color: 'blue' },
-    { id: 'provider', label: 'Energy Provider', description: 'Provides energy/utility services', color: 'green' },
-    { id: 'supplier', label: 'Energy Supplier', description: 'Energy equipment/service suppliers', color: 'purple' },
-    { id: 'contractor', label: 'Energy Contractor', description: 'Energy service contractors', color: 'orange' }
-  ],
-  construction: [
-    { id: 'client', label: 'Client', description: 'Requests construction/real estate services', color: 'blue' },
-    { id: 'contractor', label: 'Contractor', description: 'Provides construction services', color: 'green' },
-    { id: 'supplier', label: 'Supplier', description: 'Supplies construction materials', color: 'purple' },
-    { id: 'subcontractor', label: 'Subcontractor', description: 'Specialized construction services', color: 'orange' }
-  ],
-  hospitality: [
-    { id: 'guest', label: 'Guest', description: 'Uses hospitality services', color: 'blue' },
-    { id: 'operator', label: 'Service Operator', description: 'Provides hospitality services', color: 'green' },
-    { id: 'supplier', label: 'Hospitality Supplier', description: 'Supplies hospitality products/services', color: 'purple' },
-    { id: 'partner', label: 'Tourism Partner', description: 'Hospitality collaboration partners', color: 'orange' }
-  ],
-  media: [
-    { id: 'audience', label: 'Audience', description: 'Consumes media content', color: 'blue' },
-    { id: 'creator', label: 'Content Creator', description: 'Creates media content', color: 'green' },
-    { id: 'vendor', label: 'Media Vendor', description: 'Media service providers', color: 'purple' },
-    { id: 'partner', label: 'Media Partner', description: 'Media collaboration partners', color: 'orange' }
-  ],
-  agriculture: [
-    { id: 'buyer', label: 'Buyer', description: 'Purchases agricultural products', color: 'blue' },
-    { id: 'farmer', label: 'Farmer', description: 'Produces agricultural products', color: 'green' },
-    { id: 'supplier', label: 'Agricultural Supplier', description: 'Supplies farming equipment/materials', color: 'purple' },
-    { id: 'distributor', label: 'Distributor', description: 'Distributes agricultural products', color: 'orange' }
-  ],
-  pharma: [
-    { id: 'patient', label: 'Patient', description: 'Uses pharmaceutical products', color: 'blue' },
-    { id: 'provider', label: 'Healthcare Provider', description: 'Prescribes pharmaceutical products', color: 'green' },
-    { id: 'supplier', label: 'Pharma Supplier', description: 'Supplies pharmaceutical materials', color: 'purple' },
-    { id: 'distributor', label: 'Distributor', description: 'Distributes pharmaceutical products', color: 'orange' }
-  ],
-  automotive: [
-    { id: 'customer', label: 'Customer', description: 'Purchases automotive products/services', color: 'blue' },
-    { id: 'dealer', label: 'Dealer', description: 'Sells automotive products', color: 'green' },
-    { id: 'supplier', label: 'Parts Supplier', description: 'Supplies automotive parts/materials', color: 'purple' },
-    { id: 'service_provider', label: 'Service Provider', description: 'Provides automotive services', color: 'orange' }
-  ],
-  aerospace: [
-    { id: 'customer', label: 'Customer', description: 'Uses aerospace/defense services', color: 'blue' },
-    { id: 'contractor', label: 'Defense Contractor', description: 'Provides aerospace/defense services', color: 'green' },
-    { id: 'supplier', label: 'Aerospace Supplier', description: 'Supplies aerospace materials/components', color: 'purple' },
-    { id: 'partner', label: 'Defense Partner', description: 'Aerospace collaboration partners', color: 'orange' }
-  ],
-  default: [
-    { id: 'buyer', label: 'Buyer', description: 'Purchases services/products', color: 'blue' },
-    { id: 'seller', label: 'Seller', description: 'Provides services/products', color: 'green' },
-    { id: 'vendor', label: 'Vendor', description: 'Supplies products/services', color: 'purple' },
-    { id: 'partner', label: 'Partner', description: 'Business collaboration partner', color: 'orange' }
-  ],
-  other: [
-    { id: 'contact', label: 'Contact', description: 'General business contact', color: 'blue' },
-    { id: 'vendor', label: 'Vendor', description: 'Service/product provider', color: 'green' },
-    { id: 'partner', label: 'Partner', description: 'Business partner', color: 'purple' },
-    { id: 'client', label: 'Client', description: 'Business client', color: 'orange' }
-  ]
+// Updated Contact Classifications - Only 4 Types (requirement #1)
+export const CONTACT_CLASSIFICATIONS = {
+  BUYER: 'buyer',
+  SELLER: 'seller',
+  VENDOR: 'vendor',
+  PARTNER: 'partner'
 } as const;
 
-// Contact Channel Types (extending global CHANNELS)
+// Classification Configuration
+export const CONTACT_CLASSIFICATION_CONFIG = [
+  { 
+    id: 'buyer', 
+    label: 'Buyer', 
+    description: 'Purchases services/products from us', 
+    color: 'blue',
+    icon: '🛒'
+  },
+  { 
+    id: 'seller', 
+    label: 'Seller', 
+    description: 'Sells services/products to us', 
+    color: 'green',
+    icon: '💰'
+  },
+  { 
+    id: 'vendor', 
+    label: 'Vendor', 
+    description: 'Supplies products/services to us', 
+    color: 'purple',
+    icon: '📦'
+  },
+  { 
+    id: 'partner', 
+    label: 'Partner', 
+    description: 'Business collaboration partner', 
+    color: 'orange',
+    icon: '🤝'
+  }
+] as const;
+
+// Domain-specific classifications for different industries
+// Currently all industries use the same classifications, but this structure
+// allows for future customization per industry
+export const DOMAIN_CLASSIFICATIONS = {
+  default: CONTACT_CLASSIFICATION_CONFIG,
+  retail: CONTACT_CLASSIFICATION_CONFIG,
+  manufacturing: CONTACT_CLASSIFICATION_CONFIG,
+  services: CONTACT_CLASSIFICATION_CONFIG,
+  technology: CONTACT_CLASSIFICATION_CONFIG,
+  healthcare: CONTACT_CLASSIFICATION_CONFIG,
+  finance: CONTACT_CLASSIFICATION_CONFIG,
+  education: CONTACT_CLASSIFICATION_CONFIG,
+  hospitality: CONTACT_CLASSIFICATION_CONFIG,
+  real_estate: CONTACT_CLASSIFICATION_CONFIG,
+  logistics: CONTACT_CLASSIFICATION_CONFIG,
+  agriculture: CONTACT_CLASSIFICATION_CONFIG
+} as const;
+
+// Function to get classifications for a specific industry
+export const getClassificationsForIndustry = (industry: string) => {
+  // Return industry-specific classifications if available, otherwise default
+  return DOMAIN_CLASSIFICATIONS[industry as keyof typeof DOMAIN_CLASSIFICATIONS] || DOMAIN_CLASSIFICATIONS.default;
+};
+
+// Contact Channel Types
 export const CONTACT_CHANNEL_TYPES = {
-  PHONE: 'mobile',
+  MOBILE: 'mobile',
   EMAIL: 'email', 
   WHATSAPP: 'whatsapp',
   LINKEDIN: 'linkedin',
@@ -182,13 +112,12 @@ export const CONTACT_CHANNEL_TYPES = {
   TELEGRAM: 'telegram'
 } as const;
 
-// Default Contact Channel (Phone by default)
-export const DEFAULT_CONTACT_CHANNEL = CONTACT_CHANNEL_TYPES.PHONE;
-
+// Default settings
+export const DEFAULT_CONTACT_CHANNEL = CONTACT_CHANNEL_TYPES.MOBILE;
 export const DEFAULT_COUNTRY_CODE = 'IN';
 export const DEFAULT_PHONE_CODE = '+91';
 
-// User Account Status
+// User Account Status (requirement #6)
 export const USER_ACCOUNT_STATUS = {
   HAS_ACCOUNT: 'has_account',
   NO_ACCOUNT: 'no_account',
@@ -224,19 +153,9 @@ export const USER_STATUS_MESSAGES = {
   }
 } as const;
 
-// Company Size Options
-export const COMPANY_SIZES = [
-  { value: 'startup', label: 'Startup (1-10)', description: 'Early stage company' },
-  { value: 'small', label: 'Small (11-50)', description: 'Small business' },  
-  { value: 'medium', label: 'Medium (51-200)', description: 'Medium enterprise' },
-  { value: 'large', label: 'Large (201-1000)', description: 'Large enterprise' },
-  { value: 'enterprise', label: 'Enterprise (1000+)', description: 'Enterprise organization' }
-] as const;
-
 // Enhanced Address Types with Labels
 export const ADDRESS_TYPE_LABELS = {
   [ADDRESS_TYPES.HOME]: { label: 'Home', icon: '🏠', description: 'Residential address' },
-  [ADDRESS_TYPES.WORK]: { label: 'Work', icon: '🏢', description: 'Work location' },
   [ADDRESS_TYPES.OFFICE]: { label: 'Office', icon: '🏢', description: 'Business office' },
   [ADDRESS_TYPES.BILLING]: { label: 'Billing', icon: '💳', description: 'Billing address' },
   [ADDRESS_TYPES.SHIPPING]: { label: 'Shipping', icon: '📦', description: 'Delivery address' },
@@ -260,9 +179,10 @@ export const BULK_ACTIONS = {
   DELETE: 'delete',
   EXPORT: 'export',
   TAG: 'tag',
-  CHANGE_TYPE: 'changeType',
+  CHANGE_STATUS: 'changeStatus',
   ACTIVATE: 'activate',
-  DEACTIVATE: 'deactivate'
+  DEACTIVATE: 'deactivate',
+  ARCHIVE: 'archive'
 } as const;
 
 // Contact Sort Options
@@ -270,8 +190,9 @@ export const CONTACT_SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
   { value: 'created', label: 'Date Created' },
   { value: 'updated', label: 'Last Updated' },
-  { value: 'type', label: 'Contact Type' }
-];
+  { value: 'type', label: 'Contact Type' },
+  { value: 'status', label: 'Status' }
+] as const;
 
 // Contact View Modes
 export const CONTACT_VIEW_MODES = {
@@ -298,8 +219,10 @@ export const VALIDATION_RULES = {
   PHONE_MAX_LENGTH: 15,
   NOTES_MAX_LENGTH: 500,
   ADDRESS_MAX_LENGTH: 200,
-  POSTAL_CODE_MAX_LENGTH: 10
-};
+  POSTAL_CODE_MAX_LENGTH: 10,
+  TAG_MAX_COUNT: 10,
+  CLASSIFICATION_MIN_COUNT: 1
+} as const;
 
 // Error Messages
 export const ERROR_MESSAGES = {
@@ -312,23 +235,32 @@ export const ERROR_MESSAGES = {
   DUPLICATE_PRIMARY: 'Only one item can be marked as primary',
   NO_CHANNELS: 'At least one contact method is required',
   NO_PRIMARY_CHANNEL: 'Please mark one contact method as primary',
-  COUNTRY_CODE_REQUIRED: 'Country code is required for phone numbers'
-};
+  NO_CLASSIFICATIONS: 'Please select at least one classification',
+  COUNTRY_CODE_REQUIRED: 'Country code is required for phone numbers',
+  CONTACT_ARCHIVED: 'Cannot perform operations on archived contacts',
+  CONTACT_INACTIVE: 'This contact is inactive and may have limited functionality',
+  DUPLICATE_CONTACT_WARNING: 'A contact with similar information already exists',
+  MAX_TAGS_EXCEEDED: `Maximum ${VALIDATION_RULES.TAG_MAX_COUNT} tags allowed`
+} as const;
 
 // Success Messages
 export const SUCCESS_MESSAGES = {
   CONTACT_CREATED: 'Contact created successfully',
   CONTACT_UPDATED: 'Contact updated successfully',
   CONTACT_DELETED: 'Contact deleted successfully',
+  CONTACT_ACTIVATED: 'Contact activated successfully',
+  CONTACT_DEACTIVATED: 'Contact deactivated successfully',
+  CONTACT_ARCHIVED: 'Contact archived successfully',
   CONTACTS_IMPORTED: (count: number) => `${count} contacts imported successfully`,
-  CONTACTS_EXPORTED: 'Contacts exported successfully'
-};
+  CONTACTS_EXPORTED: 'Contacts exported successfully',
+  INVITATION_SENT: 'Invitation sent successfully',
+  TAG_ADDED: 'Tag added successfully',
+  TAG_REMOVED: 'Tag removed successfully'
+} as const;
 
 // Placeholder Texts
 export const PLACEHOLDER_TEXTS = {
   SEARCH: 'Search by name, email, or phone...',
-  FIRST_NAME: 'John',
-  LAST_NAME: 'Doe',
   FULL_NAME: 'John Doe',
   COMPANY_NAME: 'Acme Corporation',
   EMAIL: 'john.doe@example.com',
@@ -337,62 +269,239 @@ export const PLACEHOLDER_TEXTS = {
   CITY: 'Mumbai',
   STATE: 'Maharashtra',
   POSTAL_CODE: '400001',
-  NOTES: 'Add any additional notes here...'
-};
+  NOTES: 'Add any additional notes here...',
+  DESIGNATION: 'Manager',
+  DEPARTMENT: 'Sales'
+} as const;
 
-// Utility functions for industry-specific configurations
-export const getClassificationsForIndustry = (industryId: string) => {
-  return DOMAIN_CLASSIFICATIONS[industryId as keyof typeof DOMAIN_CLASSIFICATIONS] || DOMAIN_CLASSIFICATIONS.default;
-};
+// MasterData Query Names (requirement #3)
+export const MASTERDATA_QUERIES = {
+  CONTACT_TAGS: 'Contact Tags',
+  COMPLIANCE_TYPES: 'Compliance Types',
+  CONTACT_SOURCES: 'Contact Sources',
+  INDUSTRIES: 'Industries'
+} as const;
 
-export const getMenuTerminologyForIndustry = (industryId: string) => {
-  // Maps industry to contact terminology for menu items
-  const terminologyMap = {
-    healthcare: 'Patients & Providers',
-    education: 'Students & Educators', 
-    construction: 'Clients & Contractors',
-    professional_services: 'Clients & Consultants',
-    retail: 'Customers & Suppliers',
-    manufacturing: 'Customers & Suppliers',
-    government: 'Citizens & Officials',
-    nonprofit: 'Beneficiaries & Donors',
-    financial_services: 'Clients & Advisors',
-    technology: 'Clients & Developers',
-    telecommunications: 'Subscribers & Providers',
-    transportation: 'Customers & Carriers',
-    energy: 'Consumers & Providers',
-    hospitality: 'Guests & Operators',
-    media: 'Audience & Creators',
-    agriculture: 'Buyers & Farmers',
-    pharma: 'Patients & Providers',
-    automotive: 'Customers & Dealers',
-    aerospace: 'Customers & Contractors',
-    other: 'Contacts',
-    default: 'Contacts'
-  };
-  
-  return terminologyMap[industryId as keyof typeof terminologyMap] || terminologyMap.default;
-};
+// Duplicate Detection Settings (requirement #10, #12)
+export const DUPLICATE_DETECTION = {
+  CHECK_CHANNELS: ['mobile', 'email'] as const,
+  SIMILARITY_THRESHOLD: 0.8, // For fuzzy name matching
+  AUTO_FLAG_DUPLICATES: true,
+  REQUIRE_CONFIRMATION: true
+} as const;
 
-// Contact form validation schemas
+// Contact Form Validation Schema
 export const FORM_VALIDATION_SCHEMA = {
   individual: {
-    required: ['name', 'contact_channels'],
+    required: ['name', 'contact_channels', 'classifications'],
     optional: ['salutation', 'notes', 'tags', 'addresses']
   },
   corporate: {
-    required: ['company_name', 'contact_channels'],
-    optional: ['company_registration_number', 'website', 'industry', 'company_size', 'notes', 'tags', 'addresses', 'compliance_numbers', 'contact_persons']
+    required: ['company_name', 'contact_channels', 'classifications'],
+    optional: ['registration_number', 'notes', 'tags', 'addresses', 'compliance_numbers', 'contact_persons']
   }
 } as const;
+
+// Audit Event Types (requirement #8)
+export const AUDIT_EVENTS = {
+  CONTACT_CREATED: 'contact_created',
+  CONTACT_UPDATED: 'contact_updated',
+  CONTACT_DELETED: 'contact_deleted',
+  CONTACT_ACTIVATED: 'contact_activated',
+  CONTACT_DEACTIVATED: 'contact_deactivated',
+  CONTACT_ARCHIVED: 'contact_archived',
+  CHANNEL_ADDED: 'channel_added',
+  CHANNEL_UPDATED: 'channel_updated',
+  CHANNEL_REMOVED: 'channel_removed',
+  ADDRESS_ADDED: 'address_added',
+  ADDRESS_UPDATED: 'address_updated',
+  ADDRESS_REMOVED: 'address_removed',
+  TAG_ADDED: 'tag_added',
+  TAG_REMOVED: 'tag_removed',
+  CLASSIFICATION_ADDED: 'classification_added',
+  CLASSIFICATION_REMOVED: 'classification_removed',
+  INVITATION_SENT: 'invitation_sent',
+  DUPLICATE_FLAGGED: 'duplicate_flagged',
+  DUPLICATE_RESOLVED: 'duplicate_resolved'
+} as const;
+
+// Filter Options for Contact Lists
+export const FILTER_OPTIONS = {
+  status: [
+    { value: 'active', label: 'Active', count: 0 },
+    { value: 'inactive', label: 'Inactive', count: 0 },
+    { value: 'archived', label: 'Archived', count: 0 }
+  ],
+  type: [
+    { value: 'individual', label: 'Individual', count: 0 },
+    { value: 'corporate', label: 'Corporate', count: 0 }
+  ],
+  classification: [
+    { value: 'buyer', label: 'Buyer', count: 0 },
+    { value: 'seller', label: 'Seller', count: 0 },
+    { value: 'vendor', label: 'Vendor', count: 0 },
+    { value: 'partner', label: 'Partner', count: 0 }
+  ],
+  duplicates: [
+    { value: 'has_duplicates', label: 'Has Potential Duplicates', count: 0 },
+    { value: 'no_duplicates', label: 'No Duplicates', count: 0 }
+  ]
+} as const;
+
+// Business Rules (requirements #5, #7)
+export const BUSINESS_RULES = {
+  INACTIVE_CONTACT_RESTRICTIONS: [
+    'No new contracts can be created',
+    'No new invoices can be generated',
+    'No new services can be started',
+    'Existing services continue but no modifications'
+  ],
+  ARCHIVED_CONTACT_RESTRICTIONS: [
+    'No user operations allowed',
+    'Only system operations permitted',
+    'Record is effectively frozen',
+    'Cannot be reactivated by users'
+  ],
+  DUPLICATE_HANDLING: {
+    SHOW_WARNING: true,
+    ALLOW_SAVE_ANYWAY: true,
+    MARK_AS_POTENTIAL_DUPLICATE: true,
+    REQUIRE_USER_CONFIRMATION: true
+  }
+} as const;
+
+// API Endpoints (for frontend integration)
+export const API_ENDPOINTS = {
+  CONTACTS: '/api/contacts',
+  CONTACT_BY_ID: (id: string) => `/api/contacts/${id}`,
+  CONTACT_CHANNELS: (id: string) => `/api/contacts/${id}/channels`,
+  CONTACT_ADDRESSES: (id: string) => `/api/contacts/${id}/addresses`,
+  CONTACT_TAGS: (id: string) => `/api/contacts/${id}/tags`,
+  CONTACT_CLASSIFICATIONS: (id: string) => `/api/contacts/${id}/classifications`,
+  CONTACT_SEARCH: '/api/contacts/search',
+  CONTACT_DUPLICATES: '/api/contacts/duplicates',
+  CONTACT_INVITE: (id: string) => `/api/contacts/${id}/invite`,
+  CONTACT_BULK_ACTIONS: '/api/contacts/bulk',
+  CONTACT_EXPORT: '/api/contacts/export',
+  CONTACT_IMPORT: '/api/contacts/import'
+} as const;
+
+// UI Configuration
+export const UI_CONFIG = {
+  ITEMS_PER_PAGE: 12,
+  ITEMS_PER_PAGE_OPTIONS: [12, 24, 48, 96],
+  SEARCH_DEBOUNCE_MS: 300,
+  AUTO_SAVE_DELAY_MS: 1000,
+  TOAST_DURATION_MS: 5000,
+  MODAL_ANIMATION_DURATION_MS: 200,
+  CARD_HOVER_ELEVATION: 'hover:shadow-md',
+  PRIMARY_COLOR: '#2563eb',
+  SUCCESS_COLOR: '#059669',
+  WARNING_COLOR: '#d97706',
+  ERROR_COLOR: '#dc2626'
+} as const;
+
+// Utility Functions
+export const getClassificationConfig = (id: string) => {
+  return CONTACT_CLASSIFICATION_CONFIG.find(config => config.id === id);
+};
+
+export const getClassificationLabel = (id: string): string => {
+  const config = getClassificationConfig(id);
+  return config?.label || id;
+};
+
+export const getClassificationColor = (id: string): string => {
+  const config = getClassificationConfig(id);
+  return config?.color || 'gray';
+};
+
+export const getStatusColor = (status: string): string => {
+  switch (status) {
+    case CONTACT_STATUS.ACTIVE:
+      return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800';
+    case CONTACT_STATUS.INACTIVE:
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800';
+    case CONTACT_STATUS.ARCHIVED:
+      return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-400 dark:border-gray-800';
+  }
+};
+
+export const isContactRestricted = (status: string): boolean => {
+  return status === CONTACT_STATUS.INACTIVE || status === CONTACT_STATUS.ARCHIVED;
+};
+
+export const canPerformOperation = (status: string, operation: string): boolean => {
+  if (status === CONTACT_STATUS.ARCHIVED) {
+    return false; // No operations allowed on archived contacts
+  }
+  
+  if (status === CONTACT_STATUS.INACTIVE) {
+    // Limited operations on inactive contacts
+    const allowedOperations = ['view', 'edit', 'activate'];
+    return allowedOperations.includes(operation);
+  }
+  
+  return true; // Active contacts allow all operations
+};
+
+export const formatContactDisplayName = (contact: any): string => {
+  if (contact.type === CONTACT_FORM_TYPES.CORPORATE) {
+    return contact.company_name || 'Unnamed Company';
+  } else {
+    const salutation = contact.salutation ? 
+      SALUTATIONS.find(s => s.value === contact.salutation)?.label + ' ' : '';
+    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
+  }
+};
+
+export const getDuplicateWarningMessage = (duplicateReasons: string[]): string => {
+  if (duplicateReasons.includes('mobile_match') && duplicateReasons.includes('email_match')) {
+    return 'This contact has the same mobile number and email as another contact';
+  } else if (duplicateReasons.includes('mobile_match')) {
+    return 'This contact has the same mobile number as another contact';
+  } else if (duplicateReasons.includes('email_match')) {
+    return 'This contact has the same email address as another contact';
+  }
+  return 'This contact may be a duplicate';
+};
 
 // Type definitions for better TypeScript support
 export type ContactFormType = typeof CONTACT_FORM_TYPES[keyof typeof CONTACT_FORM_TYPES];
 export type ContactStatus = typeof CONTACT_STATUS[keyof typeof CONTACT_STATUS];
+export type ContactClassification = typeof CONTACT_CLASSIFICATIONS[keyof typeof CONTACT_CLASSIFICATIONS];
 export type AddressType = typeof ADDRESS_TYPES[keyof typeof ADDRESS_TYPES];
 export type UserAccountStatus = typeof USER_ACCOUNT_STATUS[keyof typeof USER_ACCOUNT_STATUS];
 export type ContactChannelType = typeof CONTACT_CHANNEL_TYPES[keyof typeof CONTACT_CHANNEL_TYPES];
-export type CompanySize = typeof COMPANY_SIZES[number]['value'];
 export type ContactSource = typeof CONTACT_SOURCES[keyof typeof CONTACT_SOURCES];
 export type BulkAction = typeof BULK_ACTIONS[keyof typeof BULK_ACTIONS];
 export type ContactViewMode = typeof CONTACT_VIEW_MODES[keyof typeof CONTACT_VIEW_MODES];
+export type AuditEvent = typeof AUDIT_EVENTS[keyof typeof AUDIT_EVENTS];
+
+// Export all constants as a single object for easier importing
+export const CONTACTS_CONSTANTS = {
+  FORM_TYPES: CONTACT_FORM_TYPES,
+  STATUS: CONTACT_STATUS,
+  CLASSIFICATIONS: CONTACT_CLASSIFICATIONS,
+  CLASSIFICATION_CONFIG: CONTACT_CLASSIFICATION_CONFIG,
+  CHANNELS: CONTACT_CHANNEL_TYPES,
+  ADDRESSES: ADDRESS_TYPES,
+  ADDRESS_LABELS: ADDRESS_TYPE_LABELS,
+  SALUTATIONS,
+  USER_STATUS: USER_ACCOUNT_STATUS,
+  USER_STATUS_MESSAGES,
+  VALIDATION_RULES,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  PLACEHOLDER_TEXTS,
+  MASTERDATA_QUERIES,
+  DUPLICATE_DETECTION,
+  BUSINESS_RULES,
+  API_ENDPOINTS,
+  UI_CONFIG,
+  AUDIT_EVENTS,
+  DOMAIN_CLASSIFICATIONS,
+  getClassificationsForIndustry
+} as const;

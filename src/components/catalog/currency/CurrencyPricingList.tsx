@@ -1,5 +1,6 @@
 // src/components/catalog/currency/CurrencyPricingList.tsx
 import React from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   CURRENCY_SYMBOLS,
   type SupportedCurrency 
@@ -21,9 +22,15 @@ export const CurrencyPricingList: React.FC<CurrencyPricingListProps> = ({
   maxCurrencies = 3,
   className = ''
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   if (!pricing || pricing.length === 0) {
     return (
-      <span className="text-gray-500 dark:text-gray-400 text-sm">
+      <span 
+        className="text-sm transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
         No pricing set
       </span>
     );
@@ -52,11 +59,17 @@ export const CurrencyPricingList: React.FC<CurrencyPricingListProps> = ({
     const basePricing = sortedPricing.find(p => p.is_base_currency) || sortedPricing[0];
     return (
       <div className={`flex items-center space-x-2 ${className}`}>
-        <span className="font-medium text-gray-900 dark:text-white">
+        <span 
+          className="font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
           {formatPrice(basePricing.price, basePricing.currency)}
         </span>
         {sortedPricing.length > 1 && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
+          <span 
+            className="text-xs transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             +{sortedPricing.length - 1} more
           </span>
         )}
@@ -74,25 +87,39 @@ export const CurrencyPricingList: React.FC<CurrencyPricingListProps> = ({
               item.is_base_currency ? 'font-medium' : ''
             }`}
           >
-            <span className="text-sm text-gray-600 dark:text-gray-400">
+            <span 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {item.currency}
               {item.is_base_currency && (
-                <span className="ml-1 text-xs text-indigo-600 dark:text-indigo-400">
+                <span 
+                  className="ml-1 text-xs transition-colors"
+                  style={{ color: colors.brand.primary }}
+                >
                   (base)
                 </span>
               )}
             </span>
-            <span className={`text-sm ${
-              item.is_base_currency 
-                ? 'text-gray-900 dark:text-white' 
-                : 'text-gray-700 dark:text-gray-300'
-            }`}>
+            <span 
+              className={`text-sm transition-colors ${
+                item.is_base_currency ? 'font-medium' : ''
+              }`}
+              style={{ 
+                color: item.is_base_currency 
+                  ? colors.utility.primaryText 
+                  : colors.utility.secondaryText
+              }}
+            >
               {formatPrice(item.price, item.currency)}
             </span>
           </div>
         ))}
         {remainingCount > 0 && !showAll && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 pt-1">
+          <div 
+            className="text-xs pt-1 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             +{remainingCount} more {remainingCount === 1 ? 'currency' : 'currencies'}
           </div>
         )}
@@ -106,18 +133,29 @@ export const CurrencyPricingList: React.FC<CurrencyPricingListProps> = ({
       {displayPricing.map((item, index) => (
         <React.Fragment key={item.currency}>
           {index > 0 && (
-            <span className="text-gray-400 dark:text-gray-600">•</span>
+            <span 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              •
+            </span>
           )}
           <span 
-            className={`${
-              item.is_base_currency 
-                ? 'font-medium text-gray-900 dark:text-white' 
-                : 'text-gray-700 dark:text-gray-300'
+            className={`transition-colors ${
+              item.is_base_currency ? 'font-medium' : ''
             }`}
+            style={{ 
+              color: item.is_base_currency 
+                ? colors.utility.primaryText 
+                : colors.utility.secondaryText
+            }}
           >
             {formatPrice(item.price, item.currency)}
             {item.is_base_currency && (
-              <sup className="ml-0.5 text-xs text-indigo-600 dark:text-indigo-400">
+              <sup 
+                className="ml-0.5 text-xs transition-colors"
+                style={{ color: colors.brand.primary }}
+              >
                 base
               </sup>
             )}
@@ -125,7 +163,10 @@ export const CurrencyPricingList: React.FC<CurrencyPricingListProps> = ({
         </React.Fragment>
       ))}
       {remainingCount > 0 && !showAll && (
-        <span className="text-sm text-gray-500 dark:text-gray-400">
+        <span 
+          className="text-sm transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
           +{remainingCount}
         </span>
       )}
@@ -141,6 +182,9 @@ export const PriceBadge: React.FC<{
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }> = ({ price, currency, isBase = false, size = 'md', className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const sizeClasses = {
     sm: 'text-xs px-2 py-0.5',
     md: 'text-sm px-2.5 py-1',
@@ -155,16 +199,28 @@ export const PriceBadge: React.FC<{
     })}`;
   };
 
+  const getStyles = () => {
+    if (isBase) {
+      return {
+        backgroundColor: `${colors.brand.primary}20`,
+        color: colors.brand.primary
+      };
+    }
+    return {
+      backgroundColor: `${colors.utility.primaryBackground}50`,
+      color: colors.utility.primaryText
+    };
+  };
+
   return (
-    <span className={`
-      inline-flex items-center rounded-full font-medium
-      ${isBase 
-        ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' 
-        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-      }
-      ${sizeClasses[size]}
-      ${className}
-    `}>
+    <span 
+      className={`
+        inline-flex items-center rounded-full font-medium transition-colors
+        ${sizeClasses[size]}
+        ${className}
+      `}
+      style={getStyles()}
+    >
       {formatPrice(price, currency)}
       {isBase && (
         <span className="ml-1 text-xs opacity-75">•</span>
@@ -179,8 +235,18 @@ export const PriceRangeDisplay: React.FC<{
   currency?: string;
   className?: string;
 }> = ({ pricing, currency, className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   if (!pricing || pricing.length === 0) {
-    return <span className="text-gray-500 dark:text-gray-400">-</span>;
+    return (
+      <span 
+        className="transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
+        -
+      </span>
+    );
   }
 
   // Filter by currency if specified
@@ -189,7 +255,14 @@ export const PriceRangeDisplay: React.FC<{
     : pricing;
 
   if (filteredPricing.length === 0) {
-    return <span className="text-gray-500 dark:text-gray-400">-</span>;
+    return (
+      <span 
+        className="transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
+        -
+      </span>
+    );
   }
 
   // Group by currency
@@ -217,9 +290,17 @@ export const PriceRangeDisplay: React.FC<{
       {Object.entries(byCurrency).map(([curr, prices], index) => (
         <React.Fragment key={curr}>
           {index > 0 && (
-            <span className="text-gray-400 dark:text-gray-600">|</span>
+            <span 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              |
+            </span>
           )}
-          <span className="text-gray-700 dark:text-gray-300">
+          <span 
+            className="transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             {formatRange(prices, curr)}
           </span>
         </React.Fragment>

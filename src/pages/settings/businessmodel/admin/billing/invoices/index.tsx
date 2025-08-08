@@ -15,6 +15,7 @@ import {
   Building,
   CreditCard
 } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 
 // Import mock data and types
@@ -26,6 +27,8 @@ import InvoiceTemplate from '@/components/businessmodel/billing/InvoiceTemplate'
 const InvoiceDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const [loading, setLoading] = useState(true);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -101,28 +104,52 @@ const InvoiceDetailPage: React.FC = () => {
     switch (status) {
       case 'paid':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.semantic.success}20`,
+              color: colors.semantic.success
+            }}
+          >
             <Check className="h-4 w-4 mr-2" />
             Paid
           </span>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.semantic.warning || '#F59E0B'}20`,
+              color: colors.semantic.warning || '#F59E0B'
+            }}
+          >
             <CalendarClock className="h-4 w-4 mr-2" />
             Pending
           </span>
         );
       case 'overdue':
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.semantic.error}20`,
+              color: colors.semantic.error
+            }}
+          >
             <AlertCircle className="h-4 w-4 mr-2" />
             Overdue
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+          <span 
+            className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
+          >
             {status}
           </span>
         );
@@ -132,18 +159,39 @@ const InvoiceDetailPage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+      >
         <div className="flex items-center mb-8">
-          <div className="mr-4 p-2 rounded-full bg-muted animate-pulse h-10 w-10"></div>
-          <div className="h-8 bg-muted rounded w-48 animate-pulse"></div>
+          <div 
+            className="mr-4 p-2 rounded-full animate-pulse h-10 w-10"
+            style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+          ></div>
+          <div 
+            className="h-8 rounded w-48 animate-pulse"
+            style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
+          ></div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="col-span-1 lg:col-span-2">
-            <div className="bg-card rounded-lg border border-border overflow-hidden animate-pulse h-96"></div>
+            <div 
+              className="rounded-lg border overflow-hidden animate-pulse h-96"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            ></div>
           </div>
           <div className="col-span-1">
-            <div className="bg-card rounded-lg border border-border overflow-hidden animate-pulse h-64"></div>
+            <div 
+              className="rounded-lg border overflow-hidden animate-pulse h-64"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}20`
+              }}
+            ></div>
           </div>
         </div>
       </div>
@@ -153,27 +201,67 @@ const InvoiceDetailPage: React.FC = () => {
   // 404 state
   if (!invoice) {
     return (
-      <div className="p-6 bg-muted/20">
+      <div 
+        className="p-6 transition-colors"
+        style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+      >
         <div className="flex items-center mb-8">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+            style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
-            <h1 className="text-2xl font-bold">Invoice Not Found</h1>
-            <p className="text-muted-foreground">The requested invoice does not exist or has been deleted</p>
+            <h1 
+              className="text-2xl font-bold transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Invoice Not Found
+            </h1>
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              The requested invoice does not exist or has been deleted
+            </p>
           </div>
         </div>
         
-        <div className="text-center py-12 bg-card rounded-lg border border-border">
-          <Receipt className="h-16 w-16 mx-auto text-muted-foreground opacity-50 mb-4" />
-          <h2 className="text-lg font-medium mb-2">Invoice Not Found</h2>
-          <p className="text-muted-foreground mb-6">The invoice you're looking for doesn't exist or may have been deleted.</p>
+        <div 
+          className="text-center py-12 rounded-lg border transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
+        >
+          <Receipt 
+            className="h-16 w-16 mx-auto opacity-50 mb-4"
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h2 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Invoice Not Found
+          </h2>
+          <p 
+            className="mb-6 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            The invoice you're looking for doesn't exist or may have been deleted.
+          </p>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            className="px-4 py-2 rounded-md transition-colors hover:opacity-90"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: 'white'
+            }}
           >
             Back to Billing Dashboard
           </button>
@@ -183,22 +271,37 @@ const InvoiceDetailPage: React.FC = () => {
   }
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
+    >
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center">
           <button 
             onClick={handleBack} 
-            className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
+            style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
           >
-            <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+            <ArrowLeft 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <div>
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold mr-3">{invoice.id}</h1>
+              <h1 
+                className="text-2xl font-bold mr-3 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {invoice.id}
+              </h1>
               {getStatusBadge(invoice.status)}
             </div>
-            <p className="text-muted-foreground">
+            <p 
+              className="transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {invoice.tenantName} - Issued on {formatDate(invoice.createdAt)}
             </p>
           </div>
@@ -206,24 +309,36 @@ const InvoiceDetailPage: React.FC = () => {
         
         <div className="flex space-x-2">
           <button
-            className="p-2 rounded-md hover:bg-muted transition-colors"
+            className="p-2 rounded-md transition-colors hover:opacity-80"
+            style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
             title="Download PDF"
           >
-            <Download className="h-5 w-5 text-muted-foreground" />
+            <Download 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           <button
-            className="p-2 rounded-md hover:bg-muted transition-colors"
+            className="p-2 rounded-md transition-colors hover:opacity-80"
+            style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
             title="Print Invoice"
           >
-            <Printer className="h-5 w-5 text-muted-foreground" />
+            <Printer 
+              className="h-5 w-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </button>
           {invoice.status !== 'paid' && (
             <button
               onClick={handleSendReminder}
-              className="p-2 rounded-md hover:bg-muted transition-colors"
+              className="p-2 rounded-md transition-colors hover:opacity-80"
+              style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
               title="Send Reminder"
             >
-              <Mail className="h-5 w-5 text-muted-foreground" />
+              <Mail 
+                className="h-5 w-5"
+                style={{ color: colors.utility.secondaryText }}
+              />
             </button>
           )}
         </div>
@@ -239,46 +354,106 @@ const InvoiceDetailPage: React.FC = () => {
         {/* Sidebar */}
         <div className="col-span-1 space-y-6">
           {/* Payment Information */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Payment Information</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Payment Information
+              </h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <div className="text-sm text-muted-foreground mb-1">Status</div>
+                <div 
+                  className="text-sm mb-1 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Status
+                </div>
                 <div className="font-medium">{getStatusBadge(invoice.status)}</div>
               </div>
               
               <div>
-                <div className="text-sm text-muted-foreground mb-1">Amount</div>
-                <div className="text-2xl font-bold">
+                <div 
+                  className="text-sm mb-1 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Amount
+                </div>
+                <div 
+                  className="text-2xl font-bold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {formatCurrency(invoice.amount, invoice.currency)}
                 </div>
               </div>
               
               <div>
-                <div className="text-sm text-muted-foreground mb-1">Due Date</div>
-                <div className="font-medium">{formatDate(invoice.dueDate)}</div>
+                <div 
+                  className="text-sm mb-1 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Due Date
+                </div>
+                <div 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {formatDate(invoice.dueDate)}
+                </div>
               </div>
               
               {invoice.paidDate && (
                 <div>
-                  <div className="text-sm text-muted-foreground mb-1">Paid Date</div>
-                  <div className="font-medium">{formatDate(invoice.paidDate)}</div>
+                  <div 
+                    className="text-sm mb-1 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Paid Date
+                  </div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {formatDate(invoice.paidDate)}
+                  </div>
                 </div>
               )}
               
-              <div className="pt-4 border-t border-border">
+              <div 
+                className="pt-4 border-t transition-colors"
+                style={{ borderTopColor: `${colors.utility.primaryText}20` }}
+              >
                 {invoice.status !== 'paid' ? (
                   <button
                     onClick={handleMarkAsPaid}
-                    className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center justify-center"
+                    className="w-full px-4 py-2 rounded-md transition-colors hover:opacity-90 flex items-center justify-center"
+                    style={{
+                      backgroundColor: colors.semantic.success,
+                      color: 'white'
+                    }}
                   >
                     <Check className="h-4 w-4 mr-2" />
                     Mark as Paid
                   </button>
                 ) : (
-                  <div className="text-center text-green-600 dark:text-green-400 text-sm">
+                  <div 
+                    className="text-center text-sm transition-colors"
+                    style={{ color: colors.semantic.success }}
+                  >
                     This invoice has been paid
                   </div>
                 )}
@@ -287,54 +462,146 @@ const InvoiceDetailPage: React.FC = () => {
           </div>
           
           {/* Tenant Information */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Tenant Information</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Tenant Information
+              </h2>
             </div>
             <div className="p-6 space-y-4">
               <div className="flex items-start">
-                <Building className="h-5 w-5 mr-3 text-muted-foreground mt-0.5" />
+                <Building 
+                  className="h-5 w-5 mr-3 mt-0.5"
+                  style={{ color: colors.utility.secondaryText }}
+                />
                 <div>
-                  <div className="font-medium">{invoice.tenantName}</div>
-                  <div className="text-sm text-muted-foreground">Tenant ID: {invoice.tenantId}</div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invoice.tenantName}
+                  </div>
+                  <div 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Tenant ID: {invoice.tenantId}
+                  </div>
                 </div>
               </div>
               
               <div className="flex items-start">
-                <CreditCard className="h-5 w-5 mr-3 text-muted-foreground mt-0.5" />
+                <CreditCard 
+                  className="h-5 w-5 mr-3 mt-0.5"
+                  style={{ color: colors.utility.secondaryText }}
+                />
                 <div>
-                  <div className="font-medium">{invoice.planName}</div>
-                  <div className="text-sm text-muted-foreground">Plan ID: {invoice.planId}</div>
+                  <div 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invoice.planName}
+                  </div>
+                  <div 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Plan ID: {invoice.planId}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
           {/* Action History */}
-          <div className="bg-card rounded-lg border border-border overflow-hidden">
-            <div className="px-6 py-4 bg-muted/20 border-b border-border">
-              <h2 className="text-lg font-semibold">Activity</h2>
+          <div 
+            className="rounded-lg border overflow-hidden transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: `${colors.utility.primaryText}20`
+            }}
+          >
+            <div 
+              className="px-6 py-4 border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}10`,
+                borderBottomColor: `${colors.utility.primaryText}20`
+              }}
+            >
+              <h2 
+                className="text-lg font-semibold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Activity
+              </h2>
             </div>
             <div className="p-4">
               <div className="space-y-3">
                 <div className="flex items-start text-sm">
-                  <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mr-3 flex-shrink-0">
-                    <FileDown className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                  <div 
+                    className="h-6 w-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0"
+                    style={{ backgroundColor: `${colors.brand.primary}20` }}
+                  >
+                    <FileDown 
+                      className="h-3.5 w-3.5"
+                      style={{ color: colors.brand.primary }}
+                    />
                   </div>
                   <div>
-                    <div>Invoice created</div>
-                    <div className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</div>
+                    <div 
+                      className="transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Invoice created
+                    </div>
+                    <div 
+                      className="text-xs transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {formatDate(invoice.createdAt)}
+                    </div>
                   </div>
                 </div>
                 
                 {invoice.status === 'paid' && invoice.paidDate && (
                   <div className="flex items-start text-sm">
-                    <div className="h-6 w-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mr-3 flex-shrink-0">
-                      <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                    <div 
+                      className="h-6 w-6 rounded-full flex items-center justify-center mr-3 flex-shrink-0"
+                      style={{ backgroundColor: `${colors.semantic.success}20` }}
+                    >
+                      <Check 
+                        className="h-3.5 w-3.5"
+                        style={{ color: colors.semantic.success }}
+                      />
                     </div>
                     <div>
-                      <div>Payment received</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(invoice.paidDate)}</div>
+                      <div 
+                        className="transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Payment received
+                      </div>
+                      <div 
+                        className="text-xs transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        {formatDate(invoice.paidDate)}
+                      </div>
                     </div>
                   </div>
                 )}

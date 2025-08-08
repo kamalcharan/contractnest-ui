@@ -58,33 +58,36 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Service Providers',
         icon: 'Wrench',
         path: '/contacts?filter=service_providers'
-      },
-      {
-        id: 'contacts-create',
-        label: 'Add Contact',
-        icon: 'UserPlus',
-        path: '/contacts/create'
       }
     ]
   },
+  // UPDATED: Contracts menu now points to service-contracts structure
   {
     id: 'contracts',
     label: 'Contracts',
     icon: 'FileText',
-    path: '/contracts',
+    path: '/service-contracts/contracts',
+    hasSubmenu: false
+  },
+  // UPDATED: Templates menu now points to service-contracts structure
+  {
+    id: 'templates',
+    label: 'Templates',
+    icon: 'FileTemplate',
+    path: '/service-contracts/templates',
     hasSubmenu: true,
     submenuItems: [
       {
-        id: 'contracts-list',
-        label: 'All Contracts',
-        icon: 'List',
-        path: '/contracts'
+        id: 'my-templates',
+        label: 'My Templates',
+        icon: 'FolderOpen',
+        path: '/service-contracts/templates'
       },
       {
-        id: 'contracts-create',
-        label: 'Create Contract',
-        icon: 'FilePlus',
-        path: '/contracts/new'
+        id: 'template-designer',
+        label: 'Template Designer',
+        icon: 'Edit',
+        path: '/service-contracts/templates/designer'
       }
     ]
   },
@@ -112,7 +115,7 @@ export const defaultMenuItems: MenuItem[] = [
   {
     id: 'catalog',
     label: 'Catalog',
-    icon: 'catalog',
+    icon: 'Package',
     path: '/catalog',
     hasSubmenu: true,
     submenuItems: [
@@ -139,8 +142,7 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Spare Parts',
         icon: 'Wrench',
         path: '/catalog/spare-parts'
-      },
-      
+      }
     ]
   },
   {
@@ -150,7 +152,7 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/marketplace',
     hasSubmenu: false
   },
-  // Settings menu with submenu for Configure and Template Designer
+  // Settings menu - unchanged
   {
     id: 'settings',
     label: 'Settings',
@@ -163,12 +165,6 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Configure',
         icon: 'Sliders',
         path: '/settings/configure'
-      },
-      {
-        id: 'settings-templates',
-        label: 'Template Designer',
-        icon: 'FileText',
-        path: '/settings/templates'
       },
       {
         id: 'pricing-plans',
@@ -186,7 +182,7 @@ export const defaultMenuItems: MenuItem[] = [
       }
     ]
   },
-  // Admin menus below
+  // UPDATED: Implementation Toolkit - updated paths for service-contracts structure
   {
     id: 'implementation-toolkit',
     label: 'Implementation Toolkit',
@@ -195,6 +191,24 @@ export const defaultMenuItems: MenuItem[] = [
     adminOnly: true,
     hasSubmenu: true,
     submenuItems: [
+      {
+        id: 'global-templates',
+        label: 'Global Templates',
+        icon: 'FileText',
+        path: '/service-contracts/templates/admin/global-templates'
+      },
+      {
+        id: 'global-template-designer',
+        label: 'Global Template Designer',
+        icon: 'Edit',
+        path: '/service-contracts/templates/admin/global-designer'
+      },
+      {
+        id: 'template-analytics',
+        label: 'Template Analytics',
+        icon: 'BarChart',
+        path: '/service-contracts/templates/admin/analytics'
+      },
       {
         id: 'configure-plan',
         label: 'Configure Plan',
@@ -230,7 +244,7 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Billing Dashboard',
         icon: 'CreditCard',
         path: '/settings/businessmodel/admin/billing'
-      },
+      }
     ]
   },
   {
@@ -251,7 +265,7 @@ export const defaultMenuItems: MenuItem[] = [
   }
 ];
 
-// Industry-specific menu overrides
+// Industry-specific menu overrides - UPDATED template paths
 export const industryMenuOverrides: Record<string, Partial<Record<string, { label: string, icon?: string }>>> = {
   healthcare: {
     contacts: { label: 'Patients & Staff', icon: 'Users' },
@@ -259,6 +273,9 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'contacts-partners': { label: 'Medical Partners', icon: 'Stethoscope' },
     'contacts-service-providers': { label: 'Healthcare Providers', icon: 'UserCheck' },
     contracts: { label: 'Care Packages', icon: 'Stethoscope' },
+    templates: { label: 'Care Templates', icon: 'FileTemplate' },
+    'my-templates': { label: 'My Care Templates', icon: 'FolderOpen' },
+    'template-designer': { label: 'Care Template Designer', icon: 'Edit' },
     appointments: { label: 'Patient Appointments', icon: 'Stethoscope' },
     'implementation-toolkit': { label: 'Clinical Implementation Tools', icon: 'Stethoscope' }
   },
@@ -268,6 +285,9 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'contacts-partners': { label: 'Financial Partners', icon: 'Handshake' },
     'contacts-service-providers': { label: 'Service Providers', icon: 'Building2' },
     contracts: { label: 'Financial Agreements', icon: 'DollarSign' },
+    templates: { label: 'Agreement Templates', icon: 'FileTemplate' },
+    'my-templates': { label: 'My Agreement Templates', icon: 'FolderOpen' },
+    'template-designer': { label: 'Agreement Designer', icon: 'Edit' },
     appointments: { label: 'Client Meetings', icon: 'Calendar' },
     'implementation-toolkit': { label: 'Financial Implementation Suite', icon: 'DollarSign' }
   },
@@ -277,6 +297,9 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'contacts-partners': { label: 'Education Partners', icon: 'Handshake' },
     'contacts-service-providers': { label: 'Faculty & Staff', icon: 'UserCheck' },
     contracts: { label: 'Learning Programs', icon: 'GraduationCap' },
+    templates: { label: 'Program Templates', icon: 'FileTemplate' },
+    'my-templates': { label: 'My Program Templates', icon: 'FolderOpen' },
+    'template-designer': { label: 'Program Designer', icon: 'Edit' },
     appointments: { label: 'Sessions', icon: 'Calendar' },
     'implementation-toolkit': { label: 'Education Implementation Tools', icon: 'GraduationCap' }
   },
@@ -286,13 +309,15 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'contacts-partners': { label: 'Construction Partners', icon: 'Handshake' },
     'contacts-service-providers': { label: 'Contractors', icon: 'Hammer' },
     contracts: { label: 'Project Contracts', icon: 'Hammer' },
+    templates: { label: 'Project Templates', icon: 'FileTemplate' },
+    'my-templates': { label: 'My Project Templates', icon: 'FolderOpen' },
+    'template-designer': { label: 'Project Designer', icon: 'Edit' },
     appointments: { label: 'Site Visits', icon: 'MapPin' },
     'implementation-toolkit': { label: 'Construction Implementation Kit', icon: 'Hammer' }
-  },
-  // Add more industries as needed
+  }
 };
 
-// Get industry-specific menu items
+// Get industry-specific menu items (keeping original function signature)
 export const getMenuItemsForIndustry = (industryId: string | undefined): MenuItem[] => {
   if (!industryId) return defaultMenuItems;
   

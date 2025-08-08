@@ -11,6 +11,7 @@ import {
   User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export type UserStatus = 'active' | 'invited' | 'pending' | 'expired' | 'cancelled' | 'suspended' | 'inactive';
 
@@ -27,48 +28,72 @@ const UserStatusBadge: React.FC<UserStatusBadgeProps> = ({
   showLabel = true,
   className
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const statusConfig = {
     active: {
       icon: CheckCircle,
       label: 'Active',
-      color: 'text-green-700 bg-green-50 border-green-200',
-      darkColor: 'dark:text-green-400 dark:bg-green-950 dark:border-green-800'
+      color: {
+        bg: colors.semantic.success + '10',
+        text: colors.semantic.success,
+        border: colors.semantic.success + '40'
+      }
     },
     invited: {
       icon: Mail,
       label: 'Invited',
-      color: 'text-primary bg-primary/10 border-primary/20',
-      darkColor: 'dark:text-primary dark:bg-primary/10 dark:border-primary/20'
+      color: {
+        bg: colors.brand.primary + '10',
+        text: colors.brand.primary,
+        border: colors.brand.primary + '40'
+      }
     },
     pending: {
       icon: Clock,
       label: 'Pending',
-      color: 'text-primary bg-primary/10 border-primary/20',
-      darkColor: 'dark:text-primary dark:bg-primary/10 dark:border-primary/20'
+      color: {
+        bg: colors.brand.primary + '10',
+        text: colors.brand.primary,
+        border: colors.brand.primary + '40'
+      }
     },
     expired: {
       icon: AlertCircle,
       label: 'Expired',
-      color: 'text-orange-700 bg-orange-50 border-orange-200',
-      darkColor: 'dark:text-orange-400 dark:bg-orange-950 dark:border-orange-800'
+      color: {
+        bg: colors.semantic.warning + '10',
+        text: colors.semantic.warning,
+        border: colors.semantic.warning + '40'
+      }
     },
     cancelled: {
       icon: XCircle,
       label: 'Cancelled',
-      color: 'text-gray-700 bg-gray-50 border-gray-200',
-      darkColor: 'dark:text-gray-400 dark:bg-gray-950 dark:border-gray-800'
+      color: {
+        bg: colors.utility.secondaryText + '10',
+        text: colors.utility.secondaryText,
+        border: colors.utility.secondaryText + '40'
+      }
     },
     suspended: {
       icon: UserX,
       label: 'Suspended',
-      color: 'text-red-700 bg-red-50 border-red-200',
-      darkColor: 'dark:text-red-400 dark:bg-red-950 dark:border-red-800'
+      color: {
+        bg: colors.semantic.error + '10',
+        text: colors.semantic.error,
+        border: colors.semantic.error + '40'
+      }
     },
     inactive: {
       icon: User,
       label: 'Inactive',
-      color: 'text-gray-600 bg-gray-50 border-gray-200',
-      darkColor: 'dark:text-gray-500 dark:bg-gray-950 dark:border-gray-800'
+      color: {
+        bg: colors.utility.secondaryText + '10',
+        text: colors.utility.secondaryText,
+        border: colors.utility.secondaryText + '40'
+      }
     }
   };
 
@@ -98,12 +123,15 @@ const UserStatusBadge: React.FC<UserStatusBadgeProps> = ({
   return (
     <span
       className={cn(
-        'inline-flex items-center font-medium rounded-full border',
-        config.color,
-        config.darkColor,
+        'inline-flex items-center font-medium rounded-full border transition-colors',
         showLabel ? sizeConfig.badge : sizeConfig.iconOnly,
         className
       )}
+      style={{
+        backgroundColor: config.color.bg,
+        color: config.color.text,
+        borderColor: config.color.border
+      }}
     >
       <Icon size={sizeConfig.icon} className={showLabel ? 'mr-1' : ''} />
       {showLabel && <span>{config.label}</span>}
@@ -127,12 +155,35 @@ export const UserRoleBadge: React.FC<UserRoleBadgeProps> = ({
   size = 'md',
   className
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const roleColors = {
-    owner: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800',
-    admin: 'bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800',
-    editor: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800',
-    viewer: 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
-    custom: color || 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700'
+    owner: {
+      bg: colors.brand.tertiary + '10',
+      text: colors.brand.tertiary,
+      border: colors.brand.tertiary + '40'
+    },
+    admin: {
+      bg: colors.brand.secondary + '10',
+      text: colors.brand.secondary,
+      border: colors.brand.secondary + '40'
+    },
+    editor: {
+      bg: colors.brand.primary + '10',
+      text: colors.brand.primary,
+      border: colors.brand.primary + '40'
+    },
+    viewer: {
+      bg: colors.utility.secondaryText + '10',
+      text: colors.utility.secondaryText,
+      border: colors.utility.secondaryText + '40'
+    },
+    custom: {
+      bg: color ? color + '10' : colors.utility.secondaryText + '10',
+      text: color || colors.utility.secondaryText,
+      border: color ? color + '40' : colors.utility.secondaryText + '40'
+    }
   };
 
   const sizeClasses = {
@@ -146,11 +197,15 @@ export const UserRoleBadge: React.FC<UserRoleBadgeProps> = ({
   return (
     <span
       className={cn(
-        'inline-flex items-center font-medium rounded-full border',
-        roleColor,
+        'inline-flex items-center font-medium rounded-full border transition-colors',
         sizeClasses[size],
         className
       )}
+      style={{
+        backgroundColor: roleColor.bg,
+        color: roleColor.text,
+        borderColor: roleColor.border
+      }}
     >
       {role}
     </span>

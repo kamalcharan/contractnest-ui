@@ -3,6 +3,7 @@ import React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { captureException } from '@/utils/sentry';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Define ConfigField interface locally to avoid import issues
 interface ConfigField {
@@ -32,6 +33,10 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
   disabled = false
 }) => {
   const [passwordVisible, setPasswordVisible] = React.useState(false);
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Format the field value correctly
   const getFormattedValue = () => {
@@ -88,17 +93,24 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
               onChange={handleChange}
               placeholder={`Enter ${field.display_name}`}
               className={cn(
-                "w-full p-2 border border-border rounded-md bg-card",
+                "w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors",
                 disabled && "opacity-60 cursor-not-allowed",
                 className
               )}
+              style={{
+                borderColor: `${colors.utility.secondaryText}40`,
+                backgroundColor: colors.utility.secondaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
               disabled={disabled}
               autoComplete="off"
             />
             <button
               type="button"
               onClick={togglePasswordVisibility}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground"
+              className="absolute inset-y-0 right-0 pr-3 flex items-center transition-colors"
+              style={{ color: colors.utility.secondaryText }}
             >
               {passwordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
@@ -116,14 +128,19 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
               className="sr-only peer"
               disabled={disabled}
             />
-            <div className={cn(
-              "w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700",
-              "peer-checked:after:translate-x-full peer-checked:after:border-white",
-              "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
-              "after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5",
-              "after:transition-all dark:border-gray-600 peer-checked:bg-primary",
-              disabled && "opacity-60 cursor-not-allowed"
-            )}></div>
+            <div 
+              className={cn(
+                "w-11 h-6 peer-focus:outline-none rounded-full peer",
+                "peer-checked:after:translate-x-full peer-checked:after:border-white",
+                "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
+                "after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5",
+                "after:transition-all dark:border-gray-600 transition-colors",
+                disabled && "opacity-60 cursor-not-allowed"
+              )}
+              style={{
+                backgroundColor: formattedValue ? colors.brand.primary : colors.utility.secondaryText + '40'
+              }}
+            />
           </label>
         );
         
@@ -136,10 +153,16 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
             onChange={handleChange}
             placeholder={`Enter ${field.display_name}`}
             className={cn(
-              "w-full p-2 border border-border rounded-md bg-card",
+              "w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors",
               disabled && "opacity-60 cursor-not-allowed",
               className
             )}
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
             disabled={disabled}
           />
         );
@@ -151,10 +174,16 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
             value={formattedValue}
             onChange={handleChange}
             className={cn(
-              "w-full p-2 border border-border rounded-md bg-card",
+              "w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors",
               disabled && "opacity-60 cursor-not-allowed",
               className
             )}
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
             disabled={disabled}
           >
             <option value="">Select {field.display_name}</option>
@@ -177,10 +206,16 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
             onChange={handleChange}
             placeholder={`Enter ${field.display_name}`}
             className={cn(
-              "w-full p-2 border border-border rounded-md bg-card",
+              "w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors",
               disabled && "opacity-60 cursor-not-allowed",
               className
             )}
+            style={{
+              borderColor: `${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              '--tw-ring-color': colors.brand.primary
+            } as React.CSSProperties}
             disabled={disabled}
           />
         );
@@ -190,20 +225,34 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
   return (
     <div className="space-y-2">
       <div className="flex justify-between">
-        <label htmlFor={field.name} className="block text-sm font-medium">
+        <label 
+          htmlFor={field.name} 
+          className="block text-sm font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
           {field.display_name}
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </label>
         
         {field.sensitive && (
-          <span className="text-xs text-muted-foreground">Sensitive</span>
+          <span 
+            className="text-xs transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Sensitive
+          </span>
         )}
       </div>
       
       {renderField()}
       
       {field.description && (
-        <p className="text-xs text-muted-foreground">{field.description}</p>
+        <p 
+          className="text-xs transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          {field.description}
+        </p>
       )}
     </div>
   );

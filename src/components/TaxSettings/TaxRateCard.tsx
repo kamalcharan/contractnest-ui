@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Import types
 import type { 
@@ -30,6 +31,11 @@ const TaxRateCard = ({
   disabled = false,
   isDefaultChanging = false
 }: TaxRateCardProps) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // Safety check - if rate is undefined, don't render
   if (!rate) {
     console.error('TaxRateCard: rate prop is undefined');
@@ -113,7 +119,7 @@ const TaxRateCard = ({
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -142,7 +148,7 @@ const TaxRateCard = ({
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#10B981',
+            background: colors.semantic.success,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -158,7 +164,7 @@ const TaxRateCard = ({
           style: {
             padding: '16px',
             borderRadius: '8px',
-            background: '#6B7280',
+            background: colors.utility.secondaryText,
             color: '#FFF',
             fontSize: '16px',
             minWidth: '300px'
@@ -174,7 +180,7 @@ const TaxRateCard = ({
         style: {
           padding: '16px',
           borderRadius: '8px',
-          background: '#EF4444',
+          background: colors.semantic.error,
           color: '#FFF',
           fontSize: '16px',
           minWidth: '300px'
@@ -213,15 +219,27 @@ const TaxRateCard = ({
   };
 
   return (
-    <div className={cn(
-      "bg-card rounded-lg shadow-sm border border-border transition-colors relative",
-      rate.isEditing && "border-primary border-2",
-      disabled && "opacity-60"
-    )}>
+    <div 
+      className={cn(
+        "rounded-lg shadow-sm border transition-all duration-200 relative",
+        rate.isEditing && "border-2",
+        disabled && "opacity-60"
+      )}
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: rate.isEditing ? colors.brand.primary : `${colors.utility.primaryText}20`
+      }}
+    >
       {/* Loading overlay when processing */}
       {rate.isLoading && (
-        <div className="absolute inset-0 bg-background/50 rounded-lg flex items-center justify-center z-10">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <div 
+          className="absolute inset-0 rounded-lg flex items-center justify-center z-10"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}80` }}
+        >
+          <Loader2 
+            className="h-6 w-6 animate-spin"
+            style={{ color: colors.brand.primary }}
+          />
         </div>
       )}
 
@@ -236,19 +254,40 @@ const TaxRateCard = ({
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 placeholder="Tax rate name"
                 disabled={isSaving}
-                className={cn(validationErrors.name && "border-destructive")}
+                className={cn(
+                  validationErrors.name && "border-destructive transition-colors"
+                )}
+                style={{
+                  borderColor: validationErrors.name 
+                    ? colors.semantic.error 
+                    : `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               />
               {validationErrors.name && (
-                <div className="text-xs text-destructive mt-1">
+                <div 
+                  className="text-xs mt-1 transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
                   {validationErrors.name}
                 </div>
               )}
             </div>
           ) : (
             <div className="flex items-center space-x-2">
-              <span className="font-medium">{rate.name}</span>
+              <span 
+                className="font-medium transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {rate.name}
+              </span>
               {rate.is_default && (
-                <Crown className="h-4 w-4 text-amber-500" title="Default tax rate" />
+                <Crown 
+                  className="h-4 w-4" 
+                  style={{ color: colors.semantic.warning }}
+                  title="Default tax rate" 
+                />
               )}
             </div>
           )}
@@ -276,32 +315,63 @@ const TaxRateCard = ({
                   placeholder="0.00"
                   disabled={isSaving}
                   className={cn(
-                    "w-20",
+                    "w-20 transition-colors",
                     validationErrors.rate && "border-destructive"
                   )}
+                  style={{
+                    borderColor: validationErrors.rate 
+                      ? colors.semantic.error 
+                      : `${colors.utility.primaryText}40`,
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.primaryText
+                  }}
                 />
-                <span className="text-muted-foreground">%</span>
+                <span 
+                  className="transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  %
+                </span>
               </div>
               {validationErrors.rate && (
-                <div className="text-xs text-destructive mt-1">
+                <div 
+                  className="text-xs mt-1 transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
                   {validationErrors.rate}
                 </div>
               )}
             </div>
           ) : (
-            <span className="font-medium">{formatRate(rate.rate)}</span>
+            <span 
+              className="font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              {formatRate(rate.rate)}
+            </span>
           )}
         </div>
 
         {/* DEFAULT Column */}
         <div>
           {rate.is_default ? (
-            <Badge variant="default" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+            <Badge 
+              variant="default" 
+              className="transition-colors"
+              style={{
+                backgroundColor: `${colors.semantic.warning}20`,
+                color: colors.semantic.warning,
+                borderColor: `${colors.semantic.warning}40`
+              }}
+            >
               Default
             </Badge>
           ) : (
             rate.isEditing ? (
-              <div className="text-sm text-muted-foreground">
+              <div 
+                className="text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 Not default
               </div>
             ) : (
@@ -310,7 +380,12 @@ const TaxRateCard = ({
                 size="sm"
                 onClick={handleSetDefaultClick}
                 disabled={disabled || isDefaultChanging}
-                className="text-xs"
+                className="text-xs transition-all duration-200 hover:opacity-80"
+                style={{
+                  borderColor: `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 {isDefaultChanging ? (
                   <>
@@ -335,6 +410,12 @@ const TaxRateCard = ({
                 size="sm"
                 onClick={handleCancel}
                 disabled={isSaving}
+                className="transition-all duration-200 hover:opacity-80"
+                style={{
+                  borderColor: `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -342,7 +423,10 @@ const TaxRateCard = ({
                 size="sm"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                className="text-white transition-all duration-200 hover:opacity-90"
+                style={{
+                  background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                }}
               >
                 {isSaving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -359,7 +443,12 @@ const TaxRateCard = ({
                 size="sm"
                 onClick={handleEditClick}
                 disabled={disabled}
-                className="text-primary hover:text-primary/80"
+                className="transition-all duration-200 hover:opacity-80"
+                style={{
+                  borderColor: `${colors.brand.primary}40`,
+                  backgroundColor: `${colors.brand.primary}05`,
+                  color: colors.brand.primary
+                }}
               >
                 <Pencil className="h-4 w-4" />
               </Button>
@@ -369,9 +458,20 @@ const TaxRateCard = ({
                 onClick={handleDeleteClick}
                 disabled={disabled || rate.is_default}
                 className={cn(
-                  "text-destructive hover:text-destructive/80",
+                  "transition-all duration-200 hover:opacity-80",
                   rate.is_default && "opacity-50 cursor-not-allowed"
                 )}
+                style={{
+                  borderColor: rate.is_default 
+                    ? `${colors.utility.secondaryText}40` 
+                    : `${colors.semantic.error}40`,
+                  backgroundColor: rate.is_default 
+                    ? `${colors.utility.secondaryText}05` 
+                    : `${colors.semantic.error}05`,
+                  color: rate.is_default 
+                    ? colors.utility.secondaryText 
+                    : colors.semantic.error
+                }}
                 title={rate.is_default ? "Cannot delete default tax rate" : "Delete tax rate"}
               >
                 <Trash2 className="h-4 w-4" />
@@ -383,7 +483,10 @@ const TaxRateCard = ({
 
       {/* Description Row (when editing or if description exists) */}
       {(rate.isEditing || rate.description) && (
-        <div className="px-4 pb-3 border-t border-border mt-3 pt-3">
+        <div 
+          className="px-4 pb-3 border-t mt-3 pt-3 transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
           {rate.isEditing ? (
             <div>
               <textarea
@@ -393,20 +496,34 @@ const TaxRateCard = ({
                 disabled={isSaving}
                 rows={2}
                 className={cn(
-                  "w-full px-3 py-2 text-sm rounded-md border bg-background",
-                  "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-                  "disabled:cursor-not-allowed disabled:opacity-50 resize-none",
+                  "w-full px-3 py-2 text-sm rounded-md border",
+                  "focus:outline-none focus:ring-2 focus:ring-offset-2",
+                  "disabled:cursor-not-allowed disabled:opacity-50 resize-none transition-colors",
                   validationErrors.description && "border-destructive focus:ring-destructive"
                 )}
+                style={{
+                  borderColor: validationErrors.description 
+                    ? colors.semantic.error 
+                    : `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
               />
               {validationErrors.description && (
-                <div className="text-xs text-destructive mt-1">
+                <div 
+                  className="text-xs mt-1 transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
                   {validationErrors.description}
                 </div>
               )}
             </div>
           ) : rate.description ? (
-            <div className="text-sm text-muted-foreground">
+            <div 
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {rate.description}
             </div>
           ) : null}

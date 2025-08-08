@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Info } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Import types
 import type { 
@@ -29,6 +30,10 @@ const AddTaxRateModal = ({
   existingRates
 }: AddTaxRateModalProps) => {
   const { toast } = useToast();
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Form state
   const [formData, setFormData] = useState<TaxRateFormData>({
@@ -213,16 +218,28 @@ const AddTaxRateModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px] fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50">
+      <DialogContent 
+        className="sm:max-w-[500px] fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] z-50 transition-colors"
+        style={{ backgroundColor: colors.utility.secondaryBackground }}
+      >
         <DialogHeader>
-          <DialogTitle>Add New Tax Rate</DialogTitle>
+          <DialogTitle 
+            className="transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Add New Tax Rate
+          </DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Name Field */}
           <div className="space-y-2">
-            <Label htmlFor="name" className="text-sm font-medium">
-              Name <span className="text-destructive">*</span>
+            <Label 
+              htmlFor="name" 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Name <span style={{ color: colors.semantic.error }}>*</span>
             </Label>
             <Input
               id="name"
@@ -232,52 +249,91 @@ const AddTaxRateModal = ({
               placeholder="e.g., GST, VAT, Sales Tax, SGST"
               disabled={isSubmitting}
               className={cn(
+                "transition-colors",
                 validationErrors.name && touched.name && "border-destructive"
               )}
+              style={{
+                borderColor: validationErrors.name && touched.name 
+                  ? colors.semantic.error 
+                  : `${colors.utility.primaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText
+              }}
             />
             {validationErrors.name && touched.name && (
-              <p className="text-sm text-destructive">{validationErrors.name}</p>
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
+                {validationErrors.name}
+              </p>
             )}
           </div>
 
           {/* Rate Field */}
-<div className="space-y-2">
-  <Label htmlFor="rate" className="text-sm font-medium">
-    Rate (%) <span className="text-destructive">*</span>
-  </Label>
-  <div className="flex items-center space-x-2">
-    <Input
-      id="rate"
-      type="text" // Changed from "number" to "text"
-      value={formData.rate || ''} // Show empty string instead of 0
-      onChange={(e) => {
-        const value = e.target.value;
-        // Allow empty string, numbers, and decimal point
-        if (value === '' || /^\d*\.?\d*$/.test(value)) {
-          const numValue = value === '' ? 0 : parseFloat(value);
-          // Only update if it's a valid number or empty
-          if (value === '' || !isNaN(numValue)) {
-            handleInputChange('rate', value === '' ? 0 : numValue);
-          }
-        }
-      }}
-      onBlur={() => handleBlur('rate')}
-      placeholder="0.00"
-      disabled={isSubmitting}
-      className={cn(
-        "flex-1",
-        validationErrors.rate && touched.rate && "border-destructive"
-      )}
-    />
-    <span className="text-muted-foreground">%</span>
-  </div>
-  {validationErrors.rate && touched.rate && (
-    <p className="text-sm text-destructive">{validationErrors.rate}</p>
-  )}
-</div>
+          <div className="space-y-2">
+            <Label 
+              htmlFor="rate" 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Rate (%) <span style={{ color: colors.semantic.error }}>*</span>
+            </Label>
+            <div className="flex items-center space-x-2">
+              <Input
+                id="rate"
+                type="text" // Changed from "number" to "text"
+                value={formData.rate || ''} // Show empty string instead of 0
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Allow empty string, numbers, and decimal point
+                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                    const numValue = value === '' ? 0 : parseFloat(value);
+                    // Only update if it's a valid number or empty
+                    if (value === '' || !isNaN(numValue)) {
+                      handleInputChange('rate', value === '' ? 0 : numValue);
+                    }
+                  }
+                }}
+                onBlur={() => handleBlur('rate')}
+                placeholder="0.00"
+                disabled={isSubmitting}
+                className={cn(
+                  "flex-1 transition-colors",
+                  validationErrors.rate && touched.rate && "border-destructive"
+                )}
+                style={{
+                  borderColor: validationErrors.rate && touched.rate 
+                    ? colors.semantic.error 
+                    : `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText
+                }}
+              />
+              <span 
+                className="transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                %
+              </span>
+            </div>
+            {validationErrors.rate && touched.rate && (
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
+                {validationErrors.rate}
+              </p>
+            )}
+          </div>
+
           {/* Description Field - Using plain textarea */}
           <div className="space-y-2">
-            <Label htmlFor="description" className="text-sm font-medium">
+            <Label 
+              htmlFor="description" 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Description
             </Label>
             <textarea
@@ -289,14 +345,27 @@ const AddTaxRateModal = ({
               rows={3}
               disabled={isSubmitting}
               className={cn(
-                "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-                "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                "disabled:cursor-not-allowed disabled:opacity-50 resize-none",
+                "flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+                "disabled:cursor-not-allowed disabled:opacity-50 resize-none transition-colors",
                 validationErrors.description && touched.description && "border-destructive"
               )}
+              style={{
+                borderColor: validationErrors.description && touched.description 
+                  ? colors.semantic.error 
+                  : `${colors.utility.primaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
             />
             {validationErrors.description && touched.description && (
-              <p className="text-sm text-destructive">{validationErrors.description}</p>
+              <p 
+                className="text-sm transition-colors"
+                style={{ color: colors.semantic.error }}
+              >
+                {validationErrors.description}
+              </p>
             )}
           </div>
 
@@ -308,15 +377,31 @@ const AddTaxRateModal = ({
               onCheckedChange={(checked) => handleInputChange('is_default', checked)}
               disabled={isSubmitting}
             />
-            <Label htmlFor="is_default" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <Label 
+              htmlFor="is_default" 
+              className="text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
               Set as default tax rate
             </Label>
           </div>
 
           {/* Info Box */}
-          <div className="flex items-start space-x-3 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-            <div className="text-sm text-blue-700 dark:text-blue-300">
+          <div 
+            className="flex items-start space-x-3 p-3 rounded-lg border transition-colors"
+            style={{
+              backgroundColor: `${colors.brand.primary}10`,
+              borderColor: `${colors.brand.primary}40`
+            }}
+          >
+            <Info 
+              className="w-4 h-4 mt-0.5 shrink-0"
+              style={{ color: colors.brand.primary }}
+            />
+            <div 
+              className="text-sm transition-colors"
+              style={{ color: colors.brand.primary }}
+            >
               <div className="font-medium mb-1">Tax Rate Information</div>
               <ul className="space-y-1 text-xs">
                 <li>• You can have multiple rates with the same name (e.g., SGST 5%, SGST 9%, SGST 12%)</li>
@@ -334,13 +419,22 @@ const AddTaxRateModal = ({
               variant="outline" 
               onClick={handleClose}
               disabled={isSubmitting}
+              className="transition-all duration-200 hover:opacity-80"
+              style={{
+                borderColor: `${colors.utility.primaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText
+              }}
             >
               Cancel
             </Button>
             <Button 
               type="submit"
               disabled={isSubmitting || !hasChanges}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="text-white transition-all duration-200 hover:opacity-90 disabled:opacity-50"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
             >
               {isSubmitting ? (
                 <>

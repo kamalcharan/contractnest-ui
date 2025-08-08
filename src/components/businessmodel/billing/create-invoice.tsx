@@ -1,5 +1,5 @@
 // src/pages/settings/businessmodel/admin/billing/create-invoice.tsx
-// FIXED: Added proper type imports and handling
+// FIXED: Added proper type imports and handling + Theme integration
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { analyticsService } from '@/services/analytics.service';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Import mock data
 import { fakeInvoices } from '@/utils/fakejson/BillingData';
@@ -44,6 +45,7 @@ const planOptions: PlanOption[] = fakePricingPlans
 
 const CreateInvoicePage: React.FC = () => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
   
   const [loading, setLoading] = useState(false);
   const [tenantId, setTenantId] = useState<string>('');
@@ -64,6 +66,9 @@ const CreateInvoicePage: React.FC = () => {
   
   // State for tenant invoice history
   const [tenantInvoices, setTenantInvoices] = useState<any[]>([]);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Calculate totals
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
@@ -246,28 +251,52 @@ const CreateInvoicePage: React.FC = () => {
     switch (status) {
       case 'paid':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.success}20`,
+              color: colors.semantic.success
+            }}
+          >
             <Check className="h-3 w-3 mr-1" />
             Paid
           </span>
         );
       case 'pending':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.warning}20`,
+              color: colors.semantic.warning
+            }}
+          >
             <Clock className="h-3 w-3 mr-1" />
             Pending
           </span>
         );
       case 'overdue':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.semantic.error}20`,
+              color: colors.semantic.error
+            }}
+          >
             <AlertCircle className="h-3 w-3 mr-1" />
             Overdue
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}20`,
+              color: colors.utility.secondaryText
+            }}
+          >
             {status}
           </span>
         );
@@ -275,18 +304,35 @@ const CreateInvoicePage: React.FC = () => {
   };
   
   return (
-    <div className="p-6 bg-muted/20">
+    <div 
+      className="p-6 transition-colors"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
       {/* Page Header */}
       <div className="flex items-center mb-8">
         <button 
           onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:bg-muted transition-colors"
+          className="mr-4 p-2 rounded-full hover:opacity-80 transition-all"
+          style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
         >
-          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+          <ArrowLeft 
+            className="h-5 w-5"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Create Invoice</h1>
-          <p className="text-muted-foreground">Generate a new invoice for a tenant</p>
+          <h1 
+            className="text-2xl font-bold transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Create Invoice
+          </h1>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Generate a new invoice for a tenant
+          </p>
         </div>
       </div>
       
@@ -296,16 +342,37 @@ const CreateInvoicePage: React.FC = () => {
           {/* Main Form */}
           <div className="col-span-1 lg:col-span-2 space-y-6">
             {/* Billing Details */}
-            <div className="bg-card rounded-lg border border-border overflow-hidden">
-              <div className="px-6 py-4 bg-muted/20 border-b border-border">
-                <h2 className="text-lg font-semibold">Billing Details</h2>
+            <div 
+              className="rounded-lg border border-opacity-20 overflow-hidden transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.primaryText
+              }}
+            >
+              <div 
+                className="px-6 py-4 border-b border-opacity-20 transition-colors"
+                style={{
+                  backgroundColor: `${colors.utility.primaryText}05`,
+                  borderColor: colors.utility.primaryText
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Billing Details
+                </h2>
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Tenant Search */}
                   <div ref={searchDropdownRef} className="relative">
-                    <label htmlFor="tenantSearch" className="block text-sm font-medium mb-1">
-                      Tenant <span className="text-red-500">*</span>
+                    <label 
+                      htmlFor="tenantSearch" 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Tenant <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -321,33 +388,74 @@ const CreateInvoicePage: React.FC = () => {
                         }}
                         onFocus={() => setIsSearchDropdownOpen(true)}
                         placeholder="Search tenant by name"
-                        className="w-full px-3 py-2 pl-10 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        className="w-full px-3 py-2 pl-10 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                        style={{
+                          borderColor: colors.utility.primaryText,
+                          backgroundColor: colors.utility.primaryBackground,
+                          color: colors.utility.primaryText,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                         required
                       />
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-4 w-4 text-muted-foreground" />
+                        <Search 
+                          className="h-4 w-4"
+                          style={{ color: colors.utility.secondaryText }}
+                        />
                       </div>
                       <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <ChevronDown 
+                          className="h-4 w-4"
+                          style={{ color: colors.utility.secondaryText }}
+                        />
                       </div>
                     </div>
                     
                     {/* Dropdown for tenant search */}
                     {isSearchDropdownOpen && (
-                      <div className="absolute z-10 mt-1 w-full bg-background border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <div 
+                        className="absolute z-10 mt-1 w-full border border-opacity-20 rounded-md shadow-lg max-h-60 overflow-y-auto transition-colors"
+                        style={{
+                          backgroundColor: colors.utility.secondaryBackground,
+                          borderColor: colors.utility.primaryText
+                        }}
+                      >
                         {filteredTenants.length === 0 ? (
-                          <div className="py-2 px-3 text-sm text-muted-foreground">
+                          <div 
+                            className="py-2 px-3 text-sm"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
                             {tenantSearchTerm ? 'No tenants found' : 'Type to search'}
                           </div>
                         ) : (
                           filteredTenants.map((tenant: TenantOption) => (
                             <div
                               key={tenant.id}
-                              className="py-2 px-3 hover:bg-muted cursor-pointer text-sm"
+                              className="py-2 px-3 hover:opacity-80 cursor-pointer text-sm transition-colors"
+                              style={{
+                                backgroundColor: 'transparent',
+                                ':hover': { backgroundColor: `${colors.utility.primaryText}10` }
+                              }}
                               onClick={() => handleTenantSelect(tenant.id, tenant.name)}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
                             >
-                              <div className="font-medium">{tenant.name}</div>
-                              <div className="text-xs text-muted-foreground">ID: {tenant.id}</div>
+                              <div 
+                                className="font-medium"
+                                style={{ color: colors.utility.primaryText }}
+                              >
+                                {tenant.name}
+                              </div>
+                              <div 
+                                className="text-xs"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                ID: {tenant.id}
+                              </div>
                             </div>
                           ))
                         )}
@@ -357,14 +465,24 @@ const CreateInvoicePage: React.FC = () => {
                   
                   {/* Plan Select */}
                   <div>
-                    <label htmlFor="plan" className="block text-sm font-medium mb-1">
-                      Plan <span className="text-red-500">*</span>
+                    <label 
+                      htmlFor="plan" 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Plan <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <select
                       id="plan"
                       value={planId}
                       onChange={(e) => handlePlanChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                      style={{
+                        borderColor: colors.utility.primaryText,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       required
                     >
                       <option value="">Select a plan</option>
@@ -380,14 +498,24 @@ const CreateInvoicePage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Currency Select */}
                   <div>
-                    <label htmlFor="currency" className="block text-sm font-medium mb-1">
-                      Currency <span className="text-red-500">*</span>
+                    <label 
+                      htmlFor="currency" 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Currency <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <select
                       id="currency"
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
-                      className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                      style={{
+                        borderColor: colors.utility.primaryText,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       required
                     >
                       <option value="INR">INR (₹)</option>
@@ -399,15 +527,25 @@ const CreateInvoicePage: React.FC = () => {
                   
                   {/* Due Date */}
                   <div>
-                    <label htmlFor="dueDate" className="block text-sm font-medium mb-1">
-                      Due Date <span className="text-red-500">*</span>
+                    <label 
+                      htmlFor="dueDate" 
+                      className="block text-sm font-medium mb-1 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Due Date <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <input
                       type="date"
                       id="dueDate"
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                      style={{
+                        borderColor: colors.utility.primaryText,
+                        backgroundColor: colors.utility.primaryBackground,
+                        color: colors.utility.primaryText,
+                        '--tw-ring-color': colors.brand.primary
+                      } as React.CSSProperties}
                       required
                     />
                   </div>
@@ -415,7 +553,10 @@ const CreateInvoicePage: React.FC = () => {
                 
                 {/* Payment Method Section */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">
+                  <label 
+                    className="block text-sm font-medium mb-1 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     Payment Method
                   </label>
                   <div className="flex items-center space-x-4">
@@ -424,10 +565,18 @@ const CreateInvoicePage: React.FC = () => {
                         type="radio"
                         id="payment-bank"
                         name="paymentMethod"
-                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                        className="h-4 w-4 border-gray-300 focus:ring-2"
+                        style={{ 
+                          accentColor: colors.brand.primary,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                         defaultChecked
                       />
-                      <label htmlFor="payment-bank" className="ml-2 text-sm">
+                      <label 
+                        htmlFor="payment-bank" 
+                        className="ml-2 text-sm transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         Bank Transfer
                       </label>
                     </div>
@@ -436,9 +585,17 @@ const CreateInvoicePage: React.FC = () => {
                         type="radio"
                         id="payment-gateway"
                         name="paymentMethod"
-                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                        className="h-4 w-4 border-gray-300 focus:ring-2"
+                        style={{ 
+                          accentColor: colors.brand.primary,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                       />
-                      <label htmlFor="payment-gateway" className="ml-2 text-sm">
+                      <label 
+                        htmlFor="payment-gateway" 
+                        className="ml-2 text-sm transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         Payment Gateway
                       </label>
                     </div>
@@ -447,14 +604,25 @@ const CreateInvoicePage: React.FC = () => {
                         type="radio"
                         id="payment-manual"
                         name="paymentMethod"
-                        className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                        className="h-4 w-4 border-gray-300 focus:ring-2"
+                        style={{ 
+                          accentColor: colors.brand.primary,
+                          '--tw-ring-color': colors.brand.primary
+                        } as React.CSSProperties}
                       />
-                      <label htmlFor="payment-manual" className="ml-2 text-sm">
+                      <label 
+                        htmlFor="payment-manual" 
+                        className="ml-2 text-sm transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
                         Manual/Other
                       </label>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p 
+                    className="text-xs mt-1 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     Payment gateway integration allows tenants to pay online with credit card or other methods.
                   </p>
                 </div>
@@ -462,13 +630,31 @@ const CreateInvoicePage: React.FC = () => {
             </div>
             
             {/* Invoice Items */}
-            <div className="bg-card rounded-lg border border-border overflow-hidden">
-              <div className="px-6 py-4 bg-muted/20 border-b border-border flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Invoice Items</h2>
+            <div 
+              className="rounded-lg border border-opacity-20 overflow-hidden transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.primaryText
+              }}
+            >
+              <div 
+                className="px-6 py-4 border-b border-opacity-20 flex justify-between items-center transition-colors"
+                style={{
+                  backgroundColor: `${colors.utility.primaryText}05`,
+                  borderColor: colors.utility.primaryText
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Invoice Items
+                </h2>
                 <button
                   type="button"
                   onClick={addItem}
-                  className="text-primary hover:text-primary/80 transition-colors flex items-center text-sm"
+                  className="hover:opacity-80 transition-all flex items-center text-sm"
+                  style={{ color: colors.brand.primary }}
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add Item
@@ -477,28 +663,53 @@ const CreateInvoicePage: React.FC = () => {
               
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-muted/20 border-b border-border">
+                  <thead 
+                    className="border-b border-opacity-20 transition-colors"
+                    style={{
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      borderColor: colors.utility.primaryText
+                    }}
+                  >
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         Description
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-24">
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-24 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         Quantity
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-32">
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-32 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         Unit Price
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider w-32">
+                      <th 
+                        className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider w-32 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         Amount
                       </th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider w-16">
+                      <th 
+                        className="px-6 py-3 text-center text-xs font-medium uppercase tracking-wider w-16 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item, index) => (
-                      <tr key={index} className="border-b border-border">
+                      <tr 
+                        key={index} 
+                        className="border-b border-opacity-20 transition-colors"
+                        style={{ borderColor: colors.utility.primaryText }}
+                      >
                         <td className="px-6 py-4">
                           <input
                             type="text"
@@ -509,7 +720,13 @@ const CreateInvoicePage: React.FC = () => {
                               setItems(updatedItems);
                             }}
                             placeholder="Item description"
-                            className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                            style={{
+                              borderColor: colors.utility.primaryText,
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText,
+                              '--tw-ring-color': colors.brand.primary
+                            } as React.CSSProperties}
                             required
                           />
                         </td>
@@ -522,13 +739,22 @@ const CreateInvoicePage: React.FC = () => {
                               const quantity = parseInt(e.target.value) || 0;
                               updateItemAmount(index, quantity, item.unitPrice);
                             }}
-                            className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                            style={{
+                              borderColor: colors.utility.primaryText,
+                              backgroundColor: colors.utility.primaryBackground,
+                              color: colors.utility.primaryText,
+                              '--tw-ring-color': colors.brand.primary
+                            } as React.CSSProperties}
                             required
                           />
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center">
-                            <span className="text-muted-foreground mr-2">
+                            <span 
+                              className="mr-2 transition-colors"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
                               {currency === 'INR' ? '₹' : 
                                currency === 'USD' ? '$' : 
                                currency === 'EUR' ? '€' : 
@@ -543,12 +769,21 @@ const CreateInvoicePage: React.FC = () => {
                                 const unitPrice = parseFloat(e.target.value) || 0;
                                 updateItemAmount(index, item.quantity, unitPrice);
                               }}
-                              className="w-full px-3 py-2 border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                              className="w-full px-3 py-2 border border-opacity-20 rounded-md focus:outline-none focus:ring-2 focus:ring-opacity-50 transition-colors"
+                              style={{
+                                borderColor: colors.utility.primaryText,
+                                backgroundColor: colors.utility.primaryBackground,
+                                color: colors.utility.primaryText,
+                                '--tw-ring-color': colors.brand.primary
+                              } as React.CSSProperties}
                               required
                             />
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-medium">
+                        <td 
+                          className="px-6 py-4 font-medium transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
                           {formatCurrency(item.amount)}
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -556,7 +791,8 @@ const CreateInvoicePage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => removeItem(index)}
-                              className="text-red-500 hover:text-red-700 transition-colors"
+                              className="hover:opacity-80 transition-colors"
+                              style={{ color: colors.semantic.error }}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -569,18 +805,47 @@ const CreateInvoicePage: React.FC = () => {
               </div>
               
               {/* Invoice Summary */}
-              <div className="p-6 border-t border-border">
+              <div 
+                className="p-6 border-t border-opacity-20 transition-colors"
+                style={{ borderColor: colors.utility.primaryText }}
+              >
                 <div className="flex justify-end">
                   <div className="w-64 space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Subtotal:</span>
-                      <span className="font-medium">{formatCurrency(subtotal)}</span>
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Subtotal:
+                      </span>
+                      <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {formatCurrency(subtotal)}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tax (18%):</span>
-                      <span className="font-medium">{formatCurrency(taxAmount)}</span>
+                      <span 
+                        className="transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Tax (18%):
+                      </span>
+                      <span 
+                        className="font-medium transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {formatCurrency(taxAmount)}
+                      </span>
                     </div>
-                    <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
+                    <div 
+                      className="flex justify-between text-lg font-bold pt-2 border-t border-opacity-20 transition-colors"
+                      style={{ 
+                        borderColor: colors.utility.primaryText,
+                        color: colors.utility.primaryText 
+                      }}
+                    >
                       <span>Total:</span>
                       <span>{formatCurrency(total)}</span>
                     </div>
@@ -593,19 +858,39 @@ const CreateInvoicePage: React.FC = () => {
           {/* Sidebar */}
           <div className="col-span-1 space-y-6">
             {/* Action Card */}
-            <div className="bg-card rounded-lg border border-border overflow-hidden">
-              <div className="px-6 py-4 bg-muted/20 border-b border-border">
-                <h2 className="text-lg font-semibold">Actions</h2>
+            <div 
+              className="rounded-lg border border-opacity-20 overflow-hidden transition-colors"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.primaryText
+              }}
+            >
+              <div 
+                className="px-6 py-4 border-b border-opacity-20 transition-colors"
+                style={{
+                  backgroundColor: `${colors.utility.primaryText}05`,
+                  borderColor: colors.utility.primaryText
+                }}
+              >
+                <h2 
+                  className="text-lg font-semibold transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Actions
+                </h2>
               </div>
               <div className="p-6 space-y-4">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center justify-center disabled:opacity-70"
+                  className="w-full px-4 py-2 text-white rounded-md transition-all flex items-center justify-center disabled:opacity-70 hover:opacity-90"
+                  style={{
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                  }}
                 >
                   {loading ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -622,7 +907,12 @@ const CreateInvoicePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="w-full px-4 py-2 border border-border bg-card hover:bg-muted transition-colors rounded-md"
+                  className="w-full px-4 py-2 border border-opacity-20 rounded-md transition-all hover:opacity-80"
+                  style={{
+                    borderColor: colors.utility.primaryText,
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.primaryText
+                  }}
                 >
                   Cancel
                 </button>
@@ -630,15 +920,35 @@ const CreateInvoicePage: React.FC = () => {
             </div>
             
             {/* Info Card */}
-            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-md border border-blue-100 dark:border-blue-900/20">
+            <div 
+              className="p-4 rounded-md border border-opacity-20 transition-colors"
+              style={{
+                backgroundColor: `${colors.brand.primary}10`,
+                borderColor: `${colors.brand.primary}40`
+              }}
+            >
               <div className="flex items-start">
-                <FileText className="h-5 w-5 mr-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <FileText 
+                  className="h-5 w-5 mr-3 flex-shrink-0"
+                  style={{ color: colors.brand.primary }}
+                />
                 <div>
-                  <h3 className="font-medium text-blue-700 dark:text-blue-300 mb-1">About Invoicing</h3>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <h3 
+                    className="font-medium mb-1 transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    About Invoicing
+                  </h3>
+                  <p 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
                     Created invoices will be stored in the system but not automatically sent to tenants.
                   </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-2">
+                  <p 
+                    className="text-sm mt-2 transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
                     You can later send invoices manually or set up automatic notifications for pending payments.
                   </p>
                 </div>
@@ -647,29 +957,64 @@ const CreateInvoicePage: React.FC = () => {
             
             {/* Tenant Invoice History - only shown when a tenant is selected */}
             {tenantId && (
-              <div className="bg-card rounded-lg border border-border overflow-hidden">
-                <div className="px-6 py-4 bg-muted/20 border-b border-border">
-                  <h2 className="text-lg font-semibold">Tenant Invoice History</h2>
+              <div 
+                className="rounded-lg border border-opacity-20 overflow-hidden transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText
+                }}
+              >
+                <div 
+                  className="px-6 py-4 border-b border-opacity-20 transition-colors"
+                  style={{
+                    backgroundColor: `${colors.utility.primaryText}05`,
+                    borderColor: colors.utility.primaryText
+                  }}
+                >
+                  <h2 
+                    className="text-lg font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Tenant Invoice History
+                  </h2>
                 </div>
                 
                 <div className="p-4">
                   {tenantInvoices.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
+                    <p 
+                      className="text-sm text-center py-4 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       No previous invoices found for this tenant.
                     </p>
                   ) : (
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {tenantInvoices.map((invoice: any) => (
-                        <div key={invoice.id} className="border-b border-border pb-3 last:border-0 last:pb-0">
+                        <div 
+                          key={invoice.id} 
+                          className="border-b border-opacity-20 pb-3 last:border-0 last:pb-0 transition-colors"
+                          style={{ borderColor: colors.utility.primaryText }}
+                        >
                           <div className="flex justify-between">
                             <div>
-                              <div className="font-medium">{invoice.id}</div>
-                              <div className="text-xs text-muted-foreground">
+                              <div 
+                                className="font-medium transition-colors"
+                                style={{ color: colors.utility.primaryText }}
+                              >
+                                {invoice.id}
+                              </div>
+                              <div 
+                                className="text-xs transition-colors"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
                                 {formatDate(invoice.createdAt)}
                               </div>
                             </div>
                             <div className="text-right">
-                              <div className="font-medium">
+                              <div 
+                                className="font-medium transition-colors"
+                                style={{ color: colors.utility.primaryText }}
+                              >
                                 {formatCurrency(invoice.amount, invoice.currency)}
                               </div>
                               <div className="text-xs">

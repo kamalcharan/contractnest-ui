@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Loader2, Archive, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel } from '@/hooks/useBusinessModel';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
@@ -24,6 +25,7 @@ const PlanDetailView: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { isLive } = useAuth();
+  const { isDarkMode, currentTheme } = useTheme();
   
   const { 
     selectedPlan,
@@ -38,6 +40,9 @@ const PlanDetailView: React.FC = () => {
   const [selectedCurrency, setSelectedCurrency] = useState<string>('');
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Use refs to track mounting and prevent multiple loads
   const isMounted = useRef(true);
@@ -199,7 +204,10 @@ const PlanDetailView: React.FC = () => {
   // Loading state
   if (isLoading && !selectedPlan) {
     return (
-      <div className="min-h-screen bg-background">
+      <div 
+        className="min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="p-6">
           <PlanDetailHeader
             planName="Loading..."
@@ -209,8 +217,16 @@ const PlanDetailView: React.FC = () => {
           />
           
           <div className="flex justify-center items-center min-h-[300px]">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            <span className="ml-2 text-muted-foreground">Loading plan details...</span>
+            <Loader2 
+              className="h-8 w-8 animate-spin transition-colors"
+              style={{ color: colors.brand.primary }}
+            />
+            <span 
+              className="ml-2 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Loading plan details...
+            </span>
           </div>
         </div>
       </div>
@@ -220,7 +236,10 @@ const PlanDetailView: React.FC = () => {
   // Error or not found state
   if (!isLoading && !selectedPlan && error) {
     return (
-      <div className="min-h-screen bg-background">
+      <div 
+        className="min-h-screen transition-colors"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
         <div className="p-6">
           <PlanDetailHeader
             planName="Plan Not Found"
@@ -229,14 +248,31 @@ const PlanDetailView: React.FC = () => {
             onBack={handleBack}
           />
           
-          <div className="bg-card rounded-lg border border-border p-8 text-center mt-6">
-            <h3 className="text-lg font-medium">No Plan Found</h3>
-            <p className="text-muted-foreground mt-2 mb-4">
+          <div 
+            className="rounded-lg border p-8 text-center mt-6 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.secondaryText + '40'
+            }}
+          >
+            <h3 
+              className="text-lg font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              No Plan Found
+            </h3>
+            <p 
+              className="mt-2 mb-4 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
               {error || 'The pricing plan could not be loaded.'}
             </p>
             <button
               onClick={handleBack}
-              className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="px-4 py-2 rounded-md text-white hover:opacity-90 transition-colors"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
             >
               Back to Plans
             </button>
@@ -274,7 +310,10 @@ const PlanDetailView: React.FC = () => {
   const notifications = selectedPlan.notifications || activeVersion?.notifications || [];
   
   return (
-    <div className="min-h-screen bg-background">
+    <div 
+      className="min-h-screen transition-colors"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
       <div className="p-6">
         {/* Page Header */}
         <PlanDetailHeader
@@ -305,10 +344,11 @@ const PlanDetailView: React.FC = () => {
               defaultCurrencyCode={planData.defaultCurrencyCode}
               createdAt={planData.createdAt}
               updatedAt={planData.updatedAt}
-activeVersion={activeVersion && activeVersion.version_number && activeVersion.effective_date ? {
-  version_number: activeVersion.version_number,
-  effective_date: activeVersion.effective_date
-} : undefined}            />
+              activeVersion={activeVersion && activeVersion.version_number && activeVersion.effective_date ? {
+                version_number: activeVersion.version_number,
+                effective_date: activeVersion.effective_date
+              } : undefined}            
+            />
             
             {/* Pricing Tiers */}
             <PricingTiersCard

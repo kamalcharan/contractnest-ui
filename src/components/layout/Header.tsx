@@ -49,8 +49,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState<boolean>(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState<boolean>(false);
-  const { isDarkMode, toggleDarkMode, currentThemeId, setTheme } = useTheme();
+  const { isDarkMode, toggleDarkMode, currentThemeId, setTheme, currentTheme } = useTheme();
   const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateUserPreferences } = useAuth();
+
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Refs for click outside detection
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -199,26 +202,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   // Function to get theme color indicator
   const getThemeColor = (themeId: string): string => {
     const theme = themes[themeId];
-    if (!theme) return 'bg-primary';
+    if (!theme) return colors.brand.primary;
     
-    // Use the theme's primary color for the indicator
-    const primaryColor = theme.colors.brand.primary;
-    
-    // Map common colors to Tailwind classes, or use inline style
-    const colorMap: { [key: string]: string } = {
-      '#e67e22': 'bg-orange-500', // BharathaVarsha
-      '#4b998c': 'bg-teal-500',   // ClassicElegant  
-      '#6f61ef': 'bg-purple-500', // PurpleTone
-      '#E53E3E': 'bg-red-500',    // ContractNest
-      '#19db8a': 'bg-emerald-500', // ModernBold
-      '#39d2c0': 'bg-cyan-500',   // ModernBusiness
-      '#507583': 'bg-slate-500',  // ProfessionalRedefined
-      '#2797ff': 'bg-blue-500',   // SleekCool & TechFuture
-      '#06d5cd': 'bg-teal-400',   // TechAI
-      '#f83b46': 'bg-rose-500',   // TechySimple
-    };
-    
-    return colorMap[primaryColor] || 'bg-primary';
+    // Return the theme's primary color
+    return theme.colors.brand.primary;
   };
 
   // Get user's preferred language or default to English
@@ -235,12 +222,19 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
   return (
     <div className="relative h-full">
-      <header className="bg-card shadow-sm py-3 px-4 flex items-center justify-between header h-full">
+      <header 
+        className="shadow-sm py-3 px-4 flex items-center justify-between header h-full transition-colors"
+        style={{ backgroundColor: colors.utility.secondaryBackground }}
+      >
         {/* Left section */}
         <div className="flex items-center">
           <button 
             onClick={onToggleSidebar}
-            className="mr-4 p-2 rounded-lg hover:bg-muted transition-colors"
+            className="mr-4 p-2 rounded-lg transition-all duration-200 hover:opacity-80"
+            style={{ 
+              backgroundColor: `${colors.utility.primaryText}10`,
+              color: colors.utility.primaryText 
+            }}
             aria-label="Toggle sidebar"
           >
             <Menu size={20} />
@@ -255,9 +249,18 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             <input
               type="text"
               placeholder="Search..."
-              className="pl-10 pr-4 py-2 bg-muted rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-primary"
+              className="pl-10 pr-4 py-2 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.primaryText}10`,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
             />
-            <Search size={18} className="absolute left-3 top-2.5 text-muted-foreground" />
+            <Search 
+              size={18} 
+              className="absolute left-3 top-2.5 transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            />
           </div>
         </div>
         
@@ -265,9 +268,21 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         <div className="flex items-center space-x-4">
           {/* Admin/Owner Badge */}
           {(isUserAdmin || isAdminTenant) && (
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
-              <Shield size={16} className="text-purple-600 dark:text-purple-400" />
-              <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+            <div 
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors"
+              style={{
+                backgroundColor: `${colors.brand.tertiary}20`,
+                borderColor: `${colors.brand.tertiary}40`
+              }}
+            >
+              <Shield 
+                size={16} 
+                style={{ color: colors.brand.tertiary }}
+              />
+              <span 
+                className="text-sm font-medium transition-colors"
+                style={{ color: colors.brand.tertiary }}
+              >
                 {isUserAdmin ? 'System Admin' : 'Workspace Admin'}
               </span>
             </div>
@@ -277,19 +292,32 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           {ENVIRONMENT_CONFIG.showEnvironmentSwitch && (
             <button 
               onClick={toggleEnvironment}
-              className="flex items-center px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
-              style={{ borderColor: isLive ? '#22c55e' : '#f59e0b' }}
+              className="flex items-center px-3 py-1.5 rounded-lg border transition-all duration-200 hover:opacity-80"
+              style={{ 
+                borderColor: isLive ? colors.semantic.success : colors.semantic.warning,
+                backgroundColor: `${isLive ? colors.semantic.success : colors.semantic.warning}10`
+              }}
               aria-label={isLive ? "Switch to test environment" : "Switch to live environment"}
             >
               {isLive ? (
                 <>
-                  <span className="text-sm font-medium mr-2" style={{ color: '#16a34a' }}>Live</span>
-                  <ToggleRight size={18} style={{ color: '#16a34a' }} />
+                  <span 
+                    className="text-sm font-medium mr-2 transition-colors"
+                    style={{ color: colors.semantic.success }}
+                  >
+                    Live
+                  </span>
+                  <ToggleRight size={18} style={{ color: colors.semantic.success }} />
                 </>
               ) : (
                 <>
-                  <span className="text-sm font-medium mr-2" style={{ color: '#f59e0b' }}>Test</span>
-                  <ToggleLeft size={18} style={{ color: '#f59e0b' }} />
+                  <span 
+                    className="text-sm font-medium mr-2 transition-colors"
+                    style={{ color: colors.semantic.warning }}
+                  >
+                    Test
+                  </span>
+                  <ToggleLeft size={18} style={{ color: colors.semantic.warning }} />
                 </>
               )}
             </button>
@@ -299,49 +327,104 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <div className="relative" ref={notificationRef}>
             <button 
               onClick={toggleNotifications}
-              className="p-2 rounded-lg hover:bg-muted transition-colors relative"
+              className="p-2 rounded-lg transition-all duration-200 hover:opacity-80 relative"
+              style={{ 
+                backgroundColor: `${colors.utility.primaryText}10`,
+                color: colors.utility.primaryText 
+              }}
               aria-label="Notifications"
             >
               <Bell size={20} />
               {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 bg-destructive text-destructive-foreground text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                <span 
+                  className="absolute top-0 right-0 text-xs rounded-full h-5 w-5 flex items-center justify-center text-white"
+                  style={{ backgroundColor: colors.semantic.error }}
+                >
                   {unreadCount}
                 </span>
               )}
             </button>
             
             {notificationsOpen && (
-              <div className="fixed right-4 top-16 w-80 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                <div className="p-3 border-b border-border flex justify-between items-center">
-                  <h3 className="font-medium">Notifications</h3>
-                  <button className="text-xs text-primary">Mark all as read</button>
+              <div 
+                className="fixed right-4 top-16 w-80 border rounded-lg shadow-lg z-50 overflow-hidden transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: `${colors.utility.primaryText}20`
+                }}
+              >
+                <div 
+                  className="p-3 border-b flex justify-between items-center transition-colors"
+                  style={{ borderColor: `${colors.utility.primaryText}20` }}
+                >
+                  <h3 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Notifications
+                  </h3>
+                  <button 
+                    className="text-xs transition-colors hover:opacity-80"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    Mark all as read
+                  </button>
                 </div>
                 
                 <div className="max-h-96 overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">
+                    <div 
+                      className="p-4 text-center transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       No notifications
                     </div>
                   ) : (
                     notifications.map(notification => (
                       <div 
                         key={notification.id} 
-                        className={`p-3 border-b border-border hover:bg-muted cursor-pointer ${!notification.read ? 'bg-muted/50' : ''}`}
+                        className="p-3 border-b cursor-pointer transition-all duration-200 hover:opacity-80"
+                        style={{ 
+                          borderColor: `${colors.utility.primaryText}20`,
+                          backgroundColor: !notification.read ? `${colors.utility.primaryText}05` : 'transparent'
+                        }}
                       >
                         <div className="flex justify-between items-start">
-                          <p className="text-sm">{notification.text}</p>
+                          <p 
+                            className="text-sm transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {notification.text}
+                          </p>
                           {!notification.read && (
-                            <span className="h-2 w-2 rounded-full bg-primary mt-1"></span>
+                            <span 
+                              className="h-2 w-2 rounded-full mt-1"
+                              style={{ backgroundColor: colors.brand.primary }}
+                            />
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">{notification.time}</p>
+                        <p 
+                          className="text-xs mt-1 transition-colors"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          {notification.time}
+                        </p>
                       </div>
                     ))
                   )}
                 </div>
                 
-                <div className="p-2 border-t border-border">
-                  <button className="w-full py-2 text-center text-sm text-primary hover:bg-muted rounded-md transition-colors">
+                <div 
+                  className="p-2 border-t transition-colors"
+                  style={{ borderColor: `${colors.utility.primaryText}20` }}
+                >
+                  <button 
+                    className="w-full py-2 text-center text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      color: colors.brand.primary,
+                      backgroundColor: `${colors.brand.primary}05`
+                    }}
+                  >
                     View all notifications
                   </button>
                 </div>
@@ -353,10 +436,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <div className="relative" ref={userMenuRef}>
             <button 
               onClick={toggleUserMenu}
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted transition-colors"
+              className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:opacity-80"
+              style={{ backgroundColor: `${colors.utility.primaryText}10` }}
               aria-label="User menu"
             >
-              <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+              <div 
+                className="h-8 w-8 rounded-full flex items-center justify-center text-white"
+                style={{ backgroundColor: colors.brand.primary }}
+              >
                 {user?.first_name ? (
                   <span>{user.first_name.charAt(0)}</span>
                 ) : (
@@ -364,23 +451,58 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 )}
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-sm font-medium leading-tight">
+                <p 
+                  className="text-sm font-medium leading-tight transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
                   {user?.first_name} {user?.last_name}
                 </p>
-                <p className="text-xs text-muted-foreground leading-tight">
+                <p 
+                  className="text-xs leading-tight transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   {user?.user_code || 'User'}
                 </p>
               </div>
-              <ChevronDown size={16} className="hidden md:block" />
+              <ChevronDown 
+                size={16} 
+                className="hidden md:block transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              />
             </button>
             
             {userMenuOpen && (
-              <div className="fixed right-4 top-16 w-64 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                <div className="p-3 border-b border-border">
-                  <p className="font-medium">{user?.first_name} {user?.last_name}</p>
-                  <p className="text-sm text-muted-foreground mt-1">{user?.email}</p>
+              <div 
+                className="fixed right-4 top-16 w-64 border rounded-lg shadow-lg z-50 overflow-hidden transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: `${colors.utility.primaryText}20`
+                }}
+              >
+                <div 
+                  className="p-3 border-b transition-colors"
+                  style={{ borderColor: `${colors.utility.primaryText}20` }}
+                >
+                  <p 
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {user?.first_name} {user?.last_name}
+                  </p>
+                  <p 
+                    className="text-sm mt-1 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {user?.email}
+                  </p>
                   {user?.user_code && (
-                    <div className="mt-2 text-xs bg-muted rounded px-2 py-1 inline-block">
+                    <div 
+                      className="mt-2 text-xs rounded px-2 py-1 inline-block transition-colors"
+                      style={{ 
+                        backgroundColor: `${colors.utility.primaryText}10`,
+                        color: colors.utility.primaryText
+                      }}
+                    >
                       User Code: {user.user_code}
                     </div>
                   )}
@@ -389,7 +511,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 <div className="p-2">
                   <button 
                     onClick={toggleThemeMenu}
-                    className="flex items-center justify-between gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center justify-between gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <div className="flex items-center">
                       <Palette size={18} className="mr-3" />
@@ -400,7 +526,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   
                   <button 
                     onClick={toggleLanguageMenu}
-                    className="flex items-center justify-between gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center justify-between gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <div className="flex items-center">
                       <Globe size={18} className="mr-3" />
@@ -411,7 +541,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   
                   <button 
                     onClick={handleProfileClick}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <User size={18} className="mr-3" />
                     <span>Profile</span>
@@ -419,7 +553,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   
                   <button 
                     onClick={handleChangePasswordClick}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <Key size={18} className="mr-3" />
                     <span>Change Password</span>
@@ -427,7 +565,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   
                   <button 
                     onClick={handleSettingsClick}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <Settings size={18} className="mr-3" />
                     <span>Settings</span>
@@ -435,17 +577,28 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   
                   <button 
                     onClick={handleHelpClick}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.utility.primaryText}05`,
+                      color: colors.utility.primaryText
+                    }}
                   >
                     <HelpCircle size={18} className="mr-3" />
                     <span>Help & Support</span>
                   </button>
                 </div>
                 
-                <div className="p-2 border-t border-border">
+                <div 
+                  className="p-2 border-t transition-colors"
+                  style={{ borderColor: `${colors.utility.primaryText}20` }}
+                >
                   <button 
                     onClick={handleLogout}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                    style={{ 
+                      backgroundColor: `${colors.semantic.error}10`,
+                      color: colors.semantic.error
+                    }}
                   >
                     <LogOut size={18} className="mr-3" />
                     <span>Sign out</span>
@@ -459,42 +612,94 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       
       {/* Theme Selection Menu */}
       {themeMenuOpen && (
-        <div className="fixed right-20 top-16 w-60 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden" ref={themeMenuRef}>
-          <div className="p-3 border-b border-border">
-            <h3 className="font-medium">Appearance</h3>
+        <div 
+          className="fixed right-20 top-16 w-60 border rounded-lg shadow-lg z-50 overflow-hidden transition-colors" 
+          ref={themeMenuRef}
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
+        >
+          <div 
+            className="p-3 border-b transition-colors"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          >
+            <h3 
+              className="font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Appearance
+            </h3>
           </div>
           
           <div className="p-3">
             <div className="mb-4">
-              <p className="text-sm font-medium mb-2">Mode</p>
+              <p 
+                className="text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Mode
+              </p>
               <button 
                 onClick={handleDarkModeToggle} 
-                className="flex items-center justify-between w-full p-2 text-left text-sm rounded-md hover:bg-muted transition-colors"
+                className="flex items-center justify-between w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
+                style={{ 
+                  backgroundColor: `${colors.utility.primaryText}05`,
+                  color: colors.utility.primaryText
+                }}
               >
                 <div className="flex items-center">
                   {isDarkMode ? <Moon size={16} className="mr-2" /> : <Sun size={16} className="mr-2" />}
                   <span>{isDarkMode ? 'Dark' : 'Light'}</span>
                 </div>
-                <div className="h-4 w-8 bg-muted rounded-full relative">
-                  <div className={`absolute h-3 w-3 rounded-full top-0.5 transition-all ${isDarkMode ? 'bg-primary right-0.5' : 'bg-muted-foreground left-0.5'}`}></div>
+                <div 
+                  className="h-4 w-8 rounded-full relative transition-colors"
+                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                >
+                  <div 
+                    className="absolute h-3 w-3 rounded-full top-0.5 transition-all"
+                    style={{ 
+                      backgroundColor: isDarkMode ? colors.brand.primary : colors.utility.secondaryText,
+                      transform: isDarkMode ? 'translateX(16px)' : 'translateX(2px)'
+                    }}
+                  />
                 </div>
               </button>
             </div>
             
-            <p className="text-sm font-medium mb-2">Theme</p>
+            <p 
+              className="text-sm font-medium mb-2 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Theme
+            </p>
             <div className="max-h-64 overflow-y-auto">
               {availableThemes.map((theme) => (
                 <button
                   key={theme.id}
                   onClick={() => handleThemeChange(theme.name)}
-                  className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md hover:bg-muted transition-colors ${
-                    currentThemeId === theme.name ? 'bg-muted' : ''
+                  className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80 ${
+                    currentThemeId === theme.name ? 'opacity-100' : 'opacity-70'
                   }`}
+                  style={{ 
+                    backgroundColor: currentThemeId === theme.name 
+                      ? `${colors.brand.primary}20` 
+                      : `${colors.utility.primaryText}05`,
+                    color: colors.utility.primaryText
+                  }}
                 >
-                  <div className={`h-3 w-3 rounded-full ${getThemeColor(theme.id)} mr-2`}></div>
+                  <div 
+                    className="h-3 w-3 rounded-full mr-2"
+                    style={{ backgroundColor: getThemeColor(theme.id) }}
+                  />
                   <span className="flex-1 truncate">{theme.label}</span>
                   {currentThemeId === theme.name && (
-                    <span className="ml-auto text-primary text-xs">Active</span>
+                    <span 
+                      className="ml-auto text-xs"
+                      style={{ color: colors.brand.primary }}
+                    >
+                      Active
+                    </span>
                   )}
                 </button>
               ))}
@@ -505,9 +710,24 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       
       {/* Language Selection Menu */}
       {languageMenuOpen && (
-        <div className="fixed right-20 top-16 w-60 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden" ref={languageMenuRef}>
-          <div className="p-3 border-b border-border">
-            <h3 className="font-medium">Select Language</h3>
+        <div 
+          className="fixed right-20 top-16 w-60 border rounded-lg shadow-lg z-50 overflow-hidden transition-colors" 
+          ref={languageMenuRef}
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
+        >
+          <div 
+            className="p-3 border-b transition-colors"
+            style={{ borderColor: `${colors.utility.primaryText}20` }}
+          >
+            <h3 
+              className="font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Select Language
+            </h3>
           </div>
           
           <div className="p-3 max-h-96 overflow-y-auto">
@@ -515,14 +735,25 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               <button
                 key={language.code}
                 onClick={() => handleLanguageChange(language.code)}
-                className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md hover:bg-muted transition-colors ${
-                  userPreferredLanguage === language.code ? 'bg-muted' : ''
+                className={`flex items-center w-full p-2 mb-1 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80 ${
+                  userPreferredLanguage === language.code ? 'opacity-100' : 'opacity-70'
                 }`}
+                style={{ 
+                  backgroundColor: userPreferredLanguage === language.code 
+                    ? `${colors.brand.primary}20` 
+                    : `${colors.utility.primaryText}05`,
+                  color: colors.utility.primaryText
+                }}
               >
                 <span className="mr-2">{language.isRTL ? '←' : '→'}</span>
                 <span className="flex-1 truncate">{language.name} ({language.nativeName})</span>
                 {userPreferredLanguage === language.code && (
-                  <span className="ml-auto text-primary text-xs">Active</span>
+                  <span 
+                    className="ml-auto text-xs"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    Active
+                  </span>
                 )}
               </button>
             ))}

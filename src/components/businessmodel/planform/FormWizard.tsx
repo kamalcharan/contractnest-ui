@@ -1,6 +1,7 @@
 // src/components/businessmodel/planform/FormWizard.tsx - UPDATED
 import React from 'react';
 import { Edit, Lock, GitBranch } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 
 interface FormWizardProps {
   steps: {
@@ -23,6 +24,9 @@ const FormWizard: React.FC<FormWizardProps> = ({
   currentVersion,
   nextVersion
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const jumpToStep = (index: number) => {
     if (index >= 0 && index < steps.length && index <= currentStepIndex + 1) {
       onStepChange(index);
@@ -48,7 +52,13 @@ const FormWizard: React.FC<FormWizardProps> = ({
       {/* Edit Mode Indicator with Version Info */}
       {isEditMode && (
         <div className="mb-4 flex items-center justify-center">
-          <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+          <div 
+            className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-colors"
+            style={{
+              backgroundColor: `${colors.brand.primary}20`,
+              color: colors.brand.primary
+            }}
+          >
             <GitBranch className="h-4 w-4 mr-2" />
             <span>
               Editing v{currentVersion} → Creating v{nextVersion || '?.?'}
@@ -64,20 +74,23 @@ const FormWizard: React.FC<FormWizardProps> = ({
               <div className="flex flex-col items-center">
                 <button
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-medium text-sm transition-colors relative ${
-                    getStepStatus(index) === 'completed'
-                      ? isEditMode 
-                        ? 'bg-blue-500 text-white' 
-                        : 'bg-primary text-primary-foreground'
-                      : getStepStatus(index) === 'current'
-                      ? isEditMode
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-2 border-blue-500'
-                        : 'bg-primary/20 text-primary border-2 border-primary'
-                      : isEditMode
-                        ? 'bg-muted text-muted-foreground border border-muted-foreground/30'
-                        : 'bg-muted text-muted-foreground'
-                  } ${
                     isStepClickable(index) ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'
                   }`}
+                  style={{
+                    backgroundColor: getStepStatus(index) === 'completed'
+                      ? colors.brand.primary
+                      : getStepStatus(index) === 'current'
+                      ? `${colors.brand.primary}20`
+                      : `${colors.utility.secondaryText}20`,
+                    color: getStepStatus(index) === 'completed'
+                      ? 'white'
+                      : getStepStatus(index) === 'current'
+                      ? colors.brand.primary
+                      : colors.utility.secondaryText,
+                    border: getStepStatus(index) === 'current' 
+                      ? `2px solid ${colors.brand.primary}` 
+                      : 'none'
+                  }}
                   onClick={() => jumpToStep(index)}
                   disabled={!isStepClickable(index)}
                   title={step.title}
@@ -92,27 +105,35 @@ const FormWizard: React.FC<FormWizardProps> = ({
                   )}
                   
                   {isEditMode && index === 0 && (
-                    <Lock className="absolute -top-1 -right-1 h-3 w-3 text-muted-foreground bg-background rounded-full p-0.5" />
+                    <Lock 
+                      className="absolute -top-1 -right-1 h-3 w-3 rounded-full p-0.5"
+                      style={{
+                        color: colors.utility.secondaryText,
+                        backgroundColor: colors.utility.primaryBackground
+                      }}
+                    />
                   )}
                 </button>
                 
                 <div className="mt-2 text-center">
-                  <span className={`text-xs font-medium whitespace-nowrap px-1 ${
-                    getStepStatus(index) === 'current'
-                      ? isEditMode
-                        ? 'text-blue-700 dark:text-blue-300'
-                        : 'text-primary'
-                      : getStepStatus(index) === 'completed'
-                      ? isEditMode
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-primary'
-                      : 'text-muted-foreground'
-                  }`}>
+                  <span 
+                    className="text-xs font-medium whitespace-nowrap px-1 transition-colors"
+                    style={{
+                      color: getStepStatus(index) === 'current'
+                        ? colors.brand.primary
+                        : getStepStatus(index) === 'completed'
+                        ? colors.brand.primary
+                        : colors.utility.secondaryText
+                    }}
+                  >
                     {step.title}
                   </span>
                   
                   {isEditMode && (
-                    <div className="text-xs text-muted-foreground mt-0.5">
+                    <div 
+                      className="text-xs mt-0.5 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
                       {index === 0 && '(Read-only)'}
                       {index > 0 && '(Editable)'}
                     </div>
@@ -123,13 +144,12 @@ const FormWizard: React.FC<FormWizardProps> = ({
               {index < steps.length - 1 && (
                 <div className="flex flex-col items-center mx-2">
                   <div 
-                    className={`h-1 w-16 transition-colors ${
-                      index < currentStepIndex 
-                        ? isEditMode 
-                          ? 'bg-blue-500' 
-                          : 'bg-primary' 
-                        : 'bg-muted'
-                    }`}
+                    className="h-1 w-16 transition-colors"
+                    style={{
+                      backgroundColor: index < currentStepIndex 
+                        ? colors.brand.primary 
+                        : `${colors.utility.secondaryText}40`
+                    }}
                   />
                 </div>
               )}
@@ -138,22 +158,30 @@ const FormWizard: React.FC<FormWizardProps> = ({
         </nav>
       </div>
       
-      <div className="mt-4 w-full bg-muted rounded-full h-2">
+      <div 
+        className="mt-4 w-full rounded-full h-2"
+        style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
+      >
         <div 
-          className={`h-2 rounded-full transition-all duration-300 ${
-            isEditMode ? 'bg-blue-500' : 'bg-primary'
-          }`}
+          className="h-2 rounded-full transition-all duration-300"
           style={{ 
+            backgroundColor: colors.brand.primary,
             width: `${((currentStepIndex + 1) / steps.length) * 100}%` 
           }}
         />
       </div>
       
       <div className="mt-2 text-center">
-        <span className="text-sm text-muted-foreground">
+        <span 
+          className="text-sm transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        >
           Step {currentStepIndex + 1} of {steps.length}
           {isEditMode && (
-            <span className="ml-2 text-blue-600 dark:text-blue-400">
+            <span 
+              className="ml-2"
+              style={{ color: colors.brand.primary }}
+            >
               (Creating New Version)
             </span>
           )}

@@ -4,6 +4,7 @@
 import { Crown, AlertTriangle } from 'lucide-react';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { Badge } from '@/components/ui/badge';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Import types
 import type { DeleteTaxRateDialogProps } from '@/types/taxSettings';
@@ -15,6 +16,10 @@ const DeleteTaxRateDialog = ({
   onCancel,
   isDeleting
 }: DeleteTaxRateDialogProps) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // Don't render if no rate is selected
   if (!rate) {
@@ -49,7 +54,7 @@ const DeleteTaxRateDialog = ({
         description: `The tax rate "${rate.name}" is currently set as the default rate and cannot be deleted. To delete this rate, first set another tax rate as the default, then try again.`,
         confirmText: 'Understood',
         type: 'warning' as const,
-        icon: <Crown className="h-6 w-6" />,
+        icon: <Crown className="h-6 w-6" style={{ color: colors.semantic.warning }} />,
         showCancel: false
       };
     }
@@ -73,7 +78,7 @@ const DeleteTaxRateDialog = ({
       description,
       confirmText: 'Delete Tax Rate',
       type: 'danger' as const,
-      icon: <AlertTriangle className="h-6 w-6" />,
+      icon: <AlertTriangle className="h-6 w-6" style={{ color: colors.semantic.error }} />,
       showCancel: true
     };
   };

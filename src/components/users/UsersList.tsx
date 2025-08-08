@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export interface User {
   id: string;
@@ -65,6 +66,9 @@ const UsersList: React.FC<UsersListProps> = ({
   isLoading = false,
   className
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -152,7 +156,13 @@ const UsersList: React.FC<UsersListProps> = ({
     const getStatusBadge = () => {
       if (user.status === 'invited') {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: colors.semantic.warning + '10',
+              color: colors.semantic.warning
+            }}
+          >
             Pending
           </span>
         );
@@ -163,13 +173,21 @@ const UsersList: React.FC<UsersListProps> = ({
     // Get type badge
     const getTypeBadge = () => {
       if (user.role) {
+        const roleColorMap = {
+          'admin': colors.brand.tertiary,
+          'owner': colors.brand.secondary,
+          'default': colors.brand.primary
+        };
+        const roleColor = roleColorMap[user.role.toLowerCase() as keyof typeof roleColorMap] || roleColorMap.default;
+        
         return (
-          <span className={cn(
-            "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-            user.role.toLowerCase() === 'admin' ? "bg-purple-100 text-purple-700" :
-            user.role.toLowerCase() === 'owner' ? "bg-indigo-100 text-indigo-700" :
-            "bg-blue-100 text-blue-700"
-          )}>
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: roleColor + '10',
+              color: roleColor
+            }}
+          >
             {user.role}
           </span>
         );
@@ -177,7 +195,13 @@ const UsersList: React.FC<UsersListProps> = ({
       
       if (user.contact_type) {
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+          <span 
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryText + '10',
+              color: colors.utility.secondaryText
+            }}
+          >
             {user.contact_type}
           </span>
         );
@@ -187,14 +211,22 @@ const UsersList: React.FC<UsersListProps> = ({
     };
 
     return (
-      <div className="bg-card border-2 border-primary/20 rounded-lg p-4 hover:shadow-sm transition-shadow">
+      <div 
+        className="border-2 rounded-lg p-4 hover:shadow-sm transition-all duration-200"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.brand.primary + '20'
+        }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             {/* Avatar */}
-            <div className={cn(
-              "h-12 w-12 rounded-full flex items-center justify-center text-white font-medium",
-              isOrganization ? "bg-gray-500" : "bg-primary"
-            )}>
+            <div 
+              className="h-12 w-12 rounded-full flex items-center justify-center text-white font-medium transition-colors"
+              style={{
+                backgroundColor: isOrganization ? colors.utility.secondaryText : colors.brand.primary
+              }}
+            >
               {isOrganization ? (
                 <Building size={20} />
               ) : (
@@ -205,13 +237,26 @@ const UsersList: React.FC<UsersListProps> = ({
             {/* User Info */}
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-medium text-foreground">{displayName}</h4>
-                <span className="text-xs text-muted-foreground">#{user.user_code}</span>
+                <h4 
+                  className="font-medium transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {displayName}
+                </h4>
+                <span 
+                  className="text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  #{user.user_code}
+                </span>
                 {getTypeBadge()}
                 {getStatusBadge()}
               </div>
               
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div 
+                className="flex items-center gap-4 text-sm transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 {user.email && (
                   <span className="flex items-center gap-1">
                     <Mail size={14} />
@@ -229,13 +274,16 @@ const UsersList: React.FC<UsersListProps> = ({
                   Team
                 </span>
                 {user.status === 'active' && (
-                  <Check size={16} className="text-green-600" />
+                  <Check size={16} style={{ color: colors.semantic.success }} />
                 )}
               </div>
               
               {/* Additional info for invited users */}
               {user.status === 'invited' && user.invitation && (
-                <div className="mt-1 text-xs text-muted-foreground">
+                <div 
+                  className="mt-1 text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
                   Invited {formatDistanceToNow(new Date(user.invitation.sent_at), { addSuffix: true })}
                 </div>
               )}
@@ -247,13 +295,22 @@ const UsersList: React.FC<UsersListProps> = ({
             <button
               onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
               onBlur={() => setTimeout(() => setOpenMenuId(null), 200)}
-              className="p-2 hover:bg-muted rounded-md transition-colors"
+              className="p-2 rounded-md transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: colors.utility.secondaryText + '10'
+              }}
             >
-              <MoreVertical size={16} />
+              <MoreVertical size={16} style={{ color: colors.utility.secondaryText }} />
             </button>
             
             {openMenuId === user.id && (
-              <div className="absolute right-0 mt-1 w-48 bg-popover border border-border rounded-md shadow-lg z-10">
+              <div 
+                className="absolute right-0 mt-1 w-48 border rounded-md shadow-lg z-10 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.secondaryText + '20'
+                }}
+              >
                 <div className="py-1">
                   {onViewUser && (
                     <button
@@ -261,7 +318,17 @@ const UsersList: React.FC<UsersListProps> = ({
                         onViewUser(user);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-muted flex items-center"
+                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
+                      style={{
+                        color: colors.utility.primaryText,
+                        backgroundColor: 'transparent'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                     >
                       <Eye size={14} className="mr-2" />
                       View Details
@@ -274,7 +341,17 @@ const UsersList: React.FC<UsersListProps> = ({
                         onEditUser(user);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-muted flex items-center"
+                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
+                      style={{
+                        color: colors.utility.primaryText,
+                        backgroundColor: 'transparent'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                     >
                       <Edit size={14} className="mr-2" />
                       Edit
@@ -287,7 +364,17 @@ const UsersList: React.FC<UsersListProps> = ({
                         onResendInvitation(user.id);
                         setOpenMenuId(null);
                       }}
-                      className="w-full px-4 py-2 text-sm text-left hover:bg-muted flex items-center"
+                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
+                      style={{
+                        color: colors.utility.primaryText,
+                        backgroundColor: 'transparent'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
                     >
                       <RefreshCw size={14} className="mr-2" />
                       Resend Invitation
@@ -296,13 +383,26 @@ const UsersList: React.FC<UsersListProps> = ({
                   
                   {onSuspendUser && user.status === 'active' && (
                     <>
-                      <div className="border-t border-border my-1"></div>
+                      <div 
+                        className="border-t my-1"
+                        style={{ borderColor: colors.utility.secondaryText + '20' }}
+                      ></div>
                       <button
                         onClick={() => {
                           onSuspendUser(user);
                           setOpenMenuId(null);
                         }}
-                        className="w-full px-4 py-2 text-sm text-left hover:bg-muted flex items-center text-destructive"
+                        className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
+                        style={{
+                          color: colors.semantic.error,
+                          backgroundColor: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
                         <UserX size={14} className="mr-2" />
                         Suspend
@@ -322,12 +422,28 @@ const UsersList: React.FC<UsersListProps> = ({
     return (
       <div className={cn('space-y-4', className)}>
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="bg-card border border-border rounded-lg p-4 animate-pulse">
+          <div 
+            key={i} 
+            className="border rounded-lg p-4 animate-pulse transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.secondaryText + '20'
+            }}
+          >
             <div className="flex items-center space-x-4">
-              <div className="h-12 w-12 bg-muted rounded-full"></div>
+              <div 
+                className="h-12 w-12 rounded-full"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
               <div className="flex-1 space-y-2">
-                <div className="h-4 bg-muted rounded w-1/3"></div>
-                <div className="h-3 bg-muted rounded w-1/4"></div>
+                <div 
+                  className="h-4 rounded w-1/3"
+                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+                ></div>
+                <div 
+                  className="h-3 rounded w-1/4"
+                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+                ></div>
               </div>
             </div>
           </div>
@@ -342,13 +458,23 @@ const UsersList: React.FC<UsersListProps> = ({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex-1 max-w-md">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+            <Search 
+              className="absolute left-3 top-1/2 transform -translate-y-1/2" 
+              size={18}
+              style={{ color: colors.utility.secondaryText }}
+            />
             <input
               type="text"
               placeholder="Search team members..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                borderColor: colors.utility.secondaryText + '40',
+                backgroundColor: colors.utility.secondaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
             />
           </div>
         </div>
@@ -357,9 +483,13 @@ const UsersList: React.FC<UsersListProps> = ({
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={cn(
-              "px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2",
-              showFilters && "bg-muted"
+              "px-3 py-2 border rounded-md transition-colors flex items-center gap-2 hover:opacity-80"
             )}
+            style={{
+              borderColor: colors.utility.secondaryText + '40',
+              backgroundColor: showFilters ? colors.utility.secondaryText + '10' : colors.utility.secondaryBackground,
+              color: colors.utility.primaryText
+            }}
           >
             <Filter size={16} />
             Filters
@@ -371,7 +501,12 @@ const UsersList: React.FC<UsersListProps> = ({
 
           <button
             onClick={exportToCSV}
-            className="px-3 py-2 border border-border rounded-md hover:bg-muted transition-colors flex items-center gap-2"
+            className="px-3 py-2 border rounded-md transition-colors flex items-center gap-2 hover:opacity-80"
+            style={{
+              borderColor: colors.utility.secondaryText + '40',
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText
+            }}
           >
             <Download size={16} />
             Export
@@ -380,7 +515,10 @@ const UsersList: React.FC<UsersListProps> = ({
           {onInviteUser && (
             <button
               onClick={onInviteUser}
-              className="px-3 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
+              className="px-3 py-2 text-white rounded-md transition-colors flex items-center gap-2 hover:opacity-90"
+              style={{
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+              }}
             >
               <UserPlus size={16} />
               Invite Team Member
@@ -391,14 +529,30 @@ const UsersList: React.FC<UsersListProps> = ({
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-muted/50 border border-border rounded-md p-4">
+        <div 
+          className="border rounded-md p-4 transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryText + '05',
+            borderColor: colors.utility.secondaryText + '20'
+          }}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Status</label>
+              <label 
+                className="block text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Status
+              </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background"
+                className="w-full px-3 py-2 border rounded-md transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 <option value="all">All Statuses</option>
                 {uniqueStatuses.map(status => (
@@ -410,11 +564,21 @@ const UsersList: React.FC<UsersListProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Role</label>
+              <label 
+                className="block text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Role
+              </label>
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-border rounded-md bg-background"
+                className="w-full px-3 py-2 border rounded-md transition-colors"
+                style={{
+                  borderColor: colors.utility.secondaryText + '40',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText
+                }}
               >
                 <option value="all">All Roles</option>
                 {uniqueRoles.map(role => (
@@ -429,7 +593,10 @@ const UsersList: React.FC<UsersListProps> = ({
       )}
 
       {/* Summary */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div 
+        className="flex items-center justify-between text-sm transition-colors"
+        style={{ color: colors.utility.secondaryText }}
+      >
         <div className="flex items-center gap-1">
           <Users size={16} />
           <span>
@@ -444,10 +611,28 @@ const UsersList: React.FC<UsersListProps> = ({
 
       {/* Team Members List */}
       {filteredUsers.length === 0 ? (
-        <div className="text-center py-12 bg-card border border-border rounded-lg">
-          <Users size={48} className="mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">No team members found</h3>
-          <p className="text-muted-foreground">
+        <div 
+          className="text-center py-12 border rounded-lg transition-colors"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.secondaryText + '20'
+          }}
+        >
+          <Users 
+            size={48} 
+            className="mx-auto mb-4"
+            style={{ color: colors.utility.secondaryText }}
+          />
+          <h3 
+            className="text-lg font-medium mb-2 transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            No team members found
+          </h3>
+          <p 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {searchTerm || statusFilter !== 'all' || roleFilter !== 'all'
               ? 'Try adjusting your filters'
               : 'Start by inviting team members to your workspace'}

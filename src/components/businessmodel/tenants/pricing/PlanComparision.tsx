@@ -3,6 +3,7 @@
 
 import React from 'react';
 import { Check, X } from 'lucide-react';
+import { useTheme } from '../../../../contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 // FIXED: Updated interfaces to match actual usage (same as PlanCard)
@@ -85,6 +86,9 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
   activePlanId,
   onSelectPlan
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   // FIXED: Safe accessor for plan tier price
   const getPlanPrice = (plan: PricingPlan, currency: string): number => {
     const firstTier = plan.tiers?.[0];
@@ -143,22 +147,51 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
+      <table 
+        className="w-full border-collapse"
+        style={{ color: colors.utility.primaryText }}
+      >
         <thead>
           <tr>
-            <th className="p-4 text-left border-b border-border">Features</th>
+            <th 
+              className="p-4 text-left border-b transition-colors"
+              style={{ 
+                borderBottomColor: `${colors.utility.primaryText}20`,
+                color: colors.utility.primaryText
+              }}
+            >
+              Features
+            </th>
             {plans.map(plan => (
-              <th key={plan.id} className="p-4 text-center border-b border-border min-w-[200px]">
+              <th 
+                key={plan.id} 
+                className="p-4 text-center border-b min-w-[200px] transition-colors"
+                style={{ borderBottomColor: `${colors.utility.primaryText}20` }}
+              >
                 <div className="space-y-2">
-                  <div className="font-bold text-lg">{plan.name}</div>
-                  <div className="text-2xl font-bold">
+                  <div 
+                    className="font-bold text-lg transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {plan.name}
+                  </div>
+                  <div 
+                    className="text-2xl font-bold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
                     {formatCurrency(getPlanPrice(plan, currency), currency)}
                   </div>
-                  <div className="text-sm text-muted-foreground">
+                  <div 
+                    className="text-sm transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     per {getPlanType(plan) === 'Per User' ? 'user' : 'contract'} / month
                   </div>
                   {getTrialDuration(plan) > 0 && (
-                    <div className="text-sm text-primary">
+                    <div 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.brand.primary }}
+                    >
                       {getTrialDuration(plan)} day trial
                     </div>
                   )}
@@ -166,10 +199,16 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
                     onClick={() => onSelectPlan(plan.id)}
                     disabled={activePlanId === plan.id}
                     className={`w-full px-4 py-2 rounded-md transition-colors ${
-                      activePlanId === plan.id
-                        ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                        : 'bg-primary text-primary-foreground hover:bg-primary/90'
+                      activePlanId === plan.id ? 'cursor-not-allowed' : 'hover:opacity-90'
                     }`}
+                    style={{
+                      backgroundColor: activePlanId === plan.id 
+                        ? `${colors.utility.secondaryText}20`
+                        : colors.brand.primary,
+                      color: activePlanId === plan.id 
+                        ? colors.utility.secondaryText 
+                        : 'white'
+                    }}
                   >
                     {activePlanId === plan.id ? 'Current Plan' : 'Select Plan'}
                   </button>
@@ -181,13 +220,27 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
         <tbody>
           {/* Features Section */}
           <tr>
-            <td colSpan={plans.length + 1} className="p-4 font-bold bg-muted/20 border-b border-border">
+            <td 
+              colSpan={plans.length + 1} 
+              className="p-4 font-bold border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}20`,
+                borderBottomColor: `${colors.utility.primaryText}20`,
+                color: colors.utility.primaryText
+              }}
+            >
               Features
             </td>
           </tr>
           {allFeatures.map(featureId => (
             <tr key={featureId}>
-              <td className="p-4 border-b border-border">
+              <td 
+                className="p-4 border-b transition-colors"
+                style={{ 
+                  borderBottomColor: `${colors.utility.primaryText}20`,
+                  color: colors.utility.primaryText
+                }}
+              >
                 {/* Get feature name from any plan that has this feature */}
                 {plans.find(plan => 
                   plan.features?.some(f => 
@@ -202,15 +255,28 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
                   (f.feature_id || f.featureId || f.name) === featureId
                 );
                 return (
-                  <td key={plan.id} className="p-4 text-center border-b border-border">
+                  <td 
+                    key={plan.id} 
+                    className="p-4 text-center border-b transition-colors"
+                    style={{ borderBottomColor: `${colors.utility.primaryText}20` }}
+                  >
                     {feature ? (
                       isFeatureEnabled(feature) ? (
-                        <Check className="h-5 w-5 text-green-500 mx-auto" />
+                        <Check 
+                          className="h-5 w-5 mx-auto"
+                          style={{ color: colors.semantic.success }}
+                        />
                       ) : (
-                        <X className="h-5 w-5 text-red-500 mx-auto" />
+                        <X 
+                          className="h-5 w-5 mx-auto"
+                          style={{ color: colors.semantic.error }}
+                        />
                       )
                     ) : (
-                      <X className="h-5 w-5 text-gray-300 mx-auto" />
+                      <X 
+                        className="h-5 w-5 mx-auto"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
                     )}
                   </td>
                 );
@@ -220,13 +286,27 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
           
           {/* Notifications Section */}
           <tr>
-            <td colSpan={plans.length + 1} className="p-4 font-bold bg-muted/20 border-b border-border">
+            <td 
+              colSpan={plans.length + 1} 
+              className="p-4 font-bold border-b transition-colors"
+              style={{
+                backgroundColor: `${colors.utility.secondaryText}20`,
+                borderBottomColor: `${colors.utility.primaryText}20`,
+                color: colors.utility.primaryText
+              }}
+            >
               Notification Credits
             </td>
           </tr>
           {allNotifications.map(notifType => (
             <tr key={notifType}>
-              <td className="p-4 border-b border-border">
+              <td 
+                className="p-4 border-b transition-colors"
+                style={{ 
+                  borderBottomColor: `${colors.utility.primaryText}20`,
+                  color: colors.utility.primaryText
+                }}
+              >
                 {/* Get notification name from any plan that has this notification */}
                 {plans.find(plan => 
                   plan.notifications?.some(n => 
@@ -241,20 +321,36 @@ const PlanComparison: React.FC<PlanComparisonProps> = ({
                   (n.notif_type || n.method) === notifType
                 );
                 return (
-                  <td key={plan.id} className="p-4 text-center border-b border-border">
+                  <td 
+                    key={plan.id} 
+                    className="p-4 text-center border-b transition-colors"
+                    style={{ borderBottomColor: `${colors.utility.primaryText}20` }}
+                  >
                     {notification ? (
                       isNotificationEnabled(notification) ? (
                         <div>
-                          <Check className="h-5 w-5 text-green-500 mx-auto" />
-                          <div className="text-xs mt-1">
+                          <Check 
+                            className="h-5 w-5 mx-auto"
+                            style={{ color: colors.semantic.success }}
+                          />
+                          <div 
+                            className="text-xs mt-1 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
                             {notification.credits_per_unit || notification.creditsPerUnit || 0} credits
                           </div>
                         </div>
                       ) : (
-                        <X className="h-5 w-5 text-red-500 mx-auto" />
+                        <X 
+                          className="h-5 w-5 mx-auto"
+                          style={{ color: colors.semantic.error }}
+                        />
                       )
                     ) : (
-                      <X className="h-5 w-5 text-gray-300 mx-auto" />
+                      <X 
+                        className="h-5 w-5 mx-auto"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
                     )}
                   </td>
                 );

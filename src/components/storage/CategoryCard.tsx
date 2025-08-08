@@ -2,6 +2,7 @@
 import React from 'react';
 import { ChevronRight, File, FileText, Image, User, FileVideo } from 'lucide-react';
 import { formatFileSize } from '@/utils/constants/storageConstants';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface CategoryCardProps {
   category: {
@@ -21,45 +22,93 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   totalSize,
   onClick
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  
+  // Get theme colors
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   // Get the icon component based on category ID or icon string
   const getIcon = () => {
     switch (category.id) {
       case 'contact_photos':
-        return <User className="w-6 h-6 text-blue-500" />;
+        return <User className="w-6 h-6" style={{ color: colors.brand.primary }} />;
       case 'contract_media':
-        return <FileText className="w-6 h-6 text-amber-500" />;
+        return <FileText className="w-6 h-6" style={{ color: colors.semantic.warning }} />;
       case 'service_images':
-        return <Image className="w-6 h-6 text-green-500" />;
+        return <Image className="w-6 h-6" style={{ color: colors.semantic.success }} />;
       case 'documents':
-        return <File className="w-6 h-6 text-purple-500" />;
+        return <File className="w-6 h-6" style={{ color: colors.brand.tertiary }} />;
       default:
-        return <File className="w-6 h-6 text-muted-foreground" />;
+        return <File className="w-6 h-6" style={{ color: colors.utility.secondaryText }} />;
     }
   };
   
   return (
     <div 
-      className="bg-card border border-border rounded-lg p-5 cursor-pointer hover:border-primary hover:shadow-sm transition-all"
+      className="border rounded-lg p-5 cursor-pointer transition-all duration-200 hover:shadow-sm"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: `${colors.utility.primaryText}20`
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = colors.brand.primary;
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = `${colors.utility.primaryText}20`;
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
       onClick={onClick}
     >
       <div className="flex justify-between items-start mb-4">
-        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+        <div 
+          className="w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+          style={{ backgroundColor: `${colors.brand.primary}10` }}
+        >
           {getIcon()}
         </div>
-        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        <ChevronRight 
+          className="w-5 h-5 transition-colors"
+          style={{ color: colors.utility.secondaryText }}
+        />
       </div>
       
-      <h3 className="font-medium text-lg mb-1">{category.name}</h3>
+      <h3 
+        className="font-medium text-lg mb-1 transition-colors"
+        style={{ color: colors.utility.primaryText }}
+      >
+        {category.name}
+      </h3>
       
       <div className="flex flex-col space-y-1 mt-3">
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Files</span>
-          <span>{fileCount}</span>
+          <span 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Files
+          </span>
+          <span 
+            className="transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {fileCount}
+          </span>
         </div>
         
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Size</span>
-          <span>{formatFileSize(totalSize)}</span>
+          <span 
+            className="transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Size
+          </span>
+          <span 
+            className="transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {formatFileSize(totalSize)}
+          </span>
         </div>
       </div>
     </div>

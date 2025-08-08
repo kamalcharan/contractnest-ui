@@ -5,6 +5,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { MasterDataProvider } from './contexts/MasterDataContext';
 import './styles/globals.css';
 import './styles/layout.css';
 import { Toaster } from 'react-hot-toast';
@@ -14,6 +15,7 @@ import { MiscPageWrapper } from './components/misc';
 import SessionConflictNotification from './components/SessionConflictNotification';
 import EnvironmentSwitchModal from './components/EnvironmentSwitchModal';
 import LockScreen from './components/auth/LockScreen';
+import LandingPage from './pages/public/landingPage';
 
 // Initialize Sentry as early as possible
 initSentry();
@@ -26,7 +28,7 @@ import ServicesPage from './pages/catalog/ServicesPage';
 import EquipmentsPage from './pages/catalog/EquipmentsPage';
 import AssetsPage from './pages/catalog/AssetsPage';
 import SparePartsPage from './pages/catalog/SparePartsPage';
-import { CatalogItemFormPage } from './pages/catalog/CatalogItemFormPage';
+import  CatalogItemFormPage  from './pages/catalog/CatalogItemFormPage';
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -55,6 +57,15 @@ import Dashboard from './pages/Dashboard';
 import SettingsPage from './pages/settings'; 
 import ListOfValuesPage from './pages/settings/LOV'; 
 import StorageSettingsPage from './pages/settings/storagesettings';
+
+// Service Contracts - Templates
+import MyTemplatesPage from './pages/service-contracts/templates';
+import TemplatePreviewPage from './pages/service-contracts/templates/preview';
+import GlobalTemplatesPage from './pages/service-contracts/templates/admin/global-templates';
+import TemplateDesignerPage from './pages/service-contracts/templates/designer';
+
+// Service Contracts - Contracts
+import ContractsPage from './pages/service-contracts/contracts';
 
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
@@ -94,6 +105,11 @@ import InvoiceDetailPage from './pages/settings/businessmodel/admin/billing/invo
 // Business Model - Tenant Pages
 import PricingPlansPage from './pages/settings/businessmodel/tenants/pricing-plans';
 import SubscriptionPage from './pages/settings/businessmodel/tenants/subscription';
+
+// Contacts pages
+import ContactsPage from './pages/contacts/index';
+import ContactViewPage from './pages/contacts/view';
+import ContactCreateForm from './pages/contacts/create';
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -166,6 +182,9 @@ const AppContent: React.FC = () => {
           <Route path="/misc/error" element={<ErrorPage />} />
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
           
+          {/* NEW: Landing page on separate route */}
+          <Route path="/welcome" element={<LandingPage />} />
+          
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
@@ -210,7 +229,7 @@ const AppContent: React.FC = () => {
             }
           />
           
-          {/* Protected Routes with MainLayout */}
+          {/* Protected Routes with MainLayout - YOUR ORIGINAL STRUCTURE */}
           <Route
             path="/"
             element={
@@ -219,78 +238,114 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            {/* Default redirect */}
+            {/* Default redirect - YOUR ORIGINAL */}
             <Route index element={<Navigate to="/dashboard" replace />} />
             
-            {/* Main Application Routes */}
+            {/* Main Application Routes - YOUR ORIGINAL */}
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="profile" element={<ProfilePage />} />
             
-            {/* Catalog routes */}
+            {/* Catalog routes - YOUR ORIGINAL */}
             <Route path="catalog">
               <Route path="services" element={<ServicesPage />} />
               <Route path="equipments" element={<EquipmentsPage />} />
               <Route path="assets" element={<AssetsPage />} />
               <Route path="spare-parts" element={<SparePartsPage />} />
               <Route index element={<Navigate to="/catalog/services" />} />
-              <Route path="/catalog/:type/add" element={<CatalogItemFormPage mode="add" />} />
-              <Route path="/catalog/:type/:id/edit" element={<CatalogItemFormPage mode="edit" />} />
+              <Route path=":type/add" element={<CatalogItemFormPage mode="add" />} />
+              <Route path=":type/:id/edit" element={<CatalogItemFormPage mode="edit" />} />
+            </Route>
+
+            {/* Service Contracts Routes - ADDED (missing from your original) */}
+            <Route path="service-contracts">
+              <Route index element={<Navigate to="templates" replace />} />
+              <Route path="contracts" element={<ContractsPage />} />
+              
+              {/* Service Contracts - Templates Routes */}
+              <Route path="templates">
+                <Route index element={<MyTemplatesPage />} />
+                <Route path="designer" element={<TemplateDesignerPage />} />
+                <Route path="preview" element={<TemplatePreviewPage />} />
+                {/* Admin routes */}
+                <Route path="admin">
+                  <Route path="global-templates" element={<GlobalTemplatesPage />} />
+                  <Route path="global-designer" element={<div>Global Designer Coming Soon</div>} />
+                  <Route path="analytics" element={<div>Analytics Coming Soon</div>} />
+                </Route>
+              </Route>
             </Route>
             
-            {/* Settings routes */}
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="settings/configure" element={<SettingsPage />} /> 
-            <Route path="settings/configure/lovs" element={<ListOfValuesPage />} />
-            <Route path="/settings/tax-settings" element={<TaxSettings />} />
+            {/* Legacy support for old routes - redirect to new structure */}
+            <Route path="contracts" element={<Navigate to="/service-contracts/contracts" replace />} />
+            <Route path="templates">
+              <Route index element={<Navigate to="/service-contracts/templates" replace />} />
+              <Route path="*" element={<Navigate to="/service-contracts/templates" replace />} />
+            </Route>
             
-            {/* Team Management Routes */}
-            <Route path="settings/users" element={<UsersPage />} />
-            <Route path="settings/users/view/:id" element={<UserViewPage />} />
-            <Route path="settings/users/edit/:id" element={<TeamEditPage />} />
+            {/* Settings routes - YOUR ORIGINAL */}
+            <Route path="settings">
+              <Route index element={<SettingsPage />} />
+              <Route path="configure" element={<SettingsPage />} />
+              <Route path="configure/lovs" element={<ListOfValuesPage />} />
+              <Route path="tax-settings" element={<TaxSettings />} />
+              
+              {/* Team Management Routes */}
+              <Route path="users" element={<UsersPage />} />
+              <Route path="users/view/:id" element={<UserViewPage />} />
+              <Route path="users/edit/:id" element={<TeamEditPage />} />
+
+              {/* Business Profile Settings */}
+              <Route path="business-profile" element={<BusinessProfilePage />} />
+              <Route path="business-profile/edit" element={<EditBusinessProfilePage />} />
+              
+              {/* Storage Settings */}
+              <Route path="configure/storage" element={<StorageSettingsPage />} />
+              
+              {/* Storage Management Routes */}
+              <Route path="storage/storagesetup" element={<StorageSetupPage />} />
+              <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
+              <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
+              <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
+              
+              {/* Integration Settings */}
+              <Route path="integrations" element={<IntegrationsPage />} />
+              
+              {/* Business Model Routes - YOUR ORIGINAL */}
+              
+              {/* Admin - Pricing Plans Management */}
+              <Route path="businessmodel/admin/pricing-plans" element={<PricingPlansAdminPage />} />
+              <Route path="businessmodel/admin/pricing-plans/create" element={<PricingPlanForm />} />
+              <Route path="businessmodel/admin/pricing-plans/:id" element={<PlanDetailView />} />
+              <Route path="businessmodel/admin/pricing-plans/:id/edit" element={<EditPlanPage />} />
+              <Route path="businessmodel/admin/pricing-plans/:id/assign" element={<AssignPlanPage />} />
+              
+              {/* Admin - Plan Versions */}
+              <Route path="businessmodel/admin/pricing-plans/:id/versions" element={<PlanVersionsPage />} />
+              <Route path="businessmodel/admin/pricing-plans/:id/versions/create" element={<CreateVersionPage />} />
+              <Route path="businessmodel/admin/pricing-plans/:id/versions/migrate" element={<MigrationDashboardPage />} />
+              
+              {/* Admin - Billing Management */}
+              <Route path="businessmodel/admin/billing" element={<BillingDashboardPage />} />
+              <Route path="businessmodel/admin/billing/create-invoice" element={<CreateInvoicePage />} />
+              <Route path="businessmodel/admin/billing/invoices/:id" element={<InvoiceDetailPage />} />
+            </Route>
+
+            {/* Contacts Routes - ADDED (missing from your original) */}
+            <Route path="contacts">
+              <Route index element={<ContactsPage />} />
+              <Route path="create" element={<ContactCreateForm />} />
+              <Route path=":id" element={<ContactViewPage />} />
+              <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
+            </Route>
             
-            {/* Business Profile Settings */}
-            <Route path="settings/business-profile" element={<BusinessProfilePage />} />
-            <Route path="settings/business-profile/edit" element={<EditBusinessProfilePage />} />
-            
-            {/* Storage Settings */}
-            <Route path="settings/configure/storage" element={<StorageSettingsPage />} />
-            
-            {/* Storage Management Routes */}
-            <Route path="settings/storage/storagesetup" element={<StorageSetupPage />} />
-            <Route path="settings/storage/storagecomplete" element={<StorageCompletePage />} />
-            <Route path="settings/storage/storagemanagement" element={<StorageManagementPage />} />
-            <Route path="settings/storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
-            
-            {/* Integration Settings */}
-            <Route path="settings/integrations" element={<IntegrationsPage />} />
-            
-            {/* Business Model Routes */}
-            
-            {/* Admin - Pricing Plans Management */}
-            <Route path="settings/businessmodel/admin/pricing-plans" element={<PricingPlansAdminPage />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/create" element={<PricingPlanForm />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/:id" element={<PlanDetailView />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/:id/edit" element={<EditPlanPage />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/:id/assign" element={<AssignPlanPage />} />
-            
-            {/* Admin - Plan Versions */}
-            <Route path="settings/businessmodel/admin/pricing-plans/:id/versions" element={<PlanVersionsPage />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/:id/versions/create" element={<CreateVersionPage />} />
-            <Route path="settings/businessmodel/admin/pricing-plans/:id/versions/migrate" element={<MigrationDashboardPage />} />
-            
-            {/* Admin - Billing Management */}
-            <Route path="settings/businessmodel/admin/billing" element={<BillingDashboardPage />} />
-            <Route path="settings/businessmodel/admin/billing/create-invoice" element={<CreateInvoicePage />} />
-            <Route path="settings/businessmodel/admin/billing/invoices/:id" element={<InvoiceDetailPage />} />
-            
-            {/* Tenant - Pricing Plans & Subscription */}
+            {/* Tenant - Pricing Plans & Subscription - YOUR ORIGINAL */}
             <Route path="businessmodel/tenants/pricing-plans" element={<PricingPlansPage />} />
             <Route path="businessmodel/tenants/subscription" element={<SubscriptionPage />} />
             
-            {/* Legacy routes - redirect to new structure */}
+            {/* Legacy routes - redirect to new structure - YOUR ORIGINAL */}
             <Route path="implementation/configure-plan" element={<Navigate to="/settings/businessmodel/admin/pricing-plans" replace />} />
             
-            {/* 404 Page - Must be last */}
+            {/* 404 Page - Must be last - YOUR ORIGINAL */}
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           
@@ -309,7 +364,9 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-              <AppContent />
+              <MasterDataProvider>
+                <AppContent />
+              </MasterDataProvider>
             </AuthProvider>
           </Router>
         </ThemeProvider>

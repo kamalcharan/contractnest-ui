@@ -1,5 +1,6 @@
 // src/components/common/skeletons/FormSkeleton.tsx
 import React from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface FormFieldSkeletonProps {
   label?: boolean;
@@ -24,6 +25,9 @@ export const FormFieldSkeleton: React.FC<FormFieldSkeletonProps> = ({
   inputType = 'text',
   width = 'full'
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   const widthClasses = {
     full: 'w-full',
     half: 'w-full md:w-1/2',
@@ -34,27 +38,48 @@ export const FormFieldSkeleton: React.FC<FormFieldSkeletonProps> = ({
   return (
     <div className={`${widthClasses[width]} px-2`}>
       {label && (
-        <div className="h-4 w-24 bg-gray-300 dark:bg-gray-600 rounded animate-pulse mb-2" />
+        <div 
+          className="h-4 w-24 rounded animate-pulse mb-2 transition-colors"
+          style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+        />
       )}
       
       {inputType === 'text' && (
-        <div className="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
+        <div 
+          className="h-10 w-full rounded-md animate-pulse transition-colors"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+        />
       )}
       
       {inputType === 'textarea' && (
-        <div className="h-24 w-full bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
+        <div 
+          className="h-24 w-full rounded-md animate-pulse transition-colors"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+        />
       )}
       
       {inputType === 'select' && (
-        <div className="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse relative">
-          <div className="absolute right-2 top-3 h-4 w-4 bg-gray-400 dark:bg-gray-600 rounded animate-pulse" />
+        <div 
+          className="h-10 w-full rounded-md animate-pulse relative transition-colors"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+        >
+          <div 
+            className="absolute right-2 top-3 h-4 w-4 rounded animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+          />
         </div>
       )}
       
       {inputType === 'checkbox' && (
         <div className="flex items-center space-x-3">
-          <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-          <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+          <div 
+            className="h-5 w-5 rounded animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+          />
+          <div 
+            className="h-4 w-32 rounded animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+          />
         </div>
       )}
       
@@ -62,8 +87,14 @@ export const FormFieldSkeleton: React.FC<FormFieldSkeletonProps> = ({
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center space-x-3">
-              <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-              <div className="h-4 w-24 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+              <div 
+                className="h-5 w-5 rounded-full animate-pulse transition-colors"
+                style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+              />
+              <div 
+                className="h-4 w-24 rounded animate-pulse transition-colors"
+                style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+              />
             </div>
           ))}
         </div>
@@ -71,13 +102,22 @@ export const FormFieldSkeleton: React.FC<FormFieldSkeletonProps> = ({
       
       {inputType === 'toggle' && (
         <div className="flex items-center space-x-3">
-          <div className="h-6 w-11 bg-gray-200 dark:bg-gray-700 rounded-full animate-pulse" />
-          <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+          <div 
+            className="h-6 w-11 rounded-full animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+          />
+          <div 
+            className="h-4 w-32 rounded animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+          />
         </div>
       )}
       
       {description && (
-        <div className="h-3 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mt-1" />
+        <div 
+          className="h-3 w-48 rounded animate-pulse mt-1 transition-colors"
+          style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+        />
       )}
     </div>
   );
@@ -88,11 +128,20 @@ export const FormSectionSkeleton: React.FC<{
   title?: boolean;
   fields: FormFieldSkeletonProps[];
 }> = ({ title = true, fields }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   return (
     <div className="space-y-6">
       {title && (
-        <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-          <div className="h-6 w-40 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+        <div 
+          className="border-b pb-4 transition-colors"
+          style={{ borderColor: `${colors.utility.secondaryText}40` }}
+        >
+          <div 
+            className="h-6 w-40 rounded animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+          />
         </div>
       )}
       
@@ -120,16 +169,31 @@ export const FormSkeleton: React.FC<FormSkeletonProps> = ({
   showActions = true,
   className = ''
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-sm ${className}`}>
+    <div 
+      className={`rounded-lg shadow-sm transition-colors ${className}`}
+      style={{ backgroundColor: colors.utility.secondaryBackground }}
+    >
       {/* Header */}
       {(title || subtitle) && (
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div 
+          className="px-6 py-4 border-b transition-colors"
+          style={{ borderColor: `${colors.utility.secondaryText}40` }}
+        >
           {title && (
-            <div className="h-7 w-48 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+            <div 
+              className="h-7 w-48 rounded animate-pulse transition-colors"
+              style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+            />
           )}
           {subtitle && (
-            <div className="h-4 w-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mt-2" />
+            <div 
+              className="h-4 w-64 rounded animate-pulse mt-2 transition-colors"
+              style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+            />
           )}
         </div>
       )}
@@ -157,10 +221,22 @@ export const FormSkeleton: React.FC<FormSkeletonProps> = ({
 
       {/* Actions */}
       {showActions && (
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+        <div 
+          className="px-6 py-4 border-t transition-colors"
+          style={{
+            borderColor: `${colors.utility.secondaryText}40`,
+            backgroundColor: `${colors.utility.primaryBackground}50`
+          }}
+        >
           <div className="flex items-center justify-end space-x-3">
-            <div className="h-10 w-20 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
-            <div className="h-10 w-24 bg-gray-300 dark:bg-gray-600 rounded-md animate-pulse" />
+            <div 
+              className="h-10 w-20 rounded-md animate-pulse transition-colors"
+              style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+            />
+            <div 
+              className="h-10 w-24 rounded-md animate-pulse transition-colors"
+              style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+            />
           </div>
         </div>
       )}
@@ -174,16 +250,28 @@ export const InlineFormSkeleton: React.FC<{
   showButton?: boolean;
   className?: string;
 }> = ({ fields = 3, showButton = true, className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   return (
     <div className={`flex items-end space-x-4 ${className}`}>
       {Array.from({ length: fields }).map((_, index) => (
         <div key={index} className="flex-1">
-          <div className="h-4 w-16 bg-gray-300 dark:bg-gray-600 rounded animate-pulse mb-2" />
-          <div className="h-10 w-full bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
+          <div 
+            className="h-4 w-16 rounded animate-pulse mb-2 transition-colors"
+            style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+          />
+          <div 
+            className="h-10 w-full rounded-md animate-pulse transition-colors"
+            style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+          />
         </div>
       ))}
       {showButton && (
-        <div className="h-10 w-24 bg-blue-200 dark:bg-blue-900 rounded-md animate-pulse" />
+        <div 
+          className="h-10 w-24 rounded-md animate-pulse transition-colors"
+          style={{ backgroundColor: `${colors.brand.primary}40` }}
+        />
       )}
     </div>
   );
@@ -203,17 +291,30 @@ export const TabbedFormSkeleton: React.FC<{
   ],
   showActions = true 
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+    <div 
+      className="rounded-lg shadow-sm transition-colors"
+      style={{ backgroundColor: colors.utility.secondaryBackground }}
+    >
       {/* Tab Headers */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div 
+        className="border-b transition-colors"
+        style={{ borderColor: `${colors.utility.secondaryText}40` }}
+      >
         <div className="flex space-x-8 px-6">
           {Array.from({ length: tabs }).map((_, index) => (
             <div 
               key={index} 
-              className={`py-4 ${index === 0 ? 'border-b-2 border-gray-300' : ''}`}
+              className={`py-4 ${index === 0 ? 'border-b-2' : ''} transition-colors`}
+              style={{ borderColor: index === 0 ? `${colors.utility.secondaryText}60` : 'transparent' }}
             >
-              <div className="h-5 w-20 bg-gray-300 dark:bg-gray-600 rounded animate-pulse" />
+              <div 
+                className="h-5 w-20 rounded animate-pulse transition-colors"
+                style={{ backgroundColor: `${colors.utility.secondaryText}60` }}
+              />
             </div>
           ))}
         </div>
@@ -230,12 +331,27 @@ export const TabbedFormSkeleton: React.FC<{
 
       {/* Actions */}
       {showActions && (
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+        <div 
+          className="px-6 py-4 border-t transition-colors"
+          style={{
+            borderColor: `${colors.utility.secondaryText}40`,
+            backgroundColor: `${colors.utility.primaryBackground}50`
+          }}
+        >
           <div className="flex items-center justify-between">
-            <div className="h-10 w-24 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
+            <div 
+              className="h-10 w-24 rounded-md animate-pulse transition-colors"
+              style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+            />
             <div className="flex items-center space-x-3">
-              <div className="h-10 w-20 bg-gray-200 dark:bg-gray-700 rounded-md animate-pulse" />
-              <div className="h-10 w-28 bg-blue-200 dark:bg-blue-900 rounded-md animate-pulse" />
+              <div 
+                className="h-10 w-20 rounded-md animate-pulse transition-colors"
+                style={{ backgroundColor: `${colors.utility.primaryBackground}50` }}
+              />
+              <div 
+                className="h-10 w-28 rounded-md animate-pulse transition-colors"
+                style={{ backgroundColor: `${colors.brand.primary}40` }}
+              />
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 // src/components/catalog/currency/CurrencyBadge.tsx
 import React from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 import { 
   CURRENCY_SYMBOLS,
   type SupportedCurrency 
@@ -65,6 +66,9 @@ export const CurrencyBadge: React.FC<CurrencyBadgeProps> = ({
   className = '',
   onClick
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const currencyUpper = currency.toUpperCase() as SupportedCurrency;
   const meta = CURRENCY_META[currencyUpper];
   const symbol = CURRENCY_SYMBOLS[currencyUpper] || currencyUpper;
@@ -77,25 +81,46 @@ export const CurrencyBadge: React.FC<CurrencyBadgeProps> = ({
     lg: 'text-lg px-3 py-2'
   };
 
-  // Variant classes
-  const getVariantClasses = () => {
+  // Variant styles using theme colors
+  const getVariantStyles = () => {
     if (isBase) {
-      return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
+      return {
+        backgroundColor: `${colors.brand.primary}20`,
+        color: colors.brand.primary,
+        borderColor: `${colors.brand.primary}40`
+      };
     }
 
     if (!meta) {
       return variant === 'outline' 
-        ? 'border border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300'
-        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+        ? {
+            border: `1px solid ${colors.utility.secondaryText}40`,
+            color: colors.utility.secondaryText,
+            backgroundColor: 'transparent'
+          }
+        : {
+            backgroundColor: `${colors.utility.primaryBackground}50`,
+            color: colors.utility.secondaryText
+          };
     }
 
     switch (variant) {
       case 'outline':
-        return `border border-current ${meta.color} dark:text-gray-300`;
+        return {
+          border: `1px solid ${colors.utility.secondaryText}60`,
+          color: colors.utility.primaryText,
+          backgroundColor: 'transparent'
+        };
       case 'ghost':
-        return `${meta.color} dark:text-gray-300 hover:${meta.bgColor} hover:${meta.darkBgColor}`;
+        return {
+          color: colors.utility.primaryText,
+          backgroundColor: 'transparent'
+        };
       default: // solid
-        return `${meta.bgColor} ${meta.darkBgColor} ${meta.color} dark:text-gray-200`;
+        return {
+          backgroundColor: `${colors.utility.primaryBackground}50`,
+          color: colors.utility.primaryText
+        };
     }
   };
 
@@ -105,12 +130,12 @@ export const CurrencyBadge: React.FC<CurrencyBadgeProps> = ({
     <Component
       onClick={onClick}
       className={`
-        inline-flex items-center font-medium rounded-full
+        inline-flex items-center font-medium rounded-full transition-all
         ${sizeClasses[size]}
-        ${getVariantClasses()}
-        ${onClick ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}
+        ${onClick ? 'cursor-pointer hover:opacity-80' : ''}
         ${className}
       `}
+      style={getVariantStyles()}
     >
       {showFlag && meta && (
         <span className={`${size === 'xs' ? 'text-xs' : 'text-sm'} mr-1`}>
@@ -136,8 +161,26 @@ export const CurrencySelectorBadge: React.FC<{
   disabled?: boolean;
   className?: string;
 }> = ({ currency, isBase = false, onClick, disabled = false, className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const currencyUpper = currency.toUpperCase() as SupportedCurrency;
   const meta = CURRENCY_META[currencyUpper];
+
+  const getStyles = () => {
+    if (isBase) {
+      return {
+        backgroundColor: `${colors.brand.primary}10`,
+        borderColor: `${colors.brand.primary}40`,
+        color: colors.brand.primary
+      };
+    }
+    return {
+      backgroundColor: colors.utility.secondaryBackground,
+      borderColor: `${colors.utility.secondaryText}40`,
+      color: colors.utility.primaryText
+    };
+  };
 
   return (
     <button
@@ -145,21 +188,18 @@ export const CurrencySelectorBadge: React.FC<{
       disabled={disabled}
       className={`
         inline-flex items-center space-x-1.5 px-3 py-1.5 text-sm font-medium
-        rounded-lg border transition-all
-        ${isBase
-          ? 'bg-indigo-50 border-indigo-300 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-900/30'
-          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
-        }
+        rounded-lg border transition-all hover:opacity-80
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className}
       `}
+      style={getStyles()}
     >
       {meta && (
         <span className="text-base">{meta.flag}</span>
       )}
       <span>{currencyUpper}</span>
       <svg 
-        className="w-4 h-4 text-gray-400" 
+        className="w-4 h-4 opacity-60" 
         fill="none" 
         stroke="currentColor" 
         viewBox="0 0 24 24"
@@ -193,6 +233,9 @@ export const CurrencyListItem: React.FC<{
   price,
   className = '' 
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const currencyUpper = currency.toUpperCase() as SupportedCurrency;
   const meta = CURRENCY_META[currencyUpper];
   const symbol = CURRENCY_SYMBOLS[currencyUpper] || currencyUpper;
@@ -200,41 +243,62 @@ export const CurrencyListItem: React.FC<{
   return (
     <button
       onClick={onClick}
-      className={`
-        w-full px-3 py-2 flex items-center justify-between
-        hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors
-        ${isSelected ? 'bg-gray-50 dark:bg-gray-700' : ''}
-        ${className}
-      `}
+      className={`w-full px-3 py-2 flex items-center justify-between hover:opacity-80 transition-colors ${className}`}
+      style={{
+        backgroundColor: isSelected ? `${colors.utility.primaryBackground}50` : 'transparent'
+      }}
+      onMouseEnter={(e) => {
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = `${colors.utility.primaryBackground}30`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isSelected) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }
+      }}
     >
       <div className="flex items-center space-x-3">
         {meta && (
           <span className="text-lg">{meta.flag}</span>
         )}
         <div className="text-left">
-          <div className="text-sm font-medium text-gray-900 dark:text-white">
+          <div 
+            className="text-sm font-medium transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
             {currencyUpper}
             {isBase && (
-              <span className="ml-2 text-xs text-indigo-600 dark:text-indigo-400">
+              <span 
+                className="ml-2 text-xs transition-colors"
+                style={{ color: colors.brand.primary }}
+              >
                 (base)
               </span>
             )}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div 
+            className="text-xs transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
             {symbol} - {getCurrencyName(currencyUpper)}
           </div>
         </div>
       </div>
       
       {showPrice && price !== undefined && (
-        <span className="text-sm font-medium text-gray-900 dark:text-white">
+        <span 
+          className="text-sm font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
           {symbol}{price.toLocaleString('en-IN')}
         </span>
       )}
       
       {isSelected && (
         <svg 
-          className="w-5 h-5 text-indigo-600 dark:text-indigo-400" 
+          className="w-5 h-5 transition-colors"
+          style={{ color: colors.brand.primary }}
           fill="currentColor" 
           viewBox="0 0 20 20"
         >
@@ -257,6 +321,9 @@ export const CurrencyGroup: React.FC<{
   baseCurrency?: string;
   className?: string;
 }> = ({ currencies, maxDisplay = 3, size = 'sm', baseCurrency, className = '' }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  
   const displayCurrencies = currencies.slice(0, maxDisplay);
   const remainingCount = currencies.length - maxDisplay;
 
@@ -273,11 +340,16 @@ export const CurrencyGroup: React.FC<{
         />
       ))}
       {remainingCount > 0 && (
-        <span className={`
-          inline-flex items-center font-medium rounded-full
-          bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400
-          ${size === 'xs' ? 'text-xs px-1.5 py-0.5' : 'text-sm px-2 py-1'}
-        `}>
+        <span 
+          className={`
+            inline-flex items-center font-medium rounded-full transition-colors
+            ${size === 'xs' ? 'text-xs px-1.5 py-0.5' : 'text-sm px-2 py-1'}
+          `}
+          style={{
+            backgroundColor: `${colors.utility.primaryBackground}50`,
+            color: colors.utility.secondaryText
+          }}
+        >
           +{remainingCount}
         </span>
       )}
