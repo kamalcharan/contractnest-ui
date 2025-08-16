@@ -1,7 +1,7 @@
 // src/components/Landing/ContractTypeSection.tsx
 import React, { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion'; // You'll need to install framer-motion
 
 const ContractTypeSection: React.FC = () => {

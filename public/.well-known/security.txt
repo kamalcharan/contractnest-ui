@@ -1,0 +1,20 @@
+Contact: mailto:security@contractnest.com
+Contact: mailto:charan@contractnest.com
+Expires: 2026-08-08T18:16:21.214Z
+Preferred-Languages: en
+Canonical: https://contractnest.com/.well-known/security.txt
+Policy: https://contractnest.com/security-policy
+Hiring: https://contractnest.com/careers
+
+# Security Policy
+# We appreciate responsible disclosure of security vulnerabilities.
+# Please allow up to 48 hours for our initial response.
+# For non-security issues, please use our support channels.
+
+# Bug Bounty
+# We currently do not have a formal bug bounty program.
+# However, we appreciate and acknowledge security researchers.
+
+# Scope
+# In scope: contractnest.com and all subdomains
+# Out of scope: Third-party integrations and services

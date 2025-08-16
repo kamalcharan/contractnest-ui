@@ -4,15 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
-import { useMasterDataContext } from '@/contexts/MasterDataContext';
+import { useMasterDataContext } from '@/contexts/MasterDataContext';  
 
 // Define interfaces for the component
 interface CategoryMaster {

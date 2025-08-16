@@ -1,79 +1,54 @@
 // src/pages/catalog/CatalogItemFormPage.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// ✅ COMPLETE FIX - All edit mode issues resolved
+
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useToast } from '@/components/ui/use-toast';
-import { captureException } from '@/utils/sentry';
-import { analyticsService } from '@/services/analytics.service';
-import { 
-  ArrowLeft, 
-  Save, 
-  X, 
-  Clock, 
-  Plus, 
-  Trash2,
-  Star,
-  DollarSign,
-  FileText,
-  Settings,
-  History,
-  Bold,
-  Italic,
-  List,
-  Link,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Package,
-  Wrench,
-  Box,
-  AlertTriangle,
-  Loader2,
-  Info,
-  HelpCircle,
-  Eye,
-  CheckCircle
-} from 'lucide-react';
-import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import { Loader2, AlertTriangle, ArrowLeft, X, Save, Lock, Edit3 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
-// Import services and hooks
+// Import services
 import catalogService from '../../services/catalogService';
-import { useCatalogList } from '../../hooks/useCatalogItems';
 
-// Import types
+// Import types and constants  
 import type {
   CatalogItemType,
   CreateCatalogItemRequest,
   UpdateCatalogItemRequest,
   CatalogItemDetailed,
-  PricingType,
-  SupportedCurrency
+  PriceAttributes,
+  TaxConfig
 } from '../../types/catalogTypes';
 
-// Import constants
 import {
   CATALOG_ITEM_TYPES,
   CATALOG_TYPE_LABELS,
-  CATALOG_TYPE_COLORS,
-  CATALOG_TYPE_ICONS,
   CATALOG_ITEM_STATUS,
-  CATALOG_ITEM_STATUS_LABELS,
   PRICING_TYPES,
   PRICING_TYPE_LABELS,
+  PRICING_TYPE_DESCRIPTIONS,
   BILLING_MODES,
-  BILLING_MODE_LABELS,
-  SUPPORTED_CURRENCIES,
-  CURRENCY_SYMBOLS,
   RECOMMENDED_PRICING_BY_TYPE,
-  CATALOG_VALIDATION_LIMITS,
-  CATALOG_ERROR_MESSAGES,
-  isValidCurrency,
-  isValidPrice,
-  isValidPricingType
+  CATALOG_VALIDATION,
+  SUCCESS_MESSAGES,
+  ERROR_MESSAGES,
+  WARNING_MESSAGES,
+  LOADING_MESSAGES,
+  FORM_LABELS,
+  FORM_PLACEHOLDERS,
+  catalogTypeToApi
 } from '../../utils/constants/catalog';
 
+// Import new components
+import RequiredFieldsProgress, { RequiredField } from '../../components/ui/RequiredFieldsProgress';
+import CurrencyPricingRepeater, { CurrencyPrice } from '../../components/catalog/currency/CurrencyPricingRepeater';
+import RichTextEditor from '../../components/ui/RichTextEditor';
+import NumberInput from '../../components/ui/NumberInput';
+import ExamplesPanel from '../../components/catalog/form/shared/ExamplesPanel';
+import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
+
 // Form data interface
-interface FormData extends CreateCatalogItemRequest {
+interface FormData extends Omit<CreateCatalogItemRequest, 'short_description'> {
   version_reason?: string;
 }
 
@@ -81,62 +56,48 @@ interface FormErrors {
   [key: string]: string;
 }
 
-interface CurrencyFormData {
-  currency: SupportedCurrency;
-  price: number;
-  is_base_currency: boolean;
-  tax_included: boolean;
-  tax_rate_id?: string | null;
-}
-
 const CatalogItemFormPage: React.FC = () => {
   const navigate = useNavigate();
-  const { catalogType, itemId } = useParams<{ catalogType: string; itemId?: string }>();
+  const params = useParams();
+  const { type, itemId } = useParams<{ type: string; itemId?: string }>();
   const location = useLocation();
   const { isDarkMode, currentTheme } = useTheme();
-  const { toast } = useToast();
   
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
-  // Determine mode and validate catalog type
+  // Map route type to catalog type
+  const mapRouteToCatalogType = (routeType: string): CatalogItemType => {
+    const mapping: Record<string, CatalogItemType> = {
+      'services': 'service',
+      'equipments': 'equipment',
+      'assets': 'asset',
+      'spare-parts': 'spare_part'
+    };
+    return mapping[routeType] || 'service';
+  };
+  
+  // ✅ FIXED: Determine mode and validate catalog type
   const mode = itemId ? 'edit' : 'add';
-  const validCatalogType = catalogType as CatalogItemType;
+  const catalogType = mapRouteToCatalogType(type || 'services');
+  const isEditMode = mode === 'edit';
   
   // Helper functions
-  function getExamplesForType(type: CatalogItemType): string[] {
-    switch (type) {
-      case CATALOG_ITEM_TYPES.SERVICE:
-        return ['IT Support Services', 'Consulting & Advisory', 'Maintenance Contracts', 'Training Programs', 'Cloud Solutions'];
-      case CATALOG_ITEM_TYPES.EQUIPMENT:
-        return ['Construction Tools', 'Medical Devices', 'Audio/Visual Equipment', 'Industrial Machinery', 'Laboratory Equipment'];
-      case CATALOG_ITEM_TYPES.SPARE_PART:
-        return ['Engine Components', 'Replacement Parts', 'Electronic Components', 'Wear Parts', 'Consumables'];
-      case CATALOG_ITEM_TYPES.ASSET:
-        return ['Vehicles & Fleet', 'Real Estate Properties', 'Manufacturing Equipment', 'IT Infrastructure', 'Office Equipment'];
-      default:
-        return [];
-    }
-  }
-
-  function getCatalogRoute(type: CatalogItemType): string {
+  function getCatalogRoute(catalogTypeParam: CatalogItemType): string {
     const routeMap = {
       [CATALOG_ITEM_TYPES.SERVICE]: '/catalog/services',
       [CATALOG_ITEM_TYPES.EQUIPMENT]: '/catalog/equipments', 
       [CATALOG_ITEM_TYPES.ASSET]: '/catalog/assets',
       [CATALOG_ITEM_TYPES.SPARE_PART]: '/catalog/spare-parts'
     };
-    return routeMap[type] || '/catalog/services';
+    return routeMap[catalogTypeParam] || '/catalog/services';
   }
 
   function getCatalogInfo() {
-    const typeKey = validCatalogType as keyof typeof CATALOG_TYPE_LABELS;
+    const typeKey = catalogType as keyof typeof CATALOG_TYPE_LABELS;
     return {
       singular: CATALOG_TYPE_LABELS[typeKey]?.slice(0, -1) || 'Item',
-      plural: CATALOG_TYPE_LABELS[typeKey] || 'Items',
-      icon: CATALOG_TYPE_ICONS[typeKey] || Package,
-      color: CATALOG_TYPE_COLORS[typeKey] || 'gray',
-      examples: getExamplesForType(validCatalogType)
+      plural: CATALOG_TYPE_LABELS[typeKey] || 'Items'
     };
   }
 
@@ -144,15 +105,14 @@ const CatalogItemFormPage: React.FC = () => {
 
   // Form state
   const [formData, setFormData] = useState<FormData>({
-    type: validCatalogType,
+    type: catalogType,
     name: '',
-    short_description: '',
     description_content: '',
     description_format: 'markdown',
     terms_content: '',
     terms_format: 'markdown',
     price_attributes: {
-      type: RECOMMENDED_PRICING_BY_TYPE[validCatalogType]?.[0] || PRICING_TYPES.FIXED,
+      type: RECOMMENDED_PRICING_BY_TYPE[catalogType]?.[0] || PRICING_TYPES.FIXED,
       base_amount: 0,
       currency: 'INR',
       billing_mode: BILLING_MODES.MANUAL
@@ -168,8 +128,14 @@ const CatalogItemFormPage: React.FC = () => {
     variant_attributes: {}
   });
 
-  const [currencies, setCurrencies] = useState<CurrencyFormData[]>([
-    { currency: 'INR', price: 0, is_base_currency: true, tax_included: false }
+  const [currencies, setCurrencies] = useState<CurrencyPrice[]>([
+    { 
+      id: 'inr-default',
+      currency: 'INR', 
+      price: 0, 
+      taxIncluded: false, 
+      isBaseCurrency: true 
+    }
   ]);
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -179,47 +145,90 @@ const CatalogItemFormPage: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [existingItem, setExistingItem] = useState<CatalogItemDetailed | null>(null);
 
-  // Rich text editor state
+  // ✅ FIXED: Rich text editor state - properly populate existing data
   const [editorContent, setEditorContent] = useState({
     description: '',
     service_terms: ''
   });
 
+  // ✅ FIXED: Track if data has been loaded for edit mode
+  const [dataLoaded, setDataLoaded] = useState(!isEditMode);
+
   // Refs
   const formRef = useRef<HTMLDivElement>(null);
-  const submitTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // ✅ FIXED: Required fields for progress tracking
+  const requiredFields: RequiredField[] = [
+    {
+      id: 'name',
+      label: 'Name',
+      isRequired: true,
+      isCompleted: formData.name.trim().length >= CATALOG_VALIDATION.LIMITS.NAME.MIN_LENGTH,
+      hasError: !!errors.name,
+      errorMessage: errors.name
+    },
+    {
+      id: 'description',
+      label: 'Description',
+      isRequired: true,
+      isCompleted: editorContent.description.trim().length > 0,
+      hasError: !!errors.description,
+      errorMessage: errors.description
+    },
+    {
+      id: 'currencies',
+      label: 'Base Currency',
+      isRequired: true,
+      isCompleted: currencies.length > 0 && currencies.some(c => c.isBaseCurrency),
+      hasError: !!errors.currencies || !!errors.baseCurrency,
+      errorMessage: errors.currencies || errors.baseCurrency
+    }
+  ];
 
   // Validate catalog type on mount
   useEffect(() => {
-    if (!catalogType || !Object.values(CATALOG_ITEM_TYPES).includes(validCatalogType)) {
-      toast({
-        variant: "destructive",
-        title: "Invalid catalog type",
-        description: "Redirecting to services catalog..."
-      });
+    if (!type) {
+      toast.error(ERROR_MESSAGES.INVALID_DATA);
       navigate('/catalog/services', { replace: true });
       return;
     }
-  }, [catalogType, validCatalogType, navigate, toast]);
+    
+    if (!Object.values(CATALOG_ITEM_TYPES).includes(catalogType)) {
+      toast.error(ERROR_MESSAGES.INVALID_DATA);
+      navigate('/catalog/services', { replace: true });
+      return;
+    }
+  }, [type, catalogType, navigate]);
 
-  // Load existing item for edit mode
+  // ✅ FIXED: Load existing item for edit mode
   useEffect(() => {
-    if (mode === 'edit' && itemId) {
+    if (isEditMode && itemId) {
       loadExistingItem();
     }
-  }, [mode, itemId]);
+  }, [isEditMode, itemId]);
 
   const loadExistingItem = async () => {
     try {
       setIsLoading(true);
-      const item = await catalogService.getCatalogItem(itemId!);
+      
+      console.log('🔄 Loading existing item with ID:', itemId);
+      
+      // ✅ FIXED: Use the correct API method
+      const response = await catalogService.getCatalogItemById(itemId!);
+      
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to load item');
+      }
+      
+      const item = response.data;
       setExistingItem(item);
       
-      // Populate form with existing data
+      console.log('✅ Loaded existing item:', item);
+      
+      // ✅ FIXED: Populate form with existing data properly
       setFormData({
         type: item.type,
         name: item.name,
-        short_description: item.short_description || '',
         description_content: item.description_content || '',
         description_format: item.description_format || 'markdown',
         terms_content: item.terms_content || '',
@@ -241,274 +250,68 @@ const CatalogItemFormPage: React.FC = () => {
         variant_attributes: item.variant_attributes || {}
       });
 
+      // ✅ FIXED: Set rich text editor content with existing data
       setEditorContent({
         description: item.description_content || '',
         service_terms: item.terms_content || ''
       });
 
-      // Load currencies from pricing list
+      // ✅ FIXED: Load currencies from pricing list
       if (item.pricing_list && item.pricing_list.length > 0) {
-        setCurrencies(item.pricing_list.map(p => ({
-          currency: p.currency as SupportedCurrency,
+        const loadedCurrencies = item.pricing_list.map((p, index) => ({
+          id: `${p.currency}-${index}`,
+          currency: p.currency,
           price: p.price,
-          is_base_currency: p.is_base_currency || false,
-          tax_included: p.tax_included || false,
-          tax_rate_id: p.tax_rate_id
-        })));
+          taxIncluded: p.tax_included || false,
+          isBaseCurrency: p.is_base_currency || false
+        }));
+        setCurrencies(loadedCurrencies);
+        console.log('✅ Loaded currencies:', loadedCurrencies);
       }
 
-      analyticsService.trackEvent('catalog_item_edit_loaded', {
-        catalog_type: item.type,
-        item_id: item.id
-      });
+      // ✅ FIXED: Mark data as loaded
+      setDataLoaded(true);
+      console.log('✅ Edit mode data fully loaded');
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load catalog item';
-      captureException(error, {
-        tags: { component: 'CatalogItemFormPage', action: 'loadExistingItem' },
-        extra: { itemId, catalogType }
-      });
-      
-      toast({
-        variant: "destructive",
-        title: "Error loading item",
-        description: errorMessage
-      });
-      
-      navigate(getCatalogRoute(validCatalogType), { replace: true });
+      console.error('❌ Error loading existing item:', error);
+      const errorMessage = error instanceof Error ? error.message : ERROR_MESSAGES.CATALOG_LOAD_FAILED;
+      toast.error(errorMessage);
+      navigate(getCatalogRoute(catalogType), { replace: true });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Track form changes for unsaved changes detection
+  // ✅ FIXED: Track form changes properly
   useEffect(() => {
-    const hasChanges = mode === 'edit' ? checkForChanges() : (
+    if (!dataLoaded) return; // Don't track changes until data is loaded
+    
+    const hasChanges = isEditMode ? checkForChanges() : (
       formData.name.trim() !== '' || 
       editorContent.description.trim() !== '' ||
-      editorContent.service_terms.trim() !== ''
+      editorContent.service_terms.trim() !== '' ||
+      currencies.length > 1 ||
+      currencies[0]?.price !== 0
     );
     setHasUnsavedChanges(hasChanges);
-  }, [formData, editorContent, currencies, mode]);
+  }, [formData, editorContent, currencies, isEditMode, dataLoaded]);
 
   const checkForChanges = (): boolean => {
     if (!existingItem) return false;
     
     return (
       formData.name !== existingItem.name ||
-      formData.short_description !== (existingItem.short_description || '') ||
       editorContent.description !== (existingItem.description_content || '') ||
       editorContent.service_terms !== (existingItem.terms_content || '') ||
       formData.status !== existingItem.status ||
-      JSON.stringify(currencies) !== JSON.stringify(existingItem.pricing_list?.map(p => ({
+      JSON.stringify(currencies) !== JSON.stringify(existingItem.pricing_list?.map((p, index) => ({
+        id: `${p.currency}-${index}`,
         currency: p.currency,
         price: p.price,
-        is_base_currency: p.is_base_currency,
-        tax_included: p.tax_included
+        taxIncluded: p.tax_included,
+        isBaseCurrency: p.is_base_currency
       })))
-    );
-  };
-
-  // Prevent navigation if unsaved changes
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  // Rich Text Editor Component
-  const RichTextEditor: React.FC<{
-    value: string;
-    onChange: (content: string) => void;
-    placeholder: string;
-    field: string;
-    label: string;
-    required?: boolean;
-  }> = ({ value, onChange, placeholder, field, label, required = false }) => {
-    const editorRef = useRef<HTMLDivElement>(null);
-    const [isFocused, setIsFocused] = useState(false);
-
-    const formatText = (command: string) => {
-      document.execCommand(command, false, null);
-      editorRef.current?.focus();
-    };
-
-    const insertLink = () => {
-      const url = prompt('Enter URL:');
-      if (url) {
-        document.execCommand('createLink', false, url);
-      }
-    };
-
-    const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-      const content = e.currentTarget.innerHTML;
-      onChange(content);
-      clearFieldError(field);
-    };
-
-    const handlePaste = (e: React.ClipboardEvent) => {
-      e.preventDefault();
-      const text = e.clipboardData.getData('text/plain');
-      document.execCommand('insertText', false, text);
-    };
-
-    const handleFocus = () => {
-      setIsFocused(true);
-      analyticsService.trackEvent('catalog_form_field_focus', {
-        field_name: field,
-        catalog_type: validCatalogType
-      });
-    };
-
-    return (
-      <div className="space-y-2">
-        <label 
-          className="block text-sm font-medium transition-colors"
-          style={{ color: colors.utility.primaryText }}
-        >
-          {label} {required && <span style={{ color: colors.semantic.error }}>*</span>}
-        </label>
-        <div 
-          className="border rounded-lg overflow-hidden transition-colors"
-          style={{
-            borderColor: errors[field] 
-              ? colors.semantic.error
-              : isFocused 
-                ? colors.brand.primary
-                : colors.utility.secondaryText + '40'
-          }}
-        >
-          {/* Toolbar */}
-          <div 
-            className="flex items-center gap-1 p-2 border-b transition-colors"
-            style={{
-              borderColor: colors.utility.secondaryText + '20',
-              backgroundColor: `${colors.utility.secondaryText}10`
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => formatText('bold')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Bold"
-            >
-              <Bold className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => formatText('italic')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Italic"
-            >
-              <Italic className="h-4 w-4" />
-            </button>
-            <div 
-              className="w-px h-6 mx-1"
-              style={{ backgroundColor: colors.utility.secondaryText + '40' }}
-            />
-            <button
-              type="button"
-              onClick={() => formatText('insertUnorderedList')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Bullet List"
-            >
-              <List className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={insertLink}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Insert Link"
-            >
-              <Link className="h-4 w-4" />
-            </button>
-            <div 
-              className="w-px h-6 mx-1"
-              style={{ backgroundColor: colors.utility.secondaryText + '40' }}
-            />
-            <button
-              type="button"
-              onClick={() => formatText('justifyLeft')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Align Left"
-            >
-              <AlignLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => formatText('justifyCenter')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Align Center"
-            >
-              <AlignCenter className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => formatText('justifyRight')}
-              className="p-1.5 rounded transition-colors hover:opacity-80"
-              style={{ color: colors.utility.secondaryText }}
-              title="Align Right"
-            >
-              <AlignRight className="h-4 w-4" />
-            </button>
-          </div>
-          
-          {/* Editor */}
-          <div className="relative">
-            <div
-              ref={editorRef}
-              contentEditable
-              onFocus={handleFocus}
-              onBlur={() => setIsFocused(false)}
-              onInput={handleInput}
-              onPaste={handlePaste}
-              className="min-h-[120px] p-3 focus:outline-none prose prose-sm max-w-none transition-colors"
-              style={{ 
-                wordWrap: 'break-word',
-                backgroundColor: colors.utility.primaryBackground,
-                color: colors.utility.primaryText
-              }}
-              suppressContentEditableWarning={true}
-              dangerouslySetInnerHTML={{ __html: value }}
-              role="textbox"
-              aria-label={label}
-              aria-multiline="true"
-            />
-            
-            {/* Placeholder */}
-            {!value && !isFocused && (
-              <div 
-                className="absolute top-3 left-3 pointer-events-none select-none transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                {placeholder}
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {errors[field] && (
-          <div 
-            className="flex items-center gap-2 text-sm"
-            style={{ color: colors.semantic.error }}
-          >
-            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-            {errors[field]}
-          </div>
-        )}
-      </div>
     );
   };
 
@@ -518,42 +321,23 @@ const CatalogItemFormPage: React.FC = () => {
     
     // Basic validation
     if (!formData.name.trim()) {
-      newErrors.name = CATALOG_ERROR_MESSAGES.REQUIRED_FIELD;
-    } else if (formData.name.length < CATALOG_VALIDATION_LIMITS.NAME.MIN_LENGTH) {
-      newErrors.name = CATALOG_ERROR_MESSAGES.NAME_TOO_SHORT;
-    } else if (formData.name.length > CATALOG_VALIDATION_LIMITS.NAME.MAX_LENGTH) {
-      newErrors.name = CATALOG_ERROR_MESSAGES.NAME_TOO_LONG;
+      newErrors.name = CATALOG_VALIDATION.MESSAGES.NAME_REQUIRED;
+    } else if (formData.name.length < CATALOG_VALIDATION.LIMITS.NAME.MIN_LENGTH) {
+      newErrors.name = CATALOG_VALIDATION.MESSAGES.NAME_TOO_SHORT;
+    } else if (formData.name.length > CATALOG_VALIDATION.LIMITS.NAME.MAX_LENGTH) {
+      newErrors.name = CATALOG_VALIDATION.MESSAGES.NAME_TOO_LONG;
     }
     
     if (!editorContent.description.trim()) {
-      newErrors.description = 'Description is required';
-    }
-    
-    if (formData.short_description && formData.short_description.length > CATALOG_VALIDATION_LIMITS.SHORT_DESCRIPTION.MAX_LENGTH) {
-      newErrors.short_description = 'Short description is too long';
+      newErrors.description = CATALOG_VALIDATION.MESSAGES.DESCRIPTION_REQUIRED;
     }
     
     // Currency validation
-    const baseCurrencyCount = currencies.filter(c => c.is_base_currency).length;
+    const baseCurrencyCount = currencies.filter(c => c.isBaseCurrency).length;
     if (baseCurrencyCount === 0) {
-      newErrors.currencies = 'Please select a base currency';
+      newErrors.baseCurrency = CATALOG_VALIDATION.MESSAGES.BASE_CURRENCY_REQUIRED;
     } else if (baseCurrencyCount > 1) {
-      newErrors.currencies = 'Only one base currency is allowed';
-    }
-    
-    // Validate each currency
-    currencies.forEach((curr, index) => {
-      if (!isValidPrice(curr.price)) {
-        newErrors[`price_${index}`] = CATALOG_ERROR_MESSAGES.INVALID_PRICE;
-      }
-      if (!isValidCurrency(curr.currency)) {
-        newErrors[`currency_${index}`] = 'Invalid currency';
-      }
-    });
-    
-    // Version reason required for edits
-    if (mode === 'edit' && !formData.version_reason?.trim()) {
-      newErrors.version_reason = CATALOG_ERROR_MESSAGES.VERSION_REASON_REQUIRED;
+      newErrors.baseCurrency = 'Only one base currency is allowed';
     }
     
     setErrors(newErrors);
@@ -578,210 +362,136 @@ const CatalogItemFormPage: React.FC = () => {
     }
   };
 
-  // Form handlers
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, name: e.target.value });
+  // ✅ FIXED: Form handlers with proper edit mode restrictions
+  const handleNameChange = (value: string) => {
+    // ✅ FIXED: Prevent name changes in edit mode
+    if (isEditMode) {
+      toast.warning('Service name cannot be modified in edit mode', { duration: 3000 });
+      return;
+    }
+    setFormData({ ...formData, name: value });
     clearFieldError('name');
-    
-    analyticsService.trackEvent('catalog_form_name_changed', {
-      catalog_type: validCatalogType,
-      name_length: e.target.value.length
-    });
   };
 
-  const handleShortDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFormData({ ...formData, short_description: e.target.value });
-    clearFieldError('short_description');
+  const handleDescriptionChange = (content: string) => {
+    setEditorContent({ ...editorContent, description: content });
+    clearFieldError('description');
   };
 
-  const handleCurrencyChange = (index: number, field: keyof CurrencyFormData, value: any) => {
-    setCurrencies(prev => prev.map((curr, i) => 
-      i === index ? { ...curr, [field]: value } : curr
-    ));
-    
-    clearFieldError(`${field}_${index}`);
+  const handleServiceTermsChange = (content: string) => {
+    setEditorContent({ ...editorContent, service_terms: content });
+  };
+
+  const handleCurrenciesChange = (newCurrencies: CurrencyPrice[]) => {
+    setCurrencies(newCurrencies);
     clearFieldError('currencies');
-  };
-
-  const handleSetBaseCurrency = (index: number) => {
-    setCurrencies(prev => prev.map((curr, i) => ({
-      ...curr,
-      is_base_currency: i === index
-    })));
-    clearFieldError('currencies');
-  };
-
-  const handleAddCurrency = () => {
-    const usedCurrencies = currencies.map(c => c.currency);
-    const availableCurrencies = SUPPORTED_CURRENCIES.filter(c => !usedCurrencies.includes(c));
-    
-    if (availableCurrencies.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "No more currencies available",
-        description: "All supported currencies have been added"
-      });
-      return;
-    }
-
-    setCurrencies(prev => [...prev, {
-      currency: availableCurrencies[0],
-      price: 0,
-      is_base_currency: false,
-      tax_included: false
-    }]);
-
-    analyticsService.trackEvent('catalog_form_currency_added', {
-      catalog_type: validCatalogType,
-      currency: availableCurrencies[0],
-      total_currencies: currencies.length + 1
-    });
-  };
-
-  const handleRemoveCurrency = (index: number) => {
-    const currency = currencies[index];
-    
-    if (currencies.length === 1) {
-      toast({
-        variant: "destructive",
-        title: "Cannot remove currency",
-        description: "At least one currency is required"
-      });
-      return;
-    }
-
-    if (currency.is_base_currency && currencies.length > 1) {
-      toast({
-        variant: "destructive",
-        title: "Cannot remove base currency",
-        description: "Set another currency as base before removing this one"
-      });
-      return;
-    }
-
-    setCurrencies(prev => prev.filter((_, i) => i !== index));
-    analyticsService.trackEvent('catalog_form_currency_removed', {
-      catalog_type: validCatalogType,
-      currency: currency.currency
-    });
+    clearFieldError('baseCurrency');
+    clearFieldError('currency');
   };
 
   // Submit handler
   const handleSubmit = async () => {
     if (!validateForm()) {
       const errorCount = Object.keys(errors).length;
-      toast({
-        variant: "destructive",
-        title: "Validation failed",
-        description: `Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} before submitting`
-      });
+      toast.error(`Please fix ${errorCount} error${errorCount > 1 ? 's' : ''} before submitting`);
       return;
     }
 
     setIsSubmitting(true);
     
     try {
-      // Prepare data for API
       const dataToSubmit = {
         ...formData,
         description_content: editorContent.description,
         terms_content: editorContent.service_terms,
         price_attributes: {
           ...formData.price_attributes,
-          base_amount: currencies.find(c => c.is_base_currency)?.price || 0,
-          currency: currencies.find(c => c.is_base_currency)?.currency || 'INR'
-        }
-      };
+          base_amount: currencies.find(c => c.isBaseCurrency)?.price || 0,
+          currency: currencies.find(c => c.isBaseCurrency)?.currency || 'INR'
+        },
+        currencies: !isEditMode && currencies.length > 0 ? currencies : undefined
+      } as any;
+
+      toast.loading(isEditMode ? 'Updating item...' : 'Creating item...', { 
+        id: 'catalog-submit',
+        duration: 0 
+      });
 
       let result: CatalogItemDetailed;
       
-      if (mode === 'edit') {
-        result = await catalogService.updateCatalogItem(itemId!, dataToSubmit as UpdateCatalogItemRequest);
+      if (isEditMode) {
+        // ✅ FIXED: Add version reason for edits
+        const updateData = {
+          ...dataToSubmit,
+          version_reason: formData.version_reason || 'Updated via form'
+        };
         
-        analyticsService.trackEvent('catalog_item_updated', {
-          catalog_type: validCatalogType,
-          item_id: itemId,
-          has_version_reason: !!formData.version_reason
-        });
+        result = await catalogService.updateCatalogItem(itemId!, updateData as UpdateCatalogItemRequest);
+        
+        // Update pricing separately for edits
+        if (currencies.length > 0) {
+          try {
+            await catalogService.updateMultiCurrencyPricing(result.id, {
+              price_type: formData.price_attributes.type,
+              currencies: currencies.map(c => ({
+                currency: c.currency,
+                price: c.price,
+                is_base_currency: c.isBaseCurrency,
+                tax_included: c.taxIncluded,
+                tax_rate_id: null
+              }))
+            });
+          } catch (pricingError) {
+            console.warn('Pricing update failed during edit:', pricingError);
+            toast.warning('Item updated but pricing update failed. You can update pricing later.', {
+              duration: 4000
+            });
+          }
+        }
       } else {
         result = await catalogService.createCatalogItem(dataToSubmit);
-        
-        analyticsService.trackEvent('catalog_item_created', {
-          catalog_type: validCatalogType,
-          item_id: result.id,
-          currency_count: currencies.length
-        });
       }
 
-      // Update multi-currency pricing if needed
-      if (currencies.length > 0) {
-        await catalogService.updateMultiCurrencyPricing(result.id, {
-          price_type: formData.price_attributes.type,
-          currencies: currencies.map(c => ({
-            currency: c.currency,
-            price: c.price,
-            is_base_currency: c.is_base_currency,
-            tax_included: c.tax_included,
-            tax_rate_id: c.tax_rate_id
-          }))
-        });
-      }
-
-      toast({
-        title: "Success",
-        description: `${catalogInfo.singular} ${mode === 'edit' ? 'updated' : 'created'} successfully`,
-        action: (
-          <button
-            onClick={() => {
-              navigate(getCatalogRoute(validCatalogType));
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-sm transition-colors hover:opacity-90"
-            style={{
-              backgroundColor: colors.brand.primary,
-              color: '#FFF'
-            }}
-          >
-            <Eye className="h-3 w-3" />
-            View List
-          </button>
-        )
-      });
+      const successMessage = isEditMode ? 'Item updated successfully!' : 'Item created successfully!';
       
-      // Reset unsaved changes flag
+      toast.success(successMessage, { 
+        id: 'catalog-submit', 
+        duration: 2000 
+      });
+
       setHasUnsavedChanges(false);
       
-      // Navigate back to list
-      navigate(getCatalogRoute(validCatalogType), { 
+      // Navigate back to list with refresh signal
+      navigate(getCatalogRoute(catalogType), { 
         state: { 
-          message: `${catalogInfo.singular} ${mode === 'edit' ? 'updated' : 'created'} successfully`,
-          itemId: result.id 
+          message: successMessage,
+          itemId: result.id,
+          shouldRefresh: true
         } 
       });
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : `Failed to ${mode} ${catalogInfo.singular.toLowerCase()}`;
+      console.error('Catalog operation failed:', error);
       
-      captureException(error, {
-        tags: { component: 'CatalogItemFormPage', action: 'handleSubmit' },
-        extra: { 
-          mode, 
-          catalogType: validCatalogType, 
-          itemId,
-          formData: dataToSubmit 
-        }
-      });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      toast({
-        variant: "destructive",
-        title: `Failed to ${mode} ${catalogInfo.singular.toLowerCase()}`,
-        description: errorMessage
-      });
+      if (errorMessage.includes('duplicate') || errorMessage.includes('already exists')) {
+        toast.error('An item with this name already exists. Please choose a different name.', {
+          id: 'catalog-submit',
+          duration: 4000
+        });
+      } else if (errorMessage.includes('validation')) {
+        toast.error('Please check your input and try again.', {
+          id: 'catalog-submit',
+          duration: 3000
+        });
+      } else {
+        toast.error(
+          isEditMode ? 'Failed to update item. Please try again.' : 'Failed to create item. Please try again.',
+          { id: 'catalog-submit', duration: 3000 }
+        );
+      }
       
-      analyticsService.trackEvent('catalog_item_submit_failed', {
-        catalog_type: validCatalogType,
-        mode,
-        error: errorMessage
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -792,24 +502,20 @@ const CatalogItemFormPage: React.FC = () => {
     if (hasUnsavedChanges) {
       setShowExitDialog(true);
     } else {
-      navigate(getCatalogRoute(validCatalogType));
+      navigate(getCatalogRoute(catalogType));
     }
   };
 
   const handleConfirmExit = () => {
     setHasUnsavedChanges(false);
-    navigate(getCatalogRoute(validCatalogType));
+    navigate(getCatalogRoute(catalogType));
   };
 
-  // Track page view
-  useEffect(() => {
-    analyticsService.trackPageView(`catalog-${mode}-form`, `Catalog ${mode} Form - ${catalogInfo.singular}`, {
-      catalog_type: validCatalogType,
-      mode
-    });
-  }, [mode, catalogInfo.singular, validCatalogType]);
+  // Calculate form validation state
+  const isFormValid = Object.keys(errors).length === 0 && 
+    requiredFields.filter(f => f.isRequired).every(f => f.isCompleted);
 
-  // Loading state
+  // ✅ FIXED: Loading state - show different messages for create vs edit
   if (isLoading) {
     return (
       <div 
@@ -826,13 +532,7 @@ const CatalogItemFormPage: React.FC = () => {
               className="text-lg font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
-              Loading {catalogInfo.singular}...
-            </p>
-            <p 
-              className="text-sm transition-colors"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              Please wait while we fetch the data
+              {isEditMode ? 'Loading item details...' : LOADING_MESSAGES.CATALOG_ITEM}
             </p>
           </div>
         </div>
@@ -840,134 +540,211 @@ const CatalogItemFormPage: React.FC = () => {
     );
   }
 
-  const Icon = catalogInfo.icon;
-
   return (
     <div 
       className="min-h-screen transition-colors duration-200"
-      style={{ backgroundColor: colors.utility.primaryBackground }}
+      style={{ backgroundColor: colors.utility.secondaryBackground }}
     >
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
+      {/* ✅ FIXED: Sticky Top Action Bar - Shows edit mode properly */}
+      <div 
+        className="sticky top-0 z-40 border-b transition-colors backdrop-blur-sm"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground + 'F0',
+          borderColor: colors.utility.secondaryText + '20'
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          {/* ✅ FIXED: Breadcrumb - Shows correct edit mode */}
           <button 
             onClick={handleBack}
-            className="flex items-center mb-4 transition-colors hover:opacity-80"
+            disabled={isSubmitting}
+            className="flex items-center mb-3 transition-colors hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
             style={{ color: colors.utility.secondaryText }}
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-3 h-3 mr-1" />
             Back to {catalogInfo.plural}
           </button>
           
+          {/* ✅ FIXED: Header with Actions - Shows edit mode properly */}
           <div className="flex items-center justify-between">
             <div>
               <h1 
-                className="text-3xl font-bold flex items-center gap-3 transition-colors"
+                className="text-2xl font-bold flex items-center gap-3 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
-                <Icon className="w-8 h-8" />
-                {mode === 'add' ? 'Add New' : 'Edit'} {catalogInfo.singular}
+                <span className="text-2xl">
+                  {catalogType === 'service' ? '🛎️' : 
+                   catalogType === 'equipment' ? '⚙️' : 
+                   catalogType === 'spare_part' ? '🔧' : '🏢'}
+                </span>
+                {/* ✅ FIXED: Title shows edit vs add correctly */}
+                {isEditMode ? (
+                  <>
+                    <Edit3 className="w-6 h-6" style={{ color: colors.brand.primary }} />
+                    Edit {catalogInfo.singular}
+                  </>
+                ) : (
+                  `Add New ${catalogInfo.singular}`
+                )}
               </h1>
-              <p 
-                className="mt-1 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Fill in the details below to {mode === 'add' ? 'create' : 'update'} your {catalogInfo.singular.toLowerCase()}
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {mode === 'edit' && existingItem && (
-                <div 
-                  className="flex items-center text-sm transition-colors"
+              
+              {/* ✅ FIXED: Show item name in edit mode */}
+              {isEditMode && existingItem && (
+                <p 
+                  className="text-lg mt-1 transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  <Clock className="w-4 h-4 mr-1" />
-                  Version {existingItem.version_number}
-                </div>
+                  "{existingItem.name}"
+                </p>
               )}
               
-              {hasUnsavedChanges && (
-                <div 
-                  className="flex items-center gap-2 px-3 py-1 rounded-full text-sm transition-colors"
-                  style={{
-                    backgroundColor: `${colors.semantic.warning}20`,
-                    color: colors.semantic.warning
-                  }}
-                >
+              <div className="flex items-center gap-4 mt-2">
+                {/* Required Fields Progress */}
+                <RequiredFieldsProgress 
+                  fields={requiredFields}
+                  compact={true}
+                  showPercentage={true}
+                />
+                
+                {/* Unsaved changes indicator */}
+                {hasUnsavedChanges && (
                   <div 
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: colors.semantic.warning }}
-                  />
-                  Unsaved changes
-                </div>
-              )}
+                    className="flex items-center gap-2 px-3 py-1 rounded-full text-xs transition-colors"
+                    style={{
+                      backgroundColor: `${colors.semantic.warning}20`,
+                      color: colors.semantic.warning
+                    }}
+                  >
+                    <div 
+                      className="w-2 h-2 rounded-full animate-pulse"
+                      style={{ backgroundColor: colors.semantic.warning }}
+                    />
+                    {WARNING_MESSAGES.UNSAVED_CHANGES}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleBack}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+                style={{
+                  color: colors.brand.primary,
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.brand.primary
+                }}
+              >
+                <X className="w-4 h-4 mr-2 inline" />
+                {FORM_LABELS.CANCEL}
+              </button>
+              
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!isFormValid || isSubmitting}
+                className="px-6 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all hover:opacity-90 text-white"
+                style={{
+                  backgroundColor: isFormValid ? colors.brand.primary : colors.utility.secondaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {isEditMode ? LOADING_MESSAGES.UPDATING : LOADING_MESSAGES.CREATING}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {/* ✅ FIXED: Button text shows edit vs create */}
+                    {isEditMode ? `${FORM_LABELS.UPDATE} ${catalogInfo.singular}` : `${FORM_LABELS.CREATE} ${catalogInfo.singular}`}
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Form Container */}
-        <div 
-          ref={formRef} 
-          className="rounded-xl shadow-sm border transition-colors"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: colors.utility.secondaryText + '20'
-          }}
-        >
-          <div className="p-8">
-            
-            {/* Section 1: Basic Information */}
-            <div className="mb-10">
-              <div className="flex items-center gap-3 mb-6">
-                <div 
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${colors.brand.primary}20` }}
-                >
-                  <Info 
-                    className="w-4 h-4"
-                    style={{ color: colors.brand.primary }}
-                  />
-                </div>
-                <h2 
-                  className="text-xl font-semibold transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Basic Information
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column - Form Fields */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Name */}
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="space-y-6">
+          
+          {/* ✅ FIXED: Row 1 - Name (30%) + Examples (70%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+            {/* ✅ FIXED: Name Field - Read-only in edit mode */}
+            <div className="lg:col-span-3">
+              <div 
+                className="rounded-xl shadow-sm border transition-colors"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: colors.utility.secondaryText + '20'
+                }}
+              >
+                <div className="p-6">
+                  <h2 
+                    className="text-lg font-semibold mb-6 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Basic Information
+                  </h2>
+                  
+                  {/* ✅ FIXED: Name Field - Read-only in edit mode */}
                   <div data-field="name">
                     <label 
-                      className="block text-sm font-medium mb-2 transition-colors"
+                      className="block text-sm font-medium mb-2 transition-colors flex items-center gap-2"
                       style={{ color: colors.utility.primaryText }}
                     >
-                      {catalogInfo.singular} Name <span style={{ color: colors.semantic.error }}>*</span>
+                      {FORM_LABELS.NAME}
+                      <span style={{ color: colors.semantic.error }}>*</span>
+                      {/* ✅ FIXED: Show lock icon in edit mode */}
+                      {isEditMode && (
+                        <Lock 
+                          className="w-4 h-4" 
+                          style={{ color: colors.utility.secondaryText }}
+                          title="Name cannot be changed in edit mode"
+                        />
+                      )}
                     </label>
+                    
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={handleNameChange}
-                      className="w-full px-4 py-3 border rounded-lg transition-colors focus:outline-none focus:ring-2"
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      disabled={isSubmitting || isEditMode} // ✅ FIXED: Disabled in edit mode
+                      className="w-full px-4 py-3 border rounded-lg transition-colors focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{
                         borderColor: errors.name 
                           ? colors.semantic.error
                           : colors.utility.secondaryText + '40',
-                        backgroundColor: colors.utility.primaryBackground,
+                        backgroundColor: isEditMode 
+                          ? colors.utility.secondaryText + '10' // ✅ FIXED: Different bg for read-only
+                          : colors.utility.primaryBackground,
                         color: colors.utility.primaryText,
                         '--tw-ring-color': colors.brand.primary
                       } as React.CSSProperties}
-                      placeholder={`Enter ${catalogInfo.singular.toLowerCase()} name`}
-                      maxLength={CATALOG_VALIDATION_LIMITS.NAME.MAX_LENGTH}
-                      aria-describedby={errors.name ? "name-error" : undefined}
+                      placeholder={isEditMode ? 'Name cannot be changed' : FORM_PLACEHOLDERS.NAME}
+                      maxLength={CATALOG_VALIDATION.LIMITS.NAME.MAX_LENGTH}
+                      readOnly={isEditMode} // ✅ FIXED: Read-only in edit mode
                     />
+                    
+                    {/* ✅ FIXED: Show read-only message in edit mode */}
+                    {isEditMode && (
+                      <div 
+                        className="flex items-center gap-2 mt-2 text-sm"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <Lock className="h-4 w-4 flex-shrink-0" />
+                        Service name cannot be modified in edit mode
+                      </div>
+                    )}
+                    
                     {errors.name && (
                       <div 
-                        id="name-error" 
                         className="flex items-center gap-2 mt-2 text-sm"
                         style={{ color: colors.semantic.error }}
                       >
@@ -975,484 +752,214 @@ const CatalogItemFormPage: React.FC = () => {
                         {errors.name}
                       </div>
                     )}
-                    <div 
-                      className="mt-1 text-xs transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      {formData.name.length}/{CATALOG_VALIDATION_LIMITS.NAME.MAX_LENGTH} characters
-                    </div>
-                  </div>
-
-                  {/* Short Description */}
-                  <div data-field="short_description">
-                    <label 
-                      className="block text-sm font-medium mb-2 transition-colors"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      Short Description
-                    </label>
-                    <textarea
-                      value={formData.short_description}
-                      onChange={handleShortDescriptionChange}
-                      rows={3}
-                      className="w-full px-4 py-3 border rounded-lg transition-colors resize-none focus:outline-none focus:ring-2"
-                      style={{
-                        borderColor: errors.short_description 
-                          ? colors.semantic.error
-                          : colors.utility.secondaryText + '40',
-                        backgroundColor: colors.utility.primaryBackground,
-                        color: colors.utility.primaryText,
-                        '--tw-ring-color': colors.brand.primary
-                      } as React.CSSProperties}
-                      placeholder="Brief description for listings and previews"
-                      maxLength={CATALOG_VALIDATION_LIMITS.SHORT_DESCRIPTION.MAX_LENGTH}
-                    />
-                    {errors.short_description && (
+                    
+                    {!isEditMode && (
                       <div 
-                        className="flex items-center gap-2 mt-2 text-sm"
-                        style={{ color: colors.semantic.error }}
+                        className="mt-1 text-xs transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
                       >
-                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                        {errors.short_description}
+                        {formData.name.length}/{CATALOG_VALIDATION.LIMITS.NAME.MAX_LENGTH} characters
                       </div>
                     )}
                   </div>
-
-                  {/* Version Reason (Edit Mode) */}
-                  {mode === 'edit' && (
-                    <div data-field="version_reason">
-                      <label 
-                        className="block text-sm font-medium mb-2 transition-colors"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        Version Reason <span style={{ color: colors.semantic.error }}>*</span>
-                      </label>
-                      <textarea
-                        value={formData.version_reason || ''}
-                        onChange={(e) => {
-                          setFormData({ ...formData, version_reason: e.target.value });
-                          clearFieldError('version_reason');
-                        }}
-                        rows={2}
-                        className="w-full px-4 py-3 border rounded-lg transition-colors resize-none focus:outline-none focus:ring-2"
-                        style={{
-                          borderColor: errors.version_reason 
-                            ? colors.semantic.error
-                            : colors.utility.secondaryText + '40',
-                          backgroundColor: colors.utility.primaryBackground,
-                          color: colors.utility.primaryText,
-                          '--tw-ring-color': colors.brand.primary
-                        } as React.CSSProperties}
-                        placeholder="Describe what changed in this update"
-                      />
-                      {errors.version_reason && (
-                        <div 
-                          className="flex items-center gap-2 mt-2 text-sm"
-                          style={{ color: colors.semantic.error }}
-                        >
-                          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                          {errors.version_reason}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
-
-                {/* Right Column - Examples */}
-                <div className="lg:col-span-1">
-                  <div className="sticky top-8">
-                    <div 
-                      className="p-4 border rounded-lg transition-colors"
-                      style={{
-                        backgroundColor: `${colors.brand.primary}10`,
-                        borderColor: `${colors.brand.primary}40`
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-3">
-                        <HelpCircle 
-                          className="h-4 w-4"
-                          style={{ color: colors.brand.primary }}
-                        />
-                        <h4 
-                          className="text-sm font-medium transition-colors"
-                          style={{ color: colors.brand.primary }}
-                        >
-                          Common {catalogInfo.singular} Examples
-                        </h4>
-                      </div>
-                      <div className="space-y-2">
-                        {catalogInfo.examples.map((example, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors hover:opacity-80 group"
-                            style={{ backgroundColor: `${colors.brand.primary}20` }}
-                            onClick={() => {
-                              if (!formData.name) {
-                                setFormData({ ...formData, name: example });
-                                clearFieldError('name');
-                              }
-                            }}
-                          >
-                            <CheckCircle 
-                              className="h-3 w-3 flex-shrink-0"
-                              style={{ color: colors.brand.primary }}
-                            />
-                            <span 
-                              className="text-sm transition-colors group-hover:opacity-80"
-                              style={{ color: colors.brand.primary }}
-                            >
-                              {example}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <p 
-                        className="text-xs mt-3 transition-colors"
-                        style={{ color: colors.brand.primary }}
-                      >
-                        💡 Click on any example to use it as your {catalogInfo.singular.toLowerCase()} name
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Description - Full Width */}
-              <div className="mt-6" data-field="description">
-                <RichTextEditor
-                  value={editorContent.description}
-                  onChange={(content) => setEditorContent({ ...editorContent, description: content })}
-                  placeholder="Enter detailed description with formatting..."
-                  field="description"
-                  label="Description"
-                  required
-                />
-              </div>
-
-              {/* Service Terms - Full Width */}
-              <div className="mt-6" data-field="service_terms">
-                <RichTextEditor
-                  value={editorContent.service_terms}
-                  onChange={(content) => setEditorContent({ ...editorContent, service_terms: content })}
-                  placeholder={`Enter ${catalogInfo.singular.toLowerCase()} terms and conditions...`}
-                  field="service_terms"
-                  label={`${catalogInfo.singular} Terms`}
-                />
               </div>
             </div>
 
-            {/* Section 2: Pricing Configuration */}
-            <div className="mb-10">
-              <div className="flex items-center gap-3 mb-6">
+            {/* ✅ FIXED: Examples Panel - Hidden in edit mode */}
+            {!isEditMode && (
+              <div className="lg:col-span-7">
                 <div 
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${colors.semantic.success}20` }}
-                >
-                  <DollarSign 
-                    className="w-4 h-4"
-                    style={{ color: colors.semantic.success }}
-                  />
-                </div>
-                <h2 
-                  className="text-xl font-semibold transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Pricing Configuration
-                </h2>
-              </div>
-
-              {/* Pricing Type */}
-              <div className="mb-6">
-                <label 
-                  className="block text-sm font-medium mb-3 transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Pricing Type
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {RECOMMENDED_PRICING_BY_TYPE[validCatalogType]?.map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setFormData({ 
-                        ...formData, 
-                        price_attributes: { ...formData.price_attributes, type } 
-                      })}
-                      className="p-4 rounded-lg border-2 transition-all text-left"
-                      style={{
-                        borderColor: formData.price_attributes.type === type
-                          ? colors.brand.primary
-                          : colors.utility.secondaryText + '40',
-                        backgroundColor: formData.price_attributes.type === type
-                          ? `${colors.brand.primary}10`
-                          : colors.utility.primaryBackground
-                      }}
-                    >
-                      <div 
-                        className="font-medium transition-colors"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        {PRICING_TYPE_LABELS[type]}
-                      </div>
-                      <div 
-                        className="text-sm mt-1 transition-colors"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        {type === PRICING_TYPES.FIXED && 'One-time fixed cost'}
-                        {type === PRICING_TYPES.UNIT_PRICE && 'Price per unit/item'}
-                        {type === PRICING_TYPES.HOURLY && 'Price per hour'}
-                        {type === PRICING_TYPES.DAILY && 'Price per day'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Multi-Currency Pricing */}
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <label 
-                    className="block text-sm font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Multi-Currency Pricing
-                  </label>
-                  {currencies.length < SUPPORTED_CURRENCIES.length && (
-                    <button
-                      type="button"
-                      onClick={handleAddCurrency}
-                      className="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors hover:opacity-80"
-                      style={{
-                        color: colors.brand.primary,
-                        backgroundColor: `${colors.brand.primary}10`
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Currency
-                    </button>
-                  )}
-                </div>
-
-                {errors.currencies && (
-                  <div 
-                    className="mb-4 p-3 border rounded-md transition-colors"
-                    style={{
-                      backgroundColor: `${colors.semantic.error}10`,
-                      borderColor: `${colors.semantic.error}40`
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle 
-                        className="h-4 w-4 flex-shrink-0"
-                        style={{ color: colors.semantic.error }}
-                      />
-                      <p 
-                        className="text-sm"
-                        style={{ color: colors.semantic.error }}
-                      >
-                        {errors.currencies}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {currencies.map((currency, index) => (
-                    <div key={index} className="relative">
-                      <div 
-                        className="flex items-center gap-4 p-4 rounded-lg border transition-colors"
-                        style={{
-                          backgroundColor: `${colors.utility.secondaryText}10`,
-                          borderColor: colors.utility.secondaryText + '40'
-                        }}
-                      >
-                        {/* Currency Selector */}
-                        <div className="w-32">
-                          <select
-                            value={currency.currency}
-                            onChange={(e) => handleCurrencyChange(index, 'currency', e.target.value as SupportedCurrency)}
-                            className="w-full px-3 py-2 border rounded-md text-sm font-medium focus:outline-none focus:ring-1 transition-colors"
-                            style={{
-                              borderColor: colors.utility.secondaryText + '40',
-                              backgroundColor: colors.utility.primaryBackground,
-                              color: colors.utility.primaryText,
-                              '--tw-ring-color': colors.brand.primary
-                            } as React.CSSProperties}
-                          >
-                            {SUPPORTED_CURRENCIES.map(curr => (
-                              <option key={curr} value={curr}>
-                                {curr}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Currency Symbol */}
-                        <div 
-                          className="text-lg font-semibold w-8 transition-colors"
-                          style={{ color: colors.utility.primaryText }}
-                        >
-                          {CURRENCY_SYMBOLS[currency.currency]}
-                        </div>
-
-                        {/* Price Input */}
-                        <div className="flex-1">
-                          <input
-                            type="number"
-                            value={currency.price}
-                            onChange={(e) => handleCurrencyChange(index, 'price', parseFloat(e.target.value) || 0)}
-                            className="w-full px-4 py-2 border rounded-md text-lg font-semibold focus:outline-none focus:ring-1 transition-colors"
-                            style={{
-                              borderColor: errors[`price_${index}`] 
-                                ? colors.semantic.error 
-                                : colors.utility.secondaryText + '40',
-                              backgroundColor: colors.utility.primaryBackground,
-                              color: colors.utility.primaryText,
-                              '--tw-ring-color': colors.brand.primary
-                            } as React.CSSProperties}
-                            placeholder="0.00"
-                            min="0"
-                            step="0.01"
-                          />
-                          {errors[`price_${index}`] && (
-                            <p 
-                              className="mt-1 text-xs"
-                              style={{ color: colors.semantic.error }}
-                            >
-                              {errors[`price_${index}`]}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Base Currency Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleSetBaseCurrency(index)}
-                          className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                          style={{
-                            backgroundColor: currency.is_base_currency
-                              ? `${colors.semantic.warning}20`
-                              : colors.utility.primaryBackground,
-                            color: currency.is_base_currency
-                              ? colors.semantic.warning
-                              : colors.utility.primaryText,
-                            borderColor: currency.is_base_currency
-                              ? colors.semantic.warning
-                              : colors.utility.secondaryText + '40',
-                            border: '1px solid'
-                          }}
-                        >
-                          <Star className={`w-3 h-3 ${currency.is_base_currency ? 'fill-current' : ''}`} />
-                          {currency.is_base_currency ? 'Base' : 'Set Base'}
-                        </button>
-
-                        {/* Tax Included Toggle */}
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={currency.tax_included}
-                            onChange={(e) => handleCurrencyChange(index, 'tax_included', e.target.checked)}
-                            className="rounded border-input text-primary focus:ring-primary"
-                          />
-                          <span 
-                            className="text-sm transition-colors"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            Tax Inc.
-                          </span>
-                        </label>
-
-                        {/* Remove Button */}
-                        {currencies.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCurrency(index)}
-                            className="p-2 rounded-md transition-colors hover:opacity-80"
-                            style={{
-                              color: colors.semantic.error,
-                              backgroundColor: `${colors.semantic.error}10`
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Base Currency Indicator */}
-                      {currency.is_base_currency && (
-                        <div className="absolute -top-2 -right-2">
-                          <div 
-                            className="text-xs font-bold px-2 py-1 rounded-full"
-                            style={{
-                              backgroundColor: colors.semantic.warning,
-                              color: '#000'
-                            }}
-                          >
-                            BASE
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Sticky Action Bar */}
-          <div 
-            className="sticky bottom-0 border-t px-8 py-4 rounded-b-xl transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.secondaryText + '20'
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div 
-                className="text-sm transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                <span style={{ color: colors.semantic.error }}>*</span> Required fields
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  disabled={isSubmitting}
-                  className="px-6 py-2 text-sm font-medium border rounded-lg transition-colors disabled:opacity-50 hover:opacity-80"
+                  className="rounded-xl shadow-sm border transition-colors"
                   style={{
-                    color: colors.utility.primaryText,
-                    backgroundColor: colors.utility.primaryBackground,
-                    borderColor: colors.utility.secondaryText + '40'
+                    backgroundColor: '#FFFFFF',
+                    borderColor: colors.utility.secondaryText + '20'
                   }}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="px-6 py-2 text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors hover:opacity-90"
-                  style={{
-                    color: '#FFF',
-                    backgroundColor: colors.brand.primary,
-                    '--tw-ring-color': colors.brand.primary
-                  } as React.CSSProperties}
+                  <div className="p-6">
+                    <ExamplesPanel
+                      catalogType={catalogType}
+                      onExampleClick={handleNameChange}
+                      currentValue={formData.name}
+                      trackingContext={`catalog_${mode}_form`}
+                      className="mb-0"
+                      layout="horizontal"
+                      compact={true}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Row 2 - Content & Documentation (50%) + Pricing (50%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            {/* Content & Documentation Card - 50% */}
+            <div 
+              className="rounded-xl shadow-sm border transition-colors"
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderColor: colors.utility.secondaryText + '20'
+              }}
+            >
+              <div className="p-6">
+                <h2 
+                  className="text-lg font-semibold mb-6 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {mode === 'add' ? 'Creating...' : 'Updating...'}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      {mode === 'add' ? `Create ${catalogInfo.singular}` : `Update ${catalogInfo.singular}`}
-                    </>
-                  )}
-                </button>
+                  Content & Documentation
+                </h2>
+                
+                <div className="space-y-6">
+                  {/* ✅ FIXED: Description Editor - Shows existing content */}
+                  <div data-field="description">
+                    <RichTextEditor
+                      value={editorContent.description} // ✅ FIXED: Uses loaded content
+                      onChange={handleDescriptionChange}
+                      label={`${catalogInfo.singular} ${FORM_LABELS.DESCRIPTION}`}
+                      placeholder={FORM_PLACEHOLDERS.DESCRIPTION}
+                      required
+                      error={errors.description}
+                      disabled={isSubmitting}
+                      minHeight={187}
+                      maxHeight={500}
+                      maxLength={CATALOG_VALIDATION.LIMITS.DESCRIPTION.MAX_LENGTH}
+                      showCharCount
+                      allowFullscreen
+                      toolbarButtons={[
+                        'bold', 'italic', 'underline', 'divider',
+                        'bulletList', 'orderedList', 'quote', 'divider',
+                        'link', 'divider',
+                        'alignLeft', 'alignCenter', 'alignRight'
+                      ]}
+                      onFocus={() => clearFieldError('description')}
+                    />
+                  </div>
+
+                  {/* ✅ FIXED: Service Terms Editor - Shows existing content */}
+                  <div>
+                    <RichTextEditor
+                      value={editorContent.service_terms} // ✅ FIXED: Uses loaded content
+                      onChange={handleServiceTermsChange}
+                      label={FORM_LABELS.SERVICE_TERMS}
+                      placeholder={FORM_PLACEHOLDERS.SERVICE_TERMS}
+                      disabled={isSubmitting}
+                      minHeight={150}
+                      maxHeight={437}
+                      maxLength={CATALOG_VALIDATION.LIMITS.SERVICE_TERMS.MAX_LENGTH}
+                      showCharCount
+                      allowFullscreen
+                      toolbarButtons={[
+                        'bold', 'italic', 'divider',
+                        'bulletList', 'orderedList', 'divider',
+                        'link', 'divider',
+                        'alignLeft', 'alignCenter', 'alignRight'
+                      ]}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Pricing Configuration - 50% */}
+            <div className="space-y-6">
+              {/* Pricing Type Card */}
+              <div 
+                className="rounded-xl shadow-sm border transition-colors"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderColor: colors.utility.secondaryText + '20'
+                }}
+              >
+                <div className="p-6">
+                  <h3 
+                    className="text-lg font-semibold mb-4 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Pricing configuration
+                  </h3>
+                  
+                  {/* Pricing Type Selection */}
+                  <div className="space-y-4">
+                    <label 
+                      className="block text-sm font-medium transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Pricing Type
+                      <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      {RECOMMENDED_PRICING_BY_TYPE[catalogType].map((pricingType) => (
+                        <button
+                          key={pricingType}
+                          type="button"
+                          onClick={() => setFormData({ 
+                            ...formData, 
+                            price_attributes: { 
+                              ...formData.price_attributes, 
+                              type: pricingType 
+                            } 
+                          })}
+                          disabled={isSubmitting}
+                          className={`w-full p-3 rounded-lg border-2 transition-all text-left hover:opacity-80 disabled:opacity-50`}
+                          style={{
+                            borderColor: formData.price_attributes.type === pricingType
+                              ? colors.brand.primary
+                              : colors.utility.secondaryText + '40',
+                            backgroundColor: formData.price_attributes.type === pricingType
+                              ? `${colors.brand.primary}10`
+                              : colors.utility.secondaryBackground
+                          }}
+                        >
+                          <div 
+                            className="font-medium text-sm transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {PRICING_TYPE_LABELS[pricingType]}
+                          </div>
+                          <div 
+                            className="text-xs mt-1 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
+                            {PRICING_TYPE_DESCRIPTIONS[pricingType]}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Currency Pricing Card */}
+              <div 
+                className="rounded-xl shadow-sm border transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.secondaryText + '20'
+                }}
+              >
+                <div className="p-6">
+                  <h3 
+                    className="text-lg font-semibold mb-4 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Currency pricing
+                  </h3>
+                  
+                  {/* ✅ FIXED: Currency pricing shows loaded data */}
+                  <CurrencyPricingRepeater
+                    currencies={currencies} // ✅ FIXED: Shows loaded currencies
+                    onChange={handleCurrenciesChange}
+                    errors={{}}
+                    onClearError={clearFieldError}
+                    disabled={isSubmitting}
+                    label=""
+                    required={true}
+                    backgroundColor={colors.utility.primaryBackground}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1464,8 +971,8 @@ const CatalogItemFormPage: React.FC = () => {
         isOpen={showExitDialog}
         onClose={() => setShowExitDialog(false)}
         onConfirm={handleConfirmExit}
-        title="Unsaved Changes"
-        description="You have unsaved changes that will be lost if you leave this page. Are you sure you want to continue?"
+        title={WARNING_MESSAGES.UNSAVED_CHANGES}
+        description={WARNING_MESSAGES.LEAVING_PAGE}
         confirmText="Leave Page"
         type="warning"
         icon={<AlertTriangle className="h-6 w-6" />}

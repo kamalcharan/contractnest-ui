@@ -1,5 +1,5 @@
 // src/services/serviceURLs.ts - COMPLETE VERSION
-// Fully aligned with Express API routes - Safe to replace existing file
+// Updated with Resources endpoints
 
 export const API_ENDPOINTS = {
   MASTERDATA: {
@@ -34,6 +34,42 @@ export const API_ENDPOINTS = {
     PROFILE: '/api/tenant-profile',
     UPLOAD_LOGO: '/api/tenant-profile/logo'
   },
+  
+  // =================================================================
+  // RESOURCES MANAGEMENT ENDPOINTS - NEW
+  // =================================================================
+  RESOURCES: {
+    // Main resource operations
+    LIST: '/api/resources',
+    CREATE: '/api/resources',
+    GET: (id: string) => `/api/resources/${id}`,
+    UPDATE: (id: string) => `/api/resources/${id}`,
+    DELETE: (id: string) => `/api/resources/${id}`,
+    
+    // Resource types
+    RESOURCE_TYPES: '/api/resources/resource-types',
+    
+    // Utility endpoints
+    HEALTH: '/api/resources/health',
+    SIGNING_STATUS: '/api/resources/signing-status',
+    
+    // Helper functions for building URLs with query parameters
+    LIST_WITH_FILTERS: (filters: ResourceFilters = {}) => {
+      const params = new URLSearchParams();
+      
+      if (filters.resourceTypeId) params.append('resourceTypeId', filters.resourceTypeId);
+      if (filters.nextSequence) params.append('nextSequence', 'true');
+      if (filters.search) params.append('search', filters.search);
+      if (filters.includeInactive) params.append('includeInactive', 'true');
+      
+      const queryString = params.toString();
+      return queryString ? `/api/resources?${queryString}` : '/api/resources';
+    },
+    
+    // Get next sequence number for a resource type
+    NEXT_SEQUENCE: (resourceTypeId: string) => `/api/resources?resourceTypeId=${resourceTypeId}&nextSequence=true`
+  },
+  
   // USER MANAGEMENT ENDPOINTS
   USERS: {
     // Current user endpoints
@@ -68,6 +104,7 @@ export const API_ENDPOINTS = {
       ACCEPT: '/api/users/invitations/accept'
     }
   },
+  
   // CONTACT MANAGEMENT ENDPOINTS
   CONTACTS: {
     // Main contact operations
@@ -119,6 +156,7 @@ export const API_ENDPOINTS = {
       DELETE: '/api/contacts/bulk/delete'
     }
   },
+  
   ADMIN: {
     STORAGE: {
       DIAGNOSTIC: '/api/admin/storage/diagnostic',
@@ -129,6 +167,7 @@ export const API_ENDPOINTS = {
       DELETE_FILE: '/api/admin/storage/diagnostic/file'
     }
   },
+  
   INTEGRATIONS: {
     BASE: '/api/integrations',
     LIST: '/api/integrations',
@@ -137,6 +176,7 @@ export const API_ENDPOINTS = {
     TEST: '/api/integrations/test',
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
+  
   // BUSINESS MODEL ENDPOINTS
   BUSINESSMODEL: {
     // Plan management
@@ -163,21 +203,21 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // CATALOG MANAGEMENT ENDPOINTS - FULLY ALIGNED WITH EXPRESS API
+  // CATALOG MANAGEMENT ENDPOINTS
   // =================================================================
   CATALOG: {
-    // Main catalog operations (matches catalogRoutes.ts)
+    // Main catalog operations
     LIST: '/api/catalog',
     CREATE: '/api/catalog',
     GET: (id: string) => `/api/catalog/${id}`,
     UPDATE: (id: string) => `/api/catalog/${id}`,
     DELETE: (id: string) => `/api/catalog/${id}`,
     
-    // Special operations (matches catalogRoutes.ts)
+    // Special operations
     RESTORE: (id: string) => `/api/catalog/restore/${id}`,
     VERSIONS: (id: string) => `/api/catalog/versions/${id}`,
     
-    // Multi-currency operations (NEW - matches catalogRoutes.ts)
+    // Multi-currency operations
     MULTI_CURRENCY: {
       // Get tenant currencies
       TENANT_CURRENCIES: '/api/catalog/multi-currency',
@@ -195,7 +235,7 @@ export const API_ENDPOINTS = {
       DELETE_CURRENCY: (catalogId: string, currency: string) => `/api/catalog/multi-currency/${catalogId}/${currency}`
     },
     
-    // Legacy pricing endpoints (backward compatibility - matches catalogRoutes.ts)
+    // Legacy pricing endpoints (backward compatibility)
     PRICING: {
       // Legacy single currency operations
       UPSERT: (catalogId: string) => `/api/catalog/pricing/${catalogId}`,
@@ -228,7 +268,7 @@ export const API_ENDPOINTS = {
       STATS: '/api/service-contracts/blocks/stats'
     },
     
-    // Future: Templates and Contracts will be added here
+    // Templates
     TEMPLATES: {
       // Global templates (Admin only)
       GLOBAL: {
@@ -283,6 +323,7 @@ export const API_ENDPOINTS = {
     HEALTH_CHECK: '/api/system/health',
     SESSION_STATUS: '/api/system/session/status'
   },
+  
   STORAGE: {
     STATS: '/api/storage/stats',
     SETUP: '/api/storage/setup', 
@@ -304,6 +345,20 @@ export const API_ENDPOINTS = {
 // TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT
 // =================================================================
 
+// Resources filter interface
+export type ResourceFilters = {
+  resourceTypeId?: string;
+  search?: string;
+  includeInactive?: boolean;
+  nextSequence?: boolean;
+  page?: number;
+  limit?: number;
+  sortBy?: 'name' | 'display_name' | 'sequence_no' | 'created_at' | 'updated_at';
+  sortOrder?: 'asc' | 'desc';
+};
+
+// Resource types
+export type ResourceEndpoints = typeof API_ENDPOINTS.RESOURCES;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
@@ -321,7 +376,7 @@ export type ContactFilters = {
   includeArchived?: boolean;
 };
 
-// Catalog filters interface (matches useCatalogItems hook)
+// Catalog filters interface
 export type CatalogFilters = {
   catalogType?: number; // 1-4 for catalog types
   includeInactive?: boolean;
@@ -352,6 +407,13 @@ export type BlockSearchParams = {
 // =================================================================
 
 /**
+ * Build resources list URL with filters
+ */
+export const buildResourcesListURL = (filters: ResourceFilters = {}): string => {
+  return API_ENDPOINTS.RESOURCES.LIST_WITH_FILTERS(filters);
+};
+
+/**
  * Build contact list URL with filters
  */
 export const buildContactListURL = (filters: ContactFilters = {}): string => {
@@ -371,7 +433,7 @@ export const buildContactListURL = (filters: ContactFilters = {}): string => {
 };
 
 /**
- * Build catalog list URL with filters (matches useCatalogItems implementation)
+ * Build catalog list URL with filters
  */
 export const buildCatalogListURL = (filters: CatalogFilters = {}): string => {
   const url = new URL(API_ENDPOINTS.CATALOG.LIST, window.location.origin);
@@ -424,91 +486,47 @@ export const buildBlockSearchURL = (params: BlockSearchParams): string => {
 };
 
 // =================================================================
-// USAGE EXAMPLES FOR FRONTEND DEVELOPERS
+// RESOURCES API USAGE EXAMPLES
 // =================================================================
 
-export const CONTACT_API_EXAMPLES = {
-  // List contacts with filters
-  listActiveContacts: () => buildContactListURL({ status: 'active', page: 1, limit: 20 }),
+export const RESOURCES_API_EXAMPLES = {
+  // List all resource types
+  listResourceTypes: 'GET ' + API_ENDPOINTS.RESOURCES.RESOURCE_TYPES,
   
-  // Search contacts
-  searchContacts: 'POST ' + API_ENDPOINTS.CONTACTS.SEARCH,
+  // List all resources
+  listAllResources: 'GET ' + API_ENDPOINTS.RESOURCES.LIST,
   
-  // Create contact
-  createContact: 'POST ' + API_ENDPOINTS.CONTACTS.CREATE,
+  // List resources by type
+  listByType: (typeId: string) => 'GET ' + buildResourcesListURL({ resourceTypeId: typeId }),
   
-  // Update contact
-  updateContact: (id: string) => 'PUT ' + API_ENDPOINTS.CONTACTS.UPDATE(id),
+  // Search resources
+  searchResources: (query: string) => 'GET ' + buildResourcesListURL({ search: query }),
   
-  // Update status
-  updateStatus: (id: string) => 'PATCH ' + API_ENDPOINTS.CONTACTS.UPDATE_STATUS(id),
+  // Get next sequence number
+  getNextSequence: (typeId: string) => 'GET ' + API_ENDPOINTS.RESOURCES.NEXT_SEQUENCE(typeId),
   
-  // Send invitation
-  sendInvite: (id: string) => 'POST ' + API_ENDPOINTS.CONTACTS.SEND_INVITATION(id),
+  // CRUD operations
+  createResource: 'POST ' + API_ENDPOINTS.RESOURCES.CREATE,
+  getResource: (id: string) => 'GET ' + API_ENDPOINTS.RESOURCES.GET(id),
+  updateResource: (id: string) => 'PATCH ' + API_ENDPOINTS.RESOURCES.UPDATE(id),
+  deleteResource: (id: string) => 'DELETE ' + API_ENDPOINTS.RESOURCES.DELETE(id),
   
-  // Check duplicates
-  checkDuplicates: 'POST ' + API_ENDPOINTS.CONTACTS.DUPLICATES,
-  
-  // Get statistics
-  getStats: 'GET ' + API_ENDPOINTS.CONTACTS.STATS
-};
-
-export const CATALOG_API_EXAMPLES = {
-  // List catalog items with filters
-  listServices: () => buildCatalogListURL({ catalogType: 1, page: 1, limit: 20 }),
-  listEquipment: () => buildCatalogListURL({ catalogType: 4, includeInactive: false }),
-  
-  // Search catalog items
-  searchItems: (query: string) => buildCatalogListURL({ search: query, page: 1 }),
-  
-  // Main CRUD operations
-  createItem: 'POST ' + API_ENDPOINTS.CATALOG.CREATE,
-  getItem: (id: string) => 'GET ' + API_ENDPOINTS.CATALOG.GET(id),
-  updateItem: (id: string) => 'PUT ' + API_ENDPOINTS.CATALOG.UPDATE(id),
-  deleteItem: (id: string) => 'DELETE ' + API_ENDPOINTS.CATALOG.DELETE(id),
-  
-  // Special operations
-  restoreItem: (id: string) => 'POST ' + API_ENDPOINTS.CATALOG.RESTORE(id),
-  getVersions: (id: string) => 'GET ' + API_ENDPOINTS.CATALOG.VERSIONS(id),
-  
-  // Multi-currency pricing
-  getTenantCurrencies: 'GET ' + API_ENDPOINTS.CATALOG.MULTI_CURRENCY.TENANT_CURRENCIES,
-  getPricingDetails: (catalogId: string) => 'GET ' + buildCatalogPricingURL(catalogId, true),
-  upsertMultiCurrencyPricing: 'POST ' + API_ENDPOINTS.CATALOG.MULTI_CURRENCY.UPSERT_PRICING,
-  updateCurrencyPricing: (catalogId: string, currency: string) => 'PUT ' + API_ENDPOINTS.CATALOG.MULTI_CURRENCY.UPDATE_CURRENCY(catalogId, currency),
-  deleteCurrencyPricing: (catalogId: string, currency: string) => 'DELETE ' + API_ENDPOINTS.CATALOG.MULTI_CURRENCY.DELETE_CURRENCY(catalogId, currency),
-  
-  // Legacy pricing (backward compatibility)
-  legacyUpsertPricing: (catalogId: string) => 'POST ' + API_ENDPOINTS.CATALOG.PRICING.UPSERT(catalogId),
-  legacyGetPricing: (catalogId: string) => 'GET ' + API_ENDPOINTS.CATALOG.PRICING.GET(catalogId),
-  legacyDeletePricing: (catalogId: string, currency: string) => 'DELETE ' + API_ENDPOINTS.CATALOG.PRICING.DELETE(catalogId, currency)
-};
-
-export const BLOCK_API_EXAMPLES = {
-  // Get block hierarchy for template builder
-  getHierarchy: 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.HIERARCHY,
-  getTemplateBuilderBlocks: 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.TEMPLATE_BUILDER,
-  
-  // Get categories and masters
-  getCategories: 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.CATEGORIES,
-  getAllMasters: 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.MASTERS,
-  getMastersByCategory: (categoryId: string) => 'GET ' + buildBlockMastersURL({ categoryId }),
-  
-  // Get variants
-  getVariantsForMaster: (masterId: string) => 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.VARIANTS(masterId),
-  getVariantDetail: (variantId: string) => 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.VARIANT_DETAIL(variantId),
-  
-  // Search blocks
-  searchBlocks: (query: string, category?: string) => 'GET ' + buildBlockSearchURL({ q: query, category }),
-  searchByNodeType: (query: string, nodeType: string) => 'GET ' + buildBlockSearchURL({ q: query, nodeType }),
-  
-  // System information
-  getStats: 'GET ' + API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.STATS
+  // Utility endpoints
+  healthCheck: 'GET ' + API_ENDPOINTS.RESOURCES.HEALTH,
+  signingStatus: 'GET ' + API_ENDPOINTS.RESOURCES.SIGNING_STATUS
 };
 
 // =================================================================
 // VALIDATION HELPERS
 // =================================================================
+
+/**
+ * Validate resource ID format (UUID)
+ */
+export const isValidResourceId = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
 
 /**
  * Validate catalog ID format
@@ -535,79 +553,37 @@ export const isValidCurrency = (currency: string): boolean => {
 };
 
 /**
- * Validate block search query
+ * Validate resource search query
  */
-export const isValidBlockSearchQuery = (query: string): boolean => {
+export const isValidResourceSearchQuery = (query: string): boolean => {
   return typeof query === 'string' && query.trim().length >= 1 && query.length <= 100;
 };
 
 /**
- * Get endpoint for catalog operation based on parameters
+ * Get endpoint for resource operation based on parameters
  */
-export const getCatalogEndpoint = (
-  operation: 'list' | 'create' | 'get' | 'update' | 'delete' | 'restore' | 'versions',
-  catalogId?: string
+export const getResourceEndpoint = (
+  operation: 'list' | 'create' | 'get' | 'update' | 'delete' | 'types' | 'health',
+  resourceId?: string
 ): string => {
   switch (operation) {
     case 'list':
     case 'create':
-      return API_ENDPOINTS.CATALOG.LIST;
+      return API_ENDPOINTS.RESOURCES.LIST;
     case 'get':
-      return catalogId ? API_ENDPOINTS.CATALOG.GET(catalogId) : '';
+      return resourceId ? API_ENDPOINTS.RESOURCES.GET(resourceId) : '';
     case 'update':
-      return catalogId ? API_ENDPOINTS.CATALOG.UPDATE(catalogId) : '';
+      return resourceId ? API_ENDPOINTS.RESOURCES.UPDATE(resourceId) : '';
     case 'delete':
-      return catalogId ? API_ENDPOINTS.CATALOG.DELETE(catalogId) : '';
-    case 'restore':
-      return catalogId ? API_ENDPOINTS.CATALOG.RESTORE(catalogId) : '';
-    case 'versions':
-      return catalogId ? API_ENDPOINTS.CATALOG.VERSIONS(catalogId) : '';
+      return resourceId ? API_ENDPOINTS.RESOURCES.DELETE(resourceId) : '';
+    case 'types':
+      return API_ENDPOINTS.RESOURCES.RESOURCE_TYPES;
+    case 'health':
+      return API_ENDPOINTS.RESOURCES.HEALTH;
     default:
       return '';
   }
 };
-
-/**
- * Get endpoint for block operation based on parameters
- */
-export const getBlockEndpoint = (
-  operation: 'categories' | 'masters' | 'variants' | 'hierarchy' | 'template-builder' | 'search' | 'stats',
-  masterId?: string,
-  variantId?: string
-): string => {
-  switch (operation) {
-    case 'categories':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.CATEGORIES;
-    case 'masters':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.MASTERS;
-    case 'variants':
-      return masterId ? API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.VARIANTS(masterId) : '';
-    case 'hierarchy':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.HIERARCHY;
-    case 'template-builder':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.TEMPLATE_BUILDER;
-    case 'search':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.SEARCH;
-    case 'stats':
-      return API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS.STATS;
-    default:
-      return '';
-  }
-};
-
-// =================================================================
-// DEPRECATION NOTICES (for gradual migration)
-// =================================================================
-
-/**
- * @deprecated Use API_ENDPOINTS.CATALOG.MULTI_CURRENCY.* instead
- * This will be removed in v2.0
- */
-export const LEGACY_CATALOG_PRICING_ENDPOINTS = {
-  UPSERT: API_ENDPOINTS.CATALOG.PRICING.UPSERT,
-  GET: API_ENDPOINTS.CATALOG.PRICING.GET,
-  DELETE: API_ENDPOINTS.CATALOG.PRICING.DELETE
-} as const;
 
 // Export everything for comprehensive access
 export default API_ENDPOINTS;

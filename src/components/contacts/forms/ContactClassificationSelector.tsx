@@ -1,387 +1,259 @@
-// src/components/contacts/forms/ContactClassificationSelector.tsx
-import React, { useState, useEffect } from 'react';
-import { Info, Check, Loader2, AlertCircle, RefreshCw, X } from 'lucide-react';
+// src/components/contacts/forms/ContactClassificationSelector.tsx - CLEAN VERSION
+import React from 'react';
+import { 
+  Tag, 
+  Info, 
+  X, 
+  AlertCircle,
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users
+} from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import ContactService from '../../../services/contactService';
-import { CONTACT_CLASSIFICATIONS } from '../../../utils/constants/contacts';
 import { useToast } from '@/components/ui/use-toast';
-import { captureException } from '@/utils/sentry';
+import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 
-// Create service instance
-const contactService = new ContactService();
+interface ContactClassification {
+  id?: string;
+  classification_value: string;
+  classification_label: string;
+}
 
-// Types
-type ContactClassificationType = string;
-
-interface ContactClassificationSelectorProps {
-  value: ContactClassificationType[];
-  onChange: (classifications: ContactClassificationType[]) => void;
+interface ContactClassificationsSectionProps {
+  value: ContactClassification[];
+  onChange: (classifications: ContactClassification[]) => void;
   disabled?: boolean;
-  industry?: string;
-  className?: string;
-  required?: boolean;
-  maxSelections?: number;
+  showValidation?: boolean;
 }
 
-interface ClassificationOption {
-  id: string;
-  label: string;
-  description: string;
-  color: string;
-  icon: string;
-  industry?: string[];
-}
-
-// Classifications from your constants with UI metadata
-const DEFAULT_CLASSIFICATIONS: ClassificationOption[] = [
-  {
-    id: CONTACT_CLASSIFICATIONS.BUYER,
-    label: 'Buyer',
-    description: 'Purchases services/products from us',
-    color: 'blue',
-    icon: '🛒',
-    industry: ['all']
-  },
-  {
-    id: CONTACT_CLASSIFICATIONS.SELLER,
-    label: 'Seller',
-    description: 'Sells services/products to us',
-    color: 'green',
-    icon: '💰',
-    industry: ['all']
-  },
-  {
-    id: CONTACT_CLASSIFICATIONS.VENDOR,
-    label: 'Vendor',
-    description: 'Supplies products/services to us',
-    color: 'purple',
-    icon: '📦',
-    industry: ['all']
-  },
-  {
-    id: CONTACT_CLASSIFICATIONS.PARTNER,
-    label: 'Partner',
-    description: 'Business collaboration partner',
-    color: 'orange',
-    icon: '🤝',
-    industry: ['all']
-  }
-];
-
-const ContactClassificationSelector: React.FC<ContactClassificationSelectorProps> = ({
+const ContactClassificationSelector: React.FC<ContactClassificationsSectionProps> = ({
   value,
   onChange,
   disabled = false,
-  industry = 'all',
-  className = '',
-  required = true,
-  maxSelections = 5
+  showValidation = true
 }) => {
   const { isDarkMode } = useTheme();
   const { toast } = useToast();
-  
-  // State
-  const [classifications, setClassifications] = useState<ClassificationOption[]>(DEFAULT_CLASSIFICATIONS);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [showInfo, setShowInfo] = useState<boolean>(false);
 
-  // Load classifications from API (optional - can be removed if only using constants)
-  const loadClassifications = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const constants = await contactService.getContactConstants();
-      
-      if (constants.classifications && constants.classifications.length > 0) {
-        // Map API classifications to our format, but only use the ones from our constants
-        const validClassifications = Object.values(CONTACT_CLASSIFICATIONS);
-        const apiClassifications: ClassificationOption[] = constants.classifications
-          .filter((cls: string) => validClassifications.includes(cls))
-          .map((cls: string) => {
-            // Find the matching default classification
-            const defaultClass = DEFAULT_CLASSIFICATIONS.find(c => c.id === cls);
-            return defaultClass || {
-              id: cls,
-              label: cls.charAt(0).toUpperCase() + cls.slice(1),
-              description: `${cls.charAt(0).toUpperCase() + cls.slice(1)} classification`,
-              color: 'gray',
-              icon: '📋',
-              industry: ['all']
-            };
-          });
-        
-        if (apiClassifications.length > 0) {
-          setClassifications(apiClassifications);
-        }
-      }
-    } catch (err: any) {
-      console.error('Error loading classifications:', err);
-      captureException(err, {
-        tags: { component: 'ContactClassificationSelector', action: 'loadClassifications' }
-      });
-      // Just use default classifications on error
-    } finally {
-      setLoading(false);
-    }
+  // Map classification IDs to icons
+  const getClassificationIcon = (classificationId: string) => {
+    const iconMap = {
+      'buyer': ShoppingCart,
+      'seller': DollarSign,
+      'vendor': Package,
+      'partner': Handshake,
+      'team_member': Users
+    };
+    return iconMap[classificationId as keyof typeof iconMap] || Tag;
   };
 
-  // Load classifications on mount (optional)
-  useEffect(() => {
-    loadClassifications();
-  }, []);
+  // Get color classes for each classification
+  const getColorClasses = (classificationId: string, isSelected: boolean) => {
+    const colorMap = {
+      'buyer': {
+        selected: 'bg-blue-500 text-white',
+        unselected: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+      },
+      'seller': {
+        selected: 'bg-green-500 text-white',
+        unselected: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+      },
+      'vendor': {
+        selected: 'bg-purple-500 text-white',
+        unselected: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400'
+      },
+      'partner': {
+        selected: 'bg-orange-500 text-white',
+        unselected: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
+      },
+      'team_member': {
+        selected: 'bg-indigo-500 text-white',
+        unselected: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'
+      }
+    };
+    
+    const colors = colorMap[classificationId as keyof typeof colorMap];
+    return colors ? (isSelected ? colors.selected : colors.unselected) : 'bg-gray-100 text-gray-700';
+  };
+
+  const classifications = CONTACT_CLASSIFICATION_CONFIG;
 
   // Toggle classification selection
-  const toggleClassification = (classificationId: string) => {
+  const toggleClassification = (classification: typeof classifications[0]) => {
     if (disabled) return;
-    
-    const isSelected = value.includes(classificationId);
-    let newSelections: string[];
-    
-    if (isSelected) {
-      // Deselect - but ensure at least one remains if required
-      newSelections = value.filter(c => c !== classificationId);
-      if (required && newSelections.length === 0) {
-        toast({
-          variant: "destructive",
-          title: "Required Field",
-          description: "At least one classification must be selected"
-        });
-        return;
-      }
-    } else {
-      // Select - but respect max selections
-      if (value.length >= maxSelections) {
-        toast({
-          variant: "destructive",
-          title: "Maximum Reached",
-          description: `You can only select up to ${maxSelections} classifications`
-        });
-        return;
-      }
-      newSelections = [...value, classificationId];
-    }
-    
-    onChange(newSelections);
-  };
 
-  // Get classification button classes based on state
-  const getClassificationClasses = (classification: ClassificationOption, isSelected: boolean) => {
-    const baseClasses = "w-full p-3 rounded-lg border-2 transition-all text-left relative";
-    
-    if (disabled) {
-      return `${baseClasses} opacity-50 cursor-not-allowed bg-muted border-border text-muted-foreground`;
-    }
+    const exists = value.some(c => c.classification_value === classification.id);
 
-    if (isSelected) {
-      const colorMap = {
-        blue: 'bg-blue-50 dark:bg-blue-950/20 border-blue-500 dark:border-blue-400',
-        green: 'bg-green-50 dark:bg-green-950/20 border-green-500 dark:border-green-400',
-        purple: 'bg-purple-50 dark:bg-purple-950/20 border-purple-500 dark:border-purple-400',
-        orange: 'bg-orange-50 dark:bg-orange-950/20 border-orange-500 dark:border-orange-400',
-        gray: 'bg-gray-50 dark:bg-gray-950/20 border-gray-500 dark:border-gray-400'
-      };
+    if (exists) {
+      // Remove classification
+      const newValue = value.filter(c => c.classification_value !== classification.id);
+      onChange(newValue);
       
-      return `${baseClasses} ${colorMap[classification.color as keyof typeof colorMap] || colorMap.gray} cursor-pointer`;
+      toast({
+        title: "Classification Removed",
+        description: `${classification.label} has been removed`
+      });
     } else {
-      return `${baseClasses} bg-card border-border hover:border-primary/50 cursor-pointer`;
+      // Add classification
+      const newClassification: ContactClassification = {
+        id: `temp_${Date.now()}_${classification.id}`,
+        classification_value: classification.id,
+        classification_label: classification.label
+      };
+
+      onChange([...value, newClassification]);
+      
+      toast({
+        title: "Classification Added",
+        description: `${classification.label} has been added`
+      });
     }
   };
 
-  // Retry loading
-  const handleRetry = () => {
-    loadClassifications();
+  // Check if classification is selected
+  const isSelected = (classificationId: string): boolean => {
+    return value.some(c => c.classification_value === classificationId);
   };
+
+  const remainingCount = classifications.length - value.length;
 
   return (
-    <div className={`rounded-lg shadow-sm border p-4 bg-card border-border ${className}`}>
-      <div className="flex items-center gap-2 mb-4">
-        <h3 className="text-base font-semibold text-foreground">
-          Classification {required && <span className="text-destructive">*</span>}
-        </h3>
-        <div className="relative">
-          <button 
-            className="p-1 rounded-full hover:bg-accent transition-colors text-muted-foreground"
-            onClick={() => setShowInfo(!showInfo)}
-            type="button"
-          >
-            <Info className="h-4 w-4" />
-          </button>
-          {showInfo && (
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 rounded-md z-10 whitespace-nowrap pointer-events-none text-xs bg-popover text-popover-foreground shadow-md border">
-              Select how this contact relates to your business
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-popover"></div>
-            </div>
-          )}
+    <div className="rounded-lg shadow-sm border p-6 bg-card border-border">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-foreground">
+          Classification <span className="text-destructive">*</span>
+        </h2>
+        <div className="text-muted-foreground">
+          <Info className="h-4 w-4" />
         </div>
-        {loading && (
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        )}
       </div>
 
-      {/* Error State */}
-      {error && (
-        <div className="mb-4 p-3 rounded-md border bg-destructive/10 border-destructive/20">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5 text-destructive" />
-            <div className="flex-1">
-              <p className="text-sm text-destructive">{error}</p>
-              <button
-                onClick={handleRetry}
-                className="mt-2 flex items-center gap-1 text-xs hover:underline text-destructive"
-                type="button"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Retry
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Info Message */}
+      <div className="mb-4 p-3 rounded-md bg-sky-50 dark:bg-sky-900/10 text-sky-600 dark:text-sky-400">
+        <p className="text-sm flex items-center gap-2">
+          <Tag className="h-4 w-4" />
+          Select all classifications that apply to this contact
+        </p>
+      </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="animate-pulse">
-              <div className="p-3 rounded-lg border-2 bg-muted border-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded bg-muted-foreground/20"></div>
-                  <div className="flex-1">
-                    <div className="h-4 rounded mb-1 bg-muted-foreground/20"></div>
-                    <div className="h-3 rounded w-3/4 bg-muted-foreground/10"></div>
-                  </div>
+      {/* Classification Options */}
+      <div className="space-y-3 mb-4">
+        {classifications.map((classification) => {
+          const selected = isSelected(classification.id);
+          const IconComponent = getClassificationIcon(classification.id);
+          
+          return (
+            <button
+              key={`classification-${classification.id}`}
+              onClick={() => toggleClassification(classification)}
+              disabled={disabled}
+              className={`
+                relative p-4 rounded-lg border-2 transition-all text-left w-full
+                ${selected 
+                  ? 'border-primary shadow-md bg-white dark:bg-gray-800' 
+                  : 'border-gray-200 dark:border-gray-700 hover:border-primary/50 hover:shadow-sm bg-white dark:bg-gray-800'
+                } 
+                ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`
+                  p-2.5 rounded-lg transition-colors
+                  ${getColorClasses(classification.id, selected)}
+                `}>
+                  <IconComponent className="h-5 w-5" />
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Classifications List */}
-      {!loading && (
-        <div className="space-y-3">
-          {classifications.map((classification) => {
-            const isSelected = value.includes(classification.id);
-            
-            return (
-              <button
-                key={classification.id}
-                onClick={() => toggleClassification(classification.id)}
-                disabled={disabled}
-                className={getClassificationClasses(classification, isSelected)}
-                type="button"
-              >
-                {/* Selection Indicator */}
-                {isSelected && (
-                  <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center ${
-                    classification.color === 'blue' ? 'bg-blue-500' :
-                    classification.color === 'green' ? 'bg-green-500' :
-                    classification.color === 'purple' ? 'bg-purple-500' :
-                    classification.color === 'orange' ? 'bg-orange-500' :
-                    'bg-gray-500'
-                  }`}>
-                    <Check className="h-3 w-3 text-white" />
-                  </div>
-                )}
                 
-                <div className="pr-8">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg">{classification.icon}</span>
-                    <span className="font-medium text-foreground">
-                      {classification.label}
-                    </span>
+                <div className="flex-1">
+                  <div className="font-semibold text-sm text-foreground mb-1">
+                    {classification.label}
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground leading-relaxed">
                     {classification.description}
                   </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Selection Info */}
-      <div className="mt-4 space-y-2">
-        {/* Validation Message */}
-        {required && value.length === 0 && (
-          <div className="p-2 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              Please select at least one classification
-            </p>
-          </div>
-        )}
-
-        {/* Max Selections Warning */}
-        {value.length >= maxSelections && (
-          <div className="p-2 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-            <p className="text-xs text-yellow-800 dark:text-yellow-200">
-              Maximum {maxSelections} classifications allowed
-            </p>
-          </div>
-        )}
-
-        {/* Selection Summary */}
-        {value.length > 0 && (
-          <div className="p-2 rounded-md border bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/20">
-            <p className="text-xs text-green-800 dark:text-green-200">
-              <strong>{value.length}</strong> classification{value.length !== 1 ? 's' : ''} selected
-              {maxSelections > 1 && ` (${maxSelections - value.length} remaining)`}
-            </p>
-          </div>
-        )}
+                
+                {selected && (
+                  <div className="absolute top-3 right-3">
+                    <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" stroke="currentColor">
+                        <path d="M5 13l4 4L19 7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Selected Classifications Preview */}
-      {value.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-sm font-medium mb-2 text-foreground">Selected:</h4>
-          <div className="flex flex-wrap gap-2">
-            {value.map((selectedId) => {
-              const classification = classifications.find(c => c.id === selectedId);
-              if (!classification) return null;
-              
-              return (
-                <span
-                  key={selectedId}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${
-                    classification.color === 'blue' ? 'bg-blue-100 dark:bg-blue-900/20 border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300' :
-                    classification.color === 'green' ? 'bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-800 text-green-700 dark:text-green-300' :
-                    classification.color === 'purple' ? 'bg-purple-100 dark:bg-purple-900/20 border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300' :
-                    classification.color === 'orange' ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-300 dark:border-orange-800 text-orange-700 dark:text-orange-300' :
-                    'bg-gray-100 dark:bg-gray-900/20 border-gray-300 dark:border-gray-800 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  <span>{classification.icon}</span>
-                  {classification.label}
-                  {!disabled && (
+      {/* Summary */}
+      <div className="space-y-3">
+        <div className="text-sm text-muted-foreground">
+          <strong className="text-foreground">{value.length}</strong> classification{value.length !== 1 ? 's' : ''} selected
+          {remainingCount > 0 && (
+            <span className="text-muted-foreground"> ({remainingCount} remaining)</span>
+          )}
+        </div>
+
+        {/* Selected Classifications Display */}
+        {value.length > 0 && (
+          <>
+            <div className="text-sm font-medium text-foreground">Selected:</div>
+            <div className="flex flex-wrap gap-2">
+              {value.map((classification, index) => {
+                const IconComponent = getClassificationIcon(classification.classification_value);
+                
+                return (
+                  <div
+                    key={`selected-${classification.classification_value}-${index}`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                  >
+                    <IconComponent className="h-3.5 w-3.5" />
+                    <span>{classification.classification_label}</span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleClassification(selectedId);
+                        const configItem = classifications.find(c => c.id === classification.classification_value);
+                        if (configItem) {
+                          toggleClassification(configItem);
+                        }
                       }}
-                      className="ml-1 hover:bg-black hover:bg-opacity-20 rounded-full p-0.5"
-                      type="button"
+                      className="ml-1 hover:text-destructive transition-colors"
+                      disabled={disabled}
                     >
                       <X className="h-3 w-3" />
                     </button>
-                  )}
-                </span>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {/* Tip when no classifications selected */}
+        {value.length === 0 && (
+          <div className="mt-4 p-3 rounded-md bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800">
+            <p className="text-sm text-yellow-800 dark:text-yellow-400 flex items-start gap-2">
+              <span className="text-lg">💡</span>
+              <span><strong>Tip:</strong> Classifications help organize your contacts and determine their role in your business relationships.</span>
+            </p>
           </div>
+        )}
+      </div>
+
+      {/* Validation Message */}
+      {showValidation && value.length === 0 && (
+        <div className="mt-4 p-3 rounded-md border bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            At least one classification is required
+          </p>
         </div>
       )}
-
-      {/* Help Text */}
-      <div className="mt-4 p-2 rounded-md bg-muted">
-        <p className="text-xs text-muted-foreground">
-          💡 <strong>Tip:</strong> Classifications help organize your contacts and enable better filtering. 
-          You can select multiple classifications that best describe your business relationship.
-        </p>
-      </div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
-// src/services/contactService.ts - Updated to match backend API structure
+// src/services/contactService.ts - COMPLETE VERSION with JSONB parent_contact_ids support
+
 import api from './api';
 import { API_ENDPOINTS, buildContactListURL } from './serviceURLs';
 import { 
@@ -7,18 +8,17 @@ import {
   UpdateContactRequest, 
   ContactFilters,
   ContactSearchRequest,
+  ContactSearchResult,
   ApiResponse,
-  PaginatedResponse 
+  PaginatedResponse,
+  ContactStats,
+  DuplicateCheckResponse,
+  InvitationResponse
 } from '../types/contact';
 
 /**
  * Contact Service - Domain-specific business logic for contacts
- * 
- * This service provides:
- * 1. Contact-specific data transformations matching backend API
- * 2. Business rule validation
- * 3. Error handling for contact operations
- * 4. Consistent API interface for UI components
+ * UPDATED: Now supports JSONB parent_contact_ids and relationship handling
  */
 class ContactService {
   
@@ -28,16 +28,15 @@ class ContactService {
 
   /**
    * List contacts with filtering and pagination
-   * FIXED: Proper parameter handling and error management
    */
   async listContacts(filters: ContactFilters = {}): Promise<PaginatedResponse<Contact>> {
     try {
-      // FIXED: Build URL with proper parameter names that backend expects
+      // Build URL with proper parameter names that backend expects
       const params = new URLSearchParams();
       
       if (filters.page) params.append('page', filters.page.toString());
       if (filters.limit) params.append('limit', filters.limit.toString());
-      if (filters.search) params.append('search', filters.search); // Backend expects 'search'
+      if (filters.search) params.append('search', filters.search);
       if (filters.status && filters.status !== 'all') params.append('status', filters.status);
       if (filters.type) params.append('type', filters.type);
       if (filters.sort_by) params.append('sort_by', filters.sort_by);
@@ -52,6 +51,9 @@ class ContactService {
       }
       if (filters.show_duplicates) {
         params.append('show_duplicates', 'true');
+      }
+      if (filters.show_relationships) {
+        params.append('show_relationships', 'true');
       }
       if (filters.includeInactive) {
         params.append('includeInactive', 'true');
@@ -83,7 +85,6 @@ class ContactService {
 
   /**
    * Get single contact by ID
-   * Matches backend: GET /api/contacts/:id
    */
   async getContact(contactId: string): Promise<Contact> {
     try {
@@ -106,17 +107,16 @@ class ContactService {
 
   /**
    * Create new contact
-   * FIXED: Better error handling for audit logger issues
    */
   async createContact(contactData: CreateContactRequest): Promise<Contact> {
     try {
       // Pre-validate contact data
       this.validateContactData(contactData);
       
-      // Transform UI data to API format (backend expects exact field names)
+      // Transform UI data to API format
       const apiData = this.transformContactForAPI(contactData);
       
-      // Backend expects: { type, classifications, contact_channels, etc. }
+      // Backend expects exact field names
       const response = await api.post(API_ENDPOINTS.CONTACTS.CREATE, apiData);
       
       if (!response.data.success) {
@@ -130,13 +130,14 @@ class ContactService {
       }
       
       return this.transformContactForUI(response.data.data);
-    } catch (error) {
-      // FIXED: Handle audit logger errors gracefully
+    } catch (error: any) {
+      // Handle audit logger errors gracefully
       if (error.message?.includes('auditLogger')) {
-        // If only audit logging failed but contact was created, treat as success
         console.warn('Contact created but audit logging failed:', error);
-        // You might want to return a partially successful response here
-        // or retry the creation without audit logging
+        // Return a minimal success response if we know the contact was created
+        if (error.response?.data?.data) {
+          return this.transformContactForUI(error.response.data.data);
+        }
       }
       throw this.handleContactError(error, 'Failed to create contact');
     }
@@ -144,7 +145,6 @@ class ContactService {
 
   /**
    * Update existing contact
-   * FIXED: Better error handling for audit logger issues
    */
   async updateContact(contactId: string, updateData: UpdateContactRequest): Promise<Contact> {
     try {
@@ -162,11 +162,14 @@ class ContactService {
       }
       
       return this.transformContactForUI(response.data.data);
-    } catch (error) {
-      // FIXED: Handle audit logger errors gracefully
+    } catch (error: any) {
+      // Handle audit logger errors gracefully
       if (error.message?.includes('auditLogger')) {
         console.warn('Contact updated but audit logging failed:', error);
-        // Still return success if the main operation succeeded
+        // Return a minimal success response if we know the contact was updated
+        if (error.response?.data?.data) {
+          return this.transformContactForUI(error.response.data.data);
+        }
       }
       throw this.handleContactError(error, 'Failed to update contact');
     }
@@ -174,7 +177,6 @@ class ContactService {
 
   /**
    * Update contact status only
-   * Matches backend: PATCH /api/contacts/:id/status
    */
   async updateContactStatus(contactId: string, status: 'active' | 'inactive' | 'archived'): Promise<Contact> {
     try {
@@ -197,7 +199,6 @@ class ContactService {
 
   /**
    * Delete (archive) contact
-   * Matches backend: DELETE /api/contacts/:id
    */
   async deleteContact(contactId: string, force: boolean = false): Promise<void> {
     try {
@@ -223,19 +224,19 @@ class ContactService {
   // ==========================================================
 
   /**
-   * Search contacts with advanced filters
-   * FIXED: Use POST method as backend expects
+   * Search contacts with advanced filters and relationship context
    */
-  async searchContacts(searchRequest: ContactSearchRequest): Promise<PaginatedResponse<Contact>> {
+  async searchContacts(searchRequest: ContactSearchRequest): Promise<PaginatedResponse<ContactSearchResult>> {
     try {
       if (!searchRequest.query || searchRequest.query.trim().length === 0) {
         throw new Error('Search query is required');
       }
 
-      // FIXED: Backend expects { query, filters } structure
+      // Backend expects { query, filters, includeRelationships } structure
       const response = await api.post(API_ENDPOINTS.CONTACTS.SEARCH, {
         query: searchRequest.query.trim(),
-        filters: searchRequest.filters || {}
+        filters: searchRequest.filters || {},
+        includeRelationships: searchRequest.includeRelationships || true
       });
       
       if (!response.data.success) {
@@ -244,7 +245,12 @@ class ContactService {
       
       return {
         success: true,
-        data: response.data.data.map((contact: any) => this.transformContactForUI(contact)),
+        data: response.data.data.map((contact: any) => ({
+          ...this.transformContactForUI(contact),
+          isDirectMatch: contact.isDirectMatch,
+          isRelatedContact: contact.isRelatedContact,
+          relationshipType: contact.relationshipType
+        })),
         pagination: response.data.pagination,
         message: response.data.message
       };
@@ -255,7 +261,6 @@ class ContactService {
 
   /**
    * Check for duplicate contacts
-   * FIXED: Use POST method with proper payload
    */
   async checkDuplicates(contactData: Partial<CreateContactRequest>): Promise<{ hasDuplicates: boolean; duplicates: Contact[] }> {
     try {
@@ -263,8 +268,23 @@ class ContactService {
         throw new Error('Contact channels are required for duplicate checking');
       }
 
-      // FIXED: Send to duplicates endpoint
-      const response = await api.post(API_ENDPOINTS.CONTACTS.DUPLICATES, contactData);
+      // Transform data for API
+      const apiData = {
+        ...contactData,
+        // Ensure classifications is an array of strings
+        classifications: contactData.classifications?.map(c => 
+          typeof c === 'string' ? c : (c as any).classification_value
+        ) || [],
+        // Clean up contact channels
+        contact_channels: contactData.contact_channels.map(ch => ({
+          channel_type: ch.channel_type,
+          value: ch.value,
+          country_code: ch.country_code,
+          is_primary: ch.is_primary
+        }))
+      };
+
+      const response = await api.post(API_ENDPOINTS.CONTACTS.DUPLICATES, apiData);
       
       if (!response.data.success) {
         throw new Error(response.data.error || 'Failed to check for duplicates');
@@ -286,7 +306,6 @@ class ContactService {
 
   /**
    * Send user invitation to contact
-   * Matches backend: POST /api/contacts/:id/invite
    */
   async sendInvitation(contactId: string): Promise<{ success: boolean; message: string }> {
     try {
@@ -315,11 +334,10 @@ class ContactService {
 
   /**
    * Get contact statistics for dashboard
-   * FIXED: Add support for filtered stats
    */
-  async getContactStats(filters: ContactFilters = {}): Promise<{ total: number; active: number; inactive: number; archived: number }> {
+  async getContactStats(filters: ContactFilters = {}): Promise<ContactStats> {
     try {
-      // FIXED: Send filters to stats endpoint so it returns filtered counts
+      // Send filters to stats endpoint so it returns filtered counts
       const params = new URLSearchParams();
       
       if (filters.search) params.append('search', filters.search);
@@ -341,7 +359,30 @@ class ContactService {
         throw new Error(response.data.error || 'Failed to load contact statistics');
       }
       
-      return response.data.data;
+      // Transform stats to match ContactStats interface
+      const stats = response.data.data;
+      return {
+        total: stats.total || 0,
+        active: stats.active || stats.by_status?.active || 0,
+        inactive: stats.inactive || stats.by_status?.inactive || 0,
+        archived: stats.archived || stats.by_status?.archived || 0,
+        byType: {
+          individual: stats.by_type?.individual || 0,
+          corporate: stats.by_type?.corporate || 0
+        },
+        byClassification: {
+          buyer: stats.by_classification?.buyer || 0,
+          seller: stats.by_classification?.seller || 0,
+          vendor: stats.by_classification?.vendor || 0,
+          partner: stats.by_classification?.partner || 0,
+          team_member: stats.by_classification?.team_member || 0
+        },
+        recentlyCreated: stats.recently_created || 0,
+        recentlyUpdated: stats.recently_updated || 0,
+        duplicates: stats.duplicates || 0,
+        withParents: stats.with_parents || 0,
+        withChildren: stats.with_children || 0
+      };
     } catch (error) {
       throw this.handleContactError(error, 'Failed to load contact statistics');
     }
@@ -349,7 +390,6 @@ class ContactService {
 
   /**
    * Get contact constants for frontend forms
-   * Matches backend: GET /api/contacts/constants
    */
   async getContactConstants(): Promise<{
     types: string[];
@@ -375,95 +415,207 @@ class ContactService {
   }
 
   // ==========================================================
-  // Data Transformation Methods (Matching Backend Structure)
+  // Data Transformation Methods
   // ==========================================================
 
   /**
    * Transform API contact data for UI consumption
-   * Matches the backend transformSingleContact method
+   * FIXED: Handle JSONB parent_contact_ids and relationship data
    */
-  private transformContactForUI(apiContact: any): Contact {
-    return {
-      id: apiContact.id,
-      type: apiContact.type,
-      status: apiContact.status,
-      
-      // Individual fields
-      name: apiContact.name,
-      salutation: apiContact.salutation,
-      
-      // Corporate fields  
-      company_name: apiContact.company_name,
-      company_registration_number: apiContact.registration_number, // Note: backend uses registration_number
-      industry: apiContact.industry,
-      
-      // Display name (computed field for UI)
-      displayName: this.getContactDisplayName(apiContact),
-      
-      // Arrays - matching backend structure
-      classifications: apiContact.classifications || [],
-      tags: apiContact.tags || [],
-      compliance_numbers: apiContact.compliance_numbers || [],
-      
-      // Related data - matching backend field names
-      contact_channels: apiContact.contact_channels || [],
-      addresses: apiContact.contact_addresses || [], // Backend uses contact_addresses
-      contact_persons: apiContact.contact_persons || [],
-      
-      // Computed fields for UI
-      primaryEmail: this.getPrimaryChannel(apiContact.contact_channels, 'email'),
-      primaryPhone: this.getPrimaryChannel(apiContact.contact_channels, 'mobile'),
-      primaryAddress: this.getPrimaryAddress(apiContact.contact_addresses),
-      
-      // Metadata
-      notes: apiContact.notes,
-      potential_duplicate: apiContact.potential_duplicate || false,
-      duplicate_reasons: apiContact.duplicate_reasons || [],
-      
-      // Timestamps
-      created_at: apiContact.created_at,
-      updated_at: apiContact.updated_at,
-      last_contact_date: apiContact.last_contact_date
-    };
-  }
+// FIXED transformContactForUI method
+private transformContactForUI(apiContact: any): Contact {
+  // Handle both 'addresses' and 'contact_addresses' from backend
+  const addresses = apiContact.addresses || apiContact.contact_addresses || [];
+  
+  // Ensure classifications is always an array of strings
+  const classifications = this.normalizeClassifications(apiContact.classifications);
+  
+  // Handle contact persons (now refers to child contacts, not embedded objects)
+  const contactPersons = apiContact.contact_persons || [];
+  
+  return {
+    id: apiContact.id,
+    type: apiContact.type,
+    status: apiContact.status,
+    
+    // Classifications
+    classifications: classifications,
+    
+    // Individual fields
+    name: apiContact.name,
+    salutation: apiContact.salutation,
+    designation: apiContact.designation,
+    department: apiContact.department,
+    is_primary_contact: apiContact.is_primary_contact,
+    
+    // Corporate fields  
+    company_name: apiContact.company_name,
+    company_registration_number: apiContact.company_registration_number || apiContact.registration_number,
+    industry: apiContact.industry,
+    
+    // Parent relationship fields (JSONB)
+    parent_contact_ids: apiContact.parent_contact_ids || [],
+    parent_contacts: apiContact.parent_contacts || [],
+    
+    // Display name (computed field for UI)
+    displayName: this.getContactDisplayName(apiContact),
+    
+    // Arrays
+    tags: apiContact.tags || [],
+    compliance_numbers: apiContact.compliance_numbers || [],
+    
+    // FIXED: Related data - keep original field names
+    contact_channels: apiContact.contact_channels || [],
+    addresses: (addresses || []).map(addr => ({
+      ...addr,
+      // Only map if the original field doesn't exist
+      type: addr.type || addr.address_type,
+      // Remove these incorrect mappings - the backend already sends correct field names
+      // address_line1: addr.line1,  ❌ DELETE THIS LINE
+      // address_line2: addr.line2,  ❌ DELETE THIS LINE  
+      // address_line3: addr.line3,  ❌ DELETE THIS LINE
+    })),
+    contact_addresses: addresses, // Include both for compatibility
+    contact_persons: contactPersons,
+    
+    // Computed fields for UI
+    primaryEmail: this.getPrimaryChannel(apiContact.contact_channels, 'email'),
+    primaryPhone: this.getPrimaryChannel(apiContact.contact_channels, 'mobile'),
+    primaryAddress: this.getPrimaryAddress(addresses),
+    
+    // Metadata
+    notes: apiContact.notes,
+    potential_duplicate: apiContact.potential_duplicate || false,
+    duplicate_reasons: apiContact.duplicate_reasons || [],
+    user_account_status: apiContact.user_account_status,
+    auth_user_id: apiContact.auth_user_id,
+    tenant_id: apiContact.tenant_id,
+    created_by: apiContact.created_by,
+    updated_by: apiContact.updated_by,
+    
+    // Timestamps
+    created_at: apiContact.created_at,
+    updated_at: apiContact.updated_at,
+    last_contact_date: apiContact.last_contact_date
+  };
+}
 
   /**
    * Transform UI contact data for API submission
-   * Matches what backend expects
+   * UPDATED: Handle JSONB parent_contact_ids and remove contact_persons
    */
   private transformContactForAPI(uiContact: CreateContactRequest | UpdateContactRequest): any {
-    // Remove UI-specific computed fields
-    const { displayName, primaryEmail, primaryPhone, primaryAddress, ...apiData } = uiContact as any;
+    // Remove UI-specific computed fields and relationship helpers
+    const { 
+      displayName, 
+      primaryEmail, 
+      primaryPhone, 
+      primaryAddress, 
+      selected_parent_companies,
+      contact_persons, // Remove - now handled as separate contact records
+      parent_contacts, // Remove - populated by backend
+      ...contactData 
+    } = uiContact as any;
+    
+    // Ensure classifications is an array of strings
+    const classifications = this.normalizeClassifications(contactData.classifications);
+    
+    // Transform addresses to ensure correct field names
+    const addresses = (contactData.addresses || []).map((addr: any) => ({
+      ...addr,
+      type: addr.address_type || addr.type, // Handle both field names
+      // Remove temp IDs
+      id: addr.id?.startsWith('temp_') ? undefined : addr.id
+    }));
+    
+    // Transform contact channels - remove temp IDs
+    const contact_channels = (contactData.contact_channels || []).map((channel: any) => ({
+      ...channel,
+      id: channel.id?.startsWith('temp_') ? undefined : channel.id
+    }));
+    
+    // Transform compliance numbers - remove temp IDs
+    const compliance_numbers = (contactData.compliance_numbers || []).map((num: any) => ({
+      ...num,
+      id: num.id?.startsWith('temp_') ? undefined : num.id
+    }));
+    
+    // Transform tags to ensure correct structure
+    const tags = (contactData.tags || []).map((tag: any) => {
+      if (typeof tag === 'string') {
+        return { tag_value: tag, tag_label: tag };
+      }
+      return {
+        tag_value: tag.tag_value || tag.value,
+        tag_label: tag.tag_label || tag.label || tag.tag_value || tag.value
+      };
+    });
     
     return {
-      type: apiData.type,
-      status: apiData.status,
+      type: contactData.type,
+      status: contactData.status,
       
       // Individual fields
-      name: apiData.name,
-      salutation: apiData.salutation,
+      name: contactData.name,
+      salutation: contactData.salutation,
+      designation: contactData.designation,
+      department: contactData.department,
+      is_primary_contact: contactData.is_primary_contact,
       
-      // Corporate fields
-      company_name: apiData.company_name,
-      registration_number: apiData.company_registration_number, // UI uses company_registration_number, API expects registration_number
-      industry: apiData.industry,
+      // Corporate fields - handle both field names
+      company_name: contactData.company_name,
+      registration_number: contactData.company_registration_number || contactData.registration_number,
+      industry: contactData.industry,
       
-      // Arrays - ensure proper format
-      classifications: apiData.classifications || [],
-      tags: apiData.tags || [],
-      contact_channels: apiData.contact_channels || [],
-      addresses: apiData.addresses || [], // UI uses addresses, but both should work
-      compliance_numbers: apiData.compliance_numbers || [],
-      contact_persons: apiData.contact_persons || [],
+      // NEW: Parent relationships (JSONB array)
+      parent_contact_ids: this.normalizeParentContactIds(contactData.parent_contact_ids),
+      
+      // Arrays - properly transformed
+      classifications: classifications,
+      tags: tags,
+      contact_channels: contact_channels,
+      addresses: addresses,
+      compliance_numbers: compliance_numbers,
       
       // Other fields
-      notes: apiData.notes
+      notes: contactData.notes,
+      
+      // System fields (if present)
+      tenant_id: contactData.tenant_id,
+      created_by: contactData.created_by,
+      updated_by: contactData.updated_by,
+      t_userprofile_id: contactData.t_userprofile_id
     };
   }
 
   // ==========================================================
-  // Helper Methods (Same as before but updated for backend structure)
+  // Helper Methods
   // ==========================================================
+
+  /**
+   * NEW: Normalize parent contact IDs to array format
+   */
+  private normalizeParentContactIds(parentContactIds: any): string[] {
+    if (!parentContactIds) return [];
+    if (Array.isArray(parentContactIds)) return parentContactIds;
+    if (typeof parentContactIds === 'string') return [parentContactIds];
+    return [];
+  }
+
+  /**
+   * Normalize classifications to array of strings
+   */
+  private normalizeClassifications(classifications: any): string[] {
+    if (!classifications) return [];
+    if (!Array.isArray(classifications)) return [];
+    
+    return classifications.map((c: any) => {
+      if (typeof c === 'string') return c;
+      if (typeof c === 'object' && c.classification_value) return c.classification_value;
+      if (typeof c === 'object' && c.value) return c.value;
+      return String(c);
+    }).filter(Boolean);
+  }
 
   /**
    * Get contact display name for UI
@@ -479,7 +631,6 @@ class ContactService {
 
   /**
    * Get primary contact channel by type
-   * Updated to use channel_type (not channel_code)
    */
   private getPrimaryChannel(channels: any[], channelType: string): any | null {
     if (!channels || channels.length === 0) return null;
@@ -506,8 +657,18 @@ class ContactService {
       throw new Error('Contact type is required');
     }
 
-    if (!contactData.classifications || contactData.classifications.length === 0) {
+    // Normalize classifications for validation
+    const classifications = this.normalizeClassifications(contactData.classifications);
+    
+    if (classifications.length === 0) {
       throw new Error('At least one classification is required');
+    }
+
+    // Validate that classifications are valid
+    const validClassifications = ['buyer', 'seller', 'vendor', 'partner', 'team_member'];
+    const invalidClassifications = classifications.filter(c => !validClassifications.includes(c));
+    if (invalidClassifications.length > 0) {
+      throw new Error(`Invalid classifications: ${invalidClassifications.join(', ')}`);
     }
 
     if (!contactData.contact_channels || contactData.contact_channels.length === 0) {
@@ -524,13 +685,14 @@ class ContactService {
 
     // Validate primary channel exists
     const hasPrimaryChannel = contactData.contact_channels.some(ch => ch.is_primary);
-    if (!hasPrimaryChannel) {
-      throw new Error('At least one contact channel must be marked as primary');
+    if (!hasPrimaryChannel && contactData.contact_channels.length > 0) {
+      // Auto-set first channel as primary if none specified
+      contactData.contact_channels[0].is_primary = true;
     }
   }
 
   /**
-   * FIXED: Enhanced error handling
+   * Enhanced error handling
    */
   private handleContactError(error: any, defaultMessage: string): Error {
     // Extract meaningful error messages from API responses
@@ -594,11 +756,16 @@ class ContactService {
     return {
       types: ['individual', 'corporate'],
       statuses: ['active', 'inactive', 'archived'],
-      classifications: ['buyer', 'seller', 'vendor', 'partner'],
+      classifications: ['buyer', 'seller', 'vendor', 'partner', 'team_member'],
       channel_types: ['mobile', 'email', 'whatsapp', 'linkedin', 'website', 'telegram', 'skype'],
       address_types: ['home', 'office', 'billing', 'shipping', 'factory', 'warehouse', 'other']
     };
   }
-}
+} 
 
-export default ContactService;
+// Export singleton instance
+const contactService = new ContactService();
+export default contactService;
+
+// Also export the class for testing purposes
+export { ContactService };

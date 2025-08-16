@@ -1,56 +1,40 @@
 // src/components/catalog/shared/CatalogContainer.tsx
-// ALTERNATIVE APPROACH: Copy the EXACT working ContactsPage pattern
+// ✅ FIXED: Proper detached table layout + HTML parsing
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../contexts/ThemeContext';
 import {
-  Users, 
   Plus, 
   Search, 
-  Filter, 
-  MoreHorizontal,
-  Building2,
-  User,
-  Mail,
-  Phone,
-  Eye,
-  FileText,
-  DollarSign,
-  Settings,
-  HelpCircle,
-  ChevronLeft,
-  ChevronRight,
   Upload,
   Download,
   Grid3X3,
   List,
   Loader2,
   AlertCircle,
-  Star,
+  Eye,
   Edit,
   Trash2,
-  CheckSquare,
-  X,
-  MessageSquare,
-  Globe,
-  Hash,
-  Tag,
-  UserCheck,
-  UserX,
-  Copy
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  RefreshCw
 } from 'lucide-react';
-import { useCatalogList } from '../../../hooks/useCatalogItems';
+import { useCatalogList, useDeleteCatalogItem, useCatalogOperations } from '../../../hooks/queries/useCatalogQueries';
+import { catalogTypeToApi } from '../../../utils/constants/catalog';
+import ConfirmationDialog from '../../ui/ConfirmationDialog';
 import type { 
   CatalogItemDetailed, 
   CatalogItemType,
   CatalogListParams
 } from '../../../types/catalogTypes';
 
-type ActiveTab = 'status' | 'billing' | 'services';
+type ActiveTab = 'status';
 type ViewType = 'grid' | 'list';
 
 const MINIMUM_SEARCH_LENGTH = 3;
+const ITEMS_PER_PAGE = 20;
 
 interface CatalogContainerProps {
   catalogType: CatalogItemType;
@@ -60,45 +44,44 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   
-  // Get theme colors - EXACT same pattern as LoginPage
+  // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
-  // Add this function to map catalog types to routes
-  const getCatalogRoute = (type: CatalogItemType): string => {
+  // Stable route mapping function
+  const getCatalogRoute = useCallback((type: CatalogItemType): string => {
     const routeMap: Record<CatalogItemType, string> = {
       'service': 'services',
       'equipment': 'equipments', 
       'asset': 'assets',
       'spare_part': 'spare-parts'
     };
-    return routeMap[type] || type;
-  };
+    return routeMap[type] || 'services';
+  }, []);
   
-  // EXACT same state as ContactsPage
+  // State management
   const [activeTab, setActiveTab] = useState<ActiveTab>('status');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [viewType, setViewType] = useState<ViewType>('grid');
+  const [viewType, setViewType] = useState<ViewType>('list');
   const [sortBy, setSortBy] = useState<string>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
-  const itemsPerPage = 20;
+  // Delete confirmation dialog state
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    itemId: string;
+    itemName: string;
+  }>({
+    isOpen: false,
+    itemId: '',
+    itemName: ''
+  });
+  
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Helper to convert frontend type to API number
-  function getCatalogTypeNumber(type: CatalogItemType): number {
-    const typeMap: Record<CatalogItemType, number> = {
-      'service': 1,
-      'asset': 2,
-      'spare_part': 3,
-      'equipment': 4
-    };
-    return typeMap[type];
-  }
-
-  // EXACT debounce pattern from ContactsPage
+  // Debounce search effect
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -107,6 +90,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
     searchTimeoutRef.current = setTimeout(() => {
       if (searchTerm.length === 0 || searchTerm.length >= MINIMUM_SEARCH_LENGTH) {
         setDebouncedSearchTerm(searchTerm);
+        setCurrentPage(1);
       } else {
         setDebouncedSearchTerm('');
       }
@@ -119,166 +103,172 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
     };
   }, [searchTerm]);
 
-  // EXACT filter building pattern from ContactsPage
-  const apiFilters: CatalogListParams = {
-    page: currentPage,
-    limit: itemsPerPage,
-    search: debouncedSearchTerm.trim() || undefined,
-    catalogType: getCatalogTypeNumber(catalogType),
-    includeInactive: false,
-    sort_by: sortBy,
-    sort_order: sortOrder,
-  };
+  // API filters with working status filtering
+  const apiFilters: CatalogListParams & { statusFilter?: string } = useMemo(() => {
+    const mappedCatalogType = catalogTypeToApi(catalogType);
+    
+    return {
+      page: currentPage,
+      limit: ITEMS_PER_PAGE,
+      search: debouncedSearchTerm.trim() || undefined,
+      catalogType: mappedCatalogType,
+      includeInactive: activeFilter !== 'active',
+      sortBy: sortBy as any,
+      sortOrder: sortOrder,
+      statusFilter: activeFilter,
+    };
+  }, [currentPage, debouncedSearchTerm, catalogType, sortBy, sortOrder, activeFilter]);
 
-  // EXACT hook usage pattern from ContactsPage
+  // TanStack Query hook
   const { 
-    data: items, 
-    loading, 
+    data: queryResult, 
+    isLoading, 
     error, 
-    pagination, 
-    refetch,
-    updateFilters 
+    isError,
+    refetch 
   } = useCatalogList(apiFilters);
 
-  // EXACT filter update pattern from ContactsPage
-  useEffect(() => {
-    const newFilters: CatalogListParams = {
-      page: currentPage,
-      limit: itemsPerPage,
-      search: debouncedSearchTerm.trim() || undefined,
-      catalogType: getCatalogTypeNumber(catalogType),
-      includeInactive: false,
-      sort_by: sortBy,
-      sort_order: sortOrder,
-    };
-    
-    updateFilters(newFilters);
-  }, [activeFilter, debouncedSearchTerm, currentPage, sortBy, sortOrder, updateFilters]);
+  // Extract data
+  const items = queryResult?.data || [];
+  const pagination = queryResult?.pagination || {
+    page: 1,
+    limit: ITEMS_PER_PAGE,
+    total: 0,
+    totalPages: 0
+  };
 
-  // EXACT page reset pattern from ContactsPage
-  useEffect(() => {
-    if (debouncedSearchTerm !== searchTerm) {
-      setCurrentPage(1);
-    }
-  }, [debouncedSearchTerm]);
+  // Mutations
+  const deleteMutation = useDeleteCatalogItem();
+  const { refreshCatalogList } = useCatalogOperations();
 
-  // EXACT handlers from ContactsPage
-  const handleFilterChange = (newFilter: string) => {
+  // Event handlers with proper routing
+  const handleFilterChange = useCallback((newFilter: string) => {
     setActiveFilter(newFilter);
     setCurrentPage(1);
-  };
+  }, []);
 
-  const handleSearchChange = (value: string) => {
+  const handleSearchChange = useCallback((value: string) => {
     setSearchTerm(value);
-  };
+  }, []);
 
-  // Helper function to check if search meets minimum criteria
-  const shouldShowSearchHint = () => {
-    return searchTerm.length > 0 && searchTerm.length < MINIMUM_SEARCH_LENGTH;
-  };
+  const handleAddNew = useCallback(() => {
+    const targetUrl = `/catalog/${getCatalogRoute(catalogType)}/add`;
+    navigate(targetUrl);
+  }, [catalogType, getCatalogRoute, navigate]);
 
-  // Tab configurations adapted for catalog
-  const tabConfigs = {
-    status: {
-      label: 'STATUS',
-      filters: [
-        { id: 'all', label: 'All', count: pagination?.total || 0 },
-        { id: 'active', label: 'Active', count: 0 },
-        { id: 'inactive', label: 'Inactive', count: 0 },
-        { id: 'draft', label: 'Draft', count: 0 }
-      ]
+  // ✅ FIXED: View handler
+  const handleView = useCallback((itemId: string) => {
+    const targetUrl = `/catalog/${getCatalogRoute(catalogType)}/${itemId}`;
+    console.log('🔍 Navigating to view:', targetUrl);
+    navigate(targetUrl);
+  }, [catalogType, getCatalogRoute, navigate]);
+
+  // ✅ FIXED: Edit handler
+  const handleEdit = useCallback((itemId: string) => {
+    const targetUrl = `/catalog/${getCatalogRoute(catalogType)}/${itemId}/edit`;
+    console.log('✏️ Navigating to edit:', targetUrl);
+    navigate(targetUrl);
+  }, [catalogType, getCatalogRoute, navigate]);
+
+  const handleDeleteClick = useCallback((item: CatalogItemDetailed) => {
+    setDeleteDialog({
+      isOpen: true,
+      itemId: item.id,
+      itemName: item.name
+    });
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    try {
+      await deleteMutation.mutateAsync(deleteDialog.itemId);
+      setDeleteDialog({ isOpen: false, itemId: '', itemName: '' });
+    } catch (error) {
+      console.error('Delete failed:', error);
     }
-  };
+  }, [deleteMutation, deleteDialog.itemId]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteDialog({ isOpen: false, itemId: '', itemName: '' });
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    refreshCatalogList(apiFilters);
+  }, [refreshCatalogList, apiFilters]);
+
+  // ✅ FIXED: Helper functions
+  const shouldShowSearchHint = useCallback(() => {
+    return searchTerm.length > 0 && searchTerm.length < MINIMUM_SEARCH_LENGTH;
+  }, [searchTerm]);
+
+  const formatPrice = useCallback((item: CatalogItemDetailed) => {
+    if (item.price_attributes) {
+      return `${item.price_attributes.currency} ${item.price_attributes.base_amount?.toLocaleString()}`;
+    }
+    return 'N/A';
+  }, []);
+
+  // ✅ FIXED: Parse HTML content for clean display
+  const parseHtmlContent = useCallback((htmlContent: string) => {
+    if (!htmlContent) return 'No description';
+    
+    // Strip HTML tags and get plain text
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Return first 60 characters for table display
+    return plainText.length > 60 ? plainText.substring(0, 60) + '...' : plainText;
+  }, []);
+
+  const getStatusBadge = useCallback((item: CatalogItemDetailed) => {
+    const isActive = item.status === 'active' || item.is_active === true;
+    return (
+      <span 
+        className="px-2 py-1 rounded-full text-xs font-medium border"
+        style={
+          isActive 
+            ? {
+                backgroundColor: `${colors.semantic.success}20`,
+                color: colors.semantic.success,
+                borderColor: `${colors.semantic.success}40`
+              }
+            : {
+                backgroundColor: `${colors.utility.primaryText}20`,
+                color: colors.utility.secondaryText,
+                borderColor: `${colors.utility.primaryText}40`
+              }
+        }
+      >
+        {isActive ? 'Active' : 'Inactive'}
+      </span>
+    );
+  }, [colors]);
+
+  // Tab configurations with dynamic counts based on filtered data
+  const tabConfigs = useMemo(() => {
+    const activeCount = items.filter(item => item.status === 'active' || item.is_active === true).length;
+    const inactiveCount = items.filter(item => item.status === 'inactive' || item.is_active === false).length;
+    
+    return {
+      status: {
+        label: 'STATUS',
+        filters: [
+          { id: 'all', label: 'All', count: pagination.total },
+          { id: 'active', label: 'Active', count: activeCount },
+          { id: 'inactive', label: 'Inactive', count: inactiveCount },
+        ]
+      }
+    };
+  }, [items, pagination.total]);
 
   const currentFilters = tabConfigs[activeTab].filters;
-
-  // Loading skeleton component - Themed version
-  const CatalogSkeleton = () => (
-    <div className="animate-pulse">
-      {viewType === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div 
-              key={i} 
-              className="p-4 rounded-lg border transition-colors"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}20`
-              }}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div 
-                  className="w-8 h-8 rounded-lg"
-                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                ></div>
-                <div className="flex-1">
-                  <div 
-                    className="h-4 rounded mb-2"
-                    style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                  ></div>
-                  <div 
-                    className="h-3 rounded w-2/3"
-                    style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                  ></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div 
-                  className="h-3 rounded"
-                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                ></div>
-                <div 
-                  className="h-3 rounded w-3/4"
-                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {[...Array(8)].map((_, i) => (
-            <div 
-              key={i} 
-              className="p-3 rounded-lg border transition-colors"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}20`
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-lg"
-                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                ></div>
-                <div className="flex-1">
-                  <div 
-                    className="h-4 rounded mb-2"
-                    style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                  ></div>
-                  <div 
-                    className="h-3 rounded w-1/2"
-                    style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                  ></div>
-                </div>
-                <div 
-                  className="w-20 h-3 rounded"
-                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div 
       className="p-4 md:p-6 min-h-screen transition-colors"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
-      {/* Header - Themed */}
+      {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
         <div className="flex items-center gap-3">
           <h1 
@@ -316,14 +306,24 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
             </button>
           </div>
           
-          {/* New Item Button - Themed */}
+          {/* Refresh Button */}
           <button 
-            onClick={() => {
-              console.log('🔍 Button clicked!');
-              console.log('🔍 catalogType:', catalogType);
-              console.log('🔍 Target URL:', `/catalog/${getCatalogRoute(catalogType)}/add`);
-              navigate(`/catalog/${getCatalogRoute(catalogType)}/add`);
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="flex items-center px-3 py-2 rounded-md hover:opacity-80 transition-all text-sm border disabled:opacity-50"
+            style={{
+              borderColor: colors.brand.primary,
+              color: colors.brand.primary,
+              backgroundColor: 'transparent'
             }}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+          
+          {/* New Item Button */}
+          <button 
+            onClick={handleAddNew}
             className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-all text-white"
             style={{
               background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -335,7 +335,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
         </div>
       </div>
 
-      {/* Tab Layout - Themed */}
+      {/* Tab Layout */}
       <div 
         className="rounded-lg shadow-sm border mb-6 transition-colors"
         style={{
@@ -352,16 +352,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
             {Object.entries(tabConfigs).map(([key, config]) => (
               <button
                 key={key}
-                onClick={() => {
-                  setActiveTab(key as ActiveTab);
-                  setActiveFilter('all');
-                  setCurrentPage(1);
-                }}
-                className={`pb-3 font-medium text-sm transition-colors relative ${
-                  activeTab === key 
-                    ? '' 
-                    : ''
-                }`}
+                className="pb-3 font-medium text-sm transition-colors relative"
                 style={{
                   color: activeTab === key 
                     ? colors.utility.primaryText 
@@ -380,7 +371,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
           </div>
         </div>
 
-        {/* Sub Filters & Search - Themed */}
+        {/* Sub Filters & Search */}
         <div className="p-4 space-y-3">
           {/* Sub-filter Pills */}
           <div className="flex flex-wrap gap-2">
@@ -388,7 +379,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
               <button
                 key={filter.id}
                 onClick={() => handleFilterChange(filter.id)}
-                className={`px-3 py-1.5 rounded-full text-sm transition-all`}
+                className="px-3 py-1.5 rounded-full text-sm transition-all"
                 style={
                   activeFilter === filter.id 
                     ? {
@@ -401,7 +392,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                       }
                 }
               >
-                {filter.label} {filter.count > 0 && `(${filter.count})`}
+                {filter.label} ({filter.count})
               </button>
             ))}
           </div>
@@ -438,9 +429,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                 <button 
                   onClick={() => setViewType('grid')}
                   className={`p-1.5 rounded-md transition-all ${
-                    viewType === 'grid' 
-                      ? 'shadow-sm' 
-                      : ''
+                    viewType === 'grid' ? 'shadow-sm' : ''
                   }`}
                   style={
                     viewType === 'grid'
@@ -458,9 +447,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                 <button 
                   onClick={() => setViewType('list')}
                   className={`p-1.5 rounded-md transition-all ${
-                    viewType === 'list' 
-                      ? 'shadow-sm' 
-                      : ''
+                    viewType === 'list' ? 'shadow-sm' : ''
                   }`}
                   style={
                     viewType === 'list'
@@ -481,7 +468,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                 className="text-sm whitespace-nowrap"
                 style={{ color: colors.utility.secondaryText }}
               >
-                {pagination?.total || 0} results
+                {pagination.total} results
               </span>
             </div>
           </div>
@@ -504,17 +491,17 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
               className="text-sm"
               style={{ color: colors.utility.secondaryText }}
             >
-              {loading 
+              {isLoading 
                 ? `Searching for "${debouncedSearchTerm}"...`
-                : `Showing results for "${debouncedSearchTerm}" (${pagination?.total || 0} found)`
+                : `Showing results for "${debouncedSearchTerm}" (${pagination.total} found)`
               }
             </div>
           )}
         </div>
       </div>
 
-      {/* Error State - Themed */}
-      {error && (
+      {/* Error State */}
+      {isError && (
         <div 
           className="mb-6 p-4 rounded-lg border"
           style={{
@@ -538,10 +525,10 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                 className="text-sm mt-1"
                 style={{ color: `${colors.semantic.error}80` }}
               >
-                {error}
+                {error?.message || 'An unexpected error occurred'}
               </p>
               <button 
-                onClick={refetch}
+                onClick={() => refetch()}
                 className="text-sm mt-2 underline hover:no-underline"
                 style={{ color: colors.semantic.error }}
               >
@@ -553,10 +540,23 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
       )}
 
       {/* Loading State */}
-      {loading && <CatalogSkeleton />}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 
+            className="h-8 w-8 animate-spin"
+            style={{ color: colors.brand.primary }}
+          />
+          <span 
+            className="ml-3 text-lg"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Loading {catalogType}...
+          </span>
+        </div>
+      )}
 
-      {/* Catalog List */}
-      {!loading && !error && (
+      {/* CONTENT LAYOUT */}
+      {!isLoading && !isError && (
         <div>
           {items.length === 0 ? (
             <div 
@@ -588,7 +588,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                 }
               </p>
               <button 
-                onClick={() => navigate(`/catalog/${getCatalogRoute(catalogType)}/add`)}
+                onClick={handleAddNew}
                 className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-all mx-auto text-white"
                 style={{
                   background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -600,132 +600,265 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
             </div>
           ) : (
             <>
-              <div className={`
-                ${viewType === 'grid' 
-                  ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' 
-                  : 'space-y-2'
-                }
-              `}>
-                {items.map((item) => (
+              {/* ✅ FIXED: PROPER DETACHED TABLE LAYOUT */}
+              {viewType === 'list' ? (
+                <div className="space-y-4">
+                  {/* ✅ DETACHED TABLE HEADER */}
                   <div 
-                    key={item.id} 
-                    className="rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-4"
+                    className="rounded-lg shadow-sm border-2 transition-colors"
                     style={{
                       backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: `${colors.utility.primaryText}20`
+                      borderColor: colors.brand.primary + '30'
                     }}
                   >
-                    {/* Item Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div 
+                      className="grid grid-cols-12 gap-4 px-6 py-4 text-sm font-semibold border-b-2"
+                      style={{
+                        backgroundColor: `${colors.brand.primary}10`,
+                        borderColor: colors.brand.primary + '20',
+                        color: colors.utility.primaryText
+                      }}
+                    >
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-2">Price</div>
+                      <div className="col-span-1">Status</div>
+                      <div className="col-span-1">Version</div>
+                      <div className="col-span-2 text-center">Actions</div>
+                    </div>
+                  </div>
+
+                  {/* ✅ DETACHED DATA ROWS */}
+                  <div className="space-y-2">
+                    {items.map((item, index) => (
+                      <div 
+                        key={item.id}
+                        className="rounded-lg shadow-sm border transition-all hover:shadow-md hover:border-opacity-60"
+                        style={{
+                          backgroundColor: colors.utility.secondaryBackground,
+                          borderColor: `${colors.utility.primaryText}20`
+                        }}
+                      >
                         <div 
-                          className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 border"
-                          style={{
-                            backgroundColor: `${colors.brand.primary}20`,
-                            color: colors.brand.primary,
-                            borderColor: `${colors.brand.primary}30`
-                          }}
+                          className="grid grid-cols-12 gap-4 px-6 py-4 text-sm items-center"
+                          style={{ color: colors.utility.primaryText }}
                         >
-                          {item.name?.charAt(0)?.toUpperCase() || 'C'}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 
-                            className="font-semibold text-base truncate"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            {item.name}
-                          </h3>
+                          {/* Name Column */}
+                          <div className="col-span-4 flex items-center gap-3">
+                            <div 
+                              className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 border-2"
+                              style={{
+                                backgroundColor: `${colors.brand.primary}15`,
+                                color: colors.brand.primary,
+                                borderColor: `${colors.brand.primary}40`
+                              }}
+                            >
+                              {item.name?.charAt(0)?.toUpperCase() || 'C'}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 
+                                className="font-semibold text-base truncate"
+                                style={{ color: colors.utility.primaryText }}
+                              >
+                                {item.name}
+                              </h3>
+                              <p 
+                                className="text-sm truncate mt-1"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                {/* ✅ FIXED: Parse HTML content properly */}
+                                {parseHtmlContent(item.short_description || item.description_content || '')}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Type Column */}
+                          <div className="col-span-2">
+                            <span 
+                              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border"
+                              style={{
+                                backgroundColor: `${colors.utility.primaryText}10`,
+                                color: colors.utility.primaryText,
+                                borderColor: `${colors.utility.primaryText}30`
+                              }}
+                            >
+                              {catalogType.charAt(0).toUpperCase() + catalogType.slice(1)}
+                            </span>
+                          </div>
+
+                          {/* Price Column */}
+                          <div className="col-span-2">
+                            <span 
+                              className="font-semibold text-base"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              {formatPrice(item)}
+                            </span>
+                          </div>
+
+                          {/* Status Column */}
+                          <div className="col-span-1">
+                            {getStatusBadge(item)}
+                          </div>
+
+                          {/* Version Column */}
+                          <div className="col-span-1">
+                            <span 
+                              className="text-sm font-medium"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              v{item.version_number || 1}
+                            </span>
+                          </div>
+
+                          {/* ✅ Actions Column - Fixed routing */}
+                          <div className="col-span-2 flex items-center justify-center gap-2">
+                            <button 
+                              onClick={() => handleView(item.id)}
+                              className="p-2 rounded-lg transition-all hover:shadow-sm"
+                              style={{
+                                backgroundColor: `${colors.utility.primaryText}15`,
+                                color: colors.utility.primaryText
+                              }}
+                              title="View details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleEdit(item.id)}
+                              className="p-2 rounded-lg transition-all hover:shadow-sm text-white"
+                              style={{
+                                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                              }}
+                              title="Edit"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteClick(item)}
+                              disabled={deleteMutation.isPending}
+                              className="p-2 rounded-lg transition-all hover:shadow-sm disabled:opacity-50"
+                              style={{
+                                backgroundColor: `${colors.semantic.error}20`,
+                                color: colors.semantic.error
+                              }}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <span 
-                        className={`px-2 py-1 rounded-full text-xs font-medium border flex-shrink-0`}
-                        style={
-                          item.status === 'active' 
-                            ? {
-                                backgroundColor: `${colors.semantic.success}20`,
-                                color: colors.semantic.success,
-                                borderColor: `${colors.semantic.success}40`
-                              }
-                            : {
-                                backgroundColor: `${colors.utility.primaryText}20`,
-                                color: colors.utility.secondaryText,
-                                borderColor: `${colors.utility.primaryText}40`
-                              }
-                        }
-                      >
-                        {item.status}
-                      </span>
-                    </div>
-                    
-                    {/* Description */}
-                    <div className="mb-3">
-                      <p 
-                        className="text-sm line-clamp-2"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        {item.short_description || 'No description available'}
-                      </p>
-                    </div>
-                    
-                    {/* Price */}
-                    {item.price_attributes && (
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                // Grid View (unchanged)
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {items.map((item) => (
+                    <div 
+                      key={item.id} 
+                      className="rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-4"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: `${colors.utility.primaryText}20`
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 border"
+                            style={{
+                              backgroundColor: `${colors.brand.primary}20`,
+                              color: colors.brand.primary,
+                              borderColor: `${colors.brand.primary}30`
+                            }}
+                          >
+                            {item.name?.charAt(0)?.toUpperCase() || 'C'}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 
+                              className="font-semibold text-base truncate"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              {item.name}
+                            </h3>
+                          </div>
+                        </div>
+                        {getStatusBadge(item)}
+                      </div>
+                      
+                      <div className="mb-3">
+                        <p 
+                          className="text-sm line-clamp-2"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          {parseHtmlContent(item.short_description || item.description_content || '')}
+                        </p>
+                      </div>
+                      
                       <div className="mb-3">
                         <span 
                           className="text-lg font-bold"
                           style={{ color: colors.utility.primaryText }}
                         >
-                          {item.price_attributes.currency} {item.price_attributes.base_amount?.toLocaleString()}
+                          {formatPrice(item)}
                         </span>
-                        <span 
-                          className="text-sm ml-1"
+                      </div>
+                      
+                      <div 
+                        className="flex items-center justify-between pt-2 border-t"
+                        style={{ borderColor: `${colors.utility.primaryText}20` }}
+                      >
+                        <div className="flex gap-1">
+                          <button 
+                            onClick={() => handleView(item.id)}
+                            className="p-1.5 rounded-md transition-all"
+                            style={{
+                              backgroundColor: `${colors.utility.primaryText}10`,
+                              color: colors.utility.primaryText
+                            }}
+                            title="View details"
+                          >
+                            <Eye className="h-3 w-3" />
+                          </button>
+                          <button 
+                            onClick={() => handleEdit(item.id)}
+                            className="p-1.5 rounded-md transition-all text-white"
+                            style={{
+                              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
+                            }}
+                            title="Edit"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteClick(item)}
+                            disabled={deleteMutation.isPending}
+                            className="p-1.5 rounded-md transition-all disabled:opacity-50"
+                            style={{
+                              backgroundColor: `${colors.semantic.error}20`,
+                              color: colors.semantic.error
+                            }}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div 
+                          className="text-xs"
                           style={{ color: colors.utility.secondaryText }}
                         >
-                          /{item.price_attributes.type}
-                        </span>
-                      </div>
-                    )}
-                    
-                    {/* Actions */}
-                    <div 
-                      className="flex items-center justify-between pt-2 border-t"
-                      style={{ borderColor: `${colors.utility.primaryText}20` }}
-                    >
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={() => navigate(`/catalog/${getCatalogRoute(catalogType)}/${item.id}`)}
-                          className="p-1.5 rounded-md transition-all"
-                          style={{
-                            backgroundColor: `${colors.utility.primaryText}10`,
-                            color: colors.utility.primaryText
-                          }}
-                          title="View details"
-                        >
-                          <Eye className="h-3 w-3" />
-                        </button>
-                        <button 
-                          onClick={() => navigate(`/catalog/${getCatalogRoute(catalogType)}/${item.id}/edit`)}
-                          className="p-1.5 rounded-md transition-all text-white"
-                          style={{
-                            background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
-                          }}
-                          title="Edit"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <div 
-                        className="text-xs"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        v{item.version_number || 1}
+                          v{item.version_number || 1}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
 
-              {/* Enhanced Pagination - Themed */}
-              {pagination && pagination.totalPages > 1 && (
+              {/* Pagination */}
+              {pagination.totalPages > 1 && (
                 <div 
                   className="mt-6 rounded-lg shadow-sm border p-4 transition-colors"
                   style={{
@@ -762,7 +895,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                             <button
                               key={page}
                               onClick={() => setCurrentPage(page)}
-                              className={`px-3 py-1 rounded-md text-sm font-medium transition-all`}
+                              className="px-3 py-1 rounded-md text-sm font-medium transition-all"
                               style={
                                 pagination.page === page 
                                   ? {
@@ -801,6 +934,25 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
           )}
         </div>
       )}
+
+      {/* DELETE CONFIRMATION DIALOG */}
+      <ConfirmationDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Catalog Item"
+        description={
+          <div>
+            <p>Are you sure you want to delete "{deleteDialog.itemName}"?</p>
+            <p className="mt-2 text-sm opacity-80">This action cannot be undone.</p>
+          </div>
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        icon={<Trash2 className="h-6 w-6" />}
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 };

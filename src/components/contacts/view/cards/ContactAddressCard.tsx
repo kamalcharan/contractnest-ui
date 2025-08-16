@@ -1,4 +1,4 @@
-// src/components/contacts/view/cards/ContactAddressCard.tsx - Full Production Version
+// src/components/contacts/view/cards/ContactAddressCard.tsx - FIXED VERSION
 import React, { useState } from 'react';
 import { 
   MapPin, 
@@ -19,20 +19,27 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { ADDRESS_TYPE_LABELS, canPerformOperation } from '@/utils/constants/contacts';
 
+// FIXED: Updated interface to match actual database structure
 interface ContactAddress {
   id: string;
-  address_type: 'home' | 'office' | 'billing' | 'shipping' | 'factory' | 'warehouse' | 'other';
+  type: string; // CHANGED: from address_type to type (matches database)
+  address_type?: string; // ADDED: for backward compatibility
   label?: string;
-  line1: string;
-  line2?: string;
-  line3?: string;
+  address_line1: string; // CHANGED: matches database field name
+  line1?: string; // ADDED: for backward compatibility
+  address_line2?: string; // CHANGED: matches database field name  
+  line2?: string; // ADDED: for backward compatibility
+  address_line3?: string; // ADDED: for future compatibility
+  line3?: string; // ADDED: for backward compatibility
   city: string;
-  state: string;
-  country: string;
+  state?: string;
+  state_code?: string; // ADDED: matches database field name
+  country?: string;
+  country_code: string; // ADDED: matches database field name
   postal_code?: string;
   google_pin?: string;
   is_primary: boolean;
-  is_verified: boolean;
+  is_verified?: boolean;
   notes?: string;
 }
 
@@ -55,6 +62,11 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
   const { toast } = useToast();
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
+  // FIXED: Get address type with null safety and field mapping
+  const getAddressType = (address: ContactAddress): string => {
+    return address.type || address.address_type || 'other';
+  };
+
   // Get address type icon
   const getAddressIcon = (addressType: string) => {
     switch (addressType) {
@@ -75,24 +87,27 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
     }
   };
 
-  // Get address type label and styling
-  const getAddressTypeInfo = (addressType: string) => {
-    const config = ADDRESS_TYPE_LABELS[addressType as keyof typeof ADDRESS_TYPE_LABELS];
+  // FIXED: Get address type label and styling with null safety
+  const getAddressTypeInfo = (addressType: string | null | undefined) => {
+    // Handle null/undefined addressType
+    const safeAddressType = addressType || 'other';
+    const config = ADDRESS_TYPE_LABELS[safeAddressType as keyof typeof ADDRESS_TYPE_LABELS];
+    
     return {
-      label: config?.label || addressType.charAt(0).toUpperCase() + addressType.slice(1),
+      label: config?.label || (safeAddressType.charAt(0).toUpperCase() + safeAddressType.slice(1)),
       icon: config?.icon || '📍',
       description: config?.description || 'Address'
     };
   };
 
-  // Format address for display
+  // FIXED: Format address for display with field mapping
   const formatAddress = (address: ContactAddress): string => {
     const parts = [
-      address.line1,
-      address.line2,
-      address.line3,
+      address.address_line1 || address.line1,
+      address.address_line2 || address.line2,
+      address.address_line3 || address.line3,
       address.city,
-      address.state,
+      address.state || address.state_code,
       address.postal_code,
       address.country
     ].filter(Boolean);
@@ -100,13 +115,13 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
     return parts.join(', ');
   };
 
-  // Format address for copying (multi-line)
+  // FIXED: Format address for copying (multi-line) with field mapping
   const formatAddressForCopy = (address: ContactAddress): string => {
     const lines = [
-      address.line1,
-      address.line2,
-      address.line3,
-      `${address.city}${address.state ? `, ${address.state}` : ''}${address.postal_code ? ` ${address.postal_code}` : ''}`,
+      address.address_line1 || address.line1,
+      address.address_line2 || address.line2,
+      address.address_line3 || address.line3,
+      `${address.city}${(address.state || address.state_code) ? `, ${address.state || address.state_code}` : ''}${address.postal_code ? ` ${address.postal_code}` : ''}`,
       address.country
     ].filter(Boolean);
     
@@ -161,11 +176,14 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
   // Check if edit is allowed
   const canEdit = canPerformOperation(contact.status, 'edit');
 
-  // Sort addresses: primary first, then by type
+  // FIXED: Sort addresses with null safety
   const sortedAddresses = [...contact.addresses].sort((a, b) => {
     if (a.is_primary && !b.is_primary) return -1;
     if (!a.is_primary && b.is_primary) return 1;
-    return a.address_type.localeCompare(b.address_type);
+    
+    const aType = getAddressType(a);
+    const bType = getAddressType(b);
+    return aType.localeCompare(bType);
   });
 
   return (
@@ -202,8 +220,9 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
       ) : (
         <div className="space-y-4">
           {sortedAddresses.map((address) => {
-            const IconComponent = getAddressIcon(address.address_type);
-            const typeInfo = getAddressTypeInfo(address.address_type);
+            const addressType = getAddressType(address);
+            const IconComponent = getAddressIcon(addressType);
+            const typeInfo = getAddressTypeInfo(addressType);
             const isCopied = copiedAddress === address.id;
             
             return (
@@ -274,14 +293,18 @@ const ContactAddressCard: React.FC<ContactAddressCardProps> = ({
                   </div>
                 </div>
                 
-                {/* Address lines */}
+                {/* FIXED: Address lines with field mapping */}
                 <div className="space-y-1 text-sm text-muted-foreground leading-relaxed">
-                  <div>{address.line1}</div>
-                  {address.line2 && <div>{address.line2}</div>}
-                  {address.line3 && <div>{address.line3}</div>}
+                  <div>{address.address_line1 || address.line1}</div>
+                  {(address.address_line2 || address.line2) && (
+                    <div>{address.address_line2 || address.line2}</div>
+                  )}
+                  {(address.address_line3 || address.line3) && (
+                    <div>{address.address_line3 || address.line3}</div>
+                  )}
                   <div>
                     {address.city}
-                    {address.state && `, ${address.state}`}
+                    {(address.state || address.state_code) && `, ${address.state || address.state_code}`}
                     {address.postal_code && ` ${address.postal_code}`}
                   </div>
                   <div className="font-medium text-foreground">{address.country}</div>

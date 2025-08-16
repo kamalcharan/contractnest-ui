@@ -1,7 +1,7 @@
 // src/hooks/useContacts.ts - FIXED VERSION (No Infinite Loop)
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import ContactService from '../services/contactService';
+import contactService from '../services/contactService';
 import { 
   Contact, 
   ContactFilters, 
@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
-const contactService = new ContactService();
+// const contactService = new ContactService();
 
 
 // FIXED: Custom hook for contact list with filtering and pagination
@@ -617,8 +617,11 @@ export const useDeleteContact = () => {
   };
 };
 
+// src/hooks/useContacts.ts - UPDATES NEEDED
+
+// UPDATE: Search hook to handle ContactSearchResult[]
 export const useContactSearch = (): ContactSearchHook => {
-  const [data, setData] = useState<Contact[]>([]);
+  const [data, setData] = useState<ContactSearchResult[]>([]); // ← CHANGED TYPE
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -644,7 +647,8 @@ export const useContactSearch = (): ContactSearchHook => {
       const searchRequest: ContactSearchRequest = {
         query: query.trim(),
         filters,
-        fuzzy: true
+        fuzzy: true,
+        includeRelationships: true // ← ADD: Include parent/child relationships
       };
 
       const response = await contactService.searchContacts(searchRequest);
@@ -653,7 +657,7 @@ export const useContactSearch = (): ContactSearchHook => {
         return;
       }
 
-      setData(response.data);
+      setData(response.data); // ← Now ContactSearchResult[]
     } catch (err: any) {
       if (err.name === 'AbortError') {
         return;
@@ -691,6 +695,98 @@ export const useContactSearch = (): ContactSearchHook => {
     loading,
     error,
     clear
+  };
+};
+
+// ADD: New hook for managing parent-child relationships
+export const useContactRelationships = () => {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Link individual to company
+  const linkToParent = useCallback(async (contactId: string, parentContactId: string): Promise<Contact> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get current contact
+      const contact = await contactService.getContact(contactId);
+      const currentParentIds = contact.parent_contact_ids || [];
+      
+      // Add new parent if not already linked
+      if (!currentParentIds.includes(parentContactId)) {
+        const updatedParentIds = [...currentParentIds, parentContactId];
+        
+        const updatedContact = await contactService.updateContact(contactId, {
+          parent_contact_ids: updatedParentIds
+        });
+
+        toast.success('Contact linked to company successfully');
+        
+        // Emit event for other hooks to listen
+        window.dispatchEvent(new CustomEvent('contact-updated', { 
+          detail: { contact: updatedContact, contactId } 
+        }));
+
+        return updatedContact;
+      }
+      
+      return contact;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to link contact to company';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Unlink individual from company
+  const unlinkFromParent = useCallback(async (contactId: string, parentContactId: string): Promise<Contact> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get current contact
+      const contact = await contactService.getContact(contactId);
+      const currentParentIds = contact.parent_contact_ids || [];
+      
+      // Remove parent from array
+      const updatedParentIds = currentParentIds.filter(id => id !== parentContactId);
+      
+      const updatedContact = await contactService.updateContact(contactId, {
+        parent_contact_ids: updatedParentIds
+      });
+
+      toast.success('Contact unlinked from company successfully');
+      
+      // Emit event for other hooks to listen
+      window.dispatchEvent(new CustomEvent('contact-updated', { 
+        detail: { contact: updatedContact, contactId } 
+      }));
+
+      return updatedContact;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to unlink contact from company';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const reset = useCallback(() => {
+    setError(null);
+  }, []);
+
+  return {
+    linkToParent,
+    unlinkFromParent,
+    loading,
+    error,
+    reset
   };
 };
 

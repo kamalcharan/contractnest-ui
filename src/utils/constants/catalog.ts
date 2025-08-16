@@ -1,74 +1,36 @@
 // src/utils/constants/catalog.ts
-// COMPLETE VERSION - Fully aligned with Edge Functions and Express API
-// Safe to replace existing file
+// Unified catalog constants - Single source of truth for all catalog-related constants
 
 // =================================================================
-// CATALOG ITEM TYPES (Frontend Enum)
+// CATALOG ITEM TYPES
 // =================================================================
 
 export const CATALOG_ITEM_TYPES = {
   SERVICE: 'service',
   EQUIPMENT: 'equipment', 
-  SPARE_PART: 'spare_part',
-  ASSET: 'asset'
+  ASSET: 'asset',
+  SPARE_PART: 'spare_part'
 } as const;
 
 export type CatalogItemType = typeof CATALOG_ITEM_TYPES[keyof typeof CATALOG_ITEM_TYPES];
 
-// Display labels for UI
-export const CATALOG_TYPE_LABELS = {
-  [CATALOG_ITEM_TYPES.SERVICE]: 'Service',
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'Equipment',
-  [CATALOG_ITEM_TYPES.SPARE_PART]: 'Spare Part', 
-  [CATALOG_ITEM_TYPES.ASSET]: 'Asset'
-} as const;
-
-export const CATALOG_TYPE_DESCRIPTIONS = {
-  [CATALOG_ITEM_TYPES.SERVICE]: 'Professional services offered to clients',
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'Equipment and machinery used in operations',
-  [CATALOG_ITEM_TYPES.SPARE_PART]: 'Replacement parts and components',
-  [CATALOG_ITEM_TYPES.ASSET]: 'Physical assets and facilities'
-} as const;
-
-export const CATALOG_TYPE_ICONS = {
-  [CATALOG_ITEM_TYPES.SERVICE]: 'concierge-bell',
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'cogs',
-  [CATALOG_ITEM_TYPES.SPARE_PART]: 'tools',
-  [CATALOG_ITEM_TYPES.ASSET]: 'building'
-} as const;
-
-export const CATALOG_TYPE_COLORS = {
-  [CATALOG_ITEM_TYPES.SERVICE]: 'purple',
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'orange', 
-  [CATALOG_ITEM_TYPES.SPARE_PART]: 'gray',
-  [CATALOG_ITEM_TYPES.ASSET]: 'green'
-} as const;
-
 // =================================================================
-// API MAPPINGS (Critical for Edge Function Communication)
+// CATALOG STATUS
 // =================================================================
 
-// Map frontend catalog types to Edge Function database values
-export const CATALOG_TYPE_TO_API: Record<CatalogItemType, number> = {
-  [CATALOG_ITEM_TYPES.SERVICE]: 1,
-  [CATALOG_ITEM_TYPES.ASSET]: 2,
-  [CATALOG_ITEM_TYPES.SPARE_PART]: 3,
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: 4
+export const CATALOG_ITEM_STATUS = {
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+  DRAFT: 'draft',
+  ARCHIVED: 'archived'
 } as const;
 
-// Reverse mapping for API responses
-export const API_TO_CATALOG_TYPE: Record<number, CatalogItemType> = {
-  1: CATALOG_ITEM_TYPES.SERVICE,
-  2: CATALOG_ITEM_TYPES.ASSET,
-  3: CATALOG_ITEM_TYPES.SPARE_PART,
-  4: CATALOG_ITEM_TYPES.EQUIPMENT
-} as const;
+export type CatalogItemStatus = typeof CATALOG_ITEM_STATUS[keyof typeof CATALOG_ITEM_STATUS];
 
 // =================================================================
-// PRICING TYPES (Aligned with Edge Functions)
+// PRICING TYPES
 // =================================================================
 
-// Frontend pricing types
 export const PRICING_TYPES = {
   FIXED: 'fixed',
   UNIT_PRICE: 'unit_price',
@@ -78,420 +40,512 @@ export const PRICING_TYPES = {
 
 export type PricingType = typeof PRICING_TYPES[keyof typeof PRICING_TYPES];
 
-// Edge Function API pricing types (must match database enum)
-export const API_PRICING_TYPES = {
-  FIXED: 'Fixed',
-  UNIT_PRICE: 'Unit Price',
-  HOURLY: 'Hourly',
-  DAILY: 'Daily'
-} as const;
-
-export type ApiPricingType = typeof API_PRICING_TYPES[keyof typeof API_PRICING_TYPES];
-
-// Map frontend pricing types to Edge Function format
-export const PRICING_TYPE_TO_API: Record<PricingType, ApiPricingType> = {
-  [PRICING_TYPES.FIXED]: API_PRICING_TYPES.FIXED,
-  [PRICING_TYPES.UNIT_PRICE]: API_PRICING_TYPES.UNIT_PRICE,
-  [PRICING_TYPES.HOURLY]: API_PRICING_TYPES.HOURLY,
-  [PRICING_TYPES.DAILY]: API_PRICING_TYPES.DAILY
-} as const;
-
-// Reverse mapping for API responses
-export const API_TO_PRICING_TYPE: Record<ApiPricingType, PricingType> = {
-  [API_PRICING_TYPES.FIXED]: PRICING_TYPES.FIXED,
-  [API_PRICING_TYPES.UNIT_PRICE]: PRICING_TYPES.UNIT_PRICE,
-  [API_PRICING_TYPES.HOURLY]: PRICING_TYPES.HOURLY,
-  [API_PRICING_TYPES.DAILY]: PRICING_TYPES.DAILY
-} as const;
-
-// Display labels
-export const PRICING_TYPE_LABELS = {
-  [PRICING_TYPES.FIXED]: 'Fixed Price',
-  [PRICING_TYPES.UNIT_PRICE]: 'Per Unit',
-  [PRICING_TYPES.HOURLY]: 'Hourly Rate',
-  [PRICING_TYPES.DAILY]: 'Daily Rate'
-} as const;
-
-export const PRICING_TYPE_DESCRIPTIONS = {
-  [PRICING_TYPES.FIXED]: 'One-time fixed amount',
-  [PRICING_TYPES.UNIT_PRICE]: 'Price per unit or quantity',
-  [PRICING_TYPES.HOURLY]: 'Charged by the hour',
-  [PRICING_TYPES.DAILY]: 'Charged by the day'
-} as const;
-
-// =================================================================
-// SUPPORTED CURRENCIES (Must match Edge Function validation)
-// =================================================================
-
-export const SUPPORTED_CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'CAD', 'AUD'] as const;
-export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
-
-export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
-  INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  AED: 'د.إ',
-  SGD: 'S$',
-  CAD: 'C$',
-  AUD: 'A$'
-} as const;
-
-export const CURRENCY_NAMES: Record<SupportedCurrency, string> = {
-  INR: 'Indian Rupee',
-  USD: 'US Dollar',
-  EUR: 'Euro',
-  GBP: 'British Pound',
-  AED: 'UAE Dirham',
-  SGD: 'Singapore Dollar',
-  CAD: 'Canadian Dollar',
-  AUD: 'Australian Dollar'
-} as const;
-
-// =================================================================
-// CATALOG ITEM STATUS
-// =================================================================
-
-export const CATALOG_ITEM_STATUS = {
-  ACTIVE: 'active',
-  INACTIVE: 'inactive',
-  DRAFT: 'draft'
-} as const;
-
-export type CatalogItemStatus = typeof CATALOG_ITEM_STATUS[keyof typeof CATALOG_ITEM_STATUS];
-
-export const CATALOG_ITEM_STATUS_LABELS = {
-  [CATALOG_ITEM_STATUS.ACTIVE]: 'Active',
-  [CATALOG_ITEM_STATUS.INACTIVE]: 'Inactive',
-  [CATALOG_ITEM_STATUS.DRAFT]: 'Draft'
-} as const;
-
-export const CATALOG_ITEM_STATUS_DESCRIPTIONS = {
-  [CATALOG_ITEM_STATUS.ACTIVE]: 'Available for use in contracts',
-  [CATALOG_ITEM_STATUS.INACTIVE]: 'Not available for new contracts',
-  [CATALOG_ITEM_STATUS.DRAFT]: 'Work in progress, not yet published'
-} as const;
-
-export const CATALOG_ITEM_STATUS_COLORS = {
-  [CATALOG_ITEM_STATUS.ACTIVE]: 'green',
-  [CATALOG_ITEM_STATUS.INACTIVE]: 'red',
-  [CATALOG_ITEM_STATUS.DRAFT]: 'yellow'
-} as const;
-
-// =================================================================
-// BILLING MODES
-// =================================================================
-
 export const BILLING_MODES = {
   MANUAL: 'manual',
-  AUTOMATIC: 'automatic'
+  AUTOMATIC: 'automatic',
+  RECURRING: 'recurring'
 } as const;
 
 export type BillingMode = typeof BILLING_MODES[keyof typeof BILLING_MODES];
 
-export const BILLING_MODE_LABELS = {
-  [BILLING_MODES.MANUAL]: 'Manual Billing',
-  [BILLING_MODES.AUTOMATIC]: 'Automatic Billing'
-} as const;
-
 // =================================================================
-// CONTENT FORMATS
+// CURRENCIES
 // =================================================================
 
-export const CONTENT_FORMATS = {
-  PLAIN: 'plain',
-  MARKDOWN: 'markdown',
-  HTML: 'html'
-} as const;
+export interface Currency {
+  code: string;
+  name: string;
+  symbol: string;
+  isDefault?: boolean;
+}
 
-export type ContentFormat = typeof CONTENT_FORMATS[keyof typeof CONTENT_FORMATS];
+export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF', 'HKD', 'SGD', 'SEK', 'KRW', 'NOK', 'NZD', 'MXN', 'BRL', 'ZAR'] as const;
 
-export const CONTENT_FORMAT_LABELS = {
-  [CONTENT_FORMATS.PLAIN]: 'Plain Text',
-  [CONTENT_FORMATS.MARKDOWN]: 'Markdown',
-  [CONTENT_FORMATS.HTML]: 'HTML'
-} as const;
+export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number];
 
-// =================================================================
-// VALIDATION LIMITS (Must match Express API validation)
-// =================================================================
-
-export const CATALOG_VALIDATION_LIMITS = {
-  NAME: {
-    MIN_LENGTH: 1,
-    MAX_LENGTH: 255
-  },
-  DESCRIPTION: {
-    MAX_LENGTH: 10000
-  },
-  SHORT_DESCRIPTION: {
-    MAX_LENGTH: 500
-  },
-  SERVICE_TERMS: {
-    MAX_LENGTH: 20000
-  },
-  VERSION_REASON: {
-    MIN_LENGTH: 3,
-    MAX_LENGTH: 500
-  },
-  PRICE: {
-    MIN_VALUE: 0,
-    MAX_VALUE: 99999999.99
-  },
-  CURRENCY_LENGTH: 3,
-  MAX_PRICING_ENTRIES: 10,
-  MAX_TAX_RATES: 5
-} as const;
-
-// =================================================================
-// PAGINATION AND SEARCH DEFAULTS
-// =================================================================
-
-export const CATALOG_DEFAULTS = {
-  PAGE_SIZE: 20,
-  MAX_PAGE_SIZE: 100,
-  SEARCH_MIN_LENGTH: 2,
-  SEARCH_DEBOUNCE_MS: 300
-} as const;
-
-// =================================================================
-// SORT OPTIONS (Must match API validation)
-// =================================================================
-
-export const CATALOG_SORT_FIELDS = {
-  NAME: 'name',
-  CREATED_AT: 'created_at',
-  UPDATED_AT: 'updated_at',
-  VERSION_NUMBER: 'version_number',
-  BASE_AMOUNT: 'base_amount',
-  TYPE: 'type',
-  STATUS: 'status'
-} as const;
-
-export type CatalogSortField = typeof CATALOG_SORT_FIELDS[keyof typeof CATALOG_SORT_FIELDS];
-
-export const SORT_DIRECTIONS = {
-  ASC: 'asc',
-  DESC: 'desc'
-} as const;
-
-export type SortDirection = typeof SORT_DIRECTIONS[keyof typeof SORT_DIRECTIONS];
-
-// =================================================================
-// ENVIRONMENTS
-// =================================================================
-
-export const ENVIRONMENTS = {
-  LIVE: 'live',
-  TEST: 'test'
-} as const;
-
-export type Environment = typeof ENVIRONMENTS[keyof typeof ENVIRONMENTS];
-
-// =================================================================
-// TAX CONFIGURATION
-// =================================================================
-
-export const TAX_DISPLAY_MODES = {
-  INCLUDING_TAX: 'including_tax',
-  EXCLUDING_TAX: 'excluding_tax'
-} as const;
-
-export type TaxDisplayMode = typeof TAX_DISPLAY_MODES[keyof typeof TAX_DISPLAY_MODES];
-
-// =================================================================
-// RECOMMENDED PRICING BY CATALOG TYPE
-// =================================================================
-
-export const RECOMMENDED_PRICING_BY_TYPE = {
-  [CATALOG_ITEM_TYPES.SERVICE]: [
-    PRICING_TYPES.HOURLY,
-    PRICING_TYPES.FIXED,
-    PRICING_TYPES.DAILY
-  ],
-  [CATALOG_ITEM_TYPES.EQUIPMENT]: [
-    PRICING_TYPES.DAILY,
-    PRICING_TYPES.HOURLY,
-    PRICING_TYPES.FIXED
-  ],
-  [CATALOG_ITEM_TYPES.SPARE_PART]: [
-    PRICING_TYPES.UNIT_PRICE,
-    PRICING_TYPES.FIXED
-  ],
-  [CATALOG_ITEM_TYPES.ASSET]: [
-    PRICING_TYPES.DAILY,
-    PRICING_TYPES.FIXED
-  ]
-} as const;
-
-// =================================================================
-// ERROR MESSAGES (Aligned with validation)
-// =================================================================
-
-export const CATALOG_ERROR_MESSAGES = {
-  REQUIRED_FIELD: 'This field is required',
-  INVALID_PRICE: 'Please enter a valid price',
-  PRICE_TOO_LOW: 'Price must be greater than 0',
-  PRICE_TOO_HIGH: `Price cannot exceed ${CATALOG_VALIDATION_LIMITS.PRICE.MAX_VALUE.toLocaleString()}`,
-  NAME_TOO_SHORT: `Name must be at least ${CATALOG_VALIDATION_LIMITS.NAME.MIN_LENGTH} character`,
-  NAME_TOO_LONG: `Name cannot exceed ${CATALOG_VALIDATION_LIMITS.NAME.MAX_LENGTH} characters`,
-  DESCRIPTION_TOO_LONG: `Description cannot exceed ${CATALOG_VALIDATION_LIMITS.DESCRIPTION.MAX_LENGTH} characters`,
-  VERSION_REASON_REQUIRED: 'Version reason is required for updates',
-  VERSION_REASON_TOO_SHORT: `Version reason must be at least ${CATALOG_VALIDATION_LIMITS.VERSION_REASON.MIN_LENGTH} characters`,
-  INVALID_CURRENCY: `Currency must be one of: ${SUPPORTED_CURRENCIES.join(', ')}`,
-  DUPLICATE_CURRENCY: 'Duplicate currencies are not allowed',
-  MULTIPLE_BASE_CURRENCIES: 'Only one base currency is allowed',
-  INVALID_CATALOG_TYPE: 'Invalid catalog type',
-  INVALID_PRICING_TYPE: 'Invalid pricing type',
-  NETWORK_ERROR: 'Network error. Please check your connection.',
-  SERVER_ERROR: 'Server error. Please try again later.',
-  UNAUTHORIZED: 'You are not authorized to perform this action.',
-  NOT_FOUND: 'Catalog item not found.',
-  VALIDATION_ERROR: 'Please check your input and try again.'
-} as const;
-
-// =================================================================
-// SUCCESS MESSAGES
-// =================================================================
-
-export const CATALOG_SUCCESS_MESSAGES = {
-  ITEM_CREATED: 'Catalog item created successfully',
-  ITEM_UPDATED: 'Catalog item updated successfully', 
-  ITEM_DELETED: 'Catalog item deleted successfully',
-  ITEM_RESTORED: 'Catalog item restored successfully',
-  PRICING_UPDATED: 'Pricing updated successfully',
-  CURRENCY_ADDED: 'Currency pricing added successfully',
-  CURRENCY_UPDATED: 'Currency pricing updated successfully',
-  CURRENCY_REMOVED: 'Currency pricing removed successfully',
-  DRAFT_SAVED: 'Draft saved successfully'
-} as const;
-
-// =================================================================
-// VALIDATION HELPERS
-// =================================================================
-
-/**
- * Check if value is a valid catalog type number (for API)
- */
-export const isValidCatalogTypeNumber = (value: any): value is 1 | 2 | 3 | 4 => {
-  return typeof value === 'number' && [1, 2, 3, 4].includes(value);
+export const CURRENCY_SYMBOLS: Record<SupportedCurrency, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  INR: '₹',
+  JPY: '¥',
+  CNY: '¥',
+  AUD: 'A$',
+  CAD: 'C$',
+  CHF: 'CHF',
+  HKD: 'HK$',
+  SGD: 'S$',
+  SEK: 'kr',
+  KRW: '₩',
+  NOK: 'kr',
+  NZD: 'NZ$',
+  MXN: '$',
+  BRL: 'R$',
+  ZAR: 'R'
 };
 
-/**
- * Check if value is a valid frontend catalog type
- */
-export const isValidCatalogType = (value: any): value is CatalogItemType => {
-  return typeof value === 'string' && Object.values(CATALOG_ITEM_TYPES).includes(value as CatalogItemType);
+export const currencyOptions: Currency[] = [
+  { code: 'USD', name: 'US Dollar', symbol: '$', isDefault: false },
+  { code: 'EUR', name: 'Euro', symbol: '€', isDefault: false },
+  { code: 'GBP', name: 'British Pound', symbol: '£', isDefault: false },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹', isDefault: true },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', isDefault: false },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥', isDefault: false },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'A$', isDefault: false },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$', isDefault: false },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF', isDefault: false },
+  { code: 'HKD', name: 'Hong Kong Dollar', symbol: 'HK$', isDefault: false },
+  { code: 'SGD', name: 'Singapore Dollar', symbol: 'S$', isDefault: false },
+  { code: 'SEK', name: 'Swedish Krona', symbol: 'kr', isDefault: false },
+  { code: 'KRW', name: 'South Korean Won', symbol: '₩', isDefault: false },
+  { code: 'NOK', name: 'Norwegian Krone', symbol: 'kr', isDefault: false },
+  { code: 'NZD', name: 'New Zealand Dollar', symbol: 'NZ$', isDefault: false },
+  { code: 'MXN', name: 'Mexican Peso', symbol: '$', isDefault: false },
+  { code: 'BRL', name: 'Brazilian Real', symbol: 'R$', isDefault: false },
+  { code: 'ZAR', name: 'South African Rand', symbol: 'R', isDefault: false }
+];
+
+// Currency helper functions
+export const getDefaultCurrency = (): Currency => {
+  const defaultCurrency = currencyOptions.find(currency => currency.isDefault);
+  return defaultCurrency || currencyOptions[0];
 };
 
-/**
- * Check if value is a valid pricing type
- */
-export const isValidPricingType = (value: any): value is PricingType => {
-  return typeof value === 'string' && Object.values(PRICING_TYPES).includes(value as PricingType);
+export const getCurrencyByCode = (code: string): Currency | undefined => {
+  return currencyOptions.find(currency => currency.code === code);
 };
 
-/**
- * Check if value is a valid API pricing type
- */
-export const isValidApiPricingType = (value: any): value is ApiPricingType => {
-  return typeof value === 'string' && Object.values(API_PRICING_TYPES).includes(value as ApiPricingType);
+export const getCurrencySymbol = (code: string): string => {
+  const currency = getCurrencyByCode(code);
+  return currency?.symbol || '$';
 };
 
-/**
- * Check if value is a valid currency
- */
-export const isValidCurrency = (value: any): value is SupportedCurrency => {
-  return typeof value === 'string' && SUPPORTED_CURRENCIES.includes(value as SupportedCurrency);
+export const isValidCurrency = (code: string): boolean => {
+  return SUPPORTED_CURRENCIES.includes(code.toUpperCase() as SupportedCurrency);
 };
 
-/**
- * Check if value is a valid price
- */
-export const isValidPrice = (value: any): boolean => {
-  const numValue = Number(value);
-  return !isNaN(numValue) && 
-         numValue >= CATALOG_VALIDATION_LIMITS.PRICE.MIN_VALUE && 
-         numValue <= CATALOG_VALIDATION_LIMITS.PRICE.MAX_VALUE;
+export const isValidPrice = (price: number): boolean => {
+  return typeof price === 'number' && !isNaN(price) && price >= 0 && price <= 99999999.99;
 };
 
 // =================================================================
-// TRANSFORMATION HELPERS
+// TYPE MAPPINGS
 // =================================================================
 
-/**
- * Transform frontend catalog type to API number
- */
+export const CATALOG_TYPE_LABELS: Record<CatalogItemType, string> = {
+  [CATALOG_ITEM_TYPES.SERVICE]: 'Services',
+  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'Equipment',
+  [CATALOG_ITEM_TYPES.ASSET]: 'Assets',
+  [CATALOG_ITEM_TYPES.SPARE_PART]: 'Spare Parts'
+};
+
+export const PRICING_TYPE_LABELS: Record<PricingType, string> = {
+  [PRICING_TYPES.FIXED]: 'Fixed Price',
+  [PRICING_TYPES.UNIT_PRICE]: 'Unit Price',
+  [PRICING_TYPES.HOURLY]: 'Hourly Rate',
+  [PRICING_TYPES.DAILY]: 'Daily Rate'
+};
+
+export const PRICING_TYPE_DESCRIPTIONS: Record<PricingType, string> = {
+  [PRICING_TYPES.FIXED]: 'One-time fixed price for the entire service',
+  [PRICING_TYPES.UNIT_PRICE]: 'Price per unit or quantity',
+  [PRICING_TYPES.HOURLY]: 'Price charged per hour',
+  [PRICING_TYPES.DAILY]: 'Price charged per day'
+};
+
+export const RECOMMENDED_PRICING_BY_TYPE: Record<CatalogItemType, PricingType[]> = {
+  [CATALOG_ITEM_TYPES.SERVICE]: [PRICING_TYPES.FIXED, PRICING_TYPES.HOURLY],
+  [CATALOG_ITEM_TYPES.EQUIPMENT]: [PRICING_TYPES.DAILY, PRICING_TYPES.HOURLY],
+  [CATALOG_ITEM_TYPES.ASSET]: [PRICING_TYPES.FIXED, PRICING_TYPES.DAILY],
+  [CATALOG_ITEM_TYPES.SPARE_PART]: [PRICING_TYPES.UNIT_PRICE, PRICING_TYPES.FIXED]
+};
+
+// API Type mappings
 export const catalogTypeToApi = (type: CatalogItemType): number => {
-  return CATALOG_TYPE_TO_API[type];
+  const mapping: Record<CatalogItemType, number> = {
+    [CATALOG_ITEM_TYPES.SERVICE]: 1,
+    [CATALOG_ITEM_TYPES.ASSET]: 2,
+    [CATALOG_ITEM_TYPES.SPARE_PART]: 3,
+    [CATALOG_ITEM_TYPES.EQUIPMENT]: 4
+  };
+  return mapping[type] || 1;
 };
 
-/**
- * Transform API catalog type number to frontend type
- */
 export const apiToCatalogType = (apiType: number): CatalogItemType => {
-  return API_TO_CATALOG_TYPE[apiType] || CATALOG_ITEM_TYPES.SERVICE;
-};
-
-/**
- * Transform frontend pricing type to API format
- */
-export const pricingTypeToApi = (type: PricingType): ApiPricingType => {
-  return PRICING_TYPE_TO_API[type];
-};
-
-/**
- * Transform API pricing type to frontend format
- */
-export const apiToPricingType = (apiType: ApiPricingType): PricingType => {
-  return API_TO_PRICING_TYPE[apiType] || PRICING_TYPES.FIXED;
-};
-
-/**
- * Get currency symbol for display
- */
-export const getCurrencySymbol = (currency: SupportedCurrency): string => {
-  return CURRENCY_SYMBOLS[currency] || currency;
-};
-
-/**
- * Format price with currency symbol
- */
-export const formatPrice = (amount: number, currency: SupportedCurrency): string => {
-  const symbol = getCurrencySymbol(currency);
-  return `${symbol}${amount.toLocaleString()}`;
+  const mapping: Record<number, CatalogItemType> = {
+    1: CATALOG_ITEM_TYPES.SERVICE,
+    2: CATALOG_ITEM_TYPES.ASSET,
+    3: CATALOG_ITEM_TYPES.SPARE_PART,
+    4: CATALOG_ITEM_TYPES.EQUIPMENT
+  };
+  return mapping[apiType] || CATALOG_ITEM_TYPES.SERVICE;
 };
 
 // =================================================================
-// PERMISSIONS (for future RBAC implementation)
+// VALIDATION LIMITS AND MESSAGES (GROUPED)
 // =================================================================
 
-export const CATALOG_PERMISSIONS = {
-  READ: 'catalog:read',
-  CREATE: 'catalog:create',
-  UPDATE: 'catalog:update',
-  DELETE: 'catalog:delete',
-  RESTORE: 'catalog:restore',
-  MANAGE_PRICING: 'catalog:manage_pricing',
-  VIEW_VERSIONS: 'catalog:view_versions',
-  EXPORT: 'catalog:export',
-  IMPORT: 'catalog:import'
-} as const;
+export const CATALOG_VALIDATION = {
+  // Field limits
+  LIMITS: {
+    NAME: {
+      MIN_LENGTH: 2,
+      MAX_LENGTH: 255
+    },
+    DESCRIPTION: {
+      MAX_LENGTH: 10000
+    },
+    SERVICE_TERMS: {
+      MAX_LENGTH: 20000
+    },
+    VERSION_REASON: {
+      MIN_LENGTH: 3,
+      MAX_LENGTH: 500
+    },
+    PRICE: {
+      MIN: 0,
+      MAX: 99999999.99
+    },
+    SEARCH: {
+      MIN_LENGTH: 2,
+      MAX_LENGTH: 100
+    }
+  },
+
+  // Error messages
+  MESSAGES: {
+    REQUIRED_FIELD: 'This field is required',
+    NAME_REQUIRED: 'Name is required',
+    NAME_TOO_SHORT: 'Name must be at least 2 characters',
+    NAME_TOO_LONG: 'Name must be 255 characters or less',
+    DESCRIPTION_REQUIRED: 'Description is required',
+    DESCRIPTION_TOO_LONG: 'Description must be 10,000 characters or less',
+    TERMS_TOO_LONG: 'Terms must be 20,000 characters or less',
+    VERSION_REASON_REQUIRED: 'Version reason is required for updates',
+    VERSION_REASON_TOO_SHORT: 'Version reason must be at least 3 characters',
+    VERSION_REASON_TOO_LONG: 'Version reason must be 500 characters or less',
+    
+    // Currency validation
+    CURRENCY_REQUIRED: 'At least one currency is required',
+    BASE_CURRENCY_REQUIRED: 'Please select a base currency',
+    DUPLICATE_CURRENCY: 'This currency is already added',
+    INVALID_PRICE: 'Price must be a valid number',
+    NEGATIVE_PRICE: 'Price cannot be negative',
+    PRICE_TOO_HIGH: 'Price cannot exceed 99,999,999.99',
+    
+    // Dynamic validation messages
+    MIN_LENGTH: (field: string, min: number) => `${field} must be at least ${min} characters`,
+    MAX_LENGTH: (field: string, max: number) => `${field} must be ${max} characters or less`,
+    FIELD_REQUIRED: (field: string) => `${field} is required`
+  }
+};
 
 // =================================================================
-// ANALYTICS EVENTS (for tracking)
+// SUCCESS MESSAGES (FLAT STRUCTURE)
 // =================================================================
 
-export const CATALOG_ANALYTICS_EVENTS = {
-  ITEM_CREATED: 'catalog_item_created',
-  ITEM_UPDATED: 'catalog_item_updated',
-  ITEM_DELETED: 'catalog_item_deleted',
-  ITEM_RESTORED: 'catalog_item_restored',
-  ITEM_VIEWED: 'catalog_item_viewed',
-  PRICING_UPDATED: 'catalog_pricing_updated',
-  CURRENCY_ADDED: 'catalog_currency_added',
-  CURRENCY_REMOVED: 'catalog_currency_removed',
-  SEARCH_PERFORMED: 'catalog_search_performed',
-  FILTER_APPLIED: 'catalog_filter_applied',
-  VERSION_VIEWED: 'catalog_version_viewed'
-} as const;
+export const SUCCESS_MESSAGES = {
+  CATALOG_CREATED: 'Catalog item created successfully',
+  CATALOG_UPDATED: 'Catalog item updated successfully',
+  CATALOG_DELETED: 'Catalog item deleted successfully',
+  CATALOG_RESTORED: 'Catalog item restored successfully',
+  PRICING_UPDATED: 'Pricing updated successfully',
+  CURRENCY_ADDED: 'Currency added successfully',
+  CURRENCY_REMOVED: 'Currency removed successfully',
+  BASE_CURRENCY_UPDATED: 'Base currency updated successfully',
+  CHANGES_SAVED: 'Changes saved successfully',
+  DRAFT_SAVED: 'Draft saved successfully',
+  OPERATION_COMPLETED: 'Operation completed successfully',
+  DATA_EXPORTED: 'Data exported successfully',
+  DATA_IMPORTED: 'Data imported successfully'
+};
+
+// =================================================================
+// ERROR MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const ERROR_MESSAGES = {
+  CATALOG_CREATE_FAILED: 'Failed to create catalog item',
+  CATALOG_UPDATE_FAILED: 'Failed to update catalog item',
+  CATALOG_DELETE_FAILED: 'Failed to delete catalog item',
+  CATALOG_RESTORE_FAILED: 'Failed to restore catalog item',
+  CATALOG_LOAD_FAILED: 'Failed to load catalog item',
+  CATALOG_LIST_FAILED: 'Failed to load catalog items',
+  
+  PRICING_UPDATE_FAILED: 'Failed to update pricing',
+  CURRENCY_ADD_FAILED: 'Failed to add currency',
+  CURRENCY_REMOVE_FAILED: 'Failed to remove currency',
+  
+  // Network and system errors
+  NETWORK_ERROR: 'Network error. Please check your connection',
+  SERVER_ERROR: 'Server error. Please try again later',
+  PERMISSION_DENIED: 'Permission denied. Contact your administrator',
+  SESSION_EXPIRED: 'Session expired. Please log in again',
+  RATE_LIMITED: 'Too many requests. Please try again later',
+  
+  // Validation errors
+  VALIDATION_FAILED: 'Please fix the errors before submitting',
+  INVALID_DATA: 'Invalid data provided',
+  DUPLICATE_ENTRY: 'This entry already exists',
+  
+  // Generic error messages
+  OPERATION_FAILED: 'Operation failed. Please try again',
+  UNEXPECTED_ERROR: 'An unexpected error occurred',
+  DATA_LOAD_FAILED: 'Failed to load data',
+  SAVE_FAILED: 'Failed to save changes'
+};
+
+// =================================================================
+// WARNING MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const WARNING_MESSAGES = {
+  UNSAVED_CHANGES: 'You have unsaved changes',
+  LEAVING_PAGE: 'Are you sure you want to leave? Unsaved changes will be lost',
+  DELETE_CONFIRMATION: 'Are you sure you want to delete this item?',
+  RESTORE_CONFIRMATION: 'Are you sure you want to restore this item?',
+  REMOVE_CURRENCY: 'Are you sure you want to remove this currency?',
+  CHANGE_BASE_CURRENCY: 'Changing base currency may affect calculations',
+  MISSING_REQUIRED_FIELDS: 'Please fill in all required fields',
+  FORM_INCOMPLETE: 'Form is incomplete. Please review all fields',
+  
+  // Data warnings
+  DATA_LOSS_WARNING: 'This action may result in data loss',
+  IRREVERSIBLE_ACTION: 'This action cannot be undone',
+  LARGE_DATA_WARNING: 'Processing large amount of data. This may take a while'
+};
+
+// =================================================================
+// INFO MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const INFO_MESSAGES = {
+  LOADING_DATA: 'Loading data...',
+  SAVING_CHANGES: 'Saving changes...',
+  PROCESSING: 'Processing...',
+  UPLOADING: 'Uploading...',
+  SEARCHING: 'Searching...',
+  
+  // Form tips
+  NAME_HELP: 'Enter a descriptive name for your catalog item',
+  DESCRIPTION_HELP: 'Provide detailed information about this item',
+  PRICING_HELP: 'Set prices in multiple currencies. One must be marked as base currency',
+  TERMS_HELP: 'Define terms and conditions that apply to this item',
+  VERSION_HELP: 'Explain what changed in this version',
+  
+  KEYBOARD_SHORTCUTS: 'Tip: Press Ctrl+S to save, Esc to cancel',
+  AUTO_SAVE_ENABLED: 'Auto-save is enabled',
+  OFFLINE_MODE: 'Working in offline mode',
+  SYNC_PENDING: 'Changes will sync when connection is restored'
+};
+
+// =================================================================
+// FORM LABELS (FLAT STRUCTURE)
+// =================================================================
+
+export const FORM_LABELS = {
+  NAME: 'Name',
+  DESCRIPTION: 'Description',
+  SERVICE_TERMS: 'Service Terms & Conditions',
+  VERSION_REASON: 'Version Reason',
+  PRICE: 'Price',
+  CURRENCY: 'Currency',
+  TAX_INCLUDED: 'Tax Included',
+  BASE_CURRENCY: 'Base Currency',
+  STATUS: 'Status',
+  CATEGORY: 'Category',
+  TYPE: 'Type',
+  
+  // Action labels
+  SAVE: 'Save',
+  CANCEL: 'Cancel',
+  CREATE: 'Create',
+  UPDATE: 'Update',
+  DELETE: 'Delete',
+  RESTORE: 'Restore',
+  ADD: 'Add',
+  REMOVE: 'Remove',
+  EDIT: 'Edit',
+  VIEW: 'View',
+  COPY: 'Copy',
+  EXPORT: 'Export',
+  IMPORT: 'Import'
+};
+
+// =================================================================
+// FORM PLACEHOLDERS (FLAT STRUCTURE)
+// =================================================================
+
+export const FORM_PLACEHOLDERS = {
+  NAME: 'Enter catalog item name',
+  DESCRIPTION: 'Enter detailed description...',
+  SERVICE_TERMS: 'Enter terms and conditions...',
+  VERSION_REASON: 'Describe what changed in this update...',
+  PRICE: '0.00',
+  SEARCH: 'Search catalog items...',
+  SELECT_OPTION: 'Select an option',
+  SELECT_CURRENCY: 'Select currency',
+  
+  // Dynamic placeholders
+  ENTER_FIELD: (field: string) => `Enter ${field.toLowerCase()}`,
+  SELECT_FIELD: (field: string) => `Select ${field.toLowerCase()}`
+};
+
+// =================================================================
+// PROGRESS MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const PROGRESS_MESSAGES = {
+  REQUIRED_FIELDS: 'Required Fields',
+  COMPLETION_STATUS: (completed: number, total: number) => `${completed}/${total} completed`,
+  PERCENTAGE: (percent: number) => `${percent}% complete`,
+  FIELDS_REMAINING: (count: number) => `${count} field${count !== 1 ? 's' : ''} remaining`,
+  ALL_COMPLETE: 'All required fields completed',
+  READY_TO_SAVE: 'Ready to save',
+  VALIDATION_PASSED: 'Validation passed',
+  FORM_VALID: 'Form is valid'
+};
+
+// =================================================================
+// CURRENCY MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const CURRENCY_MESSAGES = {
+  ADD_CURRENCY: 'Add Currency',
+  REMOVE_CURRENCY: 'Remove Currency',
+  SET_BASE: 'Set as Base Currency',
+  BASE_CURRENCY: 'Base Currency',
+  TAX_INCLUDED: 'Tax Included',
+  PRICE_HELP: 'Enter price in this currency',
+  BASE_CURRENCY_HELP: 'Base currency is used for calculations and reporting',
+  TAX_HELP: 'Check if tax is included in this price',
+  NO_CURRENCIES: 'No currencies added yet',
+  MULTIPLE_CURRENCIES: (count: number) => `${count} currencies configured`,
+  CURRENCY_EXISTS: 'This currency is already added',
+  CANNOT_REMOVE_LAST: 'Cannot remove the last currency',
+  CANNOT_REMOVE_BASE: 'Cannot remove base currency. Set another currency as base first'
+};
+
+// =================================================================
+// CONFIRMATION MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const CONFIRMATION_MESSAGES = {
+  DELETE_TITLE: 'Delete Catalog Item',
+  DELETE_MESSAGE: 'Are you sure you want to delete this catalog item? This action can be undone by restoring the item.',
+  DELETE_CONFIRM: 'Delete',
+  
+  RESTORE_TITLE: 'Restore Catalog Item',
+  RESTORE_MESSAGE: 'Are you sure you want to restore this catalog item?',
+  RESTORE_CONFIRM: 'Restore',
+  
+  UNSAVED_TITLE: 'Unsaved Changes',
+  UNSAVED_MESSAGE: 'You have unsaved changes that will be lost if you leave this page. Are you sure you want to continue?',
+  UNSAVED_CONFIRM: 'Leave Page',
+  
+  REMOVE_CURRENCY_TITLE: 'Remove Currency',
+  REMOVE_CURRENCY_MESSAGE: 'Are you sure you want to remove this currency pricing?',
+  REMOVE_CURRENCY_CONFIRM: 'Remove',
+  
+  CHANGE_BASE_TITLE: 'Change Base Currency',
+  CHANGE_BASE_MESSAGE: 'Changing the base currency may affect calculations. Continue?',
+  CHANGE_BASE_CONFIRM: 'Change Base Currency'
+};
+
+// =================================================================
+// LOADING MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const LOADING_MESSAGES = {
+  CATALOG_ITEM: 'Loading catalog item...',
+  CATALOG_LIST: 'Loading catalog items...',
+  SAVING: 'Saving...',
+  CREATING: 'Creating...',
+  UPDATING: 'Updating...',
+  DELETING: 'Deleting...',
+  RESTORING: 'Restoring...',
+  LOADING: 'Loading...',
+  PROCESSING: 'Processing...',
+  PLEASE_WAIT: 'Please wait...'
+};
+
+// =================================================================
+// EMPTY STATE MESSAGES (FLAT STRUCTURE)
+// =================================================================
+
+export const EMPTY_MESSAGES = {
+  NO_ITEMS: 'No catalog items found',
+  NO_RESULTS: 'No results found',
+  NO_CURRENCIES: 'No currencies added',
+  EMPTY_DESCRIPTION: 'No description available',
+  EMPTY_TERMS: 'No terms defined',
+  START_CREATING: 'Start by creating your first catalog item',
+  ADD_FIRST_CURRENCY: 'Add your first currency to get started'
+};
+
+// =================================================================
+// PAGINATION DEFAULTS
+// =================================================================
+
+export const PAGINATION_DEFAULTS = {
+  PAGE: 1,
+  LIMIT: 20,
+  MAX_LIMIT: 100
+};
+
+// =================================================================
+// UTILITY CONSTANTS
+// =================================================================
+
+export const MINIMUM_SEARCH_LENGTH = 3;
+
+export const CATALOG_ICONS = {
+  [CATALOG_ITEM_TYPES.SERVICE]: '🛎️',
+  [CATALOG_ITEM_TYPES.EQUIPMENT]: '⚙️',
+  [CATALOG_ITEM_TYPES.SPARE_PART]: '🔧',
+  [CATALOG_ITEM_TYPES.ASSET]: '🏢'
+};
+
+export const CATALOG_COLORS = {
+  [CATALOG_ITEM_TYPES.SERVICE]: 'blue',
+  [CATALOG_ITEM_TYPES.EQUIPMENT]: 'green',
+  [CATALOG_ITEM_TYPES.SPARE_PART]: 'orange',
+  [CATALOG_ITEM_TYPES.ASSET]: 'purple'
+};
+
+// =================================================================
+// HELPER FUNCTIONS
+// =================================================================
+
+export const getMessage = {
+  validation: (key: keyof typeof CATALOG_VALIDATION.MESSAGES, ...args: any[]) => {
+    const message = CATALOG_VALIDATION.MESSAGES[key];
+    return typeof message === 'function' ? message(...args) : message;
+  },
+  
+  progress: (key: keyof typeof PROGRESS_MESSAGES, ...args: any[]) => {
+    const message = PROGRESS_MESSAGES[key];
+    return typeof message === 'function' ? message(...args) : message;
+  },
+  
+  placeholder: (key: keyof typeof FORM_PLACEHOLDERS, ...args: any[]) => {
+    const message = FORM_PLACEHOLDERS[key];
+    return typeof message === 'function' ? message(...args) : message;
+  },
+  
+  currency: (key: keyof typeof CURRENCY_MESSAGES, ...args: any[]) => {
+    const message = CURRENCY_MESSAGES[key];
+    return typeof message === 'function' ? message(...args) : message;
+  }
+};
+
+// =================================================================
+// EXPORTS
+// =================================================================
+
+// Export everything for backward compatibility during migration
+export * from './catalog';
+
+// Legacy exports (can be removed after migration)
+export const CATALOG_ERROR_MESSAGES = CATALOG_VALIDATION.MESSAGES;
+export const CATALOG_VALIDATION_LIMITS = CATALOG_VALIDATION.LIMITS;

@@ -1,8 +1,8 @@
 //src/components/landing/PublicNavbar.tsx
 
-mport React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { Link } from 'react-router-dom';
 
 const PublicNavbar: React.FC = () => {
@@ -18,7 +18,7 @@ const PublicNavbar: React.FC = () => {
       if (window.scrollY > 10) {
         setScrolled(true);import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { Link } from 'react-router-dom';
 
 const PublicNavbar: React.FC = () => {

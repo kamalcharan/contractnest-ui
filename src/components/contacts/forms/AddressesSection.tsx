@@ -1,4 +1,6 @@
-// src/components/contacts/forms/AddressesSection.tsx - Without Google Maps
+// src/components/contacts/forms/AddressesSection.tsx - FIXED VERSION
+// CORRECTED: Field mapping, removed address_line3, fixed null handling
+
 import React, { useState } from 'react';
 import { 
   Plus, 
@@ -14,46 +16,60 @@ import {
   Factory,
   Warehouse,
   Star,
-  AlertCircle,
   CheckCircle
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
-import { captureException } from '@/utils/sentry';
-import { analyticsService } from '@/services/analytics.service';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { countries } from '@/utils/constants/countries';
 import { 
   ADDRESS_TYPES, 
   ADDRESS_TYPE_LABELS,
   ERROR_MESSAGES,
-  SUCCESS_MESSAGES,
   PLACEHOLDER_TEXTS,
   VALIDATION_RULES,
   DEFAULT_COUNTRY_CODE
 } from '@/utils/constants/contacts';
 
-// Types matching API structure
+// FIXED: Internal format for component state
 interface Address {
   id?: string;
   address_type: string;
   line1: string;
   line2?: string;
-  line3?: string;
   city: string;
   state: string;
   country: string;
+  country_code: string;
   postal_code: string;
   is_primary: boolean;
   is_verified: boolean;
-  latitude?: number;
-  longitude?: number;
+  notes?: string;
+}
+
+// CORRECTED: API format matching actual database schema
+interface AddressOutput {
+  id?: string;
+  type: string;
+  label?: string;
+  address_line1: string;
+  address_line2?: string;
+  // REMOVED: address_line3 - doesn't exist in database
+  city: string;
+  state?: string;
+  state_code?: string;
+  country?: string;
+  country_code: string;
+  postal_code?: string;
+  google_pin?: string;
+  is_primary: boolean;
+  is_verified?: boolean;
   notes?: string;
 }
 
 interface AddressesSectionProps {
-  value: Address[];
-  onChange: (addresses: Address[]) => void;
+  value: AddressOutput[];
+  onChange: (addresses: AddressOutput[]) => void;
   disabled?: boolean;
   mode?: 'create' | 'edit';
 }
@@ -83,19 +99,57 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
+  // FIXED: Convert API format to internal format
+  const convertToInternalFormat = (apiAddress: AddressOutput): Address => {
+    const country = countries.find(c => c.code === apiAddress.country_code);
+    return {
+      id: apiAddress.id,
+      address_type: apiAddress.type || ADDRESS_TYPES.OTHER,
+      line1: apiAddress.address_line1 || '',
+      line2: apiAddress.address_line2 || '',
+      city: apiAddress.city || '',
+      state: apiAddress.state || apiAddress.state_code || '',
+      country: country?.name || apiAddress.country || '',
+      country_code: apiAddress.country_code || DEFAULT_COUNTRY_CODE,
+      postal_code: apiAddress.postal_code || '',
+      is_primary: apiAddress.is_primary || false,
+      is_verified: apiAddress.is_verified || false,
+      notes: apiAddress.notes || ''
+    };
+  };
+
+  // FIXED: Convert internal format to API format matching database schema
+  const convertToApiFormat = (internalAddress: Address): AddressOutput => {
+    // Ensure country_code is set
+    let countryCode = internalAddress.country_code;
+    if (!countryCode && internalAddress.country) {
+      const country = countries.find(c => c.name === internalAddress.country);
+      countryCode = country?.code || DEFAULT_COUNTRY_CODE;
+    }
+
+    return {
+      id: internalAddress.id,
+      type: internalAddress.address_type,
+      label: getAddressTypeInfo(internalAddress.address_type).label,
+      address_line1: internalAddress.line1,
+      address_line2: internalAddress.line2,
+      // REMOVED: address_line3 - doesn't exist in database
+      city: internalAddress.city,
+      state: internalAddress.state,
+      state_code: internalAddress.state,
+      country: internalAddress.country,
+      country_code: countryCode,
+      postal_code: internalAddress.postal_code,
+      google_pin: internalAddress.notes,
+      is_primary: internalAddress.is_primary,
+      is_verified: internalAddress.is_verified,
+      notes: internalAddress.notes
+    };
+  };
+
   // Get default country and state
   const defaultCountry = countries.find(c => c.code === DEFAULT_COUNTRY_CODE) || countries[0];
   const defaultState = defaultCountry?.states?.[0]?.name || '';
-
-  // Track analytics
-  React.useEffect(() => {
-    if (value.length > 0) {
-      analyticsService.trackPageView(
-        `contacts/${mode}/addresses-count`,
-        `Contact Addresses: ${value.length}`
-      );
-    }
-  }, [value.length, mode]);
 
   // Add new address
   const addAddress = (newAddress: Omit<Address, 'id'>) => {
@@ -107,17 +161,19 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     };
 
     // If marking as primary, unset others
-    let updatedAddresses = [...value];
+    let updatedAddresses = value.slice();
     if (addressWithId.is_primary) {
       updatedAddresses = updatedAddresses.map(addr => ({ ...addr, is_primary: false }));
     }
 
-    onChange([...updatedAddresses, addressWithId]);
+    // Convert to API format and notify parent
+    const apiFormatAddress = convertToApiFormat(addressWithId);
+    onChange([...updatedAddresses, apiFormatAddress]);
     setIsAddingAddress(false);
     
     toast({
       title: "Success",
-      description: `${ADDRESS_TYPE_LABELS[addressWithId.address_type as keyof typeof ADDRESS_TYPE_LABELS]?.label || 'Address'} added successfully`
+      description: `${getAddressTypeInfo(addressWithId.address_type).label} added successfully`
     });
   };
 
@@ -148,6 +204,8 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     if (disabled) return;
     
     const updatedAddresses = [...value];
+    const currentAddress = convertToInternalFormat(value[index]);
+    const updatedInternalAddress = { ...currentAddress, ...updates };
     
     // If setting as primary, unset others
     if (updates.is_primary) {
@@ -158,7 +216,7 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
       });
     }
     
-    updatedAddresses[index] = { ...updatedAddresses[index], ...updates };
+    updatedAddresses[index] = convertToApiFormat(updatedInternalAddress);
     onChange(updatedAddresses);
   };
 
@@ -168,23 +226,23 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     setShowDeleteDialog(true);
   };
 
-  // Format address for display
-  const formatAddress = (address: Address): string => {
+  // FIXED: Format address for display with null safety
+  const formatAddress = (address: AddressOutput): string => {
     const parts = [
-      address.line1,
-      address.line2,
-      address.line3,
+      address.address_line1,
+      address.address_line2,
       address.city,
       address.state,
       address.postal_code,
       address.country
     ].filter(Boolean);
     
-    return parts.join(', ');
+    return parts.join(', ') || 'Incomplete address';
   };
 
-  // Get address type info
-  const getAddressTypeInfo = (addressType: string) => {
+  // FIXED: Get address type info with null safety
+  const getAddressTypeInfo = (addressType: string | null | undefined) => {
+    if (!addressType) return ADDRESS_TYPE_LABELS[ADDRESS_TYPES.OTHER];
     const typeKey = addressType as keyof typeof ADDRESS_TYPE_LABELS;
     return ADDRESS_TYPE_LABELS[typeKey] || ADDRESS_TYPE_LABELS[ADDRESS_TYPES.OTHER];
   };
@@ -238,13 +296,13 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
       ) : value.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {value.map((address, index) => {
-            const addressTypeInfo = getAddressTypeInfo(address.address_type);
-            const IconComponent = ADDRESS_TYPE_ICONS[address.address_type as keyof typeof ADDRESS_TYPE_ICONS] || MapPin;
+            const addressTypeInfo = getAddressTypeInfo(address.type);
+            const IconComponent = ADDRESS_TYPE_ICONS[address.type as keyof typeof ADDRESS_TYPE_ICONS] || MapPin;
             const isEditing = editingIndex === index;
             
             return (
               <div 
-                key={address.id || index} 
+                key={address.id || `address-${index}`} 
                 className="relative p-4 rounded-lg border hover:shadow-md transition-all border-border bg-card"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -305,7 +363,7 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
 
                 {isEditing ? (
                   <EditAddressForm
-                    address={address}
+                    address={convertToInternalFormat(address)}
                     onSave={(updates) => {
                       updateAddress(index, updates);
                       setEditingIndex(null);
@@ -372,7 +430,7 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
   );
 };
 
-// Add Address Form Component
+// FIXED: Add Address Form Component
 interface AddAddressFormProps {
   onAdd: (address: Omit<Address, 'id'>) => void;
   onCancel: () => void;
@@ -394,10 +452,10 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
     address_type: ADDRESS_TYPES.OFFICE,
     line1: '',
     line2: '',
-    line3: '',
     city: '',
     state: defaultState,
     country: defaultCountry.name,
+    country_code: defaultCountry.code,
     postal_code: '',
     is_primary: isPrimary,
     is_verified: false,
@@ -421,6 +479,7 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
       setNewAddress(prev => ({
         ...prev,
         country: country.name,
+        country_code: country.code,
         state: firstState
       }));
     }
@@ -450,9 +509,13 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
       errors.postal_code = ERROR_MESSAGES.MAX_LENGTH(VALIDATION_RULES.POSTAL_CODE_MAX_LENGTH);
     }
 
-    // Country-specific postal code validation
-    if (address.country === 'India' && !/^\d{6}$/.test(address.postal_code)) {
+    // India-specific postal code validation
+    if (address.country_code === 'IN' && !/^\d{6}$/.test(address.postal_code)) {
       errors.postal_code = 'Invalid postal code (6 digits required for India)';
+    }
+
+    if (!address.country_code) {
+      errors.country_code = 'Country selection is required';
     }
 
     return errors;
@@ -494,7 +557,7 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
           >
             {Object.entries(ADDRESS_TYPE_LABELS).map(([value, config]) => (
               <option key={value} value={value}>
-                {config.icon} {config.label}
+                {config.label}
               </option>
             ))}
           </select>
@@ -540,19 +603,6 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
               className="w-full p-2 border rounded-md bg-background border-input text-foreground"
             />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2 text-foreground">
-              Address Line 3
-            </label>
-            <input
-              type="text"
-              value={newAddress.line3}
-              onChange={(e) => setNewAddress({ ...newAddress, line3: e.target.value })}
-              placeholder="Landmark (Optional)"
-              className="w-full p-2 border rounded-md bg-background border-input text-foreground"
-            />
-          </div>
         </div>
 
         {/* Country, State, City, Postal Code */}
@@ -570,6 +620,9 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
                 </option>
               ))}
             </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Country code: {newAddress.country_code}
+            </p>
           </div>
 
           <div>
@@ -703,7 +756,7 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
   );
 };
 
-// Edit Address Form Component
+// FIXED: Edit Address Form Component
 interface EditAddressFormProps {
   address: Address;
   onSave: (updates: Partial<Address>) => void;

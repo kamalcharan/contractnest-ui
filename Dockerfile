@@ -4,15 +4,15 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+RUN npm install --legacy-peer-deps
 
-# Install dependencies
-RUN npm install
-
-# Copy source code
+# Copy source
 COPY . .
 
-# Expose the correct port
-EXPOSE 5173
+# Railway automatically provides environment variables at build time
+# Just build - no need for ARG/ENV declarations
+RUN npm run build:prod
 
-# Start development server with correct port
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+RUN npm install -g serve
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]

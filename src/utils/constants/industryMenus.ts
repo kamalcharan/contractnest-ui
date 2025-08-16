@@ -106,12 +106,87 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   {
-    id: 'vani',
-    label: 'VaNi',
-    icon: 'MessageSquare',
-    path: '/vani',
-    hasSubmenu: false
-  },
+  id: 'vani',
+  label: 'VaNi',
+  icon: 'MessageSquare',
+  path: '/vani/events', // Changed default to events dashboard
+  hasSubmenu: true,
+  submenuItems: [
+    // Core Business Operations (NEW)
+    {
+      id: 'vani-events',
+      label: 'Business Events',
+      icon: 'Activity',
+      path: '/vani/events'
+    },
+    {
+      id: 'vani-dashboard',
+      label: 'Dashboard',
+      icon: 'LayoutDashboard',
+      path: '/vani/dashboard'
+    },
+    
+    // Process Management
+    {
+      id: 'vani-jobs',
+      label: 'Communication Jobs',
+      icon: 'Send',
+      path: '/vani/jobs'
+    },
+    {
+      id: 'vani-rules',
+      label: 'Event Rules',
+      icon: 'Settings',
+      path: '/vani/rules'
+    },
+    {
+  id: 'vani-chat',
+  label: 'Customer Chat',
+  icon: 'MessageSquare',
+  path: '/vani/chat'
+},
+    {
+      id: 'vani-webhooks',
+      label: 'Module Integration',
+      icon: 'Zap',
+      path: '/vani/webhooks'
+    },
+    
+    // Business Views
+    {
+      id: 'vani-receivables',
+      label: 'Accounts Receivable',
+      icon: 'DollarSign',
+      path: '/vani/finance/receivables'
+    },
+    {
+      id: 'vani-services',
+      label: 'Service Schedule',
+      icon: 'Calendar',
+      path: '/vani/operations/services'
+    },
+    
+    // Configuration
+    {
+      id: 'vani-templates',
+      label: 'Templates',
+      icon: 'FileText',
+      path: '/vani/templates'
+    },
+    {
+      id: 'vani-channels',
+      label: 'Channels',
+      icon: 'Radio',
+      path: '/vani/channels'
+    },
+    {
+      id: 'vani-analytics',
+      label: 'Cross-Module Analytics',
+      icon: 'BarChart3',
+      path: '/vani/analytics'
+    }
+  ]
+},
   {
     id: 'catalog',
     label: 'Catalog',

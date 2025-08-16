@@ -1,4 +1,4 @@
-// src/components/contacts/forms/ContactChannelsSection.tsx
+// src/components/contacts/forms/ContactChannelsSection.tsx - FIXED VERSION
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
@@ -13,12 +13,26 @@ import {
   X,
   AlertCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  MessageCircle,
+  Linkedin,
+  Twitter,
+  Facebook,
+  Instagram
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
+
+// FIXED: Import from constants instead of hardcoding
+import { 
+  CHANNELS, 
+  getChannelByCode, 
+  validateChannelValue as validateChannel,
+  formatChannelValue 
+} from '@/utils/constants/channels';
+import { countries } from '@/utils/constants/countries';
 
 // Types matching API structure
 interface ContactChannel {
@@ -40,76 +54,20 @@ interface ContactChannelsSectionProps {
   showValidation?: boolean;
 }
 
-// Channel types configuration
-const CHANNEL_TYPES = [
-  { 
-    value: 'mobile', 
-    label: 'Mobile', 
-    icon: Phone, 
-    placeholder: '9876543210',
-    validation: /^[6-9]\d{9}$/,
-    errorMessage: 'Invalid mobile number (10 digits starting with 6-9)'
-  },
-  { 
-    value: 'email', 
-    label: 'Email', 
-    icon: Mail, 
-    placeholder: 'john@example.com',
-    validation: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    errorMessage: 'Invalid email address'
-  },
-  { 
-    value: 'whatsapp', 
-    label: 'WhatsApp', 
-    icon: MessageSquare, 
-    placeholder: '9876543210',
-    validation: /^[6-9]\d{9}$/,
-    errorMessage: 'Invalid WhatsApp number'
-  },
-  { 
-    value: 'linkedin', 
-    label: 'LinkedIn', 
-    icon: Globe, 
-    placeholder: 'linkedin.com/in/username',
-    validation: /^(https?:\/\/)?([\w]+\.)?linkedin\.com\/(in|company)\/[A-z0-9_-]+\/?$/,
-    errorMessage: 'Invalid LinkedIn URL'
-  },
-  { 
-    value: 'website', 
-    label: 'Website', 
-    icon: Globe, 
-    placeholder: 'https://example.com',
-    validation: /^https?:\/\/.+\..+$/,
-    errorMessage: 'Invalid website URL (must start with http:// or https://)'
-  },
-  { 
-    value: 'telegram', 
-    label: 'Telegram', 
-    icon: MessageSquare, 
-    placeholder: '@username or phone',
-    validation: null,
-    errorMessage: ''
-  },
-  { 
-    value: 'skype', 
-    label: 'Skype', 
-    icon: MessageSquare, 
-    placeholder: 'skype.username',
-    validation: null,
-    errorMessage: ''
-  }
-];
-
-// Country codes for mobile/whatsapp
-const COUNTRY_CODES = [
-  { code: '+91', country: 'India' },
-  { code: '+1', country: 'USA/Canada' },
-  { code: '+44', country: 'UK' },
-  { code: '+971', country: 'UAE' },
-  { code: '+65', country: 'Singapore' },
-  { code: '+60', country: 'Malaysia' },
-  { code: '+61', country: 'Australia' }
-];
+// FIXED: Icon mapping for channel types
+const getChannelIcon = (iconName?: string) => {
+  const iconMap: Record<string, any> = {
+    'phone': Phone,
+    'mail': Mail,
+    'message-circle': MessageCircle,
+    'linkedin': Linkedin,
+    'twitter': Twitter,
+    'facebook': Facebook,
+    'instagram': Instagram,
+    'globe': Globe
+  };
+  return iconMap[iconName || 'globe'] || Globe;
+};
 
 const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
   value,
@@ -141,28 +99,31 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
   const [newChannel, setNewChannel] = useState<ContactChannel>({
     channel_type: 'mobile',
     value: '',
-    country_code: '+91',
+    country_code: 'IN', // Default to India
     is_primary: value.length === 0,
     is_verified: false,
     notes: ''
   });
 
-  // Validate a channel value
-  const validateChannel = (channel: ContactChannel): string | null => {
-    const channelType = CHANNEL_TYPES.find(ct => ct.value === channel.channel_type);
-    if (!channelType || !channelType.validation) return null;
+  // FIXED: Get commonly used countries for quick selection
+  const commonCountries = ['IN', 'US', 'GB', 'AE', 'SG', 'MY', 'AU'];
+  const sortedCountries = [
+    ...countries.filter(c => commonCountries.includes(c.code)),
+    ...countries.filter(c => !commonCountries.includes(c.code))
+  ];
+
+  // Validate a channel value using imported validation
+  const validateChannelValue = (channel: ContactChannel): string | null => {
+    const channelConfig = getChannelByCode(channel.channel_type);
+    if (!channelConfig) return 'Invalid channel type';
 
     // Skip validation for empty values
     if (!channel.value) return 'This field is required';
 
-    // For mobile/whatsapp, strip country code before validation
-    let valueToValidate = channel.value;
-    if (['mobile', 'whatsapp'].includes(channel.channel_type) && channel.country_code) {
-      valueToValidate = channel.value.replace(channel.country_code, '').trim();
-    }
-
-    if (!channelType.validation.test(valueToValidate)) {
-      return channelType.errorMessage;
+    // Use the imported validation function
+    const isValid = validateChannel(channelConfig, channel.value, channel.country_code);
+    if (!isValid) {
+      return `Invalid ${channelConfig.displayName}`;
     }
 
     // Check for duplicates
@@ -173,7 +134,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     );
     
     if (duplicate) {
-      return `This ${channelType.label} is already added`;
+      return `This ${channelConfig.displayName} is already added`;
     }
 
     return null;
@@ -181,7 +142,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
   // Add new channel
   const addChannel = () => {
-    const error = validateChannel(newChannel);
+    const error = validateChannelValue(newChannel);
     if (error) {
       setValidationErrors({ new: error });
       toast({
@@ -192,8 +153,19 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
       return;
     }
 
+    const channelConfig = getChannelByCode(newChannel.channel_type);
+    if (!channelConfig) return;
+
+    // Format the value if needed
+    const formattedValue = formatChannelValue(
+      channelConfig, 
+      newChannel.value, 
+      newChannel.country_code
+    );
+
     const channelWithId: ContactChannel = {
       ...newChannel,
+      value: formattedValue,
       id: `temp_${Date.now()}`
     };
 
@@ -209,7 +181,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     setNewChannel({
       channel_type: 'mobile',
       value: '',
-      country_code: '+91',
+      country_code: 'IN',
       is_primary: false,
       is_verified: false,
       notes: ''
@@ -219,7 +191,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     
     toast({
       title: "Channel Added",
-      description: `${CHANNEL_TYPES.find(ct => ct.value === channelWithId.channel_type)?.label} added successfully`
+      description: `${channelConfig.displayName} added successfully`
     });
   };
 
@@ -239,7 +211,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     updatedChannels[index] = { ...updatedChannels[index], ...updates };
     
     // Validate the updated channel
-    const error = validateChannel(updatedChannels[index]);
+    const error = validateChannelValue(updatedChannels[index]);
     if (error) {
       setValidationErrors({ [index]: error });
     } else {
@@ -263,15 +235,11 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     
     onChange(newChannels);
     
+    const channelConfig = getChannelByCode(removedChannel.channel_type);
     toast({
       title: "Channel Removed",
-      description: `${CHANNEL_TYPES.find(ct => ct.value === removedChannel.channel_type)?.label} removed`
+      description: `${channelConfig?.displayName || 'Channel'} removed`
     });
-  };
-
-  // Get channel type info
-  const getChannelTypeInfo = (channelType: string) => {
-    return CHANNEL_TYPES.find(ct => ct.value === channelType) || CHANNEL_TYPES[0];
   };
 
   // Mark field as touched for validation display
@@ -335,34 +303,42 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                   onChange={(e) => setNewChannel({ ...newChannel, channel_type: e.target.value })}
                   className="w-full p-2 border rounded-md bg-background border-input text-foreground"
                 >
-                  {CHANNEL_TYPES.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
+                  {CHANNELS.sort((a, b) => a.order - b.order).map(channel => (
+                    <option key={channel.code} value={channel.code}>
+                      {channel.displayName}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              {/* Country Code for Mobile/WhatsApp */}
-              {['mobile', 'whatsapp'].includes(newChannel.channel_type) && (
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-foreground">Country</label>
-                  <select
-                    value={newChannel.country_code}
-                    onChange={(e) => setNewChannel({ ...newChannel, country_code: e.target.value })}
-                    className="w-full p-2 border rounded-md bg-background border-input text-foreground"
-                  >
-                    {COUNTRY_CODES.map(cc => (
-                      <option key={cc.code} value={cc.code}>
-                        {cc.code} {cc.country}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Country Code for Phone Numbers */}
+              {(() => {
+                const channelConfig = getChannelByCode(newChannel.channel_type);
+                return channelConfig?.validation.requiresCountryCode ? (
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-foreground">Country</label>
+                    <select
+                      value={newChannel.country_code}
+                      onChange={(e) => setNewChannel({ ...newChannel, country_code: e.target.value })}
+                      className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+                    >
+                      {sortedCountries.map(country => (
+                        <option key={country.code} value={country.code}>
+                          +{country.phoneCode} {country.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
 
               {/* Value Input */}
-              <div className={['mobile', 'whatsapp'].includes(newChannel.channel_type) ? '' : 'md:col-span-2'}>
+              <div className={(() => {
+                const channelConfig = getChannelByCode(newChannel.channel_type);
+                return channelConfig?.validation.requiresCountryCode ? '' : 'md:col-span-2';
+              })()}>
                 <label className="block text-sm font-medium mb-2 text-foreground">
-                  {getChannelTypeInfo(newChannel.channel_type).label} *
+                  {getChannelByCode(newChannel.channel_type)?.displayName || 'Value'} *
                 </label>
                 <div className="relative">
                   <input
@@ -371,16 +347,16 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                     onChange={(e) => {
                       setNewChannel({ ...newChannel, value: e.target.value });
                       if (validationErrors.new) {
-                        const error = validateChannel({ ...newChannel, value: e.target.value });
+                        const error = validateChannelValue({ ...newChannel, value: e.target.value });
                         setValidationErrors({ new: error || '' });
                       }
                     }}
                     onBlur={() => {
                       markFieldTouched('new');
-                      const error = validateChannel(newChannel);
+                      const error = validateChannelValue(newChannel);
                       if (error) setValidationErrors({ new: error });
                     }}
-                    placeholder={getChannelTypeInfo(newChannel.channel_type).placeholder}
+                    placeholder={getChannelByCode(newChannel.channel_type)?.placeholder}
                     className={`w-full p-2 pr-8 border rounded-md bg-background text-foreground ${
                       validationErrors.new && touchedFields.has('new')
                         ? 'border-destructive focus:ring-destructive/20' 
@@ -440,7 +416,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                   setNewChannel({
                     channel_type: 'mobile',
                     value: '',
-                    country_code: '+91',
+                    country_code: 'IN',
                     is_primary: false,
                     is_verified: false,
                     notes: ''
@@ -469,8 +445,10 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
       ) : (
         <div className="space-y-3">
           {value.map((channel, index) => {
-            const channelInfo = getChannelTypeInfo(channel.channel_type);
-            const IconComponent = channelInfo.icon;
+            const channelConfig = getChannelByCode(channel.channel_type);
+            if (!channelConfig) return null;
+            
+            const IconComponent = getChannelIcon(channelConfig.icon);
             const isEditing = editingIndex === index;
             const fieldId = `channel_${index}`;
             
@@ -493,29 +471,31 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                           onChange={(e) => updateChannel(index, { channel_type: e.target.value })}
                           className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
                         >
-                          {CHANNEL_TYPES.map(type => (
-                            <option key={type.value} value={type.value}>{type.label}</option>
+                          {CHANNELS.sort((a, b) => a.order - b.order).map(ch => (
+                            <option key={ch.code} value={ch.code}>
+                              {ch.displayName}
+                            </option>
                           ))}
                         </select>
                       </div>
 
-                      {['mobile', 'whatsapp'].includes(channel.channel_type) && (
+                      {channelConfig.validation.requiresCountryCode && (
                         <div>
                           <select
                             value={channel.country_code}
                             onChange={(e) => updateChannel(index, { country_code: e.target.value })}
                             className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
                           >
-                            {COUNTRY_CODES.map(cc => (
-                              <option key={cc.code} value={cc.code}>
-                                {cc.code} {cc.country}
+                            {sortedCountries.map(country => (
+                              <option key={country.code} value={country.code}>
+                                +{country.phoneCode} {country.name}
                               </option>
                             ))}
                           </select>
                         </div>
                       )}
 
-                      <div className={['mobile', 'whatsapp'].includes(channel.channel_type) ? '' : 'md:col-span-2'}>
+                      <div className={channelConfig.validation.requiresCountryCode ? '' : 'md:col-span-2'}>
                         <input
                           type="text"
                           value={channel.value}
@@ -565,7 +545,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-sm text-foreground">
-                            {channelInfo.label}
+                            {channelConfig.displayName}
                           </span>
                           {channel.is_primary && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary border border-primary/20">
@@ -582,8 +562,8 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         </div>
                         
                         <p className="text-sm text-foreground break-all">
-                          {['mobile', 'whatsapp'].includes(channel.channel_type) && channel.country_code
-                            ? `${channel.country_code} ${channel.value}`
+                          {channel.country_code && channelConfig.validation.requiresCountryCode
+                            ? `+${countries.find(c => c.code === channel.country_code)?.phoneCode || ''} ${channel.value}`
                             : channel.value
                           }
                         </p>
@@ -659,7 +639,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
       )}
 
       {/* Help Text */}
-      {value.length === 0 && !value.some(ch => ch.is_primary) && (
+      {value.length > 0 && !value.some(ch => ch.is_primary) && (
         <div className="mt-4 p-3 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
             💡 Tip: Mark one channel as "Primary" for the main contact method.

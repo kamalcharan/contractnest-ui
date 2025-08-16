@@ -787,3 +787,21 @@ export type {
   TaxDisplayMode,
   SupportedCurrency
 };
+
+export interface CreateCatalogItemRequestWithPricing extends CreateCatalogItemRequest {
+  currencies?: Array<{
+    currency: string;
+    price: number;
+    isBaseCurrency: boolean;
+    taxIncluded: boolean;
+  }>;
+  pricing?: Array<{
+    price_type: string;
+    currency: string;
+    price: number;
+    tax_included: boolean;
+    tax_rate_id?: string | null;
+    is_base_currency: boolean;
+    attributes?: Record<string, any>;
+  }>;
+}

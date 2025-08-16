@@ -1,4 +1,4 @@
-// src/pages/contacts/create.tsx - Theme Integrated Version
+// src/pages/contacts/create.tsx - FIXED VERSION with all issues resolved
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -62,10 +62,10 @@ import {
   getClassificationsForIndustry
 } from '../../utils/constants/contacts';
 
-// Define ContactFormData interface
+// FIXED: Proper ContactFormData interface matching API expectations
 interface ContactFormData {
   type: 'individual' | 'corporate';
-  classifications: string[];
+  classifications: any[]; // Can be objects from UI or strings
   status: 'active' | 'inactive' | 'archived';
   salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
   name?: string;
@@ -507,12 +507,24 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
     }
   }, []);
 
-  // Load existing contact data in edit mode
+  // FIXED: Load existing contact data in edit mode with proper transformation
   useEffect(() => {
     if (isEditMode && existingContact) {
+      // Transform classifications to match UI component expectations
+      const transformedClassifications = existingContact.classifications?.map((cls: any) => {
+        // If it's already an object, use it; otherwise create object structure
+        if (typeof cls === 'string') {
+          return {
+            classification_value: cls,
+            classification_label: cls.charAt(0).toUpperCase() + cls.slice(1).replace('_', ' ')
+          };
+        }
+        return cls;
+      }) || [];
+
       const loadedData = {
         type: existingContact.type as 'individual' | 'corporate',
-        classifications: existingContact.classifications || [],
+        classifications: transformedClassifications,
         status: existingContact.status as 'active' | 'inactive' | 'archived',
         salutation: existingContact.salutation as any,
         name: existingContact.name,
@@ -608,7 +620,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
     return errors.length === 0;
   };
 
-  // Handle form submission
+  // FIXED: Handle form submission with proper data transformation
   const handleSave = async () => {
     if (!validateForm()) {
       return;
@@ -622,14 +634,50 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
         'Contact Save Attempt'
       );
 
+      // FIXED: Transform all data to match API expectations
+      const transformedData = {
+        ...formData,
+        // Transform classifications from objects to strings
+        classifications: formData.classifications.map(c => {
+          if (typeof c === 'object' && c.classification_value) {
+            return c.classification_value;
+          }
+          return c;
+        }),
+        // Transform addresses to ensure correct field names
+        addresses: formData.addresses.map(addr => ({
+          ...addr,
+          type: addr.address_type || addr.type, // Handle both field names
+          // Remove temp IDs for new items
+          id: addr.id?.startsWith('temp_') ? undefined : addr.id
+        })),
+        // Transform contact channels - remove temp IDs
+        contact_channels: formData.contact_channels.map(channel => ({
+          ...channel,
+          id: channel.id?.startsWith('temp_') ? undefined : channel.id
+        })),
+        // Transform contact persons - remove temp IDs
+        contact_persons: formData.contact_persons.map(person => ({
+          ...person,
+          id: person.id?.startsWith('temp_') ? undefined : person.id
+        })),
+        // Transform tags
+        tags: formData.tags.map(tag => {
+          if (typeof tag === 'string') {
+            return { tag_value: tag, tag_label: tag };
+          }
+          return tag;
+        })
+      };
+
       // Check for duplicates first (only in create mode)
       if (!isEditMode) {
         const duplicateCheck = await checkDuplicatesHook.check({
-          contact_channels: formData.contact_channels,
-          type: formData.type,
-          name: formData.name,
-          company_name: formData.company_name,
-          classifications: formData.classifications
+          contact_channels: transformedData.contact_channels,
+          type: transformedData.type,
+          name: transformedData.name,
+          company_name: transformedData.company_name,
+          classifications: transformedData.classifications
         });
         
         if (duplicateCheck.hasDuplicates) {
@@ -640,88 +688,110 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
         }
       }
 
-      const contactData: CreateContactRequest = {
-        ...formData,
-        name: formData.type === 'individual' ? formData.name! : undefined,
-        company_name: formData.type === 'corporate' ? formData.company_name! : undefined,
+      const contactData: CreateContactRequest | UpdateContactRequest = {
+        ...transformedData,
+        name: transformedData.type === 'individual' ? transformedData.name! : undefined,
+        company_name: transformedData.type === 'corporate' ? transformedData.company_name! : undefined,
       };
 
       let savedContactId: string;
+      let saveError: any = null;
       
-      if (isEditMode && (contactId || id)) {
-        const result = await updateContactHook.mutate({ 
-          contactId: contactId || id!, 
-          updates: contactData as UpdateContactRequest 
-        });
-        savedContactId = result.id;
+      try {
+        if (isEditMode && (contactId || id)) {
+          const result = await updateContactHook.mutate({ 
+            contactId: contactId || id!, 
+            updates: contactData as UpdateContactRequest 
+          });
+          savedContactId = result.id;
+          
+          toast({
+            title: "Success!",
+            description: "Contact updated successfully",
+            duration: 3000
+          });
+        } else {
+          const result = await createContactHook.mutate(contactData as CreateContactRequest);
+          savedContactId = result.id;
+          
+          toast({
+            title: "Success!",
+            description: "Contact created successfully",
+            duration: 3000
+          });
+        }
         
-        toast({
-          title: "Success!",
-          description: "Contact updated successfully",
-          duration: 3000
-        });
-      } else {
-        const result = await createContactHook.mutate(contactData);
-        savedContactId = result.id;
-        
-        toast({
-          title: "Success!",
-          description: "Contact created successfully",
-          duration: 3000
-        });
-      }
-      
-      analyticsService.trackPageView(
-        isEditMode ? 'contacts/edit/success' : 'contacts/create/success',
-        'Contact Save Success'
-      );
+        analyticsService.trackPageView(
+          isEditMode ? 'contacts/edit/success' : 'contacts/create/success',
+          'Contact Save Success'
+        );
 
-      setHasUnsavedChanges(false);
-      
-      setTimeout(() => {
-        navigate(`/contacts/${savedContactId}`);
-      }, 500);
-      
-    } catch (error: any) {
-      console.error('Failed to save contact:', error);
-      setShowFullPageLoader(false);
-      
-      if (error.message?.includes('auditLogger')) {
-        toast({
-          title: "Success",
-          description: `Contact ${isEditMode ? 'updated' : 'created'} successfully`,
-          duration: 3000
-        });
-        
         setHasUnsavedChanges(false);
         
-        const redirectId = existingContact?.id || contactId || id;
-        if (redirectId) {
-          setTimeout(() => {
-            navigate(`/contacts/${redirectId}`);
-          }, 500);
+        setTimeout(() => {
+          navigate(`/contacts/${savedContactId}`);
+        }, 500);
+        
+      } catch (error: any) {
+        saveError = error;
+        console.error('Failed to save contact:', error);
+        setShowFullPageLoader(false);
+        
+        // FIXED: Better error handling for partial failures
+        if (error.message?.includes('auditLogger')) {
+          // Audit logger failed but contact might be saved
+          toast({
+            title: "Warning",
+            description: `Contact ${isEditMode ? 'updated' : 'created'} but audit logging failed. Please verify the contact.`,
+            duration: 5000
+          });
+          
+          // Try to navigate to contacts list or existing contact
+          if (isEditMode && (contactId || id)) {
+            setTimeout(() => {
+              navigate(`/contacts/${contactId || id}`);
+            }, 500);
+          } else {
+            navigate('/contacts');
+          }
+          return;
+        }
+        
+        // Check if it's a validation error from backend
+        if (error.message?.includes('Validation')) {
+          toast({
+            variant: "destructive",
+            title: "Validation Error",
+            description: error.message
+          });
         } else {
-          navigate('/contacts');
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: `Failed to ${isEditMode ? 'update' : 'create'} contact. Please try again.`
+          });
         }
-        return;
+        
+        captureException(error, {
+          tags: { 
+            component: 'ContactCreateForm', 
+            action: isEditMode ? 'updateContact' : 'createContact' 
+          },
+          extra: { 
+            contactData: transformedData, 
+            tenantId: currentTenant?.id,
+            mode: isEditMode ? 'edit' : 'create'
+          }
+        });
       }
+    } catch (error: any) {
+      console.error('Unexpected error in handleSave:', error);
+      setShowFullPageLoader(false);
       
-      captureException(error, {
-        tags: { 
-          component: 'ContactCreateForm', 
-          action: isEditMode ? 'updateContact' : 'createContact' 
-        },
-        extra: { 
-          contactData: formData, 
-          tenantId: currentTenant?.id,
-          mode: isEditMode ? 'edit' : 'create'
-        }
-      });
-
       toast({
         variant: "destructive",
-        title: "Error",
-        description: `Failed to ${isEditMode ? 'update' : 'create'} contact. Please try again.`
+        title: "Unexpected Error",
+        description: "An unexpected error occurred. Please try again."
       });
     }
   };
@@ -908,7 +978,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                 style={{ color: colors.semantic.error }}
               >
                 {validationErrors.map((error, index) => (
-                  <li key={index}>{error}</li>
+                  <li key={`error-${index}`}>{error}</li>
                 ))}
               </ul>
             </div>
@@ -1205,11 +1275,29 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
           setShowDuplicateDialog(false);
           setShowFullPageLoader(true);
           try {
-            const contactData: CreateContactRequest = {
+            // FIXED: Transform data before creating with duplicates
+            const transformedData = {
               ...formData,
-              name: formData.type === 'individual' ? formData.name! : undefined,
-              company_name: formData.type === 'corporate' ? formData.company_name! : undefined,
+              classifications: formData.classifications.map(c => 
+                typeof c === 'object' && c.classification_value ? c.classification_value : c
+              ),
+              addresses: formData.addresses.map(addr => ({
+                ...addr,
+                type: addr.address_type || addr.type,
+                id: addr.id?.startsWith('temp_') ? undefined : addr.id
+              })),
+              contact_channels: formData.contact_channels.map(channel => ({
+                ...channel,
+                id: channel.id?.startsWith('temp_') ? undefined : channel.id
+              }))
             };
+            
+            const contactData: CreateContactRequest = {
+              ...transformedData,
+              name: transformedData.type === 'individual' ? transformedData.name! : undefined,
+              company_name: transformedData.type === 'corporate' ? transformedData.company_name! : undefined,
+            };
+            
             const result = await createContactHook.mutate(contactData);
             
             toast({

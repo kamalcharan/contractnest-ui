@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { analyticsService } from '@/services/analytics.service';

@@ -1,10 +1,17 @@
-//src/services/api.ts
+//src/services/api.ts - FIXED with Environment Header Support
 
 import axios from 'axios';
 import { env } from '../config/env';
 
-// Simple API URL configuration
-const API_URL = env.VITE_API_URL;
+// TEMPORARY FIX: Force Railway API URL since environment variables aren't working
+const API_URL = env.VITE_API_URL || 'https://contractnest-api-production.up.railway.app';
+
+// Debug logging to see what's happening
+console.log('🔍 API Configuration:', {
+  'env.VITE_API_URL': env.VITE_API_URL,
+  'Final API_URL': API_URL,
+  'Is using fallback': !env.VITE_API_URL
+});
 
 // Debug logging (only in development when enabled)
 if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
@@ -19,7 +26,20 @@ const api = axios.create({
   timeout: 30000, // 30 seconds
 });
 
-// Request interceptor to add auth token, tenant ID, and session ID
+// FIXED: Helper function to get current environment from storage
+const getCurrentEnvironment = (): 'live' | 'test' => {
+  // Check localStorage for is_live_environment (matches AuthContext storage key)
+  const isLive = localStorage.getItem('is_live_environment');
+  
+  // Default to 'live' if not set, or if set to 'true'
+  if (isLive === null || isLive === 'true') {
+    return 'live';
+  }
+  
+  return 'test';
+};
+
+// Request interceptor to add auth token, tenant ID, session ID, and ENVIRONMENT HEADER
 api.interceptors.request.use(
   (config) => {
     // Define public endpoints that don't need authentication
@@ -31,7 +51,8 @@ api.interceptors.request.use(
       '/api/auth/register-with-invitation',
       '/api/auth/reset-password',
       '/api/system/health',
-      '/api/system/maintenance/status'
+      '/api/system/maintenance/status',
+      '/health'  // Add this for Railway health check
     ];
     
     // Check if current request is to a public endpoint
@@ -66,6 +87,15 @@ api.interceptors.request.use(
       if (sessionId) {
         config.headers['x-session-id'] = sessionId;
       }
+
+      // FIXED: Add environment header for live/test data separation
+      const currentEnvironment = getCurrentEnvironment();
+      config.headers['x-environment'] = currentEnvironment;
+      
+      // Debug log environment header
+      if (env.VITE_DEBUG_MODE === 'true') {
+        console.log(`[API] Setting environment header: ${currentEnvironment}`);
+      }
     }
 
     return config;
@@ -85,7 +115,8 @@ api.interceptors.response.use(
     if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
       console.log(`[API] Response from ${response.config.url}:`, {
         status: response.status,
-        data: response.data
+        data: response.data,
+        environment: response.config.headers['x-environment'] // FIXED: Log environment used
       });
     }
     
@@ -123,11 +154,12 @@ api.interceptors.response.use(
         url: error.config?.url,
         status: error.response?.status,
         message: error.message,
-        data: error.response?.data
+        data: error.response?.data,
+        environment: error.config?.headers?.['x-environment'] // FIXED: Log environment used
       });
     }
     
-    // Handle network errors FIRST (no internet connection)
+    // Handle network errors FIRST - UPDATED MESSAGE
     if (!error.response && (error.message === 'Network Error' || error.code === 'ERR_NETWORK')) {
       // Don't redirect for network errors during auth initialization
       const isAuthPath = error.config?.url?.includes('/auth/user') || 
@@ -140,8 +172,16 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       
-      // For other requests, redirect to no-internet page
-      window.location.href = '/misc/no-internet';
+      // UPDATED: Better error handling for server unavailable
+      // Store server error info
+      sessionStorage.setItem('server_error', JSON.stringify({
+        type: 'server_unavailable',
+        message: 'Server is currently unavailable. Please contact system administrator.',
+        timestamp: new Date().toISOString()
+      }));
+      
+      // For other requests, redirect to custom error page
+      window.location.href = '/misc/error';
       return Promise.reject(error);
     }
     
@@ -209,10 +249,15 @@ export default api;
 // Export the API URL for components that need it (like health checks)
 export { API_URL };
 
+// FIXED: Export environment helper for components that need it
+export { getCurrentEnvironment };
+
 // Helper function to check API health
 export const checkApiHealth = async (): Promise<boolean> => {
   try {
-    const response = await fetch(`${API_URL}/api/system/health`);
+    console.log('🏥 Checking API health at:', `${API_URL}/health`);
+    const response = await fetch(`${API_URL}/health`);
+    console.log('🏥 Health check response:', response.status);
     return response.ok;
   } catch (error) {
     console.error('[API] Health check failed:', error);

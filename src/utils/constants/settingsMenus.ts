@@ -52,7 +52,16 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Users',
     adminOnly: false
   },
-
+{
+  id: 'resources',
+  settings_type: 'Resources',
+  parent_type: GROUP_TEAM,
+  description_short: 'Manage resources',
+  description_long: 'Configure team, equipment, and service resources',
+  route_path: '/settings/configure/resources', // ✅ Fixed route
+  card_icon_name: 'Users', // ✅ Better icon than Shield
+  adminOnly: false
+},
   {
     id: 'team-roles',
     settings_type: 'Roles',

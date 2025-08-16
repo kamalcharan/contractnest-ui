@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Info, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/label';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';

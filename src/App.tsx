@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
+import { QueryProvider } from './providers/QueryProvider'; // ✅ NEW: TanStack Query Provider
 import './styles/globals.css';
 import './styles/layout.css';
 import { Toaster } from 'react-hot-toast';
@@ -15,7 +16,8 @@ import { MiscPageWrapper } from './components/misc';
 import SessionConflictNotification from './components/SessionConflictNotification';
 import EnvironmentSwitchModal from './components/EnvironmentSwitchModal';
 import LockScreen from './components/auth/LockScreen';
-import LandingPage from './pages/public/landingPage';
+import LandingPage from './pages/public/LandingPage';
+import LoadingSpinner from './components/ui/LoadingSpinner';
 
 // Initialize Sentry as early as possible
 initSentry();
@@ -29,6 +31,10 @@ import EquipmentsPage from './pages/catalog/EquipmentsPage';
 import AssetsPage from './pages/catalog/AssetsPage';
 import SparePartsPage from './pages/catalog/SparePartsPage';
 import  CatalogItemFormPage  from './pages/catalog/CatalogItemFormPage';
+import CatalogItemDetailPage from './pages/catalog/CatalogItemDetailPage';
+import ResourcesPage from '@/pages/settings/Resources';
+
+
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -39,6 +45,33 @@ import InvitationRegisterPage from './pages/auth/InvitationRegisterPage';
 import GoogleCallbackPage from './pages/auth/GoogleCallbackPage';
 import SelectTenantPage from './pages/auth/SelectTenantPage';
 import CreateTenantPage from './pages/auth/CreateTenantPage';
+
+//VaNi Pages
+import VaNiDashboard from './vani/pages/VaNiDashboard';
+import JobsListPage from './vani/pages/JobsListPage';
+import JobCreatePage from './vani/pages/JobCreatePage';
+import JobDetailsPage from './vani/pages/JobDetailsPage';
+import BusinessEventsPage from './vani/pages/BusinessEventsPage';
+import JobCommunicationsPage from './vani/pages/JobCommunicationsPage';
+import TemplateEditorPage from './vani/pages/TemplateEditorPage';
+import ChannelsConfigPage from './vani/pages/ChannelsConfigPage';
+import TemplatesLibraryPage from './vani/pages/TemplatesLibraryPage';
+import AnalyticsPage from './vani/pages/AnalyticsPage';
+import WebhookManagementPage from './vani/pages/WebhookManagementPage';
+import AccountsReceivablePage from './vani/pages/AccountsReceivablePage';
+import ServiceSchedulePage from './vani/pages/ServiceSchedulePage';
+import ProcessRulesPage from './vani/pages/ProcessRulesPage';
+import ChatPage from './vani/pages/ChatPage';
+import { ChatConversation, ChatMessage } from './vani/types/chat.types';
+
+
+
+
+
+
+
+
+
 
 // MISC Pages
 import { 
@@ -104,7 +137,7 @@ import InvoiceDetailPage from './pages/settings/businessmodel/admin/billing/invo
 
 // Business Model - Tenant Pages
 import PricingPlansPage from './pages/settings/businessmodel/tenants/pricing-plans';
-import SubscriptionPage from './pages/settings/businessmodel/tenants/subscription';
+import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscription';
 
 // Contacts pages
 import ContactsPage from './pages/contacts/index';
@@ -131,6 +164,26 @@ testAPIConnection();
 const ProfilePage = () => <div className="p-8">Profile Page (Coming Soon)</div>;
 const OnboardingCompletePage = () => <div className="p-8">Onboarding Complete (Coming Soon)</div>;
 const TeamEditPage = () => <div className="p-8">Edit Team Member Page (Coming Soon)</div>;
+
+// Smart Home Page Component - Shows landing page OR redirects based on auth
+const SmartHomePage: React.FC = () => {
+  const { isAuthenticated, isLoading, currentTenant } = useAuth();
+  
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
+  
+  if (isAuthenticated && currentTenant) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  if (isAuthenticated && !currentTenant) {
+    return <Navigate to="/select-tenant" replace />;
+  }
+  
+  // Not authenticated - show landing page
+  return <LandingPage />;
+};
 
 // Network status component
 const NetworkStatusHandler: React.FC = () => {
@@ -182,8 +235,8 @@ const AppContent: React.FC = () => {
           <Route path="/misc/error" element={<ErrorPage />} />
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
           
-          {/* NEW: Landing page on separate route */}
-          <Route path="/welcome" element={<LandingPage />} />
+          {/* Root Route - Smart Landing/Dashboard */}
+          <Route path="/" element={<SmartHomePage />} />
           
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -229,127 +282,217 @@ const AppContent: React.FC = () => {
             }
           />
           
-          {/* Protected Routes with MainLayout - YOUR ORIGINAL STRUCTURE */}
+          {/* Protected Routes with MainLayout - Your Original Structure */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <MainLayout />
               </ProtectedRoute>
             }
           >
-            {/* Default redirect - YOUR ORIGINAL */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            
-            {/* Main Application Routes - YOUR ORIGINAL */}
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="profile" element={<ProfilePage />} />
-            
-            {/* Catalog routes - YOUR ORIGINAL */}
-            <Route path="catalog">
-              <Route path="services" element={<ServicesPage />} />
-              <Route path="equipments" element={<EquipmentsPage />} />
-              <Route path="assets" element={<AssetsPage />} />
-              <Route path="spare-parts" element={<SparePartsPage />} />
-              <Route index element={<Navigate to="/catalog/services" />} />
-              <Route path=":type/add" element={<CatalogItemFormPage mode="add" />} />
-              <Route path=":type/:id/edit" element={<CatalogItemFormPage mode="edit" />} />
-            </Route>
+            <Route index element={<Dashboard />} />
+          </Route>
 
-            {/* Service Contracts Routes - ADDED (missing from your original) */}
-            <Route path="service-contracts">
-              <Route index element={<Navigate to="templates" replace />} />
-              <Route path="contracts" element={<ContractsPage />} />
-              
-              {/* Service Contracts - Templates Routes */}
-              <Route path="templates">
-                <Route index element={<MyTemplatesPage />} />
-                <Route path="designer" element={<TemplateDesignerPage />} />
-                <Route path="preview" element={<TemplatePreviewPage />} />
-                {/* Admin routes */}
-                <Route path="admin">
-                  <Route path="global-templates" element={<GlobalTemplatesPage />} />
-                  <Route path="global-designer" element={<div>Global Designer Coming Soon</div>} />
-                  <Route path="analytics" element={<div>Analytics Coming Soon</div>} />
-                </Route>
-              </Route>
-            </Route>
-            
-            {/* Legacy support for old routes - redirect to new structure */}
-            <Route path="contracts" element={<Navigate to="/service-contracts/contracts" replace />} />
-            <Route path="templates">
-              <Route index element={<Navigate to="/service-contracts/templates" replace />} />
-              <Route path="*" element={<Navigate to="/service-contracts/templates" replace />} />
-            </Route>
-            
-            {/* Settings routes - YOUR ORIGINAL */}
-            <Route path="settings">
-              <Route index element={<SettingsPage />} />
-              <Route path="configure" element={<SettingsPage />} />
-              <Route path="configure/lovs" element={<ListOfValuesPage />} />
-              <Route path="tax-settings" element={<TaxSettings />} />
-              
-              {/* Team Management Routes */}
-              <Route path="users" element={<UsersPage />} />
-              <Route path="users/view/:id" element={<UserViewPage />} />
-              <Route path="users/edit/:id" element={<TeamEditPage />} />
-
-              {/* Business Profile Settings */}
-              <Route path="business-profile" element={<BusinessProfilePage />} />
-              <Route path="business-profile/edit" element={<EditBusinessProfilePage />} />
-              
-              {/* Storage Settings */}
-              <Route path="configure/storage" element={<StorageSettingsPage />} />
-              
-              {/* Storage Management Routes */}
-              <Route path="storage/storagesetup" element={<StorageSetupPage />} />
-              <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
-              <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
-              <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
-              
-              {/* Integration Settings */}
-              <Route path="integrations" element={<IntegrationsPage />} />
-              
-              {/* Business Model Routes - YOUR ORIGINAL */}
-              
-              {/* Admin - Pricing Plans Management */}
-              <Route path="businessmodel/admin/pricing-plans" element={<PricingPlansAdminPage />} />
-              <Route path="businessmodel/admin/pricing-plans/create" element={<PricingPlanForm />} />
-              <Route path="businessmodel/admin/pricing-plans/:id" element={<PlanDetailView />} />
-              <Route path="businessmodel/admin/pricing-plans/:id/edit" element={<EditPlanPage />} />
-              <Route path="businessmodel/admin/pricing-plans/:id/assign" element={<AssignPlanPage />} />
-              
-              {/* Admin - Plan Versions */}
-              <Route path="businessmodel/admin/pricing-plans/:id/versions" element={<PlanVersionsPage />} />
-              <Route path="businessmodel/admin/pricing-plans/:id/versions/create" element={<CreateVersionPage />} />
-              <Route path="businessmodel/admin/pricing-plans/:id/versions/migrate" element={<MigrationDashboardPage />} />
-              
-              {/* Admin - Billing Management */}
-              <Route path="businessmodel/admin/billing" element={<BillingDashboardPage />} />
-              <Route path="businessmodel/admin/billing/create-invoice" element={<CreateInvoicePage />} />
-              <Route path="businessmodel/admin/billing/invoices/:id" element={<InvoiceDetailPage />} />
-            </Route>
-
-            {/* Contacts Routes - ADDED (missing from your original) */}
-            <Route path="contacts">
-              <Route index element={<ContactsPage />} />
-              <Route path="create" element={<ContactCreateForm />} />
-              <Route path=":id" element={<ContactViewPage />} />
-              <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
-            </Route>
-            
-            {/* Tenant - Pricing Plans & Subscription - YOUR ORIGINAL */}
-            <Route path="businessmodel/tenants/pricing-plans" element={<PricingPlansPage />} />
-            <Route path="businessmodel/tenants/subscription" element={<SubscriptionPage />} />
-            
-            {/* Legacy routes - redirect to new structure - YOUR ORIGINAL */}
-            <Route path="implementation/configure-plan" element={<Navigate to="/settings/businessmodel/admin/pricing-plans" replace />} />
-            
-            {/* 404 Page - Must be last - YOUR ORIGINAL */}
-            <Route path="*" element={<NotFoundPage />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ProfilePage />} />
           </Route>
           
-          {/* Catch all 404 for routes outside MainLayout */}
+          {/* Catalog routes */}
+          <Route
+            path="/catalog"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="services" element={<ServicesPage />} />
+            <Route path="equipments" element={<EquipmentsPage />} />
+            <Route path="assets" element={<AssetsPage />} />
+            <Route path="spare-parts" element={<SparePartsPage />} />
+            <Route index element={<Navigate to="/catalog/services" />} />
+            <Route path=":type/add" element={<CatalogItemFormPage mode="add" />} />
+            <Route path=":type/:id/edit" element={<CatalogItemFormPage mode="edit" />} />
+           <Route path=":type/:id" element={<CatalogItemDetailPage />} />
+          </Route>
+
+          {/* Service Contracts Routes */}
+          <Route
+            path="/service-contracts"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="templates" replace />} />
+            <Route path="contracts" element={<ContractsPage />} />
+            
+            {/* Service Contracts - Templates Routes */}
+            <Route path="templates">
+              <Route index element={<MyTemplatesPage />} />
+              <Route path="designer" element={<TemplateDesignerPage />} />
+              <Route path="preview" element={<TemplatePreviewPage />} />
+              {/* Admin routes */}
+              <Route path="admin">
+                <Route path="global-templates" element={<GlobalTemplatesPage />} />
+                <Route path="global-designer" element={<div>Global Designer Coming Soon</div>} />
+                <Route path="analytics" element={<div>Analytics Coming Soon</div>} />
+              </Route>
+            </Route>
+          </Route>
+          
+          {/* Legacy support for old routes - redirect to new structure */}
+          <Route path="/contracts" element={<Navigate to="/service-contracts/contracts" replace />} />
+          <Route path="/templates" element={<Navigate to="/service-contracts/templates" replace />} />
+          
+          {/* Settings routes */}
+          <Route
+  path="/settings"
+  element={
+    <ProtectedRoute>
+      <MainLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<SettingsPage />} />
+  <Route path="configure" element={<SettingsPage />} />
+  <Route path="configure/lovs" element={<ListOfValuesPage />} />
+<Route path="configure/resources" element={<ResourcesPage />} />
+            
+            {/* Team Management Routes */}
+            <Route path="users" element={<UsersPage />} />
+            <Route path="users/view/:id" element={<UserViewPage />} />
+            <Route path="users/edit/:id" element={<TeamEditPage />} />
+        
+
+
+            {/* Business Profile Settings */}
+            <Route path="business-profile" element={<BusinessProfilePage />} />
+            <Route path="business-profile/edit" element={<EditBusinessProfilePage />} />
+            
+            {/* Storage Settings */}
+            <Route path="configure/storage" element={<StorageSettingsPage />} />
+            
+            {/* Storage Management Routes */}
+            <Route path="storage/storagesetup" element={<StorageSetupPage />} />
+            <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
+            <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
+            <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
+            
+            {/* Integration Settings */}
+            <Route path="integrations" element={<IntegrationsPage />} />
+            
+            {/* Business Model Routes */}
+            
+            {/* Admin - Pricing Plans Management */}
+            <Route path="businessmodel/admin/pricing-plans" element={<PricingPlansAdminPage />} />
+            <Route path="businessmodel/admin/pricing-plans/create" element={<PricingPlanForm />} />
+            <Route path="businessmodel/admin/pricing-plans/:id" element={<PlanDetailView />} />
+            <Route path="businessmodel/admin/pricing-plans/:id/edit" element={<EditPlanPage />} />
+            <Route path="businessmodel/admin/pricing-plans/:id/assign" element={<AssignPlanPage />} />
+            
+            {/* Admin - Plan Versions */}
+            <Route path="businessmodel/admin/pricing-plans/:id/versions" element={<PlanVersionsPage />} />
+            <Route path="businessmodel/admin/pricing-plans/:id/versions/create" element={<CreateVersionPage />} />
+            <Route path="businessmodel/admin/pricing-plans/:id/versions/migrate" element={<MigrationDashboardPage />} />
+            
+            {/* Admin - Billing Management */}
+            <Route path="businessmodel/admin/billing" element={<BillingDashboardPage />} />
+            <Route path="businessmodel/admin/billing/create-invoice" element={<CreateInvoicePage />} />
+            <Route path="businessmodel/admin/billing/invoices/:id" element={<InvoiceDetailPage />} />
+          </Route>
+
+          {/* Contacts Routes */}
+          <Route
+            path="/contacts"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ContactsPage />} />
+            <Route path="create" element={<ContactCreateForm />} />
+            <Route path=":id" element={<ContactViewPage />} />
+            <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
+          </Route>
+
+
+          {/* VaNi Routes */}
+<Route
+  path="/vani"
+  element={
+    <ProtectedRoute>
+      <MainLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<Navigate to="/vani/dashboard" replace />} />
+  <Route path="dashboard" element={<VaNiDashboard />} />
+  <Route path="jobs" element={<JobsListPage />} />
+<Route path="jobs/create" element={<JobCreatePage />} />
+<Route path="/vani/events" element={<BusinessEventsPage />} />
+<Route path="jobs/:id" element={<JobDetailsPage />} />
+<Route path="/vani/jobs/:id/communications" element={<JobCommunicationsPage />} />
+<Route path="/vani/templates" element={<TemplatesLibraryPage />} />
+<Route path="/vani/templates/create" element={<TemplateEditorPage />} />
+<Route path="/vani/templates/:id" element={<TemplateEditorPage />} />
+<Route path="/vani/templates/:id/edit" element={<TemplateEditorPage />} />
+<Route path="/vani/channels" element={<ChannelsConfigPage />} />
+<Route path="/vani/analytics" element={<AnalyticsPage />} />
+<Route path="/vani/analytics/cross-module" element={<AnalyticsPage />} />
+<Route path="/vani/webhooks" element={<WebhookManagementPage />} />
+<Route path="/vani/webhooks/create" element={<div>Create Webhook - Coming Soon</div>} />
+<Route path="/vani/webhooks/:id" element={<div>Webhook Details - Coming Soon</div>} />
+<Route path="/vani/finance/receivables" element={<AccountsReceivablePage />} />
+<Route path="/vani/operations/services" element={<ServiceSchedulePage />} />
+<Route path="/vani/rules" element={<ProcessRulesPage />} />
+<Route path="/vani/rules/create" element={<div>Create Rule - Coming Soon</div>} />
+<Route path="/vani/rules/:id/edit" element={<div>Edit Rule - Coming Soon</div>} />
+<Route path="/vani/analytics/rules" element={<div>Rules Analytics - Coming Soon</div>} />
+<Route path="/vani/chat" element={<ChatPage />} />
+<Route path="/vani/chat/:conversationId" element={<ChatPage />} />
+
+
+
+</Route>
+          
+          {/* Tenant - Pricing Plans & Subscription */}
+          <Route
+            path="/businessmodel/tenants/pricing-plans"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<PricingPlansPage />} />
+          </Route>
+          
+          <Route
+            path="/businessmodel/tenants/subscription"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<SubscriptionPage />} />
+          </Route>
+          
+          {/* Legacy routes - redirect to new structure */}
+          <Route path="/implementation/configure-plan" element={<Navigate to="/settings/businessmodel/admin/pricing-plans" replace />} />
+          
+          {/* 404 Page - Must be last */}
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </MiscPageWrapper>
@@ -357,6 +500,7 @@ const AppContent: React.FC = () => {
   );
 };
 
+// ✅ UPDATED: App component with QueryProvider
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
@@ -364,9 +508,11 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-              <MasterDataProvider>
-                <AppContent />
-              </MasterDataProvider>
+              <QueryProvider> {/* ✅ NEW: Wrap with QueryProvider */}
+                <MasterDataProvider>
+                  <AppContent />
+                </MasterDataProvider>
+              </QueryProvider>
             </AuthProvider>
           </Router>
         </ThemeProvider>
@@ -377,4 +523,4 @@ const App: React.FC = () => {
 
 console.log('VITE_API_URL =', import.meta.env.VITE_API_URL);
 
-export default App;
+export default App; 

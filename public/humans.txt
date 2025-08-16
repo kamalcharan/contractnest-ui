@@ -1,0 +1,39 @@
+/* TEAM */
+Founder & CEO: Charan Kamal B
+Email: charan [at] contractnest.com
+Location: Hyderabad, Telangana, India
+
+/* THANKS */
+React Team - https://reactjs.org/
+Vite Team - https://vitejs.dev/
+TypeScript Team - https://www.typescriptlang.org/
+Tailwind CSS - https://tailwindcss.com/
+Radix UI - https://www.radix-ui.com/
+Open Source Community
+
+/* SITE */
+Last update: 2025-08-08
+Language: English
+Doctype: HTML5
+Standards: W3C compliant HTML5, CSS3, ES2022
+Components: React 19, TypeScript 5.7, Vite 6
+IDE: VS Code
+Version Control: Git
+Hosting: Vercel/Netlify
+CDN: Cloudflare
+
+/* TECHNOLOGY STACK */
+Frontend: React + TypeScript + Vite
+Styling: Tailwind CSS + Radix UI
+State: Zustand + React Query
+Backend: Supabase
+Analytics: Google Analytics 4
+Monitoring: Sentry
+Communication: react-hot-toast
+
+/* PERFORMANCE */
+Core Web Vitals: Optimized
+Accessibility: WCAG 2.1 AA compliant
+SEO: Fully optimized
+Mobile: Responsive design
+PWA: Progressive Web App ready

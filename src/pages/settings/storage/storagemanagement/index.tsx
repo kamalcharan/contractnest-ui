@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const StorageManagementPage: React.FC = () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Database, Activity, HardDrive, Cloud } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';

@@ -7,6 +7,7 @@ import CatalogContainer from '../../components/catalog/shared/CatalogContainer';
 import { CATALOG_ITEM_TYPES } from '../../utils/constants/catalog';
 
 const EquipmentsPage: React.FC = () => {
+  console.log('🔧 EquipmentsPage component loaded!');
   return (
     <>
       <Helmet>

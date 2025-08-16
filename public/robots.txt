@@ -1,0 +1,64 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /private/
+Disallow: /temp/
+Disallow: /node_modules/
+Disallow: /*.json$
+Disallow: /auth/
+Disallow: /dashboard/
+Disallow: /user/
+Disallow: /checkout/
+Disallow: /payment/
+Disallow: /*?utm_*
+Disallow: /*?ref=*
+Disallow: /*?source=*
+Disallow: /*?fbclid=*
+Disallow: /*?gclid=*
+Disallow: /*?__cf_chl*
+Disallow: /dist/
+Disallow: /.vite/
+
+User-agent: Googlebot
+Allow: /
+Allow: /features
+Allow: /industries/
+Allow: /pricing
+Allow: /how-it-works
+Allow: /blog/
+Allow: /resources/
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: DataForSEOBot
+Disallow: /
+
+User-agent: SeekportBot
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+Host: https://contractnest.com
+
+Sitemap: https://contractnest.com/sitemap.xml

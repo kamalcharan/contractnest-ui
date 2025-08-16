@@ -1,0 +1,12 @@
+# Ads.txt file for contractnest.com
+# This file authorizes digital advertising sellers
+# Updated: 2025-08-08
+
+# We currently do not serve ads on our platform
+# This file prevents unauthorized ad inventory sales
+
+# Google AdSense (if we add it in future):
+# google.com, pub-XXXXXXXXXX, DIRECT, f08c47fec0942fa0
+
+# Placeholder entry to prevent fraud
+contractnest.com, placeholder, DIRECT

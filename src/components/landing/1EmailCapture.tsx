@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { toast } from '@/components/ui/use-toast';
 import { saveContractNestLead } from '@/services/public-leads.service';
 

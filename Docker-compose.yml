@@ -1,11 +1,10 @@
 version: '3.8'
-
 services:
   ui:
     container_name: contractnest-ui
     build: 
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev  # Rename current Dockerfile
     ports:
       - "3000:5173"
     environment:
