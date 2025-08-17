@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -81,7 +81,8 @@ import {
   SessionConflictPage,
   NoInternetPage,
   ComingSoonPage,
-  ErrorPage
+  ErrorPage,
+  ApiServerDownPage
 } from './pages/misc';
 import TaxSettings from './pages/settings/TaxSettings';
 
@@ -168,9 +169,18 @@ const TeamEditPage = () => <div className="p-8">Edit Team Member Page (Coming So
 // Smart Home Page Component - Shows landing page OR redirects based on auth
 const SmartHomePage: React.FC = () => {
   const { isAuthenticated, isLoading, currentTenant } = useAuth();
+  const location = useLocation();
+  
+  // ✅ Don't redirect if user is on auth pages
+  const isAuthPage = ['/login', '/signup', '/register', '/forgot-password', '/reset-password'].includes(location.pathname);
   
   if (isLoading) {
     return <LoadingSpinner />;
+  }
+  
+  if (isAuthPage) {
+    // Let auth pages handle themselves
+    return null;
   }
   
   if (isAuthenticated && currentTenant) {
@@ -234,6 +244,9 @@ const AppContent: React.FC = () => {
           <Route path="/misc/no-internet" element={<NoInternetPage />} />
           <Route path="/misc/error" element={<ErrorPage />} />
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
+          <Route path="/misc/api-server-down" element={<ApiServerDownPage />} />
+
+
           
           {/* Root Route - Smart Landing/Dashboard */}
           <Route path="/" element={<SmartHomePage />} />

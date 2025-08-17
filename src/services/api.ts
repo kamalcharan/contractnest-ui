@@ -1,4 +1,4 @@
-//src/services/api.ts - FIXED with Environment Header Support
+//src/services/api.ts - FIXED with Environment Header Support and API Health Detection
 
 import axios from 'axios';
 import { env } from '../config/env';
@@ -17,6 +17,16 @@ console.log('🔍 API Configuration:', {
 if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
   console.log(`[API] Configured with base URL: ${API_URL}`);
 }
+
+// ===== NEW: API Health Detection Constants =====
+const API_HEALTH_CHECK_ENABLED = import.meta.env.VITE_ENABLE_API_HEALTH_CHECK === 'true';
+const API_DOWN_SESSION_KEY = 'api_server_down_detected';
+const API_DOWN_REDIRECT_KEY = 'api_down_redirect_done';
+
+console.log('🏥 API Health Check Status:', {
+  enabled: API_HEALTH_CHECK_ENABLED,
+  env_var: import.meta.env.VITE_ENABLE_API_HEALTH_CHECK
+});
 
 const api = axios.create({
   baseURL: API_URL,
@@ -37,6 +47,63 @@ const getCurrentEnvironment = (): 'live' | 'test' => {
   }
   
   return 'test';
+};
+
+// ===== NEW: API Health Detection Helper Functions =====
+const isApiServerDown = (error: any): boolean => {
+  // Check if it's a network error indicating server is completely unreachable
+  return (
+    !error.response && 
+    (error.message === 'Network Error' || 
+     error.code === 'ERR_NETWORK' || 
+     error.code === 'ECONNABORTED' ||
+     error.message?.includes('Network') ||
+     error.message?.includes('fetch'))
+  );
+};
+
+const handleApiServerDown = (error: any) => {
+  // Mark API as down in session
+  sessionStorage.setItem(API_DOWN_SESSION_KEY, 'true');
+  sessionStorage.setItem(API_DOWN_REDIRECT_KEY, 'true');
+  
+  // Store timestamp and error details for debugging
+  sessionStorage.setItem('api_down_timestamp', new Date().toISOString());
+  sessionStorage.setItem('api_down_error', JSON.stringify({
+    message: error.message,
+    code: error.code,
+    url: error.config?.url
+  }));
+  
+  console.log('🚨 API Server Down detected - redirecting to API down page');
+  
+  // Store the current location so we can return there when API recovers
+  const currentPath = window.location.pathname + window.location.search;
+  if (currentPath !== '/misc/api-server-down') {
+    sessionStorage.setItem('api_down_return_path', currentPath);
+  }
+  
+  // Redirect to API down page
+  window.location.href = '/misc/api-server-down';
+};
+
+const shouldRedirectToApiDown = (): boolean => {
+  // Don't redirect if feature is disabled
+  if (!API_HEALTH_CHECK_ENABLED) {
+    return false;
+  }
+  
+  // Don't redirect if we've already redirected
+  if (sessionStorage.getItem(API_DOWN_REDIRECT_KEY) === 'true') {
+    return false;
+  }
+  
+  // Don't redirect if we're already on the API down page
+  if (window.location.pathname === '/misc/api-server-down') {
+    return false;
+  }
+  
+  return true;
 };
 
 // Request interceptor to add auth token, tenant ID, session ID, and ENVIRONMENT HEADER
@@ -108,7 +175,7 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle maintenance mode, session conflicts, and errors
+// Response interceptor to handle maintenance mode, session conflicts, API down, and errors
 api.interceptors.response.use(
   (response) => {
     // Debug logging for successful responses
@@ -116,8 +183,22 @@ api.interceptors.response.use(
       console.log(`[API] Response from ${response.config.url}:`, {
         status: response.status,
         data: response.data,
-        environment: response.config.headers['x-environment'] // FIXED: Log environment used
+        environment: response.config.headers['x-environment']
       });
+    }
+    
+    // ===== NEW: Clear API down flags on successful response =====
+    if (API_HEALTH_CHECK_ENABLED) {
+      // If we get a successful response, clear any API down flags
+      const wasDown = sessionStorage.getItem(API_DOWN_SESSION_KEY) === 'true';
+      if (wasDown) {
+        console.log('🎉 API Server recovered - clearing down flags');
+      }
+      
+      sessionStorage.removeItem(API_DOWN_SESSION_KEY);
+      sessionStorage.removeItem(API_DOWN_REDIRECT_KEY);
+      sessionStorage.removeItem('api_down_timestamp');
+      sessionStorage.removeItem('api_down_error');
     }
     
     // Check for maintenance mode header
@@ -155,9 +236,17 @@ api.interceptors.response.use(
         status: error.response?.status,
         message: error.message,
         data: error.response?.data,
-        environment: error.config?.headers?.['x-environment'] // FIXED: Log environment used
+        environment: error.config?.headers?.['x-environment']
       });
     }
+    
+    // ===== NEW: API Server Down Detection (BEFORE existing logic) =====
+    if (API_HEALTH_CHECK_ENABLED && isApiServerDown(error) && shouldRedirectToApiDown()) {
+      handleApiServerDown(error);
+      return Promise.reject(error);
+    }
+    
+    // ===== EXISTING ERROR HANDLING (UNCHANGED) =====
     
     // Handle network errors FIRST - UPDATED MESSAGE
     if (!error.response && (error.message === 'Network Error' || error.code === 'ERR_NETWORK')) {
@@ -172,16 +261,20 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       
-      // UPDATED: Better error handling for server unavailable
-      // Store server error info
-      sessionStorage.setItem('server_error', JSON.stringify({
-        type: 'server_unavailable',
-        message: 'Server is currently unavailable. Please contact system administrator.',
-        timestamp: new Date().toISOString()
-      }));
+      // Only redirect to generic error page if NOT using API health check
+      if (!API_HEALTH_CHECK_ENABLED) {
+        // UPDATED: Better error handling for server unavailable
+        // Store server error info
+        sessionStorage.setItem('server_error', JSON.stringify({
+          type: 'server_unavailable',
+          message: 'Server is currently unavailable. Please contact system administrator.',
+          timestamp: new Date().toISOString()
+        }));
+        
+        // For other requests, redirect to custom error page
+        window.location.href = '/misc/error';
+      }
       
-      // For other requests, redirect to custom error page
-      window.location.href = '/misc/error';
       return Promise.reject(error);
     }
     
@@ -273,5 +366,45 @@ export const getMaintenanceStatus = async (): Promise<any> => {
   } catch (error) {
     // If we can't check maintenance status, assume we're not in maintenance
     return { isInMaintenance: false };
+  }
+};
+
+// ===== NEW: API Health Management Functions =====
+
+// Function to clear API down state manually
+export const clearApiDownState = () => {
+  sessionStorage.removeItem(API_DOWN_SESSION_KEY);
+  sessionStorage.removeItem(API_DOWN_REDIRECT_KEY);
+  sessionStorage.removeItem('api_down_timestamp');
+  sessionStorage.removeItem('api_down_error');
+  sessionStorage.removeItem('api_down_return_path');
+  console.log('🔄 API down state cleared manually');
+};
+
+// Function to check if API is marked as down
+export const isApiMarkedAsDown = (): boolean => {
+  return sessionStorage.getItem(API_DOWN_SESSION_KEY) === 'true';
+};
+
+// Function to get API down information
+export const getApiDownInfo = () => {
+  const timestamp = sessionStorage.getItem('api_down_timestamp');
+  const error = sessionStorage.getItem('api_down_error');
+  const returnPath = sessionStorage.getItem('api_down_return_path');
+  
+  return {
+    isDown: isApiMarkedAsDown(),
+    timestamp: timestamp ? new Date(timestamp) : null,
+    error: error ? JSON.parse(error) : null,
+    returnPath: returnPath || '/dashboard'
+  };
+};
+
+// Function to force mark API as down (for testing)
+export const forceApiDown = () => {
+  if (env.VITE_DEBUG_MODE === 'true') {
+    sessionStorage.setItem(API_DOWN_SESSION_KEY, 'true');
+    sessionStorage.setItem('api_down_timestamp', new Date().toISOString());
+    console.log('🧪 API forced down for testing');
   }
 };

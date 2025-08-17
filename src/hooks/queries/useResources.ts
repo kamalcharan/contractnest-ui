@@ -278,22 +278,6 @@ export const useUpdateResource = (): UseMutationResult<
       });
     },
     
-    onError: (error, variables) => {
-      console.error('Update resource failed:', error);
-      
-      // Show error toast
-      toast.error(error.message || 'Failed to update resource', {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-    },
-    
     // Optimistic update
     onMutate: async (variables) => {
       const { id, data } = variables;
@@ -320,14 +304,29 @@ export const useUpdateResource = (): UseMutationResult<
       return { previousResource, id };
     },
     
-    // Rollback on error
+    // Combined error handling and rollback
     onError: (err, variables, context) => {
+      console.error('Update resource failed:', err);
+      
+      // Rollback optimistic update if we have previous data
       if (context?.previousResource) {
         queryClient.setQueryData(
           RESOURCE_QUERY_KEYS.detail(context.id),
           context.previousResource
         );
       }
+      
+      // Show error toast
+      toast.error(err.message || 'Failed to update resource', {
+        duration: 4000,
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: '#EF4444',
+          color: '#FFF',
+          fontSize: '14px'
+        },
+      });
     },
     
     // Always refetch after error or success
@@ -381,22 +380,6 @@ export const useDeleteResource = (): UseMutationResult<
       });
     },
     
-    onError: (error, variables) => {
-      console.error('Delete resource failed:', error);
-      
-      // Show error toast
-      toast.error(error.message || 'Failed to delete resource', {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-    },
-    
     // Optimistic update - remove from lists
     onMutate: async (variables) => {
       const { id } = variables;
@@ -420,11 +403,25 @@ export const useDeleteResource = (): UseMutationResult<
       return { previousResource, id };
     },
     
-    // Rollback on error
+    // Combined error handling and rollback
     onError: (err, variables, context) => {
+      console.error('Delete resource failed:', err);
+      
       // Invalidate all lists to restore data
       queryClient.invalidateQueries({ 
         queryKey: RESOURCE_QUERY_KEYS.lists() 
+      });
+      
+      // Show error toast
+      toast.error(err.message || 'Failed to delete resource', {
+        duration: 4000,
+        style: {
+          padding: '16px',
+          borderRadius: '8px',
+          background: '#EF4444',
+          color: '#FFF',
+          fontSize: '14px'
+        },
       });
     },
   });

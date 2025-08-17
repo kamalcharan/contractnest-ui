@@ -8,6 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
+  root: __dirname,
   plugins: [react()],
   resolve: {
     alias: {
@@ -55,8 +56,8 @@ export default defineConfig({
     ]
   },
   preview: {
-    host: '0.0.0.0',
-    port: 3000,
+    host: '0.0.0.0',  
+    port: 5173,
     strictPort: true
   },
   css: {

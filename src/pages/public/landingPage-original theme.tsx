@@ -54,8 +54,8 @@ const LandingPage: React.FC<LandingPageProps> = ({
   const [pageLoadTime] = useState(Date.now());
 
   // Environment URLs
-  const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'http://localhost:5173/signup';
-  const loginUrl = import.meta.env.VITE_LOGIN_URL || 'http://localhost:5173/login';
+const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
+const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-production.up.railway.app/login';
 
   // Page load analytics
   useEffect(() => {

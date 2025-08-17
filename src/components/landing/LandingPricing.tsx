@@ -384,7 +384,7 @@ const LandingPricing: React.FC<PricingProps> = ({
   const sectionRef = useRef<HTMLDivElement>(null);
 
   // Environment URLs
-  const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'http://localhost:5173/signup';
+const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
 
   // Pricing plans
   const pricingPlans: PricingPlan[] = [

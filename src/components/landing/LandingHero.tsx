@@ -189,7 +189,7 @@ const LandingHero: React.FC<HeroProps> = ({
   const [showCalculator, setShowCalculator] = useState(false);
 
   // Environment URLs
-  const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'http://localhost:5173/signup';
+const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
 
   // Mock industries - would be imported from constants
   const industries: Industry[] = [

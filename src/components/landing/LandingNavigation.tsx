@@ -101,8 +101,8 @@ const LandingNavigation: React.FC<NavigationProps> = ({
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Environment URLs
-  const loginUrl = import.meta.env.VITE_LOGIN_URL || 'http://localhost:5173/login';
-  const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'http://localhost:5173/signup';
+const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
+const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-production.up.railway.app/login';
 
   // Load industries (would be imported in real implementation)
   useEffect(() => {

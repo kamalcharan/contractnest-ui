@@ -269,8 +269,8 @@ const LandingCTA: React.FC<CTAProps> = ({
   const sectionRef = useRef<HTMLDivElement>(null);
 
   // Environment URLs
-  const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'http://localhost:5173/signup';
-  const loginUrl = import.meta.env.VITE_LOGIN_URL || 'http://localhost:5173/login';
+ const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
+const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-production.up.railway.app/login';
 
   // CTA Options
   const ctaOptions: CTAOption[] = [
