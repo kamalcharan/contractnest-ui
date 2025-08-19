@@ -11,7 +11,7 @@ import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analyti
 
 const RegisterPage: React.FC = () => {
   // Check if Google OAuth is enabled - MOVED TO TOP
-  const isGoogleAuthEnabled = import.meta.env.VITE_ENABLE_GOOGLE_AUTH !== 'false';
+  const isGoogleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED!== 'false';
   
   // Form state
   const [formData, setFormData] = useState({

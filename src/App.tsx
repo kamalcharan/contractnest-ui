@@ -7,6 +7,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
 import { QueryProvider } from './providers/QueryProvider'; // ✅ NEW: TanStack Query Provider
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Add this import
 import './styles/globals.css';
 import './styles/layout.css';
 import { Toaster } from 'react-hot-toast';
@@ -26,15 +27,18 @@ initSentry();
 import MainLayout from './components/layout/MainLayout';
 
 // Catalog Pages
-import ServicesPage from './pages/catalog/ServicesPage';
-import EquipmentsPage from './pages/catalog/EquipmentsPage';
-import AssetsPage from './pages/catalog/AssetsPage';
-import SparePartsPage from './pages/catalog/SparePartsPage';
-import  CatalogItemFormPage  from './pages/catalog/CatalogItemFormPage';
-import CatalogItemDetailPage from './pages/catalog/CatalogItemDetailPage';
+// import ServicesPage from './pages/catalog/ServicesPage';
+// import EquipmentsPage from './pages/catalog/EquipmentsPage';
+// import AssetsPage from './pages/catalog/AssetsPage';
+// import SparePartsPage from './pages/catalog/SparePartsPage';
+// import  CatalogItemFormPage  from './pages/catalog/CatalogItemFormPage';
+// import CatalogItemDetailPage from './pages/catalog/CatalogItemDetailPage';
+
+import CatalogPage from './pages/catalog/CatalogPage';
+import EditServicePage from './pages/catalog/EditServicePage';
+import ServiceDetailsPage from './pages/catalog/ServiceDetailsPage';
+import CreateServicePage from './pages/catalog/CreateServicePage';
 import ResourcesPage from '@/pages/settings/Resources';
-
-
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -63,15 +67,6 @@ import ServiceSchedulePage from './vani/pages/ServiceSchedulePage';
 import ProcessRulesPage from './vani/pages/ProcessRulesPage';
 import ChatPage from './vani/pages/ChatPage';
 import { ChatConversation, ChatMessage } from './vani/types/chat.types';
-
-
-
-
-
-
-
-
-
 
 // MISC Pages
 import { 
@@ -144,6 +139,16 @@ import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscriptio
 import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
+
+// Create QueryClient
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 3,
+    },
+  },
+});
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -246,8 +251,6 @@ const AppContent: React.FC = () => {
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
           <Route path="/misc/api-server-down" element={<ApiServerDownPage />} />
 
-
-          
           {/* Root Route - Smart Landing/Dashboard */}
           <Route path="/" element={<SmartHomePage />} />
           
@@ -317,7 +320,7 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ProfilePage />} />
           </Route>
-          
+
           {/* Catalog routes */}
           <Route
             path="/catalog"
@@ -327,14 +330,10 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route path="services" element={<ServicesPage />} />
-            <Route path="equipments" element={<EquipmentsPage />} />
-            <Route path="assets" element={<AssetsPage />} />
-            <Route path="spare-parts" element={<SparePartsPage />} />
-            <Route index element={<Navigate to="/catalog/services" />} />
-            <Route path=":type/add" element={<CatalogItemFormPage mode="add" />} />
-            <Route path=":type/:id/edit" element={<CatalogItemFormPage mode="edit" />} />
-           <Route path=":type/:id" element={<CatalogItemDetailPage />} />
+            <Route index element={<CatalogPage />} />
+            <Route path="create" element={<CatalogPage />} />
+            <Route path="edit/:serviceId" element={<EditServicePage />} />
+            <Route path="service/:serviceId" element={<ServiceDetailsPage />} />
           </Route>
 
           {/* Service Contracts Routes */}
@@ -369,24 +368,22 @@ const AppContent: React.FC = () => {
           
           {/* Settings routes */}
           <Route
-  path="/settings"
-  element={
-    <ProtectedRoute>
-      <MainLayout />
-    </ProtectedRoute>
-  }
->
-  <Route index element={<SettingsPage />} />
-  <Route path="configure" element={<SettingsPage />} />
-  <Route path="configure/lovs" element={<ListOfValuesPage />} />
-<Route path="configure/resources" element={<ResourcesPage />} />
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<SettingsPage />} />
+            <Route path="configure" element={<SettingsPage />} />
+            <Route path="configure/lovs" element={<ListOfValuesPage />} />
+            <Route path="configure/resources" element={<ResourcesPage />} />
             
             {/* Team Management Routes */}
             <Route path="users" element={<UsersPage />} />
             <Route path="users/view/:id" element={<UserViewPage />} />
             <Route path="users/edit/:id" element={<TeamEditPage />} />
-        
-
 
             {/* Business Profile Settings */}
             <Route path="business-profile" element={<BusinessProfilePage />} />
@@ -439,45 +436,41 @@ const AppContent: React.FC = () => {
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
           </Route>
 
-
           {/* VaNi Routes */}
-<Route
-  path="/vani"
-  element={
-    <ProtectedRoute>
-      <MainLayout />
-    </ProtectedRoute>
-  }
->
-  <Route index element={<Navigate to="/vani/dashboard" replace />} />
-  <Route path="dashboard" element={<VaNiDashboard />} />
-  <Route path="jobs" element={<JobsListPage />} />
-<Route path="jobs/create" element={<JobCreatePage />} />
-<Route path="/vani/events" element={<BusinessEventsPage />} />
-<Route path="jobs/:id" element={<JobDetailsPage />} />
-<Route path="/vani/jobs/:id/communications" element={<JobCommunicationsPage />} />
-<Route path="/vani/templates" element={<TemplatesLibraryPage />} />
-<Route path="/vani/templates/create" element={<TemplateEditorPage />} />
-<Route path="/vani/templates/:id" element={<TemplateEditorPage />} />
-<Route path="/vani/templates/:id/edit" element={<TemplateEditorPage />} />
-<Route path="/vani/channels" element={<ChannelsConfigPage />} />
-<Route path="/vani/analytics" element={<AnalyticsPage />} />
-<Route path="/vani/analytics/cross-module" element={<AnalyticsPage />} />
-<Route path="/vani/webhooks" element={<WebhookManagementPage />} />
-<Route path="/vani/webhooks/create" element={<div>Create Webhook - Coming Soon</div>} />
-<Route path="/vani/webhooks/:id" element={<div>Webhook Details - Coming Soon</div>} />
-<Route path="/vani/finance/receivables" element={<AccountsReceivablePage />} />
-<Route path="/vani/operations/services" element={<ServiceSchedulePage />} />
-<Route path="/vani/rules" element={<ProcessRulesPage />} />
-<Route path="/vani/rules/create" element={<div>Create Rule - Coming Soon</div>} />
-<Route path="/vani/rules/:id/edit" element={<div>Edit Rule - Coming Soon</div>} />
-<Route path="/vani/analytics/rules" element={<div>Rules Analytics - Coming Soon</div>} />
-<Route path="/vani/chat" element={<ChatPage />} />
-<Route path="/vani/chat/:conversationId" element={<ChatPage />} />
-
-
-
-</Route>
+          <Route
+            path="/vani"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/vani/dashboard" replace />} />
+            <Route path="dashboard" element={<VaNiDashboard />} />
+            <Route path="jobs" element={<JobsListPage />} />
+            <Route path="jobs/create" element={<JobCreatePage />} />
+            <Route path="events" element={<BusinessEventsPage />} />
+            <Route path="jobs/:id" element={<JobDetailsPage />} />
+            <Route path="jobs/:id/communications" element={<JobCommunicationsPage />} />
+            <Route path="templates" element={<TemplatesLibraryPage />} />
+            <Route path="templates/create" element={<TemplateEditorPage />} />
+            <Route path="templates/:id" element={<TemplateEditorPage />} />
+            <Route path="templates/:id/edit" element={<TemplateEditorPage />} />
+            <Route path="channels" element={<ChannelsConfigPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="analytics/cross-module" element={<AnalyticsPage />} />
+            <Route path="webhooks" element={<WebhookManagementPage />} />
+            <Route path="webhooks/create" element={<div>Create Webhook - Coming Soon</div>} />
+            <Route path="webhooks/:id" element={<div>Webhook Details - Coming Soon</div>} />
+            <Route path="finance/receivables" element={<AccountsReceivablePage />} />
+            <Route path="operations/services" element={<ServiceSchedulePage />} />
+            <Route path="rules" element={<ProcessRulesPage />} />
+            <Route path="rules/create" element={<div>Create Rule - Coming Soon</div>} />
+            <Route path="rules/:id/edit" element={<div>Edit Rule - Coming Soon</div>} />
+            <Route path="analytics/rules" element={<div>Rules Analytics - Coming Soon</div>} />
+            <Route path="chat" element={<ChatPage />} />
+            <Route path="chat/:conversationId" element={<ChatPage />} />
+          </Route>
           
           {/* Tenant - Pricing Plans & Subscription */}
           <Route
@@ -521,11 +514,13 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-              <QueryProvider> {/* ✅ NEW: Wrap with QueryProvider */}
-                <MasterDataProvider>
-                  <AppContent />
-                </MasterDataProvider>
-              </QueryProvider>
+              <QueryClientProvider client={queryClient}>
+                <QueryProvider> {/* ✅ NEW: Wrap with QueryProvider */}
+                  <MasterDataProvider>
+                    <AppContent />
+                  </MasterDataProvider>
+                </QueryProvider>
+              </QueryClientProvider>
             </AuthProvider>
           </Router>
         </ThemeProvider>
@@ -536,4 +531,4 @@ const App: React.FC = () => {
 
 console.log('VITE_API_URL =', import.meta.env.VITE_API_URL);
 
-export default App; 
+export default App;

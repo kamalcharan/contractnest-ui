@@ -6,10 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
     "dev:with-seo": "npm run seo:watch & vite --host 0.0.0.0 --port 5173",
-    "build": "npm run seo:generate && tsc -b && vite build",
+    "build": "npm run seo:generate && vite build --mode production",
     "build:prod": "npm run seo:generate && vite build",
     "lint": "eslint .",
-     "start": "vite preview --host 0.0.0.0",
+    "start": "echo 'Starting vite preview...' && vite preview --host 0.0.0.0 --port $PORT && echo 'Vite exited'",
     "preview": "vite preview",
     "seo:generate": "node scripts/generate-seo-files.js",
     "seo:watch": "node scripts/generate-seo-files.js --watch",

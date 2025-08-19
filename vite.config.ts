@@ -27,6 +27,14 @@ export default defineConfig({
     ],
     watch: {
       usePolling: true
+    },
+    proxy: {
+      '/api': {
+        target: 'https://contractnest-api-production.up.railway.app',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path // Keep the /api prefix
+      }
     }
   },
   build: {

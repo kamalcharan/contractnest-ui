@@ -1,5 +1,5 @@
 // src/services/serviceURLs.ts - COMPLETE VERSION
-// Updated with Resources endpoints
+// Updated with Resources endpoints and Product Master Data endpoints
 
 export const API_ENDPOINTS = {
   MASTERDATA: {
@@ -7,6 +7,68 @@ export const API_ENDPOINTS = {
     CATEGORY_DETAILS: '/api/masterdata/category-details',
     NEXT_SEQUENCE: '/api/masterdata/next-sequence'
   },
+  
+  // =================================================================
+  // PRODUCT MASTER DATA ENDPOINTS - NEW
+  // =================================================================
+  PRODUCT_MASTERDATA: {
+    // Health and utility endpoints
+    HEALTH: '/api/product-masterdata/health',
+    CONSTANTS: '/api/product-masterdata/constants',
+    
+    // Global master data endpoints
+    GLOBAL: {
+      // Get global master data for specific category
+      GET_CATEGORY: '/api/product-masterdata/global',
+      
+      // Get all global categories
+      LIST_CATEGORIES: '/api/product-masterdata/global/categories',
+      
+      // Helper function to build global category URL with parameters
+      GET_CATEGORY_WITH_PARAMS: (categoryName: string, isActive: boolean = true) => {
+        const params = new URLSearchParams({
+          category_name: categoryName,
+          is_active: isActive.toString()
+        });
+        return `/api/product-masterdata/global?${params.toString()}`;
+      },
+      
+      // Helper function to build global categories URL with active filter
+      LIST_CATEGORIES_WITH_FILTER: (isActive: boolean = true) => {
+        const params = new URLSearchParams({
+          is_active: isActive.toString()
+        });
+        return `/api/product-masterdata/global/categories?${params.toString()}`;
+      }
+    },
+    
+    // Tenant-specific master data endpoints
+    TENANT: {
+      // Get tenant master data for specific category
+      GET_CATEGORY: '/api/product-masterdata/tenant',
+      
+      // Get all tenant categories
+      LIST_CATEGORIES: '/api/product-masterdata/tenant/categories',
+      
+      // Helper function to build tenant category URL with parameters
+      GET_CATEGORY_WITH_PARAMS: (categoryName: string, isActive: boolean = true) => {
+        const params = new URLSearchParams({
+          category_name: categoryName,
+          is_active: isActive.toString()
+        });
+        return `/api/product-masterdata/tenant?${params.toString()}`;
+      },
+      
+      // Helper function to build tenant categories URL with active filter
+      LIST_CATEGORIES_WITH_FILTER: (isActive: boolean = true) => {
+        const params = new URLSearchParams({
+          is_active: isActive.toString()
+        });
+        return `/api/product-masterdata/tenant/categories?${params.toString()}`;
+      }
+    }
+  },
+  
   AUTH: {
     LOGIN: '/api/auth/login',
     REGISTER: '/api/auth/register',
@@ -345,6 +407,16 @@ export const API_ENDPOINTS = {
 // TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT
 // =================================================================
 
+// Product Master Data filter interfaces
+export type ProductMasterDataFilters = {
+  category_name: string;
+  is_active?: boolean;
+};
+
+export type ProductMasterDataCategoryFilters = {
+  is_active?: boolean;
+};
+
 // Resources filter interface
 export type ResourceFilters = {
   resourceTypeId?: string;
@@ -363,6 +435,7 @@ export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
+export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
 
 // Contact filters interface
 export type ContactFilters = {
@@ -485,6 +558,34 @@ export const buildBlockSearchURL = (params: BlockSearchParams): string => {
   return url.pathname + url.search;
 };
 
+/**
+ * Build product master data URL for global category
+ */
+export const buildGlobalMasterDataURL = (categoryName: string, isActive: boolean = true): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.GLOBAL.GET_CATEGORY_WITH_PARAMS(categoryName, isActive);
+};
+
+/**
+ * Build product master data URL for tenant category
+ */
+export const buildTenantMasterDataURL = (categoryName: string, isActive: boolean = true): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.TENANT.GET_CATEGORY_WITH_PARAMS(categoryName, isActive);
+};
+
+/**
+ * Build global categories URL with active filter
+ */
+export const buildGlobalCategoriesURL = (isActive: boolean = true): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.GLOBAL.LIST_CATEGORIES_WITH_FILTER(isActive);
+};
+
+/**
+ * Build tenant categories URL with active filter
+ */
+export const buildTenantCategoriesURL = (isActive: boolean = true): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.TENANT.LIST_CATEGORIES_WITH_FILTER(isActive);
+};
+
 // =================================================================
 // RESOURCES API USAGE EXAMPLES
 // =================================================================
@@ -514,6 +615,32 @@ export const RESOURCES_API_EXAMPLES = {
   // Utility endpoints
   healthCheck: 'GET ' + API_ENDPOINTS.RESOURCES.HEALTH,
   signingStatus: 'GET ' + API_ENDPOINTS.RESOURCES.SIGNING_STATUS
+};
+
+// =================================================================
+// PRODUCT MASTER DATA API USAGE EXAMPLES
+// =================================================================
+
+export const PRODUCT_MASTERDATA_API_EXAMPLES = {
+  // Health check
+  healthCheck: 'GET ' + API_ENDPOINTS.PRODUCT_MASTERDATA.HEALTH,
+  
+  // Constants
+  getConstants: 'GET ' + API_ENDPOINTS.PRODUCT_MASTERDATA.CONSTANTS,
+  
+  // Global master data operations
+  getGlobalPricingTypes: 'GET ' + buildGlobalMasterDataURL('pricing_type'),
+  getGlobalStatusTypes: 'GET ' + buildGlobalMasterDataURL('status_type'),
+  getAllGlobalCategories: 'GET ' + buildGlobalCategoriesURL(),
+  
+  // Tenant master data operations (requires x-tenant-id header)
+  getTenantCustomFields: 'GET ' + buildTenantMasterDataURL('custom_fields'),
+  getTenantPriorityTypes: 'GET ' + buildTenantMasterDataURL('priority_type'),
+  getAllTenantCategories: 'GET ' + buildTenantCategoriesURL(),
+  
+  // With different active filters
+  getInactiveGlobalCategories: 'GET ' + buildGlobalCategoriesURL(false),
+  getInactiveTenantCategories: 'GET ' + buildTenantCategoriesURL(false)
 };
 
 // =================================================================
@@ -560,6 +687,15 @@ export const isValidResourceSearchQuery = (query: string): boolean => {
 };
 
 /**
+ * Validate category name format for product master data
+ */
+export const isValidCategoryName = (categoryName: string): boolean => {
+  // Category names should be alphanumeric with underscores and hyphens
+  const categoryNameRegex = /^[a-zA-Z0-9_-]{2,100}$/;
+  return typeof categoryName === 'string' && categoryNameRegex.test(categoryName);
+};
+
+/**
  * Get endpoint for resource operation based on parameters
  */
 export const getResourceEndpoint = (
@@ -580,6 +716,34 @@ export const getResourceEndpoint = (
       return API_ENDPOINTS.RESOURCES.RESOURCE_TYPES;
     case 'health':
       return API_ENDPOINTS.RESOURCES.HEALTH;
+    default:
+      return '';
+  }
+};
+
+/**
+ * Get endpoint for product master data operation
+ */
+export const getProductMasterDataEndpoint = (
+  scope: 'global' | 'tenant',
+  operation: 'category' | 'categories' | 'health' | 'constants',
+  categoryName?: string,
+  isActive: boolean = true
+): string => {
+  switch (operation) {
+    case 'health':
+      return API_ENDPOINTS.PRODUCT_MASTERDATA.HEALTH;
+    case 'constants':
+      return API_ENDPOINTS.PRODUCT_MASTERDATA.CONSTANTS;
+    case 'category':
+      if (!categoryName) return '';
+      return scope === 'global' 
+        ? buildGlobalMasterDataURL(categoryName, isActive)
+        : buildTenantMasterDataURL(categoryName, isActive);
+    case 'categories':
+      return scope === 'global'
+        ? buildGlobalCategoriesURL(isActive)
+        : buildTenantCategoriesURL(isActive);
     default:
       return '';
   }

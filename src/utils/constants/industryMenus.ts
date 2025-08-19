@@ -221,6 +221,27 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   {
+  id: 'new-catalog',
+  label: 'New Catalog',
+  icon: 'Package2',
+  path: '/catalog',
+  hasSubmenu: true,
+  submenuItems: [
+    {
+      id: 'catalog-main',
+      label: 'Catalog Overview',
+      icon: 'Package',
+      path: '/catalog'
+    },
+    {
+      id: 'create-service',
+      label: 'Create Service',
+      icon: 'Plus',
+      path: '/catalog/create'
+    }
+  ]
+},
+  {
     id: 'marketplace',
     label: 'Marketplace',
     icon: 'ShoppingBag',

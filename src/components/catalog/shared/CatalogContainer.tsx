@@ -21,7 +21,8 @@ import {
   FileText,
   RefreshCw
 } from 'lucide-react';
-import { useCatalogList, useDeleteCatalogItem, useCatalogOperations } from '../../../hooks/queries/useCatalogQueries';
+import { useServiceCatalogItems } from '../../../hooks/queries/useServiceCatalogQueries';
+import { useDeleteServiceCatalogItem } from '../../../hooks/mutations/useServiceCatalogMutations';
 import { catalogTypeToApi } from '../../../utils/constants/catalog';
 import ConfirmationDialog from '../../ui/ConfirmationDialog';
 import type { 
@@ -119,14 +120,23 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
     };
   }, [currentPage, debouncedSearchTerm, catalogType, sortBy, sortOrder, activeFilter]);
 
-  // TanStack Query hook
+  // TanStack Query hook - Use service catalog for services
   const { 
     data: queryResult, 
     isLoading, 
     error, 
     isError,
     refetch 
-  } = useCatalogList(apiFilters);
+  } = catalogType === 'service' 
+    ? useServiceCatalogItems({
+        search: debouncedSearchTerm.trim() || undefined,
+        isActive: activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+        sortField: sortBy === 'created_at' ? 'createdAt' : sortBy,
+        sortDirection: sortOrder.toUpperCase() as 'ASC' | 'DESC'
+      }) 
+    : { data: null, isLoading: false, error: null, isError: false, refetch: () => {} };
 
   // Extract data
   const items = queryResult?.data || [];
@@ -138,8 +148,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
   };
 
   // Mutations
-  const deleteMutation = useDeleteCatalogItem();
-  const { refreshCatalogList } = useCatalogOperations();
+  const deleteMutation = useDeleteServiceCatalogItem();
 
   // Event handlers with proper routing
   const handleFilterChange = useCallback((newFilter: string) => {
@@ -192,20 +201,28 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    refreshCatalogList(apiFilters);
-  }, [refreshCatalogList, apiFilters]);
+    refetch();
+  }, [refetch]);
 
   // ✅ FIXED: Helper functions
   const shouldShowSearchHint = useCallback(() => {
     return searchTerm.length > 0 && searchTerm.length < MINIMUM_SEARCH_LENGTH;
   }, [searchTerm]);
 
-  const formatPrice = useCallback((item: CatalogItemDetailed) => {
+  const formatPrice = useCallback((item: any) => {
+    if (catalogType === 'service' && item.pricingConfig) {
+      const currency = item.pricingConfig.currency === 'USD' ? '$' :
+                      item.pricingConfig.currency === 'EUR' ? '€' :
+                      item.pricingConfig.currency === 'GBP' ? '£' :
+                      item.pricingConfig.currency === 'INR' ? '₹' :
+                      item.pricingConfig.currency;
+      return `${currency}${item.pricingConfig.basePrice?.toLocaleString()}`;
+    }
     if (item.price_attributes) {
       return `${item.price_attributes.currency} ${item.price_attributes.base_amount?.toLocaleString()}`;
     }
     return 'N/A';
-  }, []);
+  }, [catalogType]);
 
   // ✅ FIXED: Parse HTML content for clean display
   const parseHtmlContent = useCallback((htmlContent: string) => {
@@ -220,8 +237,8 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
     return plainText.length > 60 ? plainText.substring(0, 60) + '...' : plainText;
   }, []);
 
-  const getStatusBadge = useCallback((item: CatalogItemDetailed) => {
-    const isActive = item.status === 'active' || item.is_active === true;
+  const getStatusBadge = useCallback((item: any) => {
+    const isActive = catalogType === 'service' ? item.isActive : (item.status === 'active' || item.is_active === true);
     return (
       <span 
         className="px-2 py-1 rounded-full text-xs font-medium border"
@@ -246,8 +263,12 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
 
   // Tab configurations with dynamic counts based on filtered data
   const tabConfigs = useMemo(() => {
-    const activeCount = items.filter(item => item.status === 'active' || item.is_active === true).length;
-    const inactiveCount = items.filter(item => item.status === 'inactive' || item.is_active === false).length;
+    const activeCount = items.filter(item => 
+      catalogType === 'service' ? item.isActive : (item.status === 'active' || item.is_active === true)
+    ).length;
+    const inactiveCount = items.filter(item => 
+      catalogType === 'service' ? !item.isActive : (item.status === 'inactive' || item.is_active === false)
+    ).length;
     
     return {
       status: {
@@ -660,14 +681,18 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                                 className="font-semibold text-base truncate"
                                 style={{ color: colors.utility.primaryText }}
                               >
-                                {item.name}
+                                {catalogType === 'service' ? item.serviceName : item.name}
                               </h3>
                               <p 
                                 className="text-sm truncate mt-1"
                                 style={{ color: colors.utility.secondaryText }}
                               >
                                 {/* ✅ FIXED: Parse HTML content properly */}
-                                {parseHtmlContent(item.short_description || item.description_content || '')}
+                                {parseHtmlContent(
+                                  catalogType === 'service' 
+                                    ? item.description 
+                                    : (item.short_description || item.description_content || '')
+                                )}
                               </p>
                             </div>
                           </div>
@@ -781,7 +806,7 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                               className="font-semibold text-base truncate"
                               style={{ color: colors.utility.primaryText }}
                             >
-                              {item.name}
+                              {catalogType === 'service' ? item.serviceName : item.name}
                             </h3>
                           </div>
                         </div>
@@ -793,7 +818,11 @@ const CatalogContainer: React.FC<CatalogContainerProps> = ({ catalogType }) => {
                           className="text-sm line-clamp-2"
                           style={{ color: colors.utility.secondaryText }}
                         >
-                          {parseHtmlContent(item.short_description || item.description_content || '')}
+                          {parseHtmlContent(
+                            catalogType === 'service' 
+                              ? item.description 
+                              : (item.short_description || item.description_content || '')
+                          )}
                         </p>
                       </div>
                       

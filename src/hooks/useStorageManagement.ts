@@ -298,6 +298,7 @@ toast('Storage is already set up');
 
       // Create FormData
       const formData = new FormData();
+      // Backend expects field name 'file' for single uploads
       formData.append('file', file);
       formData.append('category', category);
       
@@ -308,67 +309,73 @@ toast('Storage is already set up');
       console.log('- Size:', file.size);
       console.log('- Type:', file.type);
       console.log('- Category:', category);
+      console.log('- File is valid:', file instanceof File);
+      console.log('- File size > 0:', file.size > 0);
       console.log('FormData entries:');
       for (let [key, value] of formData.entries()) {
         console.log(`  ${key}:`, value);
+        if (value instanceof File) {
+          console.log(`    File details: name=${value.name}, size=${value.size}, type=${value.type}`);
+        }
       }
       
-      // Get auth token and tenant ID
-      const authToken = api.defaults.headers.common['Authorization'] || 
-                       localStorage.getItem('auth_token') || 
-                       sessionStorage.getItem('auth_token');
-      const tenantId = currentTenant.id;
-      const baseURL = api.defaults.baseURL;
-      const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}`;
-      
-      console.log('Upload configuration:');
-      console.log('- URL:', uploadURL);
-      console.log('- Auth Token:', authToken ? 'Present' : 'Missing');
-      console.log('- Tenant ID:', tenantId);
-      console.log('- Environment:', isLive ? 'Live' : 'Test');
-      
-      // Use fetch instead of axios to avoid header issues
-      const response = await fetch(uploadURL, {
-        method: 'POST',
-        headers: {
-          'Authorization': authToken as string,
-          'x-tenant-id': tenantId,
-          'x-environment': isLive ? 'live' : 'test'
-          // NO Content-Type header - let browser set it with boundary
-        },
-        body: formData
-      });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Upload error response:', errorData);
-        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+      // Use fetch instead of axios for file uploads to avoid FormData corruption
+      try {
+        console.log(`Uploading to ${isLive ? 'Live' : 'Test'} environment using fetch`);
+        
+        // Get auth token and tenant ID
+        const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+        const tenantId = currentTenant.id;
+        const baseURL = api.defaults.baseURL;
+        const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}`;
+        
+        // Use fetch for the upload
+        const response = await fetch(uploadURL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'x-tenant-id': tenantId,
+            'x-environment': isLive ? 'live' : 'test'
+            // NO Content-Type header - let browser set it with boundary
+          },
+          body: formData
+        });
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Response data:', errorData);
+          throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+        }
+        
+        const uploadedFile = await response.json();
+        console.log('Upload successful:', uploadedFile);
+        
+        // Update local state
+        setFiles(prev => [uploadedFile, ...prev]);
+        setCategoryFiles(prev => ({
+          ...prev,
+          [category]: [uploadedFile, ...(prev[category] || [])]
+        }));
+        
+        // Refresh storage stats
+        fetchStorageStats();
+        
+        toast.success('File uploaded successfully');
+        return uploadedFile;
+      } catch (uploadError: any) {
+        console.error('Fetch upload failed, error details:', uploadError);
+        throw uploadError;
       }
-      
-      const uploadedFile = await response.json();
-      console.log('Upload successful:', uploadedFile);
-      
-      // Update local state
-      setFiles(prev => [uploadedFile, ...prev]);
-      setCategoryFiles(prev => ({
-        ...prev,
-        [category]: [uploadedFile, ...(prev[category] || [])]
-      }));
-      
-      // Refresh storage stats
-      fetchStorageStats();
-      
-      toast.success('File uploaded successfully');
-      return uploadedFile;
     } catch (err: any) {
       console.error('=== Upload Error ===');
       console.error('Error details:', err);
       
-      setError(err.message || 'Failed to upload file');
-      toast.error(err.message || 'Failed to upload file');
+      // Handle axios errors properly
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to upload file';
+      setError(errorMessage);
+      toast.error(errorMessage);
       
       return null;
     } finally {
@@ -407,9 +414,7 @@ toast('Storage is already set up');
       console.log(`Uploading ${files.length} files to ${isLive ? 'Live' : 'Test'} environment`);
       
       // Get auth token and tenant ID
-      const authToken = api.defaults.headers.common['Authorization'] || 
-                       localStorage.getItem('auth_token') || 
-                       sessionStorage.getItem('auth_token');
+      const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
       const tenantId = currentTenant.id;
       const baseURL = api.defaults.baseURL;
       const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}/multiple`;
@@ -418,7 +423,7 @@ toast('Storage is already set up');
       const response = await fetch(uploadURL, {
         method: 'POST',
         headers: {
-          'Authorization': authToken as string,
+          'Authorization': `Bearer ${authToken}`,
           'x-tenant-id': tenantId,
           'x-environment': isLive ? 'live' : 'test'
           // NO Content-Type header

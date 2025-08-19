@@ -61,7 +61,7 @@ import {
   getResourceStats
 } from '@/services/public-resources.service';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/config/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import { toast } from '@/components/ui/use-toast';
 import AIMaturityCard from '@/components/Leads/AIMaturityAssessment/AIMaturityCard';

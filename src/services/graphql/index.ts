@@ -18,8 +18,6 @@ export const GRAPHQL_CONFIG = {
 // Resources
 export {
   GRAPHQL_OPERATIONS as RESOURCE_OPERATIONS,
-  GRAPHQL_VARIABLES as RESOURCE_VARIABLES,
-  RESOURCE_API_EXAMPLES,
   buildGraphQLRequest,
   executeGraphQLOperation,
   createApolloClientConfig,
@@ -29,23 +27,44 @@ export {
   type ResourceFilters,
   type ResourceQuery,
   type CreateResourceInput,
-  type UpdateResourceInput,
+  type BulkUpdateResourceInput,
   type GraphQLRequest
 } from './resourceGraphQLUrls';
 
+// Service Catalog
+export {
+  SERVICE_CATALOG_OPERATIONS,
+  SERVICE_CATALOG_ENDPOINTS,
+  buildServiceCatalogGraphQLRequest,
+  createServiceCatalogQuery,
+  formatServicePrice,
+  formatServiceDuration,
+  // Types
+  type ServiceCatalogItemStatus,
+  type PricingModel,
+  type BillingCycle,
+  type ServiceCatalogFilters,
+  type ServiceCatalogSort,
+  type CreateServiceCatalogItemInput,
+  type UpdateServiceCatalogItemInput,
+  type BulkUpdateServiceCatalogItemInput,
+  type ServiceCatalogGraphQLRequest
+} from './serviceCatalogGraphQLUrls';
+
 // TODO: Add future modules here
-// export { CATALOG_OPERATIONS } from './catalogGraphQLUrls';
 // export { CONTRACT_OPERATIONS } from './contractGraphQLUrls';
 
 // =================================================================
 // QUICK ACCESS (optional convenience)
 // =================================================================
 import { GRAPHQL_OPERATIONS as RESOURCE_OPS } from './resourceGraphQLUrls';
-// import { CATALOG_OPERATIONS as CATALOG_OPS } from './catalogGraphQLUrls';
+import { SERVICE_CATALOG_OPERATIONS as CATALOG_OPS } from './serviceCatalogGraphQLUrls';
 
 export const OPERATIONS = {
-  RESOURCES: RESOURCE_OPS.RESOURCES
-  // CATALOG: CATALOG_OPS.CATALOG_ITEMS,
+  RESOURCES: RESOURCE_OPS.RESOURCES,
+  SERVICE_CATALOG: CATALOG_OPS.SERVICE_CATALOG,
+  MASTER_DATA: CATALOG_OPS.MASTER_DATA,
+  AVAILABLE_RESOURCES: CATALOG_OPS.RESOURCES
   // CONTRACTS: CONTRACT_OPS.CONTRACTS
 };
 

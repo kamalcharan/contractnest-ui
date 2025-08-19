@@ -24,7 +24,7 @@ const LoginPage: React.FC = () => {
   const googleLoginInProgress = useRef(false);
 
   // Check if Google OAuth is enabled
-  const isGoogleAuthEnabled = import.meta.env.VITE_ENABLE_GOOGLE_AUTH !== 'false';
+  const isGoogleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED!== 'false';
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
