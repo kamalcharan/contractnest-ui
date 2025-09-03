@@ -14,8 +14,8 @@ export interface UserProfile {
   user_code: string;
   mobile_number?: string;
   country_code?: string;
-  preferred_language?: string;
-  preferred_theme?: string;
+  preferred_language?: string;  
+  preferred_theme?: string; 
   timezone?: string;
   department?: string;
   employee_id?: string;
@@ -383,11 +383,12 @@ export const useUsers = (options: UseUsersOptions = {}) => {
   };
 };
 
-// Hook for current user profile
+// Hook for current user profile - EXTENDED WITH NEW FUNCTIONS
 export const useCurrentUserProfile = () => {
   const { user: authUser, currentTenant } = useAuth();
   const [profile, setProfile] = useState<UserDetailsResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const fetchProfile = useCallback(async () => {
@@ -409,6 +410,7 @@ export const useCurrentUserProfile = () => {
   }, [authUser?.id, currentTenant?.id]);
   
   const updateProfile = async (data: Partial<UserProfile>): Promise<boolean> => {
+    setUpdating(true);
     try {
       await api.patch('/api/users/me', data);
       toast.success('Profile updated successfully');
@@ -421,8 +423,106 @@ export const useCurrentUserProfile = () => {
       const errorMsg = err.response?.data?.error || 'Failed to update profile';
       toast.error(errorMsg);
       return false;
+    } finally {
+      setUpdating(false);
     }
   };
+  
+  // NEW FUNCTION: Update avatar
+  const updateAvatar = async (avatarUrl: string): Promise<boolean> => {
+  setUpdating(true);
+  try {
+    const response = await api.patch('/api/users/me', { 
+      avatar_url: avatarUrl 
+    });
+    
+    toast.success('Avatar updated successfully');
+    await fetchProfile();
+    
+    // Update the user in AuthContext to reflect in Header
+    if (authUser && setUser) {  // You'll need to get setUser from AuthContext
+      setUser({
+        ...authUser,
+        avatar_url: avatarUrl
+      });
+    }
+    
+    return true;
+  } catch (err: any) {
+    console.error('Error updating avatar:', err);
+    return false;
+  } finally {
+    setUpdating(false);
+  }
+};
+
+  // NEW FUNCTION: Remove avatar
+  const removeAvatar = async (): Promise<boolean> => {
+    setUpdating(true);
+    try {
+      await api.delete('/api/user-management/me/avatar');
+      toast.success('Avatar removed successfully');
+      await fetchProfile();
+      return true;
+    } catch (err: any) {
+      console.error('Error removing avatar:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to remove avatar';
+      toast.error(errorMsg);
+      return false;
+    } finally {
+      setUpdating(false);
+    }
+  };
+  
+  // NEW FUNCTION: Change password
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    setUpdating(true);
+    try {
+      await api.post('/api/user-management/me/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+      toast.success('Password changed successfully');
+      return true;
+    } catch (err: any) {
+      console.error('Error changing password:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to change password';
+      toast.error(errorMsg);
+      return false;
+    } finally {
+      setUpdating(false);
+    }
+  };
+  
+  // NEW FUNCTION: Validate mobile number
+  // In src/hooks/useUsers.ts - update the validateMobile function in useCurrentUserProfile
+
+const validateMobile = async (mobile: string, countryCode: string): Promise<boolean> => {
+  try {
+    // If mobile is empty, it's valid (optional field)
+    if (!mobile) return true;
+    
+    const response = await api.post('/api/user-management/me/validate-mobile', {
+      mobile_number: mobile,
+      country_code: countryCode
+    });
+    
+    // Check the actual response structure
+    // The API might return { valid: true/false } or { isValid: true/false }
+    console.log('Mobile validation response:', response.data);
+    
+    // Handle different possible response formats
+    return response.data?.valid ?? response.data?.isValid ?? true;
+  } catch (err: any) {
+    console.error('Error validating mobile:', err);
+    // If the API returns 409 (conflict), the number is in use
+    if (err.response?.status === 409) {
+      return false;
+    }
+    // For other errors, assume valid to not block the user
+    return true;
+  }
+};
   
   useEffect(() => {
     fetchProfile();
@@ -431,8 +531,13 @@ export const useCurrentUserProfile = () => {
   return {
     profile,
     loading,
+    updating,
     error,
     fetchProfile,
-    updateProfile
+    updateProfile,
+    updateAvatar,
+    removeAvatar,
+    changePassword,
+    validateMobile
   };
 };

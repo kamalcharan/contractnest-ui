@@ -42,6 +42,7 @@ export interface StorageFile {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  metadata?: any;
 }
 
 // Hook implementation
@@ -57,52 +58,55 @@ export const useStorageManagement = () => {
   const [categoryFiles, setCategoryFiles] = useState<Record<string, StorageFile[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadComplete, setInitialLoadComplete] = useState<boolean>(false);
   
-  // Ref to track if component is mounted
+  // Refs
   const isMountedRef = useRef<boolean>(true);
+  const loadingRef = useRef<boolean>(false);
   
   // Helper function to ensure headers are set
   const ensureHeaders = useCallback(() => {
     if (currentTenant?.id) {
-      // Set tenant ID header
       api.defaults.headers.common['x-tenant-id'] = currentTenant.id;
     }
     
-    // The authorization header should already be set by the auth context/interceptor
-    // But we can check and log if it's missing
     if (!api.defaults.headers.common['Authorization']) {
       console.warn('Authorization header not set in api defaults');
     }
   }, [currentTenant]);
   
-  // Fetch storage stats
-  const fetchStorageStats = useCallback(async () => {
-    if (!currentTenant?.id) {
-      setIsLoading(false);
+  // Combined initial load function to prevent multiple reloads
+  const loadInitialData = useCallback(async () => {
+    // Prevent duplicate loads
+    if (loadingRef.current || !currentTenant?.id || initialLoadComplete) {
       return;
     }
     
-    // Ensure headers are set
+    loadingRef.current = true;
     ensureHeaders();
     
     setIsLoading(true);
     setError(null);
     
     try {
-      console.log(`Fetching storage stats for ${isLive ? 'Live' : 'Test'} environment`);
+      console.log(`Loading storage data for ${isLive ? 'Live' : 'Test'} environment`);
       
-      const response = await api.get(API_ENDPOINTS.STORAGE.STATS);
+      // Fetch storage stats
+      const statsResponse = await api.get(API_ENDPOINTS.STORAGE.STATS);
       
       if (!isMountedRef.current) return;
       
-      const data = response.data;
+      const statsData = statsResponse.data;
       
-      // Handle the response based on storage setup status
-      if (data.storageSetupComplete === false) {
+      if (statsData.storageSetupComplete === false) {
+        // Storage not setup
         setStorageSetupComplete(false);
         setStorageStats(null);
+        setFiles([]);
+        setCategoryFiles({});
       } else {
-        setStorageStats(data);
+        // Storage is setup
+        setStorageStats(statsData);
         setStorageSetupComplete(true);
         
         // Update tenant in context if needed
@@ -112,32 +116,95 @@ export const useStorageManagement = () => {
             storage_setup_complete: true
           });
         }
+        
+        // Fetch files immediately
+        try {
+          const filesResponse = await api.get(API_ENDPOINTS.STORAGE.FILES);
+          
+          if (!isMountedRef.current) return;
+          
+          const filesData = filesResponse.data || [];
+          setFiles(filesData);
+          
+          // Group files by category
+          const groupedFiles: Record<string, StorageFile[]> = {};
+          STORAGE_CATEGORIES.forEach(cat => {
+            groupedFiles[cat.id] = filesData.filter((file: StorageFile) => 
+              file.file_category === cat.id
+            );
+          });
+          setCategoryFiles(groupedFiles);
+        } catch (filesError) {
+          console.error('Error fetching files:', filesError);
+          setFiles([]);
+          setCategoryFiles({});
+        }
+      }
+      
+      setInitialLoadComplete(true);
+    } catch (err: any) {
+      if (!isMountedRef.current) return;
+      
+      console.error('Error loading storage data:', err);
+      
+      if (err.response?.status === 401) {
+        console.error('Authentication error in storage');
+      } else if (err.response?.status === 404) {
+        setStorageSetupComplete(false);
+        setStorageStats(null);
+        setFiles([]);
+        setCategoryFiles({});
+        setError(null);
+      } else {
+        setError(err.response?.data?.error || 'Failed to load storage data');
+      }
+      
+      setInitialLoadComplete(true);
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        loadingRef.current = false;
+      }
+    }
+  }, [currentTenant, setCurrentTenant, isLive, ensureHeaders, initialLoadComplete]);
+  
+  // Fetch storage stats only (used for refresh)
+  const fetchStorageStats = useCallback(async () => {
+    if (!currentTenant?.id) {
+      return;
+    }
+    
+    ensureHeaders();
+    setError(null);
+    
+    try {
+      const response = await api.get(API_ENDPOINTS.STORAGE.STATS);
+      
+      if (!isMountedRef.current) return;
+      
+      const data = response.data;
+      
+      if (data.storageSetupComplete === false) {
+        setStorageSetupComplete(false);
+        setStorageStats(null);
+      } else {
+        setStorageStats(data);
+        setStorageSetupComplete(true);
       }
     } catch (err: any) {
       if (!isMountedRef.current) return;
       
       console.error('Error fetching storage stats:', err);
       
-      // Handle different error scenarios
-      if (err.response?.status === 401) {
-        // Don't set error for auth issues, let the auth interceptor handle it
-        console.error('Authentication error in storage stats');
-      } else if (err.response?.status === 404 || 
-                (err.response?.status === 200 && err.response?.data?.storageSetupComplete === false)) {
-        // Storage not set up yet - this is a valid state
+      if (err.response?.status === 404) {
         setStorageSetupComplete(false);
         setStorageStats(null);
         setError(null);
       } else {
-        // Actual error
         setError(err.response?.data?.error || 'Failed to load storage statistics');
       }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
     }
-  }, [currentTenant, setCurrentTenant, isLive, ensureHeaders]);
+  }, [currentTenant, ensureHeaders]);
   
   // Setup storage
   const setupStorage = async (): Promise<boolean> => {
@@ -146,9 +213,7 @@ export const useStorageManagement = () => {
       return false;
     }
     
-    // Ensure headers are set
     ensureHeaders();
-    
     setIsSubmitting(true);
     setError(null);
     
@@ -164,7 +229,6 @@ export const useStorageManagement = () => {
       setStorageStats(data);
       setStorageSetupComplete(true);
       
-      // Update tenant in context
       if (setCurrentTenant) {
         setCurrentTenant({
           ...currentTenant,
@@ -179,18 +243,13 @@ export const useStorageManagement = () => {
       
       console.error('Error setting up storage:', err);
       
-      // Check if storage is already set up
       if (err.response?.status === 400) {
         const errorMessage = err.response?.data?.error || '';
         
         if (errorMessage.toLowerCase().includes('already set up')) {
-          // Storage is already set up, update state accordingly
           setStorageSetupComplete(true);
-          
-          // Try to fetch current stats
           await fetchStorageStats();
-          
-toast('Storage is already set up');
+          toast('Storage is already set up');
           return true;
         }
       }
@@ -205,16 +264,13 @@ toast('Storage is already set up');
     }
   };
   
-  // Fetch files
+  // Fetch files (can be called independently for refresh)
   const fetchFiles = useCallback(async (category?: string): Promise<StorageFile[]> => {
     if (!currentTenant?.id || !storageSetupComplete) {
       return [];
     }
     
-    // Ensure headers are set
     ensureHeaders();
-    
-    setIsLoading(true);
     setError(null);
     
     try {
@@ -253,34 +309,27 @@ toast('Storage is already set up');
       
       console.error('Error fetching files:', err);
       
-      // Return empty array for errors to prevent UI issues
       if (err.response?.status === 404 || err.response?.status === 400) {
         return [];
       }
       
       setError(err.response?.data?.error || 'Failed to load files');
       return [];
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
     }
   }, [currentTenant?.id, storageSetupComplete, isLive, ensureHeaders]);
   
-  // Upload single file - Using fetch instead of axios
-  const uploadFile = async (file: File, category: string): Promise<StorageFile | null> => {
+  // Upload single file
+  const uploadFile = async (file: File, category: string, metadata?: any): Promise<StorageFile | null> => {
     if (!currentTenant?.id || !storageSetupComplete) {
       toast.error('Storage is not set up yet');
       return null;
     }
     
-    // Validate file size
     if (!isFileSizeAllowed(file.size, category)) {
       toast.error(`File size exceeds the maximum limit of ${formatFileSize(5 * 1024 * 1024)}`);
       return null;
     }
     
-    // Validate file type
     if (!isFileTypeAllowed(file.type, category)) {
       toast.error('File type is not allowed for this category');
       return null;
@@ -290,90 +339,58 @@ toast('Storage is already set up');
     setError(null);
     
     try {
-      // Check current storage quota before uploading
       if (storageStats && file.size > storageStats.available) {
         toast.error('Not enough storage space available');
         return null;
       }
 
-      // Create FormData
       const formData = new FormData();
-      // Backend expects field name 'file' for single uploads
       formData.append('file', file);
       formData.append('category', category);
-      
-      // Debug: Log what we're sending
-      console.log('=== Upload Debug ===');
-      console.log('Uploading file:');
-      console.log('- Name:', file.name);
-      console.log('- Size:', file.size);
-      console.log('- Type:', file.type);
-      console.log('- Category:', category);
-      console.log('- File is valid:', file instanceof File);
-      console.log('- File size > 0:', file.size > 0);
-      console.log('FormData entries:');
-      for (let [key, value] of formData.entries()) {
-        console.log(`  ${key}:`, value);
-        if (value instanceof File) {
-          console.log(`    File details: name=${value.name}, size=${value.size}, type=${value.type}`);
-        }
+      if (metadata) {
+        formData.append('metadata', JSON.stringify(metadata));
       }
       
-      // Use fetch instead of axios for file uploads to avoid FormData corruption
-      try {
-        console.log(`Uploading to ${isLive ? 'Live' : 'Test'} environment using fetch`);
-        
-        // Get auth token and tenant ID
-        const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-        const tenantId = currentTenant.id;
-        const baseURL = api.defaults.baseURL;
-        const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}`;
-        
-        // Use fetch for the upload
-        const response = await fetch(uploadURL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'x-tenant-id': tenantId,
-            'x-environment': isLive ? 'live' : 'test'
-            // NO Content-Type header - let browser set it with boundary
-          },
-          body: formData
-        });
-        
-        console.log('Response status:', response.status);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Response data:', errorData);
-          throw new Error(errorData.error || `Upload failed with status ${response.status}`);
-        }
-        
-        const uploadedFile = await response.json();
-        console.log('Upload successful:', uploadedFile);
-        
-        // Update local state
-        setFiles(prev => [uploadedFile, ...prev]);
-        setCategoryFiles(prev => ({
-          ...prev,
-          [category]: [uploadedFile, ...(prev[category] || [])]
-        }));
-        
-        // Refresh storage stats
-        fetchStorageStats();
-        
-        toast.success('File uploaded successfully');
-        return uploadedFile;
-      } catch (uploadError: any) {
-        console.error('Fetch upload failed, error details:', uploadError);
-        throw uploadError;
+      console.log(`Uploading to ${isLive ? 'Live' : 'Test'} environment`);
+      
+      const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      const tenantId = currentTenant.id;
+      const baseURL = api.defaults.baseURL;
+      const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}`;
+      
+      const response = await fetch(uploadURL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'x-tenant-id': tenantId,
+          'x-environment': isLive ? 'live' : 'test'
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
       }
+      
+      const uploadedFile = await response.json();
+      
+      // Update local state
+      setFiles(prev => [uploadedFile, ...prev]);
+      setCategoryFiles(prev => ({
+        ...prev,
+        [category]: [uploadedFile, ...(prev[category] || [])]
+      }));
+      
+      // Refresh storage stats
+      fetchStorageStats();
+      
+      toast.success('File uploaded successfully');
+      return uploadedFile;
     } catch (err: any) {
-      console.error('=== Upload Error ===');
-      console.error('Error details:', err);
+      console.error('Upload Error:', err);
       
-      // Handle axios errors properly
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to upload file';
+      const errorMessage = err.message || 'Failed to upload file';
       setError(errorMessage);
       toast.error(errorMessage);
       
@@ -383,14 +400,13 @@ toast('Storage is already set up');
     }
   };
   
-  // Upload multiple files - Also using fetch
+  // Upload multiple files
   const uploadMultipleFiles = async (files: File[], category: string): Promise<boolean> => {
     if (!currentTenant?.id || !storageSetupComplete) {
       toast.error('Storage is not set up yet');
       return false;
     }
     
-    // Validate total size
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     if (storageStats && totalSize > storageStats.available) {
       toast.error('Not enough storage space available for all files');
@@ -403,30 +419,25 @@ toast('Storage is already set up');
     try {
       const formData = new FormData();
       
-      // Add all files to form data
       files.forEach(file => {
         formData.append('files', file);
       });
       
-      // Add category for all files
       formData.append('category', category);
       
       console.log(`Uploading ${files.length} files to ${isLive ? 'Live' : 'Test'} environment`);
       
-      // Get auth token and tenant ID
       const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
       const tenantId = currentTenant.id;
       const baseURL = api.defaults.baseURL;
       const uploadURL = `${baseURL}${API_ENDPOINTS.STORAGE.FILES}/multiple`;
       
-      // Use fetch for multiple files too
       const response = await fetch(uploadURL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'x-tenant-id': tenantId,
           'x-environment': isLive ? 'live' : 'test'
-          // NO Content-Type header
         },
         body: formData
       });
@@ -440,7 +451,6 @@ toast('Storage is already set up');
       
       if (!isMountedRef.current) return false;
       
-      // Update local state with successful uploads
       const successfulUploads = result.results
         .filter((r: any) => r.file)
         .map((r: any) => r.file);
@@ -453,12 +463,10 @@ toast('Storage is already set up');
         }));
       }
       
-      // Refresh storage stats
       fetchStorageStats();
       
-      // Show appropriate message
       if (result.summary.failed > 0) {
-toast(result.message, { icon: '⚠️' });
+        toast(result.message, { icon: '⚠️' });
       } else {
         toast.success(result.message);
       }
@@ -482,9 +490,7 @@ toast(result.message, { icon: '⚠️' });
   const deleteFile = async (fileId: string): Promise<boolean> => {
     if (!currentTenant?.id || !storageSetupComplete) return false;
     
-    // Ensure headers are set
     ensureHeaders();
-    
     setIsSubmitting(true);
     setError(null);
     
@@ -495,7 +501,6 @@ toast(result.message, { icon: '⚠️' });
       
       if (!isMountedRef.current) return false;
       
-      // Update local state
       const fileToDelete = files.find(f => f.id === fileId);
       
       if (fileToDelete) {
@@ -508,7 +513,6 @@ toast(result.message, { icon: '⚠️' });
         }));
       }
       
-      // Refresh storage stats
       fetchStorageStats();
       
       toast.success('File deleted successfully');
@@ -531,9 +535,7 @@ toast(result.message, { icon: '⚠️' });
   const deleteMultipleFiles = async (fileIds: string[]): Promise<boolean> => {
     if (!currentTenant?.id || !storageSetupComplete) return false;
     
-    // Ensure headers are set
     ensureHeaders();
-    
     setIsSubmitting(true);
     setError(null);
     
@@ -548,7 +550,6 @@ toast(result.message, { icon: '⚠️' });
       
       const result = response.data;
       
-      // Update local state by removing deleted files
       const deletedIds = result.results
         .filter((r: any) => r.success)
         .map((r: any) => r.fileId);
@@ -556,7 +557,6 @@ toast(result.message, { icon: '⚠️' });
       if (deletedIds.length > 0) {
         setFiles(prev => prev.filter(f => !deletedIds.includes(f.id)));
         
-        // Update category files
         const newCategoryFiles = { ...categoryFiles };
         Object.keys(newCategoryFiles).forEach(category => {
           newCategoryFiles[category] = newCategoryFiles[category].filter(
@@ -566,12 +566,10 @@ toast(result.message, { icon: '⚠️' });
         setCategoryFiles(newCategoryFiles);
       }
       
-      // Refresh storage stats
       fetchStorageStats();
       
-      // Show appropriate message
       if (result.summary.failed > 0) {
-toast(result.message, { icon: '⚠️' });
+        toast(result.message, { icon: '⚠️' });
       } else {
         toast.success(result.message);
       }
@@ -596,45 +594,31 @@ toast(result.message, { icon: '⚠️' });
     return STORAGE_CATEGORIES;
   }, []);
   
-  // Clear all data when environment changes
+  // Clear all data
   const clearAllData = useCallback(() => {
-    console.log('Clearing all storage data for environment switch');
+    console.log('Clearing all storage data');
     setStorageStats(null);
     setFiles([]);
     setCategoryFiles({});
     setSelectedCategory(null);
     setError(null);
-    setStorageSetupComplete(!!currentTenant?.storage_setup_complete);
-  }, [currentTenant]);
+    setInitialLoadComplete(false);
+    loadingRef.current = false;
+  }, []);
   
-  // Initialize storage setup status from tenant
+  // Single useEffect for initial load
   useEffect(() => {
-    if (currentTenant) {
-      setStorageSetupComplete(!!currentTenant.storage_setup_complete);
+    if (currentTenant?.id && !initialLoadComplete) {
+      loadInitialData();
     }
-  }, [currentTenant]);
-  
-  // Initial data load
-  useEffect(() => {
-    if (currentTenant?.id) {
-      fetchStorageStats();
-    }
-  }, [currentTenant?.id, fetchStorageStats]);
-  
-  // Load files when storage is confirmed as setup
-  useEffect(() => {
-    if (storageSetupComplete && currentTenant?.id) {
-      fetchFiles();
-    }
-  }, [storageSetupComplete, currentTenant?.id, fetchFiles]);
+  }, [currentTenant?.id, loadInitialData]);
   
   // Handle environment changes
   useEffect(() => {
-    // Clear data when environment changes
-    return () => {
+    if (initialLoadComplete) {
       clearAllData();
-    };
-  }, [isLive, clearAllData]);
+    }
+  }, [isLive]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -642,6 +626,7 @@ toast(result.message, { icon: '⚠️' });
     
     return () => {
       isMountedRef.current = false;
+      loadingRef.current = false;
     };
   }, []);
   

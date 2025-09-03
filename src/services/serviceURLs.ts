@@ -1,7 +1,58 @@
-// src/services/serviceURLs.ts - COMPLETE VERSION
-// Updated with Resources endpoints and Product Master Data endpoints
+// src/services/serviceURLs.ts - UI Layer Version COMPLETE
+// Updated with Onboarding endpoints - ALL ENDPOINTS PRESERVED
 
 export const API_ENDPOINTS = {
+  // =================================================================
+  // ONBOARDING ENDPOINTS - NEW
+  // =================================================================
+  ONBOARDING: {
+    // Main onboarding operations
+    STATUS: '/api/onboarding/status',
+    INITIALIZE: '/api/onboarding/initialize',
+    COMPLETE: '/api/onboarding/complete',
+    
+    // Step operations
+    STEP: {
+      COMPLETE: '/api/onboarding/step/complete',
+      SKIP: '/api/onboarding/step/skip',
+    },
+    
+    // Progress tracking
+    PROGRESS: '/api/onboarding/progress',
+    
+    // Testing/Debug
+    TEST: '/api/onboarding/test',
+    
+    // Helper functions for building URLs
+    helpers: {
+      // Get status with optional query params
+      getStatusUrl: (includeSteps: boolean = true) => {
+        const params = new URLSearchParams();
+        if (includeSteps) params.append('includeSteps', 'true');
+        const queryString = params.toString();
+        return queryString ? `/api/onboarding/status?${queryString}` : '/api/onboarding/status';
+      },
+      
+      // Build complete step URL with step ID
+      completeStepUrl: (stepId?: string) => {
+        if (stepId) {
+          const params = new URLSearchParams({ stepId });
+          return `/api/onboarding/step/complete?${params.toString()}`;
+        }
+        return '/api/onboarding/step/complete';
+      },
+      
+      // Build skip step URL with step ID
+      skipStepUrl: (stepId?: string) => {
+        if (stepId) {
+          const params = new URLSearchParams({ stepId });
+          return `/api/onboarding/step/skip?${params.toString()}`;
+        }
+        return '/api/onboarding/step/skip';
+      }
+    }
+  },
+
   MASTERDATA: {
     CATEGORIES: '/api/masterdata/categories',
     CATEGORY_DETAILS: '/api/masterdata/category-details',
@@ -9,7 +60,7 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // PRODUCT MASTER DATA ENDPOINTS - NEW
+  // PRODUCT MASTER DATA ENDPOINTS - ENHANCED
   // =================================================================
   PRODUCT_MASTERDATA: {
     // Health and utility endpoints
@@ -66,6 +117,63 @@ export const API_ENDPOINTS = {
         });
         return `/api/product-masterdata/tenant/categories?${params.toString()}`;
       }
+    },
+
+    // =================================================================
+    // NEW: INDUSTRY-FIRST ONBOARDING ENDPOINTS (Enhanced)
+    // =================================================================
+    INDUSTRIES: {
+      // Get industries with pagination and search
+      LIST: '/api/product-masterdata/industries',
+      
+      // Helper function to build industries URL with parameters
+      LIST_WITH_PARAMS: (filters: IndustryFilters = {}) => {
+        const params = new URLSearchParams();
+        
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+        
+        const queryString = params.toString();
+        return queryString ? `/api/product-masterdata/industries?${queryString}` : '/api/product-masterdata/industries';
+      }
+    },
+
+    CATEGORIES: {
+      // Get all categories with pagination and search
+      LIST_ALL: '/api/product-masterdata/categories/all',
+      
+      // Get industry-specific categories with filtering
+      LIST_BY_INDUSTRY: '/api/product-masterdata/categories/by-industry',
+      
+      // Helper function to build all categories URL with parameters
+      LIST_ALL_WITH_PARAMS: (filters: CategoryFilters = {}) => {
+        const params = new URLSearchParams();
+        
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+        
+        const queryString = params.toString();
+        return queryString ? `/api/product-masterdata/categories/all?${queryString}` : '/api/product-masterdata/categories/all';
+      },
+      
+      // Helper function to build industry categories URL with parameters
+      LIST_BY_INDUSTRY_WITH_PARAMS: (industryId: string, filters: IndustryCategoryFilters = {}) => {
+        const params = new URLSearchParams({
+          industry_id: industryId
+        });
+        
+        if (filters.is_primary !== undefined) params.append('is_primary', filters.is_primary.toString());
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+        
+        return `/api/product-masterdata/categories/by-industry?${params.toString()}`;
+      }
     }
   },
   
@@ -88,6 +196,7 @@ export const API_ENDPOINTS = {
     GOOGLE_LINK: '/api/auth/google-link',
     GOOGLE_UNLINK: '/api/auth/google-unlink'
   },
+  
   TENANTS: {
     LIST: '/api/tenants',
     CREATE: '/api/tenants',
@@ -312,6 +421,48 @@ export const API_ENDPOINTS = {
     }
   },
 
+  // ========================================================
+  //  SERVICE CATALOG - END POINTS
+  //=========================================================
+  SERVICE_CATALOG: {
+    // Main service operations
+    LIST: '/api/service-catalog/services',
+    CREATE: '/api/service-catalog/services',
+    GET: (id: string) => `/api/service-catalog/services/${id}`,
+    UPDATE: (id: string) => `/api/service-catalog/services/${id}`,
+    DELETE: (id: string) => `/api/service-catalog/services/${id}`,
+    
+    // Service resources
+    SERVICE_RESOURCES: (id: string) => `/api/service-catalog/services/${id}/resources`,
+    
+    // Master data and configuration
+    MASTER_DATA: '/api/service-catalog/master-data',
+    
+    // Health and utility
+    HEALTH: '/api/service-catalog/health',
+    
+    // Helper function for services with query params
+    LIST_WITH_FILTERS: (filters: ServiceCatalogFilters = {}) => {
+      const params = new URLSearchParams();
+      
+      if (filters.search_term) params.append('search_term', filters.search_term);
+      if (filters.category_id) params.append('category_id', filters.category_id);
+      if (filters.industry_id) params.append('industry_id', filters.industry_id);
+      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+      if (filters.price_min !== undefined) params.append('price_min', filters.price_min.toString());
+      if (filters.price_max !== undefined) params.append('price_max', filters.price_max.toString());
+      if (filters.currency) params.append('currency', filters.currency);
+      if (filters.has_resources !== undefined) params.append('has_resources', filters.has_resources.toString());
+      if (filters.sort_by) params.append('sort_by', filters.sort_by);
+      if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
+      if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+      if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+      
+      const queryString = params.toString();
+      return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
+    }
+  },
+  
   // =================================================================
   // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS
   // =================================================================
@@ -404,7 +555,7 @@ export const API_ENDPOINTS = {
 };
 
 // =================================================================
-// TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT
+// TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT (Enhanced)
 // =================================================================
 
 // Product Master Data filter interfaces
@@ -415,6 +566,87 @@ export type ProductMasterDataFilters = {
 
 export type ProductMasterDataCategoryFilters = {
   is_active?: boolean;
+};
+
+// NEW: Enhanced filter interfaces for industry-first onboarding
+export type IndustryFilters = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  is_active?: boolean;
+};
+
+export type CategoryFilters = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  is_active?: boolean;
+};
+
+export type IndustryCategoryFilters = {
+  is_primary?: boolean;
+  page?: number;
+  limit?: number;
+  search?: string;
+  is_active?: boolean;
+};
+
+// Pagination metadata interface
+export type PaginationMetadata = {
+  current_page: number;
+  total_pages: number;
+  total_records: number;
+  limit: number;
+  has_next: boolean;
+  has_prev: boolean;
+};
+
+// Industry interface
+export type Industry = {
+  id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+// Category-Industry mapping interface
+export type CategoryIndustryMap = {
+  id: string;
+  category_id: string;
+  industry_id: string;
+  display_name: string;
+  display_order: number;
+  is_primary: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+// Enhanced response interfaces
+export type IndustryResponse = {
+  success: boolean;
+  data?: Industry[];
+  pagination?: PaginationMetadata;
+  error?: string;
+  code?: string;
+  timestamp?: string;
+};
+
+export type CategoryMapResponse = {
+  success: boolean;
+  data?: CategoryIndustryMap[];
+  industry_id?: string;
+  filters?: {
+    is_primary_only: boolean;
+    search_applied: boolean;
+  };
+  pagination?: PaginationMetadata;
+  error?: string;
+  code?: string;
+  timestamp?: string;
 };
 
 // Resources filter interface
@@ -436,6 +668,7 @@ export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
+export type OnboardingEndpoints = typeof API_ENDPOINTS.ONBOARDING;
 
 // Contact filters interface
 export type ContactFilters = {
@@ -476,7 +709,7 @@ export type BlockSearchParams = {
 };
 
 // =================================================================
-// HELPER FUNCTIONS FOR BUILDING URLS WITH QUERY PARAMETERS
+// HELPER FUNCTIONS FOR BUILDING URLS WITH QUERY PARAMETERS (Enhanced)
 // =================================================================
 
 /**
@@ -587,7 +820,70 @@ export const buildTenantCategoriesURL = (isActive: boolean = true): string => {
 };
 
 // =================================================================
-// RESOURCES API USAGE EXAMPLES
+// NEW: ENHANCED HELPER FUNCTIONS FOR INDUSTRY-FIRST ONBOARDING
+// =================================================================
+
+/**
+ * Build industries list URL with filters
+ */
+export const buildIndustriesURL = (filters: IndustryFilters = {}): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.INDUSTRIES.LIST_WITH_PARAMS(filters);
+};
+
+/**
+ * Build all categories list URL with filters
+ */
+export const buildAllCategoriesURL = (filters: CategoryFilters = {}): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_ALL_WITH_PARAMS(filters);
+};
+
+/**
+ * Build industry-specific categories URL with filters
+ */
+export const buildIndustryCategoriesURL = (industryId: string, filters: IndustryCategoryFilters = {}): string => {
+  return API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_BY_INDUSTRY_WITH_PARAMS(industryId, filters);
+};
+
+/**
+ * Build industry categories URL for primary categories only
+ */
+export const buildPrimaryIndustryCategoriesURL = (industryId: string, filters: Omit<IndustryCategoryFilters, 'is_primary'> = {}): string => {
+  return buildIndustryCategoriesURL(industryId, { ...filters, is_primary: true });
+};
+
+// =================================================================
+// ONBOARDING HELPER FUNCTIONS
+// =================================================================
+
+/**
+ * Build onboarding status URL with optional parameters
+ */
+export const buildOnboardingStatusURL = (includeSteps: boolean = true, includeMeta: boolean = false): string => {
+  const params = new URLSearchParams();
+  if (includeSteps) params.append('includeSteps', 'true');
+  if (includeMeta) params.append('includeMeta', 'true');
+  const queryString = params.toString();
+  return queryString ? `${API_ENDPOINTS.ONBOARDING.STATUS}?${queryString}` : API_ENDPOINTS.ONBOARDING.STATUS;
+};
+
+/**
+ * Get onboarding step endpoint
+ */
+export const getOnboardingStepEndpoint = (operation: 'complete' | 'skip', stepId?: string): string => {
+  const baseUrl = operation === 'complete' 
+    ? API_ENDPOINTS.ONBOARDING.STEP.COMPLETE 
+    : API_ENDPOINTS.ONBOARDING.STEP.SKIP;
+  
+  if (stepId) {
+    const params = new URLSearchParams({ stepId });
+    return `${baseUrl}?${params.toString()}`;
+  }
+  
+  return baseUrl;
+};
+
+// =================================================================
+// API USAGE EXAMPLES
 // =================================================================
 
 export const RESOURCES_API_EXAMPLES = {
@@ -618,7 +914,7 @@ export const RESOURCES_API_EXAMPLES = {
 };
 
 // =================================================================
-// PRODUCT MASTER DATA API USAGE EXAMPLES
+// PRODUCT MASTER DATA API USAGE EXAMPLES (Enhanced)
 // =================================================================
 
 export const PRODUCT_MASTERDATA_API_EXAMPLES = {
@@ -640,11 +936,59 @@ export const PRODUCT_MASTERDATA_API_EXAMPLES = {
   
   // With different active filters
   getInactiveGlobalCategories: 'GET ' + buildGlobalCategoriesURL(false),
-  getInactiveTenantCategories: 'GET ' + buildTenantCategoriesURL(false)
+  getInactiveTenantCategories: 'GET ' + buildTenantCategoriesURL(false),
+  
+  // NEW: Industry-first onboarding examples
+  getAllIndustries: 'GET ' + buildIndustriesURL(),
+  getIndustriesWithPagination: 'GET ' + buildIndustriesURL({ page: 1, limit: 10 }),
+  searchIndustries: (query: string) => 'GET ' + buildIndustriesURL({ search: query }),
+  getAllCategories: 'GET ' + buildAllCategoriesURL(),
+  getCategoriesWithPagination: 'GET ' + buildAllCategoriesURL({ page: 1, limit: 20 }),
+  searchCategories: (query: string) => 'GET ' + buildAllCategoriesURL({ search: query }),
+  getIndustryCategories: (industryId: string) => 'GET ' + buildIndustryCategoriesURL(industryId),
+  getPrimaryIndustryCategories: (industryId: string) => 'GET ' + buildPrimaryIndustryCategoriesURL(industryId),
+  searchIndustryCategories: (industryId: string, query: string) => 'GET ' + buildIndustryCategoriesURL(industryId, { search: query })
 };
 
 // =================================================================
-// VALIDATION HELPERS
+// ONBOARDING API USAGE EXAMPLES
+// =================================================================
+
+export const ONBOARDING_API_EXAMPLES = {
+  // Get current onboarding status
+  getStatus: 'GET ' + API_ENDPOINTS.ONBOARDING.STATUS,
+  
+  // Initialize onboarding for new tenant
+  initialize: 'POST ' + API_ENDPOINTS.ONBOARDING.INITIALIZE,
+  
+  // Complete a specific step
+  completeStep: 'POST ' + API_ENDPOINTS.ONBOARDING.STEP.COMPLETE + ' (with stepId and data in body)',
+  
+  // Skip an optional step
+  skipStep: 'PUT ' + API_ENDPOINTS.ONBOARDING.STEP.SKIP + ' (with stepId in body)',
+  
+  // Update progress (save current state)
+  updateProgress: 'PUT ' + API_ENDPOINTS.ONBOARDING.PROGRESS + ' (with current_step and step_data in body)',
+  
+  // Complete entire onboarding
+  complete: 'POST ' + API_ENDPOINTS.ONBOARDING.COMPLETE,
+  
+  // Test connectivity
+  testConnection: 'GET ' + API_ENDPOINTS.ONBOARDING.TEST,
+  
+  // Example with headers
+  exampleWithHeaders: `
+    fetch('${API_ENDPOINTS.ONBOARDING.STATUS}', {
+      headers: {
+        'Authorization': 'Bearer <token>',
+        'x-tenant-id': '<tenant-id>'
+      }
+    })
+  `
+};
+
+// =================================================================
+// VALIDATION HELPERS (Enhanced)
 // =================================================================
 
 /**
@@ -696,6 +1040,37 @@ export const isValidCategoryName = (categoryName: string): boolean => {
 };
 
 /**
+ * NEW: Validate industry ID format
+ */
+export const isValidIndustryId = (industryId: string): boolean => {
+  return isValidUUID(industryId);
+};
+
+/**
+ * NEW: Validate search query for industry endpoints
+ */
+export const isValidSearchQuery = (search: string): boolean => {
+  return typeof search === 'string' && search.trim().length >= 3 && search.length <= 100;
+};
+
+/**
+ * NEW: Validate pagination parameters
+ */
+export const isValidPaginationParams = (page?: number, limit?: number): boolean => {
+  if (page !== undefined && (page < 1 || page > 10000)) return false;
+  if (limit !== undefined && (limit < 1 || limit > 100)) return false;
+  return true;
+};
+
+/**
+ * NEW: Validate onboarding step ID
+ */
+export const isValidOnboardingStepId = (stepId: string): boolean => {
+  const validSteps = ['user-profile', 'business-profile', 'data-setup', 'storage', 'team', 'tour'];
+  return validSteps.includes(stepId);
+};
+
+/**
  * Get endpoint for resource operation based on parameters
  */
 export const getResourceEndpoint = (
@@ -722,11 +1097,11 @@ export const getResourceEndpoint = (
 };
 
 /**
- * Get endpoint for product master data operation
+ * Get endpoint for product master data operation (Enhanced)
  */
 export const getProductMasterDataEndpoint = (
-  scope: 'global' | 'tenant',
-  operation: 'category' | 'categories' | 'health' | 'constants',
+  scope: 'global' | 'tenant' | 'industries' | 'categories',
+  operation: 'category' | 'categories' | 'list' | 'health' | 'constants',
   categoryName?: string,
   isActive: boolean = true
 ): string => {
@@ -744,6 +1119,33 @@ export const getProductMasterDataEndpoint = (
       return scope === 'global'
         ? buildGlobalCategoriesURL(isActive)
         : buildTenantCategoriesURL(isActive);
+    case 'list':
+      if (scope === 'industries') return API_ENDPOINTS.PRODUCT_MASTERDATA.INDUSTRIES.LIST;
+      if (scope === 'categories') return API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_ALL;
+      return '';
+    default:
+      return '';
+  }
+};
+
+/**
+ * NEW: Get endpoint for industry-first onboarding operations
+ */
+export const getIndustryEndpoint = (
+  operation: 'list' | 'categories' | 'primary-categories',
+  industryId?: string
+): string => {
+  switch (operation) {
+    case 'list':
+      return API_ENDPOINTS.PRODUCT_MASTERDATA.INDUSTRIES.LIST;
+    case 'categories':
+      return industryId 
+        ? buildIndustryCategoriesURL(industryId)
+        : API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_ALL;
+    case 'primary-categories':
+      return industryId 
+        ? buildPrimaryIndustryCategoriesURL(industryId)
+        : '';
     default:
       return '';
   }

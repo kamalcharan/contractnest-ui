@@ -1,5 +1,5 @@
 // src/hooks/useResources.ts
-// SIMPLE SOLUTION - Copy LOV Pattern Exactly (No TanStack Query)
+// CLEAN VERSION - Fixed Response Parsing for New Edge Function Format
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -90,16 +90,29 @@ export interface UseResourcesOptions {
   onError?: (error: Error) => void;
 }
 
-// Parse edge function response
+// Parse edge function response - FIXED VERSION
 const parseResponse = (response: any) => {
-  // Handle edge function format: { success: true, data: [...] }
-  if (response?.data?.success === true && 'data' in response.data) {
+  console.log('🔍 PARSING RESPONSE:', response);
+  
+  // Handle new edge function format: { success: true, data: [...] }
+  if (response?.data?.success === true && response?.data?.data) {
+    console.log('✅ NEW FORMAT - extracting data:', response.data.data);
     return response.data.data;
   }
-  // Handle direct format
-  if (response?.data) {
+  
+  // Handle direct array response
+  if (response?.data && Array.isArray(response.data)) {
+    console.log('✅ DIRECT ARRAY - using data:', response.data);
     return response.data;
   }
+  
+  // Handle direct format (fallback)
+  if (response?.data) {
+    console.log('✅ DIRECT OBJECT - using data:', response.data);
+    return response.data;
+  }
+  
+  console.log('❌ UNKNOWN FORMAT - returning empty array');
   return [];
 };
 
@@ -146,15 +159,16 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
       console.log('🚀 Fetching resource types...');
       const response = await api.get(API_ENDPOINTS.RESOURCES.RESOURCE_TYPES);
       
-      console.log('🔍 RESOURCE TYPES API COMPLETED');
-      console.log('🔍 RAW RESPONSE:', response);
-      console.log('🔍 RESPONSE STATUS:', response.status);
-      console.log('🔍 RESPONSE DATA:', response.data);
+      console.log('🔍 RESOURCE TYPES API RESPONSE:', response);
       
       const resourceTypes = parseResponse(response);
       
       console.log('🔍 PARSED RESOURCE TYPES:', resourceTypes);
-      console.log('🔍 ABOUT TO RETURN:', resourceTypes.length);
+
+      // Ensure we have an array
+      if (!Array.isArray(resourceTypes)) {
+        throw new Error('Resource types response is not an array');
+      }
 
       console.log('✅ Resource types fetched:', resourceTypes.length);
 
@@ -167,7 +181,7 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
 
       if (isMountedRef.current) {
         setData(resourceTypes);
-        setLoading(false); // EXPLICIT: Set loading false on success
+        setLoading(false);
         onSuccess?.(resourceTypes);
       }
       
@@ -179,7 +193,7 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
       
       if (isMountedRef.current) {
         setError(error);
-        setLoading(false); // EXPLICIT: Set loading false on error
+        setLoading(false);
         onError?.(error);
         
         toast({
@@ -277,7 +291,15 @@ export const useResources = (
       }
 
       const response = await api.get(url);
+      
+      console.log('🔍 RESOURCES API RESPONSE:', response);
+      
       const resources = parseResponse(response);
+
+      // Ensure we have an array
+      if (!Array.isArray(resources)) {
+        throw new Error('Resources response is not an array');
+      }
 
       console.log('✅ Resources fetched:', resources.length);
 
@@ -290,7 +312,7 @@ export const useResources = (
 
       if (isMountedRef.current) {
         setData(resources);
-        setLoading(false); // EXPLICIT: Set loading false on success
+        setLoading(false);
         onSuccess?.(resources);
       }
       
@@ -302,7 +324,7 @@ export const useResources = (
       
       if (isMountedRef.current) {
         setError(error);
-        setLoading(false); // EXPLICIT: Set loading false on error
+        setLoading(false);
         onError?.(error);
         
         toast({
@@ -371,9 +393,9 @@ export const useCreateResource = () => {
         is_deletable: data.is_deletable !== false
       });
 
-      const newResource = parseResponse(response);
+      const result = parseResponse(response);
       
-      console.log('✅ Resource created:', newResource);
+      console.log('✅ Resource created:', result);
 
       // Clear relevant cache
       const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key => 
@@ -386,7 +408,7 @@ export const useCreateResource = () => {
         description: "Resource created successfully"
       });
 
-      return newResource;
+      return result;
     } catch (error: any) {
       console.error('❌ Error creating resource:', error);
       
@@ -421,9 +443,9 @@ export const useUpdateResource = () => {
       console.log('🚀 Updating resource:', id, data);
       
       const response = await api.patch(`${API_ENDPOINTS.RESOURCES.UPDATE(id)}`, data);
-      const updatedResource = parseResponse(response);
+      const result = parseResponse(response);
       
-      console.log('✅ Resource updated:', updatedResource);
+      console.log('✅ Resource updated:', result);
 
       // Clear relevant cache
       const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key => 
@@ -436,7 +458,7 @@ export const useUpdateResource = () => {
         description: "Resource updated successfully"
       });
 
-      return updatedResource;
+      return result;
     } catch (error: any) {
       console.error('❌ Error updating resource:', error);
       
@@ -503,7 +525,7 @@ export const useDeleteResource = () => {
   return { deleteResource, loading };
 };
 
-// Main Resources Manager Hook - Simple like LOV
+// Main Resources Manager Hook
 export const useResourcesManager = (selectedResourceTypeId?: string) => {
   const resourceTypesResult = useResourceTypes();
   const resourcesResult = useResources(selectedResourceTypeId);

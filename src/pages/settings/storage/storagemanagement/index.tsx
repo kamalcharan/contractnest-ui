@@ -63,7 +63,7 @@ const StorageManagementPage: React.FC = () => {
   
   // Handle category click
   const handleCategoryClick = (categoryId: string) => {
-    navigate(`/settings/storage/category/${categoryId}`);
+    navigate(`/settings/storage/categoryfiles/${categoryId}`);
   };
   
   // Handle single file upload

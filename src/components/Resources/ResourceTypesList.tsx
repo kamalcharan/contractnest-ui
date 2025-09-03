@@ -10,7 +10,7 @@ import { useResourceTypes, useResourcesByType } from '@/hooks/queries/useResourc
 import { 
   ResourceType, 
   getResourceTypeBehavior,
-  RESOURCE_TYPE_ICONS 
+  RESOURCE_TYPE_ICONS   
 } from '@/types/resources';
 
 interface ResourceTypesListProps {

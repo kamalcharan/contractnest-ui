@@ -1,5 +1,5 @@
 // src/pages/settings/Resources/index.tsx
-// Main Resources management page
+// Main Resources management page - FIXED VERSION
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -41,11 +41,24 @@ const ResourcesPage: React.FC = () => {
 
   // Load resource types
   const { 
-    data: resourceTypes = [], 
+    data: rawResourceTypes = [], 
     isLoading: typesLoading, 
     error: typesError,
     refetch: refetchTypes
   } = useResourceTypes();
+
+  // 🔧 FIX: Ensure resourceTypes is always an array
+  const resourceTypes = React.useMemo(() => {
+    console.log('🔍 RAW RESOURCE TYPES:', rawResourceTypes, typeof rawResourceTypes);
+    
+    if (Array.isArray(rawResourceTypes)) {
+      console.log('✅ resourceTypes is array with length:', rawResourceTypes.length);
+      return rawResourceTypes;
+    }
+    
+    console.log('❌ resourceTypes is not array, returning empty array');
+    return [];
+  }, [rawResourceTypes]);
 
   // Track page view
   useEffect(() => {

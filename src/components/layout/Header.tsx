@@ -25,6 +25,7 @@ import { languages } from '../../utils/constants/languages';
 import { themes } from "../../utils/theme"
 import EnvironmentSwitchModal from "../EnvironmentSwitchModal";
 import TenantSwitcher from './TenantSwitcher';
+import { cn } from '@/lib/utils';
 
 // Environment configuration
 const ENVIRONMENT_CONFIG = {
@@ -181,7 +182,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
   const handleProfileClick = (): void => {
     setUserMenuOpen(false);
-    navigate('/profile');
+    navigate('/settings/user-profile');
   };
 
   const handleChangePasswordClick = (): void => {
@@ -524,20 +525,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                     <ChevronDown size={16} />
                   </button>
                   
-                  <button 
-                    onClick={toggleLanguageMenu}
-                    className="flex items-center justify-between gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
-                    style={{ 
-                      backgroundColor: `${colors.utility.primaryText}05`,
-                      color: colors.utility.primaryText
-                    }}
-                  >
-                    <div className="flex items-center">
-                      <Globe size={18} className="mr-3" />
-                      <span>Language: {currentLanguage.name}</span>
-                    </div>
-                    <ChevronDown size={16} />
-                  </button>
+                  
                   
                   <button 
                     onClick={handleProfileClick}
@@ -551,18 +539,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                     <span>Profile</span>
                   </button>
                   
-                  <button 
-                    onClick={handleChangePasswordClick}
-                    className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"
-                    style={{ 
-                      backgroundColor: `${colors.utility.primaryText}05`,
-                      color: colors.utility.primaryText
-                    }}
-                  >
-                    <Key size={18} className="mr-3" />
-                    <span>Change Password</span>
-                  </button>
-                  
+              
                   <button 
                     onClick={handleSettingsClick}
                     className="flex items-center gap-3 w-full p-2 text-left text-sm rounded-md transition-all duration-200 hover:opacity-80"

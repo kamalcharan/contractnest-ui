@@ -1,5 +1,5 @@
 // src/components/TaxSettings/TaxRateCard.tsx
-// Individual tax rate card with inline editing functionality
+// Individual tax rate card with inline editing functionality - Updated with graceful error handling
 
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2, Check, X, Crown, Loader2 } from 'lucide-react';
@@ -111,7 +111,7 @@ const TaxRateCard = ({
     return Object.keys(errors).length === 0;
   };
 
-  // Handle save
+  // Handle save - UPDATED with graceful error handling
   const handleSave = async () => {
     if (!validateForm()) {
       toast.error('Please fix the validation errors before saving', {
@@ -129,6 +129,7 @@ const TaxRateCard = ({
     }
 
     setIsSaving(true);
+    
     try {
       // Only send changed fields
       const changes: Partial<TaxRateFormData> = {};
@@ -141,24 +142,11 @@ const TaxRateCard = ({
 
       if (Object.keys(changes).length > 0) {
         await onSave(rate.id, changes);
-        
-        // SUCCESS TOAST
-        toast.success(`Tax Rate Updated: "${editData.name}" has been updated successfully`, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: colors.semantic.success,
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          }
-        });
+        // SUCCESS handling is now in the hook - no need to show toast here
       } else {
         // No changes, just exit edit mode
         onCancel(rate.id);
         
-        // NO CHANGES TOAST
         toast('No changes were made to the tax rate', {
           duration: 2000,
           style: {
@@ -172,20 +160,9 @@ const TaxRateCard = ({
         });
       }
     } catch (error: any) {
-      console.error('Error saving tax rate:', error);
-      
-      // ERROR TOAST
-      toast.error(`Save Failed: ${error.message || "Failed to update tax rate. Please try again."}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
-      });
+      // UPDATED: Error handling is now done in the hook
+      // Stay in edit mode so user can fix issues
+      console.log('Save failed, staying in edit mode for user to retry');
     } finally {
       setIsSaving(false);
     }

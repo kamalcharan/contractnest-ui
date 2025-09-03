@@ -1,5 +1,5 @@
 // src/pages/service-contracts/templates/designer/index.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -38,25 +38,18 @@ const TemplateDesignerPage: React.FC = () => {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(true);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // User permissions (this would come from auth context in real implementation)
-  const [userRole, setUserRole] = useState<'admin' | 'tenant' | 'user'>('tenant'); // Default to tenant
+  // User permissions
+  const [userRole, setUserRole] = useState<'admin' | 'tenant' | 'user'>('tenant');
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Track page views and user role detection
+  // Initialize user role
   useEffect(() => {
     try {
-      // Track analytics
       analyticsService.trackPageView('template-designer', 'Template Designer Page', {
         templateId: templateId || 'new',
         userRole
       });
 
-      // TODO: Replace with actual auth context when available
-      // const currentUser = useAuth(); // This would come from your auth context
-      // setUserRole(currentUser?.role || 'tenant');
-      // setIsAdmin(currentUser?.role === 'admin');
-      
-      // For now, simulate role detection
       const simulatedRole = localStorage.getItem('user_role') || 'tenant';
       setUserRole(simulatedRole as 'admin' | 'tenant' | 'user');
       setIsAdmin(simulatedRole === 'admin');
@@ -72,7 +65,7 @@ const TemplateDesignerPage: React.FC = () => {
     }
   }, [templateId, userRole]);
 
-  // Hooks with error handling
+  // Hooks
   const {
     templateBuilderBlocks,
     isLoading: blocksLoading,
@@ -91,21 +84,108 @@ const TemplateDesignerPage: React.FC = () => {
     selectBlock,
     selectedBlock,
     updateTemplate,
-    handleDragStart,
-    handleDragEnd,
-    handleDrop,
-    canDrop,
+    handleDragStart: originalHandleDragStart,
+    handleDragEnd: originalHandleDragEnd,
+    handleDrop: originalHandleDrop,
+    canDrop: originalCanDrop,
     validateTemplate,
     getValidationErrors,
     isDirty
   } = useTemplateBuilder({
     initialTemplate: {
-      // Set template type based on user role
       templateName: isAdmin ? 'Global Template' : 'My Template',
       industry: '',
       contractType: 'service'
     }
   });
+
+  // Fixed handleDrop wrapper that transforms BlockLibrary data structure
+  const handleDrop = useCallback((item: any, targetPosition: number) => {
+    console.log('🎯 handleDrop - received item:', item);
+    console.log('📍 Target position:', targetPosition);
+
+    // Check if this is a new block from BlockLibrary (doesn't have 'type' property)
+    if (item && !item.type) {
+      // Transform BlockLibrary data structure
+      const variantId = item.id;
+      const blockType = item.nodeType || item.node_type || item.blockMaster?.node_type;
+      const name = item.name || 'New Block';
+      const defaultConfig = item.defaultConfig || item.default_config || {};
+      
+      console.log('🔄 Transforming BlockLibrary item:', {
+        variantId,
+        blockType,
+        name,
+        defaultConfig
+      });
+      
+      // Use addBlock directly
+      if (variantId && blockType && name) {
+        console.log('✅ Adding new block');
+        addBlock(variantId, blockType, name, defaultConfig);
+        
+        toast({
+          title: "Block Added",
+          description: `${name} has been added to your template`
+        });
+
+        // Track block addition
+        analyticsService.trackEvent('template_designer_block_added', {
+          blockType,
+          blockName: name,
+          templateId: templateId || 'new',
+          userRole
+        });
+      } else {
+        console.error('❌ Missing required fields:', { variantId, blockType, name });
+        toast({
+          variant: "destructive",
+          title: "Failed to add block",
+          description: "Missing required block information"
+        });
+      }
+    } else if (item?.type === 'block-instance') {
+      // Existing block being moved
+      console.log('📦 Moving existing block');
+      originalHandleDrop(item, targetPosition);
+    } else if (item?.type === 'block-variant') {
+      // Properly formatted data
+      console.log('✨ Using original handleDrop');
+      originalHandleDrop(item, targetPosition);
+    }
+  }, [addBlock, originalHandleDrop, toast, templateId, userRole]);
+
+  // Fixed canDrop wrapper
+  const canDrop = useCallback((item: any, targetPosition: number): boolean => {
+    // If it's from BlockLibrary (no type property)
+    if (item && !item.type) {
+      const blockType = item.nodeType || item.node_type || item.blockMaster?.node_type;
+      
+      if (blockType) {
+        const transformedItem = {
+          type: 'block-variant',
+          blockType: blockType
+        };
+        return originalCanDrop(transformedItem, targetPosition);
+      }
+      return true;
+    }
+    
+    return originalCanDrop(item, targetPosition);
+  }, [originalCanDrop]);
+
+  // Wrapped drag handlers
+  const handleDragStart = useCallback((item: any) => {
+    console.log('🎬 Drag started:', item);
+    if (item?.type === 'block-instance') {
+      originalHandleDragStart(item);
+    }
+  }, [originalHandleDragStart]);
+
+  const handleDragEnd = useCallback(() => {
+    console.log('🏁 Drag ended');
+    originalHandleDragEnd();
+  }, [originalHandleDragEnd]);
 
   // Error handling for blocks loading
   useEffect(() => {
@@ -126,12 +206,11 @@ const TemplateDesignerPage: React.FC = () => {
     }
   }, [blocksError, toast, userRole]);
 
-  // Handlers with error handling and analytics
+  // Handlers
   const handleBlockSelect = (instanceId: string | null) => {
     try {
       selectBlock(instanceId);
       
-      // Track block selection
       if (instanceId) {
         const block = template.blocks.find(b => b.id === instanceId);
         analyticsService.trackEvent('template_designer_block_selected', {
@@ -142,7 +221,6 @@ const TemplateDesignerPage: React.FC = () => {
         });
       }
       
-      // Open right panel when block is selected
       if (instanceId && rightPanelCollapsed) {
         setRightPanelCollapsed(false);
       }
@@ -159,7 +237,6 @@ const TemplateDesignerPage: React.FC = () => {
 
   const handleSaveTemplate = async () => {
     try {
-      // Validate template before saving
       const isValid = validateTemplate();
       
       if (!isValid) {
@@ -172,13 +249,11 @@ const TemplateDesignerPage: React.FC = () => {
         return;
       }
 
-      // Show loading toast
       toast({
         title: "Saving Template",
         description: "Please wait while we save your template..."
       });
 
-      // Track save attempt
       analyticsService.trackEvent('template_designer_save_attempted', {
         templateId: templateId || 'new',
         blockCount: template.blocks.length,
@@ -191,7 +266,6 @@ const TemplateDesignerPage: React.FC = () => {
       // TODO: Implement actual save functionality
       console.log('Saving template:', template);
       
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       toast({
@@ -199,7 +273,6 @@ const TemplateDesignerPage: React.FC = () => {
         description: `${template.templateName || 'Template'} has been saved successfully.`
       });
 
-      // Track successful save
       analyticsService.trackEvent('template_designer_save_completed', {
         templateId: templateId || 'new',
         userRole,
@@ -225,7 +298,6 @@ const TemplateDesignerPage: React.FC = () => {
 
   const handlePreviewTemplate = () => {
     try {
-      // Track preview action
       analyticsService.trackEvent('template_designer_preview_opened', {
         templateId: templateId || 'new',
         blockCount: template.blocks.length,
@@ -259,14 +331,12 @@ const TemplateDesignerPage: React.FC = () => {
         if (!confirmLeave) return;
       }
 
-      // Track navigation
       analyticsService.trackEvent('template_designer_navigation_back', {
         templateId: templateId || 'new',
         hadUnsavedChanges: isDirty,
         userRole
       });
 
-      // Navigate back based on user role
       if (isAdmin) {
         navigate('/service-contracts/templates/admin/global-templates');
       } else {
@@ -357,12 +427,6 @@ const TemplateDesignerPage: React.FC = () => {
                 backgroundColor: 'transparent',
                 color: colors.utility.primaryText
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
             >
               Go Back
             </button>
@@ -382,7 +446,7 @@ const TemplateDesignerPage: React.FC = () => {
         <div 
           className={`
             ${leftPanelCollapsed ? 'w-12' : 'w-80'} 
-            transition-all duration-300 border-r
+            transition-all duration-300 border-r flex flex-col
           `}
           style={{
             backgroundColor: colors.utility.secondaryBackground,
@@ -429,12 +493,6 @@ const TemplateDesignerPage: React.FC = () => {
                 backgroundColor: colors.utility.secondaryText + '10',
                 color: colors.utility.secondaryText
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = colors.utility.primaryText;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = colors.utility.secondaryText;
-              }}
               title={leftPanelCollapsed ? 'Expand panel' : 'Collapse panel'}
             >
               {leftPanelCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
@@ -443,14 +501,8 @@ const TemplateDesignerPage: React.FC = () => {
 
           {/* Panel Content */}
           {!leftPanelCollapsed && (
-            <div className="flex-1 overflow-hidden">
-              <BlockLibrary
-                blocks={templateBuilderBlocks}
-                isLoading={blocksLoading}
-                onSearch={searchBlocks}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              />
+            <div className="flex-1 overflow-auto">
+              <BlockLibrary />
             </div>
           )}
         </div>
@@ -475,12 +527,6 @@ const TemplateDesignerPage: React.FC = () => {
                   backgroundColor: 'transparent',
                   color: colors.utility.primaryText
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
                 title="Go back to templates"
               >
                 <ArrowLeft size={16} />
@@ -499,12 +545,6 @@ const TemplateDesignerPage: React.FC = () => {
                     style={{
                       color: colors.utility.primaryText,
                       backgroundColor: 'transparent'
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   />
                   {isAdmin && (
@@ -536,8 +576,6 @@ const TemplateDesignerPage: React.FC = () => {
                       {validationErrors.length} error{validationErrors.length !== 1 ? 's' : ''}
                     </span>
                   )}
-                  {template.industry && <span>• {template.industry}</span>}
-                  <span>• {template.contractType} contract</span>
                 </div>
               </div>
             </div>
@@ -551,12 +589,6 @@ const TemplateDesignerPage: React.FC = () => {
                 style={{
                   backgroundColor: colors.utility.secondaryText + '10',
                   color: colors.utility.secondaryText
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = colors.utility.primaryText;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = colors.utility.secondaryText;
                 }}
                 title="Help & guidance"
               >
@@ -572,14 +604,6 @@ const TemplateDesignerPage: React.FC = () => {
                   borderColor: colors.utility.secondaryText + '40',
                   backgroundColor: 'transparent',
                   color: colors.utility.primaryText
-                }}
-                onMouseEnter={(e) => {
-                  if (!e.currentTarget.disabled) {
-                    e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
                 title="Preview template"
               >
@@ -613,12 +637,6 @@ const TemplateDesignerPage: React.FC = () => {
                     : colors.utility.secondaryText + '10',
                   color: colors.utility.secondaryText
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = colors.utility.primaryText;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = colors.utility.secondaryText;
-                }}
                 title={rightPanelCollapsed ? 'Open settings panel' : 'Close settings panel'}
               >
                 <Settings size={20} />
@@ -626,7 +644,7 @@ const TemplateDesignerPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Template Type Banner for Admin */}
+          {/* Admin Banner */}
           {isAdmin && (
             <div 
               className="px-4 py-2 border-b transition-colors"
@@ -663,10 +681,10 @@ const TemplateDesignerPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Panel - Block Configuration */}
+        {/* Right Panel - Configuration */}
         {!rightPanelCollapsed && (
           <div 
-            className="w-80 border-l transition-colors"
+            className="w-80 border-l transition-colors flex flex-col"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderColor: colors.utility.secondaryText + '20'
@@ -702,12 +720,6 @@ const TemplateDesignerPage: React.FC = () => {
                 style={{
                   backgroundColor: colors.utility.secondaryText + '10',
                   color: colors.utility.secondaryText
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = colors.utility.primaryText;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = colors.utility.secondaryText;
                 }}
                 title="Close panel"
               >
@@ -807,24 +819,6 @@ const TemplateDesignerPage: React.FC = () => {
                     <div>• <strong>Content blocks:</strong> Legal clauses and media</div>
                     <div>• <strong>Commercial blocks:</strong> Billing and revenue</div>
                   </div>
-                </div>
-                <div 
-                  className="p-4 rounded-lg transition-colors"
-                  style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-                >
-                  <h3 
-                    className="font-medium mb-2 transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    ⚙️ Configuration
-                  </h3>
-                  <p 
-                    className="text-sm transition-colors"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    Click on any block to configure its settings in the right panel. 
-                    Some blocks have dependencies and constraints.
-                  </p>
                 </div>
                 {isAdmin && (
                   <div 

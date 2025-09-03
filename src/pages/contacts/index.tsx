@@ -1,4 +1,4 @@
-// src/pages/contacts/index.tsx - Theme Integrated Version (Part 1)
+// src/pages/contacts/index.tsx - COMPLETE FIXED VERSION
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -65,10 +65,9 @@ import {
 type ActiveTab = 'status' | 'billing' | 'services';
 type ViewType = 'grid' | 'list';
 
-// MINIMUM_SEARCH_LENGTH constant
 const MINIMUM_SEARCH_LENGTH = 3;
 
-// Filter Dropdown Component - Theme Aware
+// Filter Dropdown Component
 const FilterDropdown: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -302,7 +301,6 @@ const ContactsPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
   
-  // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // UI State
@@ -329,7 +327,7 @@ const ContactsPage: React.FC = () => {
   const itemsPerPage = UI_CONFIG.ITEMS_PER_PAGE;
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Debounce search term with minimum length check
+  // Debounce search term
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -350,7 +348,7 @@ const ContactsPage: React.FC = () => {
     };
   }, [searchTerm]);
 
-  // Build filters for API with proper field names
+  // Build filters for API
   const apiFilters: ContactFilters = {
     page: currentPage,
     limit: itemsPerPage,
@@ -407,12 +405,10 @@ const ContactsPage: React.FC = () => {
     setSelectedContacts(new Set());
   };
 
-  // Search change handler
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
   };
 
-  // Reset page when debounced search changes
   useEffect(() => {
     if (debouncedSearchTerm !== searchTerm) {
       setCurrentPage(1);
@@ -453,8 +449,6 @@ const ContactsPage: React.FC = () => {
         description: "Please wait while we process your request"
       });
       
-      // await contactService.bulkDelete(Array.from(selectedContacts));
-      
       toast({
         title: "Success",
         description: `${selectedContacts.size} contacts deleted successfully`
@@ -475,11 +469,10 @@ const ContactsPage: React.FC = () => {
 
   // Get primary contact channel
   const getPrimaryContactChannel = (contact: any) => {
-    const primaryChannel = contact.contact_channels?.find((ch: any) => ch.is_primary);
-    const firstChannel = contact.contact_channels?.[0];
-    const channel = primaryChannel || firstChannel;
-
-    if (!channel) return { icon: null, value: 'No contact channel' };
+    // FIXED: Use optimized data structure
+    const primaryChannel = contact.contact_channels?.[0];
+    
+    if (!primaryChannel) return { icon: null, value: 'No contact channel' };
 
     const channelIcons: Record<string, any> = {
       email: Mail,
@@ -492,15 +485,15 @@ const ContactsPage: React.FC = () => {
       skype: MessageSquare
     };
 
-    const IconComponent = channelIcons[channel.channel_type] || Mail;
+    const IconComponent = channelIcons[primaryChannel.channel_type] || Mail;
     return {
       icon: IconComponent,
-      value: channel.value,
-      type: channel.channel_type
+      value: primaryChannel.value,
+      type: primaryChannel.channel_type
     };
   };
 
-  // Tab configurations with dynamic counts from API
+  // Tab configurations
   const tabConfigs = {
     status: {
       label: 'STATUS',
@@ -535,7 +528,7 @@ const ContactsPage: React.FC = () => {
 
   const currentFilters = tabConfigs[activeTab].filters;
 
-  // Loading skeleton component - Theme Aware
+  // Loading skeleton
   const ContactSkeleton = () => (
     <div className="animate-pulse">
       {viewType === 'grid' ? (
@@ -616,12 +609,9 @@ const ContactsPage: React.FC = () => {
     </div>
   );
 
-  // Helper function to check if search meets minimum criteria
   const shouldShowSearchHint = () => {
     return searchTerm.length > 0 && searchTerm.length < MINIMUM_SEARCH_LENGTH;
   };
-
-// PART 2 STARTS HERE - Add this after Part 1
 
   return (
     <div 
@@ -650,7 +640,6 @@ const ContactsPage: React.FC = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* Import/Export */}
           <div className="flex gap-2">
             <button 
               className="flex items-center px-3 py-2 rounded-md hover:opacity-80 transition-colors text-sm border"
@@ -676,7 +665,6 @@ const ContactsPage: React.FC = () => {
             </button>
           </div>
           
-          {/* New Contact Button */}
           <button 
             onClick={() => navigate('/contacts/create')}
             className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors"
@@ -734,7 +722,6 @@ const ContactsPage: React.FC = () => {
 
         {/* Sub Filters & Search */}
         <div className="p-4 space-y-3">
-          {/* Sub-filter Pills */}
           <div className="flex flex-wrap gap-2">
             {currentFilters.map((filter) => (
               <button
@@ -787,7 +774,6 @@ const ContactsPage: React.FC = () => {
             
             {/* Controls */}
             <div className="flex items-center gap-2">
-              {/* Sort Dropdown */}
               <select
                 value={`${sortBy}_${sortOrder}`}
                 onChange={(e) => {
@@ -890,7 +876,7 @@ const ContactsPage: React.FC = () => {
                 backgroundColor: colors.utility.secondaryText + '10'
               }}
             >
-              💡 Type at least {MINIMUM_SEARCH_LENGTH} characters to search contacts
+              Type at least {MINIMUM_SEARCH_LENGTH} characters to search contacts
             </div>
           )}
 
@@ -1154,6 +1140,7 @@ const ContactsPage: React.FC = () => {
                 </div>
               )}
 
+              {/* FIXED CONTACT DISPLAY */}
               <div className={`
                 ${viewType === 'grid' 
                   ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' 
@@ -1168,194 +1155,214 @@ const ContactsPage: React.FC = () => {
                   const primaryChannel = getPrimaryContactChannel(contact);
                   
                   return viewType === 'grid' ? (
-                    // GRID VIEW
+                    // FIXED GRID VIEW - Proper alignment
                     <div 
                       key={contact.id} 
-                      className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-4 ${
+                      className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 flex flex-col ${
                         isSelected ? 'ring-2' : ''
                       }`}
                       style={{
                         backgroundColor: colors.utility.secondaryBackground,
                         borderColor: colors.utility.primaryText + '20',
-                        '--tw-ring-color': colors.brand.primary
+                        '--tw-ring-color': colors.brand.primary,
+                        minHeight: '260px' // FIXED: Consistent minimum height
                       } as React.CSSProperties}
                     >
-                      {/* Checkbox */}
-                      <div className="flex items-center justify-between mb-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectContact(contact.id)}
-                          style={{ accentColor: colors.brand.primary }}
-                        />
-                      </div>
-
-                      {/* Row 1: Name + Avatar + Status */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 border"
+                      {/* FIXED: Header Section - Fixed Height */}
+                      <div className="p-4 flex-none">
+                        <div className="flex items-center justify-between mb-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleSelectContact(contact.id)}
+                            style={{ accentColor: colors.brand.primary }}
+                          />
+                          <span 
+                            className="px-2 py-1 rounded-full text-xs font-medium border"
                             style={{
-                              backgroundColor: colors.brand.primary + '40',
+                              backgroundColor: contact.status === 'active' 
+                                ? colors.semantic.success + '20'
+                                : contact.status === 'inactive' 
+                                ? colors.semantic.warning + '20'
+                                : colors.utility.secondaryText + '20',
+                              borderColor: contact.status === 'active' 
+                                ? colors.semantic.success + '40'
+                                : contact.status === 'inactive' 
+                                ? colors.semantic.warning + '40'
+                                : colors.utility.secondaryText + '40',
+                              color: contact.status === 'active' 
+                                ? colors.semantic.success
+                                : contact.status === 'inactive' 
+                                ? colors.semantic.warning
+                                : colors.utility.secondaryText
+                            }}
+                          >
+                            {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
+                          </span>
+                        </div>
+
+                        {/* FIXED: Name and Type Row */}
+                        <div className="flex items-center gap-3 mb-3">
+                          <div 
+                            className="w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm border"
+                            style={{
+                              backgroundColor: colors.brand.primary + '20',
                               color: colors.brand.primary,
-                              borderColor: colors.brand.primary + '60'
+                              borderColor: colors.brand.primary + '40'
                             }}
                           >
                             {contact.displayName?.charAt(0)?.toUpperCase() || 'U'}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
                               <h3 
                                 className="font-semibold text-base truncate transition-colors"
                                 style={{ color: colors.utility.primaryText }}
+                                title={contact.displayName}
                               >
                                 {contact.displayName}
                               </h3>
                               {contact.type === 'corporate' ? (
                                 <Building2 
-                                  className="h-3 w-3 flex-shrink-0"
+                                  className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
+                                  title="Corporate Contact"
                                 />
                               ) : (
                                 <User 
-                                  className="h-3 w-3 flex-shrink-0"
+                                  className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
+                                  title="Individual Contact"
                                 />
                               )}
                             </div>
                           </div>
                         </div>
-                        <span 
-                          className="px-2 py-1 rounded-full text-xs font-medium border flex-shrink-0"
-                          style={{
-                            backgroundColor: contact.status === 'active' 
-                              ? colors.semantic.success + '20'
-                              : contact.status === 'inactive' 
-                              ? colors.semantic.warning + '20'
-                              : colors.utility.secondaryText + '20',
-                            borderColor: contact.status === 'active' 
-                              ? colors.semantic.success + '40'
-                              : contact.status === 'inactive' 
-                              ? colors.semantic.warning + '40'
-                              : colors.utility.secondaryText + '40',
-                            color: contact.status === 'active' 
-                              ? colors.semantic.success
-                              : contact.status === 'inactive' 
-                              ? colors.semantic.warning
-                              : colors.utility.secondaryText
-                          }}
-                        >
-                          {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
-                        </span>
                       </div>
                       
-                      {/* Row 2: Primary Contact Channel */}
-                      <div className="mb-3">
-                        <div 
-                          className="flex items-center gap-2 text-sm"
-                          style={{ color: colors.utility.secondaryText }}
-                        >
-                          {primaryChannel.icon && (
-                            <primaryChannel.icon className="h-3 w-3 flex-shrink-0" />
+                      {/* FIXED: Content Section - Flexible Height */}
+                      <div className="px-4 flex-grow">
+                        {/* Primary Contact Channel */}
+                        <div className="mb-3">
+                          <div 
+                            className="flex items-center gap-2 text-sm"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
+                            {primaryChannel.icon && (
+                              <primaryChannel.icon className="h-4 w-4 flex-shrink-0" />
+                            )}
+                            <span className="truncate" title={primaryChannel.value}>
+                              {primaryChannel.value}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Classification Tags */}
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {contact.classifications?.slice(0, 2).map((cls) => {
+                            const config = getClassificationConfig(cls);
+                            return (
+                              <span
+                                key={cls}
+                                className="px-2 py-1 rounded-full text-xs font-medium border"
+                                style={{
+                                  backgroundColor: config?.color === 'blue' 
+                                    ? colors.brand.primary + '20'
+                                    : config?.color === 'green' 
+                                    ? colors.semantic.success + '20'
+                                    : config?.color === 'purple' 
+                                    ? colors.brand.tertiary + '20'
+                                    : config?.color === 'orange' 
+                                    ? colors.semantic.warning + '20'
+                                    : colors.utility.secondaryText + '20',
+                                  borderColor: config?.color === 'blue' 
+                                    ? colors.brand.primary + '40'
+                                    : config?.color === 'green' 
+                                    ? colors.semantic.success + '40'
+                                    : config?.color === 'purple' 
+                                    ? colors.brand.tertiary + '40'
+                                    : config?.color === 'orange' 
+                                    ? colors.semantic.warning + '40'
+                                    : colors.utility.secondaryText + '40',
+                                  color: config?.color === 'blue' 
+                                    ? colors.brand.primary
+                                    : config?.color === 'green' 
+                                    ? colors.semantic.success
+                                    : config?.color === 'purple' 
+                                    ? colors.brand.tertiary
+                                    : config?.color === 'orange' 
+                                    ? colors.semantic.warning
+                                    : colors.utility.secondaryText
+                                }}
+                                title={config?.label}
+                              >
+                                {config?.icon} {config?.label}
+                              </span>
+                            );
+                          })}
+                          {contact.classifications && contact.classifications.length > 2 && (
+                            <span 
+                              className="text-xs px-2 py-1"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              +{contact.classifications.length - 2}
+                            </span>
                           )}
-                          <span className="truncate">{primaryChannel.value}</span>
                         </div>
                       </div>
                       
-                      {/* Row 3: Classification Tags */}
-                      <div className="flex flex-wrap gap-1 mb-3">
-                        {contact.classifications?.map((cls) => {
-                          const config = getClassificationConfig(cls);
-                          return (
-                            <span
-                              key={cls}
-                              className="px-2 py-1 rounded-full text-xs font-medium border"
-                              style={{
-                                backgroundColor: config?.color === 'blue' 
-                                  ? colors.brand.primary + '20'
-                                  : config?.color === 'green' 
-                                  ? colors.semantic.success + '20'
-                                  : config?.color === 'purple' 
-                                  ? colors.brand.tertiary + '20'
-                                  : config?.color === 'orange' 
-                                  ? colors.semantic.warning + '20'
-                                  : colors.utility.secondaryText + '20',
-                                borderColor: config?.color === 'blue' 
-                                  ? colors.brand.primary + '40'
-                                  : config?.color === 'green' 
-                                  ? colors.semantic.success + '40'
-                                  : config?.color === 'purple' 
-                                  ? colors.brand.tertiary + '40'
-                                  : config?.color === 'orange' 
-                                  ? colors.semantic.warning + '40'
-                                  : colors.utility.secondaryText + '40',
-                                color: config?.color === 'blue' 
-                                  ? colors.brand.primary
-                                  : config?.color === 'green' 
-                                  ? colors.semantic.success
-                                  : config?.color === 'purple' 
-                                  ? colors.brand.tertiary
-                                  : config?.color === 'orange' 
-                                  ? colors.semantic.warning
-                                  : colors.utility.secondaryText
-                              }}
-                            >
-                              {config?.icon} {config?.label}
-                            </span>
-                          );
-                        })}
-                      </div>
-                      
-                      {/* Row 4: Action Buttons */}
+                      {/* FIXED: Action Section - Fixed Height */}
                       <div 
-                        className="flex items-center justify-between pt-2 border-t"
+                        className="p-4 border-t flex-none"
                         style={{ borderColor: colors.utility.primaryText + '20' }}
                       >
-                        <div className="flex gap-1">
+                        <div className="flex items-center justify-between">
+                          <div className="flex gap-1">
+                            <button 
+                              onClick={() => navigate(`/contacts/${contact.id}`)}
+                              className="p-1.5 rounded-md transition-colors"
+                              style={{
+                                backgroundColor: colors.utility.secondaryText + '20',
+                                color: colors.utility.primaryText
+                              }}
+                              title="View contact details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => navigate(`/contacts/${contact.id}/edit`)}
+                              className="p-1.5 rounded-md transition-colors"
+                              style={{
+                                backgroundColor: colors.brand.primary,
+                                color: '#ffffff'
+                              }}
+                              title="Edit contact"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button 
+                              className="p-1.5 rounded-md transition-colors"
+                              style={{
+                                backgroundColor: colors.semantic.success,
+                                color: '#ffffff'
+                              }}
+                              title="Create new contract"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                          </div>
                           <button 
-                            onClick={() => navigate(`/contacts/${contact.id}`)}
-                            className="p-1.5 rounded-md transition-colors"
-                            style={{
-                              backgroundColor: colors.utility.secondaryText + '20',
-                              color: colors.utility.primaryText
-                            }}
-                            title="View contact details"
+                            className="p-1 rounded-md hover:opacity-80 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                            title="More options"
                           >
-                            <Eye className="h-3 w-3" />
-                          </button>
-                          <button 
-                            onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                            className="p-1.5 rounded-md transition-colors"
-                            style={{
-                              backgroundColor: colors.brand.primary,
-                              color: '#ffffff'
-                            }}
-                            title="Edit contact"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </button>
-                          <button 
-                            className="p-1.5 rounded-md transition-colors"
-                            style={{
-                              backgroundColor: colors.semantic.success,
-                              color: '#ffffff'
-                            }}
-                            title="Create new contract"
-                          >
-                            <FileText className="h-3 w-3" />
+                            <MoreHorizontal className="h-4 w-4" />
                           </button>
                         </div>
-                        <button 
-                          className="p-1 rounded-md hover:opacity-80 transition-colors"
-                          style={{ color: colors.utility.secondaryText }}
-                          title="More options"
-                        >
-                          <MoreHorizontal className="h-3 w-3" />
-                        </button>
                       </div>
                     </div>
                   ) : (
-                    // LIST VIEW
+                    // FIXED LIST VIEW - Better alignment
                     <div 
                       key={contact.id} 
                       className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-3 ${
@@ -1368,8 +1375,8 @@ const ContactsPage: React.FC = () => {
                       } as React.CSSProperties}
                     >
                       <div className="flex items-center justify-between">
-                        {/* Left: Checkbox + Avatar + Name + Status */}
-                        <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+                        {/* FIXED: Left Section - Checkbox + Avatar + Name + Status */}
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -1377,32 +1384,35 @@ const ContactsPage: React.FC = () => {
                             style={{ accentColor: colors.brand.primary }}
                           />
                           <div 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm flex-shrink-0 border"
+                            className="w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm border flex-shrink-0"
                             style={{
-                              backgroundColor: colors.brand.primary + '40',
+                              backgroundColor: colors.brand.primary + '20',
                               color: colors.brand.primary,
-                              borderColor: colors.brand.primary + '60'
+                              borderColor: colors.brand.primary + '40'
                             }}
                           >
                             {contact.displayName?.charAt(0)?.toUpperCase() || 'U'}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <h3 
                                 className="font-semibold text-base truncate transition-colors"
                                 style={{ color: colors.utility.primaryText }}
+                                title={contact.displayName}
                               >
                                 {contact.displayName}
                               </h3>
                               {contact.type === 'corporate' ? (
                                 <Building2 
-                                  className="h-3 w-3 flex-shrink-0"
+                                  className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
+                                  title="Corporate Contact"
                                 />
                               ) : (
                                 <User 
-                                  className="h-3 w-3 flex-shrink-0"
+                                  className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
+                                  title="Individual Contact"
                                 />
                               )}
                             </div>
@@ -1431,7 +1441,7 @@ const ContactsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Middle: Primary Contact Channel */}
+                        {/* FIXED: Middle Section - Primary Contact Channel */}
                         <div 
                           className="flex items-center gap-2 min-w-0 flex-1 px-4"
                           style={{ color: colors.utility.secondaryText }}
@@ -1439,10 +1449,12 @@ const ContactsPage: React.FC = () => {
                           {primaryChannel.icon && (
                             <primaryChannel.icon className="h-4 w-4 flex-shrink-0" />
                           )}
-                          <span className="truncate text-sm">{primaryChannel.value}</span>
+                          <span className="truncate text-sm" title={primaryChannel.value}>
+                            {primaryChannel.value}
+                          </span>
                         </div>
 
-                        {/* Right: Classification + Actions */}
+                        {/* FIXED: Right Section - Classifications + Actions */}
                         <div className="flex items-center gap-3 flex-shrink-0">
                           {/* Classification Tags */}
                           <div className="flex flex-wrap gap-1">
@@ -1481,6 +1493,7 @@ const ContactsPage: React.FC = () => {
                                       ? colors.semantic.warning
                                       : colors.utility.secondaryText
                                   }}
+                                  title={config?.label}
                                 >
                                   {config?.icon} {config?.label}
                                 </span>
@@ -1507,7 +1520,7 @@ const ContactsPage: React.FC = () => {
                               }}
                               title="View contact details"
                             >
-                              <Eye className="h-3 w-3" />
+                              <Eye className="h-4 w-4" />
                             </button>
                             <button 
                               onClick={() => navigate(`/contacts/${contact.id}/edit`)}
@@ -1518,7 +1531,7 @@ const ContactsPage: React.FC = () => {
                               }}
                               title="Edit contact"
                             >
-                              <Edit className="h-3 w-3" />
+                              <Edit className="h-4 w-4" />
                             </button>
                             <button 
                               className="p-1.5 rounded-md transition-colors"
@@ -1528,14 +1541,14 @@ const ContactsPage: React.FC = () => {
                               }}
                               title="Create new contract"
                             >
-                              <FileText className="h-3 w-3" />
+                              <FileText className="h-4 w-4" />
                             </button>
                             <button 
                               className="p-1 rounded-md hover:opacity-80 transition-colors"
                               style={{ color: colors.utility.secondaryText }}
                               title="More options"
                             >
-                              <MoreHorizontal className="h-3 w-3" />
+                              <MoreHorizontal className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
@@ -1643,7 +1656,7 @@ const ContactsPage: React.FC = () => {
                   className="p-2 hover:opacity-80 rounded-md transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  ×
+                  <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -1657,7 +1670,7 @@ const ContactsPage: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    📹 Getting Started with Contacts
+                    Getting Started with Contacts
                   </h3>
                   <p 
                     className="text-sm transition-colors"
@@ -1674,7 +1687,7 @@ const ContactsPage: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    📹 Contact Classifications & Filtering
+                    Contact Classifications & Filtering
                   </h3>
                   <p 
                     className="text-sm transition-colors"
@@ -1691,7 +1704,7 @@ const ContactsPage: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    📹 Search & Discovery
+                    Search & Discovery
                   </h3>
                   <p 
                     className="text-sm transition-colors"
@@ -1717,6 +1730,14 @@ const ContactsPage: React.FC = () => {
         type="danger"
         icon={<Trash2 className="h-6 w-6" />}
       />
+
+      {/* Click outside handler for dropdowns */}
+      {showMoreFilters && (
+        <div 
+          className="fixed inset-0 z-10" 
+          onClick={() => setShowMoreFilters(false)}
+        />
+      )}
     </div>
   );
 };

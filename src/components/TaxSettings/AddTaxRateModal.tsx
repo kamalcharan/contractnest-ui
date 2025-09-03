@@ -1,5 +1,5 @@
 // src/components/TaxSettings/AddTaxRateModal.tsx
-// Modal component for adding new tax rates
+// Modal component for adding new tax rates - Updated with graceful error handling
 
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -167,7 +167,7 @@ const AddTaxRateModal = ({
     return Object.keys(errors).length === 0;
   };
 
-  // Handle form submission
+  // Handle form submission - UPDATED with graceful error handling
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -189,16 +189,21 @@ const AddTaxRateModal = ({
     }
 
     setIsSubmitting(true);
+    
     try {
       await onSubmit({
         ...formData,
         name: formData.name.trim(),
         description: formData.description.trim() || ''
       });
-      // Modal will be closed by parent component on success
+      
+      // If we reach here, the submission was successful
+      // The parent component will close the modal
+      
     } catch (error: any) {
-      console.error('Error submitting tax rate:', error);
-      // Error handling is done by parent component
+      // UPDATED: Error handling is now done in the hook
+      // Don't close the modal, let user fix the issue
+      console.log('Submission failed, staying on modal for user to retry');
     } finally {
       setIsSubmitting(false);
     }

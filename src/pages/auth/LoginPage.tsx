@@ -15,7 +15,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+  // Updated to include hasCompletedOnboarding and checkOnboardingStatus
+  const { login, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding, checkOnboardingStatus } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,12 +38,23 @@ const LoginPage: React.FC = () => {
     });
   }, []);
 
-  // Redirect if already authenticated - UPDATED TO /dashboard
+  // Redirect if already authenticated - UPDATED to check onboarding
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
+    const handleAuthRedirect = async () => {
+      if (isAuthenticated) {
+        // Check if user has completed onboarding
+        const isOnboardingComplete = await checkOnboardingStatus();
+        
+        if (!isOnboardingComplete) {
+          navigate('/onboarding', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
+      }
+    };
+    
+    handleAuthRedirect();
+  }, [isAuthenticated, checkOnboardingStatus, navigate]);
 
   // Check for message from navigate state (e.g., after registration)
   useEffect(() => {
@@ -102,6 +114,7 @@ const LoginPage: React.FC = () => {
         method: 'email'
       });
       // The redirect will happen automatically from the isAuthenticated useEffect
+      // which will now check onboarding status
     } catch (err) {
       // Track login failure
       analyticsService.trackEvent(AUTH_EVENTS.LOGIN_FAILURE, {
@@ -147,7 +160,7 @@ const LoginPage: React.FC = () => {
       if (error) throw error;
       
       // Supabase will handle the redirect automatically
-      // No need to do anything else here
+      // The callback page will handle onboarding check for Google users
       
     } catch (error: any) {
       // Track Google login failure

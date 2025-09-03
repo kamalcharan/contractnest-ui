@@ -14,13 +14,13 @@ export interface MenuItem {
 
 // Default menu structure
 export const defaultMenuItems: MenuItem[] = [
-  {
-    id: 'getting-started',
-    label: 'Getting Started',
-    icon: 'Compass',
-    path: '/getting-started',
-    hasSubmenu: false
-  },
+{
+  id: 'getting-started',
+  label: 'Getting Started',
+  icon: 'Compass',
+  path: '/onboarding/welcome', 
+  hasSubmenu: false
+},
   {
     id: 'dashboard',
     label: 'Dashboard',
@@ -106,147 +106,125 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   {
-  id: 'vani',
-  label: 'VaNi',
-  icon: 'MessageSquare',
-  path: '/vani/events', // Changed default to events dashboard
-  hasSubmenu: true,
-  submenuItems: [
-    // Core Business Operations (NEW)
-    {
-      id: 'vani-events',
-      label: 'Business Events',
-      icon: 'Activity',
-      path: '/vani/events'
-    },
-    {
-      id: 'vani-dashboard',
-      label: 'Dashboard',
-      icon: 'LayoutDashboard',
-      path: '/vani/dashboard'
-    },
-    
-    // Process Management
-    {
-      id: 'vani-jobs',
-      label: 'Communication Jobs',
-      icon: 'Send',
-      path: '/vani/jobs'
-    },
-    {
-      id: 'vani-rules',
-      label: 'Event Rules',
-      icon: 'Settings',
-      path: '/vani/rules'
-    },
-    {
-  id: 'vani-chat',
-  label: 'Customer Chat',
-  icon: 'MessageSquare',
-  path: '/vani/chat'
-},
-    {
-      id: 'vani-webhooks',
-      label: 'Module Integration',
-      icon: 'Zap',
-      path: '/vani/webhooks'
-    },
-    
-    // Business Views
-    {
-      id: 'vani-receivables',
-      label: 'Accounts Receivable',
-      icon: 'DollarSign',
-      path: '/vani/finance/receivables'
-    },
-    {
-      id: 'vani-services',
-      label: 'Service Schedule',
-      icon: 'Calendar',
-      path: '/vani/operations/services'
-    },
-    
-    // Configuration
-    {
-      id: 'vani-templates',
-      label: 'Templates',
-      icon: 'FileText',
-      path: '/vani/templates'
-    },
-    {
-      id: 'vani-channels',
-      label: 'Channels',
-      icon: 'Radio',
-      path: '/vani/channels'
-    },
-    {
-      id: 'vani-analytics',
-      label: 'Cross-Module Analytics',
-      icon: 'BarChart3',
-      path: '/vani/analytics'
-    }
-  ]
-},
+    id: 'vani',
+    label: 'VaNi',
+    icon: 'MessageSquare',
+    path: '/vani/events', // Changed default to events dashboard
+    hasSubmenu: true,
+    submenuItems: [
+      // Core Business Operations (NEW)
+      {
+        id: 'vani-events',
+        label: 'Business Events',
+        icon: 'Activity',
+        path: '/vani/events'
+      },
+      {
+        id: 'vani-dashboard',
+        label: 'Dashboard',
+        icon: 'LayoutDashboard',
+        path: '/vani/dashboard'
+      },
+      
+      // Process Management
+      {
+        id: 'vani-jobs',
+        label: 'Communication Jobs',
+        icon: 'Send',
+        path: '/vani/jobs'
+      },
+      {
+        id: 'vani-rules',
+        label: 'Event Rules',
+        icon: 'Settings',
+        path: '/vani/rules'
+      },
+      {
+        id: 'vani-chat',
+        label: 'Customer Chat',
+        icon: 'MessageSquare',
+        path: '/vani/chat'
+      },
+      {
+        id: 'vani-webhooks',
+        label: 'Module Integration',
+        icon: 'Zap',
+        path: '/vani/webhooks'
+      },
+      
+      // Business Views
+      {
+        id: 'vani-receivables',
+        label: 'Accounts Receivable',
+        icon: 'DollarSign',
+        path: '/vani/finance/receivables'
+      },
+      {
+        id: 'vani-services',
+        label: 'Service Schedule',
+        icon: 'Calendar',
+        path: '/vani/operations/services'
+      },
+      
+      // Configuration
+      {
+        id: 'vani-templates',
+        label: 'Templates',
+        icon: 'FileText',
+        path: '/vani/templates'
+      },
+      {
+        id: 'vani-channels',
+        label: 'Channels',
+        icon: 'Radio',
+        path: '/vani/channels'
+      },
+      {
+        id: 'vani-analytics',
+        label: 'Cross-Module Analytics',
+        icon: 'BarChart3',
+        path: '/vani/analytics'
+      }
+    ]
+  },
   {
     id: 'catalog',
-    label: 'Catalog',
+    label: 'Service Catalog',
     icon: 'Package',
     path: '/catalog',
     hasSubmenu: true,
     submenuItems: [
       {
-        id: 'Services',
-        label: 'Services',
-        icon: 'Package',
-        path: '/catalog/services'
+        id: 'all-services',
+        label: 'All Services',
+        icon: 'List',
+        path: '/catalog'
       },
       {
-        id: 'equipments',
-        label: 'Equipments',
-        icon: 'Settings',
-        path: '/catalog/equipments'
+        id: 'create-service',
+        label: 'Create Service',
+        icon: 'Plus',
+        path: '/catalog/create'
       },
       {
-        id: 'Assets',
-        label: 'Assets',
-        icon: 'Box',
-        path: '/catalog/assets'
+        id: 'active-services',
+        label: 'Active Services',
+        icon: 'CheckCircle',
+        path: '/catalog?status=active'
       },
       {
-        id: 'Spare-Parts',
-        label: 'Spare Parts',
-        icon: 'Wrench',
-        path: '/catalog/spare-parts'
+        id: 'draft-services',
+        label: 'Draft Services',
+        icon: 'Clock',
+        path: '/catalog?status=draft'
+      },
+      {
+        id: 'marketplace',
+        label: 'Marketplace',
+        icon: 'ShoppingBag',
+        path: '/marketplace'
       }
     ]
-  },
-  {
-  id: 'new-catalog',
-  label: 'New Catalog',
-  icon: 'Package2',
-  path: '/catalog',
-  hasSubmenu: true,
-  submenuItems: [
-    {
-      id: 'catalog-main',
-      label: 'Catalog Overview',
-      icon: 'Package',
-      path: '/catalog'
-    },
-    {
-      id: 'create-service',
-      label: 'Create Service',
-      icon: 'Plus',
-      path: '/catalog/create'
-    }
-  ]
-},
-  {
-    id: 'marketplace',
-    label: 'Marketplace',
-    icon: 'ShoppingBag',
-    path: '/marketplace',
-    hasSubmenu: false
   },
   // Settings menu - unchanged
   {
@@ -266,15 +244,13 @@ export const defaultMenuItems: MenuItem[] = [
         id: 'pricing-plans',
         label: 'Pricing Plans',
         icon: 'CreditCard',
-        path: '/businessmodel/tenants/pricing-plans',
-        hasSubmenu: false
+        path: '/businessmodel/tenants/pricing-plans'
       },
       {
         id: 'my-subscription',
         label: 'My Subscription',
         icon: 'Package',
-        path: '/businessmodel/tenants/subscription',
-        hasSubmenu: false
+        path: '/businessmodel/tenants/subscription'
       }
     ]
   },

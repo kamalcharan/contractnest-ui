@@ -31,8 +31,8 @@ const RegisterPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   
-  // Auth context
-  const { register, isAuthenticated, isLoading, error, clearError } = useAuth();
+  // Auth context - Added hasCompletedOnboarding
+  const { register, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
   
@@ -50,12 +50,17 @@ const RegisterPage: React.FC = () => {
     });
   }, []);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated - Updated to check onboarding status
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      // Check if user needs onboarding
+      if (!hasCompletedOnboarding) {
+        navigate('/onboarding');
+      } else {
+        navigate('/dashboard');
+      }
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, hasCompletedOnboarding, navigate]);
 
   // Clear auth errors when form changes
   useEffect(() => {
@@ -119,6 +124,9 @@ const RegisterPage: React.FC = () => {
       // Store remember me preference as false for new users
       localStorage.setItem('remember_me', 'false');
       
+      // Store a flag to indicate this is a new signup (for onboarding)
+      sessionStorage.setItem('is_new_signup', 'true');
+      
       // Use Supabase's built-in OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -134,7 +142,7 @@ const RegisterPage: React.FC = () => {
       if (error) throw error;
       
       // Supabase will handle the redirect automatically
-      // The callback page will determine if it's a new user and handle accordingly
+      // The callback page will determine if it's a new user and handle onboarding accordingly
       
     } catch (error: any) {
       // Track Google signup failure
@@ -233,7 +241,7 @@ const RegisterPage: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle form submission
+  // Handle form submission - Updated to mark for onboarding
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -244,6 +252,9 @@ const RegisterPage: React.FC = () => {
       step_name: 'submission',
       success: true
     });
+    
+    // Mark this as a new signup for onboarding
+    sessionStorage.setItem('is_new_signup', 'true');
     
     // Register the user
     try {
@@ -260,6 +271,7 @@ const RegisterPage: React.FC = () => {
         workspace_name: formData.workspaceName
       });
       
+      // The AuthContext will handle navigation to onboarding or dashboard
       // Success toast will be shown by AuthContext
     } catch (err) {
       // Track registration failure

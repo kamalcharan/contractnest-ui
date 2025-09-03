@@ -1,13 +1,20 @@
 // src/pages/settings/storage/categoryfiles/index.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, File, FileText, Image, Video, Trash2, Download, Search, Filter, ChevronDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Search, ChevronDown, Loader2 } from 'lucide-react';
 import { useStorageManagement } from '@/hooks/useStorageManagement';
-import { formatFileSize, getFileExtension, FILE_TYPE_ICONS } from '@/utils/constants/storageConstants';
+import { formatFileSize } from '@/utils/constants/storageConstants';
 import { analyticsService } from '@/services/analytics.service';
 import FileUploader from '@/components/storage/FileUploader';
 import FileList from '@/components/storage/FileList';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/ui/Button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const CategoryFilesPage: React.FC = () => {
   const { categoryId } = useParams<{ categoryId: string }>();
@@ -33,7 +40,6 @@ const CategoryFilesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showUploader, setShowUploader] = useState(false);
   const [multipleUploadMode, setMultipleUploadMode] = useState(false);
-  const [showUploadModeDropdown, setShowUploadModeDropdown] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   
   // Find the category from the categories list
@@ -77,11 +83,56 @@ const CategoryFilesPage: React.FC = () => {
     navigate('/settings/storage/storagemanagement');
   };
   
-  // Handle single file upload
+  // Create metadata based on category
+  const createMetadata = (fileName: string) => {
+    const baseMetadata = {
+      uploaded_at: new Date().toISOString(),
+      category_name: category?.name,
+      original_name: fileName
+    };
+    
+    // Add category-specific metadata
+    switch (categoryId) {
+      case 'contact_photos':
+        return {
+          ...baseMetadata,
+          entity_type: 'contact',
+          field_name: 'photo',
+          usage: 'profile_picture'
+        };
+      case 'contract_media':
+        return {
+          ...baseMetadata,
+          entity_type: 'contract',
+          field_name: 'attachment',
+          document_type: 'contract_document'
+        };
+      case 'service_images':
+        return {
+          ...baseMetadata,
+          entity_type: 'service',
+          field_name: 'image',
+          usage: 'service_gallery'
+        };
+      case 'documents':
+        return {
+          ...baseMetadata,
+          entity_type: 'document',
+          field_name: 'file',
+          document_type: 'general'
+        };
+      default:
+        return baseMetadata;
+    }
+  };
+  
+  // Handle single file upload with metadata
   const handleSingleFileUpload = async (file: File) => {
     if (!categoryId) return;
     
-    const uploaded = await uploadFile(file, categoryId);
+    const metadata = createMetadata(file.name);
+    const uploaded = await uploadFile(file, categoryId, metadata);
+    
     if (uploaded) {
       setShowUploader(false);
       setMultipleUploadMode(false);
@@ -92,6 +143,8 @@ const CategoryFilesPage: React.FC = () => {
   const handleMultipleFileUpload = async (files: File[]) => {
     if (!categoryId) return;
     
+    // Note: Current implementation doesn't support per-file metadata for multiple uploads
+    // You might want to enhance uploadMultipleFiles to support this
     const success = await uploadMultipleFiles(files, categoryId);
     if (success) {
       setShowUploader(false);
@@ -112,17 +165,11 @@ const CategoryFilesPage: React.FC = () => {
   const handleUploadClick = (multiple: boolean = false) => {
     setMultipleUploadMode(multiple);
     setShowUploader(true);
-    setShowUploadModeDropdown(false);
   };
   
   // Handle batch delete
   const handleBatchDelete = async (fileIds: string[]) => {
     await deleteMultipleFiles(fileIds);
-  };
-  
-  // Handle delete confirmation for single file (legacy support)
-  const handleDeleteClick = (fileId: string) => {
-    setFileToDelete(fileId);
   };
   
   // Handle confirmed delete
@@ -134,28 +181,6 @@ const CategoryFilesPage: React.FC = () => {
       setFileToDelete(null);
     }
   };
-  
-  // Cancel delete
-  const handleDeleteCancel = () => {
-    setFileToDelete(null);
-  };
-  
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.upload-dropdown')) {
-        setShowUploadModeDropdown(false);
-      }
-    };
-    
-    if (showUploadModeDropdown) {
-      document.addEventListener('click', handleClickOutside);
-      return () => {
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }
-  }, [showUploadModeDropdown]);
   
   if (!category) {
     return (
@@ -215,50 +240,36 @@ const CategoryFilesPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Upload Button with Dropdown */}
-        <div className="relative upload-dropdown">
-          <div className="flex items-center">
-            <button
-              onClick={() => handleUploadClick(false)}
-              className="px-4 py-2 rounded-l-md transition-colors flex items-center hover:opacity-90"
+        {/* Upload Button with Dropdown - Using same pattern as storagemanagement page */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              disabled={isSubmitting}
+              className="transition-colors hover:opacity-90"
               style={{
                 background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                color: '#FFFFFF'
+                color: '#FFFFFF',
+                borderColor: 'transparent'
               }}
             >
               <Upload className="w-4 h-4 mr-2" />
               Upload File
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowUploadModeDropdown(!showUploadModeDropdown);
-              }}
-              className="px-2 py-2 rounded-r-md transition-colors hover:opacity-90 border-l"
-              style={{
-                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                color: '#FFFFFF',
-                borderColor: '#FFFFFF20'
-              }}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent 
+            align="end" 
+            className="w-56 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
+            <DropdownMenuItem 
+              onClick={() => handleUploadClick(false)}
+              className="transition-colors hover:opacity-80"
+              style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
             >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          </div>
-          
-          {/* Dropdown Menu */}
-          {showUploadModeDropdown && (
-            <div 
-              className="absolute right-0 mt-1 w-48 rounded-md shadow-lg border z-10 transition-colors"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: colors.utility.primaryText + '20'
-              }}
-            >
-              <button
-                onClick={() => handleUploadClick(false)}
-                className="w-full px-4 py-2 text-left transition-colors rounded-t-md hover:opacity-80"
-                style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
-              >
+              <div>
                 <div 
                   className="font-medium transition-colors"
                   style={{ color: colors.utility.primaryText }}
@@ -271,12 +282,14 @@ const CategoryFilesPage: React.FC = () => {
                 >
                   Upload one file at a time
                 </div>
-              </button>
-              <button
-                onClick={() => handleUploadClick(true)}
-                className="w-full px-4 py-2 text-left transition-colors rounded-b-md hover:opacity-80"
-                style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
-              >
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => handleUploadClick(true)}
+              className="transition-colors hover:opacity-80"
+              style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
+            >
+              <div>
                 <div 
                   className="font-medium transition-colors"
                   style={{ color: colors.utility.primaryText }}
@@ -289,10 +302,10 @@ const CategoryFilesPage: React.FC = () => {
                 >
                   Upload up to 10 files at once
                 </div>
-              </button>
-            </div>
-          )}
-        </div>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       
       {/* File Uploader Modal */}
@@ -305,11 +318,11 @@ const CategoryFilesPage: React.FC = () => {
             setMultipleUploadMode(false);
           }}
           isUploading={isSubmitting}
-        //  multiple={multipleUploadMode}
+          multiple={multipleUploadMode}
         />
       )}
       
-      {/* Delete Confirmation Modal (for backward compatibility) */}
+      {/* Delete Confirmation Modal */}
       {fileToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div 
@@ -333,7 +346,7 @@ const CategoryFilesPage: React.FC = () => {
             </p>
             <div className="flex justify-end space-x-3">
               <button
-                onClick={handleDeleteCancel}
+                onClick={() => setFileToDelete(null)}
                 className="px-4 py-2 border rounded transition-colors hover:opacity-80"
                 style={{
                   borderColor: colors.utility.primaryText + '40',
@@ -411,7 +424,7 @@ const CategoryFilesPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Files List - Using the FileList component for consistency */}
+      {/* Files List */}
       <FileList
         files={searchTerm ? filteredFiles : files}
         onDelete={deleteFile}

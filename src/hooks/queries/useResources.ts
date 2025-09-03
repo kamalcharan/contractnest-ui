@@ -1,5 +1,5 @@
 // src/hooks/queries/useResources.ts
-// TanStack Query hooks for Resources management
+// FIXED TanStack Query hooks for Resources - Enhanced response parsing
 
 import { 
   useQuery, 
@@ -7,23 +7,165 @@ import {
   useQueryClient,
   UseQueryResult,
   UseMutationResult,
-  QueryKey
 } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '@/context/AuthContext';
+import api from '@/services/api';
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 
-import resourcesService from '../../services/resourcesService';
-import {
-  Resource,
-  ResourceType,
-  ResourceFilters,
-  CreateResourceFormData,
-  UpdateResourceFormData,
-  CreateResourceMutationVariables,
-  UpdateResourceMutationVariables,
-  DeleteResourceMutationVariables,
-  RESOURCE_QUERY_KEYS,
-  DEFAULT_RESOURCE_FILTERS,
-} from '../../types/resources';
+// =================================================================
+// TYPES (Simplified from your existing types)
+// =================================================================
+
+export interface ResourceType {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  sort_order?: number;
+  requires_human_assignment?: boolean;
+}
+
+export interface Resource {
+  id: string;
+  resource_type_id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  hexcolor?: string;
+  sequence_no?: number;
+  contact_id?: string;
+  tags?: any;
+  form_settings?: any;
+  is_active: boolean;
+  is_deletable: boolean;
+  tenant_id: string;
+  created_at: string;
+  updated_at?: string;
+  contact?: {
+    id: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+  };
+}
+
+export interface CreateResourceFormData {
+  resource_type_id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  hexcolor?: string;
+  sequence_no?: number;
+  contact_id?: string;
+  tags?: any;
+  form_settings?: any;
+  is_active?: boolean;
+  is_deletable?: boolean;
+}
+
+export interface UpdateResourceFormData {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  hexcolor?: string;
+  sequence_no?: number;
+  contact_id?: string;
+  tags?: any;
+  form_settings?: any;
+  is_active?: boolean;
+  is_deletable?: boolean;
+}
+
+export interface ResourceFilters {
+  resourceTypeId?: string;
+  search?: string;
+  includeInactive?: boolean;
+}
+
+// =================================================================
+// QUERY KEYS
+// =================================================================
+
+export const RESOURCE_QUERY_KEYS = {
+  all: ['resources'] as const,
+  types: () => [...RESOURCE_QUERY_KEYS.all, 'types'] as const,
+  lists: () => [...RESOURCE_QUERY_KEYS.all, 'list'] as const,
+  list: (filters: ResourceFilters) => [...RESOURCE_QUERY_KEYS.lists(), filters] as const,
+  details: () => [...RESOURCE_QUERY_KEYS.all, 'detail'] as const,
+  detail: (id: string) => [...RESOURCE_QUERY_KEYS.details(), id] as const,
+  nextSequence: (resourceTypeId: string) => [...RESOURCE_QUERY_KEYS.all, 'nextSequence', resourceTypeId] as const,
+} as const;
+
+// =================================================================
+// ENHANCED RESPONSE PARSING (Fixed for API controller format)
+// =================================================================
+
+const parseResponse = (response: any, context: string = 'unknown') => {
+  console.log(`🔍 PARSING ${context.toUpperCase()} RESPONSE:`, response);
+  
+  try {
+    // Handle API controller format: { success: true, data: [...], message: "...", timestamp: "..." }
+    if (response?.data?.success === true && response?.data?.data !== undefined) {
+      console.log(`✅ ${context} - API CONTROLLER FORMAT - extracting data:`, response.data.data);
+      return response.data.data;
+    }
+    
+    // Handle edge function format: { success: true, data: [...] }
+    if (response?.data && typeof response.data === 'object') {
+      // If response.data is an array, use it directly
+      if (Array.isArray(response.data)) {
+        console.log(`✅ ${context} - DIRECT ARRAY - using data:`, response.data);
+        return response.data;
+      }
+      
+      // If response.data is an object, check for nested data
+      if (response.data.success === true && response.data.data !== undefined) {
+        console.log(`✅ ${context} - NESTED SUCCESS FORMAT - extracting data:`, response.data.data);
+        return response.data.data;
+      }
+      
+      // If response.data has the expected structure but no wrapper
+      console.log(`✅ ${context} - DIRECT OBJECT - using data:`, response.data);
+      return response.data;
+    }
+    
+    // Handle raw response (shouldn't happen with axios, but just in case)
+    if (Array.isArray(response)) {
+      console.log(`✅ ${context} - RAW ARRAY - using response:`, response);
+      return response;
+    }
+    
+    console.log(`❌ ${context} - UNKNOWN FORMAT - returning empty array`);
+    return [];
+    
+  } catch (error) {
+    console.error(`❌ ${context} - PARSE ERROR:`, error);
+    return [];
+  }
+};
+
+// Helper to validate array responses
+const validateArrayResponse = (data: any, context: string): any[] => {
+  if (!Array.isArray(data)) {
+    console.error(`❌ ${context} - Expected array but got:`, typeof data, data);
+    throw new Error(`${context} response is not an array`);
+  }
+  
+  console.log(`✅ ${context} - Validated array with ${data.length} items`);
+  return data;
+};
+
+// Helper to validate object responses
+const validateObjectResponse = (data: any, context: string): any => {
+  if (!data || typeof data !== 'object') {
+    console.error(`❌ ${context} - Expected object but got:`, typeof data, data);
+    throw new Error(`${context} response is not a valid object`);
+  }
+  
+  console.log(`✅ ${context} - Validated object:`, data);
+  return data;
+};
 
 // =================================================================
 // QUERY HOOKS
@@ -31,117 +173,189 @@ import {
 
 /**
  * Get all resource types
- * Used in left sidebar for type selection
+ * FIXED: Better error handling and response validation
  */
 export const useResourceTypes = (): UseQueryResult<ResourceType[], Error> => {
+  const { currentTenant } = useAuth();
+
   return useQuery({
     queryKey: RESOURCE_QUERY_KEYS.types(),
-    queryFn: () => resourcesService.getResourceTypes(),
-    staleTime: 10 * 60 * 1000, // 10 minutes - resource types don't change often
+    queryFn: async () => {
+      console.log('🚀 Fetching resource types...');
+      
+      try {
+        const response = await api.get(API_ENDPOINTS.RESOURCES.RESOURCE_TYPES);
+        const data = parseResponse(response, 'resource_types');
+        const resourceTypes = validateArrayResponse(data, 'ResourceTypes');
+        
+        console.log('✅ Resource types fetched successfully:', resourceTypes.length);
+        return resourceTypes;
+        
+      } catch (error: any) {
+        console.error('❌ Resource types fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch resource types');
+      }
+    },
+    enabled: !!currentTenant,
+    staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     refetchOnWindowFocus: false,
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    retry: (failureCount, error) => {
+      console.log(`🔄 Resource types retry attempt ${failureCount}:`, error.message);
+      return failureCount < 3;
+    },
   });
 };
 
 /**
  * Get resources with filtering
- * Main hook for resources list in right panel
+ * FIXED: Better error handling and response validation
  */
 export const useResources = (
-  filters: ResourceFilters = DEFAULT_RESOURCE_FILTERS
+  filters: ResourceFilters = {}
 ): UseQueryResult<Resource[], Error> => {
+  const { currentTenant } = useAuth();
+
   return useQuery({
     queryKey: RESOURCE_QUERY_KEYS.list(filters),
-    queryFn: () => resourcesService.getResources(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutes - resources change more frequently
-    gcTime: 15 * 60 * 1000, // 15 minutes
-    refetchOnWindowFocus: true,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    enabled: true, // Always enabled, filters can be empty
-  });
-};
+    queryFn: async () => {
+      console.log('🚀 Fetching resources with filters:', filters);
+      
+      try {
+        let url = API_ENDPOINTS.RESOURCES.LIST;
+        const params = new URLSearchParams();
+        
+        if (filters.resourceTypeId) {
+          params.append('resourceTypeId', filters.resourceTypeId);
+        }
+        if (filters.search) {
+          params.append('search', filters.search);
+        }
+        if (filters.includeInactive) {
+          params.append('includeInactive', 'true');
+        }
+        
+        if (params.toString()) {
+          url += `?${params.toString()}`;
+        }
 
-/**
- * Get single resource by ID
- * Used for detailed views or editing
- */
-export const useResource = (
-  resourceId: string | null | undefined
-): UseQueryResult<Resource, Error> => {
-  return useQuery({
-    queryKey: RESOURCE_QUERY_KEYS.detail(resourceId || ''),
-    queryFn: () => resourcesService.getResource(resourceId!),
+        const response = await api.get(url);
+        const data = parseResponse(response, 'resources');
+        const resources = validateArrayResponse(data, 'Resources');
+        
+        console.log('✅ Resources fetched successfully:', resources.length);
+        return resources;
+        
+      } catch (error: any) {
+        console.error('❌ Resources fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch resources');
+      }
+    },
+    enabled: !!currentTenant,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 15 * 60 * 1000, // 15 minutes
-    enabled: !!resourceId, // Only run when we have an ID
-    retry: 2,
-  });
-};
-
-/**
- * Get next sequence number for a resource type
- * Used when creating new resources
- */
-export const useNextSequence = (
-  resourceTypeId: string | null | undefined
-): UseQueryResult<number, Error> => {
-  return useQuery({
-    queryKey: RESOURCE_QUERY_KEYS.nextSequence(resourceTypeId || ''),
-    queryFn: () => resourcesService.getNextSequence(resourceTypeId!),
-    staleTime: 1 * 60 * 1000, // 1 minute - sequence numbers change frequently
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    enabled: !!resourceTypeId, // Only run when we have a type ID
-    retry: 1, // Sequence numbers should be quick to get
+    refetchOnWindowFocus: true,
+    retry: (failureCount, error) => {
+      console.log(`🔄 Resources retry attempt ${failureCount}:`, error.message);
+      return failureCount < 2;
+    },
   });
 };
 
 /**
  * Get resources by specific type
- * Convenience hook for type-filtered queries
  */
 export const useResourcesByType = (
   resourceTypeId: string | null | undefined,
   additionalFilters: Omit<ResourceFilters, 'resourceTypeId'> = {}
 ): UseQueryResult<Resource[], Error> => {
   const filters: ResourceFilters = {
-    ...DEFAULT_RESOURCE_FILTERS,
     ...additionalFilters,
     resourceTypeId: resourceTypeId || undefined,
   };
 
+  return useResources(filters);
+};
+
+/**
+ * Get single resource by ID
+ */
+export const useResource = (
+  resourceId: string | null | undefined
+): UseQueryResult<Resource, Error> => {
+  const { currentTenant } = useAuth();
+
   return useQuery({
-    queryKey: RESOURCE_QUERY_KEYS.list(filters),
-    queryFn: () => resourcesService.getResources(filters),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 15 * 60 * 1000, // 15 minutes
-    enabled: !!resourceTypeId, // Only run when we have a type ID
+    queryKey: RESOURCE_QUERY_KEYS.detail(resourceId || ''),
+    queryFn: async () => {
+      console.log('🚀 Fetching resource:', resourceId);
+      
+      try {
+        const response = await api.get(`${API_ENDPOINTS.RESOURCES.LIST}?resourceId=${resourceId}`);
+        const data = parseResponse(response, 'single_resource');
+        const resources = validateArrayResponse(data, 'SingleResource');
+        
+        if (resources.length === 0) {
+          throw new Error('Resource not found');
+        }
+        
+        console.log('✅ Resource fetched:', resources[0].name);
+        return resources[0];
+        
+      } catch (error: any) {
+        console.error('❌ Resource fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch resource');
+      }
+    },
+    enabled: !!resourceId && !!currentTenant,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     retry: 2,
   });
 };
 
 /**
- * Search resources with query string
- * Used for search functionality
+ * Get next sequence number for a resource type
  */
-export const useResourcesSearch = (
-  searchQuery: string,
-  additionalFilters: Omit<ResourceFilters, 'search'> = {}
-): UseQueryResult<Resource[], Error> => {
-  const filters: ResourceFilters = {
-    ...DEFAULT_RESOURCE_FILTERS,
-    ...additionalFilters,
-    search: searchQuery.trim() || undefined,
-  };
+export const useNextSequence = (
+  resourceTypeId: string | null | undefined
+): UseQueryResult<number, Error> => {
+  const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: RESOURCE_QUERY_KEYS.list(filters),
-    queryFn: () => resourcesService.getResources(filters),
-    staleTime: 2 * 60 * 1000, // 2 minutes - search results change frequently
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    enabled: searchQuery.trim().length >= 2, // Only search with 2+ characters
+    queryKey: RESOURCE_QUERY_KEYS.nextSequence(resourceTypeId || ''),
+    queryFn: async () => {
+      console.log('🚀 Fetching next sequence for:', resourceTypeId);
+      
+      try {
+        const response = await api.get(
+          `${API_ENDPOINTS.RESOURCES.LIST}?resourceTypeId=${resourceTypeId}&nextSequence=true`
+        );
+        const data = parseResponse(response, 'next_sequence');
+        
+        // Handle the nextSequence response
+        if (data && typeof data === 'object' && data.nextSequence) {
+          console.log('✅ Next sequence:', data.nextSequence);
+          return data.nextSequence;
+        }
+        
+        // Fallback if response format is unexpected
+        if (typeof data === 'number') {
+          console.log('✅ Next sequence (direct):', data);
+          return data;
+        }
+        
+        console.log('✅ Next sequence (fallback):', 1);
+        return 1;
+        
+      } catch (error: any) {
+        console.error('❌ Next sequence fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch next sequence');
+      }
+    },
+    enabled: !!resourceTypeId && !!currentTenant,
+    staleTime: 1 * 60 * 1000, // 1 minute
+    gcTime: 5 * 60 * 1000,
     retry: 1,
   });
 };
@@ -152,29 +366,45 @@ export const useResourcesSearch = (
 
 /**
  * Create new resource mutation
- * Handles optimistic updates and cache invalidation
  */
 export const useCreateResource = (): UseMutationResult<
   Resource,
   Error,
-  CreateResourceMutationVariables,
+  { data: CreateResourceFormData; idempotencyKey?: string },
   unknown
 > => {
   const queryClient = useQueryClient();
+  const { currentTenant } = useAuth();
 
   return useMutation({
-    mutationFn: (variables: CreateResourceMutationVariables) =>
-      resourcesService.createResource(variables),
+    mutationFn: async (variables: { data: CreateResourceFormData; idempotencyKey?: string }) => {
+      console.log('🚀 Creating resource:', variables.data);
+      
+      try {
+        const requestData = {
+          ...variables.data,
+          tenant_id: currentTenant?.id,
+          is_active: variables.data.is_active !== false,
+          is_deletable: variables.data.is_deletable !== false
+        };
+
+        const response = await api.post(API_ENDPOINTS.RESOURCES.CREATE, requestData);
+        const data = parseResponse(response, 'create_resource');
+        const resource = validateObjectResponse(data, 'CreateResource');
+        
+        console.log('✅ Resource created:', resource);
+        return resource;
+        
+      } catch (error: any) {
+        console.error('❌ Create resource failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to create resource');
+      }
+    },
     
     onSuccess: (newResource, variables) => {
       // Invalidate and refetch resource lists
       queryClient.invalidateQueries({ 
         queryKey: RESOURCE_QUERY_KEYS.lists() 
-      });
-      
-      // Update specific type queries
-      queryClient.invalidateQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.list({ resourceTypeId: newResource.resource_type_id })
       });
       
       // Invalidate next sequence for this type
@@ -201,10 +431,9 @@ export const useCreateResource = (): UseMutationResult<
       });
     },
     
-    onError: (error, variables) => {
+    onError: (error) => {
       console.error('❌ Create resource failed:', error);
       
-      // Show error toast but don't crash the app
       toast.error(error.message || 'Failed to create resource', {
         duration: 6000,
         style: {
@@ -215,38 +444,38 @@ export const useCreateResource = (): UseMutationResult<
           fontSize: '14px'
         },
       });
-      
-      // Don't throw to prevent app-level error handling
-    },
-    
-    // Optimistic update could be added here if needed
-    onMutate: async (variables) => {
-      // Cancel any outgoing refetches for resources list
-      await queryClient.cancelQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.lists() 
-      });
-      
-      // We could add optimistic update here, but it's complex with auto-generated fields
-      // Better to rely on quick API response
     },
   });
 };
 
 /**
  * Update resource mutation
- * Handles cache updates and invalidation
  */
 export const useUpdateResource = (): UseMutationResult<
   Resource,
   Error,
-  UpdateResourceMutationVariables,
+  { id: string; data: UpdateResourceFormData; idempotencyKey?: string },
   unknown
 > => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (variables: UpdateResourceMutationVariables) =>
-      resourcesService.updateResource(variables),
+    mutationFn: async (variables: { id: string; data: UpdateResourceFormData; idempotencyKey?: string }) => {
+      console.log('🚀 Updating resource:', variables.id, variables.data);
+      
+      try {
+        const response = await api.patch(`${API_ENDPOINTS.RESOURCES.UPDATE(variables.id)}`, variables.data);
+        const data = parseResponse(response, 'update_resource');
+        const resource = validateObjectResponse(data, 'UpdateResource');
+        
+        console.log('✅ Resource updated:', resource);
+        return resource;
+        
+      } catch (error: any) {
+        console.error('❌ Update resource failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to update resource');
+      }
+    },
     
     onSuccess: (updatedResource, variables) => {
       // Update the specific resource in cache
@@ -259,13 +488,7 @@ export const useUpdateResource = (): UseMutationResult<
       queryClient.invalidateQueries({ 
         queryKey: RESOURCE_QUERY_KEYS.lists() 
       });
-      
-      // Update specific type queries
-      queryClient.invalidateQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.list({ resourceTypeId: updatedResource.resource_type_id })
-      });
 
-      // Show success toast
       toast.success('Resource updated successfully!', {
         duration: 3000,
         style: {
@@ -278,45 +501,9 @@ export const useUpdateResource = (): UseMutationResult<
       });
     },
     
-    // Optimistic update
-    onMutate: async (variables) => {
-      const { id, data } = variables;
-      
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.detail(id) 
-      });
-      
-      // Snapshot the previous value
-      const previousResource = queryClient.getQueryData<Resource>(
-        RESOURCE_QUERY_KEYS.detail(id)
-      );
-      
-      // Optimistically update the cache
-      if (previousResource) {
-        queryClient.setQueryData<Resource>(
-          RESOURCE_QUERY_KEYS.detail(id),
-          { ...previousResource, ...data }
-        );
-      }
-      
-      // Return context object with the snapshotted value
-      return { previousResource, id };
-    },
-    
-    // Combined error handling and rollback
     onError: (err, variables, context) => {
       console.error('Update resource failed:', err);
       
-      // Rollback optimistic update if we have previous data
-      if (context?.previousResource) {
-        queryClient.setQueryData(
-          RESOURCE_QUERY_KEYS.detail(context.id),
-          context.previousResource
-        );
-      }
-      
-      // Show error toast
       toast.error(err.message || 'Failed to update resource', {
         duration: 4000,
         style: {
@@ -328,31 +515,33 @@ export const useUpdateResource = (): UseMutationResult<
         },
       });
     },
-    
-    // Always refetch after error or success
-    onSettled: (data, error, variables) => {
-      queryClient.invalidateQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.detail(variables.id) 
-      });
-    },
   });
 };
 
 /**
  * Delete resource mutation
- * Handles cache removal and invalidation
  */
 export const useDeleteResource = (): UseMutationResult<
   void,
   Error,
-  DeleteResourceMutationVariables,
+  { id: string; idempotencyKey?: string },
   unknown
 > => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (variables: DeleteResourceMutationVariables) =>
-      resourcesService.deleteResource(variables),
+    mutationFn: async (variables: { id: string; idempotencyKey?: string }) => {
+      console.log('🚀 Deleting resource:', variables.id);
+      
+      try {
+        await api.delete(API_ENDPOINTS.RESOURCES.DELETE(variables.id));
+        console.log('✅ Resource deleted:', variables.id);
+        
+      } catch (error: any) {
+        console.error('❌ Delete resource failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to delete resource');
+      }
+    },
     
     onSuccess: (_, variables) => {
       const { id } = variables;
@@ -367,7 +556,6 @@ export const useDeleteResource = (): UseMutationResult<
         queryKey: RESOURCE_QUERY_KEYS.lists() 
       });
       
-      // Show success toast
       toast.success('Resource deleted successfully!', {
         duration: 3000,
         style: {
@@ -380,39 +568,9 @@ export const useDeleteResource = (): UseMutationResult<
       });
     },
     
-    // Optimistic update - remove from lists
-    onMutate: async (variables) => {
-      const { id } = variables;
-      
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.lists() 
-      });
-      
-      // Snapshot the previous value
-      const previousResource = queryClient.getQueryData<Resource>(
-        RESOURCE_QUERY_KEYS.detail(id)
-      );
-      
-      // Optimistically remove from all list queries
-      queryClient.setQueriesData<Resource[]>(
-        { queryKey: RESOURCE_QUERY_KEYS.lists() },
-        (old) => old?.filter(resource => resource.id !== id)
-      );
-      
-      return { previousResource, id };
-    },
-    
-    // Combined error handling and rollback
-    onError: (err, variables, context) => {
+    onError: (err) => {
       console.error('Delete resource failed:', err);
       
-      // Invalidate all lists to restore data
-      queryClient.invalidateQueries({ 
-        queryKey: RESOURCE_QUERY_KEYS.lists() 
-      });
-      
-      // Show error toast
       toast.error(err.message || 'Failed to delete resource', {
         duration: 4000,
         style: {
@@ -428,85 +586,48 @@ export const useDeleteResource = (): UseMutationResult<
 };
 
 // =================================================================
-// UTILITY HOOKS
+// COMBINED MANAGER HOOK
 // =================================================================
 
 /**
- * Prefetch resources for a specific type
- * Useful for preloading data on hover
+ * Combined hook for resource management (similar to your useResourcesManager)
  */
-export const usePrefetchResourcesByType = () => {
-  const queryClient = useQueryClient();
-
-  return (resourceTypeId: string, filters: Omit<ResourceFilters, 'resourceTypeId'> = {}) => {
-    const queryFilters: ResourceFilters = {
-      ...DEFAULT_RESOURCE_FILTERS,
-      ...filters,
-      resourceTypeId,
-    };
-
-    queryClient.prefetchQuery({
-      queryKey: RESOURCE_QUERY_KEYS.list(queryFilters),
-      queryFn: () => resourcesService.getResources(queryFilters),
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-  };
-};
-
-/**
- * Invalidate all resource queries
- * Useful for global refresh
- */
-export const useInvalidateResources = () => {
-  const queryClient = useQueryClient();
-
-  return () => {
-    queryClient.invalidateQueries({ 
-      queryKey: RESOURCE_QUERY_KEYS.all 
-    });
-  };
-};
-
-/**
- * Get resource query status
- * Useful for debugging and loading states
- */
-export const useResourceQueryStatus = () => {
-  const queryClient = useQueryClient();
+export const useResourcesManager = (selectedResourceTypeId?: string) => {
+  const resourceTypesQuery = useResourceTypes();
+  const resourcesQuery = useResourcesByType(selectedResourceTypeId);
+  const createResourceMutation = useCreateResource();
+  const updateResourceMutation = useUpdateResource();
+  const deleteResourceMutation = useDeleteResource();
 
   return {
-    getResourceTypesStatus: () => queryClient.getQueryState(RESOURCE_QUERY_KEYS.types()),
-    getResourcesStatus: (filters: ResourceFilters) => 
-      queryClient.getQueryState(RESOURCE_QUERY_KEYS.list(filters)),
-    getResourceStatus: (id: string) => 
-      queryClient.getQueryState(RESOURCE_QUERY_KEYS.detail(id)),
+    // Data
+    resourceTypes: resourceTypesQuery.data || [],
+    resources: resourcesQuery.data || [],
+    
+    // Loading states
+    isLoading: resourceTypesQuery.isLoading || resourcesQuery.isLoading,
+    isError: resourceTypesQuery.isError || resourcesQuery.isError,
+    error: resourceTypesQuery.error || resourcesQuery.error,
+    
+    // Mutation states
+    isCreating: createResourceMutation.isPending,
+    isUpdating: updateResourceMutation.isPending,
+    isDeleting: deleteResourceMutation.isPending,
+    isMutating: createResourceMutation.isPending || updateResourceMutation.isPending || deleteResourceMutation.isPending,
+    
+    // Operations
+    createResourceAsync: createResourceMutation.mutateAsync,
+    updateResourceAsync: updateResourceMutation.mutateAsync,
+    deleteResourceAsync: deleteResourceMutation.mutateAsync,
+    
+    // Refetch
+    refetchResources: resourcesQuery.refetch,
+    refetchResourceTypes: resourceTypesQuery.refetch,
+    refetchAll: () => {
+      resourceTypesQuery.refetch();
+      resourcesQuery.refetch();
+    }
   };
 };
 
-// =================================================================
-// HEALTH CHECK HOOK
-// =================================================================
-
-/**
- * Resources API health check
- * Used for debugging and monitoring
- */
-export const useResourcesHealth = (): UseQueryResult<{ status: string; timestamp: string }, Error> => {
-  return useQuery({
-    queryKey: [...RESOURCE_QUERY_KEYS.all, 'health'],
-    queryFn: () => resourcesService.checkHealth(),
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
-    retry: 1,
-  });
-};
-
-// Note: All hooks are already exported individually above with 'export const'
-// No need for additional export block
-
-// Export types for external use
-export type {
-  UseQueryResult,
-  UseMutationResult,
-};
+export default useResourcesManager;

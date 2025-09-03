@@ -1,879 +1,659 @@
-// src/hooks/useContacts.ts - FIXED VERSION (No Infinite Loop)
+// src/hooks/useContacts.ts - COMPLETE FIXED VERSION
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import contactService from '../services/contactService';
-import { 
-  Contact, 
-  ContactFilters, 
-  ContactSearchRequest,
-  CreateContactRequest, 
-  UpdateContactRequest,
-  ContactStats,
-  PaginatedResponse,
-  ContactListHook,
-  ContactHook,
-  ContactMutationHook,
-  ContactSearchHook,
-  ContactStatsHook
-} from '../types/contact';
 import { useAuth } from '../context/AuthContext';
-import toast from 'react-hot-toast';
+import api from '../services/api';
+import { useToast } from '@/components/ui/use-toast';
 
-// const contactService = new ContactService();
+// =================================================================
+// TYPES
+// =================================================================
 
+export interface ContactFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: 'active' | 'inactive' | 'archived' | 'all';
+  type?: 'individual' | 'corporate';
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  classifications?: string[];
+  user_status?: 'all' | 'user' | 'not_user';
+  show_duplicates?: boolean;
+  includeInactive?: boolean;
+  includeArchived?: boolean;
+}
 
-// FIXED: Custom hook for contact list with filtering and pagination
-export const useContactList = (initialFilters: ContactFilters = {}): ContactListHook => {
+export interface Contact {
+  id: string;
+  type: 'individual' | 'corporate';
+  status: 'active' | 'inactive' | 'archived';
+  name?: string;
+  company_name?: string;
+  displayName: string;
+  salutation?: string;
+  designation?: string;
+  department?: string;
+  classifications: string[];
+  tags: any[];
+  contact_channels: ContactChannel[];
+  addresses: ContactAddress[];
+  contact_addresses?: ContactAddress[]; // Alias
+  contact_persons?: Contact[];
+  parent_contacts?: Contact[];
+  notes?: string;
+  tenant_id: string;
+  auth_user_id?: string;
+  created_at: string;
+  updated_at: string;
+  is_live: boolean;
+}
+
+export interface ContactChannel {
+  id: string;
+  contact_id: string;
+  channel_type: string;
+  value: string;
+  country_code?: string;
+  is_primary: boolean;
+  is_verified: boolean;
+  notes?: string;
+}
+
+export interface ContactAddress {
+  id: string;
+  contact_id: string;
+  type: string;
+  label?: string;
+  address_line1: string;
+  address_line2?: string;
+  city: string;
+  state_code: string;
+  country_code: string;
+  postal_code?: string;
+  google_pin?: string;
+  is_primary: boolean;
+  notes?: string;
+}
+
+export interface CreateContactRequest {
+  type: 'individual' | 'corporate';
+  status?: 'active' | 'inactive' | 'archived';
+  name?: string;
+  company_name?: string;
+  salutation?: string;
+  designation?: string;
+  department?: string;
+  classifications: string[];
+  tags?: any[];
+  contact_channels: Omit<ContactChannel, 'id' | 'contact_id'>[];
+  addresses?: Omit<ContactAddress, 'id' | 'contact_id'>[];
+  contact_persons?: any[];
+  compliance_numbers?: any[];
+  notes?: string;
+  force_create?: boolean;
+}
+
+export interface UpdateContactRequest extends Partial<CreateContactRequest> {
+  // All fields optional for updates
+}
+
+export interface ContactStats {
+  total: number;
+  active: number;
+  inactive: number;
+  archived: number;
+  by_type?: {
+    individual: number;
+    corporate: number;
+  };
+  by_classification?: Record<string, number>;
+  duplicates?: number;
+}
+
+// =================================================================
+// CUSTOM HOOKS
+// =================================================================
+
+/**
+ * Hook to list contacts with filtering and pagination
+ * FIXED: Properly handles environment and tenant filtering
+ */
+export const useContactList = (initialFilters: ContactFilters) => {
+  const { currentTenant, isLive } = useAuth();
+  const { toast } = useToast();
   const [data, setData] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState<{
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  } | null>(null);
+  const [pagination, setPagination] = useState<any>(null);
+  const [filters, setFilters] = useState(initialFilters);
   
-  const [filters, setFilters] = useState<ContactFilters>({
-    page: 1,
-    limit: 20,
-    ...initialFilters
-  });
-  
-  const { isAuthenticated, currentTenant } = useAuth();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const filtersRef = useRef(filters);
-  const hasFetchedRef = useRef(false); // FIXED: Track if we've fetched once
+  // Use ref to track the current request to prevent race conditions
+  const requestIdRef = useRef(0);
 
-  // FIXED: Update ref when filters change (prevent stale closures)
-  useEffect(() => {
-    filtersRef.current = filters;
-  }, [filters]);
-
-  // FIXED: Stable fetchContacts function
-  const fetchContacts = useCallback(async (filtersToUse?: ContactFilters) => {
-    if (!isAuthenticated || !currentTenant) {
-      setLoading(false);
+  const fetchContacts = useCallback(async () => {
+    // Validate tenant
+    if (!currentTenant?.id) {
+      console.warn('No tenant selected, skipping contact fetch');
+      setError('No workspace selected');
+      setData([]);
       return;
     }
 
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
+    const currentRequestId = ++requestIdRef.current;
+    setLoading(true);
+    setError(null);
 
     try {
-      setLoading(true);
-      setError(null);
-
-      const currentFilters = filtersToUse || filtersRef.current;
-      const response = await contactService.listContacts(currentFilters);
-
-      // Check if request was aborted
-      if (abortControllerRef.current?.signal.aborted) {
-        return;
-      }
-
-      setData(response.data);
-      setPagination(response.pagination || null);
-      hasFetchedRef.current = true; // FIXED: Mark as fetched
-    } catch (err: any) {
-      // Don't set error if request was aborted
-      if (err.name === 'AbortError') {
-        return;
-      }
-
-      const errorMessage = err.message || 'Failed to load contacts';
-      setError(errorMessage);
+      // Build query parameters
+      const params = new URLSearchParams();
       
-      // Only show toast for non-network errors
-      if (!err.message?.includes('Network') && !err.message?.includes('offline')) {
-        toast.error(errorMessage, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '14px'
-          },
-        });
+      // Add all filters to params
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          if (key === 'classifications' && Array.isArray(value) && value.length > 0) {
+            // FIXED: Send classifications as comma-separated string
+            params.append(key, value.join(','));
+          } else if (key === 'includeInactive' || key === 'includeArchived' || key === 'show_duplicates') {
+            // Boolean flags
+            if (value === true) {
+              params.append(key, 'true');
+            }
+          } else if (Array.isArray(value)) {
+            // Other arrays
+            if (value.length > 0) {
+              params.append(key, value.join(','));
+            }
+          } else {
+            // All other values
+            params.append(key, String(value));
+          }
+        }
+      });
+
+      // Debug logging
+      console.log('=== CONTACT LIST REQUEST ===');
+      console.log('Tenant ID:', currentTenant.id);
+      console.log('Environment:', isLive ? 'live' : 'test');
+      console.log('Filters:', filters);
+      console.log('Query params:', params.toString());
+      console.log('Headers being sent:', {
+        'x-tenant-id': currentTenant.id,
+        'x-environment': isLive ? 'live' : 'test'
+      });
+
+      // Make the API request with proper headers
+      const response = await api.get(`/api/contacts?${params.toString()}`, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test', // CRITICAL: Send environment header
+        }
+      });
+
+      // Only update state if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        if (response.data.success) {
+          setData(response.data.data || []);
+          setPagination(response.data.pagination);
+          
+          console.log(`Fetched ${response.data.data?.length || 0} contacts for ${isLive ? 'LIVE' : 'TEST'} environment`);
+        } else {
+          const errorMsg = response.data.error || 'Failed to fetch contacts';
+          setError(errorMsg);
+          console.error('API returned error:', errorMsg);
+        }
+      }
+    } catch (err: any) {
+      // Only update state if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        console.error('Error fetching contacts:', err);
+        const errorMsg = err.response?.data?.error || err.message || 'Failed to fetch contacts';
+        setError(errorMsg);
+        
+        // Show toast for errors (except initial load)
+        if (filters.page !== 1) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: errorMsg
+          });
+        }
       }
     } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
+      // Only update loading state if this is still the latest request
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [isAuthenticated, currentTenant]); // FIXED: Only depend on auth state
+  }, [currentTenant?.id, isLive, filters, toast]);
 
-  // FIXED: Update filters function
-  const updateFilters = useCallback((newFilters: Partial<ContactFilters>) => {
-    const updatedFilters = { ...filtersRef.current, ...newFilters, page: 1 };
-    setFilters(updatedFilters);
-    fetchContacts(updatedFilters);
+  // Fetch contacts when dependencies change
+  useEffect(() => {
+    fetchContacts();
   }, [fetchContacts]);
 
-  // FIXED: Load more function
-  const loadMore = useCallback(() => {
-    if (!pagination || pagination.page >= pagination.totalPages) return;
+  // Re-fetch when tenant or environment changes
+  useEffect(() => {
+    console.log('Environment or tenant changed, refreshing contacts');
+    console.log('New environment:', isLive ? 'live' : 'test');
+    console.log('Tenant:', currentTenant?.id);
     
-    const nextPageFilters = { ...filtersRef.current, page: pagination.page + 1 };
-    setFilters(nextPageFilters);
-    fetchContacts(nextPageFilters);
-  }, [pagination, fetchContacts]);
+    if (currentTenant?.id) {
+      fetchContacts();
+    }
+  }, [currentTenant?.id, isLive]);
 
-  // FIXED: Refetch function
+  const updateFilters = useCallback((newFilters: ContactFilters) => {
+    setFilters(newFilters);
+  }, []);
+
   const refetch = useCallback(() => {
-    fetchContacts(filtersRef.current);
+    fetchContacts();
   }, [fetchContacts]);
-
-  // FIXED: Initial load - only once when auth changes
-  useEffect(() => {
-    if (isAuthenticated && currentTenant && !hasFetchedRef.current) {
-      fetchContacts(filtersRef.current);
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [isAuthenticated, currentTenant]); // REMOVED fetchContacts from deps
-
-  // FIXED: Event listeners - stable functions
-  useEffect(() => {
-    const handleContactCreated = () => {
-      if (hasFetchedRef.current) {
-        fetchContacts(filtersRef.current);
-      }
-    };
-    const handleContactUpdated = () => {
-      if (hasFetchedRef.current) {
-        fetchContacts(filtersRef.current);
-      }
-    };
-    const handleContactDeleted = () => {
-      if (hasFetchedRef.current) {
-        fetchContacts(filtersRef.current);
-      }
-    };
-
-    window.addEventListener('contact-created', handleContactCreated);
-    window.addEventListener('contact-updated', handleContactUpdated);
-    window.addEventListener('contact-deleted', handleContactDeleted);
-
-    return () => {
-      window.removeEventListener('contact-created', handleContactCreated);
-      window.removeEventListener('contact-updated', handleContactUpdated);
-      window.removeEventListener('contact-deleted', handleContactDeleted);
-    };
-  }, []); // FIXED: Empty deps - use refs for stable handlers
 
   return {
     data,
+    contacts: data, // Alias for compatibility
     loading,
     error,
     pagination,
     refetch,
-    loadMore,
-    hasNextPage: pagination ? pagination.page < pagination.totalPages : false,
-    updateFilters
+    updateFilters,
+    filters,
+    currentEnvironment: isLive ? 'live' : 'test'
   };
 };
 
-// FIXED: Custom hook for single contact
-export const useContact = (contactId: string): ContactHook => {
-  const [data, setData] = useState<Contact | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const { isAuthenticated, currentTenant } = useAuth();
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const hasFetchedRef = useRef(false); // FIXED: Track if we've fetched
-
-  // FIXED: Stable fetchContact function
-  const fetchContact = useCallback(async () => {
-    if (!isAuthenticated || !currentTenant || !contactId) {
-      setLoading(false);
-      return;
-    }
-
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const contact = await contactService.getContact(contactId);
-
-      // Check if request was aborted
-      if (abortControllerRef.current?.signal.aborted) {
-        return;
-      }
-
-      setData(contact);
-      hasFetchedRef.current = true; // FIXED: Mark as fetched
-    } catch (err: any) {
-      // Don't set error if request was aborted
-      if (err.name === 'AbortError') {
-        return;
-      }
-
-      const errorMessage = err.message || 'Failed to load contact';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [isAuthenticated, currentTenant, contactId]);
-
-  // FIXED: Refetch function
-  const refetch = useCallback(() => {
-    fetchContact();
-  }, [fetchContact]);
-
-  // FIXED: Initial load - only once
-  useEffect(() => {
-    if (isAuthenticated && currentTenant && contactId && !hasFetchedRef.current) {
-      fetchContact();
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, [isAuthenticated, currentTenant, contactId]); // REMOVED fetchContact from deps
-
-  // FIXED: Event listener for updates
-  useEffect(() => {
-    const handleContactUpdated = (event: CustomEvent) => {
-      if (event.detail?.contactId === contactId && hasFetchedRef.current) {
-        fetchContact();
-      }
-    };
-
-    window.addEventListener('contact-updated', handleContactUpdated as EventListener);
-
-    return () => {
-      window.removeEventListener('contact-updated', handleContactUpdated as EventListener);
-    };
-  }, [contactId]); // REMOVED fetchContact from deps
-
-  return {
-    data,
-    loading,
-    error,
-    refetch
-  };
-};
-
-// FIXED: Custom hook for contact statistics
-export const useContactStats = (): ContactStatsHook => {
+/**
+ * Hook to get contact statistics
+ * FIXED: Properly handles environment filtering
+ */
+export const useContactStats = (filters?: Partial<ContactFilters>) => {
+  const { currentTenant, isLive } = useAuth();
   const [data, setData] = useState<ContactStats | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const { isAuthenticated, currentTenant } = useAuth();
-  const hasFetchedRef = useRef(false); // FIXED: Track if we've fetched
 
-  // FIXED: Stable fetchStats function  
   const fetchStats = useCallback(async () => {
-    if (!isAuthenticated || !currentTenant) {
-      setLoading(false);
+    if (!currentTenant?.id) {
+      setError('No workspace selected');
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
 
-      const stats = await contactService.getContactStats();
-      setData(stats);
-      hasFetchedRef.current = true; // FIXED: Mark as fetched
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (key === 'classifications' && Array.isArray(value) && value.length > 0) {
+              params.append(key, value.join(','));
+            } else if (!Array.isArray(value)) {
+              params.append(key, String(value));
+            }
+          }
+        });
+      }
+
+      console.log('Fetching contact stats for environment:', isLive ? 'live' : 'test');
+
+      const response = await api.get(`/api/contacts/stats?${params.toString()}`, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test', // CRITICAL: Send environment header
+        }
+      });
+
+      if (response.data.success) {
+        setData(response.data.data);
+      } else {
+        setError(response.data.error || 'Failed to fetch stats');
+      }
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to load contact statistics';
-      setError(errorMessage);
+      console.error('Error fetching contact stats:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch stats');
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, currentTenant]);
+  }, [currentTenant?.id, isLive, filters]);
 
-  // FIXED: Refetch function
-  const refetch = useCallback(() => {
+  useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
-  // FIXED: Initial load - only once
-  useEffect(() => {
-    if (isAuthenticated && currentTenant && !hasFetchedRef.current) {
-      fetchStats();
-    }
-  }, [isAuthenticated, currentTenant]); // REMOVED fetchStats from deps
-
-  // FIXED: Event listeners with debounce
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    const handleContactChange = () => {
-      if (hasFetchedRef.current) {
-        // Debounce stats refresh
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          fetchStats();
-        }, 1000);
-      }
-    };
-
-    window.addEventListener('contact-created', handleContactChange);
-    window.addEventListener('contact-updated', handleContactChange);
-    window.addEventListener('contact-deleted', handleContactChange);
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('contact-created', handleContactChange);
-      window.removeEventListener('contact-updated', handleContactChange);
-      window.removeEventListener('contact-deleted', handleContactChange);
-    };
-  }, []); // FIXED: Empty deps - use refs
-
   return {
     data,
     loading,
     error,
-    refetch
+    refetch: fetchStats
   };
 };
 
-// Rest of the hooks remain the same but with similar fixes...
-// (useCreateContact, useUpdateContact, etc. - these don't have infinite loop issues)
-
-
-export const useCreateContact = (): ContactMutationHook => {
-  const [loading, setLoading] = useState<boolean>(false);
+/**
+ * Hook to get a single contact by ID
+ * FIXED: Properly handles environment filtering
+ */
+export const useContact = (contactId: string) => {
+  const { currentTenant, isLive } = useAuth();
+  const [data, setData] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mutate = useCallback(async (contactData: CreateContactRequest): Promise<Contact> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const contact = await contactService.createContact(contactData);
-
-      toast.success('Contact created successfully!', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      // Emit event for other hooks to listen
-      window.dispatchEvent(new CustomEvent('contact-created', { 
-        detail: { contact } 
-      }));
-
-      return contact;
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to create contact';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
-
-  return {
-    mutate,
-    loading,
-    error,
-    reset
-  };
-};
-
-export const useUpdateContact = (): ContactMutationHook => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutate = useCallback(async (data: { contactId: string; updates: UpdateContactRequest }): Promise<Contact> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const contact = await contactService.updateContact(data.contactId, data.updates);
-
-      toast.success('Contact updated successfully!', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      // Emit event for other hooks to listen
-      window.dispatchEvent(new CustomEvent('contact-updated', { 
-        detail: { contact, contactId: data.contactId } 
-      }));
-
-      return contact;
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to update contact';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
-
-  return {
-    mutate,
-    loading,
-    error,
-    reset
-  };
-};
-
-// Export other hooks (they don't have infinite loop issues)
-export const useUpdateContactStatus = () => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutate = useCallback(async (contactId: string, status: 'active' | 'inactive' | 'archived'): Promise<Contact> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const contact = await contactService.updateContactStatus(contactId, status);
-
-      const statusLabels = {
-        active: 'activated',
-        inactive: 'deactivated', 
-        archived: 'archived'
-      };
-
-      toast.success(`Contact ${statusLabels[status]} successfully!`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      window.dispatchEvent(new CustomEvent('contact-updated', { 
-        detail: { contact, contactId } 
-      }));
-
-      return contact;
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to update contact status';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
-
-  return {
-    mutate,
-    loading,
-    error,
-    reset
-  };
-};
-
-export const useDeleteContact = () => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutate = useCallback(async (contactId: string, force: boolean = false): Promise<void> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      await contactService.deleteContact(contactId, force);
-
-      toast.success('Contact deleted successfully!', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      window.dispatchEvent(new CustomEvent('contact-deleted', { 
-        detail: { contactId } 
-      }));
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to delete contact';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
-
-  return {
-    mutate,
-    loading,
-    error,
-    reset
-  };
-};
-
-// src/hooks/useContacts.ts - UPDATES NEEDED
-
-// UPDATE: Search hook to handle ContactSearchResult[]
-export const useContactSearch = (): ContactSearchHook => {
-  const [data, setData] = useState<ContactSearchResult[]>([]); // ← CHANGED TYPE
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const { isAuthenticated, currentTenant } = useAuth();
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const search = useCallback(async (query: string, filters?: ContactFilters) => {
-    if (!isAuthenticated || !currentTenant || !query.trim()) {
-      setData([]);
+  const fetchContact = useCallback(async () => {
+    if (!currentTenant?.id || !contactId) {
       return;
     }
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    abortControllerRef.current = new AbortController();
+    setLoading(true);
+    setError(null);
 
     try {
-      setLoading(true);
-      setError(null);
+      console.log(`Fetching contact ${contactId} for ${isLive ? 'LIVE' : 'TEST'} environment`);
 
-      const searchRequest: ContactSearchRequest = {
-        query: query.trim(),
-        filters,
-        fuzzy: true,
-        includeRelationships: true // ← ADD: Include parent/child relationships
-      };
+      const response = await api.get(`/api/contacts/${contactId}`, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test',
+        }
+      });
 
-      const response = await contactService.searchContacts(searchRequest);
-
-      if (abortControllerRef.current?.signal.aborted) {
-        return;
+      if (response.data.success) {
+        setData(response.data.data);
+      } else {
+        setError(response.data.error || 'Contact not found');
       }
-
-      setData(response.data); // ← Now ContactSearchResult[]
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        return;
-      }
-
-      const errorMessage = err.message || 'Search failed';
-      setError(errorMessage);
-      setData([]);
+      console.error('Error fetching contact:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch contact');
     } finally {
       setLoading(false);
-      abortControllerRef.current = null;
     }
-  }, [isAuthenticated, currentTenant]);
-
-  const clear = useCallback(() => {
-    setData([]);
-    setError(null);
-    
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  }, []);
+  }, [contactId, currentTenant?.id, isLive]);
 
   useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+    fetchContact();
+  }, [fetchContact]);
 
   return {
-    search,
     data,
     loading,
     error,
-    clear
+    refetch: fetchContact
   };
 };
 
-// ADD: New hook for managing parent-child relationships
-export const useContactRelationships = () => {
-  const [loading, setLoading] = useState<boolean>(false);
+/**
+ * Hook to create a contact
+ * FIXED: Properly handles environment
+ */
+export const useCreateContact = () => {
+  const { currentTenant, isLive } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Link individual to company
-  const linkToParent = useCallback(async (contactId: string, parentContactId: string): Promise<Contact> => {
+  const mutate = async (contactData: CreateContactRequest): Promise<Contact> => {
+    if (!currentTenant?.id) {
+      throw new Error('No workspace selected');
+    }
+
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
+      console.log(`Creating contact in ${isLive ? 'LIVE' : 'TEST'} environment`);
 
-      // Get current contact
-      const contact = await contactService.getContact(contactId);
-      const currentParentIds = contact.parent_contact_ids || [];
-      
-      // Add new parent if not already linked
-      if (!currentParentIds.includes(parentContactId)) {
-        const updatedParentIds = [...currentParentIds, parentContactId];
-        
-        const updatedContact = await contactService.updateContact(contactId, {
-          parent_contact_ids: updatedParentIds
-        });
+      const response = await api.post('/api/contacts', contactData, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test',
+        }
+      });
 
-        toast.success('Contact linked to company successfully');
-        
-        // Emit event for other hooks to listen
-        window.dispatchEvent(new CustomEvent('contact-updated', { 
-          detail: { contact: updatedContact, contactId } 
-        }));
-
-        return updatedContact;
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to create contact');
       }
-      
-      return contact;
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to link contact to company';
-      setError(errorMessage);
-      toast.error(errorMessage);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to create contact';
+      setError(errorMsg);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  // Unlink individual from company
-  const unlinkFromParent = useCallback(async (contactId: string, parentContactId: string): Promise<Contact> => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Get current contact
-      const contact = await contactService.getContact(contactId);
-      const currentParentIds = contact.parent_contact_ids || [];
-      
-      // Remove parent from array
-      const updatedParentIds = currentParentIds.filter(id => id !== parentContactId);
-      
-      const updatedContact = await contactService.updateContact(contactId, {
-        parent_contact_ids: updatedParentIds
-      });
-
-      toast.success('Contact unlinked from company successfully');
-      
-      // Emit event for other hooks to listen
-      window.dispatchEvent(new CustomEvent('contact-updated', { 
-        detail: { contact: updatedContact, contactId } 
-      }));
-
-      return updatedContact;
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to unlink contact from company';
-      setError(errorMessage);
-      toast.error(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
-
-  return {
-    linkToParent,
-    unlinkFromParent,
-    loading,
-    error,
-    reset
   };
-};
-
-export const useSendInvitation = () => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutate = useCallback(async (contactId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const result = await contactService.sendInvitation(contactId);
-
-      toast.success(result.message || 'Invitation sent successfully!', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      return result;
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to send invitation';
-      setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '14px'
-        },
-      });
-
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reset = useCallback(() => {
-    setError(null);
-  }, []);
 
   return {
     mutate,
     loading,
-    error,
-    reset
+    error
   };
 };
 
-export const useCheckDuplicates = () => {
-  const [loading, setLoading] = useState<boolean>(false);
+/**
+ * Hook to update a contact
+ * FIXED: Properly handles environment
+ */
+export const useUpdateContact = () => {
+  const { currentTenant, isLive } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const check = useCallback(async (contactData: Partial<CreateContactRequest>) => {
-    try {
-      setLoading(true);
-      setError(null);
+  const mutate = async ({ 
+    contactId, 
+    updates 
+  }: { 
+    contactId: string; 
+    updates: UpdateContactRequest 
+  }): Promise<Contact> => {
+    if (!currentTenant?.id) {
+      throw new Error('No workspace selected');
+    }
 
-      const result = await contactService.checkDuplicates(contactData);
-      return result;
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`Updating contact ${contactId} in ${isLive ? 'LIVE' : 'TEST'} environment`);
+
+      const response = await api.put(`/api/contacts/${contactId}`, updates, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test',
+        }
+      });
+
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to update contact');
+      }
     } catch (err: any) {
-      const errorMessage = err.message || 'Failed to check for duplicates';
-      setError(errorMessage);
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to update contact';
+      setError(errorMsg);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
-  const reset = useCallback(() => {
+  return {
+    mutate,
+    loading,
+    error
+  };
+};
+
+/**
+ * Hook to update contact status
+ * FIXED: Properly handles environment
+ */
+export const useUpdateContactStatus = () => {
+  const { currentTenant, isLive } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const mutate = async (contactId: string, status: string): Promise<Contact> => {
+    if (!currentTenant?.id) {
+      throw new Error('No workspace selected');
+    }
+
+    setLoading(true);
     setError(null);
-  }, []);
+
+    try {
+      console.log(`Updating contact ${contactId} status to ${status} in ${isLive ? 'LIVE' : 'TEST'} environment`);
+
+      const response = await api.patch(`/api/contacts/${contactId}`, 
+        { status }, 
+        {
+          headers: {
+            'x-tenant-id': currentTenant.id,
+            'x-environment': isLive ? 'live' : 'test',
+          }
+        }
+      );
+
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to update contact status');
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to update status';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    mutate,
+    loading,
+    error
+  };
+};
+
+/**
+ * Hook to check for duplicate contacts
+ * FIXED: Properly handles environment
+ */
+export const useCheckDuplicates = () => {
+  const { currentTenant, isLive } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const check = async (contactData: any): Promise<any> => {
+    if (!currentTenant?.id) {
+      throw new Error('No workspace selected');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`Checking duplicates in ${isLive ? 'LIVE' : 'TEST'} environment`);
+
+      const response = await api.post('/api/contacts/duplicates', contactData, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test',
+        }
+      });
+
+      if (response.data.success) {
+        return response.data.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to check duplicates');
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to check duplicates';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return {
     check,
     loading,
-    error,
-    reset
+    error
   };
+};
+
+/**
+ * Hook to send invitation to contact
+ * FIXED: Properly handles environment
+ */
+export const useSendInvitation = () => {
+  const { currentTenant, isLive } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const mutate = async (contactId: string): Promise<any> => {
+    if (!currentTenant?.id) {
+      throw new Error('No workspace selected');
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log(`Sending invitation to contact ${contactId} in ${isLive ? 'LIVE' : 'TEST'} environment`);
+
+      const response = await api.post(`/api/contacts/${contactId}/invite`, {}, {
+        headers: {
+          'x-tenant-id': currentTenant.id,
+          'x-environment': isLive ? 'live' : 'test',
+        }
+      });
+
+      if (response.data.success) {
+        toast({
+          title: "Success",
+          description: response.data.message || "Invitation sent successfully"
+        });
+        return response.data;
+      } else {
+        throw new Error(response.data.error || 'Failed to send invitation');
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to send invitation';
+      setError(errorMsg);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMsg
+      });
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return {
+    mutate,
+    loading,
+    error
+  };
+};
+
+// Export all hooks
+export {
+  ContactFilters,
+  Contact,
+  ContactChannel,
+  ContactAddress,
+  CreateContactRequest,
+  UpdateContactRequest,
+  ContactStats
 };

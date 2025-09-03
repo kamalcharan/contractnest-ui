@@ -53,6 +53,22 @@ export interface TaxRateWithUI extends TaxRate {
   hasUnsavedChanges?: boolean;
 }
 
+export interface DuplicateErrorResponse {
+  error: string;
+  code: 'DUPLICATE_TAX_RATE';
+  existing_rate: {
+    name: string;
+    rate: number;
+    id: string;
+  };
+  user_input?: {
+    name: string;
+    normalized_name: string;
+    rate: number;
+  };
+}
+
+
 /**
  * Component state interfaces
  */

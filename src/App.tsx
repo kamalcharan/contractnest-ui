@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -27,18 +27,10 @@ initSentry();
 import MainLayout from './components/layout/MainLayout';
 
 // Catalog Pages
-// import ServicesPage from './pages/catalog/ServicesPage';
-// import EquipmentsPage from './pages/catalog/EquipmentsPage';
-// import AssetsPage from './pages/catalog/AssetsPage';
-// import SparePartsPage from './pages/catalog/SparePartsPage';
-// import  CatalogItemFormPage  from './pages/catalog/CatalogItemFormPage';
-// import CatalogItemDetailPage from './pages/catalog/CatalogItemDetailPage';
-
-import CatalogPage from './pages/catalog/CatalogPage';
-import EditServicePage from './pages/catalog/EditServicePage';
-import ServiceDetailsPage from './pages/catalog/ServiceDetailsPage';
-import CreateServicePage from './pages/catalog/CreateServicePage';
-import ResourcesPage from '@/pages/settings/Resources';
+import CatalogPage from './pages/catalog/index';
+import CreateServicePage from './pages/catalog/create';
+import ServiceViewPage from './pages/catalog/view';
+import ServiceEditPage from './pages/catalog/edit';
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -49,6 +41,17 @@ import InvitationRegisterPage from './pages/auth/InvitationRegisterPage';
 import GoogleCallbackPage from './pages/auth/GoogleCallbackPage';
 import SelectTenantPage from './pages/auth/SelectTenantPage';
 import CreateTenantPage from './pages/auth/CreateTenantPage';
+
+// Onboarding imports
+
+import WelcomeStep from './pages/onboarding/steps/WelcomeStep';
+import OnboardingIndexPage from './pages/onboarding/index';
+import OnboardingLayout from './components/onboarding/OnboardingLayout';
+import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
+import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
+import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
+import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
+
 
 //VaNi Pages
 import VaNiDashboard from './vani/pages/VaNiDashboard';
@@ -79,13 +82,16 @@ import {
   ErrorPage,
   ApiServerDownPage
 } from './pages/misc';
-import TaxSettings from './pages/settings/TaxSettings';
+import TaxSettingsPage from './pages/settings/TaxSettings';
 
 // Main pages
 import Dashboard from './pages/Dashboard';
 import SettingsPage from './pages/settings'; 
 import ListOfValuesPage from './pages/settings/LOV'; 
 import StorageSettingsPage from './pages/settings/storagesettings';
+
+// ✅ FIXED: Import the actual Resources page instead of placeholder
+import ResourcesPage from './pages/settings/Resources';
 
 // Service Contracts - Templates
 import MyTemplatesPage from './pages/service-contracts/templates';
@@ -99,6 +105,7 @@ import ContractsPage from './pages/service-contracts/contracts';
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
 import UserViewPage from './pages/settings/users/userview';
+import UserProfilePage from './pages/settings/users/user-profile';
 
 // Business Profile pages
 import BusinessProfilePage from './pages/settings/business-profile';
@@ -168,8 +175,9 @@ testAPIConnection();
 
 // Placeholder components for pages we haven't built yet
 const ProfilePage = () => <div className="p-8">Profile Page (Coming Soon)</div>;
-const OnboardingCompletePage = () => <div className="p-8">Onboarding Complete (Coming Soon)</div>;
 const TeamEditPage = () => <div className="p-8">Edit Team Member Page (Coming Soon)</div>;
+
+// ✅ REMOVED: Placeholder ResourcesPage - now using real import
 
 // Smart Home Page Component - Shows landing page OR redirects based on auth
 const SmartHomePage: React.FC = () => {
@@ -280,24 +288,29 @@ const AppContent: React.FC = () => {
             }
           />
           
-          {/* Onboarding Routes */}
+          {/* Complete Onboarding Routes - with Layout */}
           <Route
-            path="/onboarding/business-profile"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <OnboardingBusinessProfilePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/onboarding/complete"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <OnboardingCompletePage />
-              </ProtectedRoute>
-            }
-          />
-          
+  path="/onboarding"
+  element={
+    <ProtectedRoute requireTenant={true}>
+      <OnboardingLayout />
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<OnboardingIndexPage />} />
+  <Route path="welcome" element={<WelcomeStep />} />
+  <Route path="storage-setup" element={<StorageSetupStep />} />
+  <Route path="user-profile" element={<UserProfileStep />} />
+ <Route path="/onboarding/theme-selection" element={<ThemeSelectionStep />} />
+ <Route path="/onboarding/business-basic" element={<BusinessBasicStep />} />
+  <Route path="business-branding" element={<div>Business Branding Step (Coming Soon)</div>} />
+  <Route path="business-preferences" element={<div>Business Preferences Step (Coming Soon)</div>} />
+  <Route path="master-data" element={<div>Master Data Step (Coming Soon)</div>} />
+  <Route path="team-invite" element={<div>Team Invite Step (Coming Soon)</div>} />
+  <Route path="product-tour" element={<div>Product Tour Step (Coming Soon)</div>} />
+  <Route path="sample-contract" element={<div>Sample Contract Step (Coming Soon)</div>} />
+  <Route path="complete" element={<div>Complete Step (Coming Soon)</div>} />
+</Route>
           {/* Protected Routes with MainLayout - Your Original Structure */}
           <Route
             path="/dashboard"
@@ -331,9 +344,9 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<CatalogPage />} />
-            <Route path="create" element={<CatalogPage />} />
-            <Route path="edit/:serviceId" element={<EditServicePage />} />
-            <Route path="service/:serviceId" element={<ServiceDetailsPage />} />
+            <Route path="create" element={<CreateServicePage />} />
+            <Route path="view" element={<ServiceViewPage />} />
+            <Route path="edit" element={<ServiceEditPage />} />
           </Route>
 
           {/* Service Contracts Routes */}
@@ -384,6 +397,7 @@ const AppContent: React.FC = () => {
             <Route path="users" element={<UsersPage />} />
             <Route path="users/view/:id" element={<UserViewPage />} />
             <Route path="users/edit/:id" element={<TeamEditPage />} />
+            <Route path="/settings/user-profile" element={<UserProfilePage />} />
 
             {/* Business Profile Settings */}
             <Route path="business-profile" element={<BusinessProfilePage />} />
@@ -391,6 +405,9 @@ const AppContent: React.FC = () => {
             
             {/* Storage Settings */}
             <Route path="configure/storage" element={<StorageSettingsPage />} />
+
+            {/* tax-settings route */}
+            <Route path="tax-settings" element={<TaxSettingsPage />} />
             
             {/* Storage Management Routes */}
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />

@@ -1,0 +1,684 @@
+// src/components/catalog/ServiceCard.tsx
+import React, { useState, useCallback } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
+import { 
+  Package,
+  Users,
+  Eye,
+  Edit,
+  MoreHorizontal,
+  FileText,
+  DollarSign,
+  Settings,
+  Hash,
+  Calendar,
+  Building2,
+  User,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Copy,
+  Trash2,
+  Image as ImageIcon
+} from 'lucide-react';
+
+// Import types
+import { Service } from '../../types/catalog/service';
+
+// Import utilities
+import { formatCurrencyAmount } from '../../utils/catalog/validationSchemas';
+
+interface ServiceCardProps {
+  service: Service;
+  viewType: 'grid' | 'list';
+  isSelected: boolean;
+  onSelect: () => void;
+  onView: () => void;
+  onEdit: () => void;
+  onDuplicate?: () => void;
+  onDelete?: () => void;
+}
+
+const ServiceCard: React.FC<ServiceCardProps> = ({
+  service,
+  viewType,
+  isSelected,
+  onSelect,
+  onView,
+  onEdit,
+  onDuplicate,
+  onDelete
+}) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // Local state for dropdown menu
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Get status configuration
+  const getStatusConfig = useCallback((status: string) => {
+    switch (status) {
+      case 'active':
+        return {
+          color: colors.semantic.success,
+          icon: CheckCircle,
+          label: 'Active'
+        };
+      case 'inactive':
+        return {
+          color: colors.semantic.warning,
+          icon: XCircle,
+          label: 'Inactive'
+        };
+      case 'draft':
+        return {
+          color: colors.utility.secondaryText,
+          icon: Clock,
+          label: 'Draft'
+        };
+      default:
+        return {
+          color: colors.utility.secondaryText,
+          icon: AlertCircle,
+          label: status
+        };
+    }
+  }, [colors]);
+
+  // Get service type configuration
+  const getServiceTypeConfig = useCallback((serviceType: string) => {
+    switch (serviceType) {
+      case 'independent':
+        return {
+          icon: Package,
+          label: 'Independent Service',
+          color: colors.brand.primary
+        };
+      case 'resource_based':
+        return {
+          icon: Users,
+          label: 'Resource-Based Service',
+          color: colors.brand.secondary
+        };
+      default:
+        return {
+          icon: Package,
+          label: 'Service',
+          color: colors.utility.primaryText
+        };
+    }
+  }, [colors]);
+
+  // Get primary pricing
+  const getPrimaryPricing = useCallback(() => {
+    if (!service.pricing_records || service.pricing_records.length === 0) {
+      return null;
+    }
+    
+    // Get first active pricing record
+    const primaryPricing = service.pricing_records.find(p => p.is_active) || service.pricing_records[0];
+    return primaryPricing;
+  }, [service.pricing_records]);
+
+  // Format service description for display
+  const getDisplayDescription = useCallback(() => {
+    if (!service.description) return 'No description available';
+    
+    // Strip HTML tags and truncate for display
+    const plainText = service.description.replace(/<[^>]*>/g, '');
+    return plainText.length > 120 ? plainText.substring(0, 120) + '...' : plainText;
+  }, [service.description]);
+
+  // Get resource count
+  const getResourceCount = useCallback(() => {
+    return service.resource_requirements?.length || 0;
+  }, [service.resource_requirements]);
+
+  const statusConfig = getStatusConfig(service.status);
+  const serviceTypeConfig = getServiceTypeConfig(service.service_type);
+  const primaryPricing = getPrimaryPricing();
+  const resourceCount = getResourceCount();
+
+  // Handle dropdown actions
+  const handleDropdownAction = useCallback((action: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setShowDropdown(false);
+    
+    switch (action) {
+      case 'view':
+        onView();
+        break;
+      case 'edit':
+        onEdit();
+        break;
+      case 'duplicate':
+        onDuplicate?.();
+        break;
+      case 'delete':
+        onDelete?.();
+        break;
+    }
+  }, [onView, onEdit, onDuplicate, onDelete]);
+
+  // Handle card click
+  const handleCardClick = useCallback((event: React.MouseEvent) => {
+    // Don't trigger if clicking on interactive elements
+    if ((event.target as HTMLElement).closest('button, input, a')) {
+      return;
+    }
+    onView();
+  }, [onView]);
+
+  if (viewType === 'grid') {
+    // GRID VIEW
+    return (
+      <div 
+        className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer ${
+          isSelected ? 'ring-2' : ''
+        }`}
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20',
+          '--tw-ring-color': colors.brand.primary
+        } as React.CSSProperties}
+        onClick={handleCardClick}
+      >
+        {/* Selection Checkbox */}
+        <div className="absolute top-3 left-3 z-10">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onSelect}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded"
+            style={{ accentColor: colors.brand.primary }}
+          />
+        </div>
+
+        {/* Service Image */}
+        <div className="relative">
+          {service.image_url ? (
+            <img
+              src={service.image_url}
+              alt={service.service_name}
+              className="w-full h-48 object-cover rounded-t-lg"
+            />
+          ) : (
+            <div 
+              className="w-full h-48 rounded-t-lg flex items-center justify-center"
+              style={{ backgroundColor: colors.utility.primaryBackground }}
+            >
+              <ImageIcon 
+                className="h-12 w-12"
+                style={{ color: colors.utility.secondaryText }}
+              />
+            </div>
+          )}
+          
+          {/* Status Badge */}
+          <div className="absolute top-3 right-3">
+            <span 
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
+              style={{
+                backgroundColor: statusConfig.color + '20',
+                borderColor: statusConfig.color + '40',
+                color: statusConfig.color
+              }}
+            >
+              <statusConfig.icon className="h-3 w-3" />
+              {statusConfig.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Card Content */}
+        <div className="p-4">
+          {/* Service Name & Type */}
+          <div className="mb-3">
+            <div className="flex items-start justify-between gap-2">
+              <h3 
+                className="font-semibold text-lg leading-tight transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {service.service_name}
+              </h3>
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDropdown(!showDropdown);
+                  }}
+                  className="p-1 hover:opacity-80 rounded transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                
+                {/* Dropdown Menu */}
+                {showDropdown && (
+                  <div 
+                    className="absolute right-0 top-full mt-1 w-32 rounded-md shadow-lg border z-20"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.utility.primaryText + '20'
+                    }}
+                  >
+                    <div className="py-1">
+                      <button
+                        onClick={(e) => handleDropdownAction('view', e)}
+                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        <Eye className="h-3 w-3" />
+                        View
+                      </button>
+                      <button
+                        onClick={(e) => handleDropdownAction('edit', e)}
+                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        <Edit className="h-3 w-3" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => handleDropdownAction('duplicate', e)}
+                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        <Copy className="h-3 w-3" />
+                        Duplicate
+                      </button>
+                      <button
+                        onClick={(e) => handleDropdownAction('delete', e)}
+                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                        style={{ color: colors.semantic.error }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* SKU */}
+            {service.sku && (
+              <p 
+                className="text-xs font-mono mt-1 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                SKU: {service.sku}
+              </p>
+            )}
+            
+            {/* Service Type */}
+            <div className="flex items-center gap-1 mt-2">
+              <serviceTypeConfig.icon 
+                className="h-3 w-3"
+                style={{ color: serviceTypeConfig.color }}
+              />
+              <span 
+                className="text-xs transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {serviceTypeConfig.label}
+              </span>
+            </div>
+          </div>
+
+          {/* Description */}
+          <p 
+            className="text-sm mb-4 line-clamp-3 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {getDisplayDescription()}
+          </p>
+
+          {/* Metadata Row */}
+          <div className="flex items-center justify-between mb-4">
+            {/* Resource Count */}
+            {service.service_type === 'resource_based' && (
+              <div className="flex items-center gap-1">
+                <Users 
+                  className="h-3 w-3"
+                  style={{ color: colors.utility.secondaryText }}
+                />
+                <span 
+                  className="text-xs transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  {resourceCount} resource{resourceCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+            
+            {/* Created Date */}
+            <div className="flex items-center gap-1">
+              <Calendar 
+                className="h-3 w-3"
+                style={{ color: colors.utility.secondaryText }}
+              />
+              <span 
+                className="text-xs transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {new Date(service.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+
+          {/* Pricing & Actions */}
+          <div 
+            className="flex items-center justify-between pt-3 border-t"
+            style={{ borderColor: colors.utility.primaryText + '20' }}
+          >
+            {/* Pricing */}
+            <div>
+              {primaryPricing ? (
+                <div>
+                  <span 
+                    className="text-lg font-bold transition-colors"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    {formatCurrencyAmount(primaryPricing.amount, primaryPricing.currency)}
+                  </span>
+                  <span 
+                    className="text-xs ml-1 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {primaryPricing.tax_inclusion === 'inclusive' ? 'inc. tax' : 'exc. tax'}
+                  </span>
+                </div>
+              ) : (
+                <span 
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  No pricing set
+                </span>
+              )}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex gap-1">
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView();
+                }}
+                className="p-1.5 rounded-md transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryText + '20',
+                  color: colors.utility.primaryText
+                }}
+                title="View details"
+              >
+                <Eye className="h-3 w-3" />
+              </button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className="p-1.5 rounded-md transition-colors"
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: '#ffffff'
+                }}
+                title="Edit service"
+              >
+                <Edit className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  } else {
+    // LIST VIEW
+    return (
+      <div 
+        className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer ${
+          isSelected ? 'ring-2' : ''
+        }`}
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: colors.utility.primaryText + '20',
+          '--tw-ring-color': colors.brand.primary
+        } as React.CSSProperties}
+        onClick={handleCardClick}
+      >
+        <div className="p-4">
+          <div className="flex items-center gap-4">
+            {/* Selection Checkbox */}
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={onSelect}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded"
+              style={{ accentColor: colors.brand.primary }}
+            />
+
+            {/* Service Image */}
+            <div className="flex-shrink-0">
+              {service.image_url ? (
+                <img
+                  src={service.image_url}
+                  alt={service.service_name}
+                  className="w-16 h-16 object-cover rounded-md"
+                />
+              ) : (
+                <div 
+                  className="w-16 h-16 rounded-md flex items-center justify-center"
+                  style={{ backgroundColor: colors.utility.primaryBackground }}
+                >
+                  <ImageIcon 
+                    className="h-6 w-6"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Service Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between">
+                <div className="min-w-0 flex-1">
+                  {/* Name & Type */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 
+                      className="font-semibold text-lg truncate transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      {service.service_name}
+                    </h3>
+                    <serviceTypeConfig.icon 
+                      className="h-4 w-4 flex-shrink-0"
+                      style={{ color: serviceTypeConfig.color }}
+                    />
+                  </div>
+                  
+                  {/* SKU & Status */}
+                  <div className="flex items-center gap-3 mb-2">
+                    {service.sku && (
+                      <span 
+                        className="text-xs font-mono transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        SKU: {service.sku}
+                      </span>
+                    )}
+                    <span 
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border"
+                      style={{
+                        backgroundColor: statusConfig.color + '20',
+                        borderColor: statusConfig.color + '40',
+                        color: statusConfig.color
+                      }}
+                    >
+                      <statusConfig.icon className="h-3 w-3" />
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                  
+                  {/* Description */}
+                  <p 
+                    className="text-sm line-clamp-2 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {getDisplayDescription()}
+                  </p>
+                </div>
+
+                {/* Pricing */}
+                <div className="text-right ml-4">
+                  {primaryPricing ? (
+                    <div>
+                      <span 
+                        className="text-lg font-bold transition-colors"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        {formatCurrencyAmount(primaryPricing.amount, primaryPricing.currency)}
+                      </span>
+                      <p 
+                        className="text-xs transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        {primaryPricing.tax_inclusion === 'inclusive' ? 'inc. tax' : 'exc. tax'}
+                      </p>
+                    </div>
+                  ) : (
+                    <span 
+                      className="text-sm transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      No pricing
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Metadata & Actions */}
+            <div className="flex items-center gap-4 flex-shrink-0">
+              {/* Metadata */}
+              <div className="text-right">
+                {service.service_type === 'resource_based' && (
+                  <div className="flex items-center gap-1 mb-1">
+                    <Users 
+                      className="h-3 w-3"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                    <span 
+                      className="text-xs transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {resourceCount} resource{resourceCount !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1">
+                  <Calendar 
+                    className="h-3 w-3"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                  <span 
+                    className="text-xs transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {new Date(service.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-1">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onView();
+                  }}
+                  className="p-1.5 rounded-md transition-colors"
+                  style={{
+                    backgroundColor: colors.utility.secondaryText + '20',
+                    color: colors.utility.primaryText
+                  }}
+                  title="View details"
+                >
+                  <Eye className="h-3 w-3" />
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="p-1.5 rounded-md transition-colors"
+                  style={{
+                    backgroundColor: colors.brand.primary,
+                    color: '#ffffff'
+                  }}
+                  title="Edit service"
+                >
+                  <Edit className="h-3 w-3" />
+                </button>
+                
+                {/* More Actions Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDropdown(!showDropdown);
+                    }}
+                    className="p-1.5 rounded-md transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryText + '20',
+                      color: colors.utility.secondaryText
+                    }}
+                    title="More actions"
+                  >
+                    <MoreHorizontal className="h-3 w-3" />
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  {showDropdown && (
+                    <div 
+                      className="absolute right-0 top-full mt-1 w-32 rounded-md shadow-lg border z-20"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: colors.utility.primaryText + '20'
+                      }}
+                    >
+                      <div className="py-1">
+                        <button
+                          onClick={(e) => handleDropdownAction('duplicate', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={(e) => handleDropdownAction('delete', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.semantic.error }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+};
+
+export default ServiceCard;

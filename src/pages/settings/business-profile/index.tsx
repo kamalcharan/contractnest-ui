@@ -1,7 +1,7 @@
-// src/pages/settings/business-profile/index.tsx - Theme Integrated Version
+// src/pages/settings/business-profile/index.tsx - Updated with Service Contract Management Personas
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil } from 'lucide-react';
+import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
@@ -47,6 +47,18 @@ const BusinessProfilePage = () => {
     
   const country = profile?.country_code ? 
     countries.find(c => c.code === profile.country_code) : null;
+
+  // Get appropriate icon
+  const getBusinessTypeIcon = (typeId: string) => {
+    switch (typeId) {
+      case 'buyer':
+        return ShoppingCart;
+      case 'seller':
+        return Wrench;
+      default:
+        return Building;
+    }
+  };
   
   return (
     <div 
@@ -76,7 +88,7 @@ const BusinessProfilePage = () => {
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
-            Manage your business information and settings
+            Manage your service contract management profile and settings
           </p>
         </div>
       </div>
@@ -108,7 +120,7 @@ const BusinessProfilePage = () => {
               className="mb-6 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
-              You haven't set up your business profile yet. Create one to customize your experience.
+              Set up your business profile to define your role in service contract management and customize your experience.
             </p>
             <button 
               onClick={handleEditClick}
@@ -144,6 +156,200 @@ const BusinessProfilePage = () => {
                 Edit Profile
               </button>
             </div>
+
+            {/* Business Type Persona Card - Featured prominently */}
+            {businessType && (
+              <div 
+                className="rounded-lg border shadow-sm transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: businessType.color + '30',
+                  borderLeft: `4px solid ${businessType.color}`
+                }}
+              >
+                {/* Header Section */}
+                <div className="p-6 pb-4">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-4">
+                      <div 
+                        className="w-14 h-14 rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: businessType.color + '20',
+                          color: businessType.color
+                        }}
+                      >
+                        {React.createElement(getBusinessTypeIcon(businessType.id), { size: 28 })}
+                      </div>
+                      <div>
+                        <h3 
+                          className="font-bold text-2xl transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {businessType.name}
+                        </h3>
+                        <p 
+                          className="text-sm mt-1 font-medium transition-colors"
+                          style={{ color: businessType.color }}
+                        >
+                          Your Service Contract Management Role
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Role Description */}
+                  <div 
+                    className="mb-4 p-4 rounded-lg border"
+                    style={{
+                      backgroundColor: businessType.color + '08',
+                      borderColor: businessType.color + '20'
+                    }}
+                  >
+                    <div className="flex items-start">
+                      <Info 
+                        className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0"
+                        style={{ color: businessType.color }}
+                      />
+                      <p 
+                        className="text-sm leading-relaxed transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        <strong>As a {businessType.name.split(' ')[0]}:</strong> {businessType.helpText}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Examples Section */}
+                <div 
+                  className="px-6 py-4 border-t"
+                  style={{ borderColor: businessType.color + '15' }}
+                >
+                  <h4 
+                    className="font-semibold mb-3 text-base transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Real-World Examples:
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {businessType.examples.map((example, index) => (
+                      <div 
+                        key={index}
+                        className="p-3 rounded-lg border transition-colors"
+                        style={{ 
+                          backgroundColor: businessType.color + '05',
+                          borderColor: businessType.color + '15'
+                        }}
+                      >
+                        <div className="flex items-start">
+                          <span 
+                            className="w-2 h-2 rounded-full mr-3 mt-2 flex-shrink-0"
+                            style={{ backgroundColor: businessType.color }}
+                          />
+                          <span 
+                            className="text-sm leading-relaxed"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {example}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Platform Impact Section */}
+                <div 
+                  className="px-6 py-4 border-t"
+                  style={{ 
+                    borderColor: businessType.color + '15',
+                    backgroundColor: businessType.color + '05'
+                  }}
+                >
+                  <h4 
+                    className="font-semibold mb-3 text-base transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    How This Customizes Your ContractNest Experience:
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {businessType.id === 'buyer' ? (
+                      <>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Dashboard Focus
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Service requests, vendor performance, and SLA compliance tracking
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Key Workflows
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Invoice approval, vendor evaluation, and service quality monitoring
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Priority Tools
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Vendor management, contract compliance, and cost analysis
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Dashboard Focus
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Client relationships, service delivery, and performance metrics
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Key Workflows
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Service scheduling, client communication, and billing management
+                          </div>
+                        </div>
+                        <div className="text-sm">
+                          <div 
+                            className="font-medium mb-1"
+                            style={{ color: businessType.color }}
+                          >
+                            Priority Tools
+                          </div>
+                          <div style={{ color: colors.utility.secondaryText }}>
+                            Client portal, service tracking, and revenue optimization
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -212,7 +418,7 @@ const BusinessProfilePage = () => {
                         className="text-sm transition-colors"
                         style={{ color: colors.utility.secondaryText }}
                       >
-                        {businessType?.name || 'Not specified'} • {industry?.name || 'Not specified'}
+                        {industry?.name || 'Industry not specified'}
                       </div>
                     </div>
                   </div>

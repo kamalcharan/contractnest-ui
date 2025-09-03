@@ -3,6 +3,9 @@ import React, { useRef } from 'react';
 import { useDrop, useDrag } from 'react-dnd';
 import { Trash2, Move, Settings, AlertCircle } from 'lucide-react';
 
+// Import the drag type from BlockLibrary
+import { BLOCK_DRAG_TYPE } from './BlockLibrary';
+
 interface BlockInstance {
   id: string;
   variantId: string;
@@ -40,11 +43,16 @@ const DropZone: React.FC<{
   isLast?: boolean;
 }> = ({ position, onDrop, canDrop, isFirst = false, isLast = false }) => {
   const [{ isOver, canDropHere }, drop] = useDrop({
-    accept: ['block-variant', 'block-instance'],
+    accept: [BLOCK_DRAG_TYPE, 'block-instance'], // Accept both library blocks and existing instances
     drop: (item: any) => {
+      console.log('DropZone: Dropping item at position', position, item);
       onDrop(item, position);
     },
-    canDrop: (item: any) => canDrop(item, position),
+    canDrop: (item: any) => {
+      const canDropResult = canDrop(item, position);
+      console.log('DropZone: Can drop?', canDropResult, 'at position', position);
+      return canDropResult;
+    },
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDropHere: monitor.canDrop()
@@ -90,22 +98,21 @@ const CanvasBlockItem: React.FC<{
 
   const [{ isDragging }, drag] = useDrag({
     type: 'block-instance',
-    item: {
-      type: 'block-instance',
-      instanceId: block.id,
-      sourceIndex: block.position
+    item: () => {
+      const item = {
+        type: 'block-instance',
+        instanceId: block.id,
+        sourceIndex: block.position
+      };
+      console.log('CanvasBlockItem: Starting drag', item);
+      onDragStart(item);
+      return item;
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging()
     }),
-    begin: () => {
-      onDragStart({
-        type: 'block-instance',
-        instanceId: block.id,
-        sourceIndex: block.position
-      });
-    },
     end: () => {
+      console.log('CanvasBlockItem: Ending drag');
       onDragEnd();
     }
   });
@@ -136,7 +143,7 @@ const CanvasBlockItem: React.FC<{
     <div
       ref={ref}
       className={`
-        relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200
+        relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 group
         ${block.isSelected 
           ? 'border-primary bg-primary/10 shadow-lg' 
           : blockStyle
@@ -281,11 +288,26 @@ const TemplateCanvas: React.FC<TemplateCanvasProps> = ({
   onDragStart,
   onDragEnd
 }) => {
+  console.log('TemplateCanvas: Rendering with', blocks.length, 'blocks');
+  
   // Sort blocks by position
   const sortedBlocks = [...blocks].sort((a, b) => a.position - b.position);
 
   const handleBlockSelect = (instanceId: string) => {
     onBlockSelect(instanceId === selectedBlockId ? null : instanceId);
+  };
+
+  // Wrap onDrop to add logging
+  const handleDrop = (item: any, position: number) => {
+    console.log('TemplateCanvas: Handling drop at position', position, 'with item:', item);
+    onDrop(item, position);
+  };
+
+  // Wrap canDrop to add logging  
+  const handleCanDrop = (item: any, position: number) => {
+    const result = canDrop(item, position);
+    console.log('TemplateCanvas: Can drop check:', result, 'for item:', item, 'at position:', position);
+    return result;
   };
 
   return (
@@ -307,8 +329,8 @@ const TemplateCanvas: React.FC<TemplateCanvasProps> = ({
           <div className="group">
             <DropZone 
               position={0} 
-              onDrop={onDrop} 
-              canDrop={canDrop} 
+              onDrop={handleDrop} 
+              canDrop={handleCanDrop} 
               isFirst={true} 
             />
             <EmptyCanvas />
@@ -318,8 +340,8 @@ const TemplateCanvas: React.FC<TemplateCanvasProps> = ({
             {/* Drop zone before first block */}
             <DropZone 
               position={0} 
-              onDrop={onDrop} 
-              canDrop={canDrop} 
+              onDrop={handleDrop} 
+              canDrop={handleCanDrop} 
               isFirst={true} 
             />
 
@@ -337,8 +359,8 @@ const TemplateCanvas: React.FC<TemplateCanvasProps> = ({
                 {/* Drop zone after each block */}
                 <DropZone 
                   position={index + 1} 
-                  onDrop={onDrop} 
-                  canDrop={canDrop} 
+                  onDrop={handleDrop} 
+                  canDrop={handleCanDrop} 
                   isLast={index === sortedBlocks.length - 1}
                 />
               </div>
