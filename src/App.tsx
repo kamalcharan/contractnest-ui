@@ -28,9 +28,9 @@ import MainLayout from './components/layout/MainLayout';
 
 // Catalog Pages
 import CatalogPage from './pages/catalog/index';
-import CreateServicePage from './pages/catalog/create';
 import ServiceViewPage from './pages/catalog/view';
-import ServiceEditPage from './pages/catalog/edit';
+import CatalogServiceFormPage from './pages/catalog/catalogService-form';
+
 
 // Auth Pages
 import LoginPage from './pages/auth/LoginPage';
@@ -344,9 +344,9 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<CatalogPage />} />
-            <Route path="create" element={<CreateServicePage />} />
+            
             <Route path="view" element={<ServiceViewPage />} />
-            <Route path="edit" element={<ServiceEditPage />} />
+            <Route path="/catalog/catalogService-form" element={<CatalogServiceFormPage />} />
           </Route>
 
           {/* Service Contracts Routes */}

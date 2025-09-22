@@ -1,134 +1,169 @@
 // src/hooks/queries/useServiceCatalogQueries.ts
-// ✅ PRODUCTION: Real GraphQL TanStack Query hooks for Service Catalog
+// Complete Service Catalog React Query Hooks - Production Ready
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../context/AuthContext';
-import { getCurrentEnvironment } from '../../services/api';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
 import toast from 'react-hot-toast';
-import {
-  SERVICE_CATALOG_OPERATIONS,
-  buildServiceCatalogGraphQLRequest,
-  createServiceCatalogQuery,
-  formatServicePrice,
-  type ServiceCatalogFilters,
-  type CreateServiceCatalogItemInput,
-  type UpdateServiceCatalogItemInput,
-  type ServiceCatalogSort
-} from '../../services/graphql';
+import api from '@/services/api';
+import { API_ENDPOINTS, ServiceCatalogFilters, buildServiceCatalogListURL } from '@/services/serviceURLs';
+import { captureException } from '@/utils/sentry';
+import { analyticsService } from '@/services/analytics.service';
 
 // =================================================================
-// TYPES
+// TYPES & INTERFACES
 // =================================================================
 
 export interface ServiceCatalogListParams {
-  search?: string;
-  categoryId?: string[];
-  industryId?: string[];
-  pricingModel?: string[];
-  currency?: string[];
-  priceRange?: { min: number; max: number };
-  isActive?: boolean;
-  tags?: string[];
-  page?: number;
+  search_term?: string;
+  category_id?: string;
+  industry_id?: string;
+  is_active?: boolean;
+  price_min?: number;
+  price_max?: number;
+  currency?: string;
+  has_resources?: boolean;
+  sort_by?: 'name' | 'price' | 'created_at' | 'updated_at' | 'sort_order';
+  sort_direction?: 'asc' | 'desc';
   limit?: number;
-  sortField?: string;
-  sortDirection?: 'ASC' | 'DESC';
+  offset?: number;
 }
 
-export interface ServiceCatalogItem {
+export interface Service {
   id: string;
-  serviceName: string;
-  sku?: string;
+  tenant_id: string;
+  service_name: string;
   description?: string;
-  categoryId: string;
-  industryId?: string;
-  pricingConfig: {
-    basePrice: number;
+  sku?: string;
+  category_id: string;
+  industry_id: string;
+  pricing_config: {
+    base_price: number;
     currency: string;
-    pricingModel: string;
-    billingCycle?: string;
-    tiers?: Array<{
-      minQuantity: number;
-      maxQuantity?: number;
-      price: number;
-      discountPercentage?: number;
-    }>;
+    pricing_model: string;
+    billing_cycle?: string;
+    tax_inclusive?: boolean;
   };
-  serviceAttributes?: Record<string, any>;
-  durationMinutes?: number;
+  service_attributes?: Record<string, any>;
+  duration_minutes?: number;
+  is_active: boolean;
+  sort_order?: number;
+  required_resources?: RequiredResource[];
   tags?: string[];
-  isActive: boolean;
-  sortOrder?: number;
-  requiredResources?: Array<{
-    resourceId: string;
-    quantity: number;
-    isOptional: boolean;
-    skillRequirements?: string[];
+  slug?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
+  is_live?: boolean;
+  status: string;
+  display_name?: string;
+  formatted_price?: string;
+  has_resources?: boolean;
+  resource_count?: number;
+}
+
+export interface RequiredResource {
+  resource_id: string;
+  quantity?: number;
+  is_optional?: boolean;
+}
+
+export interface CreateServiceRequest {
+  service_name: string;
+  description?: string;
+  sku?: string;
+  category_id: string;
+  industry_id: string;
+  pricing_config: {
+    base_price: number;
+    currency: string;
+    pricing_model: string;
+    billing_cycle?: string;
+    tax_inclusive?: boolean;
+  };
+  service_attributes?: Record<string, any>;
+  duration_minutes?: number;
+  sort_order?: number;
+  required_resources?: RequiredResource[];
+  tags?: string[];
+}
+
+export interface UpdateServiceRequest {
+  service_name?: string;
+  description?: string;
+  sku?: string;
+  pricing_config?: {
+    base_price?: number;
+    currency?: string;
+    pricing_model?: string;
+    billing_cycle?: string;
+    tax_inclusive?: boolean;
+  };
+  service_attributes?: Record<string, any>;
+  duration_minutes?: number;
+  sort_order?: number;
+  required_resources?: RequiredResource[];
+  tags?: string[];
+}
+
+export interface ServiceCatalogResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  timestamp: string;
+}
+
+export interface ServiceListResponse {
+  items: Service[];
+  total_count: number;
+  page_info: {
+    has_next_page: boolean;
+    has_prev_page: boolean;
+    current_page: number;
+    total_pages: number;
+  };
+  filters_applied: ServiceCatalogListParams;
+}
+
+export interface MasterData {
+  categories: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    is_active: boolean;
   }>;
-  createdAt: string;
-  updatedAt: string;
+  industries: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    is_active: boolean;
+  }>;
+  currencies: Array<{
+    code: string;
+    name: string;
+    symbol: string;
+  }>;
+  tax_rates: Array<{
+    id: string;
+    name: string;
+    rate: number;
+    is_default: boolean;
+  }>;
 }
 
 // =================================================================
-// QUERY KEYS FACTORY
+// QUERY KEYS
 // =================================================================
 
 export const serviceCatalogKeys = {
-  all: ['serviceCatalog'] as const,
+  all: ['service-catalog'] as const,
   lists: () => [...serviceCatalogKeys.all, 'list'] as const,
-  list: (filters: ServiceCatalogListParams) => [...serviceCatalogKeys.lists(), filters] as const,
+  list: (filters: ServiceCatalogListParams) => [...serviceCatalogKeys.lists(), { filters }] as const,
   details: () => [...serviceCatalogKeys.all, 'detail'] as const,
   detail: (id: string) => [...serviceCatalogKeys.details(), id] as const,
-  search: (query: string) => [...serviceCatalogKeys.all, 'search', query] as const,
-};
-
-// =================================================================
-// HELPER FUNCTIONS
-// =================================================================
-
-/**
- * Execute GraphQL request with proper error handling
- */
-const executeServiceCatalogRequest = async (request: any, token: string, tenantId: string, environment: string) => {
-  const response = await fetch('/api/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'x-tenant-id': tenantId,
-      'x-environment': environment
-    },
-    body: JSON.stringify(request)
-  });
-
-  if (!response.ok) {
-    throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
-  }
-
-  const result = await response.json();
-  
-  if (result.errors) {
-    console.error('GraphQL errors:', result.errors);
-    throw new Error(result.errors[0]?.message || 'GraphQL request failed');
-  }
-  
-  return result;
-};
-
-/**
- * Transform filters to GraphQL format
- */
-const transformFiltersToGraphQL = (filters: ServiceCatalogListParams): ServiceCatalogFilters => {
-  return {
-    searchQuery: filters.search,
-    categoryId: filters.categoryId,
-    industryId: filters.industryId,
-    pricingModel: filters.pricingModel as any[],
-    currency: filters.currency,
-    priceRange: filters.priceRange,
-    isActive: filters.isActive,
-    tags: filters.tags
-  };
+  resources: (id: string) => [...serviceCatalogKeys.all, 'resources', id] as const,
+  masterData: () => [...serviceCatalogKeys.all, 'master-data'] as const,
 };
 
 // =================================================================
@@ -136,342 +171,546 @@ const transformFiltersToGraphQL = (filters: ServiceCatalogListParams): ServiceCa
 // =================================================================
 
 /**
- * Get service catalog items with filtering, pagination, and sorting
+ * Hook to fetch list of services with filtering and pagination
  */
-export const useServiceCatalogItems = (params: ServiceCatalogListParams = {}) => {
-  const { user, currentTenant } = useAuth();
-  const environment = getCurrentEnvironment();
+export const useServiceCatalogItems = (
+  filters: ServiceCatalogListParams = {},
+  options?: {
+    enabled?: boolean;
+    refetchOnWindowFocus?: boolean;
+  }
+) => {
+  const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: serviceCatalogKeys.list(params),
-    queryFn: async () => {
-      if (!user?.token || !currentTenant?.id) {
-        throw new Error('User not authenticated or no tenant selected');
+    queryKey: serviceCatalogKeys.list(filters),
+    queryFn: async (): Promise<ServiceListResponse> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
       }
 
-      console.log('🔍 Fetching service catalog items with params:', params);
-
-      // Transform params to GraphQL format
-      const filters = transformFiltersToGraphQL(params);
-      const pagination = {
-        page: params.page || 1,
-        limit: params.limit || 20
-      };
-      const sort: ServiceCatalogSort[] = params.sortField ? [{
-        field: params.sortField as any,
-        direction: params.sortDirection || 'ASC'
-      }] : [];
-
-      // Build GraphQL request
-      const request = buildServiceCatalogGraphQLRequest(
-        SERVICE_CATALOG_OPERATIONS.SERVICE_CATALOG.QUERIES.GET_LIST,
-        { filters, pagination, sort },
-        'GetServiceCatalogItems'
-      );
-
-      // Execute request
-      const result = await executeServiceCatalogRequest(
-        request,
-        user.token,
-        currentTenant.id,
-        environment
-      );
-
-      const response = result.data?.serviceCatalogItems;
+      const url = buildServiceCatalogListURL(filters);
+      const response = await api.get(url);
       
-      if (!response?.success) {
-        throw new Error(response?.message || 'Failed to fetch service catalog items');
+      // Handle both direct data and wrapped response
+      const data = response.data?.data || response.data;
+      
+      if (!data) {
+        return {
+          items: [],
+          total_count: 0,
+          page_info: {
+            has_next_page: false,
+            has_prev_page: false,
+            current_page: 1,
+            total_pages: 0
+          },
+          filters_applied: filters
+        };
       }
 
-      return {
-        data: response.data?.items || [],
-        pagination: {
-          page: pagination.page,
-          limit: pagination.limit,
-          total: response.data?.totalCount || 0,
-          totalPages: Math.ceil((response.data?.totalCount || 0) / pagination.limit),
-          hasNextPage: response.data?.hasNextPage || false,
-          hasPreviousPage: response.data?.hasPreviousPage || false
-        },
-        environmentInfo: response.environmentInfo
-      };
+      return data;
     },
-    enabled: !!user?.token && !!currentTenant?.id,
+    enabled: !!currentTenant?.id && (options?.enabled !== false),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: (failureCount, error) => {
-      if (error.message.includes('authenticated') || error.message.includes('unauthorized')) {
-        return false;
-      }
-      return failureCount < 3;
-    }
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+    retry: 3,
   });
 };
 
 /**
- * Get single service catalog item by ID
+ * Hook to fetch a single service by ID
  */
-export const useServiceCatalogItem = (serviceId: string) => {
-  const { user, currentTenant } = useAuth();
-  const environment = getCurrentEnvironment();
+export const useServiceCatalogItem = (serviceId: string | null) => {
+  const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: serviceCatalogKeys.detail(serviceId),
-    queryFn: async () => {
-      if (!user?.token || !currentTenant?.id) {
-        throw new Error('User not authenticated or no tenant selected');
+    queryKey: serviceCatalogKeys.detail(serviceId || ''),
+    queryFn: async (): Promise<Service> => {
+      if (!serviceId || !currentTenant?.id) {
+        throw new Error('Service ID and tenant are required');
       }
 
-      if (!serviceId) {
-        throw new Error('Service ID is required');
-      }
-
-      console.log('🔍 Fetching service catalog item:', serviceId);
-
-      // Build GraphQL request
-      const request = buildServiceCatalogGraphQLRequest(
-        SERVICE_CATALOG_OPERATIONS.SERVICE_CATALOG.QUERIES.GET_SINGLE,
-        { id: serviceId },
-        'GetServiceCatalogItem'
-      );
-
-      // Execute request
-      const result = await executeServiceCatalogRequest(
-        request,
-        user.token,
-        currentTenant.id,
-        environment
-      );
-
-      const response = result.data?.serviceCatalogItem;
+      const response = await api.get(API_ENDPOINTS.SERVICE_CATALOG.GET(serviceId));
       
-      if (!response?.success) {
-        throw new Error(response?.message || 'Failed to fetch service catalog item');
-      }
-
-      if (!response.data) {
+      // Handle both direct data and wrapped response
+      const data = response.data?.data || response.data;
+      
+      if (!data) {
         throw new Error('Service not found');
       }
 
-      return response.data;
+      return data;
     },
-    enabled: !!user?.token && !!currentTenant?.id && !!serviceId,
+    enabled: !!serviceId && !!currentTenant?.id,
     staleTime: 5 * 60 * 1000,
-    retry: false // Don't retry for 404s
+    gcTime: 10 * 60 * 1000,
+    retry: 3,
   });
 };
 
 /**
- * Search service catalog items
+ * Hook to fetch service resources
  */
-export const useSearchServiceCatalog = (searchQuery: string, filters?: Partial<ServiceCatalogFilters>) => {
-  const { user, currentTenant } = useAuth();
-  const environment = getCurrentEnvironment();
+export const useServiceResources = (serviceId: string | null) => {
+  const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: serviceCatalogKeys.search(searchQuery),
+    queryKey: serviceCatalogKeys.resources(serviceId || ''),
     queryFn: async () => {
-      if (!user?.token || !currentTenant?.id) {
-        throw new Error('User not authenticated or no tenant selected');
+      if (!serviceId || !currentTenant?.id) {
+        throw new Error('Service ID and tenant are required');
       }
 
-      if (!searchQuery.trim()) {
-        return { data: [], total: 0 };
-      }
-
-      console.log('🔍 Searching service catalog:', searchQuery);
-
-      // Build search filters
-      const searchFilters: ServiceCatalogFilters = {
-        searchQuery: searchQuery.trim(),
-        isActive: true,
-        ...filters
-      };
-
-      // Build GraphQL request
-      const request = buildServiceCatalogGraphQLRequest(
-        SERVICE_CATALOG_OPERATIONS.SERVICE_CATALOG.QUERIES.GET_LIST_MINIMAL,
-        { 
-          filters: searchFilters,
-          pagination: { page: 1, limit: 50 }
-        },
-        'GetServiceCatalogItemsMinimal'
-      );
-
-      // Execute request
-      const result = await executeServiceCatalogRequest(
-        request,
-        user.token,
-        currentTenant.id,
-        environment
-      );
-
-      const response = result.data?.serviceCatalogItems;
+      const response = await api.get(API_ENDPOINTS.SERVICE_CATALOG.SERVICE_RESOURCES(serviceId));
       
-      if (!response?.success) {
-        throw new Error(response?.message || 'Search failed');
-      }
-
-      return {
-        data: response.data?.items || [],
-        total: response.data?.totalCount || 0
-      };
+      // Handle both direct data and wrapped response
+      const data = response.data?.data || response.data;
+      
+      return data || { associated_resources: [], total_resources: 0 };
     },
-    enabled: !!user?.token && !!currentTenant?.id && !!searchQuery.trim(),
-    staleTime: 2 * 60 * 1000, // 2 minutes for search results
-    retry: 1
+    enabled: !!serviceId && !!currentTenant?.id,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    retry: 3,
   });
 };
 
 /**
- * Get service catalog items for dropdown/selection
+ * Hook to fetch master data (categories, industries, currencies)
  */
-export const useServiceCatalogForDropdown = (categoryId?: string) => {
-  const { user, currentTenant } = useAuth();
-  const environment = getCurrentEnvironment();
+export const useServiceCatalogMasterData = () => {
+  const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: [...serviceCatalogKeys.all, 'dropdown', categoryId || 'all'],
-    queryFn: async () => {
-      if (!user?.token || !currentTenant?.id) {
-        throw new Error('User not authenticated or no tenant selected');
+    queryKey: serviceCatalogKeys.masterData(),
+    queryFn: async (): Promise<MasterData> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
       }
 
-      console.log('🔍 Fetching service catalog for dropdown, category:', categoryId);
-
-      // Build filters
-      const filters: ServiceCatalogFilters = {
-        isActive: true,
-        ...(categoryId && { categoryId: [categoryId] })
-      };
-
-      // Build GraphQL request
-      const request = buildServiceCatalogGraphQLRequest(
-        SERVICE_CATALOG_OPERATIONS.SERVICE_CATALOG.QUERIES.GET_FOR_DROPDOWN,
-        { filters },
-        'GetServiceCatalogForDropdown'
-      );
-
-      // Execute request
-      const result = await executeServiceCatalogRequest(
-        request,
-        user.token,
-        currentTenant.id,
-        environment
-      );
-
-      const response = result.data?.serviceCatalogItems;
+      const response = await api.get(API_ENDPOINTS.SERVICE_CATALOG.MASTER_DATA);
       
-      if (!response?.success) {
-        throw new Error(response?.message || 'Failed to fetch service catalog for dropdown');
-      }
-
-      return response.data?.items || [];
+      // Handle both direct data and wrapped response
+      const data = response.data?.data || response.data;
+      
+      return data || {
+        categories: [],
+        industries: [],
+        currencies: [],
+        tax_rates: []
+      };
     },
-    enabled: !!user?.token && !!currentTenant?.id,
-    staleTime: 10 * 60 * 1000, // 10 minutes for dropdown data
-    retry: 2
+    enabled: !!currentTenant?.id,
+    staleTime: 30 * 60 * 1000, // 30 minutes - master data doesn't change often
+    gcTime: 60 * 60 * 1000, // 1 hour
+    retry: 3,
   });
 };
 
 // =================================================================
-// LEGACY COMPATIBILITY ALIASES
+// MUTATION HOOKS
 // =================================================================
 
 /**
- * Legacy compatibility - maps to useServiceCatalogItems
- */
-export const useCatalogList = (filters: any) => {
-  // Transform legacy filters to new format
-  const transformedParams: ServiceCatalogListParams = {
-    search: filters.search,
-    categoryId: filters.catalogType ? [filters.catalogType.toString()] : undefined,
-    isActive: filters.statusFilter === 'active' ? true : filters.statusFilter === 'inactive' ? false : undefined,
-    page: filters.page,
-    limit: filters.limit
-  };
-
-  const result = useServiceCatalogItems(transformedParams);
-  
-  // Transform response to match legacy format
-  return {
-    ...result,
-    data: result.data ? {
-      data: result.data.data,
-      pagination: result.data.pagination
-    } : undefined
-  };
-};
-
-/**
- * Legacy compatibility - maps to useServiceCatalogItem
- */
-export const useCatalogDetail = (catalogId: string) => {
-  return useServiceCatalogItem(catalogId);
-};
-
-/**
- * Legacy compatibility - alias for useServiceCatalogItem
- */
-export const useService = (serviceId: string) => {
-  return useServiceCatalogItem(serviceId);
-};
-
-// =================================================================
-// HELPER HOOKS
-// =================================================================
-
-/**
- * Helper hook for common service catalog operations
+ * Hook for service catalog operations (create, update, delete)
  */
 export const useServiceCatalogOperations = () => {
+  const { currentTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast: shadcnToast } = useToast();
+
+  // Create service mutation
+  const createServiceMutation = useMutation({
+    mutationFn: async (serviceData: CreateServiceRequest): Promise<Service> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
+      }
+
+      const response = await api.post(API_ENDPOINTS.SERVICE_CATALOG.CREATE, serviceData, {
+        headers: {
+          'x-idempotency-key': `create-service-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+      });
+
+      return response.data?.data || response.data;
+    },
+    onSuccess: (createdService) => {
+      // Invalidate and refetch service lists
+      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
+      
+      // Add the new service to cache
+      queryClient.setQueryData(
+        serviceCatalogKeys.detail(createdService.id),
+        createdService
+      );
+
+      // Track analytics
+      try {
+        analyticsService.trackEvent('service_created', {
+          service_id: createdService.id,
+          service_name: createdService.service_name,
+          service_type: createdService.service_attributes?.service_type,
+          has_resources: createdService.has_resources || false
+        });
+      } catch (error) {
+        console.error('Analytics error:', error);
+      }
+
+      toast.success('Service created successfully', {
+        duration: 3000,
+        style: {
+          background: '#10B981',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        title: "Success",
+        description: `Service "${createdService.service_name}" has been created successfully`,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create service';
+      
+      captureException(error, {
+        tags: { 
+          component: 'useServiceCatalogOperations', 
+          action: 'createService' 
+        },
+        extra: { 
+          tenantId: currentTenant?.id,
+          errorMessage
+        }
+      });
+
+      toast.error(`Create Error: ${errorMessage}`, {
+        duration: 4000,
+        style: {
+          background: '#EF4444',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        variant: "destructive",
+        title: "Create Failed",
+        description: errorMessage
+      });
+    }
+  });
+
+  // Update service mutation
+  const updateServiceMutation = useMutation({
+    mutationFn: async ({ 
+      serviceId, 
+      serviceData 
+    }: { 
+      serviceId: string; 
+      serviceData: UpdateServiceRequest 
+    }): Promise<Service> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
+      }
+
+      const response = await api.put(API_ENDPOINTS.SERVICE_CATALOG.UPDATE(serviceId), serviceData, {
+        headers: {
+          'x-idempotency-key': `update-service-${serviceId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+      });
+
+      return response.data?.data || response.data;
+    },
+    onSuccess: (updatedService) => {
+      // Update the service in cache
+      queryClient.setQueryData(
+        serviceCatalogKeys.detail(updatedService.id),
+        updatedService
+      );
+
+      // Invalidate lists to refresh any displayed data
+      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
+
+      // Track analytics
+      try {
+        analyticsService.trackEvent('service_updated', {
+          service_id: updatedService.id,
+          service_name: updatedService.service_name
+        });
+      } catch (error) {
+        console.error('Analytics error:', error);
+      }
+
+      toast.success('Service updated successfully', {
+        duration: 3000,
+        style: {
+          background: '#10B981',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        title: "Success",
+        description: `Service "${updatedService.service_name}" has been updated successfully`,
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update service';
+      
+      captureException(error, {
+        tags: { 
+          component: 'useServiceCatalogOperations', 
+          action: 'updateService' 
+        },
+        extra: { 
+          tenantId: currentTenant?.id,
+          errorMessage
+        }
+      });
+
+      toast.error(`Update Error: ${errorMessage}`, {
+        duration: 4000,
+        style: {
+          background: '#EF4444',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: errorMessage
+      });
+    }
+  });
+
+  // Delete service mutation
+  const deleteServiceMutation = useMutation({
+    mutationFn: async (serviceId: string): Promise<void> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
+      }
+
+      await api.delete(API_ENDPOINTS.SERVICE_CATALOG.DELETE(serviceId), {
+        headers: {
+          'x-idempotency-key': `delete-service-${serviceId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        }
+      });
+    },
+    onSuccess: (_, serviceId) => {
+      // Remove from cache
+      queryClient.removeQueries({ queryKey: serviceCatalogKeys.detail(serviceId) });
+      
+      // Invalidate lists
+      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
+
+      // Track analytics
+      try {
+        analyticsService.trackEvent('service_deleted', {
+          service_id: serviceId
+        });
+      } catch (error) {
+        console.error('Analytics error:', error);
+      }
+
+      toast.success('Service deleted successfully', {
+        duration: 3000,
+        style: {
+          background: '#10B981',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        title: "Success",
+        description: "Service has been deleted successfully",
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete service';
+      
+      captureException(error, {
+        tags: { 
+          component: 'useServiceCatalogOperations', 
+          action: 'deleteService' 
+        },
+        extra: { 
+          tenantId: currentTenant?.id,
+          errorMessage
+        }
+      });
+
+      toast.error(`Delete Error: ${errorMessage}`, {
+        duration: 4000,
+        style: {
+          background: '#EF4444',
+          color: '#FFF',
+        }
+      });
+
+      shadcnToast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: errorMessage
+      });
+    }
+  });
+
+  return {
+    createService: createServiceMutation.mutateAsync,
+    updateService: updateServiceMutation.mutateAsync,
+    deleteService: deleteServiceMutation.mutateAsync,
+    createServiceMutation,
+    updateServiceMutation,
+    deleteServiceMutation,
+    isCreating: createServiceMutation.isPending,
+    isUpdating: updateServiceMutation.isPending,
+    isDeleting: deleteServiceMutation.isPending,
+  };
+};
+
+// =================================================================
+// UTILITY HOOKS
+// =================================================================
+
+/**
+ * Hook to refresh service catalog data
+ */
+export const useRefreshServiceCatalog = () => {
   const queryClient = useQueryClient();
 
-  const refreshServiceCatalogList = (params?: ServiceCatalogListParams) => {
-    if (params) {
-      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.list(params) });
-    } else {
-      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
-    }
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.all });
   };
 
-  const refreshServiceCatalogItem = (serviceId: string) => {
+  const refreshLists = () => {
+    queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
+  };
+
+  const refreshService = (serviceId: string) => {
     queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.detail(serviceId) });
   };
 
-  const prefetchServiceCatalogItem = async (serviceId: string) => {
-    await queryClient.prefetchQuery({
-      queryKey: serviceCatalogKeys.detail(serviceId),
-      staleTime: 5 * 60 * 1000,
-    });
-  };
-
-  const invalidateSearch = () => {
-    queryClient.invalidateQueries({ 
-      queryKey: serviceCatalogKeys.all,
-      predicate: (query) => query.queryKey.includes('search')
-    });
+  const refreshMasterData = () => {
+    queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.masterData() });
   };
 
   return {
-    refreshServiceCatalogList,
-    refreshServiceCatalogItem, 
-    prefetchServiceCatalogItem,
-    invalidateSearch
+    refreshAll,
+    refreshLists,
+    refreshService,
+    refreshMasterData,
+  };
+};
+
+/**
+ * Hook for optimistic updates
+ */
+export const useServiceCatalogOptimisticUpdates = () => {
+  const queryClient = useQueryClient();
+
+  const optimisticUpdateService = (serviceId: string, updates: Partial<Service>) => {
+    queryClient.setQueryData(
+      serviceCatalogKeys.detail(serviceId),
+      (oldData: Service | undefined) => {
+        if (!oldData) return oldData;
+        return { ...oldData, ...updates };
+      }
+    );
+  };
+
+  const rollbackOptimisticUpdate = (serviceId: string) => {
+    queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.detail(serviceId) });
+  };
+
+  return {
+    optimisticUpdateService,
+    rollbackOptimisticUpdate,
   };
 };
 
 // =================================================================
-// EXPORTS
+// DROPDOWN/SELECT OPTIMIZED HOOKS
 // =================================================================
+
+/**
+ * Hook for service catalog dropdown/select components
+ */
+export const useServiceCatalogDropdown = (filters: Partial<ServiceCatalogListParams> = {}) => {
+  const { data, isLoading, error } = useServiceCatalogItems({
+    ...filters,
+    limit: 1000, // Get all for dropdown
+    is_active: true // Only active services
+  });
+
+  const options = data?.items?.map(service => ({
+    value: service.id,
+    label: service.service_name,
+    description: service.description,
+    price: service.formatted_price,
+    category: service.category_id,
+    isActive: service.is_active
+  })) || [];
+
+  return {
+    options: options.sort((a, b) => a.label.localeCompare(b.label)),
+    isLoading,
+    error,
+    refetch: () => queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() })
+  };
+};
+
+/**
+ * Hook for master data dropdowns
+ */
+export const useMasterDataDropdowns = () => {
+  const { data, isLoading, error } = useServiceCatalogMasterData();
+
+  const categoryOptions = data?.categories?.filter(cat => cat.is_active).map(cat => ({
+    value: cat.id,
+    label: cat.name,
+    description: cat.description
+  })) || [];
+
+  const industryOptions = data?.industries?.filter(ind => ind.is_active).map(ind => ({
+    value: ind.id,
+    label: ind.name,
+    description: ind.description
+  })) || [];
+
+  const currencyOptions = data?.currencies?.map(curr => ({
+    value: curr.code,
+    label: `${curr.code} - ${curr.name}`,
+    symbol: curr.symbol
+  })) || [];
+
+  const taxRateOptions = data?.tax_rates?.map(rate => ({
+    value: rate.id,
+    label: `${rate.name} (${rate.rate}%)`,
+    rate: rate.rate,
+    isDefault: rate.is_default
+  })) || [];
+
+  return {
+    categoryOptions,
+    industryOptions,
+    currencyOptions,
+    taxRateOptions,
+    isLoading,
+    error,
+    masterData: data,
+  };
+};
 
 export default {
   useServiceCatalogItems,
   useServiceCatalogItem,
-  useSearchServiceCatalog,
-  useServiceCatalogForDropdown,
+  useServiceResources,
+  useServiceCatalogMasterData,
   useServiceCatalogOperations,
-  // Legacy compatibility
-  useCatalogList,
-  useCatalogDetail,
-  useService
+  useRefreshServiceCatalog,
+  useServiceCatalogOptimisticUpdates,
+  useServiceCatalogDropdown,
+  useMasterDataDropdowns,
 };

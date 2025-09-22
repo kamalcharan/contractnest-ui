@@ -1,3 +1,4 @@
+// src/pages/catalog/index.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -22,7 +23,7 @@ import {
 import ServiceCard from '../../components/catalog/ServiceCard';
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 
-// Import hooks
+// Import hooks - FIXED: Use real hooks
 import { 
   useServiceCatalogItems,
   useServiceCatalogOperations,
@@ -75,18 +76,17 @@ const CatalogPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [searchTerm]);
 
-  // Build API filters
+  // FIXED: Build API filters with proper parameter names
   const apiFilters: ServiceCatalogListParams = {
-    page: currentPage,
+    search_term: debouncedSearchTerm.trim() || undefined,
+    is_active: statusFilter !== 'all' ? (statusFilter === 'active') : undefined,
+    sort_by: sortBy as any,
+    sort_direction: sortOrder,
     limit: ITEMS_PER_PAGE,
-    search: debouncedSearchTerm.trim() || undefined,
-    categoryId: undefined, // Will be set when we have category filter
-    isActive: statusFilter !== 'all' ? (statusFilter === 'active') : undefined,
-    sortField: sortBy,
-    sortDirection: sortOrder
+    offset: (currentPage - 1) * ITEMS_PER_PAGE
   };
 
-  // API Hooks
+  // FIXED: API Hooks with real data
   const { 
     data: servicesData, 
     isLoading, 
@@ -94,11 +94,18 @@ const CatalogPage: React.FC = () => {
     refetch 
   } = useServiceCatalogItems(apiFilters);
 
-  const { refreshServiceCatalogList } = useServiceCatalogOperations();
+  const { 
+    deleteService,
+    isDeleting
+  } = useServiceCatalogOperations();
 
   // Track page views
   useEffect(() => {
-    analyticsService.trackPageView('catalog', 'Service Catalog Page');
+    try {
+      analyticsService.trackPageView('catalog', 'Service Catalog Page');
+    } catch (error) {
+      console.error('Analytics tracking error:', error);
+    }
   }, []);
 
   // Reset page when filters change
@@ -119,12 +126,12 @@ const CatalogPage: React.FC = () => {
 
   // Handle bulk selection
   const handleSelectAll = useCallback(() => {
-    if (selectedServices.size === servicesData?.data?.length) {
+    if (selectedServices.size === servicesData?.items?.length) {
       setSelectedServices(new Set());
     } else {
-      setSelectedServices(new Set(servicesData?.data?.map(s => s.id) || []));
+      setSelectedServices(new Set(servicesData?.items?.map(s => s.id) || []));
     }
-  }, [selectedServices.size, servicesData?.data]);
+  }, [selectedServices.size, servicesData?.items]);
 
   const handleSelectService = useCallback((serviceId: string) => {
     const newSelection = new Set(selectedServices);
@@ -136,9 +143,39 @@ const CatalogPage: React.FC = () => {
     setSelectedServices(newSelection);
   }, [selectedServices]);
 
-  // Get current services data
-  const services = servicesData?.data || [];
-  const pagination = servicesData?.pagination;
+  // FIXED: Handle service deletion with real API
+  const handleDeleteService = useCallback(async (serviceId: string) => {
+    try {
+      await deleteService(serviceId);
+      
+      // Remove from selection if it was selected
+      const newSelection = new Set(selectedServices);
+      newSelection.delete(serviceId);
+      setSelectedServices(newSelection);
+      
+      toast({
+        title: "Service Deleted",
+        description: "Service has been deleted successfully",
+      });
+    } catch (error) {
+      console.error('Delete service error:', error);
+      captureException(error, {
+        tags: { component: 'CatalogPage', action: 'deleteService' }
+      });
+    }
+  }, [deleteService, selectedServices, toast]);
+
+  // FIXED: Handle service duplication (placeholder for now)
+  const handleDuplicateService = useCallback((serviceId: string) => {
+    toast({
+      title: "Feature Coming Soon",
+      description: "Service duplication will be available soon"
+    });
+  }, [toast]);
+
+  // FIXED: Get current services data with proper structure
+  const services = servicesData?.items || [];
+  const pagination = servicesData?.page_info;
 
   // Loading skeleton component
   const ServiceSkeleton = () => (
@@ -216,6 +253,12 @@ const CatalogPage: React.FC = () => {
     return searchTerm.length > 0 && searchTerm.length < MINIMUM_SEARCH_LENGTH;
   };
 
+  // FIXED: Handle pagination
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   return (
     <div 
       className="p-4 md:p-6 min-h-screen transition-colors"
@@ -270,9 +313,9 @@ const CatalogPage: React.FC = () => {
             </button>
           </div>
           
-          {/* New Service Button */}
+          {/* FIXED: New Service Button - Updated navigation */}
           <button 
-            onClick={() => navigate('/catalog/create')}
+            onClick={() => navigate('/catalog/catalogService-form')}
             className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors"
             style={{
               backgroundColor: colors.brand.primary,
@@ -298,7 +341,7 @@ const CatalogPage: React.FC = () => {
           {/* Status Filter Pills */}
           <div className="flex flex-wrap gap-2 mb-4">
             {[
-              { id: 'all', label: 'All Services', count: 0 },
+              { id: 'all', label: 'All Services', count: servicesData?.total_count || 0 },
               { id: 'active', label: 'Active', count: 0 },
               { id: 'draft', label: 'Drafts', count: 0 },
               { id: 'inactive', label: 'Inactive', count: 0 }
@@ -316,7 +359,7 @@ const CatalogPage: React.FC = () => {
                     : colors.utility.secondaryText
                 }}
               >
-                {filter.label}
+                {filter.label} {filter.id === 'all' && filter.count > 0 && `(${filter.count})`}
               </button>
             ))}
           </div>
@@ -413,7 +456,7 @@ const CatalogPage: React.FC = () => {
                 className="text-sm whitespace-nowrap transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                {pagination?.total || 0} services
+                {servicesData?.total_count || 0} services
               </span>
             </div>
           </div>
@@ -438,7 +481,7 @@ const CatalogPage: React.FC = () => {
             >
               {isLoading 
                 ? `Searching for "${debouncedSearchTerm}"...`
-                : `Showing results for "${debouncedSearchTerm}" (${pagination?.total || 0} found)`
+                : `Showing results for "${debouncedSearchTerm}" (${servicesData?.total_count || 0} found)`
               }
             </div>
           )}
@@ -507,30 +550,68 @@ const CatalogPage: React.FC = () => {
                     className="text-lg font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    No services found
+                    {searchTerm || statusFilter !== 'all' 
+                      ? 'No services found' 
+                      : 'No services yet'
+                    }
                   </h3>
                   <p 
-                    className="mb-6 transition-colors"
+                    className="mb-6 max-w-md mx-auto transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
                     {searchTerm || statusFilter !== 'all'
                       ? shouldShowSearchHint()
                         ? `Type at least ${MINIMUM_SEARCH_LENGTH} characters to search services.`
-                        : "No services match your search criteria. Try adjusting your search or filters."
-                      : "You haven't added any services yet. Create your first service to get started."
+                        : "No services match your current search criteria. Try adjusting your search terms or filters to find what you're looking for."
+                      : "Start building your service catalog by creating your first service. You can add pricing, descriptions, and resource requirements."
                     }
                   </p>
-                  <button 
-                    onClick={() => navigate('/catalog/create')}
-                    className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors mx-auto"
-                    style={{
-                      backgroundColor: colors.brand.primary,
-                      color: '#ffffff'
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Service
-                  </button>
+                  
+                  {/* Action buttons based on state */}
+                  {!searchTerm && statusFilter === 'all' ? (
+                    // Empty catalog state - show create button
+                    <button 
+                      onClick={() => navigate('/catalog/catalogService-form')}
+                      className="flex items-center px-6 py-3 rounded-md hover:opacity-90 transition-colors mx-auto"
+                      style={{
+                        backgroundColor: colors.brand.primary,
+                        color: '#ffffff'
+                      }}
+                    >
+                      <Plus className="mr-2 h-5 w-5" />
+                      Create Your First Service
+                    </button>
+                  ) : (
+                    // Filtered/search state - show clear filters and create options
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                      <button 
+                        onClick={() => {
+                          setSearchTerm('');
+                          setStatusFilter('all');
+                          setServiceTypeFilter('all');
+                        }}
+                        className="px-4 py-2 rounded-md border transition-colors"
+                        style={{
+                          borderColor: colors.utility.primaryText + '40',
+                          color: colors.utility.primaryText,
+                          backgroundColor: 'transparent'
+                        }}
+                      >
+                        Clear Filters
+                      </button>
+                      <button 
+                        onClick={() => navigate('/catalog/catalogService-form')}
+                        className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors"
+                        style={{
+                          backgroundColor: colors.brand.primary,
+                          color: '#ffffff'
+                        }}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        New Service
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -549,22 +630,61 @@ const CatalogPage: React.FC = () => {
                         isSelected={selectedServices.has(service.id)}
                         onSelect={() => handleSelectService(service.id)}
                         onView={() => navigate(`/catalog/view?id=${service.id}`)}
-                        onEdit={() => navigate(`/catalog/edit?id=${service.id}`)}
-                        onDuplicate={() => {
-                          toast({
-                            title: "Feature Coming Soon",
-                            description: "Service duplication will be available soon"
-                          });
-                        }}
-                        onDelete={() => {
-                          toast({
-                            title: "Feature Coming Soon", 
-                            description: "Service deletion will be available soon"
-                          });
-                        }}
+                        onEdit={() => navigate(`/catalog/catalogService-form?id=${service.id}`)} // FIXED: Updated navigation
+                        onDuplicate={() => handleDuplicateService(service.id)}
+                        onDelete={() => handleDeleteService(service.id)}
                       />
                     ))}
                   </div>
+
+                  {/* FIXED: Pagination */}
+                  {pagination && pagination.total_pages > 1 && (
+                    <div className="flex items-center justify-between mt-8">
+                      <div 
+                        className="text-sm transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Showing {((pagination.current_page - 1) * ITEMS_PER_PAGE) + 1} to{' '}
+                        {Math.min(pagination.current_page * ITEMS_PER_PAGE, servicesData?.total_count || 0)} of{' '}
+                        {servicesData?.total_count || 0} services
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handlePageChange(pagination.current_page - 1)}
+                          disabled={!pagination.has_prev_page}
+                          className="flex items-center px-3 py-2 border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-colors"
+                          style={{
+                            borderColor: colors.utility.primaryText + '40',
+                            color: colors.utility.primaryText
+                          }}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          Previous
+                        </button>
+                        
+                        <span 
+                          className="text-sm px-3 py-2 transition-colors"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          Page {pagination.current_page} of {pagination.total_pages}
+                        </span>
+                        
+                        <button
+                          onClick={() => handlePageChange(pagination.current_page + 1)}
+                          disabled={!pagination.has_next_page}
+                          className="flex items-center px-3 py-2 border rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80 transition-colors"
+                          style={{
+                            borderColor: colors.utility.primaryText + '40',
+                            color: colors.utility.primaryText
+                          }}
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

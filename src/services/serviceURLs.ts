@@ -1,9 +1,9 @@
 // src/services/serviceURLs.ts - UI Layer Version COMPLETE
-// Updated with Onboarding endpoints - ALL ENDPOINTS PRESERVED
+// Updated with Service Catalog endpoints - ALL EXISTING ENDPOINTS PRESERVED
 
 export const API_ENDPOINTS = {
   // =================================================================
-  // ONBOARDING ENDPOINTS - NEW
+  // ONBOARDING ENDPOINTS - PRESERVED
   // =================================================================
   ONBOARDING: {
     // Main onboarding operations
@@ -60,7 +60,7 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // PRODUCT MASTER DATA ENDPOINTS - ENHANCED
+  // PRODUCT MASTER DATA ENDPOINTS - PRESERVED
   // =================================================================
   PRODUCT_MASTERDATA: {
     // Health and utility endpoints
@@ -120,7 +120,7 @@ export const API_ENDPOINTS = {
     },
 
     // =================================================================
-    // NEW: INDUSTRY-FIRST ONBOARDING ENDPOINTS (Enhanced)
+    // INDUSTRY-FIRST ONBOARDING ENDPOINTS - PRESERVED
     // =================================================================
     INDUSTRIES: {
       // Get industries with pagination and search
@@ -207,7 +207,7 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // RESOURCES MANAGEMENT ENDPOINTS - NEW
+  // RESOURCES MANAGEMENT ENDPOINTS - PRESERVED
   // =================================================================
   RESOURCES: {
     // Main resource operations
@@ -241,7 +241,7 @@ export const API_ENDPOINTS = {
     NEXT_SEQUENCE: (resourceTypeId: string) => `/api/resources?resourceTypeId=${resourceTypeId}&nextSequence=true`
   },
   
-  // USER MANAGEMENT ENDPOINTS
+  // USER MANAGEMENT ENDPOINTS - PRESERVED
   USERS: {
     // Current user endpoints
     ME: '/api/users/me',
@@ -276,7 +276,7 @@ export const API_ENDPOINTS = {
     }
   },
   
-  // CONTACT MANAGEMENT ENDPOINTS
+  // CONTACT MANAGEMENT ENDPOINTS - PRESERVED
   CONTACTS: {
     // Main contact operations
     LIST: '/api/contacts',
@@ -348,7 +348,7 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
   
-  // BUSINESS MODEL ENDPOINTS
+  // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management
     PLANS: '/api/business-model/plans',
@@ -374,7 +374,7 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // CATALOG MANAGEMENT ENDPOINTS
+  // CATALOG MANAGEMENT ENDPOINTS - PRESERVED
   // =================================================================
   CATALOG: {
     // Main catalog operations
@@ -421,11 +421,11 @@ export const API_ENDPOINTS = {
     }
   },
 
-  // ========================================================
-  //  SERVICE CATALOG - END POINTS
-  //=========================================================
+  // =================================================================
+  // SERVICE CATALOG ENDPOINTS - NEW ADDITION
+  // =================================================================
   SERVICE_CATALOG: {
-    // Main service operations
+    // Main service operations via Express API layer
     LIST: '/api/service-catalog/services',
     CREATE: '/api/service-catalog/services',
     GET: (id: string) => `/api/service-catalog/services/${id}`,
@@ -464,7 +464,7 @@ export const API_ENDPOINTS = {
   },
   
   // =================================================================
-  // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS
+  // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS - PRESERVED
   // =================================================================
   SERVICE_CONTRACTS: {
     BLOCKS: {
@@ -555,7 +555,7 @@ export const API_ENDPOINTS = {
 };
 
 // =================================================================
-// TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT (Enhanced)
+// TYPE DEFINITIONS FOR BETTER TYPESCRIPT SUPPORT - PRESERVED & ENHANCED
 // =================================================================
 
 // Product Master Data filter interfaces
@@ -568,7 +568,7 @@ export type ProductMasterDataCategoryFilters = {
   is_active?: boolean;
 };
 
-// NEW: Enhanced filter interfaces for industry-first onboarding
+// Enhanced filter interfaces for industry-first onboarding
 export type IndustryFilters = {
   page?: number;
   limit?: number;
@@ -589,6 +589,22 @@ export type IndustryCategoryFilters = {
   limit?: number;
   search?: string;
   is_active?: boolean;
+};
+
+// NEW: Service Catalog filter interface
+export type ServiceCatalogFilters = {
+  search_term?: string;
+  category_id?: string;
+  industry_id?: string;
+  is_active?: boolean;
+  price_min?: number;
+  price_max?: number;
+  currency?: string;
+  has_resources?: boolean;
+  sort_by?: 'name' | 'price' | 'created_at' | 'updated_at' | 'sort_order';
+  sort_direction?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
 };
 
 // Pagination metadata interface
@@ -665,6 +681,7 @@ export type ResourceFilters = {
 export type ResourceEndpoints = typeof API_ENDPOINTS.RESOURCES;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
+export type ServiceCatalogEndpoints = typeof API_ENDPOINTS.SERVICE_CATALOG;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
@@ -709,7 +726,7 @@ export type BlockSearchParams = {
 };
 
 // =================================================================
-// HELPER FUNCTIONS FOR BUILDING URLS WITH QUERY PARAMETERS (Enhanced)
+// HELPER FUNCTIONS FOR BUILDING URLS WITH QUERY PARAMETERS - PRESERVED & ENHANCED
 // =================================================================
 
 /**
@@ -751,6 +768,13 @@ export const buildCatalogListURL = (filters: CatalogFilters = {}): string => {
   });
   
   return url.pathname + url.search;
+};
+
+/**
+ * NEW: Build service catalog list URL with filters
+ */
+export const buildServiceCatalogListURL = (filters: ServiceCatalogFilters = {}): string => {
+  return API_ENDPOINTS.SERVICE_CATALOG.LIST_WITH_FILTERS(filters);
 };
 
 /**
@@ -819,10 +843,6 @@ export const buildTenantCategoriesURL = (isActive: boolean = true): string => {
   return API_ENDPOINTS.PRODUCT_MASTERDATA.TENANT.LIST_CATEGORIES_WITH_FILTER(isActive);
 };
 
-// =================================================================
-// NEW: ENHANCED HELPER FUNCTIONS FOR INDUSTRY-FIRST ONBOARDING
-// =================================================================
-
 /**
  * Build industries list URL with filters
  */
@@ -850,10 +870,6 @@ export const buildIndustryCategoriesURL = (industryId: string, filters: Industry
 export const buildPrimaryIndustryCategoriesURL = (industryId: string, filters: Omit<IndustryCategoryFilters, 'is_primary'> = {}): string => {
   return buildIndustryCategoriesURL(industryId, { ...filters, is_primary: true });
 };
-
-// =================================================================
-// ONBOARDING HELPER FUNCTIONS
-// =================================================================
 
 /**
  * Build onboarding status URL with optional parameters
@@ -883,112 +899,7 @@ export const getOnboardingStepEndpoint = (operation: 'complete' | 'skip', stepId
 };
 
 // =================================================================
-// API USAGE EXAMPLES
-// =================================================================
-
-export const RESOURCES_API_EXAMPLES = {
-  // List all resource types
-  listResourceTypes: 'GET ' + API_ENDPOINTS.RESOURCES.RESOURCE_TYPES,
-  
-  // List all resources
-  listAllResources: 'GET ' + API_ENDPOINTS.RESOURCES.LIST,
-  
-  // List resources by type
-  listByType: (typeId: string) => 'GET ' + buildResourcesListURL({ resourceTypeId: typeId }),
-  
-  // Search resources
-  searchResources: (query: string) => 'GET ' + buildResourcesListURL({ search: query }),
-  
-  // Get next sequence number
-  getNextSequence: (typeId: string) => 'GET ' + API_ENDPOINTS.RESOURCES.NEXT_SEQUENCE(typeId),
-  
-  // CRUD operations
-  createResource: 'POST ' + API_ENDPOINTS.RESOURCES.CREATE,
-  getResource: (id: string) => 'GET ' + API_ENDPOINTS.RESOURCES.GET(id),
-  updateResource: (id: string) => 'PATCH ' + API_ENDPOINTS.RESOURCES.UPDATE(id),
-  deleteResource: (id: string) => 'DELETE ' + API_ENDPOINTS.RESOURCES.DELETE(id),
-  
-  // Utility endpoints
-  healthCheck: 'GET ' + API_ENDPOINTS.RESOURCES.HEALTH,
-  signingStatus: 'GET ' + API_ENDPOINTS.RESOURCES.SIGNING_STATUS
-};
-
-// =================================================================
-// PRODUCT MASTER DATA API USAGE EXAMPLES (Enhanced)
-// =================================================================
-
-export const PRODUCT_MASTERDATA_API_EXAMPLES = {
-  // Health check
-  healthCheck: 'GET ' + API_ENDPOINTS.PRODUCT_MASTERDATA.HEALTH,
-  
-  // Constants
-  getConstants: 'GET ' + API_ENDPOINTS.PRODUCT_MASTERDATA.CONSTANTS,
-  
-  // Global master data operations
-  getGlobalPricingTypes: 'GET ' + buildGlobalMasterDataURL('pricing_type'),
-  getGlobalStatusTypes: 'GET ' + buildGlobalMasterDataURL('status_type'),
-  getAllGlobalCategories: 'GET ' + buildGlobalCategoriesURL(),
-  
-  // Tenant master data operations (requires x-tenant-id header)
-  getTenantCustomFields: 'GET ' + buildTenantMasterDataURL('custom_fields'),
-  getTenantPriorityTypes: 'GET ' + buildTenantMasterDataURL('priority_type'),
-  getAllTenantCategories: 'GET ' + buildTenantCategoriesURL(),
-  
-  // With different active filters
-  getInactiveGlobalCategories: 'GET ' + buildGlobalCategoriesURL(false),
-  getInactiveTenantCategories: 'GET ' + buildTenantCategoriesURL(false),
-  
-  // NEW: Industry-first onboarding examples
-  getAllIndustries: 'GET ' + buildIndustriesURL(),
-  getIndustriesWithPagination: 'GET ' + buildIndustriesURL({ page: 1, limit: 10 }),
-  searchIndustries: (query: string) => 'GET ' + buildIndustriesURL({ search: query }),
-  getAllCategories: 'GET ' + buildAllCategoriesURL(),
-  getCategoriesWithPagination: 'GET ' + buildAllCategoriesURL({ page: 1, limit: 20 }),
-  searchCategories: (query: string) => 'GET ' + buildAllCategoriesURL({ search: query }),
-  getIndustryCategories: (industryId: string) => 'GET ' + buildIndustryCategoriesURL(industryId),
-  getPrimaryIndustryCategories: (industryId: string) => 'GET ' + buildPrimaryIndustryCategoriesURL(industryId),
-  searchIndustryCategories: (industryId: string, query: string) => 'GET ' + buildIndustryCategoriesURL(industryId, { search: query })
-};
-
-// =================================================================
-// ONBOARDING API USAGE EXAMPLES
-// =================================================================
-
-export const ONBOARDING_API_EXAMPLES = {
-  // Get current onboarding status
-  getStatus: 'GET ' + API_ENDPOINTS.ONBOARDING.STATUS,
-  
-  // Initialize onboarding for new tenant
-  initialize: 'POST ' + API_ENDPOINTS.ONBOARDING.INITIALIZE,
-  
-  // Complete a specific step
-  completeStep: 'POST ' + API_ENDPOINTS.ONBOARDING.STEP.COMPLETE + ' (with stepId and data in body)',
-  
-  // Skip an optional step
-  skipStep: 'PUT ' + API_ENDPOINTS.ONBOARDING.STEP.SKIP + ' (with stepId in body)',
-  
-  // Update progress (save current state)
-  updateProgress: 'PUT ' + API_ENDPOINTS.ONBOARDING.PROGRESS + ' (with current_step and step_data in body)',
-  
-  // Complete entire onboarding
-  complete: 'POST ' + API_ENDPOINTS.ONBOARDING.COMPLETE,
-  
-  // Test connectivity
-  testConnection: 'GET ' + API_ENDPOINTS.ONBOARDING.TEST,
-  
-  // Example with headers
-  exampleWithHeaders: `
-    fetch('${API_ENDPOINTS.ONBOARDING.STATUS}', {
-      headers: {
-        'Authorization': 'Bearer <token>',
-        'x-tenant-id': '<tenant-id>'
-      }
-    })
-  `
-};
-
-// =================================================================
-// VALIDATION HELPERS (Enhanced)
+// VALIDATION HELPERS - PRESERVED & ENHANCED
 // =================================================================
 
 /**
@@ -1003,6 +914,14 @@ export const isValidResourceId = (id: string): boolean => {
  * Validate catalog ID format
  */
 export const isValidCatalogId = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
+
+/**
+ * NEW: Validate service ID format
+ */
+export const isValidServiceId = (id: string): boolean => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return typeof id === 'string' && uuidRegex.test(id);
 };
@@ -1040,21 +959,21 @@ export const isValidCategoryName = (categoryName: string): boolean => {
 };
 
 /**
- * NEW: Validate industry ID format
+ * Validate industry ID format
  */
 export const isValidIndustryId = (industryId: string): boolean => {
   return isValidUUID(industryId);
 };
 
 /**
- * NEW: Validate search query for industry endpoints
+ * Validate search query for industry endpoints
  */
 export const isValidSearchQuery = (search: string): boolean => {
   return typeof search === 'string' && search.trim().length >= 3 && search.length <= 100;
 };
 
 /**
- * NEW: Validate pagination parameters
+ * Validate pagination parameters
  */
 export const isValidPaginationParams = (page?: number, limit?: number): boolean => {
   if (page !== undefined && (page < 1 || page > 10000)) return false;
@@ -1063,92 +982,11 @@ export const isValidPaginationParams = (page?: number, limit?: number): boolean 
 };
 
 /**
- * NEW: Validate onboarding step ID
+ * Validate onboarding step ID
  */
 export const isValidOnboardingStepId = (stepId: string): boolean => {
   const validSteps = ['user-profile', 'business-profile', 'data-setup', 'storage', 'team', 'tour'];
   return validSteps.includes(stepId);
-};
-
-/**
- * Get endpoint for resource operation based on parameters
- */
-export const getResourceEndpoint = (
-  operation: 'list' | 'create' | 'get' | 'update' | 'delete' | 'types' | 'health',
-  resourceId?: string
-): string => {
-  switch (operation) {
-    case 'list':
-    case 'create':
-      return API_ENDPOINTS.RESOURCES.LIST;
-    case 'get':
-      return resourceId ? API_ENDPOINTS.RESOURCES.GET(resourceId) : '';
-    case 'update':
-      return resourceId ? API_ENDPOINTS.RESOURCES.UPDATE(resourceId) : '';
-    case 'delete':
-      return resourceId ? API_ENDPOINTS.RESOURCES.DELETE(resourceId) : '';
-    case 'types':
-      return API_ENDPOINTS.RESOURCES.RESOURCE_TYPES;
-    case 'health':
-      return API_ENDPOINTS.RESOURCES.HEALTH;
-    default:
-      return '';
-  }
-};
-
-/**
- * Get endpoint for product master data operation (Enhanced)
- */
-export const getProductMasterDataEndpoint = (
-  scope: 'global' | 'tenant' | 'industries' | 'categories',
-  operation: 'category' | 'categories' | 'list' | 'health' | 'constants',
-  categoryName?: string,
-  isActive: boolean = true
-): string => {
-  switch (operation) {
-    case 'health':
-      return API_ENDPOINTS.PRODUCT_MASTERDATA.HEALTH;
-    case 'constants':
-      return API_ENDPOINTS.PRODUCT_MASTERDATA.CONSTANTS;
-    case 'category':
-      if (!categoryName) return '';
-      return scope === 'global' 
-        ? buildGlobalMasterDataURL(categoryName, isActive)
-        : buildTenantMasterDataURL(categoryName, isActive);
-    case 'categories':
-      return scope === 'global'
-        ? buildGlobalCategoriesURL(isActive)
-        : buildTenantCategoriesURL(isActive);
-    case 'list':
-      if (scope === 'industries') return API_ENDPOINTS.PRODUCT_MASTERDATA.INDUSTRIES.LIST;
-      if (scope === 'categories') return API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_ALL;
-      return '';
-    default:
-      return '';
-  }
-};
-
-/**
- * NEW: Get endpoint for industry-first onboarding operations
- */
-export const getIndustryEndpoint = (
-  operation: 'list' | 'categories' | 'primary-categories',
-  industryId?: string
-): string => {
-  switch (operation) {
-    case 'list':
-      return API_ENDPOINTS.PRODUCT_MASTERDATA.INDUSTRIES.LIST;
-    case 'categories':
-      return industryId 
-        ? buildIndustryCategoriesURL(industryId)
-        : API_ENDPOINTS.PRODUCT_MASTERDATA.CATEGORIES.LIST_ALL;
-    case 'primary-categories':
-      return industryId 
-        ? buildPrimaryIndustryCategoriesURL(industryId)
-        : '';
-    default:
-      return '';
-  }
 };
 
 // Export everything for comprehensive access

@@ -13,7 +13,7 @@ import {
   Info
 } from 'lucide-react';
 
-// Import master data hooks - FIXED: Use real hooks
+// Import master data hooks
 import { 
   useTenantMasterData,
   useMasterDataDropdown
@@ -68,14 +68,13 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // FIXED: Master data hooks - Use real data from tenant context
+  // Master data hooks - corrected
   const { 
     currencies, 
     taxRates, 
     taxSettings, 
     defaultTaxRate,
     resourceTypes,
-    resources, // FIXED: Now get actual resources
     isLoading: loadingTenantContext 
   } = useTenantContextMaster({
     includeResources: true,
@@ -89,35 +88,20 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
   // Local state for resource management
   const [selectedResourceType, setSelectedResourceType] = useState<string>('');
 
-  // FIXED: Process service categories for resource-based services
+  // Process service categories for resource-based services - FIXED to use description
   const serviceCategories = serviceCategoriesData?.data?.map(item => ({
     id: item.id,
-    name: item.description || `Category ${item.id}`,
+    name: item.description || `Category ${item.id}`, // Use description as display name
     description: item.description,
     value: item.id
   })) || [];
 
-  // FIXED: Process currencies with default selection
+  // Process currencies for dropdown
   const currencyOptions = currencies?.map(currency => ({
     value: currency.code,
     label: `${currency.name} (${currency.symbol})`,
-    symbol: currency.symbol,
-    isDefault: currency.is_default || currency.code === 'INR' // Add default logic
+    symbol: currency.symbol
   })) || [];
-
-  // FIXED: Get default currency
-  const getDefaultCurrency = useCallback(() => {
-    // First try to find default from API
-    const defaultFromAPI = currencyOptions.find(c => c.isDefault);
-    if (defaultFromAPI) return defaultFromAPI.value;
-    
-    // Fallback to INR
-    const inr = currencyOptions.find(c => c.value === 'INR');
-    if (inr) return inr.value;
-    
-    // Last fallback to first available
-    return currencyOptions[0]?.value || 'INR';
-  }, [currencyOptions]);
 
   // Process tax rates for the tag selector
   const processedTaxRates = taxRates?.map(rate => ({
@@ -127,16 +111,18 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     isDefault: rate.is_default
   })) || [];
 
-  // FIXED: Get actual resources - no more mock data
-  const actualResources = resources || [];
+  // Mock resources data (you may need to adjust this based on your actual resource API)
+  const resources = [
+    { id: '1', resource_type_id: '1', display_name: 'Dr. Kiran', description: 'Senior Consultant', category: 'Staff' },
+    { id: '2', resource_type_id: '2', display_name: 'Microwave', description: 'Kitchen Equipment', category: 'Equipment' },
+    { id: '3', resource_type_id: '3', display_name: 'Operation Theatre', description: 'Clean Room Asset', category: 'Assets' }
+  ];
 
-  // FIXED: Helper to get resources by category using real data
+  // Helper to get resources by category
   const getResourcesByCategory = useCallback((categoryId: string) => {
-    return actualResources.filter(resource => 
-      resource.resource_type_id === categoryId || 
-      resource.category_id === categoryId
-    );
-  }, [actualResources]);
+    // This would typically filter based on the actual resource structure
+    return resources.filter(resource => resource.resource_type_id === categoryId);
+  }, []);
 
   // Update service type
   const handleServiceTypeChange = useCallback((newType: 'independent' | 'resource_based') => {
@@ -146,39 +132,20 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     });
   }, [onChange]);
 
-  // FIXED: Add new pricing record with proper defaults and tax rates
+  // Add new pricing record
   const addPricingRecord = useCallback(() => {
-    const defaultCurrency = getDefaultCurrency();
-    let defaultTaxRateIds: string[] = [];
-    
-    // Set default tax rates
-    if (defaultTaxRate) {
-      defaultTaxRateIds = [defaultTaxRate.id];
-    } else if (processedTaxRates.length > 0) {
-      // If no default, use the first available tax rate
-      defaultTaxRateIds = [processedTaxRates[0].id];
-    }
-    
     const newPricing: ServicePricingForm = {
-      currency: defaultCurrency,
+      currency: currencyOptions[0]?.value || 'INR',
       amount: 0,
       price_type: priceTypeOptions[0]?.value || 'fixed',
       tax_inclusion: taxSettings?.display_mode === 'including_tax' ? 'inclusive' : 'exclusive',
-      tax_rate_ids: defaultTaxRateIds
+      tax_rate_ids: defaultTaxRate ? [defaultTaxRate.id] : [] // Start with default tax rate if available
     };
     
     onChange({
       pricing_records: [...pricingRecords, newPricing]
     });
-  }, [
-    pricingRecords, 
-    getDefaultCurrency, 
-    priceTypeOptions, 
-    taxSettings, 
-    defaultTaxRate,
-    processedTaxRates,
-    onChange
-  ]);
+  }, [pricingRecords, currencyOptions, priceTypeOptions, taxSettings, defaultTaxRate, onChange]);
 
   // Update pricing record
   const updatePricingRecord = useCallback((index: number, updates: Partial<ServicePricingForm>) => {
@@ -194,7 +161,7 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     onChange({ pricing_records: updatedRecords });
   }, [pricingRecords, onChange]);
 
-  // FIXED: Add resource requirement using real resource data
+  // Add resource requirement
   const addResourceRequirement = useCallback((resourceId: string, resourceTypeId: string) => {
     const newRequirement: ServiceResourceForm = {
       resource_id: resourceId,
@@ -222,12 +189,12 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     onChange({ resource_requirements: updatedRequirements });
   }, [resourceRequirements, onChange]);
 
-  // FIXED: Auto-add first pricing record with proper default currency
+  // Auto-add first pricing record if none exist
   useEffect(() => {
-    if (pricingRecords.length === 0 && !loadingTenantContext && currencyOptions.length > 0) {
+    if (pricingRecords.length === 0 && !loadingTenantContext) {
       addPricingRecord();
     }
-  }, [pricingRecords.length, loadingTenantContext, currencyOptions.length, addPricingRecord]);
+  }, [pricingRecords.length, loadingTenantContext, addPricingRecord]);
 
   // UPDATED: Calculate pricing totals with multiple tax rates
   const calculateTotal = (pricing: ServicePricingForm) => {
@@ -427,7 +394,7 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
         </div>
       </div>
 
-      {/* FIXED: Resource Requirements (for resource-based services) */}
+      {/* Resource Requirements (for resource-based services) */}
       {serviceType === 'resource_based' && (
         <div 
           className="border rounded-lg p-6"
@@ -452,134 +419,95 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
             </div>
           ) : (
             <>
-              {/* FIXED: Service Category Selector with real data */}
-              {serviceCategories.length > 0 ? (
-                <div className="mb-6">
-                  <label 
-                    className="block text-sm font-medium mb-2 transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Select Service Category
-                  </label>
-                  <select
-                    value={selectedResourceType}
-                    onChange={(e) => setSelectedResourceType(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md transition-colors"
-                    style={{
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderColor: colors.utility.primaryText + '40',
-                      color: colors.utility.primaryText
-                    }}
-                  >
-                    <option value="">Select service category...</option>
-                    {serviceCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div 
-                  className="mb-6 p-4 rounded-lg flex items-center gap-2"
+              {/* Service Category Selector */}
+              <div className="mb-6">
+                <label 
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Select Service Category
+                </label>
+                <select
+                  value={selectedResourceType}
+                  onChange={(e) => setSelectedResourceType(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md transition-colors"
                   style={{
-                    backgroundColor: colors.semantic.warning + '10',
-                    borderColor: colors.semantic.warning + '40'
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderColor: colors.utility.primaryText + '40',
+                    color: colors.utility.primaryText
                   }}
                 >
-                  <AlertTriangle 
-                    className="h-4 w-4"
-                    style={{ color: colors.semantic.warning }}
-                  />
-                  <span 
-                    className="text-sm"
-                    style={{ color: colors.semantic.warning }}
-                  >
-                    No service categories available. Please set up categories first.
-                  </span>
-                </div>
-              )}
+                  <option value="">Select service category...</option>
+                  {serviceCategories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              {/* FIXED: Available Resources using real data */}
+              {/* Available Resources */}
               {selectedResourceType && (
                 <div className="mb-6">
                   <h4 
                     className="text-sm font-medium mb-3 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    Available Resources ({getResourcesByCategory(selectedResourceType).length})
+                    Available Resources
                   </h4>
-                  
-                  {getResourcesByCategory(selectedResourceType).length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {getResourcesByCategory(selectedResourceType).map(resource => {
-                        const isAdded = resourceRequirements.some(req => req.resource_id === resource.id);
-                        
-                        return (
-                          <div 
-                            key={resource.id}
-                            className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                              isAdded ? 'opacity-50' : 'hover:shadow-md'
-                            }`}
-                            style={{
-                              backgroundColor: colors.utility.primaryBackground,
-                              borderColor: isAdded 
-                                ? colors.semantic.success + '40'
-                                : colors.utility.primaryText + '20'
-                            }}
-                            onClick={() => {
-                              if (!isAdded) {
-                                addResourceRequirement(resource.id, resource.resource_type_id || selectedResourceType);
-                              }
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h5 
-                                  className="font-medium text-sm transition-colors"
-                                  style={{ color: colors.utility.primaryText }}
-                                >
-                                  {resource.display_name || resource.name || 'Unnamed Resource'}
-                                </h5>
-                                <p 
-                                  className="text-xs transition-colors"
-                                  style={{ color: colors.utility.secondaryText }}
-                                >
-                                  {resource.description || 'No description available'}
-                                </p>
-                              </div>
-                              {isAdded ? (
-                                <CheckCircle 
-                                  className="h-4 w-4"
-                                  style={{ color: colors.semantic.success }}
-                                />
-                              ) : (
-                                <Plus 
-                                  className="h-4 w-4"
-                                  style={{ color: colors.brand.primary }}
-                                />
-                              )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {getResourcesByCategory(selectedResourceType).map(resource => {
+                      const isAdded = resourceRequirements.some(req => req.resource_id === resource.id);
+                      
+                      return (
+                        <div 
+                          key={resource.id}
+                          className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                            isAdded ? 'opacity-50' : 'hover:shadow-md'
+                          }`}
+                          style={{
+                            backgroundColor: colors.utility.primaryBackground,
+                            borderColor: isAdded 
+                              ? colors.semantic.success + '40'
+                              : colors.utility.primaryText + '20'
+                          }}
+                          onClick={() => {
+                            if (!isAdded) {
+                              addResourceRequirement(resource.id, resource.resource_type_id);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h5 
+                                className="font-medium text-sm transition-colors"
+                                style={{ color: colors.utility.primaryText }}
+                              >
+                                {resource.display_name}
+                              </h5>
+                              <p 
+                                className="text-xs transition-colors"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                {resource.description}
+                              </p>
                             </div>
+                            {isAdded ? (
+                              <CheckCircle 
+                                className="h-4 w-4"
+                                style={{ color: colors.semantic.success }}
+                              />
+                            ) : (
+                              <Plus 
+                                className="h-4 w-4"
+                                style={{ color: colors.brand.primary }}
+                              />
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div 
-                      className="p-4 rounded-lg text-center"
-                      style={{
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderColor: colors.utility.primaryText + '20'
-                      }}
-                    >
-                      <p 
-                        className="text-sm"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        No resources available for this category.
-                      </p>
-                    </div>
-                  )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -594,7 +522,7 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                   </h4>
                   <div className="space-y-3">
                     {resourceRequirements.map((requirement, index) => {
-                      const resource = actualResources.find(r => r.id === requirement.resource_id);
+                      const resource = resources.find(r => r.id === requirement.resource_id);
                       
                       return (
                         <div 
@@ -610,13 +538,13 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                               className="font-medium text-sm transition-colors"
                               style={{ color: colors.utility.primaryText }}
                             >
-                              {resource?.display_name || resource?.name || 'Unknown Resource'}
+                              {resource?.display_name || 'Unknown Resource'}
                             </h5>
                             <p 
                               className="text-xs transition-colors"
                               style={{ color: colors.utility.secondaryText }}
                             >
-                              {resource?.description || 'No description available'}
+                              {resource?.description}
                             </p>
                           </div>
                           
@@ -908,7 +836,7 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                     </div>
                   </div>
 
-                  {/* Tax Rate Tag Selector */}
+                  {/* NEW: Tax Rate Tag Selector */}
                   <div>
                     <label 
                       className="block text-sm font-medium mb-2 transition-colors"

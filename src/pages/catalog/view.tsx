@@ -32,13 +32,11 @@ import {
 // Import components
 import ConfirmationDialog from '../../components/ui/ConfirmationDialog';
 
-// Import hooks
+// FIXED: Import real hooks
 import { 
-  useServiceCatalogItems,
-  useServiceCatalogOperations,
-  type ServiceCatalogListParams 
+  useServiceCatalogItem,
+  useServiceCatalogOperations
 } from '../../hooks/queries/useServiceCatalogQueries';
-import { useResourcesManager } from '../../hooks/useResources';
 
 // Import utilities
 import { analyticsService } from '@/services/analytics.service';
@@ -66,13 +64,21 @@ const ServiceViewPage: React.FC = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // API hooks
-  const { data: serviceData, isLoading, error, refetch } = useService(serviceId || '');
-  const deleteServiceMutation = useDeleteService();
-  const { resources } = useResourcesManager();
+  // FIXED: Real API hooks
+  const { 
+    data: serviceData, 
+    isLoading, 
+    error, 
+    refetch 
+  } = useServiceCatalogItem(serviceId);
+
+  const { 
+    deleteService,
+    isDeleting 
+  } = useServiceCatalogOperations();
 
   // Get service data
-  const service = serviceData?.data;
+  const service = serviceData;
 
   // Track page view
   useEffect(() => {
@@ -148,15 +154,10 @@ const ServiceViewPage: React.FC = () => {
     }
   }, []);
 
-  // Get resource details
-  const getResourceDetails = useCallback((resourceId: string) => {
-    return resources.find(r => r.id === resourceId);
-  }, [resources]);
-
-  // Handle edit
+  // FIXED: Handle edit - Updated navigation
   const handleEdit = useCallback(() => {
     if (serviceId) {
-      navigate(`/catalog/edit?id=${serviceId}`);
+      navigate(`/catalog/catalogService-form?id=${serviceId}`);
     }
   }, [serviceId, navigate]);
 
@@ -179,12 +180,12 @@ const ServiceViewPage: React.FC = () => {
     }
   }, [service, toast]);
 
-  // Handle delete
+  // FIXED: Handle delete with real API
   const handleDelete = useCallback(async () => {
     if (!serviceId || !service) return;
 
     try {
-      await deleteServiceMutation.mutateAsync(serviceId);
+      await deleteService(serviceId);
       
       toast({
         title: "Service Deleted",
@@ -197,8 +198,14 @@ const ServiceViewPage: React.FC = () => {
         tags: { component: 'ServiceViewPage', action: 'handleDelete' },
         extra: { serviceId, serviceName: service.service_name }
       });
+      
+      toast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: "Could not delete the service. Please try again.",
+      });
     }
-  }, [serviceId, service, deleteServiceMutation, toast, navigate]);
+  }, [serviceId, service, deleteService, toast, navigate]);
 
   // Handle share
   const handleShare = useCallback(() => {
@@ -380,7 +387,7 @@ const ServiceViewPage: React.FC = () => {
     );
   }
 
-  const statusConfig = getStatusConfig(service.status);
+  const statusConfig = getStatusConfig(service.status || 'draft');
   const serviceTypeConfig = getServiceTypeConfig(service.service_type);
 
   return (
@@ -525,7 +532,10 @@ const ServiceViewPage: React.FC = () => {
                     <button
                       onClick={() => {
                         setShowDropdown(false);
-                        console.log('Export functionality will be implemented');
+                        toast({
+                          title: "Feature Coming Soon",
+                          description: "Export functionality will be available soon"
+                        });
                       }}
                       className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
                       style={{ color: colors.utility.primaryText }}
@@ -573,7 +583,7 @@ const ServiceViewPage: React.FC = () => {
               <div 
                 className="prose prose-sm max-w-none transition-colors"
                 style={{ color: colors.utility.secondaryText }}
-                dangerouslySetInnerHTML={{ __html: service.description }}
+                dangerouslySetInnerHTML={{ __html: service.description || 'No description provided.' }}
               />
             </div>
 
@@ -618,49 +628,45 @@ const ServiceViewPage: React.FC = () => {
                   Resource Requirements
                 </h2>
                 <div className="space-y-3">
-                  {service.resource_requirements.map((requirement, index) => {
-                    const resourceDetails = getResourceDetails(requirement.resource_id);
-                    
-                    return (
-                      <div 
-                        key={index}
-                        className="flex items-center gap-4 p-3 rounded-lg border"
-                        style={{
-                          backgroundColor: colors.utility.primaryBackground,
-                          borderColor: colors.utility.primaryText + '20'
-                        }}
-                      >
-                        <div className="flex-1">
-                          <h3 
-                            className="font-medium"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            {resourceDetails?.display_name || 'Unknown Resource'}
-                          </h3>
-                          <p 
-                            className="text-sm"
-                            style={{ color: colors.utility.secondaryText }}
-                          >
-                            {resourceDetails?.description || 'No description available'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span 
-                            className="text-lg font-semibold"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            {requirement.quantity}x
-                          </span>
-                          <p 
-                            className="text-xs"
-                            style={{ color: requirement.is_required ? colors.semantic.error : colors.utility.secondaryText }}
-                          >
-                            {requirement.is_required ? 'Required' : 'Optional'}
-                          </p>
-                        </div>
+                  {service.resource_requirements.map((requirement, index) => (
+                    <div 
+                      key={index}
+                      className="flex items-center gap-4 p-3 rounded-lg border"
+                      style={{
+                        backgroundColor: colors.utility.primaryBackground,
+                        borderColor: colors.utility.primaryText + '20'
+                      }}
+                    >
+                      <div className="flex-1">
+                        <h3 
+                          className="font-medium"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {requirement.resource_name || 'Resource'}
+                        </h3>
+                        <p 
+                          className="text-sm"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          {requirement.description || 'No description available'}
+                        </p>
                       </div>
-                    );
-                  })}
+                      <div className="text-right">
+                        <span 
+                          className="text-lg font-semibold"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {requirement.quantity}x
+                        </span>
+                        <p 
+                          className="text-xs"
+                          style={{ color: requirement.is_required ? colors.semantic.error : colors.utility.secondaryText }}
+                        >
+                          {requirement.is_required ? 'Required' : 'Optional'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -682,67 +688,39 @@ const ServiceViewPage: React.FC = () => {
                   Pricing Information
                 </h2>
                 <div className="space-y-4">
-                  {service.pricing_records.map((pricing, index) => {
-                    const taxAmount = pricing.tax_rate 
-                      ? calculateTaxAmount(pricing.amount, pricing.tax_rate, pricing.tax_inclusion)
-                      : 0;
-                    const totalAmount = pricing.tax_rate 
-                      ? calculateTotalWithTax(pricing.amount, pricing.tax_rate, pricing.tax_inclusion)
-                      : pricing.amount;
-
-                    return (
-                      <div 
-                        key={index}
-                        className="p-4 rounded-lg border"
-                        style={{
-                          backgroundColor: colors.utility.primaryBackground,
-                          borderColor: colors.utility.primaryText + '20'
-                        }}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span 
-                            className="font-medium"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            {pricing.price_type || 'Standard Pricing'}
-                          </span>
-                          <span 
-                            className="text-lg font-bold"
-                            style={{ color: colors.brand.primary }}
-                          >
-                            {formatCurrencyAmount(pricing.amount, pricing.currency)}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-center justify-between text-sm">
-                          <span 
-                            style={{ color: colors.utility.secondaryText }}
-                          >
-                            Tax: {pricing.tax_inclusion === 'inclusive' ? 'Included' : 'Additional'}
-                          </span>
-                          {pricing.tax_rate && taxAmount > 0 && (
-                            <span 
-                              style={{ color: colors.utility.secondaryText }}
-                            >
-                              Tax ({pricing.tax_rate}%): {formatCurrencyAmount(taxAmount, pricing.currency)}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {pricing.tax_inclusion === 'exclusive' && pricing.tax_rate && (
-                          <div 
-                            className="mt-2 pt-2 border-t flex justify-between font-medium"
-                            style={{ borderColor: colors.utility.primaryText + '20' }}
-                          >
-                            <span style={{ color: colors.utility.primaryText }}>Total (inc. tax):</span>
-                            <span style={{ color: colors.brand.primary }}>
-                              {formatCurrencyAmount(totalAmount, pricing.currency)}
-                            </span>
-                          </div>
-                        )}
+                  {service.pricing_records.map((pricing, index) => (
+                    <div 
+                      key={index}
+                      className="p-4 rounded-lg border"
+                      style={{
+                        backgroundColor: colors.utility.primaryBackground,
+                        borderColor: colors.utility.primaryText + '20'
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span 
+                          className="font-medium"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {pricing.price_type || 'Standard Pricing'}
+                        </span>
+                        <span 
+                          className="text-lg font-bold"
+                          style={{ color: colors.brand.primary }}
+                        >
+                          {formatCurrencyAmount(pricing.amount, pricing.currency)}
+                        </span>
                       </div>
-                    );
-                  })}
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span 
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          Tax: {pricing.tax_inclusion === 'inclusive' ? 'Included' : 'Additional'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -895,7 +873,7 @@ const ServiceViewPage: React.FC = () => {
         confirmText="Delete"
         type="danger"
         icon={<Trash2 className="h-6 w-6" />}
-        isLoading={deleteServiceMutation.isPending}
+        isLoading={isDeleting}
       />
     </div>
   );
