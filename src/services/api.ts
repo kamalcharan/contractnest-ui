@@ -1,20 +1,19 @@
-//src/services/api.ts - FIXED with Environment Header Support and API Health Detection
+//src/services/api.ts - FIXED with Direct import.meta.env Usage
 
 import axios from 'axios';
-import { env } from '../config/env';
 
-// TEMPORARY FIX: Force Railway API URL since environment variables aren't working
-const API_URL = env.VITE_API_URL || 'https://contractnest-api-production.up.railway.app';
+// Use Vite's import.meta.env directly for build-time injection
+const API_URL = import.meta.env.VITE_API_URL || 'https://contractnest-api-production.up.railway.app';
 
 // Debug logging to see what's happening
 console.log('🔍 API Configuration:', {
-  'env.VITE_API_URL': env.VITE_API_URL,
+  'import.meta.env.VITE_API_URL': import.meta.env.VITE_API_URL,
   'Final API_URL': API_URL,
-  'Is using fallback': !env.VITE_API_URL
+  'Is using fallback': !import.meta.env.VITE_API_URL
 });
 
 // Debug logging (only in development when enabled)
-if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
+if (import.meta.env.VITE_DEBUG_MODE === 'true' && import.meta.env.VITE_LOG_API_CALLS === 'true') {
   console.log(`[API] Configured with base URL: ${API_URL}`);
 }
 
@@ -128,7 +127,7 @@ api.interceptors.request.use(
     );
     
     // Debug logging for API calls
-    if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
+    if (import.meta.env.VITE_DEBUG_MODE === 'true' && import.meta.env.VITE_LOG_API_CALLS === 'true') {
       console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`, {
         isPublicEndpoint,
         headers: config.headers
@@ -160,7 +159,7 @@ api.interceptors.request.use(
       config.headers['x-environment'] = currentEnvironment;
       
       // Debug log environment header
-      if (env.VITE_DEBUG_MODE === 'true') {
+      if (import.meta.env.VITE_DEBUG_MODE === 'true') {
         console.log(`[API] Setting environment header: ${currentEnvironment}`);
       }
     }
@@ -168,7 +167,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    if (env.VITE_DEBUG_MODE === 'true') {
+    if (import.meta.env.VITE_DEBUG_MODE === 'true') {
       console.error('[API] Request error:', error);
     }
     return Promise.reject(error);
@@ -179,7 +178,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     // Debug logging for successful responses
-    if (env.VITE_DEBUG_MODE === 'true' && env.VITE_LOG_API_CALLS === 'true') {
+    if (import.meta.env.VITE_DEBUG_MODE === 'true' && import.meta.env.VITE_LOG_API_CALLS === 'true') {
       console.log(`[API] Response from ${response.config.url}:`, {
         status: response.status,
         data: response.data,
@@ -206,8 +205,8 @@ api.interceptors.response.use(
       // Store maintenance info if provided
       const maintenanceInfo = {
         isInMaintenance: true,
-        estimatedEndTime: response.headers['x-maintenance-end-time'] || env.VITE_MAINTENANCE_END_TIME || null,
-        message: response.headers['x-maintenance-message'] || env.VITE_MAINTENANCE_MESSAGE || 'System maintenance in progress'
+        estimatedEndTime: response.headers['x-maintenance-end-time'] || import.meta.env.VITE_MAINTENANCE_END_TIME || null,
+        message: response.headers['x-maintenance-message'] || import.meta.env.VITE_MAINTENANCE_MESSAGE || 'System maintenance in progress'
       };
       sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
       
@@ -230,7 +229,7 @@ api.interceptors.response.use(
   },
   (error) => {
     // Debug logging for errors
-    if (env.VITE_DEBUG_MODE === 'true') {
+    if (import.meta.env.VITE_DEBUG_MODE === 'true') {
       console.error('[API] Response error:', {
         url: error.config?.url,
         status: error.response?.status,
@@ -281,14 +280,14 @@ api.interceptors.response.use(
     // Handle 503 Service Unavailable (maintenance mode)
     if (error.response?.status === 503) {
       // Check if we're in maintenance mode from env
-      const isMaintenanceMode = env.VITE_MAINTENANCE_MODE === 'true';
+      const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
       
       const maintenanceInfo = {
         isInMaintenance: true,
         estimatedEndTime: error.response.headers['x-maintenance-end-time'] || 
-                          env.VITE_MAINTENANCE_END_TIME || null,
+                          import.meta.env.VITE_MAINTENANCE_END_TIME || null,
         message: error.response.data?.message || 
-                env.VITE_MAINTENANCE_MESSAGE || 
+                import.meta.env.VITE_MAINTENANCE_MESSAGE || 
                 'System maintenance in progress'
       };
       sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
@@ -402,7 +401,7 @@ export const getApiDownInfo = () => {
 
 // Function to force mark API as down (for testing)
 export const forceApiDown = () => {
-  if (env.VITE_DEBUG_MODE === 'true') {
+  if (import.meta.env.VITE_DEBUG_MODE === 'true') {
     sessionStorage.setItem(API_DOWN_SESSION_KEY, 'true');
     sessionStorage.setItem('api_down_timestamp', new Date().toISOString());
     console.log('🧪 API forced down for testing');

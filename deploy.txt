@@ -1,0 +1,5 @@
+docker build --no-cache -t vikuna/contractnest-ui:v2.7.2 -t vikuna/contractnest-ui:latest .
+
+docker push vikuna/contractnest-ui:v2.7.1
+
+change version whenever required

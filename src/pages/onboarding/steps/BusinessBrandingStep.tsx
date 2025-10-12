@@ -1,11 +1,10 @@
-// src/pages/onboarding/steps/BusinessBasicStep.tsx
+// src/pages/onboarding/steps/BusinessBrandingStep.tsx
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
-import BusinessTypeSelector from '@/components/tenantprofile/BusinessTypeSelector';
-import { Building, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import IndustrySelector from '@/components/tenantprofile/IndustrySelector';
+import { Building2, ArrowRight, Loader2, Lightbulb, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface OnboardingStepContext {
@@ -15,18 +14,17 @@ interface OnboardingStepContext {
   updateTenantField: (field: string, value: any) => void;
 }
 
-const BusinessBasicStep: React.FC = () => {
+const BusinessBrandingStep: React.FC = () => {
   const { onComplete, isSubmitting, updateTenantField } = useOutletContext<OnboardingStepContext>();
   const { isDarkMode, currentTheme } = useTheme();
-  const { currentTenant } = useAuth();
   const { profile } = useTenantProfile();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const [selectedBusinessType, setSelectedBusinessType] = useState<string>('');
+  const [selectedIndustry, setSelectedIndustry] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Check if already completed
-  const isAlreadyCompleted = !!profile?.business_type_id;
+  const isAlreadyCompleted = !!profile?.industry_id;
 
   /**
    * Handle skip for already completed step
@@ -36,15 +34,15 @@ const BusinessBasicStep: React.FC = () => {
   };
 
   /**
-   * Handle business type selection
+   * Handle industry selection
    */
-  const handleBusinessTypeSelect = (businessTypeId: string) => {
-    console.log('🟡 BusinessBasicStep - Business type selected:', businessTypeId);
-    setSelectedBusinessType(businessTypeId);
+  const handleIndustryChange = (industryId: string) => {
+    console.log('🟡 BusinessBrandingStep (Industry) - Industry selected:', industryId);
+    setSelectedIndustry(industryId);
     
-    updateTenantField('business_type_id', businessTypeId);
+    updateTenantField('industry_id', industryId);
     
-    toast.success('Business role selected', {
+    toast.success('Industry selected', {
       duration: 2000,
       icon: '✓'
     });
@@ -54,13 +52,12 @@ const BusinessBasicStep: React.FC = () => {
    * Handle continue button click
    */
   const handleContinue = async () => {
-    console.log('🟢 BusinessBasicStep - Continue clicked');
-    console.log('🟢 Selected business type:', selectedBusinessType);
-    console.log('🟢 Tenant name:', currentTenant?.name);
+    console.log('🟢 BusinessBrandingStep (Industry) - Continue clicked');
+    console.log('🟢 Selected industry:', selectedIndustry);
     
-    if (!selectedBusinessType) {
-      console.log('🔴 No business type selected');
-      toast.error('Please select your business role to continue');
+    if (!selectedIndustry) {
+      console.log('🔴 No industry selected');
+      toast.error('Please select your industry to continue');
       return;
     }
     
@@ -68,30 +65,25 @@ const BusinessBasicStep: React.FC = () => {
     
     try {
       const dataToSend = {
-        business_type_id: selectedBusinessType,
-        business_name: currentTenant?.name || '',
-        step: 'business-basic',
+        industry_id: selectedIndustry,
+        step: 'business-branding',
         completed_at: new Date().toISOString()
       };
-      
-      if (currentTenant?.name) {
-        updateTenantField('business_name', currentTenant.name);
-      }
       
       console.log('🟢 Data being passed to onComplete:', dataToSend);
       
       await onComplete(dataToSend);
       
-      console.log('✅ BusinessBasicStep - Step completed successfully');
+      console.log('✅ BusinessBrandingStep (Industry) - Step completed successfully');
     } catch (error) {
-      console.error('❌ Error in BusinessBasicStep:', error);
-      toast.error('Failed to save business role. Please try again.');
+      console.error('❌ Error in BusinessBrandingStep (Industry):', error);
+      toast.error('Failed to save industry selection. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const canContinue = selectedBusinessType && !isSubmitting && !isLoading;
+  const canContinue = selectedIndustry && !isSubmitting && !isLoading;
 
   // Show "Already Completed" view if data exists
   if (isAlreadyCompleted) {
@@ -111,7 +103,7 @@ const BusinessBasicStep: React.FC = () => {
             className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
-            Business Profile Already Set
+            Industry Already Selected
           </h2>
           <p 
             className="text-sm mb-6"
@@ -134,7 +126,7 @@ const BusinessBasicStep: React.FC = () => {
             className="text-xs mt-4"
             style={{ color: colors.utility.secondaryText }}
           >
-            To edit your business profile, go to Settings → Business Profile after completing onboarding
+            To edit your industry, go to Settings → Business Profile after completing onboarding
           </p>
         </div>
       </div>
@@ -155,32 +147,32 @@ const BusinessBasicStep: React.FC = () => {
                 color: colors.brand.primary
               }}
             >
-              <Building className="w-8 h-8" />
+              <Building2 className="w-8 h-8" />
             </div>
             <h2 
               className="text-2xl font-bold mb-2 transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
-              Define Your Business Role
+              Select Your Industry
             </h2>
             <p 
               className="text-sm max-w-2xl mx-auto transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
-              ContractNest adapts to your role in service contracts. Choose your primary business function 
-              to unlock the right tools, workflows, and dashboard for your specific needs.
+              Help us understand your business context better. This allows us to provide 
+              industry-specific features, compliance guidelines, and insights tailored to your sector.
             </p>
           </div>
 
-          {/* Business Type Selector */}
-          <BusinessTypeSelector
-            value={selectedBusinessType}
-            onChange={handleBusinessTypeSelect}
+          {/* Industry Selector */}
+          <IndustrySelector
+            value={selectedIndustry}
+            onChange={handleIndustryChange}
             disabled={isSubmitting || isLoading}
           />
 
-          {/* Platform Customization Info */}
-          {selectedBusinessType && (
+          {/* Industry Benefits Info */}
+          {selectedIndustry && (
             <div 
               className="mt-8 p-6 rounded-lg border transition-all animate-in fade-in slide-in-from-bottom-4 duration-300"
               style={{
@@ -199,9 +191,9 @@ const BusinessBasicStep: React.FC = () => {
                     color: colors.brand.primary 
                   }}
                 >
-                  ✓
+                  <Lightbulb className="w-5 h-5" />
                 </div>
-                How This Shapes Your Experience
+                Industry-Specific Benefits
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-sm">
@@ -209,13 +201,13 @@ const BusinessBasicStep: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.brand.primary }}
                   >
-                    Dashboard Layout
+                    Compliance Templates
                   </div>
                   <p 
                     className="transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Your main dashboard shows the metrics, reports, and quick actions most relevant to your role
+                    Pre-configured contract templates that meet industry-specific regulatory requirements
                   </p>
                 </div>
                 <div className="text-sm">
@@ -223,13 +215,13 @@ const BusinessBasicStep: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.brand.primary }}
                   >
-                    Workflow Design
+                    Smart Suggestions
                   </div>
                   <p 
                     className="transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Contract creation, approval processes, and notifications are optimized for your business model
+                    AI-powered recommendations based on common practices and trends in your industry
                   </p>
                 </div>
                 <div className="text-sm">
@@ -237,13 +229,13 @@ const BusinessBasicStep: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.brand.primary }}
                   >
-                    Feature Priority
+                    Benchmarking
                   </div>
                   <p 
                     className="transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Tools most important to your role are prominently featured and easily accessible
+                    Compare your contract performance against industry standards and best practices
                   </p>
                 </div>
               </div>
@@ -251,7 +243,7 @@ const BusinessBasicStep: React.FC = () => {
           )}
 
           {/* Continue Button */}
-          {selectedBusinessType && (
+          {selectedIndustry && (
             <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
               <button
                 onClick={handleContinue}
@@ -270,7 +262,7 @@ const BusinessBasicStep: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    Continue to Industry Selection
+                    Continue to Branding
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </>
                 )}
@@ -284,7 +276,7 @@ const BusinessBasicStep: React.FC = () => {
               className="text-xs transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
-              Not sure which role fits? Don't worry - you can change this anytime in Settings → Business Profile
+              Don't see your industry? Choose the closest match - you can update this later in your business profile settings
             </p>
           </div>
         </div>
@@ -293,4 +285,4 @@ const BusinessBasicStep: React.FC = () => {
   );
 };
 
-export default BusinessBasicStep;
+export default BusinessBrandingStep;

@@ -1,10 +1,13 @@
+// src/components/onboarding/OnboardingLayout.tsx
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useOnboarding } from '@/hooks/queries/useOnboarding';
+import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, CheckCircle, AlertCircle, Circle, CheckCircle2 } from 'lucide-react';
 import { OnboardingUtils } from '@/types/onboardingTypes';
+import toast from 'react-hot-toast';
 
 interface OnboardingLayoutProps {
   children?: React.ReactNode;
@@ -15,6 +18,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { isDarkMode, currentTheme } = useTheme();
   const { currentTenant, user } = useAuth();
+  
   const {
     isLoading,
     isSubmitting,
@@ -36,8 +40,16 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     goToPreviousStep,
     completeOnboarding,
     initializeOnboarding,
+    refreshStatus,
     error
   } = useOnboarding();
+
+  // Tenant Profile Hook for business profile steps
+  const {
+    updateField: updateTenantField,
+    handleLogoChange: handleTenantLogoChange,
+    submitProfile
+  } = useTenantProfile({ isOnboarding: true });
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const allSteps = OnboardingUtils.getAllSteps();
@@ -45,6 +57,17 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   
   // Track local UI step from URL
   const [uiStepId, setUiStepId] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Business profile data accumulation (for onboarding tracking)
+  const [businessProfileData, setBusinessProfileData] = useState<Record<string, any>>({});
+  
+  // Custom step labels override
+  const stepLabelOverrides: Record<string, string> = {
+    'business-basic': 'Business Profile',
+    'business-branding': 'Industry',
+    'business-preferences': 'Branding'
+  };
   
   useEffect(() => {
     // Extract step ID from URL path
@@ -56,58 +79,209 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   // Initialize onboarding if needed
   useEffect(() => {
     const initOnboarding = async () => {
-        console.log('Init check - isLoading:', isLoading, 'needsOnboarding:', needsOnboarding, 'currentStepId:', currentStepId, 'isCompletePage:', isCompletePage);
-        
-        if (!isLoading && needsOnboarding && !currentStepId && !isCompletePage) {
-            console.log('Calling initializeOnboarding...');
-            try {
-                await initializeOnboarding();
-                console.log('Onboarding initialized successfully');
-            } catch (err) {
-                console.error('Failed to initialize onboarding:', err);
-            }
+      console.log('Init check - isLoading:', isLoading, 'needsOnboarding:', needsOnboarding, 'currentStepId:', currentStepId, 'isCompletePage:', isCompletePage);
+      
+      if (!isLoading && needsOnboarding && !currentStepId && !isCompletePage) {
+        console.log('Calling initializeOnboarding...');
+        try {
+          await initializeOnboarding();
+          console.log('Onboarding initialized successfully');
+        } catch (err) {
+          console.error('Failed to initialize onboarding:', err);
+          toast.error('Failed to initialize onboarding');
         }
+      }
     };
     
     initOnboarding();
-}, [needsOnboarding, currentStepId, isLoading, isCompletePage]);
+  }, [needsOnboarding, currentStepId, isLoading, isCompletePage]);
 
   // Redirect if onboarding is already complete
   useEffect(() => {
     if (!isLoading && isOnboardingComplete && !isCompletePage) {
+      toast.success('Onboarding already completed!');
       navigate('/dashboard');
     }
   }, [isOnboardingComplete, isLoading, isCompletePage, navigate]);
 
-  const handleCompleteStep = async (data?: Record<string, any>) => {
-  // UI-only steps that don't need backend calls
-const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selection', 'business-branding', 'business-preferences', 'sample-contract'];  
-  // Check the current UI step from URL
-  if (uiOnlySteps.includes(uiStepId)) {
-    console.log('Skipping API call for UI-only step:', uiStepId);
-    // Just navigate to next step without backend call
+ const handleCompleteStep = async (data?: Record<string, any>) => {
+  if (isProcessing) return;
+  
+  setIsProcessing(true);
+  
+  try {
+    // Find current and next UI step
     const currentIndex = allSteps.findIndex(s => s.id === uiStepId);
     const nextStep = allSteps[currentIndex + 1];
-    if (nextStep) {
-      navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+    
+    console.log(`🟢 OnboardingLayout - handleCompleteStep called for step: ${uiStepId}`);
+    console.log('🟢 Data received:', data);
+    
+    // Business profile steps that need data accumulation
+    const businessSteps = ['business-basic', 'business-branding', 'business-preferences'];
+    
+    if (businessSteps.includes(uiStepId)) {
+      // ✅ NEW: Check if this is an "already completed" skip
+      const isEmptyData = !data || Object.keys(data).length === 0;
+      
+      if (isEmptyData) {
+        // User clicked "Continue" from already completed view
+        // Just navigate without any API calls
+        console.log('🟡 Business step already completed - skipping save, just navigating');
+        toast.success('Continuing to next step');
+        
+        if (nextStep) {
+          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+        } else {
+          navigate('/onboarding/complete');
+        }
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Accumulate the data from this step
+      const updatedBusinessData = { ...businessProfileData, ...data };
+      setBusinessProfileData(updatedBusinessData);
+      
+      console.log(`🟡 Business step "${uiStepId}" completed. Accumulated data:`, updatedBusinessData);
+      
+      // Only make API calls on the LAST business step
+      if (uiStepId === 'business-preferences') {
+        console.log('🔴 LAST BUSINESS STEP - SAVING TO TENANT PROFILE');
+        
+        // First, save to tenant profile table using useTenantProfile hook
+        toast.loading('Saving your business profile...', { id: 'saving-profile' });
+        
+        const profileSaved = await submitProfile();
+        
+        if (!profileSaved) {
+          console.log('❌ Failed to save tenant profile');
+          toast.error('Failed to save business profile', { id: 'saving-profile' });
+          setIsProcessing(false);
+          return;
+        }
+        
+        console.log('✅ Tenant profile saved successfully');
+        toast.success('Business profile saved successfully!', { id: 'saving-profile' });
+        
+        // Then, mark onboarding step as complete
+        console.log('🔴 Marking onboarding step complete');
+        toast.loading('Completing onboarding step...', { id: 'completing-step' });
+        
+        const success = await completeStep('business-preferences', updatedBusinessData);
+        
+        console.log('🔴 API call result:', success);
+        
+        if (success) {
+          console.log('✅ SUCCESS - Refreshing status');
+          toast.success('Step completed!', { id: 'completing-step' });
+          await refreshStatus();
+          
+          // Clear accumulated data after successful save
+          setBusinessProfileData({});
+          console.log('✅ Business profile onboarding completed and data cleared');
+          
+          if (nextStep) {
+            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+          } else {
+            navigate('/onboarding/complete');
+          }
+        } else {
+          console.log('❌ FAILED - Not navigating');
+          toast.error('Failed to complete step', { id: 'completing-step' });
+        }
+      } else {
+        // For first two business steps, just navigate without API call
+        console.log(`🟡 Business step "${uiStepId}" - data saved locally, navigating to next step`);
+        toast.success('Progress saved');
+        
+        if (nextStep) {
+          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+        }
+      }
+    } else {
+      // For non-business steps, use existing logic
+      const uiOnlySteps = ['welcome', 'storage-setup', 'theme-selection', 'sample-contract'];
+      
+      if (uiOnlySteps.includes(uiStepId)) {
+        console.log('🟡 UI-only step:', uiStepId, '- navigating to next step without backend call');
+        toast.success('Step completed');
+        
+        if (nextStep) {
+          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+        }
+      } else {
+        console.log('🔴 Backend step:', uiStepId, '- making API call');
+        toast.loading('Saving...', { id: 'saving-step' });
+        
+        const success = await completeStep(uiStepId as any, data);
+        
+        if (success) {
+          toast.success('Step completed!', { id: 'saving-step' });
+          await refreshStatus();
+          
+          if (nextStep) {
+            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+          } else {
+            navigate('/onboarding/complete');
+          }
+        } else {
+          toast.error('Failed to complete step', { id: 'saving-step' });
+        }
+      }
     }
-    return;
-  }
-  console.log('Making API call for backend step:', uiStepId);
-  // For backend steps, make the API call
-  if (uiStepId) {
-    const success = await completeStep(uiStepId as any, data);
-    // The completeStep function already handles navigation in useOnboarding.ts
+  } catch (err: any) {
+    console.error('❌ Error in handleCompleteStep:', err);
+    toast.error(err?.message || 'An error occurred');
+  } finally {
+    setIsProcessing(false);
   }
 };
+
   const handleSkipStep = async () => {
-    if (uiStepId && canSkip) {
-      await skipStep(uiStepId as any);
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      // Find next UI step
+      const currentIndex = allSteps.findIndex(s => s.id === uiStepId);
+      const nextStep = allSteps[currentIndex + 1];
+      
+      if (uiStepId && canSkip) {
+        toast.loading('Skipping step...', { id: 'skip-step' });
+        
+        const success = await skipStep(uiStepId as any);
+        
+        if (success) {
+          toast.success('Step skipped', { id: 'skip-step' });
+          await refreshStatus();
+          
+          if (nextStep) {
+            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+          }
+        } else {
+          toast.error('Failed to skip step', { id: 'skip-step' });
+        }
+      }
+    } catch (err: any) {
+      console.error('❌ Error in handleSkipStep:', err);
+      toast.error(err?.message || 'An error occurred');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleFinish = async () => {
-    await completeOnboarding();
+    toast.loading('Completing onboarding...', { id: 'finish-onboarding' });
+    
+    try {
+      await completeOnboarding();
+      toast.success('Onboarding completed successfully!', { id: 'finish-onboarding' });
+    } catch (err: any) {
+      console.error('❌ Error completing onboarding:', err);
+      toast.error(err?.message || 'Failed to complete onboarding', { id: 'finish-onboarding' });
+    }
   };
 
   const handleGoToPreviousStep = () => {
@@ -116,6 +290,11 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
       const prevStep = allSteps[currentIndex - 1];
       navigate(prevStep.path || `/onboarding/${prevStep.id}`);
     }
+  };
+
+  // Get step display title (with overrides)
+  const getStepTitle = (stepId: string): string => {
+    return stepLabelOverrides[stepId] || allSteps.find(s => s.id === stepId)?.title || stepId;
   };
 
   // Loading state
@@ -176,6 +355,9 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
       </div>
     );
   }
+
+  // Steps that have their own submit buttons (don't show layout's Continue button)
+  const stepsWithOwnButtons = ['business-basic', 'business-branding', 'business-preferences', 'storage-setup'];
 
   return (
     <div 
@@ -259,6 +441,7 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
               const isCompleted = completedSteps.includes(step.id);
               const isSkipped = skippedSteps.includes(step.id);
               const isCurrent = uiStepId === step.id;
+              const displayTitle = getStepTitle(step.id);
               
               return (
                 <div 
@@ -304,7 +487,7 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
                                  colors.utility.secondaryText 
                         }}
                       >
-                        {step.title}
+                        {displayTitle}
                       </span>
                       {step.isRequired && !isCompleted && !isSkipped && (
                         <span 
@@ -364,7 +547,7 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
               className="text-2xl font-bold"
               style={{ color: colors.utility.primaryText }}
             >
-              {allSteps.find(s => s.id === uiStepId)?.title || 'Getting Started'}
+              {getStepTitle(uiStepId) || 'Getting Started'}
             </h2>
             <p 
               className="text-sm mt-1"
@@ -394,8 +577,12 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
               onComplete: handleCompleteStep,
               onSkip: handleSkipStep,
               onFinish: handleFinish,
-              isSubmitting,
-              stepData: {}
+              isSubmitting: isSubmitting || isProcessing,
+              stepData: {},
+              // Business profile helpers
+              updateTenantField,
+              handleTenantLogoChange,
+              submitProfile
             }} />
           </div>
         </div>
@@ -411,8 +598,8 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
           >
             <button
               onClick={handleGoToPreviousStep}
-              disabled={allSteps.findIndex(s => s.id === uiStepId) === 0 || isSubmitting}
-              className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={allSteps.findIndex(s => s.id === uiStepId) === 0 || isSubmitting || isProcessing}
+              className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
               style={{
                 backgroundColor: 'transparent',
                 border: `1px solid ${colors.utility.primaryText}20`,
@@ -422,33 +609,53 @@ const uiOnlySteps = ['welcome', 'storage-setup', 'user-profile', 'theme-selectio
               Previous
             </button>
             
-            <div className="flex gap-2">
-              {canSkip && (
+            {/* Only show Continue button for steps that DON'T have their own submit button */}
+            {!stepsWithOwnButtons.includes(uiStepId) ? (
+              <div className="flex gap-2">
+                {canSkip && (
+                  <button
+                    onClick={handleSkipStep}
+                    disabled={isSubmitting || isProcessing}
+                    className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-80"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: colors.utility.secondaryText
+                    }}
+                  >
+                    Skip
+                  </button>
+                )}
+                
                 <button
-                  onClick={handleSkipStep}
-                  disabled={isSubmitting}
-                  className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  onClick={() => handleCompleteStep()}
+                  disabled={isSubmitting || isProcessing}
+                  className="px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-medium hover:opacity-90 flex items-center"
                   style={{
-                    backgroundColor: 'transparent',
-                    color: colors.utility.secondaryText
+                    backgroundColor: colors.brand.primary,
+                    color: '#ffffff'
                   }}
                 >
-                  Skip
+                  {(isSubmitting || isProcessing) ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Continue'
+                  )}
                 </button>
-              )}
-              
-              <button
-                onClick={() => handleCompleteStep()}
-                disabled={isSubmitting}
-                className="px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-medium"
-                style={{
-                  backgroundColor: colors.brand.primary,
-                  color: '#ffffff'
+              </div>
+            ) : (
+              <div 
+                className="text-sm text-center px-4 py-2 rounded-lg"
+                style={{ 
+                  color: colors.utility.secondaryText,
+                  backgroundColor: colors.utility.primaryText + '05'
                 }}
               >
-                {isSubmitting ? 'Processing...' : 'Continue'}
-              </button>
-            </div>
+                Complete the form above to continue
+              </div>
+            )}
           </div>
         )}
       </div>

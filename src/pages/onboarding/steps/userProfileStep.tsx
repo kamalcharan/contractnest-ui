@@ -1,10 +1,10 @@
-//src/pages/onboarding/steps/userProfileStep.tsx
-import React, { useState } from 'react';
+// src/pages/onboarding/steps/UserProfileStep.tsx
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
-import ProfileInfoSection from '@/components/users/user-profile/PersonalInfoSection';
-import { Clock } from 'lucide-react';
+import { useCurrentUserProfile } from '@/hooks/useUsers';
+import PersonalInfoSection from '@/components/users/user-profile/PersonalInfoSection';
+import { Clock, Loader2 } from 'lucide-react';
 
 interface OnboardingStepContext {
   onComplete: (data?: Record<string, any>) => void;
@@ -15,48 +15,92 @@ interface OnboardingStepContext {
 const UserProfileStep: React.FC = () => {
   const { onComplete } = useOutletContext<OnboardingStepContext>();
   const { isDarkMode, currentTheme } = useTheme();
-  const { user } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
-  const [updating, setUpdating] = useState(false);
+  // ✅ Use the REAL hook - no fake adapters!
+  const {
+    profile,
+    loading,
+    updating,
+    updateProfile,
+    updateAvatar,
+    removeAvatar,
+    validateMobile,
+    fetchProfile
+  } = useCurrentUserProfile();
 
-  // Adapter functions to match ProfileInfoSection interface
+  const [hasCompletedStep, setHasCompletedStep] = useState(false);
+
+  // Fetch profile on mount
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  // ✅ Wrap the real updateProfile to call onComplete after success
   const handleUpdate = async (data: any): Promise<boolean> => {
-    setUpdating(true);
+    if (hasCompletedStep) return true; // Prevent double completion
+
     try {
-      // Complete the onboarding step with the profile data
-      await onComplete({
+      // Actually save to database using the real hook
+      const success = await updateProfile({
         first_name: data.first_name,
         last_name: data.last_name,
-        ...(data.country_code && data.mobile_number && {
-          phone_country_code: data.country_code,
-          phone_number: data.mobile_number,
-          phone_formatted: `${data.country_code} ${data.mobile_number}`
-        })
+        mobile_number: data.mobile_number,
+        country_code: data.country_code
       });
-      return true;
+
+      if (success) {
+        setHasCompletedStep(true);
+        // Complete the onboarding step
+        await onComplete({
+          profile_completed: true,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          ...(data.mobile_number && {
+            phone_number: data.mobile_number,
+            phone_country_code: data.country_code
+          })
+        });
+      }
+
+      return success;
     } catch (error) {
       console.error('Profile update error:', error);
       return false;
-    } finally {
-      setUpdating(false);
     }
   };
 
+  // ✅ Pass through the real updateAvatar function
   const handleUpdateAvatar = async (avatarUrl: string): Promise<boolean> => {
-    // For onboarding, we can include avatar in the step data
-    // or handle separately if needed
-    return true;
+    return await updateAvatar(avatarUrl);
   };
 
+  // ✅ Pass through the real removeAvatar function
   const handleRemoveAvatar = async (): Promise<boolean> => {
-    return true;
+    return await removeAvatar();
   };
 
+  // ✅ Pass through the real validateMobile function
   const handleValidateMobile = async (mobile: string, countryCode: string): Promise<boolean> => {
-    // Add mobile validation logic if needed
-    return true;
+    return await validateMobile(mobile, countryCode);
   };
+
+  // Show loading state while fetching profile
+  if (loading && !profile) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 
+            className="w-12 h-12 animate-spin mx-auto mb-4"
+            style={{ color: colors.brand.primary }}
+          />
+          <p style={{ color: colors.utility.secondaryText }}>
+            Loading profile...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -78,9 +122,9 @@ const UserProfileStep: React.FC = () => {
             </p>
           </div>
 
-          {/* Use existing ProfileInfoSection */}
-          <ProfileInfoSection
-            profile={user}
+          {/* Use existing PersonalInfoSection with REAL functions */}
+          <PersonalInfoSection
+            profile={profile}
             onUpdate={handleUpdate}
             onUpdateAvatar={handleUpdateAvatar}
             onRemoveAvatar={handleRemoveAvatar}

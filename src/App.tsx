@@ -51,6 +51,8 @@ import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
 import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
+import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';     
+import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep'; 
 
 
 //VaNi Pages
@@ -303,8 +305,8 @@ const AppContent: React.FC = () => {
   <Route path="user-profile" element={<UserProfileStep />} />
  <Route path="/onboarding/theme-selection" element={<ThemeSelectionStep />} />
  <Route path="/onboarding/business-basic" element={<BusinessBasicStep />} />
-  <Route path="business-branding" element={<div>Business Branding Step (Coming Soon)</div>} />
-  <Route path="business-preferences" element={<div>Business Preferences Step (Coming Soon)</div>} />
+<Route path="business-branding" element={<BusinessBrandingStep />} />              
+<Route path="business-preferences" element={<BusinessPreferencesStep />} />       
   <Route path="master-data" element={<div>Master Data Step (Coming Soon)</div>} />
   <Route path="team-invite" element={<div>Team Invite Step (Coming Soon)</div>} />
   <Route path="product-tour" element={<div>Product Tour Step (Coming Soon)</div>} />

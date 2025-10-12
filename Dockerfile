@@ -1,18 +1,22 @@
-FROM node:18-alpine
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 
-# Copy source
 COPY . .
-
-# Railway automatically provides environment variables at build time
-# Just build - no need for ARG/ENV declarations
 RUN npm run build:prod
 
-RUN npm install -g serve
+# Production stage with nginx
+FROM nginx:alpine
+
+# Copy built files
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+
+CMD ["nginx", "-g", "daemon off;"]

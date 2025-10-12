@@ -6,8 +6,8 @@ export const PurpleToneTheme: ThemeConfig = {
   colors: {
     brand: {
       primary: '#6f61ef',
-      secondary: '#392d2c0',
-      tertiary: '#9984bb6',
+      secondary: '#392d2c',
+      tertiary: '#984bb6',
       alternate: '#e0e3e7',
     },
     utility: {
@@ -18,7 +18,7 @@ export const PurpleToneTheme: ThemeConfig = {
     },
     accent: {
       accent1: '#4d9489f5',
-      accent2: '#4d392d2c0',
+      accent2: '#4d392d2c',
       accent3: '#4d6469f5',
       accent4: '#b2ffffff',
     },
