@@ -424,44 +424,55 @@ export const API_ENDPOINTS = {
   // =================================================================
   // SERVICE CATALOG ENDPOINTS - NEW ADDITION
   // =================================================================
-  SERVICE_CATALOG: {
-    // Main service operations via Express API layer
-    LIST: '/api/service-catalog/services',
-    CREATE: '/api/service-catalog/services',
-    GET: (id: string) => `/api/service-catalog/services/${id}`,
-    UPDATE: (id: string) => `/api/service-catalog/services/${id}`,
-    DELETE: (id: string) => `/api/service-catalog/services/${id}`,
+  // =================================================================
+// SERVICE CATALOG ENDPOINTS - UPDATED WITH NEW STATUS & VERSION ENDPOINTS
+// =================================================================
+SERVICE_CATALOG: {
+  // Main service operations via Express API layer
+  LIST: '/api/service-catalog/services',
+  CREATE: '/api/service-catalog/services',
+  GET: (id: string) => `/api/service-catalog/services/${id}`,
+  UPDATE: (id: string) => `/api/service-catalog/services/${id}`,
+  DELETE: (id: string) => `/api/service-catalog/services/${id}`,
+  
+  // ✅ NEW: Service status management
+  TOGGLE_STATUS: (id: string) => `/api/service-catalog/services/${id}/status`,
+  ACTIVATE: (id: string) => `/api/service-catalog/services/${id}/activate`,
+  
+  // ✅ NEW: Service analytics and history
+  STATISTICS: '/api/service-catalog/services/statistics',
+  VERSION_HISTORY: (id: string) => `/api/service-catalog/services/${id}/versions`,
+  
+  // Service resources
+  SERVICE_RESOURCES: (id: string) => `/api/service-catalog/services/${id}/resources`,
+  
+  // Master data and configuration
+  MASTER_DATA: '/api/service-catalog/master-data',
+  
+  // Health and utility
+  HEALTH: '/api/service-catalog/health',
+  
+  // Helper function for services with query params
+  LIST_WITH_FILTERS: (filters: ServiceCatalogFilters = {}) => {
+    const params = new URLSearchParams();
     
-    // Service resources
-    SERVICE_RESOURCES: (id: string) => `/api/service-catalog/services/${id}/resources`,
+    if (filters.search_term) params.append('search_term', filters.search_term);
+    if (filters.category_id) params.append('category_id', filters.category_id);
+    if (filters.industry_id) params.append('industry_id', filters.industry_id);
+    if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+    if (filters.price_min !== undefined) params.append('price_min', filters.price_min.toString());
+    if (filters.price_max !== undefined) params.append('price_max', filters.price_max.toString());
+    if (filters.currency) params.append('currency', filters.currency);
+    if (filters.has_resources !== undefined) params.append('has_resources', filters.has_resources.toString());
+    if (filters.sort_by) params.append('sort_by', filters.sort_by);
+    if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
+    if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+    if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
     
-    // Master data and configuration
-    MASTER_DATA: '/api/service-catalog/master-data',
-    
-    // Health and utility
-    HEALTH: '/api/service-catalog/health',
-    
-    // Helper function for services with query params
-    LIST_WITH_FILTERS: (filters: ServiceCatalogFilters = {}) => {
-      const params = new URLSearchParams();
-      
-      if (filters.search_term) params.append('search_term', filters.search_term);
-      if (filters.category_id) params.append('category_id', filters.category_id);
-      if (filters.industry_id) params.append('industry_id', filters.industry_id);
-      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-      if (filters.price_min !== undefined) params.append('price_min', filters.price_min.toString());
-      if (filters.price_max !== undefined) params.append('price_max', filters.price_max.toString());
-      if (filters.currency) params.append('currency', filters.currency);
-      if (filters.has_resources !== undefined) params.append('has_resources', filters.has_resources.toString());
-      if (filters.sort_by) params.append('sort_by', filters.sort_by);
-      if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
-      if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
-      if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
-      
-      const queryString = params.toString();
-      return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
-    }
-  },
+    const queryString = params.toString();
+    return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
+  }
+},
   
   // =================================================================
   // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS - PRESERVED

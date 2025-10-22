@@ -1,5 +1,7 @@
 // src/components/catalog/ServiceForm/BasicInfoStep.tsx
-import React, { useState, useCallback, useRef } from 'react';
+// ✅ FIXED: Image buffering - upload on submit, not on select
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { 
   Upload, 
@@ -12,9 +14,6 @@ import {
 
 // Import RichTextEditor
 import RichTextEditor from '../../ui/RichTextEditor';
-
-// Import storage management hook
-import { useStorageManagement } from '../../../hooks/useStorageManagement';
 
 // Import types
 import { ServiceBasicInfo, ServiceValidationErrors } from '../../../types/catalog/service';
@@ -36,19 +35,30 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Storage management hook
-  const {
-    uploadFile,
-    isSubmitting: isUploading,
-    storageSetupComplete,
-    error: storageError
-  } = useStorageManagement();
-
-  // Local state for image handling
-  const [imagePreview, setImagePreview] = useState<string | null>(data.image_url || null);
+  // Local state for image preview
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize preview from existing image URL (for edit mode)
+  useEffect(() => {
+    if (data.image_url && !data.image) {
+      // Edit mode: show existing image
+      setImagePreview(data.image_url);
+    } else if (data.image) {
+      // New file selected: create object URL for preview
+      const objectUrl = URL.createObjectURL(data.image);
+      setImagePreview(objectUrl);
+
+      // Cleanup object URL on unmount or when image changes
+      return () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    } else {
+      // No image
+      setImagePreview(null);
+    }
+  }, [data.image, data.image_url]);
 
   // Update form data
   const updateField = useCallback((field: keyof ServiceBasicInfo, value: any) => {
@@ -70,50 +80,39 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     }
   }, [data.sku, updateField]);
 
-  // Handle image upload with real storage integration
-  const handleImageUpload = useCallback(async (file: File) => {
+  // ✅ NEW: Buffer image file (don't upload yet)
+  const handleImageSelect = useCallback((file: File) => {
+    console.log('🖼️ Image selected (buffered):', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+
     if (!file || !file.type.startsWith('image/')) {
-      console.error('Invalid file type. Please select an image.');
+      console.error('❌ Invalid file type. Please select an image.');
       return;
     }
 
-    // Check storage setup
-    if (!storageSetupComplete) {
-      console.error('Storage is not set up. Cannot upload image.');
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      console.error('❌ File too large. Maximum size is 10MB.');
       return;
     }
 
-    setIsUploadingImage(true);
-
-    try {
-      // Upload file using storage management hook
-      const uploadedFile = await uploadFile(file, 'service_images', {
-        service_name: data.service_name,
-        upload_context: 'service_catalog'
-      });
-
-      if (uploadedFile) {
-        // Set preview and update form data
-        setImagePreview(uploadedFile.download_url);
-        updateField('image_url', uploadedFile.download_url);
-        updateField('image', null); // Clear file object since we have URL now
-        
-        console.log('Image uploaded successfully:', uploadedFile.file_name);
-      }
-    } catch (error) {
-      console.error('Image upload failed:', error);
-    } finally {
-      setIsUploadingImage(false);
-    }
-  }, [uploadFile, storageSetupComplete, data.service_name, updateField]);
+    // Store File object in form data (will be uploaded on submit)
+    updateField('image', file);
+    
+    console.log('✅ Image buffered successfully. Will upload on form submit.');
+  }, [updateField]);
 
   // Handle file input change
   const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      handleImageUpload(file);
+      handleImageSelect(file);
     }
-  }, [handleImageUpload]);
+  }, [handleImageSelect]);
 
   // Handle drag and drop
   const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -132,13 +131,27 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     
     const file = event.dataTransfer.files[0];
     if (file) {
-      handleImageUpload(file);
+      handleImageSelect(file);
     }
-  }, [handleImageUpload]);
+  }, [handleImageSelect]);
 
-  // Remove image
+  // ✅ NEW: Remove image (clears both buffered file and existing URL)
   const handleRemoveImage = useCallback(() => {
+    console.log('🗑️ Removing image');
+    
+    // Clear preview
     setImagePreview(null);
+    
+    // If there's an existing image URL, mark it for deletion
+    if (data.image_url) {
+      // Track the old image for deletion on submit
+      updateField('old_image_url', data.image_url);
+      if (data.metadata?.image_file_id) {
+        updateField('old_image_file_id', data.metadata.image_file_id);
+      }
+    }
+    
+    // Clear image data
     updateField('image', null);
     updateField('image_url', '');
     
@@ -146,16 +159,12 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [updateField]);
+  }, [data.image_url, data.metadata, updateField]);
 
   // Open file dialog
   const openFileDialog = useCallback(() => {
-    if (!storageSetupComplete) {
-      console.error('Storage is not set up. Cannot upload images.');
-      return;
-    }
     fileInputRef.current?.click();
-  }, [storageSetupComplete]);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -293,7 +302,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
               </p>
             </div>
 
-            {/* Service Image Upload */}
+            {/* Service Image Upload - Buffered */}
             <div>
               <label 
                 className="block text-sm font-medium mb-2 transition-colors"
@@ -302,32 +311,10 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                 Service Image <span className="text-xs">(Optional)</span>
               </label>
               
-              {/* Storage Error Warning */}
-              {!storageSetupComplete && (
-                <div 
-                  className="mb-3 p-3 rounded-lg flex items-center gap-2"
-                  style={{
-                    backgroundColor: colors.semantic.warning + '10',
-                    borderColor: colors.semantic.warning + '40'
-                  }}
-                >
-                  <AlertTriangle 
-                    className="h-4 w-4"
-                    style={{ color: colors.semantic.warning }}
-                  />
-                  <span 
-                    className="text-sm"
-                    style={{ color: colors.semantic.warning }}
-                  >
-                    Storage not set up. Image upload disabled.
-                  </span>
-                </div>
-              )}
-              
               <div 
                 className={`border-2 border-dashed rounded-lg transition-all ${
                   isDragging ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : ''
-                } ${!storageSetupComplete ? 'opacity-50 cursor-not-allowed' : ''}`}
+                }`}
                 style={{
                   borderColor: imagePreview 
                     ? colors.semantic.success + '60'
@@ -336,9 +323,9 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                     ? colors.brand.primary + '10'
                     : colors.utility.primaryBackground
                 }}
-                onDragOver={storageSetupComplete ? handleDragOver : undefined}
-                onDragLeave={storageSetupComplete ? handleDragLeave : undefined}
-                onDrop={storageSetupComplete ? handleDrop : undefined}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 {imagePreview ? (
                   <div className="relative">
@@ -352,33 +339,37 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                         <button
                           type="button"
                           onClick={openFileDialog}
-                          disabled={!storageSetupComplete || isUploadingImage}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
                         >
                           <Upload className="h-4 w-4 text-gray-700" />
                         </button>
                         <button
                           type="button"
                           onClick={handleRemoveImage}
-                          disabled={isUploadingImage}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
                         >
                           <X className="h-4 w-4 text-gray-700" />
                         </button>
                       </div>
                     </div>
-                    {isUploadingImage && (
-                      <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-                        <div className="text-white text-sm">Uploading...</div>
+                    {/* Show indicator if image is buffered (not uploaded yet) */}
+                    {data.image && !data.image_url && (
+                      <div 
+                        className="absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium"
+                        style={{
+                          backgroundColor: colors.semantic.warning + '20',
+                          color: colors.semantic.warning,
+                          border: `1px solid ${colors.semantic.warning}`
+                        }}
+                      >
+                        Will upload on save
                       </div>
                     )}
                   </div>
                 ) : (
                   <div 
-                    className={`p-6 text-center transition-opacity ${
-                      storageSetupComplete ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'
-                    }`}
-                    onClick={storageSetupComplete ? openFileDialog : undefined}
+                    className="p-6 text-center cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={openFileDialog}
                   >
                     <ImageIcon 
                       className="h-8 w-8 mx-auto mb-2"
@@ -388,19 +379,14 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                       className="text-sm mb-2"
                       style={{ color: colors.utility.primaryText }}
                     >
-                      {isUploadingImage ? 'Uploading...' : 'Add Service Image'}
+                      Add Service Image
                     </p>
-                    {!isUploadingImage && (
-                      <p 
-                        className="text-xs"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        {storageSetupComplete 
-                          ? 'Drag and drop or click to browse'
-                          : 'Storage setup required'
-                        }
-                      </p>
-                    )}
+                    <p 
+                      className="text-xs"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Drag and drop or click to browse
+                    </p>
                   </div>
                 )}
               </div>
@@ -410,30 +396,14 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                 type="file"
                 accept="image/*"
                 onChange={handleFileInputChange}
-                disabled={!storageSetupComplete || isUploadingImage}
                 className="hidden"
               />
-
-              {storageError && (
-                <div className="flex items-center gap-2 mt-2">
-                  <AlertTriangle 
-                    className="h-4 w-4"
-                    style={{ color: colors.semantic.error }}
-                  />
-                  <span 
-                    className="text-sm"
-                    style={{ color: colors.semantic.error }}
-                  >
-                    {storageError}
-                  </span>
-                </div>
-              )}
 
               <p 
                 className="text-xs mt-2 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                Recommended: PNG, JPG up to 10MB. Will be resized to 800x600px.
+                Recommended: PNG, JPG up to 10MB. Image will be uploaded when you save the service.
               </p>
             </div>
           </div>
@@ -536,7 +506,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
             trackingMetadata={{ field: 'description', serviceId: data.service_name }}
           />
 
-          {/* Terms & Conditions - FIXED: Removed mandatory mark */}
+          {/* Terms & Conditions */}
           <RichTextEditor
             value={data.terms || ''}
             onChange={(value) => updateField('terms', value)}

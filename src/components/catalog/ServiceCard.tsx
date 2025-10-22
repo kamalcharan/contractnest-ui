@@ -1,4 +1,6 @@
-// src/components/catalog/ServiceCard.tsx
+// Frontend-src/components/catalog/ServiceCard.tsx
+// ✅ FIXED: Boolean status support, removed draft, added onToggleStatus prop
+
 import React, { useState, useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { 
@@ -7,20 +9,15 @@ import {
   Eye,
   Edit,
   MoreHorizontal,
-  FileText,
   DollarSign,
-  Settings,
-  Hash,
   Calendar,
-  Building2,
-  User,
-  Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
   Copy,
   Trash2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Power,
+  PowerOff
 } from 'lucide-react';
 
 // Import types
@@ -38,6 +35,7 @@ interface ServiceCardProps {
   onEdit: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  onToggleStatus?: () => void; // ✅ ADDED: Missing prop
 }
 
 const ServiceCard: React.FC<ServiceCardProps> = ({
@@ -48,7 +46,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
   onView,
   onEdit,
   onDuplicate,
-  onDelete
+  onDelete,
+  onToggleStatus // ✅ ADDED
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -56,34 +55,26 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
   // Local state for dropdown menu
   const [showDropdown, setShowDropdown] = useState(false);
 
-  // Get status configuration
-  const getStatusConfig = useCallback((status: string) => {
-    switch (status) {
-      case 'active':
-        return {
-          color: colors.semantic.success,
-          icon: CheckCircle,
-          label: 'Active'
-        };
-      case 'inactive':
-        return {
-          color: colors.semantic.warning,
-          icon: XCircle,
-          label: 'Inactive'
-        };
-      case 'draft':
-        return {
-          color: colors.utility.secondaryText,
-          icon: Clock,
-          label: 'Draft'
-        };
-      default:
-        return {
-          color: colors.utility.secondaryText,
-          icon: AlertCircle,
-          label: status
-        };
+  // ✅ FIXED: Handle boolean status (not string)
+  const getStatusConfig = useCallback((status: boolean) => {
+    if (status === true) {
+      return {
+        color: colors.semantic.success,
+        icon: CheckCircle,
+        label: 'Active',
+        bgColor: colors.semantic.success + '20',
+        borderColor: colors.semantic.success + '40'
+      };
+    } else {
+      return {
+        color: colors.utility.secondaryText,
+        icon: XCircle,
+        label: 'Inactive',
+        bgColor: colors.utility.secondaryText + '20',
+        borderColor: colors.utility.secondaryText + '40'
+      };
     }
+    // ✅ REMOVED: Draft status - no longer exists
   }, [colors]);
 
   // Get service type configuration
@@ -92,7 +83,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
       case 'independent':
         return {
           icon: Package,
-          label: 'Independent Service',
+          label: 'Individual Service',
           color: colors.brand.primary
         };
       case 'resource_based':
@@ -158,8 +149,11 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
       case 'delete':
         onDelete?.();
         break;
+      case 'toggle-status':
+        onToggleStatus?.();
+        break;
     }
-  }, [onView, onEdit, onDuplicate, onDelete]);
+  }, [onView, onEdit, onDuplicate, onDelete, onToggleStatus]);
 
   // Handle card click
   const handleCardClick = useCallback((event: React.MouseEvent) => {
@@ -171,10 +165,12 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
   }, [onView]);
 
   if (viewType === 'grid') {
+    // ============================================================================
     // GRID VIEW
+    // ============================================================================
     return (
       <div 
-        className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer ${
+        className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer relative ${
           isSelected ? 'ring-2' : ''
         }`}
         style={{
@@ -221,8 +217,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
             <span 
               className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
               style={{
-                backgroundColor: statusConfig.color + '20',
-                borderColor: statusConfig.color + '40',
+                backgroundColor: statusConfig.bgColor,
+                borderColor: statusConfig.borderColor,
                 color: statusConfig.color
               }}
             >
@@ -257,48 +253,84 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                 
                 {/* Dropdown Menu */}
                 {showDropdown && (
-                  <div 
-                    className="absolute right-0 top-full mt-1 w-32 rounded-md shadow-lg border z-20"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '20'
-                    }}
-                  >
-                    <div className="py-1">
-                      <button
-                        onClick={(e) => handleDropdownAction('view', e)}
-                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        <Eye className="h-3 w-3" />
-                        View
-                      </button>
-                      <button
-                        onClick={(e) => handleDropdownAction('edit', e)}
-                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        <Edit className="h-3 w-3" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={(e) => handleDropdownAction('duplicate', e)}
-                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        <Copy className="h-3 w-3" />
-                        Duplicate
-                      </button>
-                      <button
-                        onClick={(e) => handleDropdownAction('delete', e)}
-                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                        style={{ color: colors.semantic.error }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Delete
-                      </button>
+                  <>
+                    {/* Backdrop */}
+                    <div 
+                      className="fixed inset-0 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDropdown(false);
+                      }}
+                    />
+                    
+                    {/* Menu */}
+                    <div 
+                      className="absolute right-0 top-full mt-1 w-40 rounded-md shadow-lg border z-20"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: colors.utility.primaryText + '20'
+                      }}
+                    >
+                      <div className="py-1">
+                        <button
+                          onClick={(e) => handleDropdownAction('view', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <Eye className="h-3 w-3" />
+                          View
+                        </button>
+                        <button
+                          onClick={(e) => handleDropdownAction('edit', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <Edit className="h-3 w-3" />
+                          Edit
+                        </button>
+                        
+                        {/* ✅ NEW: Toggle Status Option */}
+                        {onToggleStatus && (
+                          <button
+                            onClick={(e) => handleDropdownAction('toggle-status', e)}
+                            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                            style={{ 
+                              color: service.status ? colors.semantic.warning : colors.semantic.success 
+                            }}
+                          >
+                            {service.status ? (
+                              <>
+                                <PowerOff className="h-3 w-3" />
+                                Deactivate
+                              </>
+                            ) : (
+                              <>
+                                <Power className="h-3 w-3" />
+                                Activate
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        <button
+                          onClick={(e) => handleDropdownAction('duplicate', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <Copy className="h-3 w-3" />
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={(e) => handleDropdownAction('delete', e)}
+                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+                          style={{ color: colors.semantic.error }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
@@ -355,7 +387,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
             )}
             
             {/* Created Date */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 ml-auto">
               <Calendar 
                 className="h-3 w-3"
                 style={{ color: colors.utility.secondaryText }}
@@ -437,7 +469,9 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
       </div>
     );
   } else {
+    // ============================================================================
     // LIST VIEW
+    // ============================================================================
     return (
       <div 
         className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 cursor-pointer ${
@@ -514,8 +548,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                     <span 
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border"
                       style={{
-                        backgroundColor: statusConfig.color + '20',
-                        borderColor: statusConfig.color + '40',
+                        backgroundColor: statusConfig.bgColor,
+                        borderColor: statusConfig.borderColor,
                         color: statusConfig.color
                       }}
                     >
@@ -643,34 +677,88 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                   </button>
                   
                   {/* Dropdown Menu */}
-                  {showDropdown && (
-                    <div 
-                      className="absolute right-0 top-full mt-1 w-32 rounded-md shadow-lg border z-20"
-                      style={{
-                        backgroundColor: colors.utility.secondaryBackground,
-                        borderColor: colors.utility.primaryText + '20'
-                      }}
-                    >
-                      <div className="py-1">
-                        <button
-                          onClick={(e) => handleDropdownAction('duplicate', e)}
-                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                          style={{ color: colors.utility.primaryText }}
-                        >
-                          <Copy className="h-3 w-3" />
-                          Duplicate
-                        </button>
-                        <button
-                          onClick={(e) => handleDropdownAction('delete', e)}
-                          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-                          style={{ color: colors.semantic.error }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  )}
+{showDropdown && (
+  <>
+    {/* Backdrop */}
+    <div 
+      className="fixed inset-0 z-10"
+      onClick={(e) => {
+        e.stopPropagation();
+        setShowDropdown(false);
+      }}
+    />
+    
+    {/* Menu */}
+    <div 
+      className="absolute right-0 top-full mt-1 w-40 rounded-md shadow-lg border z-20"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '20'
+      }}
+    >
+      <div className="py-1">
+        <button
+          onClick={(e) => handleDropdownAction('view', e)}
+          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+          style={{ color: colors.utility.primaryText }}
+        >
+          <Eye className="h-3 w-3" />
+          View
+        </button>
+        
+        {/* ✅ FIXED: Only show Edit if service is ACTIVE */}
+        {service.status === true && (
+          <button
+            onClick={(e) => handleDropdownAction('edit', e)}
+            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+            style={{ color: colors.utility.primaryText }}
+          >
+            <Edit className="h-3 w-3" />
+            Edit
+          </button>
+        )}
+        
+        {/* ✅ NEW: Toggle Status Option - Shows Activate OR Deactivate */}
+        {onToggleStatus && (
+          <button
+            onClick={(e) => handleDropdownAction('toggle-status', e)}
+            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+            style={{ 
+              color: service.status ? colors.semantic.warning : colors.semantic.success 
+            }}
+          >
+            {service.status ? (
+              <>
+                <PowerOff className="h-3 w-3" />
+                Deactivate
+              </>
+            ) : (
+              <>
+                <Power className="h-3 w-3" />
+                Activate
+              </>
+            )}
+          </button>
+        )}
+        
+        {/* ✅ FIXED: Only show Duplicate if service is ACTIVE */}
+        {service.status === true && onDuplicate && (
+          <button
+            onClick={(e) => handleDropdownAction('duplicate', e)}
+            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
+            style={{ color: colors.utility.primaryText }}
+          >
+            <Copy className="h-3 w-3" />
+            Duplicate
+          </button>
+        )}
+        
+        {/* ✅ REMOVED: Delete option - use toggle status instead */}
+        {/* Delete is now handled by deactivate (toggle status to false) */}
+      </div>
+    </div>
+  </>
+)}
                 </div>
               </div>
             </div>

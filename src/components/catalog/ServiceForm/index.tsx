@@ -1,4 +1,6 @@
 // src/components/catalog/ServiceForm/index.tsx
+// ✅ FIXED: Image buffering - upload on submit with file ID tracking
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -17,11 +19,14 @@ import {
 import BasicInfoStep from './BasicInfoStep';
 import ServiceConfigStep from './ServiceConfigStep';
 
-// FIXED: Import real hooks instead of placeholders
+// Import hooks
 import { 
   useServiceCatalogOperations,
   useServiceCatalogItem
 } from '../../../hooks/queries/useServiceCatalogQueries';
+
+// Import storage hook
+import { useStorageManagement } from '../../../hooks/useStorageManagement';
 
 // Import types
 import { 
@@ -32,7 +37,7 @@ import {
   ServiceResourceForm
 } from '../../../types/catalog/service';
 
-// FIXED: Import real validation functions
+// Import validation functions
 import { 
   validateServiceBasicInfo,
   validateServiceConfiguration,
@@ -46,7 +51,7 @@ interface ServiceFormProps {
   onCancel?: () => void;
 }
 
-// FIXED: Helper function to check if there are validation errors
+// Helper function to check if there are validation errors
 const hasValidationErrors = (errors: ServiceValidationErrors): boolean => {
   return Object.keys(errors).length > 0;
 };
@@ -70,7 +75,9 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
       description: '',
       terms: '',
       image: null,
-      image_url: ''
+      image_url: '',
+      old_image_url: '',
+      old_image_file_id: ''
     },
     service_type: 'independent',
     pricing_records: [],
@@ -82,7 +89,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // FIXED: Real API hooks
+  // API hooks
   const {
     createService,
     updateService,
@@ -96,16 +103,31 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
     error: loadServiceError 
   } = useServiceCatalogItem(serviceId || null);
 
+  // ✅ Storage hook for image upload/delete
+  const {
+    uploadFile,
+    deleteFile,
+    isSubmitting: isUploadingImage
+  } = useStorageManagement();
+
   // Get existing service data
   const existingService = existingServiceData;
 
   // Loading states
-  const isSaving = isCreating || isUpdating;
+  const isSaving = isCreating || isUpdating || isUploadingImage;
   const isLoading = isLoadingService && mode === 'edit';
 
-  // FIXED: Load existing service data for edit mode
+  // Load existing service data for edit mode
   useEffect(() => {
     if (mode === 'edit' && existingService && !isLoading) {
+      console.log('📝 Loading existing service for edit:', {
+        serviceId: existingService.id,
+        serviceName: existingService.service_name,
+        hasImage: !!existingService.metadata?.image_url,
+        imageUrl: existingService.metadata?.image_url,
+        imageFileId: existingService.metadata?.image_file_id
+      });
+
       setFormData({
         basic_info: {
           service_name: existingService.service_name || '',
@@ -113,13 +135,16 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
           description: existingService.description || '',
           terms: existingService.terms || '',
           image: null, // Don't populate file object
-          image_url: existingService.image_url || ''
+          image_url: existingService.metadata?.image_url || '',
+          old_image_url: '',
+          old_image_file_id: ''
         },
         service_type: existingService.service_type || 'independent',
         pricing_records: existingService.pricing_records || [],
-        resource_requirements: existingService.resource_requirements || []
+        resource_requirements: existingService.resource_requirements || [],
+        metadata: existingService.metadata
       });
-      setHasUnsavedChanges(false); // Reset since we're loading existing data
+      setHasUnsavedChanges(false);
     }
   }, [mode, existingService, isLoading]);
 
@@ -205,7 +230,61 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
     }
   }, [currentStep]);
 
-  // FIXED: Handle form submission with real API calls
+  // ✅ NEW: Handle image upload and deletion
+  const handleImageUpload = useCallback(async (): Promise<{ imageUrl: string; imageFileId: string } | null> => {
+    // Check if there's a buffered image to upload
+    if (!formData.basic_info.image) {
+      // No new image, return existing data if any
+      if (formData.basic_info.image_url) {
+        return {
+          imageUrl: formData.basic_info.image_url,
+          imageFileId: formData.metadata?.image_file_id || ''
+        };
+      }
+      return null;
+    }
+
+    console.log('📤 Uploading buffered image...');
+
+    try {
+      // Upload the image
+      const uploadedFile = await uploadFile(
+        formData.basic_info.image,
+        'service_images',
+        {
+          service_name: formData.basic_info.service_name,
+          upload_context: 'service_catalog'
+        }
+      );
+
+      console.log('✅ Image uploaded:', {
+        fileId: uploadedFile.id,
+        downloadUrl: uploadedFile.download_url
+      });
+
+      // Delete old image if we're replacing one
+      if (formData.basic_info.old_image_file_id) {
+        console.log('🗑️ Deleting old image:', formData.basic_info.old_image_file_id);
+        try {
+          await deleteFile(formData.basic_info.old_image_file_id);
+          console.log('✅ Old image deleted');
+        } catch (deleteError) {
+          console.error('⚠️ Failed to delete old image (non-critical):', deleteError);
+          // Continue anyway - don't block service save if old image delete fails
+        }
+      }
+
+      return {
+        imageUrl: uploadedFile.download_url,
+        imageFileId: uploadedFile.id
+      };
+    } catch (error) {
+      console.error('❌ Image upload failed:', error);
+      throw new Error('Failed to upload image. Please try again.');
+    }
+  }, [formData.basic_info, formData.metadata, uploadFile, deleteFile]);
+
+  // ✅ UPDATED: Handle form submission with image upload
   const handleSubmit = useCallback(async () => {
     // Validate all steps
     const basicInfoErrors = validateServiceBasicInfo(formData.basic_info);
@@ -214,44 +293,88 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
 
     if (hasValidationErrors(allErrors)) {
       setValidationErrors(allErrors);
-      console.log('Validation errors:', allErrors);
+      console.log('❌ Validation errors:', allErrors);
       return;
     }
 
     try {
+      // ✅ Step 1: Upload image if needed (or delete if removed)
+      let imageData: { imageUrl: string; imageFileId: string } | null = null;
+      
+      if (formData.basic_info.image) {
+        // New image to upload
+        imageData = await handleImageUpload();
+      } else if (formData.basic_info.image_url) {
+        // Keeping existing image
+        imageData = {
+          imageUrl: formData.basic_info.image_url,
+          imageFileId: formData.metadata?.image_file_id || ''
+        };
+      } else if (formData.basic_info.old_image_file_id) {
+        // Image was removed - delete old image
+        console.log('🗑️ Deleting removed image:', formData.basic_info.old_image_file_id);
+        try {
+          await deleteFile(formData.basic_info.old_image_file_id);
+          console.log('✅ Removed image deleted');
+        } catch (deleteError) {
+          console.error('⚠️ Failed to delete removed image (non-critical):', deleteError);
+        }
+      }
+
+      console.log('📤 Submitting service:', {
+        mode,
+        serviceId,
+        serviceName: formData.basic_info.service_name,
+        hasImage: !!imageData,
+        imageUrl: imageData?.imageUrl,
+        imageFileId: imageData?.imageFileId,
+        pricingRecordsCount: formData.pricing_records.length,
+        resourceRequirementsCount: formData.resource_requirements.length
+      });
+
+      // ✅ Step 2: Build payload with image data in metadata
+      const basePayload = {
+        service_name: formData.basic_info.service_name,
+        sku: formData.basic_info.sku,
+        description: formData.basic_info.description,
+        terms: formData.basic_info.terms,
+        category_id: null,
+        industry_id: null,
+        service_type: formData.service_type,
+        pricing_records: formData.pricing_records,
+        resource_requirements: formData.resource_requirements,
+        metadata: {
+          ...(formData.metadata || {}),
+          ...(imageData && {
+            image_url: imageData.imageUrl,
+            image_file_id: imageData.imageFileId
+          })
+        }
+      };
+
       let result;
       
       if (mode === 'create') {
-        // FIXED: Use real createService API call
-        result = await createService({
-          service_name: formData.basic_info.service_name,
-          sku: formData.basic_info.sku,
-          description: formData.basic_info.description,
-          terms: formData.basic_info.terms,
-          image_url: formData.basic_info.image_url,
-          service_type: formData.service_type,
-          pricing_records: formData.pricing_records,
-          resource_requirements: formData.resource_requirements
-        });
+        result = await createService(basePayload);
         
-        console.log('Service created successfully:', result);
+        console.log('✅ Service created successfully:', {
+          serviceId: result?.id,
+          serviceName: result?.service_name,
+          status: result?.status,
+          hasImage: !!result?.metadata?.image_url
+        });
       } else if (mode === 'edit' && serviceId) {
-        // FIXED: Use real updateService API call
         result = await updateService({
           serviceId,
-          serviceData: {
-            service_name: formData.basic_info.service_name,
-            sku: formData.basic_info.sku,
-            description: formData.basic_info.description,
-            terms: formData.basic_info.terms,
-            image_url: formData.basic_info.image_url,
-            service_type: formData.service_type,
-            pricing_records: formData.pricing_records,
-            resource_requirements: formData.resource_requirements
-          }
+          serviceData: basePayload
         });
         
-        console.log('Service updated successfully:', result);
+        console.log('✅ Service updated successfully:', {
+          serviceId: result?.id,
+          serviceName: result?.service_name,
+          status: result?.status,
+          hasImage: !!result?.metadata?.image_url
+        });
       }
       
       // Success callback
@@ -265,12 +388,15 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
       navigate('/catalog');
       
     } catch (error) {
-      console.error('Form submission error:', error);
+      console.error('❌ Form submission error:', error);
       
       // Set validation errors if the API returns validation errors
       if (error && typeof error === 'object' && 'validationErrors' in error) {
         setValidationErrors((error as any).validationErrors);
       }
+      
+      // Show error message
+      throw error;
     }
   }, [
     formData, 
@@ -278,6 +404,8 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
     serviceId, 
     createService, 
     updateService, 
+    handleImageUpload,
+    deleteFile,
     onSuccess, 
     navigate
   ]);
