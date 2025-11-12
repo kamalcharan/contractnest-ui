@@ -1,17 +1,16 @@
 // src/components/users/InvitationsList.tsx
 import React, { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  Mail, 
-  Phone, 
-  MessageSquare, 
-  Clock, 
-  CheckCircle, 
+import {
+  Mail,
+  Phone,
+  MessageSquare,
+  Clock,
+  CheckCircle,
   XCircle,
   RefreshCw,
   Eye,
   Copy,
-  MoreVertical,
   AlertCircle,
   User
 } from 'lucide-react';
@@ -19,6 +18,7 @@ import { Invitation } from '@/hooks/useInvitations';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useTheme } from '@/contexts/ThemeContext';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 interface InvitationsListProps {
   invitations: Invitation[];
@@ -36,12 +36,13 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
   isLoading = false
 }) => {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [invitationToCancel, setInvitationToCancel] = useState<string | null>(null);
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Get status badge
   const getStatusBadge = (invitation: Invitation) => {
     const statusConfig = {
@@ -52,12 +53,12 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
       expired: { icon: XCircle, backgroundColor: `${colors.semantic.error}20`, color: colors.semantic.error, label: 'Expired' },
       cancelled: { icon: XCircle, backgroundColor: `${colors.utility.secondaryText}20`, color: colors.utility.secondaryText, label: 'Cancelled' }
     };
-    
+
     const config = statusConfig[invitation.status] || statusConfig.pending;
     const Icon = config.icon;
-    
+
     return (
-      <span 
+      <span
         className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
         style={{
           backgroundColor: config.backgroundColor,
@@ -69,7 +70,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
       </span>
     );
   };
-  
+
   // Get method icon
   const getMethodIcon = (method: string) => {
     const icons = {
@@ -79,12 +80,12 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
     };
     return icons[method as keyof typeof icons] || Mail;
   };
-  
+
   // Copy invitation link
   const copyInvitationLink = (invitation: Invitation) => {
     if (invitation.invitation_link) {
       navigator.clipboard.writeText(invitation.invitation_link);
-      toast.success('Invitation link copied!', { 
+      toast.success('Invitation link copied!', {
         duration: 2000,
         style: {
           background: colors.semantic.success,
@@ -93,7 +94,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
       });
     }
   };
-  
+
   // Handle resend
   const handleResend = async (invitationId: string) => {
     setProcessingIds(prev => new Set(prev).add(invitationId));
@@ -105,33 +106,39 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
         newSet.delete(invitationId);
         return newSet;
       });
-      setOpenMenuId(null);
     }
   };
-  
-  // Handle cancel
-  const handleCancel = async (invitationId: string) => {
-    if (!confirm('Are you sure you want to cancel this invitation?')) return;
-    
-    setProcessingIds(prev => new Set(prev).add(invitationId));
+
+  // Handle cancel - open confirmation dialog
+  const handleCancelClick = (invitationId: string) => {
+    setInvitationToCancel(invitationId);
+    setCancelDialogOpen(true);
+  };
+
+  // Confirm cancel
+  const confirmCancel = async () => {
+    if (!invitationToCancel) return;
+
+    setProcessingIds(prev => new Set(prev).add(invitationToCancel));
     try {
-      await onCancel(invitationId);
+      await onCancel(invitationToCancel);
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
-        newSet.delete(invitationId);
+        newSet.delete(invitationToCancel);
         return newSet;
       });
-      setOpenMenuId(null);
+      setCancelDialogOpen(false);
+      setInvitationToCancel(null);
     }
   };
-  
+
   if (isLoading) {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map(i => (
           <div key={i} className="animate-pulse">
-            <div 
+            <div
               className="border rounded-lg p-4 transition-colors"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
@@ -140,16 +147,16 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
             >
               <div className="flex items-center justify-between">
                 <div className="space-y-2">
-                  <div 
+                  <div
                     className="h-4 rounded w-48"
                     style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                   />
-                  <div 
+                  <div
                     className="h-3 rounded w-32"
                     style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                   />
                 </div>
-                <div 
+                <div
                   className="h-8 rounded w-20"
                   style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                 />
@@ -160,28 +167,28 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
       </div>
     );
   }
-  
+
   if (invitations.length === 0) {
     return (
-      <div 
+      <div
         className="text-center py-12 border rounded-lg transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderColor: `${colors.utility.primaryText}20`
         }}
       >
-        <User 
-          size={48} 
+        <User
+          size={48}
           className="mx-auto mb-4"
           style={{ color: colors.utility.secondaryText }}
         />
-        <h3 
+        <h3
           className="text-lg font-medium mb-2 transition-colors"
           style={{ color: colors.utility.primaryText }}
         >
           No invitations found
         </h3>
-        <p 
+        <p
           className="transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
@@ -190,7 +197,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
       </div>
     );
   }
-  
+
   return (
     <div className="space-y-3">
       {invitations.map((invitation) => {
@@ -198,10 +205,10 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
         const isProcessing = processingIds.has(invitation.id);
         const canResend = ['pending', 'sent', 'resent'].includes(invitation.status);
         const canCancel = ['pending', 'sent', 'resent'].includes(invitation.status);
-        
+
         return (
-          <div 
-            key={invitation.id} 
+          <div
+            key={invitation.id}
             className={cn(
               "border-2 rounded-lg p-4 transition-all duration-200",
               isProcessing && "opacity-60"
@@ -214,27 +221,27 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-start space-x-3">
-                  <div 
+                  <div
                     className="p-2 rounded-full transition-colors"
                     style={{
-                      backgroundColor: invitation.status === 'accepted' 
-                        ? `${colors.semantic.success}20` 
+                      backgroundColor: invitation.status === 'accepted'
+                        ? `${colors.semantic.success}20`
                         : `${colors.utility.primaryText}20`
                     }}
                   >
-                    <MethodIcon 
-                      size={20} 
+                    <MethodIcon
+                      size={20}
                       style={{
-                        color: invitation.status === 'accepted' 
-                          ? colors.semantic.success 
+                        color: invitation.status === 'accepted'
+                          ? colors.semantic.success
                           : colors.utility.secondaryText
                       }}
                     />
                   </div>
-                  
+
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <h4 
+                      <h4
                         className="font-medium transition-colors"
                         style={{ color: colors.utility.primaryText }}
                       >
@@ -242,9 +249,9 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                       </h4>
                       {getStatusBadge(invitation)}
                     </div>
-                    
+
                     <div className="mt-1 space-y-1">
-                      <p 
+                      <p
                         className="text-sm transition-colors"
                         style={{ color: colors.utility.secondaryText }}
                       >
@@ -252,9 +259,9 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                         {' • '}
                         {formatDistanceToNow(new Date(invitation.created_at), { addSuffix: true })}
                       </p>
-                      
+
                       {invitation.resent_count > 0 && (
-                        <p 
+                        <p
                           className="text-sm transition-colors"
                           style={{ color: colors.utility.secondaryText }}
                         >
@@ -264,9 +271,9 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                           )}
                         </p>
                       )}
-                      
+
                       {invitation.accepted_at && invitation.accepted_user && (
-                        <p 
+                        <p
                           className="text-sm transition-colors"
                           style={{ color: colors.semantic.success }}
                         >
@@ -275,9 +282,9 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                           {formatDistanceToNow(new Date(invitation.accepted_at), { addSuffix: true })}
                         </p>
                       )}
-                      
+
                       {invitation.is_expired && (
-                        <div 
+                        <div
                           className="flex items-center text-sm transition-colors"
                           style={{ color: colors.semantic.error }}
                         >
@@ -285,9 +292,9 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                           Invitation expired
                         </div>
                       )}
-                      
+
                       {invitation.time_remaining && !invitation.is_expired && canResend && (
-                        <p 
+                        <p
                           className="text-sm transition-colors"
                           style={{ color: colors.utility.secondaryText }}
                         >
@@ -298,122 +305,81 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                   </div>
                 </div>
               </div>
-              
-              {/* Actions */}
-              <div className="relative">
-                <button
-                  onClick={() => setOpenMenuId(openMenuId === invitation.id ? null : invitation.id)}
-                  disabled={isProcessing}
-                  className="p-2 rounded-md transition-all duration-200 hover:opacity-80"
-                  style={{ 
-                    backgroundColor: `${colors.utility.primaryText}10`,
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  <MoreVertical size={16} />
-                </button>
-                
-                {openMenuId === invitation.id && (
-                  <div 
-                    className="absolute right-0 mt-1 w-48 border rounded-md shadow-lg z-10 transition-colors"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: `${colors.utility.primaryText}20`
-                    }}
+
+              {/* Actions - Icon Buttons */}
+              <div className="flex items-center gap-2">
+                {onViewDetails && (
+                  <button
+                    onClick={() => onViewDetails(invitation)}
+                    disabled={isProcessing}
+                    className="p-2 rounded-md transition-colors hover:opacity-80"
+                    title="View Details"
+                    style={{ color: colors.brand.primary }}
                   >
-                    <div className="py-1">
-                      {onViewDetails && (
-                        <button
-                          onClick={() => {
-                            onViewDetails(invitation);
-                            setOpenMenuId(null);
-                          }}
-                          className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
-                          style={{ 
-                            color: colors.utility.primaryText,
-                            backgroundColor: 'transparent'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <Eye size={14} className="mr-2" />
-                          View Details
-                        </button>
-                      )}
-                      
-                      {invitation.invitation_link && (
-                        <button
-                          onClick={() => copyInvitationLink(invitation)}
-                          className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
-                          style={{ 
-                            color: colors.utility.primaryText,
-                            backgroundColor: 'transparent'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <Copy size={14} className="mr-2" />
-                          Copy Link
-                        </button>
-                      )}
-                      
-                      {canResend && (
-                        <button
-                          onClick={() => handleResend(invitation.id)}
-                          disabled={isProcessing}
-                          className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
-                          style={{ 
-                            color: colors.utility.primaryText,
-                            backgroundColor: 'transparent'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = `${colors.utility.primaryText}10`;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <RefreshCw size={14} className="mr-2" />
-                          Resend
-                        </button>
-                      )}
-                      
-                      {canCancel && (
-                        <button
-                          onClick={() => handleCancel(invitation.id)}
-                          disabled={isProcessing}
-                          className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
-                          style={{ 
-                            color: colors.semantic.error,
-                            backgroundColor: 'transparent'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = `${colors.semantic.error}10`;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <XCircle size={14} className="mr-2" />
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    <Eye size={16} />
+                  </button>
+                )}
+
+                {invitation.invitation_link && (
+                  <button
+                    onClick={() => copyInvitationLink(invitation)}
+                    disabled={isProcessing}
+                    className="p-2 rounded-md transition-colors hover:opacity-80"
+                    title="Copy Link"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    <Copy size={16} />
+                  </button>
+                )}
+
+                {canResend && (
+                  <button
+                    onClick={() => handleResend(invitation.id)}
+                    disabled={isProcessing}
+                    className="p-2 rounded-md transition-colors hover:opacity-80"
+                    title="Resend Invitation"
+                    style={{ color: colors.brand.tertiary || colors.brand.primary }}
+                  >
+                    {isProcessing ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={16} />
+                    )}
+                  </button>
+                )}
+
+                {canCancel && (
+                  <button
+                    onClick={() => handleCancelClick(invitation.id)}
+                    disabled={isProcessing}
+                    className="p-2 rounded-md transition-colors hover:opacity-80"
+                    title="Cancel Invitation"
+                    style={{ color: colors.semantic.error }}
+                  >
+                    <XCircle size={16} />
+                  </button>
                 )}
               </div>
             </div>
           </div>
         );
       })}
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={cancelDialogOpen}
+        onClose={() => {
+          setCancelDialogOpen(false);
+          setInvitationToCancel(null);
+        }}
+        onConfirm={confirmCancel}
+        title="Cancel Invitation"
+        description="Are you sure you want to cancel this invitation? This action cannot be undone."
+        confirmText="Yes, Cancel Invitation"
+        cancelText="No, Keep It"
+        type="danger"
+        isLoading={invitationToCancel ? processingIds.has(invitationToCancel) : false}
+      />
     </div>
   );
 };
