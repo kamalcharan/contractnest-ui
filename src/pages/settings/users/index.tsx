@@ -186,8 +186,13 @@ const UsersPage: React.FC = () => {
     const invitation = await createInvitation(data);
     if (invitation) {
       setShowInviteModal(false);
+
+      // Always fetch invitations to update the pending count immediately
+      await fetchInvitations(1, 'pending');
+
       // Reset loaded state to force refresh
       setDataLoaded(prev => ({ ...prev, all: false, pending: false }));
+
       // Refresh current tab
       if (activeTab === 'pending' || activeTab === 'all') {
         await handleRefresh();

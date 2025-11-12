@@ -1,12 +1,12 @@
 // src/components/users/InvitationsList.tsx
 import React, { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  Mail, 
-  Phone, 
-  MessageSquare, 
-  Clock, 
-  CheckCircle, 
+import {
+  Mail,
+  Phone,
+  MessageSquare,
+  Clock,
+  CheckCircle,
   XCircle,
   RefreshCw,
   Eye,
@@ -19,6 +19,7 @@ import { Invitation } from '@/hooks/useInvitations';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useTheme } from '@/contexts/ThemeContext';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 interface InvitationsListProps {
   invitations: Invitation[];
@@ -37,8 +38,10 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
 }) => {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [invitationToCancel, setInvitationToCancel] = useState<string | null>(null);
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
@@ -109,20 +112,28 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
     }
   };
   
-  // Handle cancel
-  const handleCancel = async (invitationId: string) => {
-    if (!confirm('Are you sure you want to cancel this invitation?')) return;
-    
-    setProcessingIds(prev => new Set(prev).add(invitationId));
+  // Handle cancel - open confirmation dialog
+  const handleCancelClick = (invitationId: string) => {
+    setInvitationToCancel(invitationId);
+    setCancelDialogOpen(true);
+    setOpenMenuId(null);
+  };
+
+  // Confirm cancel
+  const confirmCancel = async () => {
+    if (!invitationToCancel) return;
+
+    setProcessingIds(prev => new Set(prev).add(invitationToCancel));
     try {
-      await onCancel(invitationId);
+      await onCancel(invitationToCancel);
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
-        newSet.delete(invitationId);
+        newSet.delete(invitationToCancel);
         return newSet;
       });
-      setOpenMenuId(null);
+      setCancelDialogOpen(false);
+      setInvitationToCancel(null);
     }
   };
   
@@ -388,10 +399,10 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                       
                       {canCancel && (
                         <button
-                          onClick={() => handleCancel(invitation.id)}
+                          onClick={() => handleCancelClick(invitation.id)}
                           disabled={isProcessing}
                           className="w-full px-4 py-2 text-sm text-left flex items-center transition-all duration-200 hover:opacity-80"
-                          style={{ 
+                          style={{
                             color: colors.semantic.error,
                             backgroundColor: 'transparent'
                           }}
@@ -414,6 +425,22 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
           </div>
         );
       })}
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={cancelDialogOpen}
+        onClose={() => {
+          setCancelDialogOpen(false);
+          setInvitationToCancel(null);
+        }}
+        onConfirm={confirmCancel}
+        title="Cancel Invitation"
+        description="Are you sure you want to cancel this invitation? This action cannot be undone."
+        confirmText="Yes, Cancel Invitation"
+        cancelText="No, Keep It"
+        type="danger"
+        isLoading={invitationToCancel ? processingIds.has(invitationToCancel) : false}
+      />
     </div>
   );
 };

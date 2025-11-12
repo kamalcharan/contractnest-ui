@@ -15,51 +15,24 @@ import { CreateInvitationData } from '@/hooks/useInvitations';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 
-// Country codes data
-const COUNTRY_CODES = [
-  { code: 'IN', name: 'India', phoneCode: '91', flag: '🇮🇳', popular: true },
-  { code: 'US', name: 'United States', phoneCode: '1', flag: '🇺🇸', popular: true },
-  { code: 'GB', name: 'United Kingdom', phoneCode: '44', flag: '🇬🇧', popular: true },
-  { code: 'AE', name: 'UAE', phoneCode: '971', flag: '🇦🇪', popular: true },
-  { code: 'SG', name: 'Singapore', phoneCode: '65', flag: '🇸🇬', popular: true },
-  { code: 'AU', name: 'Australia', phoneCode: '61', flag: '🇦🇺', popular: false },
-  { code: 'CA', name: 'Canada', phoneCode: '1', flag: '🇨🇦', popular: false },
-  { code: 'DE', name: 'Germany', phoneCode: '49', flag: '🇩🇪', popular: false },
-  { code: 'FR', name: 'France', phoneCode: '33', flag: '🇫🇷', popular: false },
-  { code: 'JP', name: 'Japan', phoneCode: '81', flag: '🇯🇵', popular: false },
-  { code: 'CN', name: 'China', phoneCode: '86', flag: '🇨🇳', popular: false },
-  { code: 'BR', name: 'Brazil', phoneCode: '55', flag: '🇧🇷', popular: false },
-  { code: 'MX', name: 'Mexico', phoneCode: '52', flag: '🇲🇽', popular: false },
-  { code: 'IT', name: 'Italy', phoneCode: '39', flag: '🇮🇹', popular: false },
-  { code: 'ES', name: 'Spain', phoneCode: '34', flag: '🇪🇸', popular: false },
-  { code: 'KR', name: 'South Korea', phoneCode: '82', flag: '🇰🇷', popular: false },
-  { code: 'NL', name: 'Netherlands', phoneCode: '31', flag: '🇳🇱', popular: false },
-  { code: 'SE', name: 'Sweden', phoneCode: '46', flag: '🇸🇪', popular: false },
-  { code: 'CH', name: 'Switzerland', phoneCode: '41', flag: '🇨🇭', popular: false },
-  { code: 'PL', name: 'Poland', phoneCode: '48', flag: '🇵🇱', popular: false },
-  { code: 'BE', name: 'Belgium', phoneCode: '32', flag: '🇧🇪', popular: false },
-  { code: 'AT', name: 'Austria', phoneCode: '43', flag: '🇦🇹', popular: false },
-  { code: 'NO', name: 'Norway', phoneCode: '47', flag: '🇳🇴', popular: false },
-  { code: 'DK', name: 'Denmark', phoneCode: '45', flag: '🇩🇰', popular: false },
-  { code: 'FI', name: 'Finland', phoneCode: '358', flag: '🇫🇮', popular: false },
-  { code: 'IE', name: 'Ireland', phoneCode: '353', flag: '🇮🇪', popular: false },
-  { code: 'NZ', name: 'New Zealand', phoneCode: '64', flag: '🇳🇿', popular: false },
-  { code: 'ZA', name: 'South Africa', phoneCode: '27', flag: '🇿🇦', popular: false },
-  { code: 'MY', name: 'Malaysia', phoneCode: '60', flag: '🇲🇾', popular: false },
-  { code: 'TH', name: 'Thailand', phoneCode: '66', flag: '🇹🇭', popular: false },
-  { code: 'ID', name: 'Indonesia', phoneCode: '62', flag: '🇮🇩', popular: false },
-  { code: 'PH', name: 'Philippines', phoneCode: '63', flag: '🇵🇭', popular: false },
-  { code: 'VN', name: 'Vietnam', phoneCode: '84', flag: '🇻🇳', popular: false },
-  { code: 'PK', name: 'Pakistan', phoneCode: '92', flag: '🇵🇰', popular: false },
-  { code: 'BD', name: 'Bangladesh', phoneCode: '880', flag: '🇧🇩', popular: false },
-  { code: 'LK', name: 'Sri Lanka', phoneCode: '94', flag: '🇱🇰', popular: false },
-  { code: 'NP', name: 'Nepal', phoneCode: '977', flag: '🇳🇵', popular: false },
+// Popular countries with phone codes
+const popularCountries = [
+  { code: 'IN', name: 'India', phoneCode: '91', flag: '🇮🇳' },
+  { code: 'US', name: 'United States', phoneCode: '1', flag: '🇺🇸' },
+  { code: 'GB', name: 'United Kingdom', phoneCode: '44', flag: '🇬🇧' },
+  { code: 'AU', name: 'Australia', phoneCode: '61', flag: '🇦🇺' },
+  { code: 'CA', name: 'Canada', phoneCode: '1', flag: '🇨🇦' },
+  { code: 'SG', name: 'Singapore', phoneCode: '65', flag: '🇸🇬' },
+  { code: 'AE', name: 'UAE', phoneCode: '971', flag: '🇦🇪' },
+  { code: 'DE', name: 'Germany', phoneCode: '49', flag: '🇩🇪' },
+  { code: 'FR', name: 'France', phoneCode: '33', flag: '🇫🇷' },
+  { code: 'JP', name: 'Japan', phoneCode: '81', flag: '🇯🇵' },
 ];
 
 // Form validation schema - simplified
 const inviteSchema = z.object({
   email: z.string().email('Invalid email address').optional(),
-  mobile_number: z.string().regex(/^[\d\s-()]+$/, 'Invalid mobile number').optional(),
+  mobile_number: z.string().regex(/^[\d\s]+$/, 'Invalid mobile number').optional(),
   country_code: z.string().optional(),
   role_id: z.string().uuid().optional(),
   custom_message: z.string().max(500, 'Message too long').optional()
@@ -109,17 +82,13 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
   const email = watch('email');
   const mobile = watch('mobile_number');
   const countryCode = watch('country_code');
-  
-  // Get country flag emoji
-  const getCountryFlag = (code: string) => {
-    const country = COUNTRY_CODES.find(c => c.code === code);
-    return country?.flag || '';
+
+  // Helper to get phone code from country code
+  const getPhoneCode = (countryCode: string): string | undefined => {
+    const country = popularCountries.find(c => c.code === countryCode);
+    return country?.phoneCode;
   };
 
-  // Split countries into popular and others
-  const popularCountries = COUNTRY_CODES.filter(c => c.popular);
-  const otherCountries = COUNTRY_CODES.filter(c => !c.popular).sort((a, b) => a.name.localeCompare(b.name));
-  
   // Handle form submission
   const onFormSubmit = async (data: InviteFormData) => {
     try {
@@ -127,18 +96,16 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
       const invitationData: CreateInvitationData = {
         invitation_method: data.email ? 'email' : 'sms'
       };
-      
+
       if (data.email) {
         invitationData.email = data.email;
       }
       if (data.mobile_number) {
         invitationData.mobile_number = data.mobile_number;
-        // Add phone_code for SMS invitations
+        // Include country_code and phone_code when mobile number is provided
         if (data.country_code) {
-          const country = COUNTRY_CODES.find(c => c.code === data.country_code);
-          if (country) {
-            invitationData.phone_code = country.phoneCode;
-          }
+          invitationData.country_code = data.country_code;
+          invitationData.phone_code = getPhoneCode(data.country_code);
         }
       }
       if (data.role_id) {
@@ -147,7 +114,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
       if (data.custom_message) {
         invitationData.custom_message = data.custom_message;
       }
-      
+
       await onSubmit(invitationData);
     } catch (error) {
       // Error handling is done in the parent component
@@ -232,26 +199,20 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
         
         {/* Mobile Number Input with Country Code */}
         <div>
-          <label
-            className="block text-sm font-medium mb-2 transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Mobile number with country code
-          </label>
           <div className="grid grid-cols-12 gap-2">
             {/* Country Code Selector */}
             <div className="col-span-5">
               <label
                 htmlFor="country_code"
-                className="block text-xs font-medium mb-1 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
+                className="block text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
               >
                 Country
               </label>
               <select
                 {...register('country_code')}
                 id="country_code"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                className="w-full px-2 py-2 border rounded-md focus:outline-none focus:ring-2 text-sm transition-colors"
                 style={{
                   borderColor: `${colors.utility.primaryText}40`,
                   backgroundColor: colors.utility.primaryBackground,
@@ -260,22 +221,9 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
                 } as React.CSSProperties}
                 disabled={isSubmitting}
               >
-                {/* Popular countries first */}
                 {popularCountries.map(country => (
                   <option key={country.code} value={country.code}>
-                    {getCountryFlag(country.code)} +{country.phoneCode} {country.name}
-                  </option>
-                ))}
-
-                {/* Separator */}
-                {popularCountries.length > 0 && otherCountries.length > 0 && (
-                  <option disabled>──────────</option>
-                )}
-
-                {/* All other countries alphabetically */}
-                {otherCountries.map(country => (
-                  <option key={country.code} value={country.code}>
-                    {getCountryFlag(country.code)} +{country.phoneCode} {country.name}
+                    {country.flag} +{country.phoneCode}
                   </option>
                 ))}
               </select>
@@ -285,8 +233,8 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             <div className="col-span-7">
               <label
                 htmlFor="mobile_number"
-                className="block text-xs font-medium mb-1 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
+                className="block text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.primaryText }}
               >
                 Phone Number
               </label>
@@ -317,7 +265,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             </div>
           </div>
           {errors.mobile_number && (
-            <div 
+            <div
               className="mt-1 flex items-center text-sm transition-colors"
               style={{ color: colors.semantic.error }}
             >
