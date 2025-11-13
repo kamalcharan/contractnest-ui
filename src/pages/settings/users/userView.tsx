@@ -1,18 +1,17 @@
 // src/pages/settings/users/userview.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  User, 
-  Mail, 
-  Phone, 
+import {
+  ArrowLeft,
+  User,
+  Mail,
+  Phone,
   Calendar,
   Shield,
   Clock,
   Edit,
   UserX,
   RefreshCw,
-  Download,
   Activity,
   Key,
   Globe,
@@ -26,8 +25,9 @@ import toast from 'react-hot-toast';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
-type TabType = 'overview' | 'activity' | 'permissions';
+type TabType = 'overview' | 'permissions';
 
 const UserViewPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,21 +38,20 @@ const UserViewPage: React.FC = () => {
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
-  const { 
-    getUser, 
-    suspendUser, 
-    activateUser, 
+  const {
+    getUser,
+    suspendUser,
+    activateUser,
     resetUserPassword,
-    getUserActivity,
-    submitting 
+    submitting
   } = useUsers({ autoLoad: false });
-  
+
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activityLog, setActivityLog] = useState<any[]>([]);
-  const [activityLoading, setActivityLoading] = useState(false);
-  
+  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+
   // Check if viewing own profile
   const isOwnProfile = currentUser?.id === id;
   
@@ -80,27 +79,7 @@ const UserViewPage: React.FC = () => {
     
     fetchUserDetails();
   }, [id]);
-  
-  // Fetch activity log when activity tab is selected
-  useEffect(() => {
-    const fetchActivity = async () => {
-      if (!id || activeTab !== 'activity') return;
-      
-      setActivityLoading(true);
-      try {
-        const activities = await getUserActivity(id, 30);
-        setActivityLog(activities);
-      } catch (error) {
-        console.error('Error fetching activity:', error);
-        toast.error('Failed to load activity log');
-      } finally {
-        setActivityLoading(false);
-      }
-    };
-    
-    fetchActivity();
-  }, [id, activeTab]);
-  
+
   // Handle back navigation
   const handleBack = () => {
     navigate('/settings/users');
@@ -111,15 +90,19 @@ const UserViewPage: React.FC = () => {
     navigate(`/settings/users/edit/${id}`);
   };
   
-  // Handle suspend user
-  const handleSuspend = async () => {
+  // Handle suspend user - open dialog
+  const handleSuspend = () => {
+    setSuspendDialogOpen(true);
+  };
+
+  // Confirm suspend
+  const confirmSuspend = async () => {
     if (!user) return;
-    
-    if (confirm(`Are you sure you want to suspend ${user.first_name} ${user.last_name}?`)) {
-      const success = await suspendUser(user.user_id);
-      if (success) {
-        setUser((prev: any) => ({ ...prev, status: 'suspended' }));
-      }
+
+    const success = await suspendUser(user.user_id);
+    if (success) {
+      setUser((prev: any) => ({ ...prev, status: 'suspended' }));
+      setSuspendDialogOpen(false);
     }
   };
   
@@ -133,49 +116,19 @@ const UserViewPage: React.FC = () => {
     }
   };
   
-  // Handle reset password
-  const handleResetPassword = async () => {
+  // Handle reset password - open dialog
+  const handleResetPassword = () => {
+    setResetPasswordDialogOpen(true);
+  };
+
+  // Confirm reset password
+  const confirmResetPassword = async () => {
     if (!user) return;
-    
-    if (confirm('Send password reset email to this user?')) {
-      await resetUserPassword(user.user_id);
-    }
+
+    await resetUserPassword(user.user_id);
+    setResetPasswordDialogOpen(false);
   };
-  
-  // Export user data
-  const handleExportData = () => {
-    if (!user) return;
-    
-    const data = {
-      user: user,
-      activity_log: activityLog
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `user-${user.user_code}-${format(new Date(), 'yyyy-MM-dd')}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  
-  // Get action icon and color
-  const getActionIcon = (action: string) => {
-    const icons = {
-      login: { icon: Activity, color: colors.semantic.success },
-      logout: { icon: Activity, color: colors.utility.secondaryText },
-      password_changed: { icon: Key, color: colors.brand.primary },
-      profile_updated: { icon: User, color: colors.brand.tertiary || colors.brand.primary },
-      failed_login: { icon: Shield, color: colors.semantic.error },
-      user_suspended: { icon: UserX, color: colors.semantic.error },
-      user_activated: { icon: Shield, color: colors.semantic.success },
-      role_assigned: { icon: Shield, color: colors.brand.primary },
-      role_removed: { icon: Shield, color: colors.semantic.warning || '#f59e0b' }
-    };
-    return icons[action as keyof typeof icons] || { icon: Activity, color: colors.utility.secondaryText };
-  };
-  
+
   if (loading) {
     return (
       <div 
@@ -270,34 +223,8 @@ const UserViewPage: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportData}
-              className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
-              style={{
-                borderColor: colors.utility.primaryText + '40',
-                backgroundColor: colors.utility.secondaryBackground,
-                color: colors.utility.primaryText
-              }}
-            >
-              <Download size={16} />
-              Export
-            </button>
-            
             {!isOwnProfile && (
               <>
-                <button
-                  onClick={handleEdit}
-                  className="px-3 py-2 border rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
-                  style={{
-                    borderColor: colors.utility.primaryText + '40',
-                    backgroundColor: colors.utility.secondaryBackground,
-                    color: colors.utility.primaryText
-                  }}
-                >
-                  <Edit size={16} />
-                  Edit
-                </button>
-                
                 {user.status === 'active' && (
                   <button
                     onClick={handleSuspend}
@@ -313,7 +240,7 @@ const UserViewPage: React.FC = () => {
                     Suspend
                   </button>
                 )}
-                
+
                 {user.status === 'suspended' && (
                   <button
                     onClick={handleActivate}
@@ -426,7 +353,6 @@ const UserViewPage: React.FC = () => {
           <nav className="-mb-px flex space-x-8">
             {[
               { id: 'overview', label: 'Overview' },
-              { id: 'activity', label: 'Activity Log' },
               { id: 'permissions', label: 'Permissions' }
             ].map((tab) => (
               <button
@@ -599,174 +525,9 @@ const UserViewPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
-            {/* Security Information */}
-            <div 
-              className="pt-6 border-t transition-colors"
-              style={{ borderColor: colors.utility.primaryText + '20' }}
-            >
-              <h3 
-                className="text-lg font-semibold mb-4 transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Security Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <label 
-                      className="text-sm font-medium transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Last Login
-                    </label>
-                    <p 
-                      className="mt-1 transition-colors"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {user.last_login ? format(new Date(user.last_login), 'PPpp') : 'Never'}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label 
-                      className="text-sm font-medium transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Total Logins
-                    </label>
-                    <p 
-                      className="mt-1 transition-colors"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {user.stats?.total_logins || 0}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label 
-                      className="text-sm font-medium transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Last Password Change
-                    </label>
-                    <p 
-                      className="mt-1 transition-colors"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {user.stats?.last_password_change 
-                        ? format(new Date(user.stats.last_password_change), 'PP')
-                        : 'Never'
-                      }
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label 
-                      className="text-sm font-medium transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Failed Login Attempts
-                    </label>
-                    <p 
-                      className="mt-1 flex items-center gap-2 transition-colors"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {user.stats?.failed_login_attempts || 0}
-                      {user.stats?.last_failed_login && (
-                        <span 
-                          className="text-sm transition-colors"
-                          style={{ color: colors.utility.secondaryText }}
-                        >
-                          (Last: {formatDistanceToNow(new Date(user.stats.last_failed_login), { addSuffix: true })})
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
         
-        {activeTab === 'activity' && (
-          <div>
-            <h3 
-              className="text-lg font-semibold mb-4 transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              Recent Activity
-            </h3>
-            {activityLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 
-                  className="h-6 w-6 animate-spin transition-colors" 
-                  style={{ color: colors.brand.primary }}
-                />
-              </div>
-            ) : activityLog.length > 0 ? (
-              <div className="space-y-3">
-                {activityLog.map((activity) => {
-                  const { icon: Icon, color } = getActionIcon(activity.action);
-                  
-                  return (
-                    <div 
-                      key={activity.id} 
-                      className="flex items-start space-x-3 py-3 border-b last:border-0 transition-colors"
-                      style={{ borderColor: colors.utility.primaryText + '20' }}
-                    >
-                      <div 
-                        className="p-2 rounded-full transition-colors"
-                        style={{
-                          backgroundColor: colors.utility.primaryBackground + '80',
-                          color: color
-                        }}
-                      >
-                        <Icon size={16} />
-                      </div>
-                      
-                      <div className="flex-1">
-                        <p 
-                          className="font-medium transition-colors"
-                          style={{ color: colors.utility.primaryText }}
-                        >
-{activity.action.split('_').map((word: string) =>
-                            word.charAt(0).toUpperCase() + word.slice(1)
-                          ).join(' ')}
-                        </p>
-                        <div 
-                          className="flex items-center gap-4 text-sm mt-1 transition-colors"
-                          style={{ color: colors.utility.secondaryText }}
-                        >
-                          <span>{format(new Date(activity.timestamp || activity.created_at), 'PPpp')}</span>
-                          {activity.ip_address && <span>IP: {activity.ip_address}</span>}
-                          {activity.user_agent && <span>{activity.user_agent.split('/')[0]}</span>}
-                        </div>
-                        {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                          <div 
-                            className="mt-2 text-sm transition-colors"
-                            style={{ color: colors.utility.secondaryText }}
-                          >
-                            {JSON.stringify(activity.metadata)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div 
-                className="text-center py-8 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                No activity recorded
-              </div>
-            )}
-          </div>
-        )}
         
         {activeTab === 'permissions' && (
           <div>
@@ -876,6 +637,32 @@ const UserViewPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Suspend Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={suspendDialogOpen}
+        onClose={() => setSuspendDialogOpen(false)}
+        onConfirm={confirmSuspend}
+        title="Suspend User"
+        description={`Are you sure you want to suspend ${user?.first_name} ${user?.last_name}? They will no longer be able to access this workspace.`}
+        confirmText="Yes, Suspend User"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={submitting}
+      />
+
+      {/* Reset Password Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={resetPasswordDialogOpen}
+        onClose={() => setResetPasswordDialogOpen(false)}
+        onConfirm={confirmResetPassword}
+        title="Reset Password"
+        description={`Send a password reset email to ${user?.email}? The user will receive an email with instructions to reset their password.`}
+        confirmText="Yes, Send Reset Email"
+        cancelText="Cancel"
+        type="warning"
+        isLoading={submitting}
+      />
     </div>
   );
 };

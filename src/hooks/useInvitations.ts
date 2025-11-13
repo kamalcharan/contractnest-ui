@@ -61,6 +61,8 @@ export interface InvitationListResponse {
 export interface CreateInvitationData {
   email?: string;
   mobile_number?: string;
+  country_code?: string;
+  phone_code?: string;
   invitation_method: 'email' | 'sms' | 'whatsapp';
   role_id?: string;
   custom_message?: string;

@@ -18,10 +18,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import UsersList from '@/components/users/UsersList';
 import InvitationsList from '@/components/users/InvitationsList';
 import InviteUserModal from '@/components/users/InviteUserModal';
+import InvitationDetailsModal from '@/components/users/InvitationDetailsModal';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
+import { Invitation } from '@/hooks/useInvitations';
 
 type TabType = 'all' | 'active' | 'pending';
 
@@ -60,6 +62,8 @@ const UsersPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showInvitationDetails, setShowInvitationDetails] = useState(false);
+  const [selectedInvitation, setSelectedInvitation] = useState<Invitation | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
@@ -186,10 +190,21 @@ const UsersPage: React.FC = () => {
     const invitation = await createInvitation(data);
     if (invitation) {
       setShowInviteModal(false);
-      // Reset loaded state to force refresh
-      setDataLoaded(prev => ({ ...prev, all: false, pending: false }));
-      // Refresh current tab
-      if (activeTab === 'pending' || activeTab === 'all') {
+
+      // Fetch all invitation statuses and users to update all counts immediately
+      await Promise.all([
+        fetchInvitations(1, 'all'),
+        fetchInvitations(1, 'pending'),
+        fetchInvitations(1, 'accepted'),
+        fetchInvitations(1, 'expired'),
+        fetchUsers(1, 'invited') // Update invited users count
+      ]);
+
+      // Reset loaded state to force refresh of all tabs
+      setDataLoaded({ all: false, active: false, pending: false });
+
+      // Refresh current tab display if needed
+      if (activeTab !== 'all') {
         await handleRefresh();
       }
     }
@@ -523,13 +538,14 @@ if (user?.status === 'invited') {
                     Pending Invitations
                   </h2>
                   <InvitationsList
-                    invitations={invitations.filter(inv => 
+                    invitations={invitations.filter(inv =>
                       ['pending', 'sent', 'resent'].includes(inv.status)
                     )}
                     onResend={resendInvitation}
                     onCancel={cancelInvitation}
                     onViewDetails={(invitation) => {
-                      console.log('View invitation:', invitation);
+                      setSelectedInvitation(invitation);
+                      setShowInvitationDetails(true);
                     }}
                     isLoading={invitationsLoading}
                   />
@@ -560,6 +576,16 @@ if (user?.status === 'invited') {
         onSubmit={handleInviteTeamMember}
         isSubmitting={submitting}
         availableRoles={availableRoles}
+      />
+
+      {/* Invitation Details Modal */}
+      <InvitationDetailsModal
+        invitation={selectedInvitation}
+        isOpen={showInvitationDetails}
+        onClose={() => {
+          setShowInvitationDetails(false);
+          setSelectedInvitation(null);
+        }}
       />
     </div>
   );
