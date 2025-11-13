@@ -9,12 +9,13 @@ export { default as AddResourceForm } from './AddResourceForm';
 
 // Empty states - default export and named exports
 export { default as ResourcesEmptyStates } from './EmptyStates';
-export { 
+export {
   ManualEntryEmptyState,
-  ContactBasedEmptyState, 
+  ContactBasedEmptyState,
   SearchEmptyState,
   ErrorEmptyState,
-  NoResourceTypesEmptyState 
+  NoResourceTypesEmptyState,
+  ResourceDescriptionCard
 } from './EmptyStates';
 
 // Re-export types for convenience

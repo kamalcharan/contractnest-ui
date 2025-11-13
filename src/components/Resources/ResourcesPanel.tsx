@@ -19,7 +19,8 @@ import ResourcesEmptyStates, {
   ManualEntryEmptyState,
   ContactBasedEmptyState,
   SearchEmptyState,
-  ErrorEmptyState
+  ErrorEmptyState,
+  ResourceDescriptionCard
 } from '@/components/Resources/EmptyStates';
 import AddResourceForm from './AddResourceForm';
 import ResourceCard from './ResourceCard';
@@ -74,14 +75,17 @@ const ResourcesPanel: React.FC<ResourcesPanelProps> = ({
   } = useResourcesByType(selectedTypeId, filters);
 
   // Load contacts for contact-based resource types
-  const contactClassification = selectedResourceType ? 
-    CONTACT_CLASSIFICATION_MAP[selectedResourceType.name] : null;
-  const { 
+  // FIX: Use resource type ID instead of name for lookup
+  const contactClassification = selectedResourceType ?
+    CONTACT_CLASSIFICATION_MAP[selectedResourceType.id] : null;
+  const {
     data: contacts = [],
     loading: contactsLoading,
-    error: contactsError 
+    error: contactsError
   } = useContactList(
-    contactClassification ? { classifications: [contactClassification] } : {}
+    contactClassification
+      ? { classifications: [contactClassification], enabled: true }
+      : { enabled: false } // Don't fetch contacts for non-contact-based resource types
   );
 
   // Log contact loading for debugging
@@ -222,6 +226,13 @@ const ResourcesPanel: React.FC<ResourcesPanelProps> = ({
         isAddingNew={isAddingNew}
         colors={colors}
       />
+
+      {/* Description Card - Shows resource type description from DB */}
+      {selectedResourceType && (
+        <div className="mt-6">
+          <ResourceDescriptionCard resourceType={selectedResourceType} />
+        </div>
+      )}
 
       <div className="mt-6">
         {/* Column Headers */}

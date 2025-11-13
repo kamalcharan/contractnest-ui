@@ -22,6 +22,7 @@ export interface ContactFilters {
   show_duplicates?: boolean;
   includeInactive?: boolean;
   includeArchived?: boolean;
+  enabled?: boolean; // ADDED: Control whether to fetch or not
 }
 
 export interface Contact {
@@ -132,6 +133,14 @@ export const useContactList = (initialFilters: ContactFilters) => {
   const requestIdRef = useRef(0);
 
   const fetchContacts = useCallback(async () => {
+    // Check if fetching is enabled
+    if (filters.enabled === false) {
+      console.log('Contact fetching disabled by enabled flag');
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
     // Validate tenant
     if (!currentTenant?.id) {
       console.warn('No tenant selected, skipping contact fetch');

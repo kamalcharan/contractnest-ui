@@ -444,6 +444,50 @@ export const NoResourceTypesEmptyState: React.FC<{
   );
 };
 
+/**
+ * Description card component - Shows resource type description from database
+ * Always visible at top of resources panel to provide context
+ */
+export const ResourceDescriptionCard: React.FC<{
+  resourceType: ResourceType;
+}> = ({ resourceType }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // Don't render if no description
+  if (!resourceType.description) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-lg border-l-4 p-4 mb-6 transition-colors"
+      style={{
+        backgroundColor: isDarkMode
+          ? colors.brand.primary + '15'  // 15% opacity for dark mode
+          : colors.brand.primary + '10', // 10% opacity for light mode
+        borderLeftColor: colors.brand.primary,
+        borderTop: `1px solid ${colors.utility.primaryText}10`,
+        borderRight: `1px solid ${colors.utility.primaryText}10`,
+        borderBottom: `1px solid ${colors.utility.primaryText}10`,
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <AlertCircle
+          className="h-5 w-5 flex-shrink-0 mt-0.5"
+          style={{ color: colors.brand.primary }}
+        />
+        <p
+          className="text-sm leading-relaxed transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          {resourceType.description}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // Export main component and specialized variants
 export default ResourcesEmptyStates;
 

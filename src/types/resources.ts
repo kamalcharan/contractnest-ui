@@ -281,7 +281,7 @@ export const getResourceTypeBehavior = (resourceType: ResourceType) => ({
   allowsColor: !resourceType.requires_human_assignment,
   allowsEdit: !resourceType.requires_human_assignment,
   allowsDelete: !resourceType.requires_human_assignment,
-  contactClassification: CONTACT_CLASSIFICATION_MAP[resourceType.name] || null,
+  contactClassification: CONTACT_CLASSIFICATION_MAP[resourceType.id] || null,
 });
 
 // Resource type icons mapping
