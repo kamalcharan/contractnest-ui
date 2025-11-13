@@ -1,20 +1,17 @@
 // src/components/users/UsersList.tsx
 import React, { useState, useMemo } from 'react';
-import { 
-  Search, 
-  Filter, 
-  MoreVertical, 
-  Mail, 
+import {
+  Search,
+  Filter,
+  Mail,
   Phone,
   ChevronDown,
   Users,
-  Download,
   UserPlus,
   Building,
   User,
   Check,
   Eye,
-  Edit,
   UserX,
   RefreshCw,
   Key
@@ -22,6 +19,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '../../contexts/ThemeContext';
+import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 export interface User {
   id: string;
@@ -72,8 +70,9 @@ const UsersList: React.FC<UsersListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
+  const [userToSuspend, setUserToSuspend] = useState<User | null>(null);
 
   // Get unique roles and statuses for filters
   const uniqueRoles = useMemo(() => {
@@ -116,32 +115,23 @@ const UsersList: React.FC<UsersListProps> = ({
     });
   }, [users, searchTerm, statusFilter, roleFilter]);
 
-  // Export users to CSV
-  const exportToCSV = () => {
-    const headers = ['Name', 'Email', 'Code', 'Mobile', 'Status', 'Role', 'Last Login', 'Created At'];
-    const csvData = filteredUsers.map(user => [
-      `${user.first_name} ${user.last_name}`,
-      user.email,
-      user.user_code,
-      user.mobile_number || '',
-      user.status,
-      user.role || '',
-      user.last_login ? new Date(user.last_login).toLocaleDateString() : '',
-      new Date(user.created_at).toLocaleDateString()
-    ]);
+  // Handle suspend user
+  const handleSuspendClick = (user: User) => {
+    setUserToSuspend(user);
+    setSuspendDialogOpen(true);
+  };
 
-    const csvContent = [
-      headers.join(','),
-      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+  const handleSuspendConfirm = () => {
+    if (userToSuspend && onSuspendUser) {
+      onSuspendUser(userToSuspend);
+    }
+    setSuspendDialogOpen(false);
+    setUserToSuspend(null);
+  };
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `team-members-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleSuspendCancel = () => {
+    setSuspendDialogOpen(false);
+    setUserToSuspend(null);
   };
 
   // Get member card component
@@ -290,127 +280,48 @@ const UsersList: React.FC<UsersListProps> = ({
             </div>
           </div>
           
-          {/* Actions Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setOpenMenuId(openMenuId === user.id ? null : user.id)}
-              onBlur={() => setTimeout(() => setOpenMenuId(null), 200)}
-              className="p-2 rounded-md transition-colors hover:opacity-80"
-              style={{
-                backgroundColor: colors.utility.secondaryText + '10'
-              }}
-            >
-              <MoreVertical size={16} style={{ color: colors.utility.secondaryText }} />
-            </button>
-            
-            {openMenuId === user.id && (
-              <div 
-                className="absolute right-0 mt-1 w-48 border rounded-md shadow-lg z-10 transition-colors"
+          {/* Actions - Icon Buttons */}
+          <div className="flex items-center gap-2">
+            {onViewUser && (
+              <button
+                onClick={() => onViewUser(user)}
+                title="View Details"
+                className="p-2 rounded-md transition-colors hover:opacity-80"
                 style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderColor: colors.utility.secondaryText + '20'
+                  backgroundColor: colors.utility.secondaryText + '10',
+                  color: colors.utility.primaryText
                 }}
               >
-                <div className="py-1">
-                  {onViewUser && (
-                    <button
-                      onClick={() => {
-                        onViewUser(user);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
-                      style={{
-                        color: colors.utility.primaryText,
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <Eye size={14} className="mr-2" />
-                      View Details
-                    </button>
-                  )}
-                  
-                  {onEditUser && user.status === 'active' && (
-                    <button
-                      onClick={() => {
-                        onEditUser(user);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
-                      style={{
-                        color: colors.utility.primaryText,
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <Edit size={14} className="mr-2" />
-                      Edit
-                    </button>
-                  )}
-                  
-                  {onResendInvitation && user.status === 'invited' && (
-                    <button
-                      onClick={() => {
-                        onResendInvitation(user.id);
-                        setOpenMenuId(null);
-                      }}
-                      className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
-                      style={{
-                        color: colors.utility.primaryText,
-                        backgroundColor: 'transparent'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <RefreshCw size={14} className="mr-2" />
-                      Resend Invitation
-                    </button>
-                  )}
-                  
-                  {onSuspendUser && user.status === 'active' && (
-                    <>
-                      <div 
-                        className="border-t my-1"
-                        style={{ borderColor: colors.utility.secondaryText + '20' }}
-                      ></div>
-                      <button
-                        onClick={() => {
-                          onSuspendUser(user);
-                          setOpenMenuId(null);
-                        }}
-                        className="w-full px-4 py-2 text-sm text-left transition-colors flex items-center hover:opacity-80"
-                        style={{
-                          color: colors.semantic.error,
-                          backgroundColor: 'transparent'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = colors.semantic.error + '10';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        <UserX size={14} className="mr-2" />
-                        Suspend
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                <Eye size={16} />
+              </button>
+            )}
+
+            {onResendInvitation && user.status === 'invited' && (
+              <button
+                onClick={() => onResendInvitation(user.id)}
+                title="Resend Invitation"
+                className="p-2 rounded-md transition-colors hover:opacity-80"
+                style={{
+                  backgroundColor: colors.utility.secondaryText + '10',
+                  color: colors.utility.primaryText
+                }}
+              >
+                <RefreshCw size={16} />
+              </button>
+            )}
+
+            {onSuspendUser && user.status === 'active' && (
+              <button
+                onClick={() => handleSuspendClick(user)}
+                title="Suspend User"
+                className="p-2 rounded-md transition-colors hover:opacity-80"
+                style={{
+                  backgroundColor: colors.semantic.error + '10',
+                  color: colors.semantic.error
+                }}
+              >
+                <UserX size={16} />
+              </button>
             )}
           </div>
         </div>
@@ -497,19 +408,6 @@ const UsersList: React.FC<UsersListProps> = ({
               "transition-transform",
               showFilters && "rotate-180"
             )} />
-          </button>
-
-          <button
-            onClick={exportToCSV}
-            className="px-3 py-2 border rounded-md transition-colors flex items-center gap-2 hover:opacity-80"
-            style={{
-              borderColor: colors.utility.secondaryText + '40',
-              backgroundColor: colors.utility.secondaryBackground,
-              color: colors.utility.primaryText
-            }}
-          >
-            <Download size={16} />
-            Export
           </button>
 
           {onInviteUser && (
@@ -611,25 +509,25 @@ const UsersList: React.FC<UsersListProps> = ({
 
       {/* Team Members List */}
       {filteredUsers.length === 0 ? (
-        <div 
+        <div
           className="text-center py-12 border rounded-lg transition-colors"
           style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderColor: colors.utility.secondaryText + '20'
           }}
         >
-          <Users 
-            size={48} 
+          <Users
+            size={48}
             className="mx-auto mb-4"
             style={{ color: colors.utility.secondaryText }}
           />
-          <h3 
+          <h3
             className="text-lg font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             No team members found
           </h3>
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -645,6 +543,23 @@ const UsersList: React.FC<UsersListProps> = ({
           ))}
         </div>
       )}
+
+      {/* Suspend Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={suspendDialogOpen}
+        onClose={handleSuspendCancel}
+        onConfirm={handleSuspendConfirm}
+        title="Suspend User"
+        description={
+          userToSuspend
+            ? `Are you sure you want to suspend ${userToSuspend.first_name} ${userToSuspend.last_name}? They will no longer be able to access the workspace.`
+            : ''
+        }
+        confirmText="Suspend"
+        cancelText="Cancel"
+        type="danger"
+        icon={<UserX className="h-6 w-6" />}
+      />
     </div>
   );
 };
