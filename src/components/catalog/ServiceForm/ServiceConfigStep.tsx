@@ -14,11 +14,15 @@ import {
 } from 'lucide-react';
 
 // Import master data hooks - FIXED: Use real hooks
-import { 
+import {
   useTenantMasterData,
   useMasterDataDropdown
 } from '../../../hooks/queries/useProductMasterdata';
 import { useTenantContextMaster } from '../../../hooks/queries/useTenantContextMaster';
+
+// PRODUCTION FIX: Import resource hooks for proper data fetching
+import { useResourcesByType } from '../../../hooks/useResources';
+import { useContactList } from '../../../hooks/useContactList';
 
 // Import the TaxRateTagSelector component
 import TaxRateTagSelector from '../shared/TaxRateTagSelector';
@@ -69,14 +73,13 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // FIXED: Master data hooks - Use real data from tenant context
-  const { 
-    currencies, 
-    taxRates, 
-    taxSettings, 
+  const {
+    currencies,
+    taxRates,
+    taxSettings,
     defaultTaxRate,
     resourceTypes,
-    resources, // FIXED: Now get actual resources
-    isLoading: loadingTenantContext 
+    isLoading: loadingTenantContext
   } = useTenantContextMaster({
     includeResources: true,
     includeTax: true,
@@ -88,6 +91,28 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
 
   // Local state for resource management
   const [selectedResourceType, setSelectedResourceType] = useState<string>('');
+
+  // PRODUCTION FIX: Fetch actual resources based on selected type
+  const {
+    data: manualResources,
+    isLoading: isLoadingManualResources
+  } = useResourcesByType(selectedResourceType || null);
+
+  // PRODUCTION FIX: Fetch contacts for contact-based resource types
+  const selectedResourceTypeData = resourceTypes?.find(rt => rt.id === selectedResourceType);
+  const isContactBased = selectedResourceTypeData?.requires_human_assignment || false;
+
+  const {
+    data: contactsData,
+    isLoading: isLoadingContacts
+  } = useContactList({
+    classification: selectedResourceTypeData?.name?.toLowerCase().includes('partner')
+      ? 'partner'
+      : 'team_member',
+    is_active: true
+  }, {
+    enabled: isContactBased && !!selectedResourceType
+  });
 
   // FIXED: Process service categories for resource-based services
   const serviceCategories = serviceCategoriesData?.data?.map(item => ({
@@ -127,16 +152,45 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     isDefault: rate.is_default
   })) || [];
 
-  // FIXED: Get actual resources - no more mock data
-  const actualResources = resources || [];
+  // PRODUCTION FIX: Transform contacts to resource format
+  const transformContactsToResources = useCallback((contacts: any[]) => {
+    if (!contacts || contacts.length === 0) return [];
 
-  // FIXED: Helper to get resources by category using real data
+    return contacts.map(contact => ({
+      id: contact.id,
+      name: `${contact.first_name} ${contact.last_name}`.trim(),
+      display_name: `${contact.first_name} ${contact.last_name}`.trim(),
+      description: contact.email || contact.phone || 'Contact resource',
+      resource_type_id: selectedResourceType,
+      is_active: contact.is_active ?? true,
+      created_at: contact.created_at,
+      updated_at: contact.updated_at,
+      _source: 'contact'
+    }));
+  }, [selectedResourceType]);
+
+  // PRODUCTION FIX: Get actual resources based on type
+  const actualResources = useCallback(() => {
+    if (!selectedResourceType) return [];
+
+    if (isContactBased) {
+      return transformContactsToResources(contactsData?.data || []);
+    } else {
+      return manualResources || [];
+    }
+  }, [selectedResourceType, isContactBased, contactsData, manualResources, transformContactsToResources]);
+
+  // PRODUCTION FIX: Helper to get resources by category using real data
   const getResourcesByCategory = useCallback((categoryId: string) => {
-    return actualResources.filter(resource => 
-      resource.resource_type_id === categoryId || 
+    const resources = actualResources();
+    return resources.filter(resource =>
+      resource.resource_type_id === categoryId ||
       resource.category_id === categoryId
     );
   }, [actualResources]);
+
+  // PRODUCTION FIX: Check if resources are loading
+  const isLoadingResources = isLoadingManualResources || isLoadingContacts;
 
   // Update service type
   const handleServiceTypeChange = useCallback((newType: 'independent' | 'resource_based') => {
@@ -594,7 +648,7 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                   </h4>
                   <div className="space-y-3">
                     {resourceRequirements.map((requirement, index) => {
-                      const resource = actualResources.find(r => r.id === requirement.resource_id);
+                      const resource = actualResources().find(r => r.id === requirement.resource_id);
                       
                       return (
                         <div 

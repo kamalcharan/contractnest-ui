@@ -1,6 +1,7 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query'; // PRODUCTION FIX: Add React Query
 import api from '../services/api';
 import { API_ENDPOINTS } from '../services/serviceURLs';
 import toast from 'react-hot-toast';
@@ -155,6 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLive, setIsLive] = useState<boolean>(localStorage.getItem(STORAGE_KEYS.IS_LIVE) !== 'false');
   const [registrationStatus, setRegistrationStatus] = useState<'complete' | 'pending_workspace' | null>(null);
   const navigate = useNavigate();
+  const queryClient = useQueryClient(); // PRODUCTION FIX: Add React Query client
 
   // Environment switch modal state
   const [showEnvironmentSwitchModal, setShowEnvironmentSwitchModal] = useState<boolean>(false);
@@ -779,27 +781,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setShowEnvironmentSwitchModal(true);
   };
 
-  // Confirm environment switch
+  // PRODUCTION FIX: Confirm environment switch with cache clearing
   const confirmEnvironmentSwitch = async () => {
     if (!pendingEnvironment) return;
-    
+
     const newIsLive = pendingEnvironment === 'live';
-    
+
     setShowEnvironmentSwitchModal(false);
-    
+
     toast.loading(`Switching to ${newIsLive ? 'Live' : 'Test'} environment...`, {
       id: 'environment-switch'
     });
-    
+
+    // Update state and storage
     setIsLive(newIsLive);
     storage.setEnvironmentMode(newIsLive);
-    
+
+    // Update axios default headers
     api.defaults.headers.common['x-environment'] = newIsLive ? 'live' : 'test';
-    
+
+    // PRODUCTION FIX: Clear ALL React Query cache to prevent stale data
+    console.log('🔄 Clearing React Query cache for environment switch...');
+    queryClient.clear();
+
+    // Small delay to ensure state updates propagate
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     setPendingEnvironment(null);
-    
+
     toast.success(`Switched to ${newIsLive ? 'Live' : 'Test'} environment`, {
       id: 'environment-switch',
       duration: 2000,
@@ -812,7 +821,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         minWidth: '300px'
       },
     });
-    
+
+    // Navigate to dashboard - will trigger fresh data fetch
     navigate('/dashboard');
   };
 
