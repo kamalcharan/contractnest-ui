@@ -628,138 +628,85 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                 </div>
               </div>
 
-              {/* Actions */}
+              {/* ✅ PRODUCTION FIX: Direct Action Icon Buttons (No dropdown) */}
               <div className="flex gap-1">
-                <button 
+                {/* View Button */}
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onView();
                   }}
-                  className="p-1.5 rounded-md transition-colors"
+                  className="p-1.5 rounded-md transition-colors hover:opacity-80"
                   style={{
                     backgroundColor: colors.utility.secondaryText + '20',
                     color: colors.utility.primaryText
                   }}
                   title="View details"
                 >
-                  <Eye className="h-3 w-3" />
+                  <Eye className="h-4 w-4" />
                 </button>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }}
-                  className="p-1.5 rounded-md transition-colors"
-                  style={{
-                    backgroundColor: colors.brand.primary,
-                    color: '#ffffff'
-                  }}
-                  title="Edit service"
-                >
-                  <Edit className="h-3 w-3" />
-                </button>
-                
-                {/* More Actions Dropdown */}
-                <div className="relative">
+
+                {/* Edit Button - Only show if service is ACTIVE */}
+                {service.status === true && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setShowDropdown(!showDropdown);
+                      onEdit();
                     }}
-                    className="p-1.5 rounded-md transition-colors"
+                    className="p-1.5 rounded-md transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: colors.brand.primary + '20',
+                      color: colors.brand.primary
+                    }}
+                    title="Edit service"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                )}
+
+                {/* Toggle Status Button (Activate/Deactivate) */}
+                {onToggleStatus && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleStatus();
+                    }}
+                    className="p-1.5 rounded-md transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: service.status
+                        ? colors.semantic.warning + '20'
+                        : colors.semantic.success + '20',
+                      color: service.status
+                        ? colors.semantic.warning
+                        : colors.semantic.success
+                    }}
+                    title={service.status ? 'Deactivate service' : 'Activate service'}
+                  >
+                    {service.status ? (
+                      <PowerOff className="h-4 w-4" />
+                    ) : (
+                      <Power className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
+
+                {/* Duplicate Button - Only show if service is ACTIVE */}
+                {service.status === true && onDuplicate && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDuplicate();
+                    }}
+                    className="p-1.5 rounded-md transition-colors hover:opacity-80"
                     style={{
                       backgroundColor: colors.utility.secondaryText + '20',
-                      color: colors.utility.secondaryText
+                      color: colors.utility.primaryText
                     }}
-                    title="More actions"
+                    title="Duplicate service"
                   >
-                    <MoreHorizontal className="h-3 w-3" />
+                    <Copy className="h-4 w-4" />
                   </button>
-                  
-                  {/* Dropdown Menu */}
-{showDropdown && (
-  <>
-    {/* Backdrop */}
-    <div 
-      className="fixed inset-0 z-10"
-      onClick={(e) => {
-        e.stopPropagation();
-        setShowDropdown(false);
-      }}
-    />
-    
-    {/* Menu */}
-    <div 
-      className="absolute right-0 top-full mt-1 w-40 rounded-md shadow-lg border z-20"
-      style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderColor: colors.utility.primaryText + '20'
-      }}
-    >
-      <div className="py-1">
-        <button
-          onClick={(e) => handleDropdownAction('view', e)}
-          className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-          style={{ color: colors.utility.primaryText }}
-        >
-          <Eye className="h-3 w-3" />
-          View
-        </button>
-        
-        {/* ✅ FIXED: Only show Edit if service is ACTIVE */}
-        {service.status === true && (
-          <button
-            onClick={(e) => handleDropdownAction('edit', e)}
-            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-            style={{ color: colors.utility.primaryText }}
-          >
-            <Edit className="h-3 w-3" />
-            Edit
-          </button>
-        )}
-        
-        {/* ✅ NEW: Toggle Status Option - Shows Activate OR Deactivate */}
-        {onToggleStatus && (
-          <button
-            onClick={(e) => handleDropdownAction('toggle-status', e)}
-            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-            style={{ 
-              color: service.status ? colors.semantic.warning : colors.semantic.success 
-            }}
-          >
-            {service.status ? (
-              <>
-                <PowerOff className="h-3 w-3" />
-                Deactivate
-              </>
-            ) : (
-              <>
-                <Power className="h-3 w-3" />
-                Activate
-              </>
-            )}
-          </button>
-        )}
-        
-        {/* ✅ FIXED: Only show Duplicate if service is ACTIVE */}
-        {service.status === true && onDuplicate && (
-          <button
-            onClick={(e) => handleDropdownAction('duplicate', e)}
-            className="w-full text-left px-3 py-2 text-sm hover:opacity-80 transition-colors flex items-center gap-2"
-            style={{ color: colors.utility.primaryText }}
-          >
-            <Copy className="h-3 w-3" />
-            Duplicate
-          </button>
-        )}
-        
-        {/* ✅ REMOVED: Delete option - use toggle status instead */}
-        {/* Delete is now handled by deactivate (toggle status to false) */}
-      </div>
-    </div>
-  </>
-)}
-                </div>
+                )}
               </div>
             </div>
           </div>

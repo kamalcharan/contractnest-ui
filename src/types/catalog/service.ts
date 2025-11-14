@@ -105,12 +105,22 @@ export interface ServicePricingForm {
 export interface ServiceResourceForm {
   resource_id: string;
   resource_type_id: string;
+  resource_name?: string; // For displaying in edit mode
   quantity: number;
   is_required: boolean;
   duration_hours?: number; // ✅ ADDED
   unit_cost?: number; // ✅ ADDED
   currency?: string; // ✅ ADDED
   is_billable?: boolean; // ✅ ADDED
+  description?: string; // For displaying in edit mode
+
+  // Populated from API in edit mode
+  resource?: {
+    id: string;
+    name: string;
+    display_name: string;
+    resource_type_id: string;
+  };
 }
 
 export interface ServiceFormData {

@@ -28,6 +28,9 @@ import {
 // Import storage hook
 import { useStorageManagement } from '../../../hooks/useStorageManagement';
 
+// Import UI components
+import ConfirmationDialog from '../../ui/ConfirmationDialog';
+
 // Import types
 import { 
   ServiceFormData, 
@@ -68,6 +71,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
 
   // Form state
   const [currentStep, setCurrentStep] = useState(1);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [formData, setFormData] = useState<ServiceFormData>({
     basic_info: {
       service_name: '',
@@ -128,6 +132,13 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
         imageFileId: existingService.metadata?.image_file_id
       });
 
+      // ✅ PRODUCTION FIX: Transform resource_requirements to include resource_name for edit mode
+      const transformedResourceRequirements = (existingService.resource_requirements || []).map(req => ({
+        ...req,
+        // Ensure resource_name is populated from nested resource object
+        resource_name: req.resource?.display_name || req.resource?.name || undefined
+      }));
+
       setFormData({
         basic_info: {
           service_name: existingService.service_name || '',
@@ -141,7 +152,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
         },
         service_type: existingService.service_type || 'independent',
         pricing_records: existingService.pricing_records || [],
-        resource_requirements: existingService.resource_requirements || [],
+        resource_requirements: transformedResourceRequirements,
         metadata: existingService.metadata
       });
       setHasUnsavedChanges(false);
@@ -413,15 +424,19 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
   // Handle cancel
   const handleCancel = useCallback(() => {
     if (hasUnsavedChanges) {
-      if (window.confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-        onCancel?.();
-        navigate('/catalog');
-      }
+      setShowCancelDialog(true);
     } else {
       onCancel?.();
       navigate('/catalog');
     }
   }, [hasUnsavedChanges, onCancel, navigate]);
+
+  // Confirm cancel with unsaved changes
+  const confirmCancel = useCallback(() => {
+    setShowCancelDialog(false);
+    onCancel?.();
+    navigate('/catalog');
+  }, [onCancel, navigate]);
 
   // Show loading state for edit mode
   if (isLoading) {
@@ -743,6 +758,18 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
           )}
         </div>
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showCancelDialog}
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={confirmCancel}
+        title="Discard Changes?"
+        message="You have unsaved changes. Are you sure you want to cancel? All changes will be lost."
+        confirmText="Discard Changes"
+        cancelText="Continue Editing"
+        variant="danger"
+      />
     </div>
   );
 };

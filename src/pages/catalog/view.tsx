@@ -1,6 +1,6 @@
 // src/pages/catalog/view.tsx
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 import { 
@@ -52,13 +52,10 @@ import { Service } from '../../types/catalog/service';
 
 const ServiceViewPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { id: serviceId } = useParams<{ id: string }>();
   const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-
-  // Get service ID from URL params
-  const serviceId = searchParams.get('id');
 
   // Local state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);

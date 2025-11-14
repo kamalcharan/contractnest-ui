@@ -346,8 +346,8 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<CatalogPage />} />
-            
-            <Route path="view" element={<ServiceViewPage />} />
+
+            <Route path="view/:id" element={<ServiceViewPage />} />
             <Route path="/catalog/catalogService-form" element={<CatalogServiceFormPage />} />
           </Route>
 
