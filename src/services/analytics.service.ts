@@ -24,20 +24,30 @@ export const analyticsService = {
   },
 
   /**
+   * Track a generic event
+   * @param eventName The name of the event
+   * @param properties Additional properties to track with the event
+   */
+  trackEvent(eventName: string, properties?: EventProperties): void {
+    // In a real implementation, this would send data to your analytics provider
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Analytics] Event: ${eventName}`, properties);
+    }
+
+    // Here you would typically call something like:
+    // window.gtag('event', eventName, properties);
+    // or
+    // window.amplitude.getInstance().logEvent(eventName, properties);
+  },
+
+  /**
    * Track a workspace event
    * @param eventName The name of the event
    * @param properties Additional properties to track with the event
    */
   trackWorkspaceEvent(eventName: string, properties?: EventProperties): void {
-    // In a real implementation, this would send data to your analytics provider
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[Analytics] Event: ${eventName}`, properties);
-    }
-    
-    // Here you would typically call something like:
-    // window.gtag('event', eventName, properties);
-    // or
-    // window.amplitude.getInstance().logEvent(eventName, properties);
+    // Delegate to trackEvent for consistency
+    this.trackEvent(eventName, properties);
   },
 
   /**

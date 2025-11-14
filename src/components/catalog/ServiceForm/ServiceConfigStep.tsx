@@ -14,11 +14,16 @@ import {
 } from 'lucide-react';
 
 // Import master data hooks - FIXED: Use real hooks
-import { 
+import {
   useTenantMasterData,
   useMasterDataDropdown
 } from '../../../hooks/queries/useProductMasterdata';
 import { useTenantContextMaster } from '../../../hooks/queries/useTenantContextMaster';
+
+// PRODUCTION FIX: Import resource hooks for proper data fetching
+import { useResources } from '../../../hooks/useResources';
+import { useContactList } from '../../../hooks/useContacts';
+import { transformContactsToResources } from '../../../utils/resourceTransforms';
 
 // Import the TaxRateTagSelector component
 import TaxRateTagSelector from '../shared/TaxRateTagSelector';
@@ -69,14 +74,13 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // FIXED: Master data hooks - Use real data from tenant context
-  const { 
-    currencies, 
-    taxRates, 
-    taxSettings, 
+  const {
+    currencies,
+    taxRates,
+    taxSettings,
     defaultTaxRate,
     resourceTypes,
-    resources, // FIXED: Now get actual resources
-    isLoading: loadingTenantContext 
+    isLoading: loadingTenantContext
   } = useTenantContextMaster({
     includeResources: true,
     includeTax: true,
@@ -88,6 +92,27 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
 
   // Local state for resource management
   const [selectedResourceType, setSelectedResourceType] = useState<string>('');
+
+  // PRODUCTION FIX: Fetch actual resources based on selected type
+  const {
+    data: manualResources,
+    loading: isLoadingManualResources
+  } = useResources(selectedResourceType || undefined);
+
+  // PRODUCTION FIX: Fetch contacts for contact-based resource types
+  const selectedResourceTypeData = resourceTypes?.find(rt => rt.id === selectedResourceType);
+  const isContactBased = selectedResourceTypeData?.requires_human_assignment || false;
+
+  const {
+    data: contactsData,
+    loading: isLoadingContacts
+  } = useContactList({
+    classifications: [selectedResourceTypeData?.name?.toLowerCase().includes('partner')
+      ? 'partner'
+      : 'team_member'],
+    status: 'active',
+    enabled: isContactBased && !!selectedResourceType
+  });
 
   // FIXED: Process service categories for resource-based services
   const serviceCategories = serviceCategoriesData?.data?.map(item => ({
@@ -127,16 +152,32 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
     isDefault: rate.is_default
   })) || [];
 
-  // FIXED: Get actual resources - no more mock data
-  const actualResources = resources || [];
+  // PRODUCTION FIX: Get actual resources based on type (using shared transform utility)
+  const actualResources = useCallback(() => {
+    if (!selectedResourceType) return [];
 
-  // FIXED: Helper to get resources by category using real data
+    if (isContactBased) {
+      return transformContactsToResources(
+        contactsData || [],
+        selectedResourceType,
+        selectedResourceTypeData
+      );
+    } else {
+      return manualResources || [];
+    }
+  }, [selectedResourceType, isContactBased, contactsData, manualResources, selectedResourceTypeData]);
+
+  // PRODUCTION FIX: Helper to get resources by category using real data
   const getResourcesByCategory = useCallback((categoryId: string) => {
-    return actualResources.filter(resource => 
-      resource.resource_type_id === categoryId || 
+    const resources = actualResources();
+    return resources.filter(resource =>
+      resource.resource_type_id === categoryId ||
       resource.category_id === categoryId
     );
   }, [actualResources]);
+
+  // PRODUCTION FIX: Check if resources are loading
+  const isLoadingResources = isLoadingManualResources || isLoadingContacts;
 
   // Update service type
   const handleServiceTypeChange = useCallback((newType: 'independent' | 'resource_based') => {
@@ -452,14 +493,14 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
             </div>
           ) : (
             <>
-              {/* FIXED: Service Category Selector with real data */}
-              {serviceCategories.length > 0 ? (
+              {/* PRODUCTION FIX: Resource Type Selector - use resourceTypes not serviceCategories */}
+              {resourceTypes && resourceTypes.length > 0 ? (
                 <div className="mb-6">
-                  <label 
+                  <label
                     className="block text-sm font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    Select Service Category
+                    Select Resource Type
                   </label>
                   <select
                     value={selectedResourceType}
@@ -471,10 +512,10 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                       color: colors.utility.primaryText
                     }}
                   >
-                    <option value="">Select service category...</option>
-                    {serviceCategories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
+                    <option value="">Select resource type...</option>
+                    {resourceTypes.map(type => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
                       </option>
                     ))}
                   </select>
@@ -491,11 +532,11 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                     className="h-4 w-4"
                     style={{ color: colors.semantic.warning }}
                   />
-                  <span 
+                  <span
                     className="text-sm"
                     style={{ color: colors.semantic.warning }}
                   >
-                    No service categories available. Please set up categories first.
+                    No resource types available. Please contact support.
                   </span>
                 </div>
               )}
@@ -594,8 +635,27 @@ const ServiceConfigStep: React.FC<ServiceConfigStepProps> = ({
                   </h4>
                   <div className="space-y-3">
                     {resourceRequirements.map((requirement, index) => {
-                      const resource = actualResources.find(r => r.id === requirement.resource_id);
-                      
+                      // PRODUCTION FIX: Try to find resource in current actualResources first,
+                      // then fallback to requirement data itself (for edit mode)
+                      let resource = actualResources().find(r => r.id === requirement.resource_id);
+
+                      // If not found and requirement has embedded resource data, use that
+                      if (!resource && requirement.resource) {
+                        resource = requirement.resource;
+                      }
+
+                      // If still not found, create a minimal object from requirement data
+                      if (!resource && requirement.resource_name) {
+                        resource = {
+                          id: requirement.resource_id,
+                          name: requirement.resource_name,
+                          display_name: requirement.resource_name,
+                          description: null,
+                          resource_type_id: requirement.resource_type_id || '',
+                          is_active: true
+                        };
+                      }
+
                       return (
                         <div 
                           key={index}

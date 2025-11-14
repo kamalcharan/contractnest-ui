@@ -132,13 +132,6 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
         imageFileId: existingService.metadata?.image_file_id
       });
 
-      // ✅ PRODUCTION FIX: Transform resource_requirements to include resource_name for edit mode
-      const transformedResourceRequirements = (existingService.resource_requirements || []).map(req => ({
-        ...req,
-        // Ensure resource_name is populated from nested resource object
-        resource_name: req.resource?.display_name || req.resource?.name || undefined
-      }));
-
       setFormData({
         basic_info: {
           service_name: existingService.service_name || '',
@@ -152,7 +145,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
         },
         service_type: existingService.service_type || 'independent',
         pricing_records: existingService.pricing_records || [],
-        resource_requirements: transformedResourceRequirements,
+        resource_requirements: existingService.resource_requirements || [],
         metadata: existingService.metadata
       });
       setHasUnsavedChanges(false);

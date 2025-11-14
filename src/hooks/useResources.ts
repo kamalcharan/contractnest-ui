@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import api from '@/services/api';
-import { API_ENDPOINTS } from '@/services/serviceURLs';
+import { API_ENDPOINTS, buildResourcesListURL } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
 
 // Type definitions
@@ -284,11 +284,13 @@ export const useResources = (
       setError(null);
 
       console.log('🚀 Fetching resources for type:', resourceTypeId);
-      
-      let url = API_ENDPOINTS.RESOURCES.LIST;
-      if (resourceTypeId) {
-        url += `?resourceTypeId=${resourceTypeId}`;
-      }
+
+      // PRODUCTION FIX: Use proper URL builder with filters
+      const url = buildResourcesListURL({
+        resourceTypeId: resourceTypeId || undefined
+      });
+
+      console.log('📍 Fetching from URL:', url);
 
       const response = await api.get(url);
       
@@ -318,27 +320,39 @@ export const useResources = (
       
       return resources;
     } catch (err) {
-      const error = err as Error;
-      
+      const error = err as any;
+
       console.error('❌ Error fetching resources:', error);
-      
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+
+      const errorMessage = error.response?.data?.error
+        || error.response?.data?.message
+        || error.message
+        || 'Failed to fetch resources';
+
       if (isMountedRef.current) {
         setError(error);
         setLoading(false);
         onError?.(error);
-        
+
         toast({
           variant: "destructive",
           title: "Error loading resources",
-          description: error.message
+          description: `${errorMessage}${error.response?.status ? ` (${error.response.status})` : ''}`
         });
       }
 
       captureException(error, {
         tags: { component: 'useResources', action: 'fetchResources' },
-        extra: { resourceTypeId, tenantId: currentTenant?.id }
+        extra: {
+          resourceTypeId,
+          tenantId: currentTenant?.id,
+          errorStatus: error.response?.status,
+          errorData: error.response?.data
+        }
       });
-      
+
       return [];
     }
   }, [currentTenant?.id, resourceTypeId, cacheKey, cacheTime, enabled, toast, onSuccess, onError]);

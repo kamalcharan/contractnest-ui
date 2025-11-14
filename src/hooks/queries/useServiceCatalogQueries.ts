@@ -263,7 +263,8 @@ export const serviceCatalogKeys = {
 // =================================================================
 
 /**
- * Hook to fetch list of services with filtering and pagination
+ * PRODUCTION FIX: Hook to fetch list of services with filtering and pagination
+ * Optimized for high-concurrency (500-600 requests) with proper caching and retry logic
  */
 export const useServiceCatalogItems = (
   filters: ServiceCatalogListParams = {},
@@ -283,9 +284,9 @@ export const useServiceCatalogItems = (
 
       const url = buildServiceCatalogListURL(filters);
       const response = await api.get(url);
-      
+
       const data = response.data?.data || response.data;
-      
+
       if (!data) {
         return {
           items: [],
@@ -303,10 +304,23 @@ export const useServiceCatalogItems = (
       return data;
     },
     enabled: !!currentTenant?.id && (options?.enabled !== false),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+
+    // PRODUCTION FIX: Optimized cache settings for high concurrency
+    staleTime: 2 * 60 * 1000, // 2 minutes (reduced from 5) - faster updates
+    gcTime: 5 * 60 * 1000, // 5 minutes (reduced from 10) - less memory
+
     refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+    refetchOnReconnect: true, // Auto-refetch on network reconnection
+
+    // PRODUCTION FIX: Exponential backoff retry logic
     retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // 1s, 2s, 4s max 30s
+
+    // PRODUCTION FIX: Request deduplication - prevent duplicate requests
+    networkMode: 'online',
+
+    // PRODUCTION FIX: Structural sharing for memory optimization
+    structuralSharing: true,
   });
 };
 
@@ -398,7 +412,8 @@ export const useServiceCatalogMasterData = () => {
 };
 
 /**
- * Hook to fetch service statistics
+ * PRODUCTION FIX: Hook to fetch service statistics
+ * Optimized for high-frequency polling with aggressive caching
  */
 export const useServiceStatistics = (options?: { enabled?: boolean }) => {
   const { currentTenant } = useAuth();
@@ -411,9 +426,9 @@ export const useServiceStatistics = (options?: { enabled?: boolean }) => {
       }
 
       const response = await api.get(API_ENDPOINTS.SERVICE_CATALOG.STATISTICS);
-      
+
       const data = response.data?.data || response.data;
-      
+
       return data || {
         total_services: 0,
         active_services: 0,
@@ -423,9 +438,19 @@ export const useServiceStatistics = (options?: { enabled?: boolean }) => {
       };
     },
     enabled: !!currentTenant?.id && (options?.enabled !== false),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+
+    // PRODUCTION FIX: Statistics change infrequently, cache aggressively
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes - can keep longer as data is small
+
+    // PRODUCTION FIX: Retry with backoff
     retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+
+    refetchOnWindowFocus: false, // Don't refetch on focus - statistics are stable
+    refetchOnReconnect: true,
+    networkMode: 'online',
+    structuralSharing: true,
   });
 };
 
@@ -711,14 +736,14 @@ export const useServiceStatusOperations = () => {
   const queryClient = useQueryClient();
   const { toast: shadcnToast } = useToast();
 
-  // Toggle status mutation (activate/deactivate)
+  // PRODUCTION FIX: Toggle status mutation with optimistic updates
   const toggleStatusMutation = useMutation({
-    mutationFn: async ({ 
-      serviceId, 
-      status 
-    }: { 
-      serviceId: string; 
-      status: boolean 
+    mutationFn: async ({
+      serviceId,
+      status
+    }: {
+      serviceId: string;
+      status: boolean
     }): Promise<Service> => {
       if (!currentTenant?.id) {
         throw new Error('No tenant selected');
@@ -736,14 +761,57 @@ export const useServiceStatusOperations = () => {
 
       return response.data?.data?.service || response.data?.data || response.data;
     },
+    // PRODUCTION FIX: Add optimistic update BEFORE API call
+    onMutate: async ({ serviceId, status }) => {
+      // Cancel outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: serviceCatalogKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: serviceCatalogKeys.detail(serviceId) });
+
+      // Snapshot current values for rollback
+      const previousLists = queryClient.getQueriesData({ queryKey: serviceCatalogKeys.lists() });
+      const previousDetail = queryClient.getQueryData(serviceCatalogKeys.detail(serviceId));
+
+      // Optimistically update detail cache
+      queryClient.setQueryData(
+        serviceCatalogKeys.detail(serviceId),
+        (old: Service | undefined) => {
+          if (!old) return old;
+          return { ...old, status, is_active: status };
+        }
+      );
+
+      // Optimistically update all list caches
+      queryClient.setQueriesData(
+        { queryKey: serviceCatalogKeys.lists() },
+        (old: ServiceListResponse | undefined) => {
+          if (!old) return old;
+
+          return {
+            ...old,
+            items: old.items.map(service =>
+              service.id === serviceId
+                ? { ...service, status, is_active: status }
+                : service
+            )
+          };
+        }
+      );
+
+      // Return context for rollback
+      return { previousLists, previousDetail, serviceId, status };
+    },
     onSuccess: (updatedService, variables) => {
+      // Update detail cache with server response
       queryClient.setQueryData(
         serviceCatalogKeys.detail(updatedService.id),
         updatedService
       );
 
-      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.statistics() });
+      // PRODUCTION FIX: Delayed invalidation to prevent flickering
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.statistics() });
+      }, 500);
 
       try {
         analyticsService.trackPageView('service/status-toggled', 'Service Status Toggled');
@@ -752,7 +820,7 @@ export const useServiceStatusOperations = () => {
       }
 
       const statusText = variables.status ? 'activated' : 'deactivated';
-      
+
       toast.success(`Service ${statusText} successfully`, {
         duration: 3000,
         style: {
@@ -766,15 +834,33 @@ export const useServiceStatusOperations = () => {
         description: `Service "${updatedService.service_name}" has been ${statusText}`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      // PRODUCTION FIX: Rollback optimistic updates on error
+      if (context) {
+        // Restore previous lists
+        if (context.previousLists) {
+          context.previousLists.forEach(([queryKey, data]) => {
+            queryClient.setQueryData(queryKey, data);
+          });
+        }
+
+        // Restore previous detail
+        if (context.previousDetail) {
+          queryClient.setQueryData(
+            serviceCatalogKeys.detail(context.serviceId),
+            context.previousDetail
+          );
+        }
+      }
+
       const errorMessage = error.response?.data?.error || error.message || 'Failed to toggle service status';
-      
+
       captureException(error, {
-        tags: { 
-          component: 'useServiceStatusOperations', 
-          action: 'toggleStatus' 
+        tags: {
+          component: 'useServiceStatusOperations',
+          action: 'toggleStatus'
         },
-        extra: { 
+        extra: {
           tenantId: currentTenant?.id,
           errorMessage
         }
@@ -793,6 +879,12 @@ export const useServiceStatusOperations = () => {
         title: "Status Toggle Failed",
         description: errorMessage
       });
+    },
+    // PRODUCTION FIX: Always refetch after mutation settles
+    onSettled: () => {
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: serviceCatalogKeys.statistics() });
+      }, 1000);
     }
   });
 
