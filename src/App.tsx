@@ -73,6 +73,11 @@ import ProcessRulesPage from './vani/pages/ProcessRulesPage';
 import ChatPage from './vani/pages/ChatPage';
 import { ChatConversation, ChatMessage } from './vani/types/chat.types';
 
+// VaNi Channels Sub-pages
+import WebsiteIntegrationPage from './vani/pages/channels/WebsiteIntegrationPage';
+import ChatBotIntegrationPage from './vani/pages/channels/ChatBotIntegrationPage';
+import WhatsAppIntegrationPage from './vani/pages/channels/WhatsAppIntegrationPage';
+
 // MISC Pages
 import { 
   NotFoundPage,
@@ -476,6 +481,9 @@ const AppContent: React.FC = () => {
             <Route path="templates/:id" element={<TemplateEditorPage />} />
             <Route path="templates/:id/edit" element={<TemplateEditorPage />} />
             <Route path="channels" element={<ChannelsConfigPage />} />
+            <Route path="channels/website" element={<WebsiteIntegrationPage />} />
+            <Route path="channels/chatbot" element={<ChatBotIntegrationPage />} />
+            <Route path="channels/whatsapp" element={<WhatsAppIntegrationPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="analytics/cross-module" element={<AnalyticsPage />} />
             <Route path="webhooks" element={<WebhookManagementPage />} />
