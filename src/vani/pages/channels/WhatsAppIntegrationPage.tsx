@@ -5,25 +5,20 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import {
   MessageSquare,
-  Smartphone,
   Users,
   Lock,
-  Zap,
-  TrendingUp,
   CheckCircle,
-  ArrowRight,
-  Rocket,
-  Shield,
-  Clock,
   Sparkles,
   Brain,
   BookOpen,
-  Play,
   Key,
   UserPlus,
-  Globe,
   Target,
-  Bell
+  Rocket,
+  Shield,
+  TrendingUp,
+  Search,
+  ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -33,6 +28,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<'bot' | 'groups'>('bot');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
+
   const [formData, setFormData] = useState({
     companyName: '',
     email: '',
@@ -46,9 +44,6 @@ const WhatsAppIntegrationPage: React.FC = () => {
     password: '',
     name: ''
   });
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isJoiningGroup, setIsJoiningGroup] = useState(false);
 
   const features = [
     {
@@ -141,12 +136,10 @@ const WhatsAppIntegrationPage: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      toast.success('Interest registered! Our team will reach out within 24 hours to help you set up WhatsApp integration.', {
+      toast.success('Interest registered! Our team will reach out within 24 hours.', {
         style: { background: colors.semantic.success, color: '#FFF' },
-        duration: 5000
+        duration: 4000
       });
-
-      console.log('WhatsApp Integration Interest:', formData);
 
       setFormData({
         companyName: '',
@@ -167,66 +160,78 @@ const WhatsAppIntegrationPage: React.FC = () => {
 
   const handleGroupJoin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!groupJoinData.password.trim()) {
+      toast.error('Please enter the password', {
+        style: { background: colors.semantic.error, color: '#FFF' }
+      });
+      return;
+    }
+
     setIsJoiningGroup(true);
 
-    try {
-      const passwordLower = groupJoinData.password.toLowerCase();
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Admin password check
-      if (passwordLower === 'admin2025') {
-        toast.success('Admin access verified! Redirecting to admin dashboard...', {
-          style: { background: colors.semantic.success, color: '#FFF' },
-          duration: 2000
-        });
+    const passwordLower = groupJoinData.password.toLowerCase();
 
-        console.log('Admin Access:', groupJoinData);
+    if (passwordLower === 'admin2025') {
+      toast.success('Password verified! Welcome to BBB Directory', {
+        style: { background: colors.semantic.success, color: '#FFF' },
+        duration: 3000
+      });
 
-        // Navigate immediately
-        navigate('/vani/channels/bbb/admin');
-      } 
-      // User password check
-      else if (passwordLower === 'bagyanagar') {
-        toast.success('Password verified! Setting up your profile...', {
-          style: { background: colors.semantic.success, color: '#FFF' },
-          duration: 2000
-        });
+      setGroupJoinData({ phone: '', password: '', name: '' });
+      navigate('/vani/channels/bbb/admin');
+    } else if (passwordLower === 'bagyanagar') {
+      toast.success('Password verified! Welcome to BBB Directory', {
+        style: { background: colors.semantic.success, color: '#FFF' },
+        duration: 3000
+      });
 
-        console.log('Group Join Request:', groupJoinData);
-
-        // Navigate immediately
-        navigate('/vani/channels/bbb/onboarding', { state: { branch: 'bagyanagar' } });
-      } 
-      // Incorrect password
-      else {
-        toast.error('Incorrect password. Please contact the group admin for the correct password.', {
-          style: { background: colors.semantic.error, color: '#FFF' },
-          duration: 4000
-        });
-        setIsJoiningGroup(false);
-      }
-
-    } catch (error) {
-      toast.error('Something went wrong. Please try again.', {
-        style: { background: colors.semantic.error, color: '#FFF' }
+      setGroupJoinData({ phone: '', password: '', name: '' });
+      navigate('/vani/channels/bbb/onboarding', { state: { branch: 'bagyanagar' } });
+    } else {
+      toast.error('Incorrect password. Please contact the group admin for access.', {
+        style: { background: colors.semantic.error, color: '#FFF' },
+        duration: 4000
       });
       setIsJoiningGroup(false);
     }
   };
 
+  const handleJoinBBBClick = () => {
+    if (activeTab !== 'groups') {
+      setActiveTab('groups');
+    }
+
+    setTimeout(() => {
+      document.getElementById('group-invite')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }, 100);
+  };
+
   return (
-    <div className="min-h-screen p-6 space-y-8">
+    <div
+      className="min-h-screen p-6 space-y-8"
+      style={{ backgroundColor: colors.utility.primaryBackground }}
+    >
       {/* Hero Section */}
-      <div className="relative overflow-hidden rounded-2xl p-12"
+      <div
+        className="relative overflow-hidden rounded-2xl p-12"
         style={{
-          background: `linear-gradient(135deg, #25D36615 0%, ${colors.brand.secondary}15 100%)`,
-          border: `1px solid #25D36640`
+          background: `linear-gradient(135deg, ${colors.brand.primary}15 0%, ${colors.brand.secondary}15 100%)`,
+          border: `1px solid ${colors.utility.primaryText}20`
         }}
       >
         <div className="relative z-10 max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-full mb-6"
+          <div
+            className="inline-flex items-center space-x-2 px-4 py-2 rounded-full mb-6"
             style={{
-              backgroundColor: '#25D36620',
-              color: '#25D366'
+              backgroundColor: `${colors.brand.primary}20`,
+              color: colors.brand.primary
             }}
           >
             <Sparkles className="w-4 h-4" />
@@ -234,21 +239,24 @@ const WhatsAppIntegrationPage: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-center space-x-3 mb-6">
-            <MessageSquare className="w-16 h-16"
-              style={{ color: '#25D366' }}
+            <MessageSquare
+              className="w-16 h-16"
+              style={{ color: colors.brand.primary }}
             />
-            <h1 className="text-5xl font-bold"
+            <h1
+              className="text-5xl font-bold"
               style={{ color: colors.utility.primaryText }}
             >
               Connect with Customers on
               <br />
-              <span style={{ color: '#25D366' }}>
+              <span style={{ color: colors.brand.secondary }}>
                 WhatsApp
               </span>
             </h1>
           </div>
 
-          <p className="text-xl mb-8"
+          <p
+            className="text-xl mb-8"
             style={{ color: colors.utility.secondaryText }}
           >
             Deploy an AI-powered WhatsApp bot for customer support, sales, and service.
@@ -258,9 +266,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
           <div className="flex items-center justify-center space-x-4">
             <button
               onClick={() => document.getElementById('interest-form')?.scrollIntoView({ behavior: 'smooth' })}
-              className="px-8 py-4 rounded-lg font-semibold text-white flex items-center space-x-2 transition-all hover:opacity-90 transform hover:scale-105"
+              className="px-8 py-4 rounded-lg font-semibold text-white flex items-center space-x-2 transition-all hover:opacity-90"
               style={{
-                backgroundColor: '#25D366'
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
               }}
             >
               <Rocket className="w-5 h-5" />
@@ -268,12 +276,12 @@ const WhatsAppIntegrationPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => document.getElementById('group-invite')?.scrollIntoView({ behavior: 'smooth' })}
+              onClick={handleJoinBBBClick}
               className="px-8 py-4 rounded-lg font-semibold flex items-center space-x-2 transition-all hover:opacity-80"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
                 color: colors.utility.primaryText,
-                border: `2px solid #25D366`
+                border: `2px solid ${colors.brand.primary}`
               }}
             >
               <Key className="w-5 h-5" />
@@ -281,13 +289,6 @@ const WhatsAppIntegrationPage: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Decorative background */}
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-10"
-          style={{
-            background: 'radial-gradient(circle, #25D366, transparent)'
-          }}
-        />
       </div>
 
       {/* Stats Section */}
@@ -301,17 +302,20 @@ const WhatsAppIntegrationPage: React.FC = () => {
               borderColor: `${colors.utility.primaryText}20`
             }}
           >
-            <div className="text-4xl font-bold mb-2"
-              style={{ color: '#25D366' }}
+            <div
+              className="text-4xl font-bold mb-2"
+              style={{ color: colors.brand.primary }}
             >
               {benefit.stat}
             </div>
-            <div className="font-semibold mb-2"
+            <div
+              className="font-semibold mb-2"
               style={{ color: colors.utility.primaryText }}
             >
               {benefit.label}
             </div>
-            <p className="text-sm"
+            <p
+              className="text-sm"
               style={{ color: colors.utility.secondaryText }}
             >
               {benefit.description}
@@ -320,14 +324,14 @@ const WhatsAppIntegrationPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Tabs: Bot vs Groups */}
+      {/* Tabs */}
       <div className="flex justify-center space-x-2">
         <button
           onClick={() => setActiveTab('bot')}
           className="px-6 py-3 rounded-lg font-semibold transition-all"
           style={{
-            backgroundColor: activeTab === 'bot' ? '#25D366' : colors.utility.secondaryBackground,
-            color: activeTab === 'bot' ? '#FFF' : colors.utility.primaryText
+            backgroundColor: activeTab === 'bot' ? colors.brand.primary : colors.utility.secondaryBackground,
+            color: activeTab === 'bot' ? '#FFFFFF' : colors.utility.primaryText
           }}
         >
           <div className="flex items-center space-x-2">
@@ -340,8 +344,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
           onClick={() => setActiveTab('groups')}
           className="px-6 py-3 rounded-lg font-semibold transition-all"
           style={{
-            backgroundColor: activeTab === 'groups' ? '#25D366' : colors.utility.secondaryBackground,
-            color: activeTab === 'groups' ? '#FFF' : colors.utility.primaryText
+            backgroundColor: activeTab === 'groups' ? colors.brand.primary : colors.utility.secondaryBackground,
+            color: activeTab === 'groups' ? '#FFFFFF' : colors.utility.primaryText
           }}
         >
           <div className="flex items-center space-x-2">
@@ -357,15 +361,17 @@ const WhatsAppIntegrationPage: React.FC = () => {
           {/* Features Grid */}
           <div className="space-y-6">
             <div className="text-center max-w-3xl mx-auto mb-12">
-              <h2 className="text-3xl font-bold mb-4"
+              <h2
+                className="text-3xl font-bold mb-4"
                 style={{ color: colors.utility.primaryText }}
               >
                 WhatsApp Bot Features
               </h2>
-              <p className="text-lg"
+              <p
+                className="text-lg"
                 style={{ color: colors.utility.secondaryText }}
               >
-                AI-powered automation for customer engagement on WhatsApp
+                AI-powered automation for customer engagement
               </p>
             </div>
 
@@ -382,7 +388,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     }}
                   >
                     <div className="mb-4">
-                      <div className="p-3 rounded-lg inline-flex"
+                      <div
+                        className="p-3 rounded-lg inline-flex"
                         style={{
                           backgroundColor: `${feature.color}20`
                         }}
@@ -390,7 +397,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
                         <Icon className="w-6 h-6" style={{ color: feature.color }} />
                       </div>
                     </div>
-                    <h3 className="text-xl font-semibold mb-2"
+                    <h3
+                      className="text-xl font-semibold mb-2"
                       style={{ color: colors.utility.primaryText }}
                     >
                       {feature.title}
@@ -418,8 +426,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {botCapabilities.map((capability, index) => (
                   <div key={index} className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0"
-                      style={{ color: '#25D366' }}
+                    <CheckCircle
+                      className="w-5 h-5 mt-0.5 flex-shrink-0"
+                      style={{ color: colors.semantic.success }}
                     />
                     <span style={{ color: colors.utility.secondaryText }}>
                       {capability}
@@ -449,17 +458,20 @@ const WhatsAppIntegrationPage: React.FC = () => {
                   { step: '4', title: 'Go Live', description: 'Start receiving and auto-responding to customer messages' }
                 ].map((step, index) => (
                   <div key={index} className="text-center">
-                    <div className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-xl font-bold text-white"
-                      style={{ backgroundColor: '#25D366' }}
+                    <div
+                      className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center text-xl font-bold text-white"
+                      style={{ backgroundColor: colors.brand.primary }}
                     >
                       {step.step}
                     </div>
-                    <h4 className="font-semibold mb-2"
+                    <h4
+                      className="font-semibold mb-2"
                       style={{ color: colors.utility.primaryText }}
                     >
                       {step.title}
                     </h4>
-                    <p className="text-sm"
+                    <p
+                      className="text-sm"
                       style={{ color: colors.utility.secondaryText }}
                     >
                       {step.description}
@@ -478,19 +490,21 @@ const WhatsAppIntegrationPage: React.FC = () => {
           {/* Group Features */}
           <div className="space-y-6">
             <div className="text-center max-w-3xl mx-auto mb-12">
-              <h2 className="text-3xl font-bold mb-4"
+              <h2
+                className="text-3xl font-bold mb-4"
                 style={{ color: colors.utility.primaryText }}
               >
                 WhatsApp Groups with Access Control
               </h2>
-              <p className="text-lg"
+              <p
+                className="text-lg"
                 style={{ color: colors.utility.secondaryText }}
               >
                 Create exclusive communities with password-protected invites (BBB model)
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {features.slice(4, 6).map((feature, index) => {
                 const Icon = feature.icon;
                 return (
@@ -503,7 +517,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     }}
                   >
                     <div className="mb-4">
-                      <div className="p-3 rounded-lg inline-flex"
+                      <div
+                        className="p-3 rounded-lg inline-flex"
                         style={{
                           backgroundColor: `${feature.color}20`
                         }}
@@ -511,7 +526,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
                         <Icon className="w-6 h-6" style={{ color: feature.color }} />
                       </div>
                     </div>
-                    <h3 className="text-xl font-semibold mb-2"
+                    <h3
+                      className="text-xl font-semibold mb-2"
                       style={{ color: colors.utility.primaryText }}
                     >
                       {feature.title}
@@ -539,8 +555,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {groupFeatures.map((feature, index) => (
                   <div key={index} className="flex items-start space-x-3">
-                    <CheckCircle className="w-5 h-5 mt-0.5 flex-shrink-0"
-                      style={{ color: '#25D366' }}
+                    <CheckCircle
+                      className="w-5 h-5 mt-0.5 flex-shrink-0"
+                      style={{ color: colors.semantic.success }}
                     />
                     <span style={{ color: colors.utility.secondaryText }}>
                       {feature}
@@ -572,7 +589,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <h4 className="font-semibold"
+                  <h4
+                    className="font-semibold"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Core ContractNest Intents (Default)
@@ -588,7 +606,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="font-semibold"
+                  <h4
+                    className="font-semibold"
                     style={{ color: colors.utility.primaryText }}
                   >
                     BBB Group Exclusive Intents
@@ -596,7 +615,7 @@ const WhatsAppIntegrationPage: React.FC = () => {
                   <ul className="space-y-2">
                     {['Activate with "Hi BBB"', 'Network-specific queries', 'Member-only content', 'Community discussions'].map((intent, idx) => (
                       <li key={idx} className="flex items-start space-x-2">
-                        <span style={{ color: '#25D366' }}>•</span>
+                        <span style={{ color: colors.semantic.success }}>•</span>
                         <span style={{ color: colors.utility.secondaryText }}>{intent}</span>
                       </li>
                     ))}
@@ -604,34 +623,25 @@ const WhatsAppIntegrationPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg"
+              <div
+                className="p-4 rounded-lg"
                 style={{
-                  backgroundColor: '#25D36620',
-                  border: `2px solid #25D366`
+                  backgroundColor: `${colors.semantic.success}20`,
+                  border: `1px solid ${colors.semantic.success}40`
                 }}
               >
-                <p className="font-semibold mb-2"
-                  style={{ color: colors.utility.primaryText }}
-                >
+                <p className="text-sm font-semibold mb-2" style={{ color: colors.utility.primaryText }}>
                   Example: Triggering BBB Intent
                 </p>
-                <div className="space-y-2">
-                  <div className="flex items-start space-x-3">
-                    <MessageSquare className="w-5 h-5 flex-shrink-0"
-                      style={{ color: '#25D366' }}
-                    />
-                    <div>
-                      <p className="text-sm font-medium"
-                        style={{ color: colors.utility.primaryText }}
-                      >
-                        User sends: "Hi BBB"
-                      </p>
-                      <p className="text-xs"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        Bot switches to BBB-specific context and intents
-                      </p>
-                    </div>
+                <div className="flex items-start space-x-3">
+                  <MessageSquare className="w-5 h-5 flex-shrink-0" style={{ color: colors.semantic.success }} />
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+                      User sends: "Hi BBB"
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
+                      Bot switches to BBB-specific context and intents
+                    </p>
                   </div>
                 </div>
               </div>
@@ -644,13 +654,13 @@ const WhatsAppIntegrationPage: React.FC = () => {
             className="max-w-2xl mx-auto"
             style={{
               backgroundColor: colors.utility.primaryBackground,
-              borderColor: '#25D366',
-              border: `2px solid #25D36640`
+              borderColor: `${colors.brand.primary}40`,
+              border: `2px solid ${colors.brand.primary}40`
             }}
           >
             <CardHeader
               style={{
-                background: `linear-gradient(135deg, #25D36615 0%, ${colors.brand.primary}15 100%)`,
+                background: `linear-gradient(135deg, ${colors.brand.primary}15 0%, ${colors.brand.secondary}15 100%)`,
                 borderBottom: `1px solid ${colors.utility.primaryText}15`
               }}
             >
@@ -659,33 +669,37 @@ const WhatsAppIntegrationPage: React.FC = () => {
                 style={{ color: colors.utility.primaryText }}
               >
                 <div className="flex items-center justify-center space-x-2">
-                  <Key className="w-6 h-6" style={{ color: '#25D366' }} />
+                  <Key className="w-6 h-6" style={{ color: colors.brand.primary }} />
                   <span>Join BBB WhatsApp Group</span>
                 </div>
               </CardTitle>
-              <p className="text-center mt-2"
+              <p
+                className="text-center mt-2"
                 style={{ color: colors.utility.secondaryText }}
               >
                 Enter the password to access BBB directory and community
               </p>
-              <div className="mt-4 p-3 rounded-lg"
+              <div
+                className="mt-4 p-3 rounded-lg"
                 style={{
                   backgroundColor: `${colors.semantic.info}20`,
                   border: `1px solid ${colors.semantic.info}40`
                 }}
               >
-                <p className="text-xs text-center"
+                <p
+                  className="text-xs text-center"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  <strong style={{ color: colors.utility.primaryText }}>User password:</strong> bagyanagar | 
+                  <strong style={{ color: colors.utility.primaryText }}>User password:</strong> bagyanagar |
                   <strong style={{ color: colors.utility.primaryText }}> Admin password:</strong> admin2025
                 </p>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <form onSubmit={handleGroupJoin} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2"
+                  <label
+                    className="block text-sm font-medium mb-2"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Your Name *
@@ -700,14 +714,16 @@ const WhatsAppIntegrationPage: React.FC = () => {
                       borderColor: `${colors.utility.secondaryText}40`,
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText,
-                      '--tw-ring-color': '#25D366'
+                      '--tw-ring-color': colors.brand.primary
                     } as React.CSSProperties}
                     placeholder="Your full name"
+                    disabled={isJoiningGroup}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2"
+                  <label
+                    className="block text-sm font-medium mb-2"
                     style={{ color: colors.utility.primaryText }}
                   >
                     WhatsApp Phone Number *
@@ -722,14 +738,16 @@ const WhatsAppIntegrationPage: React.FC = () => {
                       borderColor: `${colors.utility.secondaryText}40`,
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText,
-                      '--tw-ring-color': '#25D366'
+                      '--tw-ring-color': colors.brand.primary
                     } as React.CSSProperties}
                     placeholder="+91 9876543210"
+                    disabled={isJoiningGroup}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2"
+                  <label
+                    className="block text-sm font-medium mb-2"
                     style={{ color: colors.utility.primaryText }}
                   >
                     <div className="flex items-center space-x-2">
@@ -747,11 +765,13 @@ const WhatsAppIntegrationPage: React.FC = () => {
                       borderColor: `${colors.utility.secondaryText}40`,
                       backgroundColor: colors.utility.secondaryBackground,
                       color: colors.utility.primaryText,
-                      '--tw-ring-color': '#25D366'
+                      '--tw-ring-color': colors.brand.primary
                     } as React.CSSProperties}
                     placeholder="Enter password provided by admin"
+                    disabled={isJoiningGroup}
                   />
-                  <p className="text-xs mt-1"
+                  <p
+                    className="text-xs mt-1"
                     style={{ color: colors.utility.secondaryText }}
                   >
                     Contact the group admin if you don't have the password
@@ -763,7 +783,7 @@ const WhatsAppIntegrationPage: React.FC = () => {
                   disabled={isJoiningGroup}
                   className="w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-lg font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
                   style={{
-                    backgroundColor: '#25D366'
+                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
                   }}
                 >
                   {isJoiningGroup ? (
@@ -778,26 +798,20 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     </>
                   )}
                 </button>
-
-                <p className="text-xs text-center"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  By joining, you agree to group rules and ContractNest's terms of service.
-                </p>
               </form>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Interest Form (shown for both tabs) */}
+      {/* Interest Form */}
       <Card
         id="interest-form"
         className="max-w-2xl mx-auto"
         style={{
           backgroundColor: colors.utility.primaryBackground,
-          borderColor: '#25D366',
-          border: `2px solid #25D36640`
+          borderColor: `${colors.brand.primary}40`,
+          border: `2px solid ${colors.brand.primary}40`
         }}
       >
         <CardHeader>
@@ -807,17 +821,19 @@ const WhatsAppIntegrationPage: React.FC = () => {
           >
             Express Interest in WhatsApp Integration
           </CardTitle>
-          <p className="text-center mt-2"
+          <p
+            className="text-center mt-2"
             style={{ color: colors.utility.secondaryText }}
           >
-            Be among the first to deploy WhatsApp Bot and Groups. Early access gets 50% off!
+            Be among the first to deploy WhatsApp Bot. Early access gets 50% off!
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium mb-2"
+                <label
+                  className="block text-sm font-medium mb-2"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Company Name *
@@ -832,14 +848,16 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     borderColor: `${colors.utility.secondaryText}40`,
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    '--tw-ring-color': '#25D366'
+                    '--tw-ring-color': colors.brand.primary
                   } as React.CSSProperties}
                   placeholder="Your company"
+                  disabled={isSubmitting}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2"
+                <label
+                  className="block text-sm font-medium mb-2"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Email Address *
@@ -854,15 +872,17 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     borderColor: `${colors.utility.secondaryText}40`,
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    '--tw-ring-color': '#25D366'
+                    '--tw-ring-color': colors.brand.primary
                   } as React.CSSProperties}
                   placeholder="your@email.com"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2"
+              <label
+                className="block text-sm font-medium mb-2"
                 style={{ color: colors.utility.primaryText }}
               >
                 Phone Number *
@@ -877,15 +897,17 @@ const WhatsAppIntegrationPage: React.FC = () => {
                   borderColor: `${colors.utility.secondaryText}40`,
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.utility.primaryText,
-                  '--tw-ring-color': '#25D366'
+                  '--tw-ring-color': colors.brand.primary
                 } as React.CSSProperties}
                 placeholder="+91 9876543210"
+                disabled={isSubmitting}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium mb-2"
+                <label
+                  className="block text-sm font-medium mb-2"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Primary Use Case *
@@ -899,8 +921,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     borderColor: `${colors.utility.secondaryText}40`,
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    '--tw-ring-color': '#25D366'
+                    '--tw-ring-color': colors.brand.primary
                   } as React.CSSProperties}
+                  disabled={isSubmitting}
                 >
                   <option value="customer_support">Customer Support</option>
                   <option value="sales">Sales & Lead Generation</option>
@@ -911,7 +934,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2"
+                <label
+                  className="block text-sm font-medium mb-2"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Have WhatsApp Business? *
@@ -925,8 +949,9 @@ const WhatsAppIntegrationPage: React.FC = () => {
                     borderColor: `${colors.utility.secondaryText}40`,
                     backgroundColor: colors.utility.secondaryBackground,
                     color: colors.utility.primaryText,
-                    '--tw-ring-color': '#25D366'
+                    '--tw-ring-color': colors.brand.primary
                   } as React.CSSProperties}
+                  disabled={isSubmitting}
                 >
                   <option value="no">No, need help setting up</option>
                   <option value="yes">Yes, already have account</option>
@@ -940,7 +965,7 @@ const WhatsAppIntegrationPage: React.FC = () => {
               disabled={isSubmitting}
               className="w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-lg font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
               style={{
-                backgroundColor: '#25D366'
+                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
               }}
             >
               {isSubmitting ? (
@@ -956,7 +981,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
               )}
             </button>
 
-            <p className="text-xs text-center"
+            <p
+              className="text-xs text-center"
               style={{ color: colors.utility.secondaryText }}
             >
               Our team will help you set up WhatsApp Business API if you don't have it yet.
@@ -1003,13 +1029,16 @@ const WhatsAppIntegrationPage: React.FC = () => {
               a: 'Our AI groups similar user profiles and queries to improve response accuracy over time.'
             }
           ].map((faq, index) => (
-            <div key={index} className="p-4 rounded-lg"
+            <div
+              key={index}
+              className="p-4 rounded-lg"
               style={{
                 backgroundColor: colors.utility.primaryBackground,
-                borderLeft: `4px solid #25D366`
+                borderLeft: `4px solid ${colors.brand.primary}`
               }}
             >
-              <h4 className="font-semibold mb-2"
+              <h4
+                className="font-semibold mb-2"
                 style={{ color: colors.utility.primaryText }}
               >
                 {faq.q}
