@@ -170,33 +170,45 @@ const WhatsAppIntegrationPage: React.FC = () => {
     setIsJoiningGroup(true);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const passwordLower = groupJoinData.password.toLowerCase();
 
-      // Validate password (example: "bagyanagar")
-      if (groupJoinData.password.toLowerCase() === 'bagyanagar') {
-        toast.success('Password verified! You will receive a WhatsApp group invite link shortly.', {
+      // Admin password check
+      if (passwordLower === 'admin2025') {
+        toast.success('Admin access verified! Redirecting to admin dashboard...', {
           style: { background: colors.semantic.success, color: '#FFF' },
-          duration: 5000
+          duration: 2000
+        });
+
+        console.log('Admin Access:', groupJoinData);
+
+        // Navigate immediately
+        navigate('/vani/channels/bbb/admin');
+      } 
+      // User password check
+      else if (passwordLower === 'bagyanagar') {
+        toast.success('Password verified! Setting up your profile...', {
+          style: { background: colors.semantic.success, color: '#FFF' },
+          duration: 2000
         });
 
         console.log('Group Join Request:', groupJoinData);
 
-        setGroupJoinData({
-          phone: '',
-          password: '',
-          name: ''
-        });
-      } else {
+        // Navigate immediately
+        navigate('/vani/channels/bbb/onboarding', { state: { branch: 'bagyanagar' } });
+      } 
+      // Incorrect password
+      else {
         toast.error('Incorrect password. Please contact the group admin for the correct password.', {
-          style: { background: colors.semantic.error, color: '#FFF' }
+          style: { background: colors.semantic.error, color: '#FFF' },
+          duration: 4000
         });
+        setIsJoiningGroup(false);
       }
 
     } catch (error) {
       toast.error('Something went wrong. Please try again.', {
         style: { background: colors.semantic.error, color: '#FFF' }
       });
-    } finally {
       setIsJoiningGroup(false);
     }
   };
@@ -206,8 +218,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
       {/* Hero Section */}
       <div className="relative overflow-hidden rounded-2xl p-12"
         style={{
-          background: `linear-gradient(135deg, #25D366 15, ${colors.brand.secondary}15 100%)`,
-          borderColor: '#25D366'
+          background: `linear-gradient(135deg, #25D36615 0%, ${colors.brand.secondary}15 100%)`,
+          border: `1px solid #25D36640`
         }}
       >
         <div className="relative z-10 max-w-4xl mx-auto text-center">
@@ -632,10 +644,16 @@ const WhatsAppIntegrationPage: React.FC = () => {
             className="max-w-2xl mx-auto"
             style={{
               backgroundColor: colors.utility.primaryBackground,
-              borderColor: '#25D366'
+              borderColor: '#25D366',
+              border: `2px solid #25D36640`
             }}
           >
-            <CardHeader>
+            <CardHeader
+              style={{
+                background: `linear-gradient(135deg, #25D36615 0%, ${colors.brand.primary}15 100%)`,
+                borderBottom: `1px solid ${colors.utility.primaryText}15`
+              }}
+            >
               <CardTitle
                 className="text-center text-2xl"
                 style={{ color: colors.utility.primaryText }}
@@ -648,8 +666,21 @@ const WhatsAppIntegrationPage: React.FC = () => {
               <p className="text-center mt-2"
                 style={{ color: colors.utility.secondaryText }}
               >
-                Enter the password to receive an exclusive invite link
+                Enter the password to access BBB directory and community
               </p>
+              <div className="mt-4 p-3 rounded-lg"
+                style={{
+                  backgroundColor: `${colors.semantic.info}20`,
+                  border: `1px solid ${colors.semantic.info}40`
+                }}
+              >
+                <p className="text-xs text-center"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <strong style={{ color: colors.utility.primaryText }}>User password:</strong> bagyanagar | 
+                  <strong style={{ color: colors.utility.primaryText }}> Admin password:</strong> admin2025
+                </p>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleGroupJoin} className="space-y-6">
@@ -743,7 +774,7 @@ const WhatsAppIntegrationPage: React.FC = () => {
                   ) : (
                     <>
                       <UserPlus className="w-5 h-5" />
-                      <span>Join WhatsApp Group</span>
+                      <span>Access BBB Directory</span>
                     </>
                   )}
                 </button>
@@ -765,7 +796,8 @@ const WhatsAppIntegrationPage: React.FC = () => {
         className="max-w-2xl mx-auto"
         style={{
           backgroundColor: colors.utility.primaryBackground,
-          borderColor: '#25D366'
+          borderColor: '#25D366',
+          border: `2px solid #25D36640`
         }}
       >
         <CardHeader>
