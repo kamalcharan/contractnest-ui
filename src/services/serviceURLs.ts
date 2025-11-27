@@ -1,5 +1,6 @@
 // src/services/serviceURLs.ts - UI Layer Version COMPLETE
 // Updated with Service Catalog endpoints - ALL EXISTING ENDPOINTS PRESERVED
+// Updated with Groups & Directory endpoints
 
 export const API_ENDPOINTS = {
   // =================================================================
@@ -422,57 +423,145 @@ export const API_ENDPOINTS = {
   },
 
   // =================================================================
-  // SERVICE CATALOG ENDPOINTS - NEW ADDITION
+  // SERVICE CATALOG ENDPOINTS - UPDATED WITH NEW STATUS & VERSION ENDPOINTS
   // =================================================================
+  SERVICE_CATALOG: {
+    // Main service operations via Express API layer
+    LIST: '/api/service-catalog/services',
+    CREATE: '/api/service-catalog/services',
+    GET: (id: string) => `/api/service-catalog/services/${id}`,
+    UPDATE: (id: string) => `/api/service-catalog/services/${id}`,
+    DELETE: (id: string) => `/api/service-catalog/services/${id}`,
+    
+    // Service status management
+    TOGGLE_STATUS: (id: string) => `/api/service-catalog/services/${id}/status`,
+    ACTIVATE: (id: string) => `/api/service-catalog/services/${id}/activate`,
+    
+    // Service analytics and history
+    STATISTICS: '/api/service-catalog/services/statistics',
+    VERSION_HISTORY: (id: string) => `/api/service-catalog/services/${id}/versions`,
+    
+    // Service resources
+    SERVICE_RESOURCES: (id: string) => `/api/service-catalog/services/${id}/resources`,
+    
+    // Master data and configuration
+    MASTER_DATA: '/api/service-catalog/master-data',
+    
+    // Health and utility
+    HEALTH: '/api/service-catalog/health',
+    
+    // Helper function for services with query params
+    LIST_WITH_FILTERS: (filters: ServiceCatalogFilters = {}) => {
+      const params = new URLSearchParams();
+      
+      if (filters.search_term) params.append('search_term', filters.search_term);
+      if (filters.category_id) params.append('category_id', filters.category_id);
+      if (filters.industry_id) params.append('industry_id', filters.industry_id);
+      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+      if (filters.price_min !== undefined) params.append('price_min', filters.price_min.toString());
+      if (filters.price_max !== undefined) params.append('price_max', filters.price_max.toString());
+      if (filters.currency) params.append('currency', filters.currency);
+      if (filters.has_resources !== undefined) params.append('has_resources', filters.has_resources.toString());
+      if (filters.sort_by) params.append('sort_by', filters.sort_by);
+      if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
+      if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+      if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+      
+      const queryString = params.toString();
+      return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
+    }
+  },
+  
   // =================================================================
-// SERVICE CATALOG ENDPOINTS - UPDATED WITH NEW STATUS & VERSION ENDPOINTS
-// =================================================================
-SERVICE_CATALOG: {
-  // Main service operations via Express API layer
-  LIST: '/api/service-catalog/services',
-  CREATE: '/api/service-catalog/services',
-  GET: (id: string) => `/api/service-catalog/services/${id}`,
-  UPDATE: (id: string) => `/api/service-catalog/services/${id}`,
-  DELETE: (id: string) => `/api/service-catalog/services/${id}`,
-  
-  // ✅ NEW: Service status management
-  TOGGLE_STATUS: (id: string) => `/api/service-catalog/services/${id}/status`,
-  ACTIVATE: (id: string) => `/api/service-catalog/services/${id}/activate`,
-  
-  // ✅ NEW: Service analytics and history
-  STATISTICS: '/api/service-catalog/services/statistics',
-  VERSION_HISTORY: (id: string) => `/api/service-catalog/services/${id}/versions`,
-  
-  // Service resources
-  SERVICE_RESOURCES: (id: string) => `/api/service-catalog/services/${id}/resources`,
-  
-  // Master data and configuration
-  MASTER_DATA: '/api/service-catalog/master-data',
-  
-  // Health and utility
-  HEALTH: '/api/service-catalog/health',
-  
-  // Helper function for services with query params
-  LIST_WITH_FILTERS: (filters: ServiceCatalogFilters = {}) => {
-    const params = new URLSearchParams();
+  // GROUPS & DIRECTORY MANAGEMENT ENDPOINTS - NEW ADDITION
+  // =================================================================
+  GROUPS: {
+    // Main group operations
+    LIST: '/api/groups',
+    GET: (groupId: string) => `/api/groups/${groupId}`,
+    VERIFY_ACCESS: '/api/groups/verify-access',
     
-    if (filters.search_term) params.append('search_term', filters.search_term);
-    if (filters.category_id) params.append('category_id', filters.category_id);
-    if (filters.industry_id) params.append('industry_id', filters.industry_id);
-    if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-    if (filters.price_min !== undefined) params.append('price_min', filters.price_min.toString());
-    if (filters.price_max !== undefined) params.append('price_max', filters.price_max.toString());
-    if (filters.currency) params.append('currency', filters.currency);
-    if (filters.has_resources !== undefined) params.append('has_resources', filters.has_resources.toString());
-    if (filters.sort_by) params.append('sort_by', filters.sort_by);
-    if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
-    if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
-    if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+    // Helper function for listing groups with filters
+    LIST_WITH_FILTERS: (filters: GroupFilters = {}) => {
+      const params = new URLSearchParams();
+      
+      if (filters.group_type) params.append('group_type', filters.group_type);
+      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+      if (filters.search) params.append('search', filters.search);
+      
+      const queryString = params.toString();
+      return queryString ? `/api/groups?${queryString}` : '/api/groups';
+    },
     
-    const queryString = params.toString();
-    return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
-  }
-},
+    // Membership operations
+    MEMBERSHIPS: {
+      CREATE: '/api/memberships',
+      GET: (membershipId: string) => `/api/memberships/${membershipId}`,
+      UPDATE: (membershipId: string) => `/api/memberships/${membershipId}`,
+      DELETE: (membershipId: string) => `/api/memberships/${membershipId}`,
+      LIST_BY_GROUP: (groupId: string) => `/api/memberships/group/${groupId}`,
+      
+      // Helper function for listing memberships with filters
+      LIST_BY_GROUP_WITH_FILTERS: (groupId: string, filters: MembershipFilters = {}) => {
+        const params = new URLSearchParams();
+        
+        if (filters.status) params.append('status', filters.status);
+        if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+        if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+        
+        const queryString = params.toString();
+        return queryString 
+          ? `/api/memberships/group/${groupId}?${queryString}` 
+          : `/api/memberships/group/${groupId}`;
+      }
+    },
+    
+    // Profile operations (AI-powered)
+    PROFILES: {
+      ENHANCE: '/api/profiles/enhance',
+      SCRAPE_WEBSITE: '/api/profiles/scrape-website',
+      GENERATE_CLUSTERS: '/api/profiles/generate-clusters',
+      SAVE: '/api/profiles/save'
+    },
+    
+    // Search operations
+    SEARCH: '/api/search',
+    
+    // Helper function for search with options
+    SEARCH_WITH_OPTIONS: (searchOptions: GroupSearchOptions = {}) => {
+      // Search uses POST, but we can build the body structure here
+      return {
+        url: '/api/search',
+        body: {
+          group_id: searchOptions.group_id,
+          query: searchOptions.query,
+          limit: searchOptions.limit || 10,
+          use_cache: searchOptions.use_cache !== false
+        }
+      };
+    },
+    
+    // Admin operations
+    ADMIN: {
+      STATS: (groupId: string) => `/api/admin/stats/${groupId}`,
+      UPDATE_MEMBERSHIP_STATUS: (membershipId: string) => `/api/admin/memberships/${membershipId}/status`,
+      ACTIVITY_LOGS: (groupId: string) => `/api/admin/activity-logs/${groupId}`,
+      
+      // Helper function for activity logs with filters
+      ACTIVITY_LOGS_WITH_FILTERS: (groupId: string, filters: ActivityLogFilters = {}) => {
+        const params = new URLSearchParams();
+        
+        if (filters.activity_type) params.append('activity_type', filters.activity_type);
+        if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+        if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+        
+        const queryString = params.toString();
+        return queryString 
+          ? `/api/admin/activity-logs/${groupId}?${queryString}` 
+          : `/api/admin/activity-logs/${groupId}`;
+      }
+    }
+  },
   
   // =================================================================
   // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS - PRESERVED
@@ -602,7 +691,7 @@ export type IndustryCategoryFilters = {
   is_active?: boolean;
 };
 
-// NEW: Service Catalog filter interface
+// Service Catalog filter interface
 export type ServiceCatalogFilters = {
   search_term?: string;
   category_id?: string;
@@ -614,6 +703,32 @@ export type ServiceCatalogFilters = {
   has_resources?: boolean;
   sort_by?: 'name' | 'price' | 'created_at' | 'updated_at' | 'sort_order';
   sort_direction?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+};
+
+// Groups & Directory filter interfaces
+export type GroupFilters = {
+  group_type?: 'bbb_chapter' | 'association' | 'network' | 'community';
+  is_active?: boolean;
+  search?: string;
+};
+
+export type MembershipFilters = {
+  status?: 'all' | 'active' | 'suspended' | 'pending' | 'inactive';
+  limit?: number;
+  offset?: number;
+};
+
+export type GroupSearchOptions = {
+  group_id: string;
+  query: string;
+  limit?: number;
+  use_cache?: boolean;
+};
+
+export type ActivityLogFilters = {
+  activity_type?: 'profile_update' | 'status_change' | 'profile_view' | 'search' | 'join' | 'leave';
   limit?: number;
   offset?: number;
 };
@@ -693,6 +808,7 @@ export type ResourceEndpoints = typeof API_ENDPOINTS.RESOURCES;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
 export type ServiceCatalogEndpoints = typeof API_ENDPOINTS.SERVICE_CATALOG;
+export type GroupsEndpoints = typeof API_ENDPOINTS.GROUPS;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
@@ -782,10 +898,31 @@ export const buildCatalogListURL = (filters: CatalogFilters = {}): string => {
 };
 
 /**
- * NEW: Build service catalog list URL with filters
+ * Build service catalog list URL with filters
  */
 export const buildServiceCatalogListURL = (filters: ServiceCatalogFilters = {}): string => {
   return API_ENDPOINTS.SERVICE_CATALOG.LIST_WITH_FILTERS(filters);
+};
+
+/**
+ * Build groups list URL with filters
+ */
+export const buildGroupsListURL = (filters: GroupFilters = {}): string => {
+  return API_ENDPOINTS.GROUPS.LIST_WITH_FILTERS(filters);
+};
+
+/**
+ * Build group memberships URL with filters
+ */
+export const buildGroupMembershipsURL = (groupId: string, filters: MembershipFilters = {}): string => {
+  return API_ENDPOINTS.GROUPS.MEMBERSHIPS.LIST_BY_GROUP_WITH_FILTERS(groupId, filters);
+};
+
+/**
+ * Build activity logs URL with filters
+ */
+export const buildActivityLogsURL = (groupId: string, filters: ActivityLogFilters = {}): string => {
+  return API_ENDPOINTS.GROUPS.ADMIN.ACTIVITY_LOGS_WITH_FILTERS(groupId, filters);
 };
 
 /**
@@ -930,9 +1067,25 @@ export const isValidCatalogId = (id: string): boolean => {
 };
 
 /**
- * NEW: Validate service ID format
+ * Validate service ID format
  */
 export const isValidServiceId = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
+
+/**
+ * Validate group ID format
+ */
+export const isValidGroupId = (id: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return typeof id === 'string' && uuidRegex.test(id);
+};
+
+/**
+ * Validate membership ID format
+ */
+export const isValidMembershipId = (id: string): boolean => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return typeof id === 'string' && uuidRegex.test(id);
 };
@@ -958,6 +1111,37 @@ export const isValidCurrency = (currency: string): boolean => {
  */
 export const isValidResourceSearchQuery = (query: string): boolean => {
   return typeof query === 'string' && query.trim().length >= 1 && query.length <= 100;
+};
+
+/**
+ * Validate group search query
+ */
+export const isValidGroupSearchQuery = (query: string): boolean => {
+  return typeof query === 'string' && query.trim().length >= 2 && query.length <= 200;
+};
+
+/**
+ * Validate group type
+ */
+export const isValidGroupType = (groupType: string): boolean => {
+  const validTypes = ['bbb_chapter', 'association', 'network', 'community'];
+  return validTypes.includes(groupType);
+};
+
+/**
+ * Validate membership status
+ */
+export const isValidMembershipStatus = (status: string): boolean => {
+  const validStatuses = ['all', 'active', 'suspended', 'pending', 'inactive'];
+  return validStatuses.includes(status);
+};
+
+/**
+ * Validate activity type
+ */
+export const isValidActivityType = (activityType: string): boolean => {
+  const validTypes = ['profile_update', 'status_change', 'profile_view', 'search', 'join', 'leave'];
+  return validTypes.includes(activityType);
 };
 
 /**

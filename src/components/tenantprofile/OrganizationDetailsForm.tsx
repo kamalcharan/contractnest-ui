@@ -86,15 +86,19 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
         </div>
       </div>
       
-      {/* Contact Information - Using Shared Component */}
+      {/* Contact Information - Using Shared Component with WhatsApp */}
       <ContactFields
         email={formData.business_email || ''}
         phone={formData.business_phone || ''}
         phoneCountryCode={formData.business_phone_country_code || '+91'}
+        whatsapp={formData.business_whatsapp || ''}
+        whatsappCountryCode={formData.business_whatsapp_country_code || '+91'}
         website={formData.website_url || ''}
         onEmailChange={(value) => onUpdate('business_email', value)}
         onPhoneChange={(value) => onUpdate('business_phone', value)}
         onPhoneCountryCodeChange={(value) => onUpdate('business_phone_country_code', value)}
+        onWhatsAppChange={(value) => onUpdate('business_whatsapp', value)}
+        onWhatsAppCountryCodeChange={(value) => onUpdate('business_whatsapp_country_code', value)}
         onWebsiteChange={(value) => onUpdate('website_url', value)}
         disabled={disabled}
         required={false}

@@ -1,7 +1,7 @@
-// src/pages/settings/business-profile/index.tsx - Updated with Service Contract Management Personas
+// src/pages/settings/business-profile/index.tsx - Updated with WhatsApp display
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info } from 'lucide-react';
+import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
@@ -487,6 +487,27 @@ const BusinessProfilePage = () => {
                     </div>
                   )}
                   
+                  {/* WhatsApp - NEW */}
+                  {profile.business_whatsapp && (
+                    <div className="flex space-x-3">
+                      <MessageCircle 
+                        className="h-5 w-5 shrink-0"
+                        style={{ color: '#25D366' }} // WhatsApp green
+                      />
+                      <div>
+                        <div style={{ color: colors.utility.primaryText }}>
+                          {profile.business_whatsapp_country_code || ''} {profile.business_whatsapp}
+                        </div>
+                        <div 
+                          className="text-xs mt-0.5"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          WhatsApp Business
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Email */}
                   {profile.business_email && (
                     <div className="flex space-x-3">
@@ -521,7 +542,7 @@ const BusinessProfilePage = () => {
                     </div>
                   )}
                   
-                  {!profile.business_phone && !profile.business_email && !profile.website_url && (
+                  {!profile.business_phone && !profile.business_whatsapp && !profile.business_email && !profile.website_url && (
                     <div 
                       className="text-sm transition-colors"
                       style={{ color: colors.utility.secondaryText }}

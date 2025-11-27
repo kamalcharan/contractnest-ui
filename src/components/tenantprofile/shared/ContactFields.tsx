@@ -1,7 +1,7 @@
 // src/components/tenantprofile/shared/ContactFields.tsx
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Mail, Phone, Globe, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Phone, Globe, AlertCircle, CheckCircle, MessageCircle } from 'lucide-react';
 import { countries } from '@/utils/constants/countries';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,10 @@ interface ContactFieldsProps {
   phone?: string;
   /** Phone country code value */
   phoneCountryCode?: string;
+  /** WhatsApp number value */
+  whatsapp?: string;
+  /** WhatsApp country code value */
+  whatsappCountryCode?: string;
   /** Website URL value */
   website?: string;
   /** Callback when email changes */
@@ -20,6 +24,10 @@ interface ContactFieldsProps {
   onPhoneChange: (phone: string) => void;
   /** Callback when phone country code changes */
   onPhoneCountryCodeChange: (code: string) => void;
+  /** Callback when WhatsApp changes */
+  onWhatsAppChange: (whatsapp: string) => void;
+  /** Callback when WhatsApp country code changes */
+  onWhatsAppCountryCodeChange: (code: string) => void;
   /** Callback when website changes */
   onWebsiteChange: (website: string) => void;
   /** Whether the fields are disabled */
@@ -40,10 +48,14 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
   email = '',
   phone = '',
   phoneCountryCode = '+91',
+  whatsapp = '',
+  whatsappCountryCode = '+91',
   website = '',
   onEmailChange,
   onPhoneChange,
   onPhoneCountryCodeChange,
+  onWhatsAppChange,
+  onWhatsAppCountryCodeChange,
   onWebsiteChange,
   disabled = false,
   required = false,
@@ -58,10 +70,12 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
   // Local state for validation
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
   const [websiteError, setWebsiteError] = useState<string | null>(null);
   
   const [emailTouched, setEmailTouched] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [whatsappTouched, setWhatsappTouched] = useState(false);
   const [websiteTouched, setWebsiteTouched] = useState(false);
   
   /**
@@ -93,6 +107,25 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
     
     if (value && value.replace(/\D/g, '').length < 10) {
       return 'Phone number must be at least 10 digits';
+    }
+    
+    return null;
+  };
+  
+  /**
+   * Validate WhatsApp format (same as phone)
+   */
+  const validateWhatsApp = (value: string): string | null => {
+    if (!value) {
+      return null; // WhatsApp is always optional
+    }
+    
+    if (!/^[\d\s\-\(\)]+$/.test(value)) {
+      return 'Please enter a valid WhatsApp number';
+    }
+    
+    if (value.replace(/\D/g, '').length < 10) {
+      return 'WhatsApp number must be at least 10 digits';
     }
     
     return null;
@@ -158,6 +191,26 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
   };
   
   /**
+   * Handle WhatsApp change
+   */
+  const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    onWhatsAppChange(value);
+    
+    if (whatsappTouched) {
+      setWhatsappError(validateWhatsApp(value));
+    }
+  };
+  
+  /**
+   * Handle WhatsApp blur
+   */
+  const handleWhatsAppBlur = () => {
+    setWhatsappTouched(true);
+    setWhatsappError(validateWhatsApp(whatsapp));
+  };
+  
+  /**
    * Handle website change
    */
   const handleWebsiteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,6 +238,17 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
       const formatted = `https://${website}`;
       onWebsiteChange(formatted);
       toast.success('Website URL formatted');
+    }
+  };
+  
+  /**
+   * Copy phone to WhatsApp
+   */
+  const copyPhoneToWhatsApp = () => {
+    if (phone) {
+      onWhatsAppChange(phone);
+      onWhatsAppCountryCodeChange(phoneCountryCode);
+      toast.success('Phone number copied to WhatsApp');
     }
   };
   
@@ -387,6 +451,118 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 {phoneError}
               </p>
             </div>
+          )}
+        </div>
+        
+        {/* WhatsApp Field */}
+        <div className="space-y-2 md:col-span-2">
+          <div className="flex items-center justify-between">
+            <label 
+              htmlFor="contact_whatsapp"
+              className="block text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              <div className="flex items-center">
+                <MessageCircle 
+                  className="mr-2 h-4 w-4"
+                  style={{ color: '#25D366' }} // WhatsApp green color
+                />
+                WhatsApp Number
+                <span 
+                  className="text-xs font-normal ml-2"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  (Optional - for BBB WhatsApp integration)
+                </span>
+              </div>
+            </label>
+            {phone && !whatsapp && (
+              <button
+                type="button"
+                onClick={copyPhoneToWhatsApp}
+                className="text-xs px-2 py-1 rounded hover:opacity-80 transition-colors"
+                style={{
+                  color: colors.brand.primary,
+                  backgroundColor: colors.brand.primary + '10'
+                }}
+                disabled={disabled}
+              >
+                Copy from Phone
+              </button>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            {/* Country Code Selector */}
+            <div className="w-32">
+              <select
+                id="contact_whatsapp_country_code"
+                value={whatsappCountryCode}
+                onChange={(e) => onWhatsAppCountryCodeChange(e.target.value)}
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                style={getInputStyles(false)}
+                disabled={disabled}
+                aria-label="WhatsApp country code"
+              >
+                {sortedCountries.map(country => (
+                  <option key={country.code} value={`+${country.phoneCode}`}>
+                    {country.code} +{country.phoneCode}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* WhatsApp Number Input */}
+            <div className="flex-1 relative">
+              <input
+                id="contact_whatsapp"
+                type="tel"
+                value={whatsapp}
+                onChange={handleWhatsAppChange}
+                onBlur={handleWhatsAppBlur}
+                placeholder="1234567890"
+                className="w-full p-2 pr-10 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                style={getInputStyles(!!whatsappError)}
+                disabled={disabled}
+                aria-invalid={!!whatsappError}
+                aria-describedby={whatsappError ? "whatsapp-error" : undefined}
+              />
+              {whatsapp && !whatsappError && whatsappTouched && (
+                <CheckCircle 
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
+                  style={{ color: colors.semantic.success }}
+                />
+              )}
+            </div>
+          </div>
+          {whatsappError && whatsappTouched && (
+            <div 
+              id="whatsapp-error"
+              className="flex items-start space-x-2 p-2 rounded-md transition-colors"
+              style={{
+                backgroundColor: colors.semantic.error + '10',
+                borderLeft: `3px solid ${colors.semantic.error}`
+              }}
+              role="alert"
+            >
+              <AlertCircle 
+                className="h-4 w-4 mt-0.5 flex-shrink-0"
+                style={{ color: colors.semantic.error }}
+              />
+              <p 
+                className="text-xs"
+                style={{ color: colors.semantic.error }}
+              >
+                {whatsappError}
+              </p>
+            </div>
+          )}
+          {whatsapp && (
+            <p 
+              className="text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              This number will be used for WhatsApp Business API integration in BBB directory
+            </p>
           )}
         </div>
         
