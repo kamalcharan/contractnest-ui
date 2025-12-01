@@ -4,8 +4,9 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
-import { 
-  Sparkles, 
+import RichTextEditor from '../../ui/RichTextEditor';
+import {
+  Sparkles,
   CheckCircle,
   Edit3,
   Save,
@@ -170,31 +171,23 @@ const AIEnhancementSection: React.FC<AIEnhancementSectionProps> = ({
             
             {isEditing ? (
               <div className="space-y-3">
-                <textarea
-                  rows={8}
+                <RichTextEditor
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="AI-enhanced business description (6-8 lines)"
-                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 transition-all resize-none"
-                  style={{
-                    borderColor: `${colors.utility.secondaryText}40`,
-                    backgroundColor: colors.utility.secondaryBackground,
-                    color: colors.utility.primaryText,
-                    '--tw-ring-color': colors.brand.primary
-                  } as React.CSSProperties}
+                  onChange={setDescription}
+                  placeholder="Review and edit your AI-enhanced business description..."
+                  minHeight={250}
+                  maxHeight={400}
+                  toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+                  showCharCount={true}
+                  maxLength={3000}
                   disabled={isSaving}
                 />
-                <div className="flex justify-between items-center">
-                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                    {description.length} characters
-                  </p>
-                  {description.length > 0 && description.length < 100 && (
-                    <p className="text-xs flex items-center space-x-1" style={{ color: colors.semantic.warning }}>
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Consider adding more details</span>
-                    </p>
-                  )}
-                </div>
+                {description.length > 0 && description.length < 100 && (
+                  <div className="flex items-center space-x-1" style={{ color: colors.semantic.warning }}>
+                    <AlertCircle className="w-3 h-3" />
+                    <span className="text-xs">Consider adding more details for a comprehensive profile</span>
+                  </div>
+                )}
                 <div className="flex space-x-3">
                   <button
                     type="button"

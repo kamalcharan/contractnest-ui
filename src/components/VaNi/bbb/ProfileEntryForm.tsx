@@ -1,15 +1,17 @@
-  // src/components/VaNi/bbb/ProfileEntryForm.tsx
-// File 5/13 - BBB Profile Entry Form Component
+// src/components/VaNi/bbb/ProfileEntryForm.tsx
+// File 5/13 - BBB Profile Entry Form Component (with edit mode support)
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
-import { 
-  FileText, 
-  Globe, 
+import RichTextEditor from '../../ui/RichTextEditor';
+import {
+  FileText,
+  Globe,
   Sparkles,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Pencil
 } from 'lucide-react';
 import { ProfileFormData } from '../../../types/bbb';
 
@@ -18,20 +20,38 @@ interface ProfileEntryFormProps {
   onEnhanceWithAI: (description: string) => void;
   isEnhancing?: boolean;
   isSaving?: boolean;
+  // Edit mode props
+  isEditMode?: boolean;
+  initialDescription?: string;
+  initialWebsiteUrl?: string;
+  initialMethod?: 'manual' | 'website';
 }
 
-const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({ 
-  onSubmit, 
+const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
+  onSubmit,
   onEnhanceWithAI,
   isEnhancing = false,
-  isSaving = false
+  isSaving = false,
+  isEditMode = false,
+  initialDescription = '',
+  initialWebsiteUrl = '',
+  initialMethod = 'manual'
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const [generationMethod, setGenerationMethod] = useState<'manual' | 'website'>('manual');
-  const [shortDescription, setShortDescription] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [generationMethod, setGenerationMethod] = useState<'manual' | 'website'>(initialMethod);
+  const [shortDescription, setShortDescription] = useState(initialDescription);
+  const [websiteUrl, setWebsiteUrl] = useState(initialWebsiteUrl);
+
+  // Update form when initial values change (entering edit mode)
+  useEffect(() => {
+    if (isEditMode) {
+      setShortDescription(initialDescription);
+      setWebsiteUrl(initialWebsiteUrl);
+      setGenerationMethod(initialMethod);
+    }
+  }, [isEditMode, initialDescription, initialWebsiteUrl, initialMethod]);
 
   const handleEnhance = () => {
     if (!shortDescription.trim()) {
@@ -42,7 +62,7 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const formData: ProfileFormData = {
       generation_method: generationMethod,
       short_description: shortDescription.trim(),
@@ -52,7 +72,7 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
     onSubmit(formData);
   };
 
-  const isFormValid = generationMethod === 'manual' 
+  const isFormValid = generationMethod === 'manual'
     ? shortDescription.trim().length > 0
     : websiteUrl.trim().length > 0;
 
@@ -78,20 +98,27 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                   backgroundColor: `${colors.brand.primary}20`
                 }}
               >
-                <Sparkles className="w-6 h-6" style={{ color: colors.brand.primary }} />
+                {isEditMode ? (
+                  <Pencil className="w-6 h-6" style={{ color: colors.brand.primary }} />
+                ) : (
+                  <Sparkles className="w-6 h-6" style={{ color: colors.brand.primary }} />
+                )}
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
-                  Welcome! I am VaNi
+                  {isEditMode ? 'Edit Your Profile' : 'Welcome! I am VaNi'}
                 </h3>
-                <p 
+                <p
                   className="text-sm font-normal mt-1 leading-relaxed"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  I am an AI assistant for ContractNest and I will help you now to create your profile 
-                  into <strong style={{ color: colors.brand.primary }}>Bagyanagar chapter of BBB</strong>. 
-                  This will enable the group to have a directory of the esteemed entrepreneurs like you 
-                  and share profiles between the group.
+                  {isEditMode
+                    ? 'Update your business description below. You can edit the text directly or re-enhance with AI.'
+                    : <>I am an AI assistant for ContractNest and I will help you now to create your profile
+                      into <strong style={{ color: colors.brand.primary }}>Bagyanagar chapter of BBB</strong>.
+                      This will enable the group to have a directory of the esteemed entrepreneurs like you
+                      and share profiles between the group.</>
+                  }
                 </p>
               </div>
             </div>
@@ -107,7 +134,7 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
               className="block text-sm font-semibold mb-3"
               style={{ color: colors.utility.primaryText }}
             >
-              How would you like to create your profile?
+              {isEditMode ? 'Update method:' : 'How would you like to create your profile?'}
             </label>
 
             {/* Manual Entry Option */}
@@ -116,11 +143,11 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                 generationMethod === 'manual' ? 'ring-2' : ''
               }`}
               style={{
-                backgroundColor: generationMethod === 'manual' 
-                  ? `${colors.brand.primary}10` 
+                backgroundColor: generationMethod === 'manual'
+                  ? `${colors.brand.primary}10`
                   : colors.utility.secondaryBackground,
-                borderColor: generationMethod === 'manual' 
-                  ? colors.brand.primary 
+                borderColor: generationMethod === 'manual'
+                  ? colors.brand.primary
                   : `${colors.utility.primaryText}20`,
                 '--tw-ring-color': colors.brand.primary
               } as React.CSSProperties}
@@ -143,18 +170,21 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                     className="flex items-center space-x-2 cursor-pointer"
                   >
                     <FileText className="w-5 h-5" style={{ color: colors.brand.primary }} />
-                    <span 
+                    <span
                       className="font-semibold"
                       style={{ color: colors.utility.primaryText }}
                     >
-                      Enter details of my business here
+                      {isEditMode ? 'Edit my description manually' : 'Enter details of my business here'}
                     </span>
                   </label>
-                  <p 
+                  <p
                     className="text-sm mt-1 ml-7"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Manually provide a brief description of your business
+                    {isEditMode
+                      ? 'Edit the existing description and optionally re-enhance with AI'
+                      : 'Manually provide a brief description of your business'
+                    }
                   </p>
                 </div>
               </div>
@@ -166,11 +196,11 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                 generationMethod === 'website' ? 'ring-2' : ''
               }`}
               style={{
-                backgroundColor: generationMethod === 'website' 
-                  ? `${colors.brand.primary}10` 
+                backgroundColor: generationMethod === 'website'
+                  ? `${colors.brand.primary}10`
                   : colors.utility.secondaryBackground,
-                borderColor: generationMethod === 'website' 
-                  ? colors.brand.primary 
+                borderColor: generationMethod === 'website'
+                  ? colors.brand.primary
                   : `${colors.utility.primaryText}20`,
                 '--tw-ring-color': colors.brand.primary
               } as React.CSSProperties}
@@ -193,18 +223,21 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                     className="flex items-center space-x-2 cursor-pointer"
                   >
                     <Globe className="w-5 h-5" style={{ color: colors.brand.secondary }} />
-                    <span 
+                    <span
                       className="font-semibold"
                       style={{ color: colors.utility.primaryText }}
                     >
-                      Use my Website to generate about me
+                      {isEditMode ? 'Regenerate from my website' : 'Use my Website to generate about me'}
                     </span>
                   </label>
-                  <p 
+                  <p
                     className="text-sm mt-1 ml-7"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    VaNi will analyze your website and create your profile automatically
+                    {isEditMode
+                      ? 'VaNi will re-scrape your website and create a fresh profile'
+                      : 'VaNi will analyze your website and create your profile automatically'
+                    }
                   </p>
                 </div>
               </div>
@@ -215,39 +248,24 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
           {generationMethod === 'manual' ? (
             <div className="space-y-4">
               <div>
-                <label
-                  htmlFor="short_description"
-                  className="block text-sm font-medium mb-2"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Short Description *
-                </label>
-                <textarea
-                  id="short_description"
-                  rows={4}
+                <RichTextEditor
                   value={shortDescription}
-                  onChange={(e) => setShortDescription(e.target.value)}
-                  placeholder="Brief description of the business (1-2 sentences)"
-                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 transition-all resize-none"
-                  style={{
-                    borderColor: `${colors.utility.secondaryText}40`,
-                    backgroundColor: colors.utility.secondaryBackground,
-                    color: colors.utility.primaryText,
-                    '--tw-ring-color': colors.brand.primary
-                  } as React.CSSProperties}
+                  onChange={setShortDescription}
+                  label={isEditMode ? "Edit Your Description *" : "Short Description *"}
+                  placeholder="Describe your business - what you do, your services, expertise, and what makes you unique..."
+                  minHeight={200}
+                  maxHeight={350}
+                  toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+                  showCharCount={true}
+                  maxLength={2000}
                   disabled={isEnhancing || isSaving}
                 />
-                <div className="flex justify-between items-center mt-1">
-                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                    {shortDescription.length} characters
-                  </p>
-                  {shortDescription.length > 0 && shortDescription.length < 20 && (
-                    <p className="text-xs flex items-center space-x-1" style={{ color: colors.semantic.warning }}>
-                      <AlertCircle className="w-3 h-3" />
-                      <span>Too short. Provide more details.</span>
-                    </p>
-                  )}
-                </div>
+                {shortDescription.length > 0 && shortDescription.length < 50 && (
+                  <div className="flex items-center space-x-1 mt-2" style={{ color: colors.semantic.warning }}>
+                    <AlertCircle className="w-3 h-3" />
+                    <span className="text-xs">Too short. Provide more details for better AI enhancement.</span>
+                  </div>
+                )}
               </div>
 
               {/* Enhance with AI Button */}
@@ -269,7 +287,7 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                 ) : (
                   <>
                     <Sparkles className="w-5 h-5" />
-                    <span>Enhance with AI</span>
+                    <span>{isEditMode ? 'Re-enhance with AI' : 'Enhance with AI'}</span>
                   </>
                 )}
               </button>
@@ -299,7 +317,10 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                 disabled={isSaving}
               />
               <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
-                VaNi will scrape your website and generate a profile based on your content
+                {isEditMode
+                  ? 'VaNi will re-scrape your website and regenerate your profile'
+                  : 'VaNi will scrape your website and generate a profile based on your content'
+                }
               </p>
             </div>
           )}
@@ -316,14 +337,18 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
               <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.info }} />
               <div>
                 <p className="text-sm font-semibold mb-1" style={{ color: colors.utility.primaryText }}>
-                  {generationMethod === 'manual' 
-                    ? 'AI Enhancement Available' 
-                    : 'Automatic Profile Generation'}
+                  {generationMethod === 'manual'
+                    ? (isEditMode ? 'Edit & Re-enhance' : 'AI Enhancement Available')
+                    : (isEditMode ? 'Regenerate Profile' : 'Automatic Profile Generation')}
                 </p>
                 <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
                   {generationMethod === 'manual'
-                    ? 'Click "Enhance with AI" to expand your description into a professional 6-8 line profile. VaNi will also generate semantic clusters for better searchability.'
-                    : 'VaNi will analyze your website content and automatically create a comprehensive business profile including services, keywords, and semantic clusters.'}
+                    ? (isEditMode
+                        ? 'Edit your description and click "Re-enhance with AI" to improve it further.'
+                        : 'Click "Enhance with AI" to expand your description into a professional 6-8 line profile. VaNi will also generate semantic clusters for better searchability.')
+                    : (isEditMode
+                        ? 'VaNi will analyze your website again and create a fresh comprehensive business profile.'
+                        : 'VaNi will analyze your website content and automatically create a comprehensive business profile including services, keywords, and semantic clusters.')}
                 </p>
               </div>
             </div>
@@ -341,12 +366,12 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
             {isSaving ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Saving your profile...</span>
+                <span>{isEditMode ? 'Updating your profile...' : 'Saving your profile...'}</span>
               </>
             ) : (
               <>
                 <CheckCircle className="w-5 h-5" />
-                <span>Save my profile</span>
+                <span>{isEditMode ? 'Update my profile' : 'Save my profile'}</span>
               </>
             )}
           </button>

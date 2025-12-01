@@ -159,12 +159,27 @@ class GroupsService {
       
     } catch (error: any) {
       console.error('UI Service error in createMembership:', error);
-      
-      // Handle duplicate membership (409)
+
+      // Handle duplicate membership (409) - extract membership_id for reuse
       if (error.response?.status === 409) {
-        throw new Error('You are already a member of this group');
+        const membershipId = error.response?.data?.membership_id;
+        console.log('🔍 UI Service: 409 detected, membership_id:', membershipId);
+
+        // Store in sessionStorage as backup (TanStack Query strips custom error properties)
+        if (membershipId) {
+          sessionStorage.setItem('bbb_existing_membership_id', membershipId);
+          console.log('🔍 UI Service: Stored membership_id in sessionStorage');
+        }
+
+        // Create error with membership_id attached in multiple ways for robustness
+        const customError = new Error('Membership already exists', {
+          cause: { membership_id: membershipId }
+        }) as Error & { membership_id?: string; cause?: { membership_id?: string } };
+        customError.membership_id = membershipId;
+
+        throw customError;
       }
-      
+
       throw new Error(error.message || 'Failed to create membership');
     }
   }
@@ -364,6 +379,102 @@ class GroupsService {
     } catch (error: any) {
       console.error('UI Service error in generateClusters:', error);
       throw new Error(error.message || 'Cluster generation failed');
+    }
+  }
+
+  /**
+   * Save semantic clusters to database
+   * Calls: POST /api/profiles/clusters
+   */
+  async saveClusters(
+    membershipId: string,
+    clusters: Array<{
+      primary_term: string;
+      related_terms: string[];
+      category: string;
+      confidence_score?: number;
+    }>
+  ): Promise<{ success: boolean; clusters_saved: number; cluster_ids: string[] }> {
+    try {
+      console.log('🔍 UI Service: Saving clusters...', { membershipId, clusterCount: clusters.length });
+
+      const response = await api.post(
+        API_ENDPOINTS.GROUPS.PROFILES.SAVE_CLUSTERS,
+        {
+          membership_id: membershipId,
+          clusters
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to save clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in saveClusters:', error);
+      throw new Error(error.message || 'Failed to save clusters');
+    }
+  }
+
+  /**
+   * Get semantic clusters for a membership
+   * Calls: GET /api/profiles/clusters/:membershipId
+   */
+  async getClusters(membershipId: string): Promise<{
+    success: boolean;
+    clusters: Array<{
+      id: string;
+      membership_id: string;
+      primary_term: string;
+      related_terms: string[];
+      category: string;
+      confidence_score: number;
+      is_active: boolean;
+      created_at: string;
+    }>;
+  }> {
+    try {
+      console.log('🔍 UI Service: Getting clusters...', { membershipId });
+
+      const response = await api.get(
+        API_ENDPOINTS.GROUPS.PROFILES.GET_CLUSTERS(membershipId)
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to load clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in getClusters:', error);
+      throw new Error(error.message || 'Failed to load clusters');
+    }
+  }
+
+  /**
+   * Delete all clusters for a membership (before re-saving)
+   * Calls: DELETE /api/profiles/clusters/:membershipId
+   */
+  async deleteClusters(membershipId: string): Promise<{ success: boolean; deleted_count: number }> {
+    try {
+      console.log('🔍 UI Service: Deleting clusters...', { membershipId });
+
+      const response = await api.delete(
+        API_ENDPOINTS.GROUPS.PROFILES.DELETE_CLUSTERS(membershipId)
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to delete clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in deleteClusters:', error);
+      throw new Error(error.message || 'Failed to delete clusters');
     }
   }
 
