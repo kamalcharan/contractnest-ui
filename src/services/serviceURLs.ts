@@ -655,6 +655,42 @@ PROFILES: {
     SETTINGS: '/api/tax-settings/settings',
     RATES: '/api/tax-settings/rates',
     RATE_DETAIL: (id: string) => `/api/tax-settings/rates/${id}`,
+  },
+
+  // =================================================================
+  // SEQUENCE NUMBERS MANAGEMENT ENDPOINTS - NEW
+  // =================================================================
+  SEQUENCES: {
+    // Health check
+    HEALTH: '/api/sequences/health',
+
+    // Sequence configurations CRUD
+    CONFIGS: {
+      LIST: '/api/sequences/configs',
+      CREATE: '/api/sequences/configs',
+      UPDATE: (id: string) => `/api/sequences/configs/${id}`,
+      DELETE: (id: string) => `/api/sequences/configs/${id}`,
+    },
+
+    // Sequence status and operations
+    STATUS: '/api/sequences/status',
+    NEXT: (code: string) => `/api/sequences/next/${code}`,
+    RESET: (code: string) => `/api/sequences/reset/${code}`,
+
+    // Onboarding and backfill
+    SEED: '/api/sequences/seed',
+    BACKFILL: (code: string) => `/api/sequences/backfill/${code}`,
+
+    // Helper function for listing configs with filters
+    LIST_WITH_FILTERS: (filters: SequenceFilters = {}) => {
+      const params = new URLSearchParams();
+
+      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+      if (filters.entity_type) params.append('entity_type', filters.entity_type);
+
+      const queryString = params.toString();
+      return queryString ? `/api/sequences/configs?${queryString}` : '/api/sequences/configs';
+    }
   }
 };
 
@@ -795,6 +831,42 @@ export type CategoryMapResponse = {
   timestamp?: string;
 };
 
+// Sequence Numbers filter interface
+export type SequenceFilters = {
+  is_active?: boolean;
+  entity_type?: string;
+};
+
+// Sequence configuration interface
+export type SequenceConfig = {
+  id: string;
+  entity_type: string;
+  prefix: string;
+  suffix: string | null;
+  padding: number;
+  start_value: number;
+  current_value: number;
+  increment_by: number;
+  reset_frequency: 'never' | 'yearly' | 'monthly' | 'quarterly';
+  format_pattern: string;
+  is_active: boolean;
+  tenant_id: string;
+  environment: 'live' | 'test';
+  created_at: string;
+  updated_at: string;
+};
+
+// Sequence status interface
+export type SequenceStatus = {
+  entity_type: string;
+  display_name: string;
+  current_value: number;
+  next_formatted: string;
+  is_active: boolean;
+  reset_frequency: string;
+  last_reset_at: string | null;
+};
+
 // Resources filter interface
 export type ResourceFilters = {
   resourceTypeId?: string;
@@ -817,6 +889,7 @@ export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
 export type OnboardingEndpoints = typeof API_ENDPOINTS.ONBOARDING;
+export type SequencesEndpoints = typeof API_ENDPOINTS.SEQUENCES;
 
 // Contact filters interface
 export type ContactFilters = {

@@ -220,8 +220,8 @@ export const settingsMenuItems: SettingsItem[] = [
     settings_type: 'Sequence Numbers',
     parent_type: GROUP_BUSINESS_PROFILE,
     description_short: 'Configure sequences',
-    description_long: 'Sequence Numbers',
-    route_path: '/settings/configure/business/sequences',
+    description_long: 'Configure auto-generated number formats for contacts, invoices, and more',
+    route_path: '/settings/sequencing',
     card_icon_name: 'Hash',
     adminOnly: false
   },

@@ -52,7 +52,8 @@ import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';     
-import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep'; 
+import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
+import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
 
 
 //VaNi Pages
@@ -94,6 +95,7 @@ import {
   ApiServerDownPage
 } from './pages/misc';
 import TaxSettingsPage from './pages/settings/TaxSettings';
+import SequencingSettingsPage from './pages/settings/sequencing';
 
 // Main pages
 import Dashboard from './pages/Dashboard';
@@ -315,7 +317,8 @@ const AppContent: React.FC = () => {
  <Route path="/onboarding/theme-selection" element={<ThemeSelectionStep />} />
  <Route path="/onboarding/business-basic" element={<BusinessBasicStep />} />
 <Route path="business-branding" element={<BusinessBrandingStep />} />              
-<Route path="business-preferences" element={<BusinessPreferencesStep />} />       
+<Route path="business-preferences" element={<BusinessPreferencesStep />} />
+<Route path="sequence-numbers" element={<SequenceNumbersStep />} />
   <Route path="master-data" element={<div>Master Data Step (Coming Soon)</div>} />
   <Route path="team-invite" element={<div>Team Invite Step (Coming Soon)</div>} />
   <Route path="product-tour" element={<div>Product Tour Step (Coming Soon)</div>} />
@@ -419,7 +422,10 @@ const AppContent: React.FC = () => {
 
             {/* tax-settings route */}
             <Route path="tax-settings" element={<TaxSettingsPage />} />
-            
+
+            {/* sequence-numbers settings route */}
+            <Route path="sequencing" element={<SequencingSettingsPage />} />
+
             {/* Storage Management Routes */}
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />
             <Route path="storage/storagecomplete" element={<StorageCompletePage />} />

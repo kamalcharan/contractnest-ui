@@ -192,9 +192,9 @@ export const ONBOARDING_CONSTANTS = {
     TEAM: 'team' as OnboardingStepId,
     TOUR: 'tour' as OnboardingStepId,
   },
-  REQUIRED_STEPS: ['user-profile', 'business-basic'] as string[],
-  TOTAL_STEPS: 12, // Updated for 12-step flow
-  
+  REQUIRED_STEPS: ['user-profile', 'business-basic', 'sequence-numbers'] as string[],
+  TOTAL_STEPS: 13, // Updated for 13-step flow (added sequence-numbers)
+
   // UI specific - routing paths
   ROUTES: {
     BASE: '/onboarding',
@@ -205,6 +205,7 @@ export const ONBOARDING_CONSTANTS = {
     BUSINESS_BASIC: '/onboarding/business-basic',
     BUSINESS_BRANDING: '/onboarding/business-branding',
     BUSINESS_PREFERENCES: '/onboarding/business-preferences',
+    SEQUENCE_NUMBERS: '/onboarding/sequence-numbers',
     MASTER_DATA: '/onboarding/master-data',
     TEAM_INVITE: '/onboarding/team-invite',
     PRODUCT_TOUR: '/onboarding/product-tour',
@@ -360,8 +361,19 @@ export const OnboardingUtils = {
         component: 'BusinessPreferencesStep'
       },
       {
-        id: 'master-data',
+        id: 'sequence-numbers',
         sequence: 8,
+        title: 'Sequence Numbers',
+        description: 'Configure auto-generated number formats',
+        isRequired: true,
+        estimatedTime: '2 min',
+        icon: 'Hash',
+        path: ONBOARDING_CONSTANTS.ROUTES.SEQUENCE_NUMBERS,
+        component: 'SequenceNumbersStep'
+      },
+      {
+        id: 'master-data',
+        sequence: 9,
         title: 'Data Setup',
         description: 'Import or set up your initial data',
         isRequired: false,
@@ -372,7 +384,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'team-invite',
-        sequence: 9,
+        sequence: 10,
         title: 'Invite Team',
         description: 'Add team members to collaborate',
         isRequired: false,
@@ -383,7 +395,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'product-tour',
-        sequence: 10,
+        sequence: 11,
         title: 'Product Tour',
         description: 'Learn the basics of ContractNest',
         isRequired: false,
@@ -394,7 +406,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'sample-contract',
-        sequence: 11,
+        sequence: 12,
         title: 'Sample Contract',
         description: 'Try creating your first contract',
         isRequired: false,
@@ -405,7 +417,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'complete',
-        sequence: 12,
+        sequence: 13,
         title: 'All Done!',
         description: 'Complete your onboarding',
         isRequired: false,
@@ -431,6 +443,7 @@ export const OnboardingUtils = {
       'business-basic',
       'business-branding',
       'business-preferences',
+      'sequence-numbers',
       'master-data',
       'team-invite',
       'product-tour',
@@ -553,6 +566,7 @@ export const OnboardingUtils = {
       'business-basic': 2,
       'business-branding': 2,
       'business-preferences': 3,
+      'sequence-numbers': 2,
       'master-data': 5,
       'team-invite': 2,
       'product-tour': 3,
