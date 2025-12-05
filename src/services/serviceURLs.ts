@@ -517,16 +517,15 @@ export const API_ENDPOINTS = {
     },
     
     // Profile operations (AI-powered)
-    // Profile operations (AI-powered)
-PROFILES: {
-  ENHANCE: '/api/profiles/enhance',
-  SCRAPE_WEBSITE: '/api/profiles/scrape-website',
-  GENERATE_CLUSTERS: '/api/groups/profiles/generate-clusters',
-  SAVE: '/api/profiles/save',
-  SAVE_CLUSTERS: '/api/groups/profiles/clusters',
-  GET_CLUSTERS: (membershipId: string) => `/api/groups/profiles/clusters/${membershipId}`,
-  DELETE_CLUSTERS: (membershipId: string) => `/api/groups/profiles/clusters/${membershipId}`,
-},
+    PROFILES: {
+      ENHANCE: '/api/profiles/enhance',
+      SCRAPE_WEBSITE: '/api/profiles/scrape-website',
+      GENERATE_CLUSTERS: '/api/profiles/generate-clusters',
+      SAVE: '/api/profiles/save',
+      SAVE_CLUSTERS: '/api/profiles/clusters',
+      GET_CLUSTERS: (membershipId: string) => `/api/profiles/clusters/${membershipId}`,
+      DELETE_CLUSTERS: (membershipId: string) => `/api/profiles/clusters/${membershipId}`,
+    },
     
     // Search operations
     SEARCH: '/api/search',

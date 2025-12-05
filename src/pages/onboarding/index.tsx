@@ -1,3 +1,4 @@
+//src/pages/onboarding/indes.tsx
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboarding } from '@/hooks/queries/useOnboarding';
