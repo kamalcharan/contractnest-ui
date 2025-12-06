@@ -2,14 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFormContext } from 'react-hook-form';
-import { Info, X, ChevronDown, Lock, Edit, GitBranch } from 'lucide-react';
+import { Info, X, ChevronDown, Lock, Edit, GitBranch, Package } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { 
-  DEFAULT_VALUES, 
+import {
+  DEFAULT_VALUES,
   PLAN_TYPES,
-  CONFIRMATION_MESSAGES 
+  CONFIRMATION_MESSAGES
 } from '@/utils/constants/businessModelConstants';
 import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '@/utils/constants/currencies';
+import { useProducts } from '@/hooks/queries/useProductsQuery';
 
 interface BasicInfoStepProps {
   isEditMode?: boolean;
@@ -26,8 +27,12 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
   
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
+  // Fetch products for dropdown (only needed in create mode)
+  const { data: products, isLoading: productsLoading } = useProducts();
+
   // Watch values for conditional rendering
+  const watchProductCode = watch('productCode');
   const watchPlanType = watch('planType');
   const watchIsVisible = watch('isVisible');
   const watchSupportedCurrencies = watch('supportedCurrencies') || [];
@@ -38,12 +43,20 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
   // State for currency dropdown
   const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
   
+  // Initialize form with default product (only if not in edit mode)
+  useEffect(() => {
+    if (!isEditMode && products && products.length > 0 && !watchProductCode) {
+      const defaultProduct = products.find(p => p.is_default) || products[0];
+      setValue('productCode', defaultProduct.code);
+    }
+  }, [products, isEditMode, setValue, watchProductCode]);
+
   // Initialize form with default currency (only if not in edit mode)
   useEffect(() => {
     if (!isEditMode) {
       // Get the default currency
       const defaultCurrency = getDefaultCurrency();
-      
+
       // Only set if not already set or empty
       if (!watchSupportedCurrencies || watchSupportedCurrencies.length === 0) {
         setValue('supportedCurrencies', [defaultCurrency.code]);
@@ -240,6 +253,61 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+        {/* Product Selector - Only in Create Mode */}
+        {!isEditMode && (
+          <div className="md:col-span-2">
+            <label
+              htmlFor="productCode"
+              className="block text-sm font-medium mb-1 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              <Package className="inline h-4 w-4 mr-1 mb-0.5" />
+              Product <span style={{ color: colors.semantic.error }}>*</span>
+            </label>
+            <select
+              id="productCode"
+              className="w-full max-w-md px-4 py-2 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                borderColor: errors.productCode ? colors.semantic.error : `${colors.utility.secondaryText}40`,
+                backgroundColor: colors.utility.secondaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
+              {...register('productCode', {
+                required: 'Product is required'
+              })}
+              disabled={productsLoading}
+            >
+              {productsLoading ? (
+                <option value="">Loading products...</option>
+              ) : (
+                <>
+                  <option value="">Select a product</option>
+                  {products?.map((product) => (
+                    <option key={product.code} value={product.code}>
+                      {product.name} {product.is_default && '(Default)'}
+                    </option>
+                  ))}
+                </>
+              )}
+            </select>
+            {errors.productCode && (
+              <p
+                className="mt-1 text-sm"
+                style={{ color: colors.semantic.error }}
+              >
+                {errors.productCode.message?.toString()}
+              </p>
+            )}
+            <p
+              className="mt-1 text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Select which product this pricing plan belongs to
+            </p>
+          </div>
+        )}
+
         {/* Plan Name */}
         <div>
           <label 

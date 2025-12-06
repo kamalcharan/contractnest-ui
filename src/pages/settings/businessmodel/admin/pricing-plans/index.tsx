@@ -108,9 +108,11 @@ const PricingPlansAdminPage: React.FC = () => {
           planType: planType as 'Per User' | 'Per Contract',
           userCount: subscriberCount,
           featuresCount: featuresCount,
-          lastUpdated: updatedAt ? new Date(updatedAt).toLocaleDateString() : 
-                       createdAt ? new Date(createdAt).toLocaleDateString() : 
-                       'Unknown'
+          lastUpdated: updatedAt ? new Date(updatedAt).toLocaleDateString() :
+                       createdAt ? new Date(createdAt).toLocaleDateString() :
+                       'Unknown',
+          productCode: plan.productCode || plan.product_code,
+          productName: plan.productName || plan.product_name
         };
       });
       

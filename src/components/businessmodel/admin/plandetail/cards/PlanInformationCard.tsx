@@ -1,7 +1,7 @@
 // src/components/businessmodel/admin/plandetail/cards/PlanInformationCard.tsx
 
 import React from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Package } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -16,6 +16,8 @@ interface PlanInformationCardProps {
     version_number: string;
     effective_date: string;
   } | null;
+  productName?: string;
+  productCode?: string;
 }
 
 const PlanInformationCard: React.FC<PlanInformationCardProps> = ({
@@ -25,7 +27,9 @@ const PlanInformationCard: React.FC<PlanInformationCardProps> = ({
   defaultCurrencyCode,
   createdAt,
   updatedAt,
-  activeVersion
+  activeVersion,
+  productName,
+  productCode
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   
@@ -60,15 +64,39 @@ const PlanInformationCard: React.FC<PlanInformationCardProps> = ({
       </div>
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Product */}
+          {productName && (
+            <div>
+              <h3
+                className="text-sm font-medium mb-2 transition-colors"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Product
+              </h3>
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-colors"
+                  style={{
+                    backgroundColor: colors.brand.primary + '15',
+                    color: colors.brand.primary
+                  }}
+                >
+                  <Package className="h-4 w-4" />
+                  {productName}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Plan Type */}
           <div>
-            <h3 
+            <h3
               className="text-sm font-medium mb-2 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
               Plan Type
             </h3>
-            <p 
+            <p
               className="transition-colors"
               style={{ color: colors.utility.primaryText }}
             >

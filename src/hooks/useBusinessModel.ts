@@ -44,6 +44,12 @@ interface BusinessModelPlan {
   features?: PlanFeature[];
   notifications?: NotificationConfig[];
   subscriber_count?: number;
+
+  // Product association (multi-product support)
+  productCode?: string;
+  product_code?: string; // API compatibility
+  productName?: string;
+  product_name?: string; // API compatibility
 }
 
 interface PricingTier {
@@ -259,6 +265,12 @@ const transformApiPlanToFrontend = (apiPlan: any): BusinessModelPlan => {
     tiers: apiPlan.tiers || apiPlan.activeVersion?.tiers || [],
     features: apiPlan.features || apiPlan.activeVersion?.features || [],
     notifications: apiPlan.notifications || apiPlan.activeVersion?.notifications || [],
+
+    // Product association
+    productCode: apiPlan.product_code || apiPlan.productCode,
+    product_code: apiPlan.product_code || apiPlan.productCode,
+    productName: apiPlan.product_name || apiPlan.productName,
+    product_name: apiPlan.product_name || apiPlan.productName,
   };
 };
 

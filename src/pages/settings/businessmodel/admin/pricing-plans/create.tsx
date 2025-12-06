@@ -30,6 +30,7 @@ type PlanType = typeof PLAN_TYPES[number];
  * ✅ FIXED: Updated form data interface
  */
 interface PricingPlanFormData {
+  productCode: string; // Product this plan belongs to
   name: string;
   description: string;
   planType: PlanType;
@@ -82,6 +83,7 @@ const CreatePricingPlanPage: React.FC = () => {
   // ✅ FIXED: Updated default values
   const methods = useForm<PricingPlanFormData>({
     defaultValues: {
+      productCode: '', // Will be set by BasicInfoStep when products load
       name: '',
       description: '',
       planType: 'Per User',
@@ -170,10 +172,13 @@ const CreatePricingPlanPage: React.FC = () => {
       // Step-specific validation
       if (currentStep === 0) {
         // Validate basic information
-        const { name, defaultCurrencyCode, supportedCurrencies } = methods.getValues();
-        if (!name || !defaultCurrencyCode || !supportedCurrencies || supportedCurrencies.length === 0) {
+        const { productCode, name, defaultCurrencyCode, supportedCurrencies } = methods.getValues();
+        if (!productCode || !name || !defaultCurrencyCode || !supportedCurrencies || supportedCurrencies.length === 0) {
           hasErrors = true;
-          
+
+          if (!productCode) {
+            toast.error("Product selection is required");
+          }
           if (!name) {
             toast.error("Plan name is required");
           }
@@ -232,6 +237,9 @@ const CreatePricingPlanPage: React.FC = () => {
 
     // ✅ FIXED: Transform to match CreatePlanRequest interface exactly
     return {
+      // Product association
+      productCode: data.productCode,
+      product_code: data.productCode,
       name: data.name,
       description: data.description,
       // ✅ Both camelCase and snake_case for API compatibility

@@ -300,7 +300,9 @@ const PlanDetailView: React.FC = () => {
     supportedCurrencies: selectedPlan.supportedCurrencies || selectedPlan.supported_currencies || ['USD'],
     createdAt: selectedPlan.createdAt || selectedPlan.created_at || new Date().toISOString(),
     updatedAt: selectedPlan.updatedAt || selectedPlan.updated_at || new Date().toISOString(),
-    activeVersion: selectedPlan.activeVersion || selectedPlan.active_version || null
+    activeVersion: selectedPlan.activeVersion || selectedPlan.active_version || null,
+    productCode: selectedPlan.productCode || selectedPlan.product_code,
+    productName: selectedPlan.productName || selectedPlan.product_name
   };
   
   // Extract version data
@@ -322,6 +324,7 @@ const PlanDetailView: React.FC = () => {
           isVisible={planData.isVisible}
           isArchived={planData.isArchived}
           isLive={isLive}
+          productName={planData.productName}
           onBack={handleBack}
         />
         
@@ -347,7 +350,9 @@ const PlanDetailView: React.FC = () => {
               activeVersion={activeVersion && activeVersion.version_number && activeVersion.effective_date ? {
                 version_number: activeVersion.version_number,
                 effective_date: activeVersion.effective_date
-              } : undefined}            
+              } : undefined}
+              productName={planData.productName}
+              productCode={planData.productCode}
             />
             
             {/* Pricing Tiers */}

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, GitBranch, Calendar, User, Eye, Activity, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, GitBranch, Calendar, User, Eye, Activity, Clock, AlertCircle, Package } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
 import { useBusinessModel } from '@/hooks/useBusinessModel';
@@ -204,13 +204,28 @@ const VersionHistoryPage: React.FC = () => {
             />
           </button>
           <div>
-            <h1 
-              className="text-2xl font-bold transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              Version History
-            </h1>
-            <p 
+            <div className="flex items-center gap-3">
+              <h1
+                className="text-2xl font-bold transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Version History
+              </h1>
+              {/* Product Badge */}
+              {(selectedPlan?.productName || selectedPlan?.product_name) && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: colors.brand.primary + '15',
+                    color: colors.brand.primary
+                  }}
+                >
+                  <Package className="h-3 w-3" />
+                  {selectedPlan?.productName || selectedPlan?.product_name}
+                </span>
+              )}
+            </div>
+            <p
               className="transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >

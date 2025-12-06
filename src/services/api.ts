@@ -31,6 +31,7 @@ const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
+    'x-product': 'contractnest',
   },
   timeout: 30000, // 30 seconds
 });

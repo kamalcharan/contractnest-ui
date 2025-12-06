@@ -1,7 +1,7 @@
 //src/components/businessmodel/dashboard/PlanList.tsx
 
-import React, { useState } from 'react';
-import { Eye, Archive, Tag, Calendar, Users, FileText } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Eye, Archive, Tag, Calendar, Users, FileText, Package } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 export interface PricingPlanSummary {
@@ -13,6 +13,8 @@ export interface PricingPlanSummary {
   userCount: number;
   featuresCount: number;
   lastUpdated: string;
+  productCode?: string;
+  productName?: string;
 }
 
 interface PlanListProps {
@@ -30,14 +32,27 @@ const PlanList: React.FC<PlanListProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState(true);
+  const [filterProduct, setFilterProduct] = useState<string>('all');
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
-  // Filter plans based on search and active filter
+
+  // Get unique products for filter dropdown
+  const availableProducts = useMemo(() => {
+    const products = new Map<string, string>();
+    plans.forEach(plan => {
+      if (plan.productCode && plan.productName) {
+        products.set(plan.productCode, plan.productName);
+      }
+    });
+    return Array.from(products.entries());
+  }, [plans]);
+
+  // Filter plans based on search, active filter, and product filter
   const filteredPlans = plans.filter(plan => {
     const matchesSearch = plan.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesActiveFilter = filterActive ? plan.isActive : true;
-    return matchesSearch && matchesActiveFilter;
+    const matchesProductFilter = filterProduct === 'all' || plan.productCode === filterProduct;
+    return matchesSearch && matchesActiveFilter && matchesProductFilter;
   });
   
   // Render loading skeleton
@@ -166,14 +181,40 @@ const PlanList: React.FC<PlanListProps> = ({
               accentColor: colors.brand.primary
             } as React.CSSProperties}
           />
-          <label 
-            htmlFor="filter-active" 
+          <label
+            htmlFor="filter-active"
             className="ml-2 text-sm transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Show active plans only
           </label>
         </div>
+
+        {/* Product Filter */}
+        {availableProducts.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Package
+              className="h-4 w-4"
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <select
+              value={filterProduct}
+              onChange={(e) => setFilterProduct(e.target.value)}
+              className="px-3 py-1.5 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
+              style={{
+                borderColor: `${colors.utility.secondaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
+            >
+              <option value="all">All Products</option>
+              {availableProducts.map(([code, name]) => (
+                <option key={code} value={code}>{name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       
       {/* Plans list */}
@@ -205,21 +246,34 @@ const PlanList: React.FC<PlanListProps> = ({
                   >
                     v{plan.version}
                   </div>
-                  <div 
+                  <div
                     className="text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{
-                      backgroundColor: plan.isActive 
-                        ? `${colors.semantic.success}20` 
+                      backgroundColor: plan.isActive
+                        ? `${colors.semantic.success}20`
                         : `${colors.semantic.error}20`,
-                      color: plan.isActive 
-                        ? colors.semantic.success 
+                      color: plan.isActive
+                        ? colors.semantic.success
                         : colors.semantic.error
                     }}
                   >
                     {plan.isActive ? 'active' : 'inactive'}
                   </div>
+                  {/* Product Badge */}
+                  {plan.productName && (
+                    <div
+                      className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1"
+                      style={{
+                        backgroundColor: `${colors.brand.primary}15`,
+                        color: colors.brand.primary
+                      }}
+                    >
+                      <Package className="h-3 w-3" />
+                      {plan.productName}
+                    </div>
+                  )}
                 </div>
-                
+
                 <div className="text-sm mt-1">
                   <span 
                     className="inline-flex items-center transition-colors"

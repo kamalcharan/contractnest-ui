@@ -349,6 +349,14 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
   
+  // =================================================================
+  // PRODUCTS ENDPOINTS - Multi-product support (ContractNest, FamilyKnows)
+  // =================================================================
+  PRODUCTS: {
+    LIST: '/api/products',
+    GET: (code: string) => `/api/products/${code}`,
+  },
+
   // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management

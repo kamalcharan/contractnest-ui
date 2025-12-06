@@ -1,7 +1,7 @@
 // src/components/businessmodel/admin/plandetail/PlanDetailHeader.tsx
 
 import React from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Package } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface PlanDetailHeaderProps {
@@ -10,6 +10,7 @@ interface PlanDetailHeaderProps {
   isVisible?: boolean;
   isArchived?: boolean;
   isLive: boolean;
+  productName?: string;
   onBack: () => void;
 }
 
@@ -19,6 +20,7 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
   isVisible,
   isArchived,
   isLive,
+  productName,
   onBack
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
@@ -118,8 +120,21 @@ const PlanDetailHeader: React.FC<PlanDetailHeaderProps> = ({
             >
               {planName}
             </h1>
-            <div className="ml-4">
+            <div className="ml-4 flex items-center gap-2">
               {getStatusBadge()}
+              {/* Product Badge */}
+              {productName && (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: colors.brand.primary + '15',
+                    color: colors.brand.primary
+                  }}
+                >
+                  <Package className="h-3 w-3" />
+                  {productName}
+                </span>
+              )}
             </div>
           </div>
           {planDescription && (
