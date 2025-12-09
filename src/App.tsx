@@ -83,6 +83,9 @@ import WhatsAppIntegrationPage from './vani/pages/channels/WhatsAppIntegrationPa
 import BBBProfileOnboardingPage from './pages/VaNi/channels/BBBProfileOnboardingPage';
 import BBBAdminDashboard from './pages/VaNi/channels/BBBAdminDashboard';
 
+// ✅ Implementation Toolkit
+import TenantProfilesPage from './pages/VaNi/TenantProfilesPage';
+
 // MISC Pages
 import { 
   NotFoundPage,
@@ -498,7 +501,10 @@ const AppContent: React.FC = () => {
             {/* ✅ NEW: BBB Directory Routes */}
             <Route path="channels/bbb/onboarding" element={<BBBProfileOnboardingPage />} />
             <Route path="channels/bbb/admin" element={<BBBAdminDashboard />} />
-            
+
+            {/* ✅ Implementation Toolkit Routes */}
+            <Route path="tenant-profiles" element={<TenantProfilesPage />} />
+
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="analytics/cross-module" element={<AnalyticsPage />} />
             <Route path="webhooks" element={<WebhookManagementPage />} />

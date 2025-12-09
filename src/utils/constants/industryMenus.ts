@@ -355,6 +355,18 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Billing Dashboard',
         icon: 'CreditCard',
         path: '/settings/businessmodel/admin/billing'
+      },
+      {
+        id: 'tenant-profiles',
+        label: 'Tenant Profiles',
+        icon: 'Users',
+        path: '/vani/tenant-profiles'
+      },
+      {
+        id: 'bbb-admin',
+        label: 'BBB Admin',
+        icon: 'Shield',
+        path: '/vani/channels/bbb/admin'
       }
     ]
   },

@@ -349,14 +349,6 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
   
-  // =================================================================
-  // PRODUCTS ENDPOINTS - Multi-product support (ContractNest, FamilyKnows)
-  // =================================================================
-  PRODUCTS: {
-    LIST: '/api/products',
-    GET: (code: string) => `/api/products/${code}`,
-  },
-
   // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management
@@ -561,15 +553,31 @@ export const API_ENDPOINTS = {
       // Helper function for activity logs with filters
       ACTIVITY_LOGS_WITH_FILTERS: (groupId: string, filters: ActivityLogFilters = {}) => {
         const params = new URLSearchParams();
-        
+
         if (filters.activity_type) params.append('activity_type', filters.activity_type);
         if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
         if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
-        
+
         const queryString = params.toString();
-        return queryString 
-          ? `/api/admin/activity-logs/${groupId}?${queryString}` 
+        return queryString
+          ? `/api/admin/activity-logs/${groupId}?${queryString}`
           : `/api/admin/activity-logs/${groupId}`;
+      }
+    },
+
+    // Tenant Dashboard operations (NLP-based search)
+    TENANTS_DASHBOARD: {
+      STATS: '/api/tenants/stats',
+      SEARCH: '/api/tenants/search',
+      INTENTS: '/api/intents',
+
+      // Helper function for getting intents with filters
+      INTENTS_WITH_FILTERS: (groupId: string, userRole: string = 'admin', channel: string = 'web') => {
+        const params = new URLSearchParams();
+        params.append('group_id', groupId);
+        params.append('user_role', userRole);
+        params.append('channel', channel);
+        return `/api/intents?${params.toString()}`;
       }
     }
   },
