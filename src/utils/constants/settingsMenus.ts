@@ -225,6 +225,17 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Hash',
     adminOnly: false
   },
+    {
+    id: 'smart-profile',
+    settings_type: 'Smart Profile',
+    parent_type: GROUP_BUSINESS_PROFILE,
+    description_short: 'AI-enhanced profile',
+    description_long: 'Generate AI-powered business profile with semantic keywords for better discoverability',
+    route_path: '/settings/business-profile/smart-profile',
+    card_icon_name: 'Sparkles',
+    adminOnly: false
+  },
+
   
   // Subscription
   {

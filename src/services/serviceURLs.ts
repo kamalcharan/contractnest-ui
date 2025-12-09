@@ -553,11 +553,11 @@ export const API_ENDPOINTS = {
       // Helper function for activity logs with filters
       ACTIVITY_LOGS_WITH_FILTERS: (groupId: string, filters: ActivityLogFilters = {}) => {
         const params = new URLSearchParams();
-
+        
         if (filters.activity_type) params.append('activity_type', filters.activity_type);
         if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
         if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
-
+        
         const queryString = params.toString();
         return queryString
           ? `/api/admin/activity-logs/${groupId}?${queryString}`
@@ -579,9 +579,17 @@ export const API_ENDPOINTS = {
         params.append('channel', channel);
         return `/api/intents?${params.toString()}`;
       }
+    },
+
+    // SmartProfile operations (tenant-level AI profiles)
+    SMARTPROFILES: {
+      GET: (tenantId: string) => `/api/smartprofiles/${tenantId}`,
+      SAVE: '/api/smartprofiles',
+      GENERATE: '/api/smartprofiles/generate',
+      SEARCH: '/api/smartprofiles/search'
     }
   },
-  
+
   // =================================================================
   // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS - PRESERVED
   // =================================================================

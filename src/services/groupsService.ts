@@ -619,18 +619,18 @@ class GroupsService {
   ): Promise<{ logs: ActivityLog[]; pagination: any }> {
     try {
       console.log('🔍 UI Service: Getting activity logs...', { groupId, filters });
-      
+
       // Use serviceURLs helper to build URL with filters
       const url = filters
         ? API_ENDPOINTS.GROUPS.ADMIN.ACTIVITY_LOGS_WITH_FILTERS(groupId, filters)
         : API_ENDPOINTS.GROUPS.ADMIN.ACTIVITY_LOGS(groupId);
-      
+
       const response = await api.get(url);
-      
+
       if (!response.data.success) {
         throw new Error(response.data.error || 'Failed to load activity logs');
       }
-      
+
       return {
         logs: response.data.logs || [],
         pagination: response.data.pagination || {
@@ -639,12 +639,325 @@ class GroupsService {
           offset: filters?.offset || 0
         }
       };
-      
+
     } catch (error: any) {
       console.error('UI Service error in getActivityLogs:', error);
       throw new Error(error.message || 'Failed to load activity logs');
     }
   }
+
+  // ============================================
+  // SMARTPROFILE OPERATIONS (Tenant-level AI Profiles)
+  // ============================================
+
+  /**
+   * Get SmartProfile for a tenant
+   * Calls: GET /api/smartprofiles/:tenantId
+   */
+  async getSmartProfile(tenantId: string): Promise<{
+    profile: SmartProfileData | null;
+    clusters: SmartProfileCluster[];
+  }> {
+    try {
+      console.log('🔍 UI Service: Getting SmartProfile...', { tenantId });
+
+      const response = await api.get(
+        API_ENDPOINTS.GROUPS.SMARTPROFILES.GET(tenantId)
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to load SmartProfile');
+      }
+
+      return {
+        profile: response.data.data?.profile || null,
+        clusters: response.data.data?.clusters || []
+      };
+
+    } catch (error: any) {
+      // 404 means no profile yet - return empty
+      if (error.response?.status === 404) {
+        return { profile: null, clusters: [] };
+      }
+      console.error('UI Service error in getSmartProfile:', error);
+      throw new Error(error.message || 'Failed to load SmartProfile');
+    }
+  }
+
+  /**
+   * Save SmartProfile (basic save without AI)
+   * Calls: POST /api/smartprofiles
+   */
+  async saveSmartProfile(data: {
+    tenant_id: string;
+    short_description?: string;
+    ai_enhanced_description?: string;
+    approved_keywords?: string[];
+    profile_type?: string;
+    website_url?: string;
+    generation_method?: 'manual' | 'website';
+  }): Promise<{ success: boolean; profile_id: string }> {
+    try {
+      console.log('🔍 UI Service: Saving SmartProfile...', {
+        tenantId: data.tenant_id,
+        hasEnhancedDesc: !!data.ai_enhanced_description,
+        enhancedDescLength: data.ai_enhanced_description?.length || 0,
+        shortDescLength: data.short_description?.length || 0,
+        keywordsCount: data.approved_keywords?.length || 0,
+        generationMethod: data.generation_method
+      });
+
+      const response = await api.post(
+        API_ENDPOINTS.GROUPS.SMARTPROFILES.SAVE,
+        data
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to save SmartProfile');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in saveSmartProfile:', error);
+      throw new Error(error.message || 'Failed to save SmartProfile');
+    }
+  }
+
+  /**
+   * Enhance SmartProfile description with AI
+   * Calls: POST /api/smartprofiles/enhance
+   * (Uses same n8n workflow as membership profiles)
+   */
+  async enhanceSmartProfile(request: {
+    tenant_id: string;
+    short_description: string;
+  }): Promise<{
+    success: boolean;
+    ai_enhanced_description: string;
+    suggested_keywords: string[];
+  }> {
+    try {
+      console.log('🔍 UI Service: Enhancing SmartProfile...', { tenantId: request.tenant_id });
+
+      const response = await api.post(
+        `${API_ENDPOINTS.GROUPS.SMARTPROFILES.SAVE}/enhance`,
+        request
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to enhance SmartProfile');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in enhanceSmartProfile:', error);
+      throw new Error(error.message || 'AI enhancement failed. Please try again.');
+    }
+  }
+
+  /**
+   * Scrape website for SmartProfile
+   * Calls: POST /api/smartprofiles/scrape-website
+   */
+  async scrapeWebsiteForSmartProfile(request: {
+    tenant_id: string;
+    website_url: string;
+  }): Promise<{
+    success: boolean;
+    ai_enhanced_description: string;
+    suggested_keywords: string[];
+    scraped_data?: any;
+  }> {
+    try {
+      console.log('🔍 UI Service: Scraping website for SmartProfile...', {
+        tenantId: request.tenant_id,
+        websiteUrl: request.website_url
+      });
+
+      const response = await api.post(
+        `${API_ENDPOINTS.GROUPS.SMARTPROFILES.SAVE}/scrape-website`,
+        request
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to scrape website');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in scrapeWebsiteForSmartProfile:', error);
+      throw new Error(error.message || 'Website scraping failed. Please check the URL.');
+    }
+  }
+
+  /**
+   * Generate semantic clusters for SmartProfile
+   * Calls: POST /api/smartprofiles/generate-clusters
+   */
+  async generateSmartProfileClusters(request: {
+    tenant_id: string;
+    profile_text: string;
+    keywords: string[];
+  }): Promise<{
+    success: boolean;
+    clusters_generated: number;
+    clusters: SmartProfileCluster[];
+  }> {
+    try {
+      console.log('🔍 UI Service: Generating SmartProfile clusters...', { tenantId: request.tenant_id });
+
+      const response = await api.post(
+        `${API_ENDPOINTS.GROUPS.SMARTPROFILES.SAVE}/generate-clusters`,
+        request
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to generate clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in generateSmartProfileClusters:', error);
+      throw new Error(error.message || 'Cluster generation failed');
+    }
+  }
+
+  /**
+   * Save SmartProfile clusters to database
+   * Calls: POST /api/smartprofiles/clusters
+   */
+  async saveSmartProfileClusters(
+    tenantId: string,
+    clusters: Array<{
+      primary_term: string;
+      related_terms: string[];
+      category: string;
+      confidence_score?: number;
+    }>
+  ): Promise<{ success: boolean; clusters_saved: number; cluster_ids: string[] }> {
+    try {
+      console.log('🔍 UI Service: Saving SmartProfile clusters...', { tenantId, clusterCount: clusters.length });
+
+      const response = await api.post(
+        `${API_ENDPOINTS.GROUPS.SMARTPROFILES.SAVE}/clusters`,
+        {
+          tenant_id: tenantId,
+          clusters
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to save clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in saveSmartProfileClusters:', error);
+      throw new Error(error.message || 'Failed to save clusters');
+    }
+  }
+
+  /**
+   * Get SmartProfile clusters
+   * Calls: GET /api/smartprofiles/:tenantId/clusters
+   */
+  async getSmartProfileClusters(tenantId: string): Promise<{
+    success: boolean;
+    clusters: SmartProfileCluster[];
+  }> {
+    try {
+      console.log('🔍 UI Service: Getting SmartProfile clusters...', { tenantId });
+
+      const response = await api.get(
+        `${API_ENDPOINTS.GROUPS.SMARTPROFILES.GET(tenantId)}/clusters`
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to load clusters');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      // 404 means no clusters yet
+      if (error.response?.status === 404) {
+        return { success: true, clusters: [] };
+      }
+      console.error('UI Service error in getSmartProfileClusters:', error);
+      throw new Error(error.message || 'Failed to load clusters');
+    }
+  }
+
+  /**
+   * Search SmartProfiles
+   * Calls: POST /api/smartprofiles/search
+   */
+  async searchSmartProfiles(request: {
+    query: string;
+    scope?: 'group' | 'tenant' | 'product';
+    group_id?: string;
+    tenant_id?: string;
+    limit?: number;
+    use_cache?: boolean;
+  }): Promise<{
+    success: boolean;
+    results: any[];
+    results_count: number;
+  }> {
+    try {
+      console.log('🔍 UI Service: Searching SmartProfiles...', { query: request.query });
+
+      const response = await api.post(
+        API_ENDPOINTS.GROUPS.SMARTPROFILES.SEARCH,
+        request
+      );
+
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Search failed');
+      }
+
+      return response.data;
+
+    } catch (error: any) {
+      console.error('UI Service error in searchSmartProfiles:', error);
+      throw new Error(error.message || 'SmartProfile search failed');
+    }
+  }
+}
+
+// SmartProfile type definitions
+export interface SmartProfileData {
+  id?: string;
+  tenant_id: string;
+  profile_type: string;
+  short_description: string | null;
+  ai_enhanced_description: string | null;
+  approved_keywords: string[] | null;
+  website_url?: string | null;
+  generation_method?: 'manual' | 'website';
+  embedding?: boolean;
+  status: string;
+  is_active: boolean;
+  last_embedding_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SmartProfileCluster {
+  id?: string;
+  tenant_id?: string;
+  primary_term: string;
+  related_terms: string[];
+  category: string;
+  confidence_score: number;
+  is_active?: boolean;
+  isNew?: boolean;
+  isEditing?: boolean;
 }
 
 // Export singleton instance

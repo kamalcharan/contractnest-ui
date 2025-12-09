@@ -749,5 +749,262 @@ export const useGroupsManager = (groupId?: string, membershipId?: string) => {
   };
 };
 
+// ================================================================
+// SMARTPROFILE QUERY KEYS
+// ================================================================
+
+export const smartProfileQueryKeys = {
+  all: ['smartprofiles'] as const,
+  profile: (tenantId: string) => [...smartProfileQueryKeys.all, 'profile', tenantId] as const,
+  clusters: (tenantId: string) => [...smartProfileQueryKeys.all, 'clusters', tenantId] as const,
+};
+
+// ================================================================
+// SMARTPROFILE HOOKS
+// ================================================================
+
+/**
+ * Get SmartProfile for a tenant
+ */
+export const useSmartProfile = (tenantId: string) => {
+  const { currentTenant } = useAuth();
+
+  return useQuery({
+    queryKey: smartProfileQueryKeys.profile(tenantId),
+    queryFn: () => groupsService.getSmartProfile(tenantId),
+    enabled: !!currentTenant && !!tenantId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000,   // 10 minutes
+  });
+};
+
+/**
+ * Get SmartProfile clusters
+ */
+export const useSmartProfileClusters = (tenantId: string) => {
+  const { currentTenant } = useAuth();
+
+  return useQuery({
+    queryKey: smartProfileQueryKeys.clusters(tenantId),
+    queryFn: () => groupsService.getSmartProfileClusters(tenantId),
+    enabled: !!currentTenant && !!tenantId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+};
+
+/**
+ * Save SmartProfile (basic save)
+ */
+export const useSaveSmartProfile = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (data: {
+      tenant_id: string;
+      short_description?: string;
+      ai_enhanced_description?: string;
+      approved_keywords?: string[];
+      profile_type?: string;
+      website_url?: string;
+      generation_method?: 'manual' | 'website';
+    }) => groupsService.saveSmartProfile(data),
+
+    onSuccess: (data, variables) => {
+      // Invalidate SmartProfile query
+      queryClient.invalidateQueries({
+        queryKey: smartProfileQueryKeys.profile(variables.tenant_id)
+      });
+
+      toast({
+        title: "Success",
+        description: "SmartProfile saved successfully"
+      });
+      console.log('✅ SmartProfile saved:', data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to save SmartProfile"
+      });
+      console.error('❌ Error saving SmartProfile:', error);
+    }
+  });
+};
+
+/**
+ * Enhance SmartProfile with AI
+ */
+export const useEnhanceSmartProfile = () => {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (request: {
+      tenant_id: string;
+      short_description: string;
+    }) => groupsService.enhanceSmartProfile(request),
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Profile enhanced successfully"
+      });
+      console.log('✅ SmartProfile enhanced:', data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to enhance profile"
+      });
+      console.error('❌ Error enhancing SmartProfile:', error);
+    }
+  });
+};
+
+/**
+ * Scrape website for SmartProfile
+ */
+export const useScrapeWebsiteForSmartProfile = () => {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (request: {
+      tenant_id: string;
+      website_url: string;
+    }) => groupsService.scrapeWebsiteForSmartProfile(request),
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Website analyzed successfully"
+      });
+      console.log('✅ Website scraped for SmartProfile:', data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to scrape website"
+      });
+      console.error('❌ Error scraping website for SmartProfile:', error);
+    }
+  });
+};
+
+/**
+ * Generate SmartProfile clusters
+ */
+export const useGenerateSmartProfileClusters = () => {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (request: {
+      tenant_id: string;
+      profile_text: string;
+      keywords: string[];
+    }) => groupsService.generateSmartProfileClusters(request),
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `${data.clusters_generated} semantic clusters generated`
+      });
+      console.log('✅ SmartProfile clusters generated:', data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to generate clusters"
+      });
+      console.error('❌ Error generating SmartProfile clusters:', error);
+    }
+  });
+};
+
+/**
+ * Save SmartProfile clusters
+ */
+export const useSaveSmartProfileClusters = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      tenantId,
+      clusters
+    }: {
+      tenantId: string;
+      clusters: Array<{
+        primary_term: string;
+        related_terms: string[];
+        category: string;
+        confidence_score?: number;
+      }>;
+    }) => groupsService.saveSmartProfileClusters(tenantId, clusters),
+
+    onSuccess: (data, variables) => {
+      // Invalidate clusters query
+      queryClient.invalidateQueries({
+        queryKey: smartProfileQueryKeys.clusters(variables.tenantId)
+      });
+
+      toast({
+        title: "Success",
+        description: `${data.clusters_saved} clusters saved successfully`
+      });
+
+      console.log('✅ SmartProfile clusters saved:', data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to save clusters"
+      });
+      console.error('❌ Error saving SmartProfile clusters:', error);
+    }
+  });
+};
+
+/**
+ * Search SmartProfiles
+ */
+export const useSearchSmartProfiles = () => {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (request: {
+      query: string;
+      scope?: 'group' | 'tenant' | 'product';
+      group_id?: string;
+      tenant_id?: string;
+      limit?: number;
+      use_cache?: boolean;
+    }) => groupsService.searchSmartProfiles(request),
+
+    onSuccess: (data) => {
+      console.log('✅ SmartProfile search completed:', data.results_count, 'results');
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Search Failed",
+        description: error.message || "Failed to search SmartProfiles"
+      });
+      console.error('❌ Error searching SmartProfiles:', error);
+    }
+  });
+};
+
 // Export default for convenience
 export default useGroupsManager;
