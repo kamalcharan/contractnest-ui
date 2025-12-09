@@ -358,7 +358,7 @@ export const defaultMenuItems: MenuItem[] = [
       },
       {
         id: 'tenant-profiles',
-        label: 'Tenant Profiles',
+        label: 'Group Member Profiles',
         icon: 'Users',
         path: '/vani/tenant-profiles'
       },

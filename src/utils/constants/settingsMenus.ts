@@ -183,6 +183,16 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'MessageCircle',
     adminOnly: false
   },
+  {
+    id: 'groups',
+    settings_type: 'Groups',
+    parent_type: GROUP_CUSTOMER_CHANNELS,
+    description_short: 'Business Groups',
+    description_long: 'Join business groups, create your profile, and connect with other members',
+    route_path: '/settings/configure/customer-channels/groups',
+    card_icon_name: 'Users',
+    adminOnly: false
+  },
   
   // Business Profile
   {

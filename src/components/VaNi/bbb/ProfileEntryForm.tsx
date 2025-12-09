@@ -27,6 +27,43 @@ interface ProfileEntryFormProps {
   initialMethod?: 'manual' | 'website';
 }
 
+// URL validation helper
+const isValidWebsiteUrl = (url: string): { valid: boolean; error?: string } => {
+  if (!url.trim()) {
+    return { valid: false, error: 'Website URL is required' };
+  }
+
+  // Must start with http:// or https://
+  if (!url.match(/^https?:\/\//i)) {
+    return { valid: false, error: 'URL must start with http:// or https://' };
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+
+    // Must have a valid domain (at least one dot)
+    if (!parsedUrl.hostname.includes('.')) {
+      return { valid: false, error: 'Please enter a valid domain (e.g., example.com)' };
+    }
+
+    // Domain must have valid TLD (at least 2 characters after last dot)
+    const parts = parsedUrl.hostname.split('.');
+    const tld = parts[parts.length - 1];
+    if (tld.length < 2) {
+      return { valid: false, error: 'Please enter a valid domain extension' };
+    }
+
+    // No spaces allowed
+    if (url.includes(' ')) {
+      return { valid: false, error: 'URL cannot contain spaces' };
+    }
+
+    return { valid: true };
+  } catch {
+    return { valid: false, error: 'Please enter a valid URL format' };
+  }
+};
+
 const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
   onSubmit,
   onEnhanceWithAI,
@@ -43,6 +80,8 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
   const [generationMethod, setGenerationMethod] = useState<'manual' | 'website'>(initialMethod);
   const [shortDescription, setShortDescription] = useState(initialDescription);
   const [websiteUrl, setWebsiteUrl] = useState(initialWebsiteUrl);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlTouched, setUrlTouched] = useState(false);
 
   // Update form when initial values change (entering edit mode)
   useEffect(() => {
@@ -60,8 +99,38 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
     onEnhanceWithAI(shortDescription);
   };
 
+  // Handle URL change with validation
+  const handleUrlChange = (value: string) => {
+    setWebsiteUrl(value);
+    if (urlTouched && value.trim()) {
+      const validation = isValidWebsiteUrl(value.trim());
+      setUrlError(validation.valid ? null : (validation.error || null));
+    } else if (!value.trim()) {
+      setUrlError(null);
+    }
+  };
+
+  // Handle URL blur - validate on blur
+  const handleUrlBlur = () => {
+    setUrlTouched(true);
+    if (websiteUrl.trim()) {
+      const validation = isValidWebsiteUrl(websiteUrl.trim());
+      setUrlError(validation.valid ? null : (validation.error || null));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate URL before submit
+    if (generationMethod === 'website') {
+      const validation = isValidWebsiteUrl(websiteUrl.trim());
+      if (!validation.valid) {
+        setUrlError(validation.error || 'Invalid URL');
+        setUrlTouched(true);
+        return;
+      }
+    }
 
     const formData: ProfileFormData = {
       generation_method: generationMethod,
@@ -72,9 +141,11 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
     onSubmit(formData);
   };
 
+  // Form validation - check URL is valid for website method
+  const urlValidation = generationMethod === 'website' ? isValidWebsiteUrl(websiteUrl.trim()) : { valid: true };
   const isFormValid = generationMethod === 'manual'
     ? shortDescription.trim().length > 0
-    : websiteUrl.trim().length > 0;
+    : urlValidation.valid;
 
   return (
     <Card
@@ -305,23 +376,31 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
                 type="url"
                 id="website_url"
                 value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
+                onChange={(e) => handleUrlChange(e.target.value)}
+                onBlur={handleUrlBlur}
                 placeholder="https://www.yourcompany.com"
                 className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 transition-all"
                 style={{
-                  borderColor: `${colors.utility.secondaryText}40`,
+                  borderColor: urlError && urlTouched ? colors.semantic.error : `${colors.utility.secondaryText}40`,
                   backgroundColor: colors.utility.secondaryBackground,
                   color: colors.utility.primaryText,
-                  '--tw-ring-color': colors.brand.primary
+                  '--tw-ring-color': urlError && urlTouched ? colors.semantic.error : colors.brand.primary
                 } as React.CSSProperties}
                 disabled={isSaving}
               />
-              <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
-                {isEditMode
-                  ? 'VaNi will re-scrape your website and regenerate your profile'
-                  : 'VaNi will scrape your website and generate a profile based on your content'
-                }
-              </p>
+              {urlError && urlTouched ? (
+                <div className="flex items-center space-x-1 mt-2" style={{ color: colors.semantic.error }}>
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span className="text-xs">{urlError}</span>
+                </div>
+              ) : (
+                <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
+                  {isEditMode
+                    ? 'VaNi will re-scrape your website and regenerate your profile'
+                    : 'VaNi will scrape your website and generate a profile based on your content'
+                  }
+                </p>
+              )}
             </div>
           )}
 

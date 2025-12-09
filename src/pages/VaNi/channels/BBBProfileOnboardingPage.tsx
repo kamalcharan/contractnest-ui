@@ -395,14 +395,11 @@ const BBBProfileOnboardingPage: React.FC = () => {
     try {
       console.log('🤖 VaNi: Saving profile with embedding generation...');
 
-      // Generate default keywords if not already set
-      const finalKeywords = keywords.length > 0 ? keywords : [
-        currentTenantProfile.business_category || 'Services',
-        currentTenantProfile.city || 'Hyderabad',
-        'Business',
-        'Professional'
-      ];
-      setKeywords(finalKeywords);
+      // Use keywords from AI enhancement (no hardcoded fallbacks - semantic clusters handle search)
+      const finalKeywords = keywords.length > 0 ? keywords : [];
+      if (finalKeywords.length > 0) {
+        setKeywords(finalKeywords);
+      }
 
       // Call the real save profile API with embedding generation
       const result = await saveProfileMutation.mutateAsync({

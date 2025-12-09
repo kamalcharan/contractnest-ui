@@ -82,9 +82,14 @@ import WhatsAppIntegrationPage from './vani/pages/channels/WhatsAppIntegrationPa
 // ✅ NEW: BBB Directory Pages
 import BBBProfileOnboardingPage from './pages/VaNi/channels/BBBProfileOnboardingPage';
 import BBBAdminDashboard from './pages/VaNi/channels/BBBAdminDashboard';
+import VaNiChatPage from './pages/VaNi/channels/VaNiChatPage';
 
 // ✅ Implementation Toolkit
 import TenantProfilesPage from './pages/VaNi/TenantProfilesPage';
+
+// ✅ NEW: Groups Pages (Customer Channels)
+import GroupsListPage from './pages/settings/customer-channels/GroupsListPage';
+import GroupProfileDashboard from './pages/settings/customer-channels/GroupProfileDashboard';
 
 // MISC Pages
 import { 
@@ -441,7 +446,11 @@ const AppContent: React.FC = () => {
             
             {/* Integration Settings */}
             <Route path="integrations" element={<IntegrationsPage />} />
-            
+
+            {/* ✅ NEW: Customer Channels - Groups */}
+            <Route path="configure/customer-channels/groups" element={<GroupsListPage />} />
+            <Route path="configure/customer-channels/groups/:groupId" element={<GroupProfileDashboard />} />
+
             {/* Business Model Routes */}
             
             {/* Admin - Pricing Plans Management */}
@@ -505,6 +514,7 @@ const AppContent: React.FC = () => {
             {/* ✅ NEW: BBB Directory Routes */}
             <Route path="channels/bbb/onboarding" element={<BBBProfileOnboardingPage />} />
             <Route path="channels/bbb/admin" element={<BBBAdminDashboard />} />
+            <Route path="channels/bbb/chat" element={<VaNiChatPage />} />
 
             {/* ✅ Implementation Toolkit Routes */}
             <Route path="tenant-profiles" element={<TenantProfilesPage />} />
