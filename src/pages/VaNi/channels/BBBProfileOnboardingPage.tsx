@@ -36,6 +36,7 @@ import {
 } from '../../../hooks/queries/useGroupQueries';
 import groupsService from '../../../services/groupsService';
 import { useTenantProfile } from '../../../hooks/useTenantProfile';
+import { useAuth } from '../../../context/AuthContext';
 import { Users, MessageCircle, Sparkles, Pencil, Eye, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import type { SemanticCluster } from '../../../components/VaNi/bbb/SemanticClustersForm';
 
@@ -52,7 +53,10 @@ const BBBProfileOnboardingPage: React.FC = () => {
   const location = useLocation();
   const branch = location.state?.branch || 'bagyanagar';
 
-  // Get live tenant profile data
+  // Get currentTenant from AuthContext (this has the tenant_id from sessionStorage)
+  const { currentTenant } = useAuth();
+
+  // Get live tenant profile data (for business details display)
   const { profile: tenantProfileData, loading: isLoadingProfile } = useTenantProfile();
 
   // Get BBB groups to find the group_id
@@ -97,20 +101,22 @@ const BBBProfileOnboardingPage: React.FC = () => {
   // Check membership status on page load - query FIRST, then show dialog if not found
   useEffect(() => {
     const checkMembership = async () => {
-      if (!bbbGroupId || !tenantProfileData?.tenant_id) {
+      // Use currentTenant.id from AuthContext (sessionStorage), NOT tenantProfileData.tenant_id
+      if (!bbbGroupId || !currentTenant?.id) {
+        console.log('🤖 VaNi: Waiting for bbbGroupId or currentTenant.id...', { bbbGroupId, tenantId: currentTenant?.id });
         setIsCheckingMembership(false);
         return;
       }
 
       try {
-        console.log('🤖 VaNi: Checking for existing membership...');
+        console.log('🤖 VaNi: Checking for existing membership with tenant_id:', currentTenant.id);
 
         // Query for existing membership FIRST
         const { memberships } = await groupsService.getGroupMemberships(bbbGroupId, { status: 'all' });
         console.log('🤖 VaNi: Found memberships:', memberships.length);
 
         const myMembership = memberships.find(
-          (m: any) => m.tenant_id === tenantProfileData?.tenant_id
+          (m: any) => m.tenant_id === currentTenant.id
         );
 
         if (myMembership) {
@@ -146,10 +152,10 @@ const BBBProfileOnboardingPage: React.FC = () => {
       setIsCheckingMembership(false);
     };
 
-    if (!isLoadingProfile && !isLoadingGroups) {
+    if (!isLoadingGroups && currentTenant?.id) {
       checkMembership();
     }
-  }, [bbbGroupId, tenantProfileData?.tenant_id, isLoadingProfile, isLoadingGroups]);
+  }, [bbbGroupId, currentTenant?.id, isLoadingGroups]);
 
   // Handle "Let me in" click - create membership
   const handleJoinBBB = async () => {
@@ -395,11 +401,14 @@ const BBBProfileOnboardingPage: React.FC = () => {
     try {
       console.log('🤖 VaNi: Saving profile with embedding generation...');
 
-      // Use keywords from AI enhancement (no hardcoded fallbacks - semantic clusters handle search)
-      const finalKeywords = keywords.length > 0 ? keywords : [];
-      if (finalKeywords.length > 0) {
-        setKeywords(finalKeywords);
-      }
+      // Generate default keywords if not already set
+      const finalKeywords = keywords.length > 0 ? keywords : [
+        currentTenantProfile.business_category || 'Services',
+        currentTenantProfile.city || 'Hyderabad',
+        'Business',
+        'Professional'
+      ];
+      setKeywords(finalKeywords);
 
       // Call the real save profile API with embedding generation
       const result = await saveProfileMutation.mutateAsync({
