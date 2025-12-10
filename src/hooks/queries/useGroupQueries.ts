@@ -56,6 +56,141 @@ export const groupQueryKeys = {
 };
 
 // ================================================================
+// SHARED HOOK FACTORIES (Phase 3 Refactor)
+// Used by both Groups and SmartProfile hooks
+// ================================================================
+
+type EntityType = 'membership' | 'tenant';
+
+/**
+ * Shared hook factory for profile enhancement
+ * Used by both useEnhanceProfile and useEnhanceSmartProfile
+ */
+export const useEnhanceProfileFactory = (entityType: EntityType) => {
+  const { toast } = useToast();
+  const label = entityType === 'membership' ? 'Profile' : 'SmartProfile';
+
+  return useMutation({
+    mutationFn: (request: { entityId: string; shortDescription: string }) => {
+      if (entityType === 'membership') {
+        return groupsService.enhanceProfile({
+          membership_id: request.entityId,
+          short_description: request.shortDescription
+        });
+      } else {
+        return groupsService.enhanceSmartProfile({
+          tenant_id: request.entityId,
+          short_description: request.shortDescription
+        });
+      }
+    },
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `${label} enhanced successfully`
+      });
+      console.log(`✅ ${label} enhanced:`, data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || `Failed to enhance ${label.toLowerCase()}`
+      });
+      console.error(`❌ Error enhancing ${label}:`, error);
+    }
+  });
+};
+
+/**
+ * Shared hook factory for website scraping
+ * Used by both useScrapeWebsite and useScrapeWebsiteForSmartProfile
+ */
+export const useScrapeWebsiteFactory = (entityType: EntityType) => {
+  const { toast } = useToast();
+  const label = entityType === 'membership' ? 'Profile' : 'SmartProfile';
+
+  return useMutation({
+    mutationFn: (request: { entityId: string; websiteUrl: string }) => {
+      if (entityType === 'membership') {
+        return groupsService.scrapeWebsite({
+          membership_id: request.entityId,
+          website_url: request.websiteUrl
+        });
+      } else {
+        return groupsService.scrapeWebsiteForSmartProfile({
+          tenant_id: request.entityId,
+          website_url: request.websiteUrl
+        });
+      }
+    },
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Website analyzed successfully"
+      });
+      console.log(`✅ Website scraped for ${label}:`, data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to scrape website"
+      });
+      console.error(`❌ Error scraping website for ${label}:`, error);
+    }
+  });
+};
+
+/**
+ * Shared hook factory for cluster generation
+ * Used by both useGenerateClusters and useGenerateSmartProfileClusters
+ */
+export const useGenerateClustersFactory = (entityType: EntityType) => {
+  const { toast } = useToast();
+  const label = entityType === 'membership' ? 'Profile' : 'SmartProfile';
+
+  return useMutation({
+    mutationFn: (request: { entityId: string; profileText: string; keywords?: string[] }) => {
+      if (entityType === 'membership') {
+        return groupsService.generateClusters({
+          membership_id: request.entityId,
+          profile_text: request.profileText,
+          keywords: request.keywords || []
+        });
+      } else {
+        return groupsService.generateSmartProfileClusters({
+          tenant_id: request.entityId,
+          profile_text: request.profileText,
+          keywords: request.keywords || []
+        });
+      }
+    },
+
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: `${data.clusters_generated} semantic clusters generated`
+      });
+      console.log(`✅ ${label} clusters generated:`, data);
+    },
+
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Failed to generate clusters"
+      });
+      console.error(`❌ Error generating ${label} clusters:`, error);
+    }
+  });
+};
+
+// ================================================================
 // QUERY HOOKS (Read Operations)
 // ================================================================
 
