@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'lucide-react';
+import { MapPin, Calendar, FileText } from 'lucide-react';
 import { TenantProfile } from '@/hooks/useTenantProfile';
 import { countries } from '@/utils/constants/countries';
 import LogoUploadField from '@/components/tenantprofile/shared/LogoUploadField';
@@ -64,8 +64,8 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Organization Name */}
           <div className="space-y-2 md:col-span-2">
-            <label 
-              htmlFor="business_name" 
+            <label
+              htmlFor="business_name"
               className="block text-sm font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
@@ -83,9 +83,37 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
               required
             />
           </div>
+
+          {/* Short Description */}
+          <div className="space-y-2 md:col-span-2">
+            <label
+              htmlFor="short_description"
+              className="block text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Short Description
+            </label>
+            <textarea
+              id="short_description"
+              value={formData.short_description || ''}
+              onChange={(e) => onUpdate('short_description', e.target.value.slice(0, 200))}
+              placeholder="Brief description of your business (shown in search results)"
+              rows={3}
+              maxLength={200}
+              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors resize-none"
+              style={getInputStyles()}
+              disabled={disabled}
+            />
+            <p
+              className="text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              {(formData.short_description || '').length}/200 characters - This appears in search results
+            </p>
+          </div>
         </div>
       </div>
-      
+
       {/* Contact Information - Using Shared Component with WhatsApp */}
       <ContactFields
         email={formData.business_email || ''}
@@ -106,7 +134,58 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
         labelText="Contact Information"
         showHelpText={true}
       />
-      
+
+      {/* Business Tools */}
+      <div className="space-y-6">
+        <div>
+          <div
+            className="text-base font-medium flex items-center transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            <Calendar
+              className="mr-2 h-5 w-5"
+              style={{ color: colors.brand.primary }}
+            />
+            Business Tools
+          </div>
+          <p
+            className="text-sm mt-1 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Links for scheduling and resources
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
+          {/* Booking URL */}
+          <div className="space-y-2">
+            <label
+              htmlFor="booking_url"
+              className="block text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Appointment Booking Link
+            </label>
+            <input
+              id="booking_url"
+              type="url"
+              value={formData.booking_url || ''}
+              onChange={(e) => onUpdate('booking_url', e.target.value)}
+              placeholder="https://calendly.com/your-link or https://cal.com/your-link"
+              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+              style={getInputStyles()}
+              disabled={disabled}
+            />
+            <p
+              className="text-xs transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Calendly, Cal.com, or any scheduling link for the "Book Appointment" feature
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Address Information */}
       <div className="space-y-6">
         <div>

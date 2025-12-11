@@ -16,6 +16,8 @@ export interface TenantProfile {
   business_type_id: string;
   industry_id: string;
   business_name: string;
+  short_description?: string | null;  // NEW: For search result cards (200 chars)
+  booking_url?: string | null;        // NEW: For Book Appointment intent (Calendly/Cal.com)
   logo_url?: string | null;
   address_line1?: string | null;
   address_line2?: string | null;
@@ -25,6 +27,8 @@ export interface TenantProfile {
   postal_code?: string | null;
   business_phone_country_code?: string | null;
   business_phone?: string | null;
+  business_whatsapp_country_code?: string | null;  // WhatsApp country code
+  business_whatsapp?: string | null;               // WhatsApp number
   business_email?: string | null;
   website_url?: string | null;
   primary_color?: string | null;

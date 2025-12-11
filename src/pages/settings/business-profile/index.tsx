@@ -1,7 +1,7 @@
 // src/pages/settings/business-profile/index.tsx - Updated with WhatsApp display
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
@@ -408,13 +408,13 @@ const BusinessProfilePage = () => {
                     )}
                     
                     <div>
-                      <div 
+                      <div
                         className="font-semibold text-lg transition-colors"
                         style={{ color: colors.utility.primaryText }}
                       >
                         {profile.business_name}
                       </div>
-                      <div 
+                      <div
                         className="text-sm transition-colors"
                         style={{ color: colors.utility.secondaryText }}
                       >
@@ -422,7 +422,23 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   </div>
-                  
+
+                  {/* Short Description */}
+                  {profile.short_description && (
+                    <div className="flex space-x-3">
+                      <FileText
+                        className="h-5 w-5 shrink-0 mt-0.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <div
+                        className="text-sm transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        {profile.short_description}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Address */}
                   {(profile.address_line1 || profile.city || profile.country_code) && (
                     <div className="flex space-x-3">
@@ -553,7 +569,63 @@ const BusinessProfilePage = () => {
                 </div>
               </div>
             </div>
-            
+
+            {/* Business Tools Card */}
+            {profile.booking_url && (
+              <div
+                className="rounded-lg border shadow-sm p-6 transition-colors"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText + '20'
+                }}
+              >
+                <div className="flex items-center space-x-3 mb-4">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center"
+                    style={{
+                      backgroundColor: colors.brand.primary + '20',
+                      color: colors.brand.primary
+                    }}
+                  >
+                    <Calendar size={20} />
+                  </div>
+                  <h3
+                    className="font-semibold text-lg transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Business Tools
+                  </h3>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Booking URL */}
+                  <div className="flex space-x-3">
+                    <Calendar
+                      className="h-5 w-5 shrink-0"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                    <div>
+                      <div
+                        className="text-sm font-medium mb-1 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        Appointment Booking
+                      </div>
+                      <a
+                        href={profile.booking_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm hover:underline transition-colors"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        {profile.booking_url.replace(/^https?:\/\//, '')}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Brand Colors Card */}
             <div 
               className="rounded-lg border shadow-sm p-6 transition-colors"
