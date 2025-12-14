@@ -613,6 +613,14 @@ export const API_ENDPOINTS = {
   },
 
   // =================================================================
+  // AI AGENT ENDPOINTS - Conversational Group Discovery
+  // =================================================================
+  AI_AGENT: {
+    // Send message to AI Agent (via N8N webhook)
+    MESSAGE: '/api/ai-agent/message'
+  },
+
+  // =================================================================
   // SERVICE CONTRACTS - BLOCK SYSTEM ENDPOINTS - PRESERVED
   // =================================================================
   SERVICE_CONTRACTS: {
