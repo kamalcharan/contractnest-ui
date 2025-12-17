@@ -42,12 +42,15 @@ export interface AIAgentRequest {
 
 export interface AIAgentSuccessResponse {
   success: true;
-  message: string;
+  message: string;              // AI-generated response (normalized from N8N's 'response' field)
   results?: AIAgentSearchResult[];
   results_count?: number;
   session_id?: string;
+  group_id?: string;            // Group context from N8N
+  channel?: string;             // Channel type
   intent_detected?: string;
   from_cache?: boolean;
+  duration_ms?: number;         // Processing time in milliseconds
 }
 
 export interface AIAgentErrorResponse {

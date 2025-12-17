@@ -17,7 +17,7 @@ import { ProfileFormData } from '../../../types/bbb';
 
 interface ProfileEntryFormProps {
   onSubmit: (data: ProfileFormData) => void;
-  onEnhanceWithAI: (description: string) => void;
+  onEnhanceWithAI: (description: string) => Promise<string | undefined> | void;
   isEnhancing?: boolean;
   isSaving?: boolean;
   // Edit mode props
@@ -92,11 +92,16 @@ const ProfileEntryForm: React.FC<ProfileEntryFormProps> = ({
     }
   }, [isEditMode, initialDescription, initialWebsiteUrl, initialMethod]);
 
-  const handleEnhance = () => {
+  const handleEnhance = async () => {
     if (!shortDescription.trim()) {
       return;
     }
-    onEnhanceWithAI(shortDescription);
+    // Call parent and get enhanced description back
+    const result = await onEnhanceWithAI(shortDescription);
+    // Update local state with enhanced content (for edit mode)
+    if (result) {
+      setShortDescription(result);
+    }
   };
 
   // Handle URL change with validation

@@ -29,6 +29,61 @@ import toast from 'react-hot-toast';
 import { chatService } from '../../../services/chatService';
 import { aiAgentService, type AIAgentSearchResult } from '../../../services/aiAgentService';
 
+// Simple markdown renderer for N8N responses
+const renderMarkdown = (text: string): React.ReactNode => {
+  if (!text) return null;
+
+  // Split by lines and process
+  const lines = text.split('\n');
+
+  return lines.map((line, i) => {
+    // Process bold text: **text** → <strong>text</strong>
+    let processed: React.ReactNode = line;
+
+    // Handle bold
+    const boldPattern = /\*\*(.*?)\*\*/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = boldPattern.exec(line)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(line.substring(lastIndex, match.index));
+      }
+      parts.push(<strong key={`bold-${i}-${match.index}`}>{match[1]}</strong>);
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (parts.length > 0) {
+      if (lastIndex < line.length) {
+        parts.push(line.substring(lastIndex));
+      }
+      processed = <>{parts}</>;
+    }
+
+    // Handle list items: - item
+    if (line.trim().startsWith('- ')) {
+      const content = line.trim().substring(2);
+      // Re-process bold in list item
+      const listContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      return (
+        <div key={i} className="flex items-start space-x-2 ml-2">
+          <span>•</span>
+          <span dangerouslySetInnerHTML={{ __html: listContent }} />
+        </div>
+      );
+    }
+
+    // Regular line
+    return (
+      <React.Fragment key={i}>
+        {processed}
+        {i < lines.length - 1 && <br />}
+      </React.Fragment>
+    );
+  });
+};
+
 // Types
 interface ChatSession {
   id: string;
@@ -104,6 +159,7 @@ const VaNiChatPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitializedRef = useRef(false);
 
   // State
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -125,50 +181,34 @@ const VaNiChatPage: React.FC = () => {
   }, []);
 
   const initializeChat = async () => {
+    // Prevent double initialization (React StrictMode)
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     setIsInitializing(true);
     try {
-      // Get or create session
+      // Get or create session (for tracking purposes)
       const sessionResponse = await chatService.getSession();
       if (sessionResponse.success && sessionResponse.session) {
         setSession(sessionResponse.session);
-
-        // Auto-activate BBB group
-        try {
-          const activateResponse = await chatService.activateGroup({
-            trigger_phrase: 'Hi BBB',
-            session_id: sessionResponse.session.id
-          });
-
-          if (activateResponse.success) {
-            setSession(prev => prev ? {
-              ...prev,
-              group_id: activateResponse.group_id,
-              group_name: activateResponse.group_name
-            } : null);
-
-            // Add welcome message with group name
-            addBotMessage(`Hi, I am VaNi, your AI assistant.\nWelcome to ${activateResponse.group_name || 'BBB Bagyanagar'}!\n\nHow can I help you today?`);
-          } else {
-            // Still show welcome even if activation fails
-            addBotMessage('Hi, I am VaNi, your AI assistant.\nWelcome to BBB Bagyanagar!\n\nHow can I help you today?');
-          }
-        } catch (activateError) {
-          console.error('Error activating group:', activateError);
-          // Still show welcome even if activation fails
-          addBotMessage('Hi, I am VaNi, your AI assistant.\nWelcome to BBB Bagyanagar!\n\nHow can I help you today?');
-        }
-
-        // Always enable typing after session is created
-        setGroupActivated(true);
-      } else {
-        // No session - show welcome anyway
-        addBotMessage('Hi, I am VaNi, your AI assistant.\nWelcome to BBB Bagyanagar!\n\nHow can I help you today?');
-        setGroupActivated(true);
       }
+
+      // Show welcome message with clear instructions
+      // N8N will handle the actual conversation once user sends "Hi BBB"
+      addBotMessage(
+        `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?\n\n- To start conversation: **'Hi BBB'**\n- To end conversation: **'Bye'**`
+      );
+
+      // Pre-fill input with "Hi BBB" for easy start
+      setInputValue('Hi BBB');
+      setGroupActivated(true);
     } catch (error) {
       console.error('Error initializing chat:', error);
       // Show welcome even on error
-      addBotMessage('Hi, I am VaNi, your AI assistant.\nWelcome to BBB Bagyanagar!\n\nHow can I help you today?');
+      addBotMessage(
+        `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?\n\n- To start conversation: **'Hi BBB'**\n- To end conversation: **'Bye'**`
+      );
+      setInputValue('Hi BBB');
       setGroupActivated(true);
     } finally {
       setIsInitializing(false);
@@ -351,11 +391,11 @@ const VaNiChatPage: React.FC = () => {
               className="text-sm font-bold px-2 py-1 rounded"
               style={{
                 backgroundColor: `${colors.brand.primary}20`,
-                color: colors.brand.primary
-              }}
-            >
-              {matchPercent}% match
-            </div>
+              color: colors.brand.primary
+            }}
+          >
+            {matchPercent}% match
+          </div>
           )}
         </div>
 
@@ -368,7 +408,8 @@ const VaNiChatPage: React.FC = () => {
           </p>
         )}
 
-        <div className="flex flex-wrap gap-3 text-sm">
+        {/* Contact Info Row */}
+        <div className="flex flex-wrap gap-3 text-sm mb-3">
           {result.city && (
             <div className="flex items-center space-x-1" style={{ color: colors.utility.secondaryText }}>
               <MapPin className="w-3 h-3" />
@@ -376,20 +417,38 @@ const VaNiChatPage: React.FC = () => {
             </div>
           )}
           {result.business_phone && (
-            <a
-              href={`tel:${result.business_phone}`}
-              className="flex items-center space-x-1 hover:underline"
-              style={{ color: colors.semantic.info }}
-            >
+            <div className="flex items-center space-x-1" style={{ color: colors.utility.secondaryText }}>
               <Phone className="w-3 h-3" />
               <span>{result.business_phone}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons Row */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: `${colors.utility.primaryText}10` }}>
+          {result.business_phone && (
+            <a
+              href={`tel:${result.business_phone}`}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+              style={{
+                backgroundColor: `${colors.semantic.success}15`,
+                color: colors.semantic.success,
+                border: `1px solid ${colors.semantic.success}30`
+              }}
+            >
+              <Phone className="w-3 h-3" />
+              <span>Call</span>
             </a>
           )}
           {result.business_email && (
             <a
               href={`mailto:${result.business_email}`}
-              className="flex items-center space-x-1 hover:underline"
-              style={{ color: colors.semantic.warning }}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+              style={{
+                backgroundColor: `${colors.semantic.warning}15`,
+                color: colors.semantic.warning,
+                border: `1px solid ${colors.semantic.warning}30`
+              }}
             >
               <Mail className="w-3 h-3" />
               <span>Email</span>
@@ -400,14 +459,32 @@ const VaNiChatPage: React.FC = () => {
               href={result.website_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center space-x-1 hover:underline"
-              style={{ color: colors.brand.secondary }}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+              style={{
+                backgroundColor: `${colors.semantic.info}15`,
+                color: colors.semantic.info,
+                border: `1px solid ${colors.semantic.info}30`
+              }}
             >
               <Globe className="w-3 h-3" />
               <span>Website</span>
-              <ExternalLink className="w-3 h-3" />
             </a>
           )}
+          <button
+            onClick={() => {
+              // Send follow-up message to get more details
+              setInputValue(`Tell me more about ${result.business_name}`);
+            }}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+            style={{
+              backgroundColor: `${colors.brand.primary}15`,
+              color: colors.brand.primary,
+              border: `1px solid ${colors.brand.primary}30`
+            }}
+          >
+            <Info className="w-3 h-3" />
+            <span>Get Details</span>
+          </button>
         </div>
       </div>
     );
@@ -442,14 +519,14 @@ const VaNiChatPage: React.FC = () => {
           </div>
           <div className="flex-1">
             <div
-              className="px-4 py-2 rounded-lg rounded-bl-none whitespace-pre-wrap"
+              className="px-4 py-2 rounded-lg rounded-bl-none"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
                 color: colors.utility.primaryText,
                 border: `1px solid ${colors.utility.primaryText}15`
               }}
             >
-              {message.content}
+              {renderMarkdown(message.content)}
             </div>
 
             {/* Search results */}
@@ -565,11 +642,12 @@ const VaNiChatPage: React.FC = () => {
             {/* Messages */}
             {messages.map(renderMessage)}
 
-            {/* Intent Buttons - Show when no current intent and group is activated */}
-            {groupActivated && !currentIntent && !isLoading && (
+            {/* Intent Buttons - Hidden: N8N AI Agent shows its own menu after "Hi BBB" */}
+            {/* To re-enable local intent buttons, uncomment below and set showIntentButtons state */}
+            {/* {groupActivated && !currentIntent && !isLoading && showIntentButtons && (
               <div className="flex justify-start mb-4">
                 <div className="flex items-start space-x-3">
-                  <div className="w-8 h-8" /> {/* Spacer for alignment */}
+                  <div className="w-8 h-8" />
                   <div className="grid grid-cols-2 gap-3">
                     {INTENTS.map((intent) => {
                       const Icon = intent.icon;
@@ -605,7 +683,7 @@ const VaNiChatPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* Loading indicator */}
             {isLoading && (
@@ -650,7 +728,7 @@ const VaNiChatPage: React.FC = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={currentIntent ? 'Type your search query...' : 'Ask me anything about BBB members...'}
+            placeholder="Type your message..."
             disabled={isLoading || isInitializing || !groupActivated}
             className="flex-1 p-3 border rounded-lg focus:outline-none focus:ring-2 disabled:opacity-50"
             style={{
@@ -677,7 +755,8 @@ const VaNiChatPage: React.FC = () => {
           </button>
         </div>
 
-        {currentIntent && (
+        {/* Intent indicator - Hidden: N8N handles intents internally */}
+        {/* {currentIntent && (
           <div
             className="mt-2 text-sm flex items-center space-x-2"
             style={{ color: colors.utility.secondaryText }}
@@ -694,7 +773,7 @@ const VaNiChatPage: React.FC = () => {
               Clear
             </button>
           </div>
-        )}
+        )} */}
       </div>
       </div> {/* End Centered Chat Container */}
     </div>

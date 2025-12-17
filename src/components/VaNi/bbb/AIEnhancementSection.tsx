@@ -1,7 +1,7 @@
 // src/components/VaNi/bbb/AIEnhancementSection.tsx
 // File 7/13 - BBB AI Enhancement Results Component
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import RichTextEditor from '../../ui/RichTextEditor';
@@ -33,6 +33,13 @@ const AIEnhancementSection: React.FC<AIEnhancementSectionProps> = ({
 
   const [description, setDescription] = useState(enhancedDescription);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Sync local state when enhancedDescription prop changes
+  useEffect(() => {
+    if (enhancedDescription) {
+      setDescription(enhancedDescription);
+    }
+  }, [enhancedDescription]);
 
   const handleSave = () => {
     if (description.trim().length === 0) {
