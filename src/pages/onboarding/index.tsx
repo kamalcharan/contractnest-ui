@@ -33,9 +33,6 @@ const getStepPath = (stepId: string): string => {
     'business-preferences': '/onboarding/business-preferences',
     'sequence-numbers': '/onboarding/sequence-numbers',
     'master-data': '/onboarding/master-data',
-    'team-invite': '/onboarding/team-invite',
-    'product-tour': '/onboarding/product-tour',
-    'sample-contract': '/onboarding/sample-contract',
     'complete': '/onboarding/complete'
   };
 

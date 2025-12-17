@@ -455,25 +455,19 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
         </div>
         
         {/* WhatsApp Field */}
-        <div className="space-y-2 md:col-span-2">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label 
+            <label
               htmlFor="contact_whatsapp"
               className="block text-sm font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               <div className="flex items-center">
-                <MessageCircle 
+                <MessageCircle
                   className="mr-2 h-4 w-4"
-                  style={{ color: '#25D366' }} // WhatsApp green color
+                  style={{ color: '#25D366' }}
                 />
-                WhatsApp Number
-                <span 
-                  className="text-xs font-normal ml-2"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  (Optional - for BBB WhatsApp integration)
-                </span>
+                WhatsApp
               </div>
             </label>
             {phone && !whatsapp && (
@@ -487,31 +481,28 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 }}
                 disabled={disabled}
               >
-                Copy from Phone
+                Copy
               </button>
             )}
           </div>
           <div className="flex space-x-2">
-            {/* Country Code Selector */}
-            <div className="w-32">
+            <div className="w-24">
               <select
                 id="contact_whatsapp_country_code"
                 value={whatsappCountryCode}
                 onChange={(e) => onWhatsAppCountryCodeChange(e.target.value)}
-                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors text-sm"
                 style={getInputStyles(false)}
                 disabled={disabled}
                 aria-label="WhatsApp country code"
               >
                 {sortedCountries.map(country => (
                   <option key={country.code} value={`+${country.phoneCode}`}>
-                    {country.code} +{country.phoneCode}
+                    +{country.phoneCode}
                   </option>
                 ))}
               </select>
             </div>
-            
-            {/* WhatsApp Number Input */}
             <div className="flex-1 relative">
               <input
                 id="contact_whatsapp"
@@ -520,54 +511,29 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 onChange={handleWhatsAppChange}
                 onBlur={handleWhatsAppBlur}
                 placeholder="1234567890"
-                className="w-full p-2 pr-10 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                className="w-full p-2 pr-8 border rounded-md focus:outline-none focus:ring-2 transition-colors"
                 style={getInputStyles(!!whatsappError)}
                 disabled={disabled}
                 aria-invalid={!!whatsappError}
                 aria-describedby={whatsappError ? "whatsapp-error" : undefined}
               />
               {whatsapp && !whatsappError && whatsappTouched && (
-                <CheckCircle 
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
+                <CheckCircle
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4"
                   style={{ color: colors.semantic.success }}
                 />
               )}
             </div>
           </div>
           {whatsappError && whatsappTouched && (
-            <div 
-              id="whatsapp-error"
-              className="flex items-start space-x-2 p-2 rounded-md transition-colors"
-              style={{
-                backgroundColor: colors.semantic.error + '10',
-                borderLeft: `3px solid ${colors.semantic.error}`
-              }}
-              role="alert"
-            >
-              <AlertCircle 
-                className="h-4 w-4 mt-0.5 flex-shrink-0"
-                style={{ color: colors.semantic.error }}
-              />
-              <p 
-                className="text-xs"
-                style={{ color: colors.semantic.error }}
-              >
-                {whatsappError}
-              </p>
-            </div>
-          )}
-          {whatsapp && (
-            <p 
-              className="text-xs transition-colors"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              This number will be used for WhatsApp Business API integration in BBB directory
+            <p className="text-xs" style={{ color: colors.semantic.error }}>
+              {whatsappError}
             </p>
           )}
         </div>
-        
+
         {/* Website Field */}
-        <div className="space-y-2 md:col-span-2">
+        <div className="space-y-2">
           <label 
             htmlFor="contact_website"
             className="block text-sm font-medium transition-colors"
@@ -606,37 +572,9 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
             )}
           </div>
           {websiteError && websiteTouched && (
-            <div 
-              id="website-error"
-              className="flex items-start space-x-2 p-2 rounded-md transition-colors"
-              style={{
-                backgroundColor: colors.semantic.error + '10',
-                borderLeft: `3px solid ${colors.semantic.error}`
-              }}
-              role="alert"
-            >
-              <AlertCircle 
-                className="h-4 w-4 mt-0.5 flex-shrink-0"
-                style={{ color: colors.semantic.error }}
-              />
-              <p 
-                className="text-xs"
-                style={{ color: colors.semantic.error }}
-              >
-                {websiteError}
-              </p>
-            </div>
-          )}
-          {website && !websiteError && !website.startsWith('http') && (
-            <button
-              type="button"
-              onClick={formatWebsiteUrl}
-              className="text-xs transition-colors hover:underline"
-              style={{ color: colors.brand.primary }}
-              disabled={disabled}
-            >
-              Add https:// prefix
-            </button>
+            <p className="text-xs" style={{ color: colors.semantic.error }}>
+              {websiteError}
+            </p>
           )}
         </div>
       </div>

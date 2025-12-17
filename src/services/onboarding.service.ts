@@ -54,7 +54,7 @@ class OnboardingService {
   async completeStep(stepId: OnboardingStepId | string, data?: Record<string, any>): Promise<CompleteStepResponse> {
     try {
       // Skip API call for UI-only steps
-      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences', 'sample-contract'];
+      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences'];
       if (uiOnlySteps.includes(stepId)) {
         return {
           success: true,
@@ -69,9 +69,7 @@ class OnboardingService {
         'storage-setup': 'storage',
         'user-profile': 'user-profile',
         'business-basic': 'business-profile',
-        'master-data': 'data-setup',
-        'team-invite': 'team',
-        'product-tour': 'tour'
+        'master-data': 'data-setup'
       };
 
       const backendStepId = stepMapping[stepId] || stepId;
@@ -98,7 +96,7 @@ class OnboardingService {
   async skipStep(stepId: OnboardingStepId | string): Promise<SkipStepResponse> {
     try {
       // Skip API call for UI-only steps
-      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences', 'sample-contract'];
+      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences'];
       if (uiOnlySteps.includes(stepId)) {
         return {
           success: true,
@@ -113,9 +111,7 @@ class OnboardingService {
         'storage-setup': 'storage',
         'user-profile': 'user-profile',
         'business-basic': 'business-profile',
-        'master-data': 'data-setup',
-        'team-invite': 'team',
-        'product-tour': 'tour'
+        'master-data': 'data-setup'
       };
 
       const backendStepId = stepMapping[stepId] || stepId;
@@ -251,11 +247,9 @@ class OnboardingService {
       'business-branding': 'Set up your brand',
       'business-preferences': 'Configure business preferences',
       'master-data': 'Set up initial data',
-      'team-invite': 'Invite team members',
-      'product-tour': 'Take a product tour',
-      'sample-contract': 'Create a sample contract'
+      'complete': 'Finish onboarding'
     };
-    
+
     return helpTexts[stepId] || '';
   }
 
@@ -272,11 +266,9 @@ class OnboardingService {
       'business-branding': 2,
       'business-preferences': 1,
       'master-data': 5,
-      'team-invite': 2,
-      'product-tour': 3,
-      'sample-contract': 2
+      'complete': 0
     };
-    
+
     return remainingSteps.reduce((total, stepId) => {
       return total + (stepTimes[stepId] || 0);
     }, 0);

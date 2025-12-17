@@ -130,6 +130,7 @@ const UserProfileStep: React.FC = () => {
             onRemoveAvatar={handleRemoveAvatar}
             onValidateMobile={handleValidateMobile}
             updating={updating}
+            initialEditMode={true}  // Start in edit mode during onboarding
           />
 
           {/* Info Box */}

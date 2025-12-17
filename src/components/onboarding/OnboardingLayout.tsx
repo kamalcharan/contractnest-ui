@@ -201,7 +201,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
       }
     } else {
       // For non-business steps, use existing logic
-      const uiOnlySteps = ['welcome', 'storage-setup', 'theme-selection', 'sample-contract'];
+      const uiOnlySteps = ['welcome', 'storage-setup', 'theme-selection'];
       
       if (uiOnlySteps.includes(uiStepId)) {
         console.log('🟡 UI-only step:', uiStepId, '- navigating to next step without backend call');

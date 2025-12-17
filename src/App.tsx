@@ -47,13 +47,15 @@ import CreateTenantPage from './pages/auth/CreateTenantPage';
 import WelcomeStep from './pages/onboarding/steps/WelcomeStep';
 import OnboardingIndexPage from './pages/onboarding/index';
 import OnboardingLayout from './components/onboarding/OnboardingLayout';
+import OnboardingPendingPage from './pages/onboarding/OnboardingPendingPage';
 import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
 import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
-import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';     
+import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
+import CompleteStep from '@/pages/onboarding/steps/CompleteStep';
 
 
 //VaNi Pages
@@ -311,6 +313,16 @@ const AppContent: React.FC = () => {
             }
           />
           
+          {/* Onboarding Pending - for non-owners when onboarding is not complete */}
+          <Route
+            path="/onboarding-pending"
+            element={
+              <ProtectedRoute requireTenant={true}>
+                <OnboardingPendingPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Complete Onboarding Routes - with Layout */}
           <Route
   path="/onboarding"
@@ -330,10 +342,7 @@ const AppContent: React.FC = () => {
 <Route path="business-preferences" element={<BusinessPreferencesStep />} />
 <Route path="sequence-numbers" element={<SequenceNumbersStep />} />
   <Route path="master-data" element={<div>Master Data Step (Coming Soon)</div>} />
-  <Route path="team-invite" element={<div>Team Invite Step (Coming Soon)</div>} />
-  <Route path="product-tour" element={<div>Product Tour Step (Coming Soon)</div>} />
-  <Route path="sample-contract" element={<div>Sample Contract Step (Coming Soon)</div>} />
-  <Route path="complete" element={<div>Complete Step (Coming Soon)</div>} />
+  <Route path="complete" element={<CompleteStep />} />
 </Route>
           {/* Protected Routes with MainLayout - Your Original Structure */}
           <Route

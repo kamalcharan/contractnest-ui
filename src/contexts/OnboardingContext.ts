@@ -88,9 +88,13 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
         steps: response.steps,
         error: null
       }));
-      
-      // Check if we should redirect based on onboarding status
-      handleOnboardingRedirect(response.needs_onboarding, response.onboarding?.is_completed || false);
+
+      // Check if we should redirect based on onboarding status and user role
+      handleOnboardingRedirect(
+        response.needs_onboarding,
+        response.onboarding?.is_completed || false,
+        response.owner  // Pass owner info for non-owners
+      );
       
     } catch (err: any) {
       console.error('[OnboardingContext] Error fetching status:', err);
@@ -114,25 +118,43 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
   }, [isAuthenticated, currentTenant?.id]);
   
   /**
-   * Handle onboarding redirects based on status
+   * Handle onboarding redirects based on status and user role
    */
-  const handleOnboardingRedirect = (needsOnboarding: boolean, isCompleted: boolean) => {
+  const handleOnboardingRedirect = (needsOnboarding: boolean, isCompleted: boolean, ownerInfo?: { name: string; email: string } | null) => {
     const isOnboardingPath = location.pathname.startsWith('/onboarding');
-    
-    // If onboarding is needed but not completed and user is not on onboarding path
-    if (needsOnboarding && !isCompleted && !isOnboardingPath) {
+    const isOnboardingPendingPath = location.pathname === '/onboarding-pending';
+
+    // If onboarding is needed but not completed
+    if (needsOnboarding && !isCompleted) {
       // Don't redirect from certain paths
-      const excludedPaths = ['/logout', '/login', '/register', '/misc'];
+      const excludedPaths = ['/logout', '/login', '/register', '/misc', '/invitation'];
       const shouldRedirect = !excludedPaths.some(path => location.pathname.startsWith(path));
-      
+
       if (shouldRedirect) {
-        navigate('/onboarding');
+        // Check if user is the owner (only owners can complete onboarding)
+        if (currentTenant?.is_owner) {
+          // Owner: redirect to onboarding (if not already there)
+          if (!isOnboardingPath) {
+            navigate('/onboarding');
+          }
+        } else {
+          // Non-owner: redirect to onboarding-pending (if not already there)
+          if (!isOnboardingPendingPath) {
+            // Store owner info for the pending page
+            navigate('/onboarding-pending', { state: { owner: ownerInfo } });
+          }
+        }
       }
     }
-    
-    // If onboarding is completed and user is still on onboarding path
-    if (isCompleted && isOnboardingPath && location.pathname !== '/onboarding/complete') {
-      navigate('/dashboard');
+
+    // If onboarding is completed and user is still on onboarding path or pending path
+    if (isCompleted) {
+      if (isOnboardingPath && location.pathname !== '/onboarding/complete') {
+        navigate('/dashboard');
+      }
+      if (isOnboardingPendingPath) {
+        navigate('/dashboard');
+      }
     }
   };
   

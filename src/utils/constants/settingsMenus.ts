@@ -62,16 +62,7 @@ export const settingsMenuItems: SettingsItem[] = [
   card_icon_name: 'Users', // ✅ Better icon than Shield
   adminOnly: false
 },
-  {
-    id: 'team-roles',
-    settings_type: 'Roles',
-    parent_type: GROUP_TEAM,
-    description_short: 'Configure team roles',
-    description_long: 'Define and manage team roles through List of Values',
-    route_path: '/settings/configure/lovs?category=Roles',
-    card_icon_name: 'Shield',
-    adminOnly: false
-  },
+
   
   // List of Value (LOVs)
   {

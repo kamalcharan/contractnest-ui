@@ -17,6 +17,7 @@ interface ProfileInfoSectionProps {
   onRemoveAvatar: () => Promise<boolean>;
   onValidateMobile: (mobile: string, countryCode: string) => Promise<boolean>;
   updating: boolean;
+  initialEditMode?: boolean; // Start in edit mode (useful for onboarding)
 }
 
 const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
@@ -25,15 +26,16 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   onUpdateAvatar,
   onRemoveAvatar,
   onValidateMobile,
-  updating
+  updating,
+  initialEditMode = false
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const { currentTenant } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { uploadFile, isSubmitting } = useStorageManagement();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isEditing, setIsEditing] = useState(false);
+
+  const [isEditing, setIsEditing] = useState(initialEditMode);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [formData, setFormData] = useState({
     first_name: '',

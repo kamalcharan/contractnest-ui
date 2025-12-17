@@ -39,8 +39,10 @@ const BusinessPreferencesStep: React.FC = () => {
   const [businessEmail, setBusinessEmail] = useState('');
   const [businessPhone, setBusinessPhone] = useState('');
   const [businessPhoneCountryCode, setBusinessPhoneCountryCode] = useState('+91');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappCountryCode, setWhatsappCountryCode] = useState('+91');
   const [websiteUrl, setWebsiteUrl] = useState('');
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -130,6 +132,16 @@ const BusinessPreferencesStep: React.FC = () => {
   const handleWebsiteChange = (website: string) => {
     setWebsiteUrl(website);
     if (website) updateTenantField('website_url', website);
+  };
+
+  const handleWhatsAppChange = (whatsapp: string) => {
+    setWhatsappNumber(whatsapp);
+    if (whatsapp) updateTenantField('whatsapp_number', whatsapp);
+  };
+
+  const handleWhatsAppCountryCodeChange = (code: string) => {
+    setWhatsappCountryCode(code);
+    updateTenantField('whatsapp_country_code', code);
   };
 
   /**
@@ -356,10 +368,14 @@ const BusinessPreferencesStep: React.FC = () => {
               email={businessEmail}
               phone={businessPhone}
               phoneCountryCode={businessPhoneCountryCode}
+              whatsapp={whatsappNumber}
+              whatsappCountryCode={whatsappCountryCode}
               website={websiteUrl}
               onEmailChange={handleEmailChange}
               onPhoneChange={handlePhoneChange}
               onPhoneCountryCodeChange={handlePhoneCountryCodeChange}
+              onWhatsAppChange={handleWhatsAppChange}
+              onWhatsAppCountryCodeChange={handleWhatsAppCountryCodeChange}
               onWebsiteChange={handleWebsiteChange}
               disabled={isSubmitting || isLoading}
               required={false}

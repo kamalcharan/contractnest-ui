@@ -193,7 +193,7 @@ export const ONBOARDING_CONSTANTS = {
     TOUR: 'tour' as OnboardingStepId,
   },
   REQUIRED_STEPS: ['user-profile', 'business-basic', 'sequence-numbers'] as string[],
-  TOTAL_STEPS: 13, // Updated for 13-step flow (added sequence-numbers)
+  TOTAL_STEPS: 10, // Updated: removed team-invite, product-tour, sample-contract
 
   // UI specific - routing paths
   ROUTES: {
@@ -207,9 +207,6 @@ export const ONBOARDING_CONSTANTS = {
     BUSINESS_PREFERENCES: '/onboarding/business-preferences',
     SEQUENCE_NUMBERS: '/onboarding/sequence-numbers',
     MASTER_DATA: '/onboarding/master-data',
-    TEAM_INVITE: '/onboarding/team-invite',
-    PRODUCT_TOUR: '/onboarding/product-tour',
-    SAMPLE_CONTRACT: '/onboarding/sample-contract',
     COMPLETE: '/onboarding/complete',
   }
 } as const;
@@ -383,41 +380,8 @@ export const OnboardingUtils = {
         component: 'MasterDataStep'
       },
       {
-        id: 'team-invite',
-        sequence: 10,
-        title: 'Invite Team',
-        description: 'Add team members to collaborate',
-        isRequired: false,
-        estimatedTime: '2 min',
-        icon: 'Users',
-        path: ONBOARDING_CONSTANTS.ROUTES.TEAM_INVITE,
-        component: 'TeamInviteStep'
-      },
-      {
-        id: 'product-tour',
-        sequence: 11,
-        title: 'Product Tour',
-        description: 'Learn the basics of ContractNest',
-        isRequired: false,
-        estimatedTime: '3 min',
-        icon: 'Map',
-        path: ONBOARDING_CONSTANTS.ROUTES.PRODUCT_TOUR,
-        component: 'ProductTourStep'
-      },
-      {
-        id: 'sample-contract',
-        sequence: 12,
-        title: 'Sample Contract',
-        description: 'Try creating your first contract',
-        isRequired: false,
-        estimatedTime: '3 min',
-        icon: 'FileText',
-        path: ONBOARDING_CONSTANTS.ROUTES.SAMPLE_CONTRACT,
-        component: 'SampleContractStep'
-      },
-      {
         id: 'complete',
-        sequence: 13,
+        sequence: 10,
         title: 'All Done!',
         description: 'Complete your onboarding',
         isRequired: false,
@@ -432,7 +396,7 @@ export const OnboardingUtils = {
   },
   
   /**
-   * Get all step definitions - Returns all 12 UI steps in order
+   * Get all step definitions - Returns all 10 UI steps in order
    */
   getAllSteps: (): OnboardingStep[] => {
     return [
@@ -445,9 +409,6 @@ export const OnboardingUtils = {
       'business-preferences',
       'sequence-numbers',
       'master-data',
-      'team-invite',
-      'product-tour',
-      'sample-contract',
       'complete'
     ].map(id => OnboardingUtils.getStepDefinition(id)).filter(Boolean) as OnboardingStep[];
   },
@@ -568,9 +529,6 @@ export const OnboardingUtils = {
       'business-preferences': 3,
       'sequence-numbers': 2,
       'master-data': 5,
-      'team-invite': 2,
-      'product-tour': 3,
-      'sample-contract': 3,
       'complete': 0
     };
     

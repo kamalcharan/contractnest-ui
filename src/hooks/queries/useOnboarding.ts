@@ -112,19 +112,16 @@ export const useOnboarding = (): UseOnboardingReturn => {
   const getBackendStepId = (uiStepId: string): OnboardingStepId | null => {
     const stepMapping: Record<string, OnboardingStepId> = {
       'welcome': 'user-profile',
-      'storage-setup': 'storage', 
+      'storage-setup': 'storage',
       'user-profile': 'user-profile',
       'theme-selection': 'user-profile',
       'business-basic': 'business-profile',
       'business-branding': 'business-profile',
       'business-preferences': 'business-profile',
       'master-data': 'data-setup',
-      'team-invite': 'team',
-      'product-tour': 'tour',
-      'sample-contract': 'tour',
       'complete': null
     };
-    
+
     return stepMapping[uiStepId] || null;
   };
 
