@@ -20,17 +20,59 @@ import { API_ENDPOINTS } from './serviceURLs';
 export type AIAgentChannel = 'chat' | 'whatsapp' | 'web';
 
 export interface AIAgentSearchResult {
+  // Core identifiers
   membership_id: string;
-  tenant_id: string;
+  tenant_id?: string;
+  rank?: number;
+
+  // Business info
   business_name: string;
-  business_category: string | null;
-  city: string | null;
-  chapter: string | null;
-  business_phone: string | null;
-  business_email: string | null;
-  website_url: string | null;
-  ai_enhanced_description: string | null;
+  logo_url?: string | null;
+  short_description?: string | null;
+  ai_enhanced_description?: string | null;  // For contact details
+
+  // Industry/Category (support both old and new field names)
+  industry?: string | null;
+  business_category?: string | null;
+
+  // Location
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  full_address?: string | null;
+  chapter?: string | null;
+
+  // Contact info (support both old and new field names)
+  phone?: string | null;
+  phone_country_code?: string;
+  business_phone?: string | null;
+
+  whatsapp?: string | null;
+  whatsapp_country_code?: string;
+  business_whatsapp?: string | null;
+
+  email?: string | null;
+  business_email?: string | null;
+
+  website?: string | null;
+  website_url?: string | null;
+
+  booking_url?: string | null;
+
+  // Card URLs (for contact details)
+  card_url?: string | null;
+  vcard_url?: string | null;
+
+  // Match scoring (0-100 scale from API)
   similarity?: number;
+  cluster_boost?: number;
+}
+
+// Segment/Industry list result
+export interface AIAgentSegmentResult {
+  segment_id: string;
+  segment_name: string;
+  member_count: number;
 }
 
 export interface AIAgentRequest {
@@ -44,9 +86,11 @@ export interface AIAgentSuccessResponse {
   success: true;
   message: string;              // AI-generated response (normalized from N8N's 'response' field)
   results?: AIAgentSearchResult[];
+  segments?: AIAgentSegmentResult[];  // For industry/segment list responses
   results_count?: number;
   session_id?: string;
   group_id?: string;            // Group context from N8N
+  group_name?: string;          // Group name
   channel?: string;             // Channel type
   intent_detected?: string;
   from_cache?: boolean;
