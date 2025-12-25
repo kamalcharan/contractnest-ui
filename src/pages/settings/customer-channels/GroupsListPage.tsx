@@ -613,7 +613,7 @@ const GroupsListPage: React.FC = () => {
 
                       {/* Chat - VaNi AI Chat (BBB Directory Search) */}
                       <button
-                        onClick={() => navigate('/vani/channels/bbb/chat')}
+                        onClick={() => navigate(`/vani/channels/bbb/chat?groupId=${group.id}`)}
                         title="Search BBB Directory"
                         className="p-2.5 rounded-lg transition-all hover:opacity-80"
                         style={{

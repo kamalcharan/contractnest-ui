@@ -3,7 +3,7 @@
 // Route: /vani/channels/chat
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import {
@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { chatService } from '../../../services/chatService';
-import { aiAgentService, type AIAgentSearchResult, type AIAgentSegmentResult, type AIAgentSuccessResponse } from '../../../services/aiAgentService';
+import { aiAgentService, type AIAgentSearchResult, type AIAgentSegmentResult, type AIAgentSuccessResponse, type AIAgentResponseType, type AIAgentDetailLevel, type AvailableIntent, type OptionsConfig, type ContactAction, type OptionItem } from '../../../services/aiAgentService';
 
 // Simple markdown renderer for N8N responses
 const renderMarkdown = (text: string): React.ReactNode => {
@@ -149,23 +149,24 @@ interface SearchResult {
 }
 
 interface SegmentResult {
-  segment_id: string;
   segment_name: string;
   member_count: number;
 }
 
-type ResponseType = 'message_only' | 'search_results' | 'contact_details' | 'segment_list' | 'member_list';
-
 interface ChatMessage {
   id: string;
-  type: 'bot' | 'user' | 'results' | 'segments' | 'contact';
+  type: 'bot' | 'user';
   content: string;
   timestamp: Date;
   results?: SearchResult[];
   segments?: SegmentResult[];
-  responseType?: ResponseType;
+  responseType?: AIAgentResponseType;  // Use N8N response_type directly
+  detailLevel?: AIAgentDetailLevel;    // Use N8N detail_level directly
   fromCache?: boolean;
-  cacheHitCount?: number;
+  // Dynamic UI elements from N8N
+  availableIntents?: AvailableIntent[];
+  options?: OptionsConfig;
+  contactActions?: ContactAction[];
 }
 
 // ============================================
@@ -201,34 +202,6 @@ const getMatchColor = (similarity: number | undefined): string => {
   return '#9ca3af';  // Gray
 };
 
-/**
- * Determine response type from API response
- */
-const getResponseType = (response: AIAgentSuccessResponse): ResponseType => {
-  // Check for segments first
-  if (response.segments && response.segments.length > 0) {
-    return 'segment_list';
-  }
-
-  if (!response.results || response.results.length === 0) {
-    return 'message_only';
-  }
-
-  const firstResult = response.results[0];
-
-  // Contact details have card_url and vcard_url
-  if (firstResult.card_url && firstResult.vcard_url) {
-    return 'contact_details';
-  }
-
-  // Search results have similarity score
-  if (firstResult.similarity !== undefined) {
-    return 'search_results';
-  }
-
-  // Default to member list
-  return 'member_list';
-};
 
 /**
  * Map API result to SearchResult with backward compatibility
@@ -296,15 +269,16 @@ const INTENTS = [
   }
 ];
 
-// BBB Group ID (hardcoded for now - will be dynamic later)
-const BBB_GROUP_ID = '550e8400-e29b-41d4-a716-446655440001'; // Replace with actual BBB group ID
-
 const VaNiChatPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitializedRef = useRef(false);
+
+  // Get groupId from URL query param (passed from GroupsListPage)
+  const urlGroupId = searchParams.get('groupId');
 
   // State
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -332,43 +306,104 @@ const VaNiChatPage: React.FC = () => {
 
     setIsInitializing(true);
     try {
-      // Get or create session (for tracking purposes)
-      const sessionResponse = await chatService.getSession();
+      // Step 1: Get or create session (this ensures we always have group_id)
+      console.log('🔄 Getting/creating session...');
+      const sessionResponse = await chatService.getSession('chat');
+
+      // ALWAYS set session if returned (needed for group_id in all API calls)
       if (sessionResponse.success && sessionResponse.session) {
         setSession(sessionResponse.session);
+        console.log('✅ Session obtained:', {
+          session_id: sessionResponse.session.id,
+          group_id: sessionResponse.session.group_id,
+          intent_state: sessionResponse.session.intent_state
+        });
       }
 
-      // Show welcome message with clear instructions
-      // N8N will handle the actual conversation once user sends "Hi BBB"
-      addBotMessage(
-        `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?\n\n- To start conversation: **'Hi BBB'**\n- To end conversation: **'Bye'**`
-      );
+      // Get group_id from session or URL
+      const groupId = sessionResponse.session?.group_id || urlGroupId;
 
-      // Pre-fill input with "Hi BBB" for easy start
-      setInputValue('Hi BBB');
-      setGroupActivated(true);
+      // Step 2: Call Group Discovery API with 'welcome' intent to get dynamic buttons
+      if (groupId) {
+        console.log('🔄 Calling welcome intent...');
+        const welcomeResponse = await aiAgentService.welcome(groupId, sessionResponse.session?.id);
+
+        if (aiAgentService.isSuccess(welcomeResponse)) {
+          // Show N8N's welcome message with available_intents
+          addBotMessage(welcomeResponse.message || 'Welcome to BBB Directory!', {
+            responseType: welcomeResponse.response_type || 'welcome',
+            availableIntents: welcomeResponse.available_intents,
+            options: welcomeResponse.options,
+            contactActions: welcomeResponse.contact_actions
+          });
+
+          // Update session if N8N returned one
+          if (welcomeResponse.session_id) {
+            setSession(prev => ({
+              id: welcomeResponse.session_id!,
+              group_id: welcomeResponse.group_id || prev?.group_id || null,
+              group_name: welcomeResponse.group_name || prev?.group_name || 'BBB',
+              intent_state: 'active',
+              current_intent: null,
+              expires_at: prev?.expires_at || ''
+            }));
+          }
+
+          setGroupActivated(true);
+        } else {
+          // Fallback if welcome API fails
+          addBotMessage(
+            `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?`,
+            { responseType: 'welcome' }
+          );
+          setGroupActivated(true);
+        }
+      } else {
+        // No group_id - show basic welcome
+        addBotMessage(
+          `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nPlease select a group to start.`,
+          { responseType: 'welcome' }
+        );
+      }
     } catch (error) {
       console.error('Error initializing chat:', error);
-      // Show welcome even on error
+      // Show VaNi intro on error
       addBotMessage(
-        `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?\n\n- To start conversation: **'Hi BBB'**\n- To end conversation: **'Bye'**`
+        `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?`,
+        { responseType: 'welcome' }
       );
-      setInputValue('Hi BBB');
       setGroupActivated(true);
     } finally {
       setIsInitializing(false);
     }
   };
 
-  const addBotMessage = (content: string, results?: SearchResult[], fromCache?: boolean, cacheHitCount?: number) => {
+  const addBotMessage = (
+    content: string,
+    options?: {
+      results?: SearchResult[];
+      segments?: SegmentResult[];
+      responseType?: AIAgentResponseType;
+      detailLevel?: AIAgentDetailLevel;
+      fromCache?: boolean;
+      availableIntents?: AvailableIntent[];
+      options?: OptionsConfig;
+      contactActions?: ContactAction[];
+    }
+  ) => {
     const message: ChatMessage = {
       id: `bot-${Date.now()}`,
-      type: results ? 'results' : 'bot',
+      type: 'bot',
       content,
       timestamp: new Date(),
-      results,
-      fromCache,
-      cacheHitCount
+      results: options?.results,
+      segments: options?.segments,
+      responseType: options?.responseType,
+      detailLevel: options?.detailLevel,
+      fromCache: options?.fromCache,
+      availableIntents: options?.availableIntents,
+      options: options?.options,
+      contactActions: options?.contactActions
     };
     setMessages(prev => [...prev, message]);
   };
@@ -390,7 +425,7 @@ const VaNiChatPage: React.FC = () => {
 
     if (intent.id === 'ABOUT_GROUP') {
       // Show group info directly
-      addBotMessage(`BBB Bagyanagar is part of the Bagyanagar Business Network.\n\n• 45+ verified entrepreneurs\n• AI-powered member search\n• Semantic clustering for better discovery\n• WhatsApp integration with "Hi BBB"\n\nUse the search buttons above to find members!`);
+      addBotMessage(`BBB Bagyanagar is part of the Bagyanagar Business Network.\n\n• 45+ verified entrepreneurs\n• AI-powered member search\n• Semantic clustering for better discovery\n• WhatsApp integration with "Hi BBB"\n\nUse the search buttons above to find members!`, { responseType: 'conversation' });
       setCurrentIntent(null);
       return;
     }
@@ -402,7 +437,7 @@ const VaNiChatPage: React.FC = () => {
         prompt: intent.prompt || undefined
       });
 
-      addBotMessage(intent.prompt || 'What are you looking for?');
+      addBotMessage(intent.prompt || 'What are you looking for?', { responseType: 'conversation' });
     } catch (error) {
       console.error('Error setting intent:', error);
       toast.error('Failed to set intent');
@@ -418,58 +453,73 @@ const VaNiChatPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Use AI Agent for conversational search
-      const response = await aiAgentService.chat(query, session?.group_id || undefined);
+      // Use Group Discovery API with intent detection
+      // Use session group_id, fallback to URL groupId param
+      const groupId = session?.group_id || urlGroupId || undefined;
+      const response = await aiAgentService.chat(query, groupId, session?.id);
 
       if (aiAgentService.isSuccess(response)) {
-        const responseType = getResponseType(response);
-        const fromCache = response.from_cache || false;
+        // Check if this is a "Hi BBB" activation or "Bye" goodbye
+        const isHiBBB = query.toLowerCase().includes('hi bbb');
+        const isBye = query.toLowerCase() === 'bye' || query.toLowerCase().includes('bye bbb');
 
-        // Handle segment/industry list response
-        if (responseType === 'segment_list' && response.segments) {
-          const message: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            type: 'segments',
-            content: response.message || 'Here are the available industries:',
-            timestamp: new Date(),
-            segments: response.segments,
-            responseType: 'segment_list',
-            fromCache
-          };
-          setMessages(prev => [...prev, message]);
+        // Update session info if returned from N8N
+        if (response.session_id) {
+          setSession(prev => ({
+            id: response.session_id!,
+            group_id: response.group_id || prev?.group_id || null,
+            group_name: response.group_name || prev?.group_name || 'BBB Bhagyanagar',
+            intent_state: isBye ? 'inactive' : 'active',
+            current_intent: null,
+            expires_at: prev?.expires_at || ''
+          }));
         }
-        // Handle contact details response
-        else if (responseType === 'contact_details' && response.results) {
-          const mappedResults = response.results.map(mapApiResult);
-          const message: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            type: 'contact',
-            content: response.message || 'Here are the contact details:',
-            timestamp: new Date(),
-            results: mappedResults,
-            responseType: 'contact_details',
-            fromCache
-          };
-          setMessages(prev => [...prev, message]);
+
+        // Step 4: Activate group if this was a "Hi BBB" trigger
+        if (isHiBBB && !groupActivated) {
+          setGroupActivated(true);
+          console.log('✅ Group activated via "Hi BBB"');
         }
-        // Handle search results or member list
-        else if ((responseType === 'search_results' || responseType === 'member_list') && response.results) {
-          const mappedResults = response.results.map(mapApiResult);
-          const resultCount = response.results_count || mappedResults.length;
-          const message: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            type: 'results',
-            content: response.message || `Found ${resultCount} member${resultCount !== 1 ? 's' : ''}:`,
-            timestamp: new Date(),
+
+        // Step 5: Handle "Bye" - thank user but keep input enabled for new session
+        if (isBye) {
+          console.log('👋 Session ended via "Bye" - input remains enabled for new session');
+          // Show N8N's goodbye message with available_intents for restart
+          addBotMessage(
+            response.message || 'Thank you for using VaNi! Goodbye and have a great day. Type **"Hi BBB"** to start a new conversation.',
+            {
+              responseType: response.response_type || 'goodbye',
+              availableIntents: response.available_intents,
+              options: response.options,
+              contactActions: response.contact_actions
+            }
+          );
+        } else {
+          // Use N8N's response_type directly
+          const responseType = response.response_type || 'conversation';
+          const detailLevel = response.detail_level || 'none';
+          const fromCache = response.from_cache || false;
+
+          // Map results if present
+          const mappedResults = response.results?.map(mapApiResult);
+
+          // For segments_list, use results directly if options not provided
+          let segments = response.segments;
+          if (responseType === 'segments_list' && !segments && response.results) {
+            segments = response.results as unknown as AIAgentSegmentResult[];
+          }
+
+          // Add bot message with appropriate data based on response_type
+          addBotMessage(response.message || 'How can I help you?', {
             results: mappedResults,
+            segments,
             responseType,
-            fromCache
-          };
-          setMessages(prev => [...prev, message]);
-        }
-        // Message only (no results)
-        else {
-          addBotMessage(response.message || 'How can I help you?');
+            detailLevel,
+            fromCache,
+            availableIntents: response.available_intents,
+            options: response.options,
+            contactActions: response.contact_actions
+          });
         }
       } else {
         // Error response
@@ -494,43 +544,42 @@ const VaNiChatPage: React.FC = () => {
 
   const handleNewSearch = () => {
     setCurrentIntent(null);
-    addBotMessage('What would you like to search for?');
+    addBotMessage('What would you like to search for?', { responseType: 'conversation' });
   };
 
   /**
    * Handle "Get Details" button click - sends membership_id to API
-   * FIX: Uses membership_id (UUID) instead of business_name
    */
   const handleGetDetails = async (result: SearchResult) => {
+    const groupId = session?.group_id || urlGroupId;
+    if (!groupId) {
+      toast.error('Group ID is required');
+      return;
+    }
+
     addUserMessage(`Get details for ${result.business_name}`);
     setIsLoading(true);
 
     try {
-      // Pass membership_id in the message for N8N to parse
-      const response = await aiAgentService.chat(
-        `get contact for membership_id:${result.membership_id}`,
-        session?.group_id || undefined
+      // Use getContact method with membership_id
+      const response = await aiAgentService.getContact(
+        groupId,
+        { membership_id: result.membership_id },
+        session?.id
       );
 
       if (aiAgentService.isSuccess(response)) {
-        const responseType = getResponseType(response);
+        const mappedResults = response.results?.map(mapApiResult);
 
-        if (response.results && response.results.length > 0) {
-          const mappedResults = response.results.map(mapApiResult);
-
-          const message: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            type: responseType === 'contact_details' ? 'contact' : 'results',
-            content: response.message || `Here are the details for ${result.business_name}:`,
-            timestamp: new Date(),
-            results: mappedResults,
-            responseType,
-            fromCache: response.from_cache
-          };
-          setMessages(prev => [...prev, message]);
-        } else {
-          addBotMessage(response.message || 'Contact details not found.');
-        }
+        addBotMessage(response.message || `Here are the details for ${result.business_name}:`, {
+          results: mappedResults,
+          responseType: response.response_type || 'contact_details',
+          detailLevel: response.detail_level || 'full',
+          fromCache: response.from_cache,
+          availableIntents: response.available_intents,
+          options: response.options,
+          contactActions: response.contact_actions
+        });
       } else {
         addBotMessage(response.message || 'Failed to get contact details. Please try again.');
       }
@@ -616,20 +665,29 @@ const VaNiChatPage: React.FC = () => {
    * Handle "View Members" click from segment list
    */
   const handleViewMembers = (segment: SegmentResult) => {
-    const query = `list members in ${segment.segment_name}`;
-    setInputValue('');
-    addUserMessage(query);
+    const groupId = session?.group_id || urlGroupId;
+    if (!groupId) {
+      toast.error('Group ID is required');
+      return;
+    }
+
+    addUserMessage(`Show members in ${segment.segment_name}`);
     setIsLoading(true);
 
-    aiAgentService.chat(query, session?.group_id || undefined)
+    // Use listMembers method with segment name
+    aiAgentService.listMembers(groupId, segment.segment_name, session?.id)
       .then(response => {
-        if (aiAgentService.isSuccess(response) && response.results) {
-          const mappedResults = response.results.map(mapApiResult);
-          addBotMessage(
-            response.message || `Members in ${segment.segment_name}:`,
-            mappedResults,
-            response.from_cache
-          );
+        if (aiAgentService.isSuccess(response)) {
+          const mappedResults = response.results?.map(mapApiResult);
+          addBotMessage(response.message || `Members in ${segment.segment_name}:`, {
+            results: mappedResults,
+            responseType: response.response_type || 'search_results',
+            detailLevel: response.detail_level || 'summary',
+            fromCache: response.from_cache,
+            availableIntents: response.available_intents,
+            options: response.options,
+            contactActions: response.contact_actions
+          });
         } else {
           addBotMessage(response.message || 'No members found in this segment.');
         }
@@ -1057,18 +1115,19 @@ const VaNiChatPage: React.FC = () => {
     );
   };
 
-  // Render segment/industry list card
+  // Render segment/industry list card (chip style)
   const renderSegmentListCard = (segment: SegmentResult, index: number) => {
     return (
-      <div
-        key={segment.segment_id || index}
-        className="flex items-center justify-between p-4 rounded-lg transition-all hover:shadow-md"
+      <button
+        key={segment.segment_name || index}
+        onClick={() => handleViewMembers(segment)}
+        className="flex items-center justify-between p-4 rounded-lg transition-all hover:shadow-md cursor-pointer"
         style={{
           backgroundColor: colors.utility.primaryBackground,
           border: `1px solid ${colors.utility.primaryText}15`
         }}
       >
-        <div>
+        <div className="text-left">
           <h4 className="font-semibold" style={{ color: colors.utility.primaryText }}>
             {segment.segment_name}
           </h4>
@@ -1076,24 +1135,250 @@ const VaNiChatPage: React.FC = () => {
             {segment.member_count} member{segment.member_count !== 1 ? 's' : ''}
           </p>
         </div>
-        <button
-          onClick={() => handleViewMembers(segment)}
-          className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+        <div
+          className="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium"
           style={{
             backgroundColor: `${colors.brand.primary}15`,
             color: colors.brand.primary,
-            border: `1px solid ${colors.brand.primary}30`
           }}
         >
           <Users className="w-4 h-4" />
-          <span>View Members</span>
-        </button>
+          <span>View</span>
+        </div>
+      </button>
+    );
+  };
+
+  // Handle dynamic intent button click
+  const handleDynamicIntent = async (intent: AvailableIntent) => {
+    const groupId = session?.group_id || urlGroupId;
+    if (!groupId) {
+      toast.error('Group ID is required');
+      return;
+    }
+
+    if (intent.requires_input) {
+      // Show input prompt
+      setInputValue('');
+      addBotMessage(intent.input_placeholder || 'What are you looking for?', { responseType: 'conversation' });
+      // Focus input field
+      return;
+    }
+
+    // Direct action - send intent
+    addUserMessage(intent.label);
+    setIsLoading(true);
+
+    try {
+      const response = await aiAgentService.sendRequest({
+        intent: intent.id as any,
+        group_id: groupId,
+        channel: 'chat',
+        session_id: session?.id
+      });
+
+      if (aiAgentService.isSuccess(response)) {
+        const mappedResults = response.results?.map(mapApiResult);
+        let segments = response.segments;
+        if (response.response_type === 'segments_list' && !segments && response.results) {
+          segments = response.results as unknown as AIAgentSegmentResult[];
+        }
+
+        addBotMessage(response.message || 'Here you go:', {
+          results: mappedResults,
+          segments,
+          responseType: response.response_type,
+          detailLevel: response.detail_level,
+          fromCache: response.from_cache,
+          availableIntents: response.available_intents,
+          options: response.options,
+          contactActions: response.contact_actions
+        });
+      } else {
+        addBotMessage(response.message || 'Something went wrong.');
+      }
+    } catch (error) {
+      console.error('Error with dynamic intent:', error);
+      addBotMessage('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle option item click (from options.items)
+  const handleOptionClick = async (options: OptionsConfig, item: OptionItem) => {
+    const groupId = session?.group_id || urlGroupId;
+    if (!groupId) {
+      toast.error('Group ID is required');
+      return;
+    }
+
+    addUserMessage(item.label);
+    setIsLoading(true);
+
+    try {
+      const response = await aiAgentService.sendRequest({
+        intent: options.intent as any,
+        group_id: groupId,
+        channel: 'chat',
+        session_id: session?.id,
+        segment: item.value,
+        membership_id: item.value
+      });
+
+      if (aiAgentService.isSuccess(response)) {
+        const mappedResults = response.results?.map(mapApiResult);
+        addBotMessage(response.message || `Here are the results for ${item.label}:`, {
+          results: mappedResults,
+          responseType: response.response_type,
+          detailLevel: response.detail_level,
+          fromCache: response.from_cache,
+          availableIntents: response.available_intents,
+          options: response.options,
+          contactActions: response.contact_actions
+        });
+      } else {
+        addBotMessage(response.message || 'No results found.');
+      }
+    } catch (error) {
+      console.error('Error with option click:', error);
+      addBotMessage('Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle contact action click
+  const handleContactAction = (action: ContactAction) => {
+    switch (action.type) {
+      case 'call':
+        window.location.href = `tel:${action.value}`;
+        break;
+      case 'whatsapp':
+        window.open(`https://wa.me/${action.value.replace(/[^0-9]/g, '')}`, '_blank');
+        break;
+      case 'email':
+        window.location.href = `mailto:${action.value}`;
+        break;
+      case 'website':
+        window.open(action.value.startsWith('http') ? action.value : `https://${action.value}`, '_blank');
+        break;
+      case 'vcard':
+        window.location.href = action.value;
+        break;
+      case 'booking':
+        window.open(action.value, '_blank');
+        break;
+    }
+  };
+
+  // Render dynamic available_intents buttons
+  const renderAvailableIntents = (intents: AvailableIntent[]) => {
+    if (!intents || intents.length === 0) return null;
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {intents.map((intent, idx) => (
+          <button
+            key={intent.id || idx}
+            onClick={() => handleDynamicIntent(intent)}
+            disabled={isLoading}
+            className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md disabled:opacity-50"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              border: `1px solid ${colors.brand.primary}30`,
+              color: colors.utility.primaryText
+            }}
+          >
+            <span>{intent.label}</span>
+          </button>
+        ))}
       </div>
     );
   };
 
-  // Render Intent Buttons panel
+  // Render dynamic options (industry/member pills)
+  const renderOptions = (options: OptionsConfig) => {
+    if (!options || !options.items || options.items.length === 0) return null;
+
+    return (
+      <div className="mt-3">
+        {options.prompt && (
+          <p className="text-sm mb-2" style={{ color: colors.utility.secondaryText }}>
+            {options.prompt}
+          </p>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {options.items.map((item, idx) => (
+            <button
+              key={item.value || idx}
+              onClick={() => handleOptionClick(options, item)}
+              disabled={isLoading}
+              className="flex items-center justify-between p-3 rounded-lg transition-all hover:shadow-md cursor-pointer disabled:opacity-50"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                border: `1px solid ${colors.utility.primaryText}15`
+              }}
+            >
+              <div className="text-left">
+                <h4 className="font-medium" style={{ color: colors.utility.primaryText }}>
+                  {item.label}
+                </h4>
+                {item.subtitle && (
+                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    {item.subtitle}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4" style={{ color: colors.utility.secondaryText }} />
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // Render dynamic contact actions
+  const renderContactActions = (actions: ContactAction[]) => {
+    if (!actions || actions.length === 0) return null;
+
+    const getActionIcon = (type: string) => {
+      switch (type) {
+        case 'call': return <Phone className="w-4 h-4" />;
+        case 'whatsapp': return <MessageCircle className="w-4 h-4" />;
+        case 'email': return <Mail className="w-4 h-4" />;
+        case 'website': return <Globe className="w-4 h-4" />;
+        case 'vcard': return <Download className="w-4 h-4" />;
+        case 'booking': return <Calendar className="w-4 h-4" />;
+        default: return <ExternalLink className="w-4 h-4" />;
+      }
+    };
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {actions.map((action, idx) => (
+          <button
+            key={`${action.type}-${idx}`}
+            onClick={() => handleContactAction(action)}
+            className="flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
+            style={{
+              backgroundColor: `${colors.brand.primary}15`,
+              color: colors.brand.primary,
+              border: `1px solid ${colors.brand.primary}30`
+            }}
+          >
+            {getActionIcon(action.type)}
+            <span>{action.label}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  // Render Intent Buttons panel (fallback when no dynamic intents)
   const renderIntentButtons = () => {
+    const groupId = session?.group_id || urlGroupId;
+
     return (
       <div className="flex justify-start mb-4">
         <div className="flex items-start space-x-3">
@@ -1106,7 +1391,7 @@ const VaNiChatPage: React.FC = () => {
               <button
                 onClick={() => {
                   setInputValue('');
-                  addBotMessage('What are you looking for?');
+                  addBotMessage('What are you looking for?', { responseType: 'conversation' });
                 }}
                 className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-md"
                 style={{
@@ -1120,24 +1405,27 @@ const VaNiChatPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  addUserMessage('list industries');
+                  if (!groupId) {
+                    toast.error('Group ID is required');
+                    return;
+                  }
+                  addUserMessage('Browse Industries');
                   setIsLoading(true);
-                  aiAgentService.chat('list industries', session?.group_id || undefined)
+                  // Use listSegments method
+                  aiAgentService.listSegments(groupId, session?.id)
                     .then(response => {
                       if (aiAgentService.isSuccess(response)) {
-                        if (response.segments && response.segments.length > 0) {
-                          const message: ChatMessage = {
-                            id: `bot-${Date.now()}`,
-                            type: 'segments',
-                            content: response.message || 'Here are the available industries:',
-                            timestamp: new Date(),
-                            segments: response.segments,
-                            responseType: 'segment_list'
-                          };
-                          setMessages(prev => [...prev, message]);
-                        } else {
-                          addBotMessage(response.message || 'No industries found.');
-                        }
+                        // Segments come directly from response.results for segments_list type
+                        const segments = response.response_type === 'segments_list'
+                          ? response.results as unknown as SegmentResult[]
+                          : response.segments;
+                        addBotMessage(response.message || 'Here are the available industries:', {
+                          segments: segments,
+                          responseType: response.response_type || 'segments_list',
+                          detailLevel: response.detail_level || 'list'
+                        });
+                      } else {
+                        addBotMessage(response.message || 'No industries found.');
                       }
                     })
                     .finally(() => setIsLoading(false));
@@ -1154,17 +1442,23 @@ const VaNiChatPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  addUserMessage('list all members');
+                  if (!groupId) {
+                    toast.error('Group ID is required');
+                    return;
+                  }
+                  addUserMessage('View All Members');
                   setIsLoading(true);
-                  aiAgentService.chat('list all members', session?.group_id || undefined)
+                  // Use search method with 'all' query
+                  aiAgentService.search(groupId, 'all', session?.id)
                     .then(response => {
-                      if (aiAgentService.isSuccess(response) && response.results) {
-                        const mappedResults = response.results.map(mapApiResult);
-                        addBotMessage(
-                          response.message || 'Here are all members:',
-                          mappedResults,
-                          response.from_cache
-                        );
+                      if (aiAgentService.isSuccess(response)) {
+                        const mappedResults = response.results?.map(mapApiResult);
+                        addBotMessage(response.message || 'Here are all members:', {
+                          results: mappedResults,
+                          responseType: response.response_type || 'search_results',
+                          detailLevel: response.detail_level || 'summary',
+                          fromCache: response.from_cache
+                        });
                       } else {
                         addBotMessage(response.message || 'No members found.');
                       }
@@ -1206,6 +1500,11 @@ const VaNiChatPage: React.FC = () => {
       );
     }
 
+    // Bot message - render based on response_type from N8N
+    const responseType = message.responseType;
+    const hasResults = message.results && message.results.length > 0;
+    const hasSegments = message.segments && message.segments.length > 0;
+
     return (
       <div key={message.id} className="flex justify-start mb-4">
         <div className="flex items-start space-x-3 max-w-2xl">
@@ -1216,35 +1515,25 @@ const VaNiChatPage: React.FC = () => {
             <Bot className="w-4 h-4" style={{ color: colors.brand.primary }} />
           </div>
           <div className="flex-1">
-            <div
-              className="px-4 py-2 rounded-lg rounded-bl-none"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                color: colors.utility.primaryText,
-                border: `1px solid ${colors.utility.primaryText}15`
-              }}
-            >
-              {renderMarkdown(message.content)}
-            </div>
-
-            {/* Contact Details Card */}
-            {message.type === 'contact' && message.results && message.results.length > 0 && (
-              <div className="mt-3">
-                {renderContactDetailCard(message.results[0])}
+            {/* Message bubble - always show for welcome/goodbye/conversation, or when there's content */}
+            {(responseType === 'welcome' || responseType === 'goodbye' || responseType === 'conversation' || message.content) && (
+              <div
+                className="px-4 py-2 rounded-lg rounded-bl-none"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                  border: `1px solid ${colors.utility.primaryText}15`
+                }}
+              >
+                {renderMarkdown(message.content)}
               </div>
             )}
 
-            {/* Segment/Industry List */}
-            {message.type === 'segments' && message.segments && message.segments.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {message.segments.map((segment, idx) => renderSegmentListCard(segment, idx))}
-              </div>
-            )}
-
-            {/* Search results (regular cards) */}
-            {message.type === 'results' && message.results && message.results.length > 0 && (
+            {/* Search Results - Multiple mini cards */}
+            {/* Show cards whenever results exist */}
+            {hasResults && (
               <div className="mt-3 space-y-3">
-                {message.results.map((result, idx) => renderResultCard(result, idx))}
+                {message.results!.map((result, idx) => renderResultCard(result, idx))}
 
                 {/* Cache info */}
                 {message.fromCache && (
@@ -1273,12 +1562,28 @@ const VaNiChatPage: React.FC = () => {
               </div>
             )}
 
-            {/* Fallback for 'bot' type with results (backward compat) */}
-            {message.type === 'bot' && message.results && message.results.length > 0 && (
-              <div className="mt-3 space-y-3">
-                {message.results.map((result, idx) => renderResultCard(result, idx))}
+            {/* Contact Details - Full card for single result */}
+            {responseType === 'contact_details' && hasResults && (
+              <div className="mt-3">
+                {renderContactDetailCard(message.results![0])}
               </div>
             )}
+
+            {/* Segments List - Chips/cards for industries */}
+            {responseType === 'segments_list' && hasSegments && (
+              <div className="mt-3 space-y-2">
+                {message.segments!.map((segment, idx) => renderSegmentListCard(segment, idx))}
+              </div>
+            )}
+
+            {/* Dynamic Options from N8N (alternative to segments) */}
+            {message.options && renderOptions(message.options)}
+
+            {/* Dynamic Contact Actions from N8N */}
+            {message.contactActions && renderContactActions(message.contactActions)}
+
+            {/* Dynamic Available Intents from N8N */}
+            {message.availableIntents && renderAvailableIntents(message.availableIntents)}
           </div>
         </div>
       </div>
