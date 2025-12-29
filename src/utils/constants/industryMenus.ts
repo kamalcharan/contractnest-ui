@@ -227,6 +227,18 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   {
+  id: 'catalog-studio',
+  label: 'Catalog Studio',
+  icon: 'Layers',
+  path: '/catalog-studio',
+  hasSubmenu: true,
+  submenuItems: [
+    { id: 'catalog-studio-configure', label: 'Configure', icon: 'Settings', path: '/catalog-studio/configure' },
+    { id: 'catalog-studio-template', label: 'Template', icon: 'FileTemplate', path: '/catalog-studio/template' }
+  ]
+},
+
+  {
     id: 'catalog',
     label: 'Service Catalog',
     icon: 'Package',
