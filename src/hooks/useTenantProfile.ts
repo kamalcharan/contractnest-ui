@@ -16,23 +16,30 @@ export interface TenantProfile {
   business_type_id: string;
   industry_id: string;
   business_name: string;
-  short_description?: string | null;  // NEW: For search result cards (200 chars)
-  booking_url?: string | null;        // NEW: For Book Appointment intent (Calendly/Cal.com)
+  short_description?: string | null;  // For search result cards (200 chars)
+  booking_url?: string | null;        // For Book Appointment intent (Calendly/Cal.com)
   logo_url?: string | null;
+  // Contact Person
+  contact_first_name?: string | null;
+  contact_last_name?: string | null;
+  // Address
   address_line1?: string | null;
   address_line2?: string | null;
   city?: string | null;
   state_code?: string | null;
   country_code?: string | null;
   postal_code?: string | null;
+  // Contact Info
   business_phone_country_code?: string | null;
   business_phone?: string | null;
-  business_whatsapp_country_code?: string | null;  // WhatsApp country code
-  business_whatsapp?: string | null;               // WhatsApp number
+  business_whatsapp_country_code?: string | null;
+  business_whatsapp?: string | null;
   business_email?: string | null;
   website_url?: string | null;
+  // Branding
   primary_color?: string | null;
   secondary_color?: string | null;
+  // Timestamps
   created_at?: string;
   updated_at?: string;
 }

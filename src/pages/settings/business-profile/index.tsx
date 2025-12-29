@@ -6,7 +6,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
 import { businessTypes } from '@/utils/constants/businessTypes';
-import { industries } from '@/utils/constants/industries';
+import { useIndustries } from '@/hooks/queries/useProductMasterdata';
 import { countries } from '@/utils/constants/countries';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +27,11 @@ const BusinessProfilePage = () => {
     loading,
     profile
   } = useTenantProfile();
-  
+
+  // Fetch industries from API
+  const { data: industriesResponse, isLoading: industriesLoading } = useIndustries();
+  const industries = industriesResponse?.data || [];
+
   // Handle edit button click
   const handleEditClick = () => {
     navigate('/settings/business-profile/edit');

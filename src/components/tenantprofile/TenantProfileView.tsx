@@ -3,19 +3,19 @@ import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext'; // Fixed import path
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button'; // Fixed casing - use uppercase Button
-import { 
-  Building, 
-  Phone, 
-  Mail, 
-  Globe, 
-  MapPin, 
+import {
+  Building,
+  Phone,
+  Mail,
+  Globe,
+  MapPin,
   Palette,
   Pencil,
-  ChevronLeft 
+  ChevronLeft
 } from 'lucide-react';
 import { TenantProfile } from '@/hooks/useTenantProfile';
 import { businessTypes } from '@/utils/constants/businessTypes';
-import { industries } from '@/utils/constants/industries';
+import { useIndustries } from '@/hooks/queries/useProductMasterdata';
 import { countries } from '@/utils/constants/countries';
 import { Link } from 'react-router-dom';
 
@@ -32,7 +32,11 @@ const TenantProfileView: React.FC<TenantProfileViewProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
+  // Fetch industries from API
+  const { data: industriesResponse, isLoading: industriesLoading } = useIndustries();
+  const industries = industriesResponse?.data || [];
+
   if (isLoading) {
     return (
       <div className="animate-pulse space-y-6">

@@ -38,6 +38,8 @@ interface BrandColorPickerProps {
   showLabel?: boolean;
   /** Custom label text */
   labelText?: string;
+  /** Compact mode - inline layout without presets/preview */
+  compact?: boolean;
 }
 
 /**
@@ -319,27 +321,97 @@ const BrandColorPicker: React.FC<BrandColorPickerProps> = ({
   disabled = false,
   className = '',
   showLabel = true,
-  labelText = 'Brand Colors'
+  labelText = 'Brand Colors',
+  compact = false
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
+  // Compact mode - simple inline color pickers
+  if (compact) {
+    return (
+      <div className={`space-y-2 ${className}`}>
+        <label
+          className="block text-sm font-medium transition-colors"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Brand Colors
+        </label>
+        <div className="flex items-center space-x-4">
+          {/* Primary Color */}
+          <div className="flex items-center space-x-2">
+            <div
+              className="w-8 h-8 rounded-full border-2 cursor-pointer transition-all hover:scale-105"
+              style={{
+                backgroundColor: primaryColor,
+                borderColor: colors.utility.secondaryText + '40',
+              }}
+              onClick={() => document.getElementById('compact-primary-color')?.click()}
+              title="Primary Color"
+            />
+            <input
+              id="compact-primary-color"
+              type="color"
+              value={primaryColor}
+              onChange={(e) => onPrimaryColorChange(e.target.value)}
+              className="sr-only"
+              disabled={disabled}
+            />
+            <span
+              className="text-xs font-mono"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Primary
+            </span>
+          </div>
+
+          {/* Secondary Color */}
+          <div className="flex items-center space-x-2">
+            <div
+              className="w-8 h-8 rounded-full border-2 cursor-pointer transition-all hover:scale-105"
+              style={{
+                backgroundColor: secondaryColor,
+                borderColor: colors.utility.secondaryText + '40',
+              }}
+              onClick={() => document.getElementById('compact-secondary-color')?.click()}
+              title="Secondary Color"
+            />
+            <input
+              id="compact-secondary-color"
+              type="color"
+              value={secondaryColor}
+              onChange={(e) => onSecondaryColorChange(e.target.value)}
+              className="sr-only"
+              disabled={disabled}
+            />
+            <span
+              className="text-xs font-mono"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Secondary
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Section Label */}
       {showLabel && (
         <div>
-          <div 
+          <div
             className="text-base font-medium flex items-center transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
-            <Palette 
+            <Palette
               className="mr-2 h-5 w-5"
               style={{ color: colors.brand.primary }}
             />
             {labelText}
           </div>
-          <p 
+          <p
             className="text-sm mt-1 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -347,7 +419,7 @@ const BrandColorPicker: React.FC<BrandColorPickerProps> = ({
           </p>
         </div>
       )}
-      
+
       {/* Color Pickers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Primary Color */}
@@ -358,7 +430,7 @@ const BrandColorPicker: React.FC<BrandColorPickerProps> = ({
           disabled={disabled}
           placeholder="#4F46E5"
         />
-        
+
         {/* Secondary Color */}
         <ColorPicker
           label="Secondary Color"
@@ -368,16 +440,16 @@ const BrandColorPicker: React.FC<BrandColorPickerProps> = ({
           placeholder="#10B981"
         />
       </div>
-      
+
       {/* Preview Section */}
-      <div 
+      <div
         className="p-4 rounded-lg border transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderColor: colors.utility.secondaryText + '20'
         }}
       >
-        <p 
+        <p
           className="text-xs font-medium mb-3 transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
@@ -385,20 +457,20 @@ const BrandColorPicker: React.FC<BrandColorPickerProps> = ({
         </p>
         <div className="flex items-center space-x-4">
           <div className="flex-1 space-y-2">
-            <div 
+            <div
               className="h-10 rounded-md flex items-center justify-center text-white font-medium text-sm transition-all"
               style={{ backgroundColor: primaryColor }}
             >
               Primary
             </div>
-            <div 
+            <div
               className="h-10 rounded-md flex items-center justify-center text-white font-medium text-sm transition-all"
               style={{ backgroundColor: secondaryColor }}
             >
               Secondary
             </div>
           </div>
-          <div 
+          <div
             className="flex-1 h-20 rounded-md transition-all"
             style={{
               background: `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`

@@ -486,19 +486,20 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
             )}
           </div>
           <div className="flex space-x-2">
-            <div className="w-24">
+            {/* WhatsApp Country Code - Same format as Phone */}
+            <div className="w-32">
               <select
                 id="contact_whatsapp_country_code"
                 value={whatsappCountryCode}
                 onChange={(e) => onWhatsAppCountryCodeChange(e.target.value)}
-                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors text-sm"
+                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
                 style={getInputStyles(false)}
                 disabled={disabled}
                 aria-label="WhatsApp country code"
               >
                 {sortedCountries.map(country => (
                   <option key={country.code} value={`+${country.phoneCode}`}>
-                    +{country.phoneCode}
+                    {country.code} +{country.phoneCode}
                   </option>
                 ))}
               </select>

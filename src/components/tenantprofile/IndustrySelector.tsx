@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { industries } from '@/utils/constants/industries';
+import { useIndustries } from '@/hooks/queries/useProductMasterdata';
 import { cn } from '@/lib/utils';
-import { Search } from 'lucide-react';
+import { Search, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface IndustrySelectorProps {
   value: string;
@@ -20,21 +20,79 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [searchTerm, setSearchTerm] = useState('');
-  
+
+  // Fetch industries from API
+  const { data: industriesResponse, isLoading, error, refetch } = useIndustries();
+  const industries = industriesResponse?.data || [];
+
   // Get icon component from name
   const getIconComponent = (iconName: string, isSelected: boolean) => {
     const IconComponent = (LucideIcons as any)[iconName] || LucideIcons.Circle;
     const iconColor = isSelected ? colors.brand.primary : colors.utility.secondaryText;
-    
+
     return <IconComponent size={24} style={{ color: iconColor }} />;
   };
-  
+
   // Filter industries based on search term
-  const filteredIndustries = industries.filter(industry => 
-    industry.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredIndustries = industries.filter(industry =>
+    industry.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (industry.description && industry.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
-  
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div
+          className="h-10 rounded-md animate-pulse"
+          style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="h-24 rounded-lg animate-pulse"
+              style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div
+        className="text-center p-6 border border-dashed rounded-lg"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: '#EF4444' + '40'
+        }}
+      >
+        <AlertCircle
+          className="mx-auto mb-3"
+          size={32}
+          style={{ color: '#EF4444' }}
+        />
+        <p
+          className="mb-4"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Failed to load industries. Please try again.
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center px-4 py-2 rounded-md text-white transition-colors hover:opacity-90"
+          style={{ backgroundColor: colors.brand.primary }}
+        >
+          <RefreshCw size={16} className="mr-2" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Search input */}
