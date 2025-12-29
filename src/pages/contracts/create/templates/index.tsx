@@ -26,14 +26,10 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Import our components and hooks
 import TemplateCard from '../../../../components/contracts/TemplateCard';
-import { useTemplates, useTemplateSelection } from '../../../../hooks/contracts/useTemplates';
+import { useTemplates, useTemplateSelection } from '../../../../hooks/queries/useTemplates';
+
 import { Template, TemplateCardContext } from '../../../../types/contracts/template';
-import { 
-  INDUSTRIES,
-  TEMPLATE_COMPLEXITY_LABELS,
-  CONTRACT_TYPE_LABELS,
-  ITEMS_PER_PAGE_OPTIONS 
-} from '../../../../utils/fakejson/contracts/templates';
+
 
 type ViewType = 'grid' | 'list';
 type SortOption = 'popular' | 'rating' | 'usage' | 'name' | 'recent';
