@@ -82,6 +82,24 @@ export const defaultMenuItems: MenuItem[] = [
         path: '/contracts/create'
       },
       {
+        id: 'contracts-preview',
+        label: 'Contract Preview',
+        icon: 'Eye',
+        path: '/contracts/preview'
+      },
+      {
+        id: 'contracts-pdf',
+        label: 'PDF View',
+        icon: 'FileSearch',
+        path: '/contracts/pdf'
+      },
+      {
+        id: 'contracts-invite',
+        label: 'Invite Sellers',
+        icon: 'UserPlus',
+        path: '/contracts/invite'
+      },
+      {
         id: 'contracts-drafts',
         label: 'Drafts',
         icon: 'FileEdit',
@@ -261,6 +279,34 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Cross-Module Analytics',
         icon: 'BarChart3',
         path: '/vani/analytics'
+      }
+    ]
+  },
+  // ✅ NEW: Operations menu for Ops Cockpit
+  {
+    id: 'operations',
+    label: 'Operations',
+    icon: 'Activity',
+    path: '/ops/cockpit',
+    hasSubmenu: true,
+    submenuItems: [
+      {
+        id: 'ops-cockpit',
+        label: 'Ops Cockpit',
+        icon: 'Gauge',
+        path: '/ops/cockpit'
+      },
+      {
+        id: 'ops-activity',
+        label: 'Activity Feed',
+        icon: 'Activity',
+        path: '/ops/activity'
+      },
+      {
+        id: 'ops-reports',
+        label: 'Reports',
+        icon: 'BarChart2',
+        path: '/ops/reports'
       }
     ]
   },

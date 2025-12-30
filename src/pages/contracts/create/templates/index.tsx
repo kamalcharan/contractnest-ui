@@ -165,7 +165,17 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
   );
 };
 
-const TemplateGalleryPage: React.FC = () => {
+interface TemplateGalleryPageProps {
+  onTemplateSelect?: (template: Template) => void;
+  onNext?: () => void;
+  onBack?: () => void;
+}
+
+const TemplateGalleryPage: React.FC<TemplateGalleryPageProps> = ({
+  onTemplateSelect: parentOnTemplateSelect,
+  onNext,
+  onBack
+}) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isDarkMode } = useTheme();
@@ -286,8 +296,14 @@ const TemplateGalleryPage: React.FC = () => {
       title: "Template Selected",
       description: `${template.name} is ready for contract creation.`
     });
-    
-    // Navigate to next step in contract creation
+    // Call parent handler if provided (for contract builder flow)
+    if (parentOnTemplateSelect) {
+      parentOnTemplateSelect(template);
+      // Parent will handle navigation/step progression
+      return;
+    }
+
+    // Navigate to next step in contract creation (standalone mode)
     navigate(`/contracts/create/contract-type?template=${template.id}`);
   };
 

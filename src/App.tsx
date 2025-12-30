@@ -131,6 +131,12 @@ import ContractsPage from './pages/service-contracts/contracts';
 // ✅ NEW: Contract Builder
 import ContractCreatePage from './pages/contracts/create';
 
+// ✅ NEW: Contract Preview, PDF View, Ops Cockpit, Invite Sellers
+import ContractPreviewPage from './pages/contracts/preview';
+import PDFViewPage from './pages/contracts/pdf-view';
+import OpsCockpitPage from './pages/ops/cockpit';
+import InviteSellersPage from './pages/contracts/invite';
+
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
 import UserViewPage from './pages/settings/users/userview';
@@ -423,6 +429,56 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* ✅ NEW: Contract Preview Route */}
+          <Route
+            path="/contracts/preview"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ContractPreviewPage />} />
+            <Route path=":id" element={<ContractPreviewPage />} />
+          </Route>
+
+          {/* ✅ NEW: PDF View Route */}
+          <Route
+            path="/contracts/pdf"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<PDFViewPage />} />
+            <Route path=":id" element={<PDFViewPage />} />
+          </Route>
+
+          {/* ✅ NEW: Ops Cockpit Route */}
+          <Route
+            path="/ops/cockpit"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* ✅ NEW: Invite Sellers Route */}
+          <Route
+            path="/contracts/invite"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<InviteSellersPage />} />
+          </Route>
 
           {/* Catalog Studio Routes */}
           <Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

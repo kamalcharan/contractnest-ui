@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
 
   // Mock quick actions
   const quickActions = [
-    { title: 'Create Contract', icon: FileText, href: '/contracts/new' },
+    { title: 'Create Contract', icon: FileText, href: '/contracts/create' },
     { title: 'Schedule Appointment', icon: Calendar, href: '/appointments/new' },
     { title: 'Add Contact', icon: Users, href: '/contacts/new' },
     { title: 'View Tasks', icon: CheckCircle, href: '/tasks' },
