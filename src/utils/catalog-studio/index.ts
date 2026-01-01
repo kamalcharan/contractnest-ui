@@ -1,4 +1,9 @@
 // src/utils/catalog-studio/index.ts
-export * from './categories';
-export * from './blocks';
-export * from './wizard-data';
+// Catalog Studio utilities - adapters and helpers
+
+export * from './catBlockAdapter';
+export * from './catTemplateAdapter';
+
+// Re-export the default objects
+export { default as catBlockAdapter } from './catBlockAdapter';
+export { default as catTemplateAdapter } from './catTemplateAdapter';
