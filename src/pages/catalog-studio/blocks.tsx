@@ -1,11 +1,20 @@
-// src/pages/catalog-studio/blocks.tsx - Block Library Page
+// src/pages/catalog-studio/blocks.tsx - Block Library Page (API Integrated)
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Search, Filter, Grid3X3, List, Plus, Download, ChevronDown, X, Tag, Clock, DollarSign, Check, AlertCircle, MoreVertical, Edit2, Copy, Trash2, Eye, SlidersHorizontal } from 'lucide-react';
+import { Search, Filter, Grid3X3, List, Plus, Download, ChevronDown, X, Tag, Clock, DollarSign, Check, AlertCircle, MoreVertical, Edit2, Copy, Trash2, Eye, SlidersHorizontal, Loader2, RefreshCw } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Block, WizardMode } from '../../types/catalogStudio';
-import { BLOCK_CATEGORIES, getAllBlocks, getCategoryById } from '../../utils/catalog-studio';
+import { BLOCK_CATEGORIES, getCategoryById } from '../../utils/catalog-studio';
 import { BlockWizard, BlockEditorPanel } from '../../components/catalog-studio';
+
+// API Hooks
+import { useCatBlocks } from '../../hooks/queries/useCatBlocks';
+import {
+  useCreateCatBlock,
+  useUpdateCatBlock,
+  useDeleteCatBlock,
+} from '../../hooks/mutations/useCatBlocksMutations';
+import { catBlocksToBlocks, blockToCreateData, blockToUpdateData } from '../../utils/catalog-studio/catBlockAdapter';
 
 // Toast notification types
 interface Toast {
@@ -90,7 +99,24 @@ const CatalogStudioBlocksPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const allBlocks = getAllBlocks();
+  // ===== API HOOKS =====
+  const {
+    data: blocksResponse,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useCatBlocks();
+
+  const createBlockMutation = useCreateCatBlock();
+  const updateBlockMutation = useUpdateCatBlock();
+  const deleteBlockMutation = useDeleteCatBlock();
+
+  // Convert API blocks to UI format
+  const allBlocks = useMemo(() => {
+    if (!blocksResponse?.data?.blocks) return [];
+    return catBlocksToBlocks(blocksResponse.data.blocks);
+  }, [blocksResponse]);
 
   // View and filter state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -164,7 +190,11 @@ const CatalogStudioBlocksPage: React.FC = () => {
         blocks.sort((a, b) => (b.price || 0) - (a.price || 0));
         break;
       case 'recent':
-        blocks.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+        blocks.sort((a, b) => {
+          const aDate = a.meta?.updated_at ? new Date(String(a.meta.updated_at)).getTime() : 0;
+          const bDate = b.meta?.updated_at ? new Date(String(b.meta.updated_at)).getTime() : 0;
+          return bDate - aDate;
+        });
         break;
     }
 
@@ -203,10 +233,25 @@ const CatalogStudioBlocksPage: React.FC = () => {
     setEditingBlock(null);
   };
 
-  const handleSaveBlock = (blockData: Partial<Block>) => {
-    console.log('Saving block:', blockData);
-    showToast('success', wizardMode === 'create' ? 'Block created' : 'Block updated', blockData.name);
-    closeWizard();
+  // ===== API MUTATION HANDLERS =====
+  const handleSaveBlock = async (blockData: Partial<Block>) => {
+    try {
+      if (wizardMode === 'create') {
+        await createBlockMutation.mutateAsync(blockToCreateData(blockData as Block));
+        showToast('success', 'Block created', blockData.name);
+      } else if (editingBlock) {
+        await updateBlockMutation.mutateAsync({
+          id: editingBlock.id,
+          data: blockToUpdateData(blockData),
+        });
+        showToast('success', 'Block updated', blockData.name);
+      }
+      closeWizard();
+      refetch();
+    } catch (error: any) {
+      console.error('Failed to save block:', error);
+      showToast('error', 'Failed to save block', error.message);
+    }
   };
 
   // Block actions
@@ -223,16 +268,32 @@ const CatalogStudioBlocksPage: React.FC = () => {
     setPreviewBlock(block);
   };
 
-  const handleBlockDuplicate = (block: Block) => {
-    console.log('Duplicating block:', block);
-    showToast('success', 'Block duplicated', block.name);
+  const handleBlockDuplicate = async (block: Block) => {
+    try {
+      const duplicateData = {
+        ...blockToCreateData(block),
+        name: `${block.name} (Copy)`,
+      };
+      await createBlockMutation.mutateAsync(duplicateData);
+      showToast('success', 'Block duplicated', `${block.name} (Copy)`);
+      refetch();
+    } catch (error: any) {
+      console.error('Failed to duplicate block:', error);
+      showToast('error', 'Failed to duplicate block', error.message);
+    }
   };
 
-  const handleBlockDelete = (blockId: string) => {
-    console.log('Deleting block:', blockId);
-    showToast('success', 'Block deleted');
-    setIsEditorPanelOpen(false);
-    setSelectedBlock(null);
+  const handleBlockDelete = async (blockId: string) => {
+    try {
+      await deleteBlockMutation.mutateAsync(blockId);
+      showToast('success', 'Block deleted');
+      setIsEditorPanelOpen(false);
+      setSelectedBlock(null);
+      refetch();
+    } catch (error: any) {
+      console.error('Failed to delete block:', error);
+      showToast('error', 'Failed to delete block', error.message);
+    }
   };
 
   const handleEditorPanelClose = () => {
@@ -240,11 +301,20 @@ const CatalogStudioBlocksPage: React.FC = () => {
     setSelectedBlock(null);
   };
 
-  const handleEditorPanelSave = (block: Block) => {
-    console.log('Saving block from editor:', block);
-    showToast('success', 'Block updated', block.name);
-    setIsEditorPanelOpen(false);
-    setSelectedBlock(null);
+  const handleEditorPanelSave = async (block: Block) => {
+    try {
+      await updateBlockMutation.mutateAsync({
+        id: block.id,
+        data: blockToUpdateData(block),
+      });
+      showToast('success', 'Block updated', block.name);
+      setIsEditorPanelOpen(false);
+      setSelectedBlock(null);
+      refetch();
+    } catch (error: any) {
+      console.error('Failed to save block:', error);
+      showToast('error', 'Failed to save block', error.message);
+    }
   };
 
   // Get category stats
@@ -257,6 +327,51 @@ const CatalogStudioBlocksPage: React.FC = () => {
   }, [allBlocks]);
 
   const hasActiveFilters = searchQuery || selectedCategories.size > 0 || priceRange.min !== null || priceRange.max !== null;
+
+  const isMutating = createBlockMutation.isPending || updateBlockMutation.isPending || deleteBlockMutation.isPending;
+
+  // ===== LOADING STATE =====
+  if (isLoading) {
+    return (
+      <div
+        className="h-full flex items-center justify-center"
+        style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : colors.utility.secondaryBackground }}
+      >
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: colors.brand.primary }} />
+          <p className="text-sm" style={{ color: colors.utility.secondaryText }}>Loading blocks...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== ERROR STATE =====
+  if (error) {
+    return (
+      <div
+        className="h-full flex items-center justify-center"
+        style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : colors.utility.secondaryBackground }}
+      >
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 mx-auto mb-4" style={{ color: colors.semantic.error }} />
+          <h3 className="text-lg font-semibold mb-2" style={{ color: colors.utility.primaryText }}>
+            Failed to load blocks
+          </h3>
+          <p className="text-sm mb-4" style={{ color: colors.utility.secondaryText }}>
+            {error instanceof Error ? error.message : 'An error occurred'}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 mx-auto"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -279,9 +394,27 @@ const CatalogStudioBlocksPage: React.FC = () => {
             <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
               {filteredBlocks.length} of {allBlocks.length} blocks
               {hasActiveFilters && ' (filtered)'}
+              {isFetching && !isLoading && (
+                <span className="ml-2">
+                  <Loader2 className="w-3 h-3 animate-spin inline" />
+                </span>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="p-2 text-sm font-medium border rounded-lg transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderColor: isDarkMode ? colors.utility.secondaryText : '#D1D5DB',
+                color: colors.utility.primaryText
+              }}
+              title="Refresh"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            </button>
             <button
               className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center gap-2 transition-colors"
               style={{
@@ -295,10 +428,15 @@ const CatalogStudioBlocksPage: React.FC = () => {
             </button>
             <button
               onClick={() => openWizard('create')}
-              className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 transition-colors"
+              disabled={isMutating}
+              className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
               style={{ backgroundColor: colors.brand.primary }}
             >
-              <Plus className="w-4 h-4" />
+              {createBlockMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               New Block
             </button>
           </div>
@@ -338,9 +476,7 @@ const CatalogStudioBlocksPage: React.FC = () => {
           {/* Filter Toggle */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-2 text-sm font-medium border rounded-lg flex items-center gap-2 transition-colors ${
-              showFilters || hasActiveFilters ? '' : ''
-            }`}
+            className="px-3 py-2 text-sm font-medium border rounded-lg flex items-center gap-2 transition-colors"
             style={{
               backgroundColor: showFilters || hasActiveFilters ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
               borderColor: showFilters || hasActiveFilters ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryText : '#D1D5DB'),
@@ -574,7 +710,8 @@ const CatalogStudioBlocksPage: React.FC = () => {
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleBlockDuplicate(block); }}
-                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                          disabled={isMutating}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
                           style={{ color: colors.utility.secondaryText }}
                           title="Duplicate"
                         >
@@ -740,7 +877,8 @@ const CatalogStudioBlocksPage: React.FC = () => {
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleBlockDuplicate(block); }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        disabled={isMutating}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
                         style={{ color: colors.utility.secondaryText }}
                         title="Duplicate"
                       >
@@ -887,7 +1025,8 @@ const CatalogStudioBlocksPage: React.FC = () => {
                       </button>
                       <button
                         onClick={() => { handleBlockDuplicate(previewBlock); setPreviewBlock(null); }}
-                        className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2"
+                        disabled={isMutating}
+                        className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
                         style={{ backgroundColor: colors.brand.primary }}
                       >
                         <Copy className="w-4 h-4" />

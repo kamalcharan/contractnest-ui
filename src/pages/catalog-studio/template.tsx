@@ -1,12 +1,66 @@
 // src/pages/catalog-studio/template.tsx
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Plus, Download, Save, Eye, MoreVertical, Settings, GripVertical, Trash2, LayoutTemplate, FileText, X, Info, DollarSign, Clock, Camera, FileCheck, AlertCircle, Package, CreditCard, Type, Video, Image, CheckSquare, Paperclip, ToggleLeft, ToggleRight, Square, CheckSquare as CheckedSquare, Copy, EyeOff, Undo2, Keyboard, Check, AlertTriangle, Loader2, Edit3, Upload, ListChecks } from 'lucide-react';
+// Fully integrated with Catalog Studio API hooks
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  Plus,
+  Download,
+  Save,
+  Eye,
+  MoreVertical,
+  Settings,
+  GripVertical,
+  Trash2,
+  LayoutTemplate,
+  FileText,
+  X,
+  Info,
+  DollarSign,
+  Clock,
+  Camera,
+  FileCheck,
+  AlertCircle,
+  Package,
+  CreditCard,
+  Type,
+  Video,
+  Image,
+  CheckSquare,
+  Paperclip,
+  ToggleLeft,
+  ToggleRight,
+  Square,
+  CheckSquare as CheckedSquare,
+  Copy,
+  EyeOff,
+  Undo2,
+  Keyboard,
+  Check,
+  AlertTriangle,
+  Loader2,
+  Edit3,
+  Upload,
+  ListChecks,
+  RefreshCw,
+  ArrowLeft,
+} from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Block } from '../../types/catalogStudio';
-import { BLOCK_CATEGORIES, getAllBlocks } from '../../utils/catalog-studio';
+import { BLOCK_CATEGORIES } from '../../utils/catalog-studio';
 import { ServiceCatalogTree } from '../../components/catalog-studio';
 import { RichTextEditor, MediaUpload, ChecklistBuilder } from '../../components/catalog-studio/ContentEnhancements';
+
+// API Hooks
+import { useCatBlocks } from '../../hooks/queries/useCatBlocks';
+import { useCatTemplate, TemplateBlock as APITemplateBlock } from '../../hooks/queries/useCatTemplates';
+import { useSaveTemplate, CreateTemplateData, UpdateTemplateData } from '../../hooks/mutations/useCatTemplatesMutations';
+
+// Adapters
+import {
+  catBlocksToBlocks,
+  createTemplateBlock as createAPITemplateBlock,
+} from '../../utils/catalog-studio/catBlockAdapter';
 
 // Toast notification types
 interface Toast {
@@ -237,13 +291,53 @@ const getIconComponent = (iconName: string) => {
 const CatalogStudioTemplatePage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const navigate = useNavigate();
 
-  const allBlocks = getAllBlocks();
+  // URL params for edit mode
+  const [searchParams] = useSearchParams();
+  const templateId = searchParams.get('templateId');
+  const isEditMode = searchParams.get('edit') === 'true' && !!templateId;
+
+  // =================================================================
+  // API HOOKS - Blocks
+  // =================================================================
+  const {
+    data: blocksResponse,
+    isLoading: isLoadingBlocks,
+    error: blocksError,
+    refetch: refetchBlocks,
+    isFetching: isFetchingBlocks,
+  } = useCatBlocks();
+
+  // Convert API blocks to UI blocks
+  const allBlocks = useMemo(() => {
+    if (!blocksResponse?.data?.blocks) return [];
+    return catBlocksToBlocks(blocksResponse.data.blocks);
+  }, [blocksResponse]);
+
+  // =================================================================
+  // API HOOKS - Template (for edit mode)
+  // =================================================================
+  const {
+    data: templateResponse,
+    isLoading: isLoadingTemplate,
+    error: templateError,
+  } = useCatTemplate(isEditMode ? templateId : undefined);
+
+  // =================================================================
+  // API HOOKS - Save Template
+  // =================================================================
+  const saveTemplateMutation = useSaveTemplate();
+
+  // =================================================================
+  // LOCAL STATE
+  // =================================================================
   const [templateBlocks, setTemplateBlocks] = useState<TemplateBlock[]>([]);
   const [templateName, setTemplateName] = useState('Untitled Template');
   const [templateDescription, setTemplateDescription] = useState('');
   const [selectedTemplateBlock, setSelectedTemplateBlock] = useState<string | null>(null);
   const [previewBlock, setPreviewBlock] = useState<Block | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Drag-drop state
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
@@ -263,13 +357,50 @@ const CatalogStudioTemplatePage: React.FC = () => {
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; blockId: string | null }>({ isOpen: false, blockId: null });
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
-  // Save state
-  const [isSaving, setIsSaving] = useState(false);
-
   // Undo history
   const [history, setHistory] = useState<TemplateBlock[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const maxHistorySize = 50;
+
+  // =================================================================
+  // LOAD TEMPLATE DATA IN EDIT MODE
+  // =================================================================
+  useEffect(() => {
+    if (templateResponse?.data && isEditMode && allBlocks.length > 0) {
+      const template = templateResponse.data;
+      setTemplateName(template.name);
+      setTemplateDescription(template.description || '');
+
+      // Convert API blocks to UI format
+      if (template.blocks && Array.isArray(template.blocks)) {
+        const uiBlocks: TemplateBlock[] = [];
+
+        template.blocks.forEach((apiBlock: APITemplateBlock, index: number) => {
+          const block = allBlocks.find(b => b.id === apiBlock.block_id);
+          if (block) {
+            uiBlocks.push({
+              id: `tb-${apiBlock.block_id}-${index}`,
+              blockId: apiBlock.block_id,
+              block,
+              order: apiBlock.order ?? index,
+              config: {
+                isVisible: apiBlock.config?.visible !== false,
+                priceOverride: apiBlock.config?.price,
+                durationOverride: apiBlock.config?.duration,
+                notes: apiBlock.config?.notes,
+                ...apiBlock.config,
+              },
+            });
+          }
+        });
+
+        // Sort by order
+        uiBlocks.sort((a, b) => a.order - b.order);
+        setTemplateBlocks(uiBlocks);
+        setHasUnsavedChanges(false);
+      }
+    }
+  }, [templateResponse, isEditMode, allBlocks]);
 
   // Toast helper
   const showToast = useCallback((type: Toast['type'], title: string, description?: string) => {
@@ -292,6 +423,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
       return newHistory;
     });
     setHistoryIndex((prev) => Math.min(prev + 1, maxHistorySize - 1));
+    setHasUnsavedChanges(true);
   }, [historyIndex]);
 
   const undo = useCallback(() => {
@@ -353,6 +485,13 @@ const CatalogStudioTemplatePage: React.FC = () => {
             }, 1000);
           }
         }
+        return;
+      }
+
+      // Cmd/Ctrl + S - Save template
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSaveTemplate();
         return;
       }
 
@@ -426,22 +565,68 @@ const CatalogStudioTemplatePage: React.FC = () => {
     }, 1000);
   };
 
-  // Save template handler
+  // =================================================================
+  // SAVE TEMPLATE - API INTEGRATION
+  // =================================================================
   const handleSaveTemplate = async () => {
     if (templateBlocks.length === 0) {
       showToast('warning', 'Cannot save empty template', 'Add at least one block');
       return;
     }
 
-    setIsSaving(true);
+    if (!templateName.trim()) {
+      showToast('warning', 'Template name required', 'Please enter a name for the template');
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Convert UI blocks to API format
+      const apiBlocks: APITemplateBlock[] = templateBlocks.map((tb, index) => ({
+        block_id: tb.blockId,
+        order: index,
+        config: {
+          visible: tb.config.isVisible !== false,
+          price: tb.config.priceOverride,
+          duration: tb.config.durationOverride,
+          notes: tb.config.notes,
+          evidenceRequired: tb.config.evidenceRequired,
+          quantity: tb.config.quantity,
+          warrantyMonths: tb.config.warrantyMonths,
+          paymentTermsDays: tb.config.paymentTermsDays,
+          autoInvoice: tb.config.autoInvoice,
+          isRequired: tb.config.isRequired,
+          requireSignature: tb.config.requireSignature,
+          richTextContent: tb.config.richTextContent,
+          autoPlay: tb.config.autoPlay,
+          showControls: tb.config.showControls,
+          mediaFiles: tb.config.mediaFiles,
+          enforceOrder: tb.config.enforceOrder,
+          requirePhoto: tb.config.requirePhoto,
+          checklistItems: tb.config.checklistItems,
+        },
+      }));
+
+      const saveData: CreateTemplateData | UpdateTemplateData = {
+        name: templateName,
+        description: templateDescription,
+        blocks: apiBlocks,
+      };
+
+      await saveTemplateMutation.mutateAsync({
+        templateId: isEditMode ? templateId : undefined,
+        data: saveData,
+      });
+
+      setHasUnsavedChanges(false);
       showToast('success', 'Template saved', `"${templateName}" has been saved successfully`);
-    } catch {
-      showToast('error', 'Save failed', 'An error occurred while saving');
-    } finally {
-      setIsSaving(false);
+
+      // If creating new, navigate to edit mode with new ID
+      if (!isEditMode && saveTemplateMutation.data?.data?.id) {
+        navigate(`/catalog-studio/template?templateId=${saveTemplateMutation.data.data.id}&edit=true`, { replace: true });
+      }
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      showToast('error', 'Save failed', 'An error occurred while saving the template');
     }
   };
 
@@ -479,6 +664,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
         tb.id === templateBlockId ? { ...tb, config: { ...tb.config, ...updates } } : tb
       )
     );
+    setHasUnsavedChanges(true);
   };
 
   // Get selected template block
@@ -620,6 +806,73 @@ const CatalogStudioTemplatePage: React.FC = () => {
     return BLOCK_CATEGORIES.find((c) => c.id === block.categoryId);
   };
 
+  // =================================================================
+  // LOADING STATE
+  // =================================================================
+  if (isLoadingBlocks || (isEditMode && isLoadingTemplate)) {
+    return (
+      <div
+        className="h-full flex flex-col items-center justify-center gap-4"
+        style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : colors.utility.secondaryBackground }}
+      >
+        <Loader2 className="w-10 h-10 animate-spin" style={{ color: colors.brand.primary }} />
+        <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+          {isEditMode ? 'Loading template...' : 'Loading blocks library...'}
+        </p>
+      </div>
+    );
+  }
+
+  // =================================================================
+  // ERROR STATE
+  // =================================================================
+  if (blocksError || templateError) {
+    const error = blocksError || templateError;
+    return (
+      <div
+        className="h-full flex flex-col items-center justify-center gap-4"
+        style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : colors.utility.secondaryBackground }}
+      >
+        <AlertCircle className="w-12 h-12" style={{ color: colors.semantic.error }} />
+        <div className="text-center">
+          <p className="font-semibold" style={{ color: colors.utility.primaryText }}>
+            Failed to load {blocksError ? 'blocks library' : 'template'}
+          </p>
+          <p className="text-sm mt-1" style={{ color: colors.utility.secondaryText }}>
+            {(error as Error)?.message || 'An unexpected error occurred'}
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/catalog-studio/templates')}
+            className="px-4 py-2 text-sm font-medium border rounded-lg flex items-center gap-2"
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderColor: colors.utility.secondaryText + '40',
+              color: colors.utility.primaryText,
+            }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Templates
+          </button>
+          <button
+            onClick={() => {
+              if (blocksError) refetchBlocks();
+            }}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // =================================================================
+  // MAIN RENDER
+  // =================================================================
   return (
     <div
       className="h-full flex flex-col"
@@ -634,6 +887,14 @@ const CatalogStudioTemplatePage: React.FC = () => {
         }}
       >
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/catalog-studio/templates')}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            style={{ color: colors.utility.secondaryText }}
+            title="Back to Templates"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: `${colors.brand.primary}15` }}
@@ -641,17 +902,41 @@ const CatalogStudioTemplatePage: React.FC = () => {
             <LayoutTemplate className="w-5 h-5" style={{ color: colors.brand.primary }} />
           </div>
           <div>
-            <input
-              type="text"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              className="text-xl font-bold bg-transparent border-none outline-none focus:ring-0"
-              style={{ color: colors.utility.primaryText }}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={templateName}
+                onChange={(e) => {
+                  setTemplateName(e.target.value);
+                  setHasUnsavedChanges(true);
+                }}
+                className="text-xl font-bold bg-transparent border-none outline-none focus:ring-0"
+                style={{ color: colors.utility.primaryText }}
+              />
+              {hasUnsavedChanges && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{ backgroundColor: `${colors.semantic.warning}15`, color: colors.semantic.warning }}
+                >
+                  Unsaved
+                </span>
+              )}
+              {isEditMode && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{ backgroundColor: `${colors.semantic.info}15`, color: colors.semantic.info }}
+                >
+                  Editing
+                </span>
+              )}
+            </div>
             <input
               type="text"
               value={templateDescription}
-              onChange={(e) => setTemplateDescription(e.target.value)}
+              onChange={(e) => {
+                setTemplateDescription(e.target.value);
+                setHasUnsavedChanges(true);
+              }}
               placeholder="Add a description..."
               className="block text-sm bg-transparent border-none outline-none focus:ring-0 w-64"
               style={{ color: colors.utility.secondaryText }}
@@ -659,6 +944,20 @@ const CatalogStudioTemplatePage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Refresh blocks button */}
+          <button
+            onClick={() => refetchBlocks()}
+            disabled={isFetchingBlocks}
+            className="p-2 text-sm font-medium border rounded-lg transition-colors disabled:opacity-40"
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              borderColor: isDarkMode ? colors.utility.secondaryText : '#D1D5DB',
+              color: colors.utility.primaryText
+            }}
+            title="Refresh blocks"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetchingBlocks ? 'animate-spin' : ''}`} />
+          </button>
           {/* Undo button */}
           <button
             onClick={undo}
@@ -699,11 +998,11 @@ const CatalogStudioTemplatePage: React.FC = () => {
           </button>
           <button
             onClick={handleSaveTemplate}
-            disabled={isSaving}
+            disabled={saveTemplateMutation.isPending}
             className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-70"
             style={{ backgroundColor: colors.brand.primary }}
           >
-            {isSaving ? (
+            {saveTemplateMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Saving...
@@ -711,7 +1010,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Save Template
+                {isEditMode ? 'Update Template' : 'Save Template'}
               </>
             )}
           </button>
@@ -855,6 +1154,14 @@ const CatalogStudioTemplatePage: React.FC = () => {
                     <strong>Double-click</strong> on blocks from the catalog to add them here.
                     Arrange and configure them to create reusable contract templates.
                   </p>
+                  {allBlocks.length === 0 && (
+                    <p
+                      className="text-xs mt-4"
+                      style={{ color: colors.semantic.warning }}
+                    >
+                      No blocks available. Please check if blocks have been created.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1945,6 +2252,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
           <div className="space-y-1">
             <div><kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">⌘Z</kbd> Undo</div>
             <div><kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">⌘D</kbd> Duplicate</div>
+            <div><kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">⌘S</kbd> Save</div>
             <div><kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">Del</kbd> Delete</div>
             <div><kbd className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">Esc</kbd> Clear selection</div>
           </div>
