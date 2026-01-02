@@ -30,7 +30,7 @@ import MainLayout from './components/layout/MainLayout';
 import CatalogPage from './pages/catalog/index';
 import ServiceViewPage from './pages/catalog/view';
 import CatalogServiceFormPage from './pages/catalog/catalogService-form';
-import CatalogStudioConfigurePage from './pages/catalog-studio/configure';
+import CatalogStudioBlocksPage from './pages/catalog-studio/blocks';
 import CatalogStudioTemplatePage from './pages/catalog-studio/template';
 import CatalogStudioTemplatesListPage from './pages/catalog-studio/templates-list';
 
@@ -483,7 +483,7 @@ const AppContent: React.FC = () => {
           {/* Catalog Studio Routes */}
           <Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="configure" replace />} />
-            <Route path="configure" element={<CatalogStudioConfigurePage />} />
+            <Route path="configure" element={<CatalogStudioBlocksPage />} />
             <Route path="template" element={<CatalogStudioTemplatePage />} />
             <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
           </Route>
