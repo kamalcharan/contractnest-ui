@@ -89,12 +89,8 @@ export const useCreateCatTemplate = () => {
 
       const response = await api.post(
         API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.CREATE,
-        templateData,
-        {
-          headers: {
-            'x-is-admin': String(isAdmin || false),
-          },
-        }
+        templateData
+        
       );
 
       if (!response.data?.success) {

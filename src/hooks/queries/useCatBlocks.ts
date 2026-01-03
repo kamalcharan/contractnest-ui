@@ -1,7 +1,7 @@
 // src/hooks/queries/useCatBlocks.ts
 // TanStack Query hooks for Catalog Studio Blocks
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { API_ENDPOINTS, CatBlockFilters } from '@/services/serviceURLs';
@@ -110,64 +110,113 @@ export const catBlockKeys = {
 };
 
 // =================================================================
+// RESPONSE PARSING (Matching useResources pattern)
+// =================================================================
+
+const parseResponse = (response: any, context: string = 'unknown') => {
+  try {
+    // Handle API controller format: { success: true, data: {...} }
+    if (response?.data?.success === true && response?.data?.data !== undefined) {
+      return response.data.data;
+    }
+    
+    // Handle direct data format
+    if (response?.data && typeof response.data === 'object') {
+      return response.data;
+    }
+    
+    return { blocks: [], total: 0 };
+  } catch (error) {
+    console.error(`❌ ${context} - PARSE ERROR:`, error);
+    return { blocks: [], total: 0 };
+  }
+};
+
+// =================================================================
 // HOOKS
 // =================================================================
 
 /**
  * Hook to fetch all blocks (filtered by admin status automatically)
  */
-export const useCatBlocks = (filters?: CatBlockFilters) => {
+export const useCatBlocks = (filters?: CatBlockFilters): UseQueryResult<CatBlocksResponse, Error> => {
   const { currentTenant, isAdmin } = useAuth();
 
   return useQuery({
     queryKey: catBlockKeys.list(filters || {}),
-    queryFn: async (): Promise<CatBlocksResponse> => {
-      if (!currentTenant?.id) {
-        throw new Error('Missing tenant');
+    queryFn: async () => {
+      console.log('🚀 Fetching catalog blocks...');
+      
+      try {
+        const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.LIST_WITH_FILTERS(filters || {});
+
+        const response = await api.get(url, {
+          headers: {
+            'x-is-admin': String(isAdmin || false),
+          },
+        });
+
+        const data = parseResponse(response, 'cat_blocks');
+        console.log('✅ Catalog blocks fetched:', data);
+        
+        return {
+          success: true,
+          data: data
+        } as CatBlocksResponse;
+
+      } catch (error: any) {
+        console.error('❌ Catalog blocks fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch blocks');
       }
-
-      const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.LIST_WITH_FILTERS(filters || {});
-
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
-
-      return response.data;
     },
-    enabled: !!currentTenant?.id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    enabled: !!currentTenant,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      console.log(`🔄 Catalog blocks retry attempt ${failureCount}:`, error.message);
+      return failureCount < 2;
+    },
   });
 };
 
 /**
  * Hook to fetch a single block by ID
  */
-export const useCatBlock = (blockId: string | undefined) => {
+export const useCatBlock = (blockId: string | undefined): UseQueryResult<CatBlockResponse, Error> => {
   const { currentTenant, isAdmin } = useAuth();
 
   return useQuery({
     queryKey: catBlockKeys.detail(blockId || ''),
-    queryFn: async (): Promise<CatBlockResponse> => {
-      if (!currentTenant?.id || !blockId) {
-        throw new Error('Missing tenant or block ID');
+    queryFn: async () => {
+      console.log('🚀 Fetching single block:', blockId);
+      
+      try {
+        const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.GET(blockId!);
+
+        const response = await api.get(url, {
+          headers: {
+            'x-is-admin': String(isAdmin || false),
+          },
+        });
+
+        const data = parseResponse(response, 'single_block');
+        console.log('✅ Block fetched:', data);
+        
+        return {
+          success: true,
+          data: data
+        } as CatBlockResponse;
+
+      } catch (error: any) {
+        console.error('❌ Block fetch failed:', error);
+        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch block');
       }
-
-      const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.GET(blockId);
-
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
-
-      return response.data;
     },
-    enabled: !!currentTenant?.id && !!blockId,
+    enabled: !!currentTenant && !!blockId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    retry: 2,
   });
 };
 

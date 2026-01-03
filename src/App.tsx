@@ -7,7 +7,7 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
 import { QueryProvider } from './providers/QueryProvider'; // ✅ NEW: TanStack Query Provider
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // Add this import
+
 import './styles/globals.css';
 import './styles/layout.css';
 import { Toaster } from 'react-hot-toast';
@@ -30,6 +30,7 @@ import MainLayout from './components/layout/MainLayout';
 import CatalogPage from './pages/catalog/index';
 import ServiceViewPage from './pages/catalog/view';
 import CatalogServiceFormPage from './pages/catalog/catalogService-form';
+import CatalogStudioConfigurePage from './pages/catalog-studio/configure';
 import CatalogStudioBlocksPage from './pages/catalog-studio/blocks';
 import CatalogStudioTemplatePage from './pages/catalog-studio/template';
 import CatalogStudioTemplatesListPage from './pages/catalog-studio/templates-list';
@@ -184,15 +185,6 @@ import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
 
-// Create QueryClient
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      retry: 3,
-    },
-  },
-});
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -480,13 +472,14 @@ const AppContent: React.FC = () => {
             <Route index element={<InviteSellersPage />} />
           </Route>
 
-          {/* Catalog Studio Routes */}
-          <Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="configure" replace />} />
-            <Route path="configure" element={<CatalogStudioBlocksPage />} />
-            <Route path="template" element={<CatalogStudioTemplatePage />} />
-            <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
-          </Route>
+         {/* Catalog Studio Routes */}
+<Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+  <Route index element={<Navigate to="configure" replace />} />
+  <Route path="configure" element={<CatalogStudioConfigurePage />} />  {/* ✅ FIXED */}
+  <Route path="blocks" element={<CatalogStudioBlocksPage />} />        {/* ✅ ADD THIS */}
+  <Route path="template" element={<CatalogStudioTemplatePage />} />
+  <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
+</Route>
 
           {/* Legacy support for old routes - redirect to new structure */}
           <Route path="/contracts" element={<Navigate to="/service-contracts/contracts" replace />} />
@@ -665,13 +658,13 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-              <QueryClientProvider client={queryClient}>
+              
                 <QueryProvider> {/* ✅ NEW: Wrap with QueryProvider */}
                   <MasterDataProvider>
                     <AppContent />
                   </MasterDataProvider>
                 </QueryProvider>
-              </QueryClientProvider>
+             
             </AuthProvider>
           </Router>
         </ThemeProvider>

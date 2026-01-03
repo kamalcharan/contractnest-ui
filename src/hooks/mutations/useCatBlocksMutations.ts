@@ -97,12 +97,7 @@ export const useCreateCatBlock = () => {
 
       const response = await api.post(
         API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.CREATE,
-        blockData,
-        {
-          headers: {
-            'x-is-admin': 'true',
-          },
-        }
+        blockData
       );
 
       if (!response.data?.success) {
@@ -155,12 +150,7 @@ export const useUpdateCatBlock = () => {
 
       const response = await api.patch(
         API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.UPDATE(id),
-        data,
-        {
-          headers: {
-            'x-is-admin': 'true',
-          },
-        }
+        data
       );
 
       if (!response.data?.success) {
@@ -214,12 +204,7 @@ export const useDeleteCatBlock = () => {
       console.log('🗑️ Deleting block:', blockId);
 
       const response = await api.delete(
-        API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.DELETE(blockId),
-        {
-          headers: {
-            'x-is-admin': 'true',
-          },
-        }
+        API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.DELETE(blockId)
       );
 
       if (!response.data?.success) {
