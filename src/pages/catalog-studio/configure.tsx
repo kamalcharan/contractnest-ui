@@ -213,6 +213,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
         onClose={closeWizard}
         onSave={handleSaveBlock}
         onBlockTypeChange={setWizardBlockType}
+        fullPage={true}
       />
     </div>
   );

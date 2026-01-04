@@ -29,7 +29,7 @@ const RulesStep: React.FC<RulesStepProps> = ({ formData, onChange }) => {
   };
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -67,7 +67,7 @@ const RulesStep: React.FC<RulesStepProps> = ({ formData, onChange }) => {
                   onClick={() => handlePolicyChange(policy.id as 'flexible' | 'moderate' | 'strict')}
                   className="p-4 border-2 rounded-xl cursor-pointer transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >

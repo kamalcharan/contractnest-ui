@@ -19,7 +19,7 @@ const AutomationStep: React.FC<AutomationStepProps> = ({ formData, onChange }) =
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -113,7 +113,7 @@ const AutomationStep: React.FC<AutomationStepProps> = ({ formData, onChange }) =
                 key={method.id}
                 className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer transition-all"
                 style={{
-                  backgroundColor: colors.utility.primaryBackground,
+                  backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
                   borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
                 }}
               >

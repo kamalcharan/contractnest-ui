@@ -21,7 +21,7 @@ const DisplaySettingsStep: React.FC<DisplaySettingsStepProps> = ({ formData, onC
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -60,7 +60,7 @@ const DisplaySettingsStep: React.FC<DisplaySettingsStepProps> = ({ formData, onC
                   onClick={() => onChange('displaySize', size.id)}
                   className="p-3 border-2 rounded-lg cursor-pointer text-center transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >
@@ -93,7 +93,7 @@ const DisplaySettingsStep: React.FC<DisplaySettingsStepProps> = ({ formData, onC
                   onClick={() => onChange('alignment', align)}
                   className="p-3 border-2 rounded-lg cursor-pointer text-center transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >

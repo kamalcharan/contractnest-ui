@@ -28,7 +28,7 @@ const ItemsStep: React.FC<ItemsStepProps> = ({ formData, onChange }) => {
   ]);
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -74,7 +74,7 @@ const ItemsStep: React.FC<ItemsStepProps> = ({ formData, onChange }) => {
               key={item.id}
               className="flex items-start gap-3 p-4 rounded-lg border"
               style={{
-                backgroundColor: colors.utility.primaryBackground,
+                backgroundColor: (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
               }}
             >

@@ -21,7 +21,7 @@ const FulfillmentStep: React.FC<FulfillmentStepProps> = ({ formData, onChange })
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -59,7 +59,7 @@ const FulfillmentStep: React.FC<FulfillmentStepProps> = ({ formData, onChange })
                   onClick={() => onChange('fulfillmentType', option.id)}
                   className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >

@@ -53,21 +53,31 @@ const CategoryPanel: React.FC<CategoryPanelProps> = ({
             <div
               key={category.id}
               onClick={() => onSelectCategory(category.id)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-1 border-2 transition-all"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-2 border transition-all shadow-sm"
               style={{
-                backgroundColor: isSelected ? `${colors.brand.primary}10` : 'transparent',
-                borderColor: isSelected ? colors.brand.primary : 'transparent',
+                backgroundColor: isSelected
+                  ? `${colors.brand.primary}10`
+                  : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
+                borderColor: isSelected
+                  ? colors.brand.primary
+                  : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
               }}
               onMouseEnter={(e) => {
                 if (!isSelected) {
                   e.currentTarget.style.backgroundColor = isDarkMode
-                    ? colors.utility.secondaryBackground
+                    ? colors.utility.primaryBackground
                     : '#F9FAFB';
+                  e.currentTarget.style.borderColor = colors.brand.primary + '60';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isSelected) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.backgroundColor = isDarkMode
+                    ? colors.utility.secondaryBackground
+                    : '#FFFFFF';
+                  e.currentTarget.style.borderColor = isDarkMode
+                    ? colors.utility.secondaryBackground
+                    : '#E5E7EB';
                 }
               }}
             >

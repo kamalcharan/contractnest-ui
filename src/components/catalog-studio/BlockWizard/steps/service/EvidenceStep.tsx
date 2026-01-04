@@ -46,7 +46,7 @@ const EvidenceStep: React.FC<EvidenceStepProps> = ({ formData, onChange }) => {
   const enabledCount = evidenceItems.filter((i) => i.enabled).length;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -103,7 +103,7 @@ const EvidenceStep: React.FC<EvidenceStepProps> = ({ formData, onChange }) => {
               key={item.id}
               className="p-4 border-2 rounded-xl transition-all"
               style={{
-                backgroundColor: item.enabled ? `${colors.brand.primary}05` : colors.utility.primaryBackground,
+                backgroundColor: item.enabled ? `${colors.brand.primary}05` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: item.enabled ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
             >

@@ -20,7 +20,7 @@ const FileSettingsStep: React.FC<FileSettingsStepProps> = ({ formData, onChange 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -53,7 +53,7 @@ const FileSettingsStep: React.FC<FileSettingsStepProps> = ({ formData, onChange 
               onClick={() => onChange('fileType', 'upload')}
               className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
               style={{
-                backgroundColor: (formData.fileType || 'upload') === 'upload' ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                backgroundColor: (formData.fileType || 'upload') === 'upload' ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: (formData.fileType || 'upload') === 'upload' ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
             >
@@ -65,7 +65,7 @@ const FileSettingsStep: React.FC<FileSettingsStepProps> = ({ formData, onChange 
               onClick={() => onChange('fileType', 'request')}
               className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
               style={{
-                backgroundColor: formData.fileType === 'request' ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                backgroundColor: formData.fileType === 'request' ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: formData.fileType === 'request' ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
             >
@@ -110,7 +110,7 @@ const FileSettingsStep: React.FC<FileSettingsStepProps> = ({ formData, onChange 
                     key={format.id}
                     className="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-all"
                     style={{
-                      backgroundColor: colors.utility.primaryBackground,
+                      backgroundColor: (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                       borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
                     }}
                   >

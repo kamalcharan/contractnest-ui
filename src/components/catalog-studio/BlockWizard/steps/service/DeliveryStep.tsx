@@ -26,7 +26,7 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   };
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -62,7 +62,7 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
                   onClick={() => handleModeChange(option.id as 'on-site' | 'virtual' | 'hybrid')}
                   className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >

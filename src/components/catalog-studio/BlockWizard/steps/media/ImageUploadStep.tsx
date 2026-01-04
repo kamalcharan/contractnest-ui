@@ -18,7 +18,7 @@ const ImageUploadStep: React.FC<ImageUploadStepProps> = ({ formData, onChange })
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -43,7 +43,7 @@ const ImageUploadStep: React.FC<ImageUploadStepProps> = ({ formData, onChange })
               onClick={() => onChange('sourceType', 'upload')}
               className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
               style={{
-                backgroundColor: (formData.sourceType || 'upload') === 'upload' ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                backgroundColor: (formData.sourceType || 'upload') === 'upload' ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: (formData.sourceType || 'upload') === 'upload' ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
             >
@@ -55,7 +55,7 @@ const ImageUploadStep: React.FC<ImageUploadStepProps> = ({ formData, onChange })
               onClick={() => onChange('sourceType', 'url')}
               className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
               style={{
-                backgroundColor: formData.sourceType === 'url' ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                backgroundColor: formData.sourceType === 'url' ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: formData.sourceType === 'url' ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
             >

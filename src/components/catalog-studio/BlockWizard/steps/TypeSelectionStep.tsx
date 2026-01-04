@@ -45,7 +45,7 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
               onClick={() => onSelectType(cat.id)}
               className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
               style={{
-                backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                 borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
               }}
               onMouseEnter={(e) => {
@@ -57,7 +57,7 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
               onMouseLeave={(e) => {
                 if (!isSelected) {
                   e.currentTarget.style.borderColor = isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB';
-                  e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+                  e.currentTarget.style.backgroundColor = isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF';
                 }
               }}
             >

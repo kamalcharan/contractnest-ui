@@ -17,7 +17,7 @@ const ContentStep: React.FC<ContentStepProps> = ({ formData, onChange }) => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const inputStyle = {
-    backgroundColor: colors.utility.primaryBackground,
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText
   };
@@ -53,7 +53,7 @@ const ContentStep: React.FC<ContentStepProps> = ({ formData, onChange }) => {
                   onClick={() => onChange('contentType', type.id)}
                   className="p-3 border-2 rounded-xl cursor-pointer text-center transition-all"
                   style={{
-                    backgroundColor: isSelected ? `${colors.brand.primary}10` : colors.utility.primaryBackground,
+                    backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
                     borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
                   }}
                 >
@@ -130,7 +130,7 @@ const ContentStep: React.FC<ContentStepProps> = ({ formData, onChange }) => {
                 key={template.label}
                 className="p-3 border rounded-lg cursor-pointer transition-all"
                 style={{
-                  backgroundColor: colors.utility.primaryBackground,
+                  backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
                   borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
                 }}
                 onClick={() => onChange('content', template.preview)}
