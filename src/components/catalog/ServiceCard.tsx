@@ -24,7 +24,7 @@ import {
 import { Service } from '../../types/catalog/service';
 
 // Import utilities
-import { formatCurrencyAmount } from '../../utils/catalog/validationSchemas';
+import { formatCurrencyAmount } from '../../utils/catalog/ValidationSchemas';
 
 interface ServiceCardProps {
   service: Service;

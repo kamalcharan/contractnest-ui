@@ -1,7 +1,7 @@
 // contractnest-ui/src/vani/components/shared/index.ts
-export { VaNiList, VaNiListItem, VaNiListHeader } from './VaNiList';
-export { VaNiStatusBadge } from './VaNiStatusBadge';
-export { VaNiMetricCard } from './VaNiMetricCard';
+export { VaNiList, VaNiListItem, VaNiListHeader } from './VaniList';
+export { VaNiStatusBadge } from './VaniStatusBadge';
+export { VaNiMetricCard } from './VaniMetricCard';
 
 // Export component prop types
 export type {

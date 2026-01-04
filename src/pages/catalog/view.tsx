@@ -45,7 +45,7 @@ import {
   formatCurrencyAmount, 
   calculateTotalWithTax,
   calculateTaxAmount 
-} from '../../utils/catalog/validationSchemas';
+} from '../../utils/catalog/ValidationSchemas';
 
 // Import types
 import { Service } from '../../types/catalog/service';

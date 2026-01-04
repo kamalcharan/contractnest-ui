@@ -53,7 +53,7 @@ import OnboardingIndexPage from './pages/onboarding/index';
 import OnboardingLayout from './components/onboarding/OnboardingLayout';
 import OnboardingPendingPage from './pages/onboarding/OnboardingPendingPage';
 import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
-import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
+import UserProfileStep from '@/pages/onboarding/steps/userProfileStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
@@ -140,7 +140,7 @@ import InviteSellersPage from './pages/contracts/invite';
 
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
-import UserViewPage from './pages/settings/users/userview';
+import UserViewPage from './pages/settings/users/userView';
 import UserProfilePage from './pages/settings/users/user-profile';
 
 // Business Profile pages

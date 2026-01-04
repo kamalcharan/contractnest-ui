@@ -45,7 +45,7 @@ import {
   validateServiceBasicInfo,
   validateServiceConfiguration,
   generateSKU
-} from '../../../utils/catalog/validationSchemas';
+} from '../../../utils/catalog/ValidationSchemas';
 
 interface ServiceFormProps {
   mode: 'create' | 'edit';

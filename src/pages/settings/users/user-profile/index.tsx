@@ -9,7 +9,7 @@ import PersonalInfoSection from '@/components/users/user-profile/PersonalInfoSec
 import AvatarSection from '@/components/users/user-profile/AvatarSection';
 import SecuritySection from '@/components/users/user-profile/SecuritySection';
 import ThemePreferences from '@/components/users/user-profile/ThemePreferences';
-import WorkspacesSection from '@/components/users/user-profile/WorkspacesSection';
+import WorkspacesSection from '@/components/users/user-profile/WorkSpacesSection';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 

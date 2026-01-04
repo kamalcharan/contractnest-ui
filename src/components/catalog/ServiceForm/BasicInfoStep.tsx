@@ -17,7 +17,7 @@ import RichTextEditor from '../../ui/RichTextEditor';
 
 // Import types
 import { ServiceBasicInfo, ServiceValidationErrors } from '../../../types/catalog/service';
-import { generateSKU } from '../../../utils/catalog/validationSchemas';
+import { generateSKU } from '../../../utils/catalog/ValidationSchemas';
 
 interface BasicInfoStepProps {
   data: ServiceBasicInfo;
