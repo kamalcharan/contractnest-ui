@@ -1,6 +1,11 @@
 // src/components/catalog-studio/BlockWizard/steps/index.ts
+// Phase 5: Added ResourceDependencyStep export
+
 export { default as TypeSelectionStep } from './TypeSelectionStep';
 export { default as BasicInfoStep } from './BasicInfoStep';
+
+// Phase 5: Resource Dependency step
+export { default as ResourceDependencyStep } from './ResourceDependencyStep';
 
 // Service block steps
 export * from './service';

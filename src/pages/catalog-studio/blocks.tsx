@@ -1049,7 +1049,8 @@ const CatalogStudioBlocksPage: React.FC = () => {
           onSave={handleSaveBlock}
           mode={wizardMode}
           blockType={wizardBlockType}
-          initialData={editingBlock || undefined}
+          editingBlock={editingBlock}
+          onBlockTypeChange={setWizardBlockType}
         />
       )}
 

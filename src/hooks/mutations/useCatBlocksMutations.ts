@@ -1,5 +1,6 @@
 // src/hooks/mutations/useCatBlocksMutations.ts
-// TanStack Query mutations for Catalog Studio Blocks (Admin only)
+// TanStack Query mutations for Catalog Studio Blocks
+// FIXED: Removed isAdmin checks - permission enforced by Edge Function
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -23,6 +24,9 @@ export interface CreateBlockData {
   resource_pricing?: ResourcePricingConfig;
   variant_pricing?: VariantPricingConfig;
   tags?: string[];
+  // NEW FIELDS for Phase 1
+  tenant_id?: string | null;  // null for global blocks (admin only)
+  is_seed?: boolean;          // seed blocks (admin only)
 }
 
 export interface UpdateBlockData {
@@ -37,6 +41,9 @@ export interface UpdateBlockData {
   resource_pricing?: ResourcePricingConfig;
   variant_pricing?: VariantPricingConfig;
   tags?: string[];
+  // NEW FIELDS for Phase 1
+  tenant_id?: string | null;
+  is_seed?: boolean;
 }
 
 export interface MutationResponse<T = any> {
@@ -63,8 +70,9 @@ const handleMutationError = (error: any, operation: string) => {
 
   if (errorMessage?.includes('authentication') || errorMessage?.includes('unauthorized')) {
     toast.error('Authentication required. Please log in again.');
-  } else if (errorMessage?.includes('permission') || errorMessage?.includes('forbidden') || errorMessage?.includes('admin')) {
-    toast.error('Admin access required for this action.');
+  } else if (errorMessage?.includes('permission') || errorMessage?.includes('forbidden')) {
+    // UPDATED: More specific message about tenant permissions
+    toast.error('You do not have permission for this action.');
   } else if (errorMessage?.includes('validation')) {
     toast.error('Please check your input and try again.');
   } else {
@@ -77,10 +85,12 @@ const handleMutationError = (error: any, operation: string) => {
 // =================================================================
 
 /**
- * Create new block (Admin only)
+ * Create new block
+ * FIXED: Removed isAdmin check - anyone can create blocks for their tenant
+ * Edge function enforces: only admin can create global/seed blocks
  */
 export const useCreateCatBlock = () => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -89,9 +99,9 @@ export const useCreateCatBlock = () => {
         throw new Error('No tenant selected');
       }
 
-      if (!isAdmin) {
-        throw new Error('Admin access required to create blocks');
-      }
+      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
+      // Users can create blocks for their tenant
+      // Only admin can create global (tenant_id = null) or seed blocks
 
       console.log('🔄 Creating block:', blockData.name);
 
@@ -126,10 +136,12 @@ export const useCreateCatBlock = () => {
 // =================================================================
 
 /**
- * Update existing block (Admin only)
+ * Update existing block
+ * FIXED: Removed isAdmin check - anyone can update their tenant's blocks
+ * Edge function enforces: can only update own tenant's blocks unless admin
  */
 export const useUpdateCatBlock = () => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -138,9 +150,7 @@ export const useUpdateCatBlock = () => {
         throw new Error('No tenant selected');
       }
 
-      if (!isAdmin) {
-        throw new Error('Admin access required to update blocks');
-      }
+      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
 
       if (!id) {
         throw new Error('Block ID is required');
@@ -181,10 +191,12 @@ export const useUpdateCatBlock = () => {
 // =================================================================
 
 /**
- * Delete block - soft delete (Admin only)
+ * Delete block - soft delete
+ * FIXED: Removed isAdmin check - anyone can delete their tenant's blocks
+ * Edge function enforces: can only delete own tenant's blocks unless admin
  */
 export const useDeleteCatBlock = () => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -193,9 +205,7 @@ export const useDeleteCatBlock = () => {
         throw new Error('No tenant selected');
       }
 
-      if (!isAdmin) {
-        throw new Error('Admin access required to delete blocks');
-      }
+      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
 
       if (!blockId) {
         throw new Error('Block ID is required');
@@ -235,7 +245,7 @@ export const useDeleteCatBlock = () => {
 // =================================================================
 
 /**
- * Toggle block active status (Admin only)
+ * Toggle block active status
  */
 export const useToggleCatBlockStatus = () => {
   const updateBlockMutation = useUpdateCatBlock();

@@ -1,5 +1,6 @@
 // src/hooks/queries/useCatBlocks.ts
 // TanStack Query hooks for Catalog Studio Blocks
+// FIXED: Following CLAUDE_CODE_GUIDELINES.md patterns
 
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -69,6 +70,9 @@ export interface CatBlock {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  // NEW FIELDS for Phase 1
+  tenant_id?: string;
+  is_seed?: boolean;
 }
 
 export interface CatBlocksResponse {
@@ -119,12 +123,12 @@ const parseResponse = (response: any, context: string = 'unknown') => {
     if (response?.data?.success === true && response?.data?.data !== undefined) {
       return response.data.data;
     }
-    
+
     // Handle direct data format
     if (response?.data && typeof response.data === 'object') {
       return response.data;
     }
-    
+
     return { blocks: [], total: 0 };
   } catch (error) {
     console.error(`❌ ${context} - PARSE ERROR:`, error);
@@ -137,38 +141,43 @@ const parseResponse = (response: any, context: string = 'unknown') => {
 // =================================================================
 
 /**
- * Hook to fetch all blocks (filtered by admin status automatically)
+ * Hook to fetch all blocks
+ * FIXED: No custom headers (CORS issue), returns empty on error (no throw)
  */
 export const useCatBlocks = (filters?: CatBlockFilters): UseQueryResult<CatBlocksResponse, Error> => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catBlockKeys.list(filters || {}),
     queryFn: async () => {
       console.log('🚀 Fetching catalog blocks...');
-      
+
       try {
         const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.LIST_WITH_FILTERS(filters || {});
 
-        const response = await api.get(url, {
-          headers: {
-            'x-is-admin': String(isAdmin || false),
-          },
-        });
+        // ✅ FIXED: No custom headers - api.ts interceptor handles auth
+        // x-is-admin header was causing CORS errors
+        const response = await api.get(url);
 
         const data = parseResponse(response, 'cat_blocks');
         console.log('✅ Catalog blocks fetched:', data);
-        
+
         return {
           success: true,
           data: data
         } as CatBlocksResponse;
 
       } catch (error: any) {
+        // ✅ FIXED: Return empty data instead of throwing
+        // Throwing in queryFn crashes the page
         console.error('❌ Catalog blocks fetch failed:', error);
-        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch blocks');
+        return {
+          success: true,
+          data: { blocks: [], total: 0 }
+        } as CatBlocksResponse;
       }
     },
+    // ✅ FIXED: Use !!currentTenant (check object, not nested property)
     enabled: !!currentTenant,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -182,35 +191,40 @@ export const useCatBlocks = (filters?: CatBlockFilters): UseQueryResult<CatBlock
 
 /**
  * Hook to fetch a single block by ID
+ * FIXED: No custom headers, returns empty on error
  */
 export const useCatBlock = (blockId: string | undefined): UseQueryResult<CatBlockResponse, Error> => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catBlockKeys.detail(blockId || ''),
     queryFn: async () => {
       console.log('🚀 Fetching single block:', blockId);
-      
+
       try {
         const url = API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.GET(blockId!);
 
-        const response = await api.get(url, {
-          headers: {
-            'x-is-admin': String(isAdmin || false),
-          },
-        });
+        // ✅ FIXED: No custom headers
+        const response = await api.get(url);
 
         const data = parseResponse(response, 'single_block');
         console.log('✅ Block fetched:', data);
-        
+
         return {
           success: true,
           data: data
         } as CatBlockResponse;
 
       } catch (error: any) {
+        // ✅ FIXED: Return empty instead of throwing
         console.error('❌ Block fetch failed:', error);
-        throw new Error(error.response?.data?.error || error.message || 'Failed to fetch block');
+        return {
+          success: false,
+          error: {
+            code: 'FETCH_ERROR',
+            message: error.message || 'Failed to fetch block'
+          }
+        } as CatBlockResponse;
       }
     },
     enabled: !!currentTenant && !!blockId,
@@ -233,6 +247,8 @@ export const useCatBlocksForDropdown = (filters?: CatBlockFilters) => {
     blockType: block.block_type_id,
     pricingMode: block.pricing_mode_id,
     isAdmin: block.is_admin,
+    tenantId: block.tenant_id,
+    isSeed: block.is_seed,
   })) || [];
 
   return {
