@@ -59,6 +59,7 @@ import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
+import MasterDataStep from '@/pages/onboarding/steps/MasterDataStep';
 import CompleteStep from '@/pages/onboarding/steps/CompleteStep';
 
 
@@ -345,7 +346,7 @@ const AppContent: React.FC = () => {
 <Route path="business-branding" element={<BusinessBrandingStep />} />
 <Route path="business-preferences" element={<BusinessPreferencesStep />} />
 <Route path="sequence-numbers" element={<SequenceNumbersStep />} />
-  <Route path="master-data" element={<div>Master Data Step (Coming Soon)</div>} />
+  <Route path="master-data" element={<MasterDataStep />} />
   <Route path="complete" element={<CompleteStep />} />
 </Route>
           {/* Protected Routes with MainLayout - Your Original Structure */}
