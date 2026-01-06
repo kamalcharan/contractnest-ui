@@ -183,12 +183,28 @@ const InvitationDetailsModal: React.FC<InvitationDetailsModalProps> = ({
               >
                 Recipient
               </label>
-              <p
-                className="transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                {invitation.email || invitation.mobile_number}
-              </p>
+              {invitation.email && (
+                <div className="flex items-center gap-2 mb-1">
+                  <Mail size={16} style={{ color: colors.brand.primary }} />
+                  <span
+                    className="transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invitation.email}
+                  </span>
+                </div>
+              )}
+              {invitation.mobile_number && (
+                <div className="flex items-center gap-2">
+                  <Phone size={16} style={{ color: colors.brand.primary }} />
+                  <span
+                    className="transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {invitation.phone_code ? `+${invitation.phone_code} ` : ''}{invitation.mobile_number}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Invited By */}

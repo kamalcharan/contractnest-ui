@@ -241,7 +241,7 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                   
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <h4 
+                      <h4
                         className="font-medium transition-colors"
                         style={{ color: colors.utility.primaryText }}
                       >
@@ -249,9 +249,22 @@ const InvitationsList: React.FC<InvitationsListProps> = ({
                       </h4>
                       {getStatusBadge(invitation)}
                     </div>
-                    
+
+                    {/* Show mobile number if available (for whatsapp/sms invites) */}
+                    {invitation.mobile_number && (
+                      <div
+                        className="flex items-center gap-1 mt-0.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <Phone size={12} />
+                        <span className="text-sm">
+                          {invitation.phone_code ? `+${invitation.phone_code} ` : ''}{invitation.mobile_number}
+                        </span>
+                      </div>
+                    )}
+
                     <div className="mt-1 space-y-1">
-                      <p 
+                      <p
                         className="text-sm transition-colors"
                         style={{ color: colors.utility.secondaryText }}
                       >
