@@ -18,6 +18,7 @@ import SessionConflictNotification from './components/SessionConflictNotificatio
 import EnvironmentSwitchModal from './components/EnvironmentSwitchModal';
 import LockScreen from './components/auth/LockScreen';
 import LandingPage from './pages/public/LandingPage';
+import PlaygroundPage from './pages/public/PlaygroundPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
 
 // Initialize Sentry as early as possible
@@ -299,6 +300,8 @@ const AppContent: React.FC = () => {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register-invitation" element={<InvitationRegisterPage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
+          <Route path="/playground" element={<PlaygroundPage />} />
+
 
           {/* Routes outside of MainLayout that require auth */}
           <Route

@@ -15,6 +15,7 @@ import LandingIndustries from '../../components/landing/LandingIndustries';
 import DualPersonaTimeline from '../../components/landing/DualPersonaTimeline';
 import LandingPricing from '../../components/landing/LandingPricing';
 import LandingCTA from '../../components/landing/LandingCTA';
+import LandingPlayground from '../../components/landing/LandingPlayground';
 import LandingFooter from '../../components/landing/LandingFooter';
 
 // Import existing CRO components
@@ -563,7 +564,10 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
             }
           }}
         />
+        {/* Playground Section - Interactive Demo */}
+        <LandingPlayground />
 
+        
         {/* Problem Statistics - Can be removed if TheProblem covers it */}
         {/* <LandingStats
           onCalculatorOpen={handleValueCalculatorOpen}
@@ -592,6 +596,7 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onStepClick={handleTimelineStepClick}
         />
 
+          
         {/* Pricing with Urgency */}
         <LandingPricing
           onPlanSelect={handlePlanSelect}
