@@ -1,23 +1,32 @@
 // src/pages/catalog-studio/configure.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
 import { useCatBlockMutationOperations } from '@/hooks/mutations/useCatBlocksMutations';
-import { useBlockCategories, usePricingModes } from '@/hooks/queries/useBlockTypes';
 import { Block, WizardMode } from '@/types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
 import { CategoryPanel, BlockGrid, BlockWizard, BlockEditorPanel } from '@/components/catalog-studio';
+
+// ✅ FIX: Import the adapter to convert CatBlock → Block
+import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
 
 const CatalogStudioConfigurePage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { currentTenant } = useAuth();
-  
+
   // API Hooks
   const { data: blocksResponse, isLoading, error, refetch } = useCatBlocksTest();
-  const allBlocks: Block[] = blocksResponse?.data?.blocks || [];
+
+  // ✅ FIX: Use adapter to convert API blocks (CatBlock) to UI blocks (Block)
+  // Previously: const allBlocks: Block[] = blocksResponse?.data?.blocks || [];
+  const allBlocks: Block[] = useMemo(() => {
+    const rawBlocks = blocksResponse?.data?.blocks;
+    if (!rawBlocks || !Array.isArray(rawBlocks)) return [];
+    return catBlocksToBlocks(rawBlocks);
+  }, [blocksResponse]);
 
   // Mutations
   const {
@@ -26,10 +35,6 @@ const CatalogStudioConfigurePage: React.FC = () => {
     deleteBlock,
     isLoading: isMutating,
   } = useCatBlockMutationOperations();
-
-  // Block Types and Pricing Modes (for getting UUIDs from type strings)
-  const { getDbIdByType } = useBlockCategories();
-  const { getDbIdByMode } = usePricingModes();
 
   // State
   const [selectedCategory, setSelectedCategory] = useState<string>('service');
@@ -72,20 +77,11 @@ const CatalogStudioConfigurePage: React.FC = () => {
           tags: blockData.tags,
         });
       } else {
-        // Get the UUIDs for block type and pricing mode from the database
-        const blockTypeUuid = getDbIdByType(wizardBlockType);
-        const pricingModeUuid = getDbIdByMode(blockData.meta?.pricingMode || 'independent');
-
-        if (!blockTypeUuid) {
-          console.error('Block type UUID not found for:', wizardBlockType);
-          return;
-        }
-
         await createBlock({
           name: blockData.name,
           description: blockData.description,
-          block_type_id: blockTypeUuid,
-          pricing_mode_id: pricingModeUuid || undefined, // Optional - may be null if not found
+          block_type_id: wizardBlockType,
+          pricing_mode_id: blockData.pricingMode || 'independent',
           config: blockData.config || {},
           tags: blockData.tags,
         });
@@ -101,7 +97,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
     if (!confirm(`Are you sure you want to delete "${block.name}"?`)) {
       return;
     }
-    
+
     try {
       await deleteBlock(block.id);
       setIsEditorPanelOpen(false);
@@ -114,20 +110,11 @@ const CatalogStudioConfigurePage: React.FC = () => {
 
   const handleDuplicateBlock = async (block: Block) => {
     try {
-      // Use existing blockTypeId if it's a UUID, otherwise look it up
-      const blockTypeUuid = block.blockTypeId || getDbIdByType(block.categoryId || 'service');
-      const pricingModeUuid = getDbIdByMode(block.pricingMode || 'independent');
-
-      if (!blockTypeUuid) {
-        console.error('Block type UUID not found for duplication');
-        return;
-      }
-
       await createBlock({
         name: `${block.name} (Copy)`,
         description: block.description,
-        block_type_id: blockTypeUuid,
-        pricing_mode_id: pricingModeUuid || undefined,
+        block_type_id: block.categoryId, // ✅ Use categoryId which is now correctly mapped
+        pricing_mode_id: block.meta?.pricing_mode_id as string || 'independent',
         config: block.config || {},
         tags: block.tags,
       });
