@@ -35,6 +35,7 @@ import {
   useClusters
 } from '../../../hooks/queries/useGroupQueries';
 import groupsService from '../../../services/groupsService';
+import memberRegistryService from '../../../services/memberRegistryService';
 import { useTenantProfile } from '../../../hooks/useTenantProfile';
 import { useAuth } from '../../../context/AuthContext';
 import { Users, MessageCircle, Sparkles, Pencil, Eye, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
@@ -429,6 +430,19 @@ const BBBProfileOnboardingPage: React.FC = () => {
       });
 
       console.log('🤖 VaNi: Profile saved:', result);
+
+      // Sync to member registry (fire and forget)
+      const isNewProfile = !existingProfileData?.ai_enhanced_description;
+      if (tenantProfileData && membershipId && bbbGroupId) {
+        const registryAction = isNewProfile ? 'add' : 'update';
+        console.log(`📱 Registry: Calling ${registryAction}...`);
+
+        // Fire and forget - don't await, don't block UI
+        (isNewProfile
+          ? memberRegistryService.add(tenantProfileData, bbbGroupId, membershipId)
+          : memberRegistryService.update(tenantProfileData, bbbGroupId, membershipId)
+        ).catch(err => console.error('📱 Registry sync failed:', err));
+      }
 
       // Update existing profile data with new values
       const newProfileData = {

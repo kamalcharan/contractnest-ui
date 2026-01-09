@@ -611,15 +611,15 @@ const GroupsListPage: React.FC = () => {
                         <span>View</span>
                       </button>
 
-                      {/* Chat - VaNi AI Chat (BBB Directory Search) */}
+                      {/* Chat - VaNi AI Chat (BBB Directory Search) - Coming Soon */}
                       <button
-                        onClick={() => navigate(`/vani/channels/bbb/chat?groupId=${group.id}`)}
-                        title="Search BBB Directory"
-                        className="p-2.5 rounded-lg transition-all hover:opacity-80"
+                        title="Chat (Coming Soon)"
+                        className="p-2.5 rounded-lg transition-all cursor-not-allowed opacity-50"
                         style={{
                           backgroundColor: `${colors.brand.primary}15`,
                           color: colors.brand.primary
                         }}
+                        disabled
                       >
                         <MessageCircle className="w-4 h-4" />
                       </button>
@@ -640,15 +640,15 @@ const GroupsListPage: React.FC = () => {
                         </svg>
                       </button>
 
-                      {/* Explore - Group Member Profiles */}
+                      {/* Explore - Group Member Profiles - Coming Soon */}
                       <button
-                        onClick={() => navigate('/vani/tenant-profiles')}
-                        title="Explore Group Members"
-                        className="p-2.5 rounded-lg transition-all hover:opacity-80"
+                        title="Explore (Coming Soon)"
+                        className="p-2.5 rounded-lg transition-all cursor-not-allowed opacity-50"
                         style={{
                           backgroundColor: `${colors.brand.secondary}15`,
                           color: colors.brand.secondary
                         }}
+                        disabled
                       >
                         <Compass className="w-4 h-4" />
                       </button>

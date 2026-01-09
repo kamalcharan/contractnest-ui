@@ -24,6 +24,7 @@ import AIEnhancementSection from '../../../components/VaNi/bbb/AIEnhancementSect
 import toast from 'react-hot-toast';
 import { useGroups, useGroupMemberships, useEnhanceProfile, useSaveProfile } from '../../../hooks/queries/useGroupQueries';
 import groupsService from '../../../services/groupsService';
+import memberRegistryService from '../../../services/memberRegistryService';
 import type { TenantProfile, ProfileFormData } from '../../../types/bbb';
 
 const BBBAdminDashboard: React.FC = () => {
@@ -232,6 +233,15 @@ const BBBAdminDashboard: React.FC = () => {
         style: { background: colors.semantic.success, color: '#FFF' }
       });
 
+      // Sync to member registry (fire and forget)
+      if (selectedMembership?.tenant_profile && bbbGroupId) {
+        memberRegistryService.update(
+          selectedMembership.tenant_profile,
+          bbbGroupId,
+          selectedMembership.id
+        ).catch(err => console.error('📱 Registry update failed:', err));
+      }
+
       setEditModalOpen(false);
       setSelectedMembership(null);
       refetchMemberships();
@@ -260,6 +270,15 @@ const BBBAdminDashboard: React.FC = () => {
         style: { background: colors.semantic.success, color: '#FFF' }
       });
 
+      // Sync to member registry (fire and forget)
+      if (selectedMembership?.tenant_profile && bbbGroupId) {
+        memberRegistryService.update(
+          selectedMembership.tenant_profile,
+          bbbGroupId,
+          selectedMembership.id
+        ).catch(err => console.error('📱 Registry update failed:', err));
+      }
+
       setEditModalOpen(false);
       setSelectedMembership(null);
       refetchMemberships();
@@ -283,6 +302,16 @@ const BBBAdminDashboard: React.FC = () => {
       toast.success(`${membership?.tenant_profile?.business_name || 'Profile'} status changed to ${newStatus}`, {
         style: { background: colors.semantic.success, color: '#FFF' }
       });
+
+      // Sync to member registry (fire and forget)
+      if (membership?.tenant_profile && bbbGroupId) {
+        const registryStatus = (newStatus === 'active') ? 'active' : 'inactive';
+        memberRegistryService.update(
+          { ...membership.tenant_profile, status: registryStatus },
+          bbbGroupId,
+          membershipId
+        ).catch(err => console.error('📱 Registry status update failed:', err));
+      }
 
       // Refresh data
       refetchMemberships();
@@ -311,6 +340,13 @@ const BBBAdminDashboard: React.FC = () => {
         toast.success(`${membership?.tenant_profile?.business_name || 'Profile'} has been deleted (set to inactive)`, {
           style: { background: colors.semantic.success, color: '#FFF' }
         });
+
+        // Sync to member registry (fire and forget)
+        const phone = membership?.tenant_profile?.business_phone || membership?.tenant_profile?.business_whatsapp;
+        if (phone && bbbGroupId) {
+          memberRegistryService.delete(phone, bbbGroupId)
+            .catch(err => console.error('📱 Registry delete failed:', err));
+        }
 
         refetchMemberships();
       } catch (error: any) {
