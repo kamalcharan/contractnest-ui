@@ -569,22 +569,22 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onCalculatorOpen={handleValueCalculatorOpen}
         /> */}
 
-        {/* Solution Features */}
-        <LandingFeatures
+        {/* Solution Features - HIDDEN */}
+        {/* <LandingFeatures
           onDemoRequest={handleDemoRequest}
-        />
+        /> */}
 
-        {/* Customer Testimonials */}
-        <LandingTestimonials
+        {/* Customer Testimonials - HIDDEN */}
+        {/* <LandingTestimonials
           onVideoPlay={handleVideoPlay}
           onCaseStudyView={handleCaseStudyView}
-        />
+        /> */}
 
-        {/* Industry Showcase */}
-        <LandingIndustries
+        {/* Industry Showcase - HIDDEN */}
+        {/* <LandingIndustries
           onIndustrySelect={handleIndustrySelect}
           onViewAll={() => navigate('/industries')}
-        />
+        /> */}
 
         {/* Dual Persona Timeline - NEW! */}
         <DualPersonaTimeline
@@ -599,14 +599,14 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onContactSales={handleContactSales}
         />
 
-        {/* Final CTA */}
-        <LandingCTA
+        {/* Final CTA - HIDDEN */}
+        {/* <LandingCTA
           onSignup={handleSignup}
           onDemo={handleDemoRequest}
           onContact={handleContactSales}
           onVideoPlay={handleVideoPlay}
           onDownload={handleResourceDownload}
-        />
+        /> */}
 
         {/* Footer */}
         <LandingFooter

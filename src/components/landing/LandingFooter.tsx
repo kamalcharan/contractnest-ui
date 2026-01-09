@@ -366,8 +366,8 @@ const LandingFooter: React.FC<FooterProps> = ({
             <div className="space-y-3 mb-6">
               <div className="flex items-center text-gray-600">
                 <Mail className="h-4 w-4 mr-3 text-red-500" />
-                <a href="mailto:charan@contractnest.com" className="hover:text-red-600 transition-colors">
-                  charan@contractnest.com
+                <a href="mailto:info@vikuna.io" className="hover:text-red-600 transition-colors">
+                  info@vikuna.io
                 </a>
               </div>
               <div className="flex items-center text-gray-600">
@@ -433,14 +433,13 @@ const LandingFooter: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Company Stats */}
-          <div className="lg:col-span-1">
+          {/* Company Stats - HIDDEN */}
+          {/* <div className="lg:col-span-1">
             <h4 className="text-lg font-semibold text-gray-900 mb-6">
               Trusted by Businesses
             </h4>
             <CompanyStats />
-            
-            {/* Trust Badges */}
+
             <div className="mt-8">
               <h5 className="font-medium text-gray-900 mb-4">Security & Compliance</h5>
               <div className="flex flex-wrap gap-3">
@@ -458,6 +457,24 @@ const LandingFooter: React.FC<FooterProps> = ({
                 </div>
               </div>
             </div>
+          </div> */}
+
+          {/* START FREE CTA */}
+          <div className="lg:col-span-1">
+            <h4 className="text-lg font-semibold text-gray-900 mb-4">
+              Get Started Today
+            </h4>
+            <p className="text-gray-600 mb-6">
+              Start managing your service contracts efficiently. No credit card required.
+            </p>
+            <Button
+              onClick={() => window.location.href = '/signup'}
+              className="w-full"
+              size="lg"
+            >
+              START FREE
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
           </div>
         </div>
 
@@ -485,8 +502,8 @@ const LandingFooter: React.FC<FooterProps> = ({
           ))}
         </div>
 
-        {/* Awards & Recognition */}
-        <div className="bg-gray-50 rounded-2xl p-8 mb-12">
+        {/* Awards & Recognition - HIDDEN */}
+        {/* <div className="bg-gray-50 rounded-2xl p-8 mb-12">
           <div className="text-center mb-6">
             <h4 className="text-lg font-semibold text-gray-900 mb-2">
               Recognition & Awards
@@ -495,7 +512,7 @@ const LandingFooter: React.FC<FooterProps> = ({
               Trusted by industry leaders and recognized by experts
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
               <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -504,7 +521,7 @@ const LandingFooter: React.FC<FooterProps> = ({
               <h5 className="font-medium text-gray-900 mb-1">Rising Star 2024</h5>
               <p className="text-sm text-gray-600">Emerging SaaS Platform</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Users className="h-8 w-8 text-blue-600" />
@@ -512,7 +529,7 @@ const LandingFooter: React.FC<FooterProps> = ({
               <h5 className="font-medium text-gray-900 mb-1">Customer Choice</h5>
               <p className="text-sm text-gray-600">Contract Management 2024</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Award className="h-8 w-8 text-green-600" />
@@ -521,7 +538,7 @@ const LandingFooter: React.FC<FooterProps> = ({
               <p className="text-sm text-gray-600">Service Automation</p>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Bottom Section */}

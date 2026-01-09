@@ -1,5 +1,5 @@
 // src/components/landing/TheProblem.tsx - The Problem Section with Dual Persona
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Building2,
   Wrench,
@@ -19,7 +19,8 @@ import {
   Dumbbell,
   Cog,
   Package,
-  Server
+  Server,
+  MousePointer2
 } from 'lucide-react';
 
 type PersonaType = 'buyer' | 'seller';
@@ -234,6 +235,16 @@ const TheProblem: React.FC<TheProblemProps> = ({ onCtaClick, className = '' }) =
   const [persona, setPersona] = useState<PersonaType>('buyer');
   const [industry, setIndustry] = useState<IndustryType>('equipment-maintenance');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showCallout, setShowCallout] = useState(true);
+  const [hasInteracted, setHasInteracted] = useState(false);
+
+  // Hide callout after user interacts with dropdown
+  useEffect(() => {
+    if (hasInteracted) {
+      const timer = setTimeout(() => setShowCallout(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [hasInteracted]);
 
   const currentPainPoints = painPoints[persona];
   const currentContract = contractData[persona][industry];
@@ -397,11 +408,34 @@ const TheProblem: React.FC<TheProblemProps> = ({ onCtaClick, className = '' }) =
                     </div>
                   </div>
 
-                  {/* Industry Dropdown */}
-                  <div className="relative">
+                  {/* Industry Dropdown with Callout */}
+                  <div className="relative flex items-center gap-2">
+                    {/* Animated Callout */}
+                    {showCallout && !hasInteracted && (
+                      <div className="hidden sm:flex items-center gap-1.5 animate-pulse">
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          persona === 'buyer'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          Switch Industry
+                        </span>
+                        <MousePointer2 className={`w-4 h-4 animate-bounce ${
+                          persona === 'buyer' ? 'text-blue-500' : 'text-orange-500'
+                        }`} />
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setDropdownOpen(!dropdownOpen)}
-                      className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                      onClick={() => {
+                        setDropdownOpen(!dropdownOpen);
+                        if (!hasInteracted) setHasInteracted(true);
+                      }}
+                      className={`flex items-center gap-2 px-3 py-2 bg-white border rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-all ${
+                        showCallout && !hasInteracted
+                          ? `ring-2 ring-offset-1 ${persona === 'buyer' ? 'ring-blue-300 border-blue-300' : 'ring-orange-300 border-orange-300'}`
+                          : 'border-slate-200'
+                      }`}
                     >
                       {currentIndustry && <currentIndustry.icon className="w-4 h-4 text-slate-500" />}
                       <span className="hidden sm:inline">{currentIndustry?.label}</span>
@@ -409,13 +443,14 @@ const TheProblem: React.FC<TheProblemProps> = ({ onCtaClick, className = '' }) =
                     </button>
 
                     {dropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-10">
+                      <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl z-10">
                         {industries.map((ind) => (
                           <button
                             key={ind.id}
                             onClick={() => {
                               setIndustry(ind.id as IndustryType);
                               setDropdownOpen(false);
+                              if (!hasInteracted) setHasInteracted(true);
                             }}
                             className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm hover:bg-slate-50 transition-colors ${
                               industry === ind.id ? 'bg-slate-50 font-semibold' : ''
