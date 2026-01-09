@@ -82,7 +82,8 @@ const BlockWizard: React.FC<BlockWizardProps> = ({
   const categories: BlockCategory[] = propCategories
     || (dbCategories.length > 0 ? dbCategories : BLOCK_CATEGORIES);
 
-  const [currentStep, setCurrentStep] = useState(1);
+  // Start at step 2 (Basic Info) when editing - skip type selection
+  const [currentStep, setCurrentStep] = useState(mode === 'edit' ? 2 : 1);
   const [formData, setFormData] = useState<Partial<Block>>(editingBlock || {});
 
   // Get wizard steps from centralized config
@@ -167,7 +168,7 @@ const BlockWizard: React.FC<BlockWizardProps> = ({
             editingBlock={editingBlock}
             initialStep={currentStep}
             categories={categories}
-            showTypeSelection={true}
+            showTypeSelection={mode !== 'edit'}  // Skip type selection when editing
             onSave={onSave}
             onCancel={onClose}
             onBlockTypeChange={onBlockTypeChange}
@@ -211,16 +212,19 @@ const BlockWizard: React.FC<BlockWizardProps> = ({
     switch (blockType) {
       case 'service':
         switch (currentStep) {
-          case 3: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 5: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
+          case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 6: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
+          case 7: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 
       case 'spare':
         switch (currentStep) {
           case 3: return <InventoryStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <FulfillmentStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <FulfillmentStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

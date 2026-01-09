@@ -5,16 +5,18 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
   service: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
-    { id: 3, label: 'Delivery' },
-    { id: 4, label: 'Pricing' },
-    { id: 5, label: 'Evidence' },
-    { id: 6, label: 'Business Rules' }, // Rules step removed, Business Rules kept
+    { id: 3, label: 'Resources' },      // ResourceDependencyStep - Independent vs Resource-based
+    { id: 4, label: 'Delivery' },
+    { id: 5, label: 'Pricing' },
+    { id: 6, label: 'Evidence' },
+    { id: 7, label: 'Business Rules' },
   ],
   spare: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
     { id: 3, label: 'Inventory' },
-    { id: 4, label: 'Fulfillment' },
+    { id: 4, label: 'Pricing' },        // Spare parts also need pricing
+    { id: 5, label: 'Fulfillment' },
   ],
   billing: [
     { id: 1, label: 'Type' },

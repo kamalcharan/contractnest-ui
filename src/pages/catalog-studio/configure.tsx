@@ -9,19 +9,22 @@ import { Block, WizardMode } from '@/types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
 import { CategoryPanel, BlockGrid, BlockWizard, BlockEditorPanel } from '@/components/catalog-studio';
 
-// ✅ FIX: Import the adapter to convert CatBlock → Block
-import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
+// ✅ FIX: Import ALL adapter functions for proper field mapping
+import {
+  catBlocksToBlocks,
+  blockToCreateData,
+  blockToUpdateData
+} from '@/utils/catalog-studio/catBlockAdapter';
 
 const CatalogStudioConfigurePage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  const { currentTenant } = useAuth();
+  const { user, isLive } = useAuth();
 
   // API Hooks
   const { data: blocksResponse, isLoading, error, refetch } = useCatBlocksTest();
 
   // ✅ FIX: Use adapter to convert API blocks (CatBlock) to UI blocks (Block)
-  // Previously: const allBlocks: Block[] = blocksResponse?.data?.blocks || [];
   const allBlocks: Block[] = useMemo(() => {
     const rawBlocks = blocksResponse?.data?.blocks;
     if (!rawBlocks || !Array.isArray(rawBlocks)) return [];
@@ -67,24 +70,33 @@ const CatalogStudioConfigurePage: React.FC = () => {
     setEditingBlock(null);
   };
 
-  const handleSaveBlock = async (blockData: any) => {
+  // Get current user ID for audit fields
+  const userId = user?.id || null;
+
+  // Calculate next sequence number for new blocks
+  const getNextSequenceNo = () => {
+    const categoryBlocks = allBlocks.filter(b => b.categoryId === wizardBlockType);
+    return categoryBlocks.length;
+  };
+
+  // ✅ FIX: Use adapter for proper field mapping with user tracking and environment
+  const handleSaveBlock = async (blockData: Partial<Block>) => {
     try {
       if (wizardMode === 'edit' && editingBlock) {
-        await updateBlock(editingBlock.id, {
-          name: blockData.name,
-          description: blockData.description,
-          config: blockData.config,
-          tags: blockData.tags,
-        });
+        // ✅ Use blockToUpdateData adapter for updates with userId
+        await updateBlock(editingBlock.id, blockToUpdateData(blockData, { userId }));
       } else {
-        await createBlock({
-          name: blockData.name,
-          description: blockData.description,
-          block_type_id: wizardBlockType,
-          pricing_mode_id: blockData.pricingMode || 'independent',
-          config: blockData.config || {},
-          tags: blockData.tags,
-        });
+        // ✅ Use blockToCreateData adapter for creates with userId, sequenceNo, and isLive
+        const fullBlockData = {
+          ...blockData,
+          categoryId: wizardBlockType,
+          name: blockData.name || 'Untitled Block',
+        } as Block;
+        await createBlock(blockToCreateData(fullBlockData, {
+          userId,
+          sequenceNo: getNextSequenceNo(),
+          isLive, // ✅ Pass environment flag
+        }));
       }
       closeWizard();
       refetch();
@@ -108,30 +120,24 @@ const CatalogStudioConfigurePage: React.FC = () => {
     }
   };
 
+  // ✅ FIX: Use adapter for duplicate with userId and isLive
   const handleDuplicateBlock = async (block: Block) => {
     try {
-      await createBlock({
+      const duplicateData = {
+        ...blockToCreateData(block, { userId, sequenceNo: getNextSequenceNo(), isLive }),
         name: `${block.name} (Copy)`,
-        description: block.description,
-        block_type_id: block.categoryId, // ✅ Use categoryId which is now correctly mapped
-        pricing_mode_id: block.meta?.pricing_mode_id as string || 'independent',
-        config: block.config || {},
-        tags: block.tags,
-      });
+      };
+      await createBlock(duplicateData);
       refetch();
     } catch (error) {
       console.error('Duplicate failed:', error);
     }
   };
 
+  // ✅ FIX: Use adapter for editor save with userId
   const handleEditorSave = async (updatedBlock: Block) => {
     try {
-      await updateBlock(updatedBlock.id, {
-        name: updatedBlock.name,
-        description: updatedBlock.description,
-        config: updatedBlock.config,
-        tags: updatedBlock.tags,
-      });
+      await updateBlock(updatedBlock.id, blockToUpdateData(updatedBlock, { userId }));
       refetch();
     } catch (error) {
       console.error('Editor save failed:', error);
@@ -210,6 +216,10 @@ const CatalogStudioConfigurePage: React.FC = () => {
           isOpen={isEditorPanelOpen}
           onClose={() => { setIsEditorPanelOpen(false); setSelectedBlock(null); }}
           onSave={handleEditorSave}
+          onEdit={(block) => {
+            setIsEditorPanelOpen(false);
+            openWizard('edit', block.categoryId, block);
+          }}
           onDelete={() => selectedBlock && handleDeleteBlock(selectedBlock)}
           onDuplicate={() => selectedBlock && handleDuplicateBlock(selectedBlock)}
         />

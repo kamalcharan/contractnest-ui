@@ -13,11 +13,11 @@ import WizardFooter from './WizardFooter';
 import {
   TypeSelectionStep,
   BasicInfoStep,
+  ResourceDependencyStep,
   // Service steps
   DeliveryStep,
   PricingStep,
   EvidenceStep,
-  // RulesStep, // HIDDEN: Replaced by BusinessRulesStep
   // Spare Parts steps
   InventoryStep,
   FulfillmentStep,
@@ -39,7 +39,7 @@ import {
   FileSettingsStep,
 } from './steps';
 
-// Import BusinessRulesStep for step 6
+// Import BusinessRulesStep for step 7
 import BusinessRulesStep from './steps/service/BusinessRulesStep';
 
 // =================================================================
@@ -130,10 +130,11 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
 
     // Block-specific step validations
     if (type === 'service') {
-      // Step 3 - Delivery: No mandatory fields (cycles are optional)
-      // Step 4 - Pricing: Price is required
+      // Step 3 - Resources: No mandatory fields (independent is default)
+      // Step 4 - Delivery: No mandatory fields (cycles are optional)
+      // Step 5 - Pricing: Price is required
       // Supports both independent pricing (pricingRecords) and resource-based pricing (resourcePricingRecords)
-      if (step === 4) {
+      if (step === 5) {
         const pricingMode = data.meta?.pricingMode as string | undefined;
         let hasValidPrice = false;
 
@@ -153,8 +154,8 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           errors.push('Price is required');
         }
       }
-      // Step 5 - Evidence: No mandatory fields
-      // Step 6 - Business Rules: No mandatory fields
+      // Step 6 - Evidence: No mandatory fields
+      // Step 7 - Business Rules: No mandatory fields
     }
 
     if (type === 'spare') {
@@ -164,7 +165,16 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           errors.push('Stock quantity is required');
         }
       }
-      // Step 4 - Fulfillment: No mandatory fields
+      // Step 4 - Pricing: Price required
+      if (step === 4) {
+        const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
+        const hasValidPrice = pricingRecords && pricingRecords.length > 0 &&
+                              pricingRecords.some(r => r.amount > 0);
+        if (!hasValidPrice) {
+          errors.push('Price is required');
+        }
+      }
+      // Step 5 - Fulfillment: No mandatory fields
     }
 
     if (type === 'billing') {
@@ -301,17 +311,19 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
     switch (blockType) {
       case 'service':
         switch (currentStep) {
-          case 3: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 5: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
-          case 6: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
+          case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 6: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
+          case 7: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 
       case 'spare':
         switch (currentStep) {
           case 3: return <InventoryStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <FulfillmentStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <FulfillmentStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

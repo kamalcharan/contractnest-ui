@@ -144,6 +144,8 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'MessageSquare',
     adminOnly: false
   },
+  // HIDDEN: SMS, Email, WhatsApp - commented out for now
+  /*
   {
     id: 'sms',
     settings_type: 'SMS',
@@ -174,6 +176,7 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'MessageCircle',
     adminOnly: false
   },
+  */
   {
     id: 'groups',
     settings_type: 'Groups',
@@ -226,7 +229,9 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Hash',
     adminOnly: false
   },
-    {
+  // HIDDEN: Smart Profile - commented out for now
+  /*
+  {
     id: 'smart-profile',
     settings_type: 'Smart Profile',
     parent_type: GROUP_BUSINESS_PROFILE,
@@ -236,9 +241,11 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Sparkles',
     adminOnly: false
   },
+  */
 
   
-  // Subscription
+  // HIDDEN: Whole Subscription section - commented out for now
+  /*
   {
     id: 'subscription',
     settings_type: GROUP_SUBSCRIPTION,
@@ -269,16 +276,18 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'BarChart',
     adminOnly: false
   }
+  */
 ];
 
 // Function to get grouped settings metadata
 export const getGroupedSettingsMetadata = (isProfile: boolean = false): GroupedSettingsMetadata => {
   const grouped: GroupedSettingsMetadata = {};
-  
+
   // Define the groups we want to include
-  const groupNames = isProfile 
-    ? [GROUP_SUBSCRIPTION] // For profile page
-    : [GROUP_TEAM, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - Team
+  // HIDDEN: GROUP_SUBSCRIPTION removed from both lists
+  const groupNames = isProfile
+    ? [] // For profile page - Subscription hidden
+    : [GROUP_TEAM, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE]; // For settings page - Team (Subscription removed)
   
   // Create group entries for each category
   groupNames.forEach(groupName => {

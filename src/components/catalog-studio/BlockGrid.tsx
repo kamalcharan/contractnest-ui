@@ -116,30 +116,30 @@ const BlockGrid: React.FC<BlockGridProps> = ({
             onClick={onAddBlock}
             className="rounded-xl border-2 border-dashed overflow-hidden cursor-pointer transition-all flex flex-col items-center justify-center min-h-[180px] gap-2 group"
             style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderColor: isDarkMode ? colors.utility.secondaryText : '#D1D5DB'
+              backgroundColor: `${colors.brand.primary}08`,
+              borderColor: `${colors.brand.primary}40`
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = colors.brand.primary;
-              e.currentTarget.style.backgroundColor = `${colors.brand.primary}10`;
+              e.currentTarget.style.backgroundColor = `${colors.brand.primary}15`;
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = isDarkMode ? colors.utility.secondaryText : '#D1D5DB';
-              e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
+              e.currentTarget.style.borderColor = `${colors.brand.primary}40`;
+              e.currentTarget.style.backgroundColor = `${colors.brand.primary}08`;
             }}
           >
             <div
               className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
               style={{
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F3F4F6',
-                color: colors.utility.secondaryText
+                backgroundColor: `${colors.brand.primary}15`,
+                color: colors.brand.primary
               }}
             >
               <Plus className="w-5 h-5" />
             </div>
             <span
               className="text-sm font-medium"
-              style={{ color: colors.utility.secondaryText }}
+              style={{ color: colors.brand.primary }}
             >
               Add {category.name} Block
             </span>

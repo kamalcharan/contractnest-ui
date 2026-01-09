@@ -58,21 +58,59 @@ export interface CatBlock {
   id: string;
   name: string;
   description?: string;
+
+  // Block type - can be block_type_id (legacy), type (new schema), or block_type_name (enriched)
   block_type_id: string;
-  pricing_mode_id: string;
+  type?: string;  // New schema field - 'service', 'spare', 'billing', etc.
+  block_type_name?: string;  // Enriched by edge function for UI display
+
+  // Pricing mode - can be pricing_mode_id (legacy) or pricing_mode (new schema)
+  pricing_mode_id?: string;  // Legacy - 'fixed', 'resource_based', etc.
+  pricing_mode?: string;  // New schema - 'independent', 'resource_based', 'variant_based'
+
+  // Pricing fields (top-level in new schema)
+  base_price?: number;
+  currency?: string;
+  price_type?: string;  // 'per_session', 'per_hour', 'per_day', 'per_unit', 'fixed'
+  tax_rate?: number;
+
+  // Display fields
+  icon?: string;
+  display_name?: string;
+
+  // Status (new schema)
+  status?: string;  // 'active', 'draft', 'archived'
+
+  // Visibility flags
   is_admin: boolean;
   visible: boolean;
   is_active: boolean;
+
+  // Config JSONB - type-specific configuration
   config: BlockConfig;
-  resource_pricing?: ResourcePricingConfig;
-  variant_pricing?: VariantPricingConfig;
+
+  // Resource and variant pricing JSONB
+  resource_pricing?: ResourcePricingConfig | Record<string, any>;
+  variant_pricing?: VariantPricingConfig | Record<string, any>;
+
+  // Tags
   tags?: string[];
+
+  // Audit fields
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // NEW FIELDS for Phase 1
+  updated_by?: string;
+
+  // Tenant fields
   tenant_id?: string;
+  is_live?: boolean;
   is_seed?: boolean;
+
+  // Sequence and version
+  sequence_no?: number;
+  version?: number;
+  is_deletable?: boolean;
 }
 
 export interface CatBlocksResponse {

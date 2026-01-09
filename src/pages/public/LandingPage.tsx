@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 // Import all landing page components
 import LandingNavigation from '../../components/landing/LandingNavigation';
 import LandingHero from '../../components/landing/LandingHero';
+import TheProblem from '../../components/landing/TheProblem';
 import LandingStats from '../../components/landing/LandingStats';
 import LandingFeatures from '../../components/landing/LandingFeatures';
 import LandingTestimonials from '../../components/landing/LandingTestimonials';
@@ -531,16 +532,42 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onNavigate={(path) => navigate(path)}
         />
 
-        {/* Hero Section with Value Calculator Integration */}
+        {/* Hero Section - Simplified */}
         <LandingHero
-          onSubmit={(data) => handleFormSubmission({ ...data, source: 'hero_form' })}
-          onCalculatorOpen={handleValueCalculatorOpen}
+          onPlaygroundClick={() => {
+            const playgroundSection = document.getElementById('playground');
+            if (playgroundSection) {
+              playgroundSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+          onBuyerExplore={() => {
+            const playgroundSection = document.getElementById('playground');
+            if (playgroundSection) {
+              playgroundSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
+          onSellerExplore={() => {
+            const playgroundSection = document.getElementById('playground');
+            if (playgroundSection) {
+              playgroundSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
         />
 
-        {/* Problem Statistics */}
-        <LandingStats
-          onCalculatorOpen={handleValueCalculatorOpen}
+        {/* The Problem Section - Dual Persona */}
+        <TheProblem
+          onCtaClick={() => {
+            const playgroundSection = document.getElementById('playground');
+            if (playgroundSection) {
+              playgroundSection.scrollIntoView({ behavior: 'smooth' });
+            }
+          }}
         />
+
+        {/* Problem Statistics - Can be removed if TheProblem covers it */}
+        {/* <LandingStats
+          onCalculatorOpen={handleValueCalculatorOpen}
+        /> */}
 
         {/* Solution Features */}
         <LandingFeatures

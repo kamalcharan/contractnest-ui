@@ -1,425 +1,330 @@
-// src/components/landing/LandingHero.tsx
-import React, { useState } from 'react';
-import { 
-  Shield, 
-  Users, 
-  CheckCircle, 
-  ArrowRight,
-  Calculator,
-  TrendingUp,
-  IndianRupee,
-  Heart,
-  Settings,
+// src/components/landing/LandingHero.tsx - Enhanced with Animated Background
+import React from 'react';
+import {
+  Rocket,
+  Play,
+  Building2,
+  Wrench,
+  Hospital,
+  Factory,
   Building,
-  Clock,
-  Timer,
-  Flame
+  ClipboardList,
+  Briefcase,
+  Monitor,
+  ShieldCheck,
+  BarChart3,
+  Sparkles,
+  ArrowRight,
+  FileText,
+  Handshake,
+  Calendar,
+  Receipt,
+  RefreshCw,
+  CheckCircle
 } from 'lucide-react';
 
-// Import existing components
-import ValueCalculator from '../CRO/ValueCalculator';
-import UrgencyElements from '../CRO/UrgencyElements';
-
-// Types
-interface Industry {
-  id: string;
-  name: string;
-  description?: string;
-  icon: string;
-}
-
 interface HeroProps {
-  onSubmit?: (data: FormData) => void;
-  onCalculatorOpen?: () => void;
+  onPlaygroundClick?: () => void;
+  onBuyerExplore?: () => void;
+  onSellerExplore?: () => void;
   className?: string;
 }
 
-interface FormData {
-  email: string;
-  companyName: string;
-  industry: string;
-}
+// Persona data
+const buyerPersonas = [
+  { icon: Hospital, label: 'Hospitals', color: 'text-red-500' },
+  { icon: Factory, label: 'Manufacturing', color: 'text-orange-500' },
+  { icon: Building, label: 'Facilities', color: 'text-blue-500' },
+  { icon: ClipboardList, label: 'Procurement', color: 'text-green-500' },
+  { icon: Briefcase, label: 'Enterprise', color: 'text-purple-500' },
+];
 
-// Mock components
-const Button = ({ children, className = '', variant = 'primary', onClick, disabled = false, ...props }) => {
-  const baseClass = 'inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-  const variants = {
-    primary: 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500',
-    secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-gray-500',
-    outline: 'border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white focus:ring-red-500'
-  };
-  
-  return (
-    <button 
-      className={`${baseClass} ${variants[variant]} ${className}`}
-      onClick={onClick}
-      disabled={disabled}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
+const sellerPersonas = [
+  { icon: Wrench, label: 'AMC', color: 'text-orange-500' },
+  { icon: Monitor, label: 'IT Services', color: 'text-blue-500' },
+  { icon: Sparkles, label: 'Facility', color: 'text-cyan-500' },
+  { icon: ShieldCheck, label: 'Security', color: 'text-green-500' },
+  { icon: BarChart3, label: 'Consulting', color: 'text-purple-500' },
+];
 
-const Input = ({ className = '', ...props }) => (
-  <input 
-    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors ${className}`}
-    {...props}
-  />
-);
+// Floating background icons
+const floatingIcons = [
+  { Icon: FileText, top: '8%', left: '5%', delay: '0s', duration: '20s' },
+  { Icon: Handshake, top: '15%', right: '8%', delay: '2s', duration: '18s' },
+  { Icon: Calendar, top: '60%', left: '3%', delay: '4s', duration: '22s' },
+  { Icon: Receipt, top: '70%', right: '5%', delay: '1s', duration: '19s' },
+  { Icon: RefreshCw, top: '35%', left: '8%', delay: '3s', duration: '21s' },
+  { Icon: CheckCircle, top: '25%', right: '12%', delay: '5s', duration: '17s' },
+  { Icon: FileText, bottom: '15%', left: '12%', delay: '2.5s', duration: '23s' },
+  { Icon: Handshake, bottom: '25%', right: '10%', delay: '1.5s', duration: '20s' },
+];
 
-const Badge = ({ children, className = '', variant = 'default' }) => {
-  const variants = {
-    default: 'bg-gray-100 text-gray-800',
-    success: 'bg-green-100 text-green-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    error: 'bg-red-100 text-red-800',
-    urgent: 'bg-red-50 text-red-700 border border-red-200'
-  };
-  
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>
-      {children}
-    </span>
-  );
-};
+// Geometric shapes
+const geometricShapes = [
+  { type: 'circle', top: '20%', left: '15%', size: 'w-3 h-3', delay: '0s', duration: '15s' },
+  { type: 'circle', top: '45%', right: '18%', size: 'w-2 h-2', delay: '2s', duration: '18s' },
+  { type: 'circle', bottom: '30%', left: '20%', size: 'w-4 h-4', delay: '4s', duration: '20s' },
+  { type: 'triangle', top: '30%', right: '25%', size: 'w-4 h-4', delay: '1s', duration: '16s' },
+  { type: 'triangle', bottom: '20%', left: '25%', size: 'w-3 h-3', delay: '3s', duration: '19s' },
+  { type: 'square', top: '55%', left: '10%', size: 'w-2 h-2', delay: '2.5s', duration: '17s' },
+  { type: 'square', top: '10%', right: '20%', size: 'w-3 h-3', delay: '0.5s', duration: '21s' },
+];
 
-// ValueCalculator CTA Component
-const ValueCalculatorCTA = ({ onClick }: { onClick: () => void }) => {
-  return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Calculate Your ROI</h3>
-          <p className="text-sm text-gray-600">
-            See how much ContractNest can save your business in the first year
-          </p>
-        </div>
-        <Button variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-500 hover:text-white">
-          <Calculator className="mr-2 h-4 w-4" />
-          Calculate Savings
-        </Button>
-      </div>
-      <div className="mt-4 flex items-center space-x-4 text-sm text-blue-600">
-        <span>⚡ 2-minute assessment</span>
-        <span>📊 Industry benchmarks</span>
-        <span>💡 Personalized insights</span>
-      </div>
-    </div>
-  );
-};
-
-// Mock Dashboard Component
-const MockDashboard = () => {
-  return (
-    <div className="relative">
-      <div className="bg-gray-100 rounded-xl p-8 shadow-2xl">
-        {/* Active Contracts Card */}
-        <div className="bg-white rounded-lg p-6 shadow-sm mb-4">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Active Contracts</h3>
-            <Badge variant="success">23 Active</Badge>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-              <div>
-                <p className="font-medium text-sm">CT-Scan Maintenance</p>
-                <p className="text-xs text-gray-500">City General Hospital</p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-green-600">₹40L</p>
-                <p className="text-xs text-gray-500">Next: Feb 15</p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded">
-              <div>
-                <p className="font-medium text-sm">HVAC Maintenance</p>
-                <p className="text-xs text-gray-500">Manufacturing Plant</p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-green-600">₹2.1L</p>
-                <p className="text-xs text-gray-500">Next: Feb 20</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Compliance Score Card */}
-        <div className="bg-white rounded-lg p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Compliance Score</h3>
-            <div className="flex items-center">
-              <div className="text-2xl font-bold text-green-600">95%</div>
-              <TrendingUp className="h-4 w-4 text-green-500 ml-1" />
-            </div>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-green-500 h-2 rounded-full" style={{width: '95%'}}></div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Floating Success Elements */}
-      <div className="absolute -top-6 -right-6 bg-white p-4 rounded-xl shadow-lg border-2 border-green-100 animate-pulse">
-        <div className="flex items-center space-x-2">
-          <CheckCircle className="h-5 w-5 text-green-500" />
-          <span className="text-sm font-medium">SLA Compliant</span>
-        </div>
-      </div>
-      
-      <div className="absolute -bottom-6 -left-6 bg-white p-4 rounded-xl shadow-lg border-2 border-blue-100 animate-bounce">
-        <div className="flex items-center space-x-2">
-          <IndianRupee className="h-5 w-5 text-blue-500" />
-          <span className="text-sm font-medium">Auto-invoiced</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const LandingHero: React.FC<HeroProps> = ({ 
-  onSubmit,
-  onCalculatorOpen,
+const LandingHero: React.FC<HeroProps> = ({
+  onPlaygroundClick,
+  onBuyerExplore,
+  onSellerExplore,
   className = ''
 }) => {
-  const [email, setEmail] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [selectedIndustry, setSelectedIndustry] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCalculator, setShowCalculator] = useState(false);
-
-  // Environment URLs
-const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
-
-  // Mock industries - would be imported from constants
-  const industries: Industry[] = [
-    { id: 'healthcare', name: 'Healthcare', icon: 'Heart' },
-    { id: 'manufacturing', name: 'Manufacturing', icon: 'Settings' },
-    { id: 'pharma', name: 'Pharmaceutical', icon: 'Shield' },
-    { id: 'consulting', name: 'Consulting', icon: 'Users' },
-    { id: 'financial_services', name: 'Financial Services', icon: 'Building' }
-  ];
-
-  // Form submission handler
-  const handleSubmit = async () => {
-    if (!email || !companyName || !selectedIndustry) {
-      alert('Please fill in all fields');
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
-    const formData: FormData = {
-      email,
-      companyName,
-      industry: selectedIndustry
-    };
-    
-    try {
-      // Mock API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Track conversion
-      if (typeof gtag !== 'undefined') {
-        gtag('event', 'generate_lead', {
-          event_category: 'conversion',
-          event_label: 'hero_signup',
-          value: 1,
-          custom_parameters: {
-            industry: selectedIndustry,
-            company: companyName
-          }
-        });
+  const handlePlaygroundClick = () => {
+    if (onPlaygroundClick) {
+      onPlaygroundClick();
+    } else {
+      const playgroundSection = document.getElementById('playground');
+      if (playgroundSection) {
+        playgroundSection.scrollIntoView({ behavior: 'smooth' });
       }
-      
-      if (onSubmit) {
-        onSubmit(formData);
-      } else {
-        // Default behavior - redirect to signup
-        alert('Thank you! We\'ll be in touch soon for your personalized demo.');
-        window.location.href = signupUrl;
-      }
-      
-      // Reset form
-      setEmail('');
-      setCompanyName('');
-      setSelectedIndustry('');
-      
-    } catch (error) {
-      console.error('Form submission error:', error);
-      alert('There was an error submitting your request. Please try again.');
-    } finally {
-      setIsSubmitting(false);
     }
-  };
 
-  // Calculator modal handlers
-  const handleCalculatorOpen = () => {
-    setShowCalculator(true);
-    
-    if (onCalculatorOpen) {
-      onCalculatorOpen();
-    }
-    
-    // Track calculator open
     if (typeof gtag !== 'undefined') {
-      gtag('event', 'calculator_open', {
+      gtag('event', 'playground_cta_click', {
         event_category: 'engagement',
-        event_label: 'hero_calculator'
+        event_label: 'hero_playground_button',
+        value: 1
       });
     }
   };
 
-  const handleCalculatorClose = () => {
-    setShowCalculator(false);
+  const handleExploreClick = (persona: 'buyer' | 'seller') => {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'persona_explore_click', {
+        event_category: 'engagement',
+        event_label: `${persona}_explore`,
+        value: 1
+      });
+    }
+
+    if (persona === 'buyer' && onBuyerExplore) {
+      onBuyerExplore();
+    } else if (persona === 'seller' && onSellerExplore) {
+      onSellerExplore();
+    } else {
+      const playgroundSection = document.getElementById('playground');
+      if (playgroundSection) {
+        playgroundSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   };
 
   return (
-    <>
-      <section className={`pt-8 pb-20 px-4 sm:px-6 lg:px-8 ${className}`}>
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            {/* Left: Content */}
-            <div>
-              {/* Urgency Elements */}
-              <div className="mb-6 space-y-3">
-                <Badge variant="urgent" className="animate-pulse">
-                  🚀 Early Access Program - Limited Time
-                </Badge>
-                <UrgencyElements 
-                  variant="limited-spots" 
-                  autoShow={true}
-                  onTrigger={(event, data) => {
-                    console.log('Urgency triggered:', event, data);
-                  }}
-                />
-              </div>
-              
-              {/* Main Headline */}
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
-                Turn Service Commitments Into 
-                <span className="text-red-500"> Profitable Relationships</span>
-              </h1>
-              
-              {/* Subheadline */}
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                Transform scattered service agreements into an automated, collaborative exchange. 
-                From healthcare equipment maintenance to manufacturing service contracts - 
-                <strong> digitize, automate, and scale your service relationships.</strong>
-              </p>
+    <section className={`relative overflow-hidden min-h-[calc(100vh-80px)] flex items-center ${className}`}>
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          25% { transform: translateY(-10px) rotate(2deg); }
+          50% { transform: translateY(-5px) rotate(-1deg); }
+          75% { transform: translateY(-15px) rotate(1deg); }
+        }
+        @keyframes floatSlow {
+          0%, 100% { transform: translateY(0px) translateX(0px); }
+          33% { transform: translateY(-8px) translateX(5px); }
+          66% { transform: translateY(-4px) translateX(-3px); }
+        }
+        @keyframes pulse-subtle {
+          0%, 100% { opacity: 0.08; }
+          50% { opacity: 0.15; }
+        }
+        .animate-float {
+          animation: float var(--duration, 20s) ease-in-out infinite;
+          animation-delay: var(--delay, 0s);
+        }
+        .animate-float-slow {
+          animation: floatSlow var(--duration, 15s) ease-in-out infinite;
+          animation-delay: var(--delay, 0s);
+        }
+        .animate-pulse-subtle {
+          animation: pulse-subtle 4s ease-in-out infinite;
+        }
+      `}</style>
 
-              {/* Trust Indicators */}
-              <div className="flex flex-wrap items-center gap-6 mb-8 text-sm text-gray-500">
-                <div className="flex items-center">
-                  <Shield className="h-4 w-4 text-green-500 mr-2" />
-                  Enterprise Security
-                </div>
-                <div className="flex items-center">
-                  <Users className="h-4 w-4 text-blue-500 mr-2" />
-                  500+ Businesses Exploring
-                </div>
-                <div className="flex items-center">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                  HIPAA Ready
-                </div>
-              </div>
+      {/* Background gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-red-50/30" />
 
-              {/* ValueCalculator CTA */}
-              <div className="mb-8">
-                <ValueCalculatorCTA onClick={handleCalculatorOpen} />
-              </div>
+      {/* Soft color blobs */}
+      <div className="absolute top-10 left-5 w-64 h-64 bg-red-100/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-10 right-5 w-72 h-72 bg-blue-100/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-50/20 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Lead Capture Form */}
-              <div className="max-w-md">
-                <div className="space-y-4">
-                  <Input
-                    type="text"
-                    placeholder="Company Name"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required
-                  />
-                  <Input
-                    type="email"
-                    placeholder="Business Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                  <select
-                    value={selectedIndustry}
-                    onChange={(e) => setSelectedIndustry(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                    required
-                  >
-                    <option value="">Select Your Industry</option>
-                    {industries.map(industry => (
-                      <option key={industry.id} value={industry.id}>{industry.name}</option>
-                    ))}
-                  </select>
-                  <Button 
-                    onClick={handleSubmit}
-                    className="w-full"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? 'Processing...' : 'Get Personalized Demo'}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-                
-                {/* Form Footer */}
-                <p className="text-xs text-gray-500 mt-3 text-center">
-                  ✓ Free 30-min consultation ✓ No pressure, just insights ✓ First 10 contracts free
-                </p>
-              </div>
-            </div>
+      {/* Floating Icons */}
+      {floatingIcons.map((item, index) => (
+        <div
+          key={`icon-${index}`}
+          className="absolute pointer-events-none animate-float"
+          style={{
+            top: item.top,
+            left: item.left,
+            right: item.right,
+            bottom: item.bottom,
+            '--delay': item.delay,
+            '--duration': item.duration,
+          } as React.CSSProperties}
+        >
+          <item.Icon className="w-6 h-6 text-slate-300/50" strokeWidth={1} />
+        </div>
+      ))}
 
-            {/* Right: Visual Dashboard */}
-            <div className="relative">
-              <MockDashboard />
-            </div>
+      {/* Geometric Shapes */}
+      {geometricShapes.map((shape, index) => (
+        <div
+          key={`shape-${index}`}
+          className={`absolute pointer-events-none animate-float-slow ${shape.size}`}
+          style={{
+            top: shape.top,
+            left: shape.left,
+            right: shape.right,
+            bottom: shape.bottom,
+            '--delay': shape.delay,
+            '--duration': shape.duration,
+          } as React.CSSProperties}
+        >
+          {shape.type === 'circle' && (
+            <div className="w-full h-full rounded-full bg-slate-300/20 animate-pulse-subtle" />
+          )}
+          {shape.type === 'triangle' && (
+            <div
+              className="w-0 h-0 animate-pulse-subtle"
+              style={{
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderBottom: '10px solid rgba(148, 163, 184, 0.15)',
+              }}
+            />
+          )}
+          {shape.type === 'square' && (
+            <div className="w-full h-full bg-slate-300/15 rotate-45 animate-pulse-subtle" />
+          )}
+        </div>
+      ))}
+
+      {/* Content */}
+      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
+
+        {/* Hero Text Content */}
+        <div className="text-center max-w-4xl mx-auto mb-6 md:mb-8">
+
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 mb-4 shadow-sm backdrop-blur-sm">
+            <Rocket className="w-3.5 h-3.5 text-red-500" />
+            <span className="text-xs font-semibold text-red-600">Launching Soon</span>
+          </div>
+
+          {/* Main Headline */}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-[1.1] tracking-tight mb-3">
+            Where Service Contracts
+            <span className="text-red-500"> Just Work.</span>
+          </h1>
+
+          {/* Subheadline */}
+          <p className="text-sm sm:text-base md:text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto mb-5">
+            Whether you're tracking 50 vendors or chasing 50 renewals—
+            <span className="text-slate-800 font-medium"> one platform to manage it all.</span>
+          </p>
+
+          {/* CTA Button */}
+          <div className="flex flex-col items-center gap-1.5 mb-6">
+            <button
+              onClick={handlePlaygroundClick}
+              className="group inline-flex items-center gap-2 px-6 py-3 bg-red-500 hover:bg-red-600 text-white text-sm md:text-base font-semibold rounded-xl shadow-lg shadow-red-500/25 hover:shadow-xl hover:shadow-red-500/30 transition-all duration-300 transform hover:-translate-y-0.5"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              Try the Playground
+            </button>
+
+            {/* Trust Line */}
+            <p className="text-xs text-slate-400">
+              No signup required • 60 seconds
+            </p>
           </div>
         </div>
-      </section>
 
-      {/* Calculator Modal */}
-      {showCalculator && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="relative max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-2xl">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-900">ROI Calculator</h2>
-                <button
-                  onClick={handleCalculatorClose}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <span className="sr-only">Close</span>
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+        {/* Persona Cards - BIGGER */}
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+
+            {/* Buyer Card */}
+            <div
+              onClick={() => handleExploreClick('buyer')}
+              className="group relative bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:border-blue-200 transition-all duration-300 cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <Building2 className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base md:text-lg font-bold text-slate-900">I Manage Vendors</h3>
+                    <p className="text-xs md:text-sm text-slate-500">Track contracts & compliance</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-blue-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
               </div>
-              
-              {/* Modal Content */}
-              <div className="p-6">
-                <ValueCalculator />
+
+              {/* Persona Icons */}
+              <div className="flex items-center justify-between">
+                {buyerPersonas.map((persona, index) => (
+                  <div key={index} className="flex flex-col items-center">
+                    <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+                      <persona.icon className={`w-4 h-4 md:w-5 md:h-5 ${persona.color}`} />
+                    </div>
+                    <span className="text-[10px] md:text-xs text-slate-400 mt-1.5 font-medium">{persona.label}</span>
+                  </div>
+                ))}
               </div>
+
+              {/* Hover gradient */}
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-b-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
+
+            {/* Seller Card */}
+            <div
+              onClick={() => handleExploreClick('seller')}
+              className="group relative bg-white/80 backdrop-blur-sm rounded-2xl p-5 md:p-6 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:border-orange-200 transition-all duration-300 cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-orange-50 flex items-center justify-center">
+                    <Wrench className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base md:text-lg font-bold text-slate-900">I Provide Services</h3>
+                    <p className="text-xs md:text-sm text-slate-500">Win contracts & automate billing</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 text-orange-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all" />
+              </div>
+
+              {/* Persona Icons */}
+              <div className="flex items-center justify-between">
+                {sellerPersonas.map((persona, index) => (
+                  <div key={index} className="flex flex-col items-center">
+                    <div className="w-9 h-9 md:w-10 md:h-10 rounded-lg bg-slate-50 flex items-center justify-center group-hover:bg-orange-50 transition-colors">
+                      <persona.icon className={`w-4 h-4 md:w-5 md:h-5 ${persona.color}`} />
+                    </div>
+                    <span className="text-[10px] md:text-xs text-slate-400 mt-1.5 font-medium">{persona.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Hover gradient */}
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-orange-500 to-red-500 rounded-b-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+
           </div>
         </div>
-      )}
 
-      {/* Exit Intent Urgency */}
-      <UrgencyElements 
-        variant="exit-intent" 
-        autoShow={false}
-        onTrigger={(event, data) => {
-          console.log('Exit intent triggered:', event, data);
-          // Could redirect to signup or show special offer
-        }}
-      />
-    </>
+      </div>
+    </section>
   );
 };
 

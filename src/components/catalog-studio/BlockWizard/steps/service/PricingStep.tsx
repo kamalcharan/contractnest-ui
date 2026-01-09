@@ -456,9 +456,8 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
             </div>
           )}
 
-          {/* Pricing Model Selection */}
-          {pricingMode !== 'resource_based' && (
-            <div className="p-6 rounded-xl border" style={cardStyle}>
+          {/* Pricing Model Selection - Always shown regardless of pricingMode */}
+          <div className="p-6 rounded-xl border" style={cardStyle}>
               <label className="block text-sm font-semibold mb-4" style={{ color: colors.utility.primaryText }}>
                 Pricing Model <span style={{ color: colors.semantic.error }}>*</span>
               </label>
@@ -501,10 +500,9 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                 })}
               </div>
             </div>
-          )}
 
-          {/* MULTI-CURRENCY PRICING RECORDS */}
-          {pricingMode !== 'resource_based' && priceType !== 'custom' && (
+          {/* MULTI-CURRENCY PRICING RECORDS - Always shown regardless of pricingMode */}
+          {priceType !== 'custom' && (
             <div className="p-6 rounded-xl border" style={cardStyle}>
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
