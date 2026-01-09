@@ -1,8 +1,9 @@
 // src/components/catalog-studio/BlockWizard/index.tsx
 // Block Creation/Edit Wizard with Modal and Full-Page variants
-// ✅ Phase 8: Full-page support, DB-driven categories, ResourceDependency, BusinessRules
+// Updated: Full-page now uses BlockWizardContent with side wizard layout
 
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Block, WizardMode, BlockCategory } from '../../../types/catalogStudio';
 import { BLOCK_CATEGORIES, WIZARD_STEPS } from '../../../utils/catalog-studio';
@@ -55,26 +56,11 @@ interface BlockWizardProps {
   onClose: () => void;
   onSave: (block: Partial<Block>) => void;
   onBlockTypeChange: (type: string) => void;
-  fullPage?: boolean; // NEW: Enable full-page layout
+  fullPage?: boolean;
 }
 
 // =================================================================
-// UPDATED WIZARD STEPS (With ResourceDependency & BusinessRules)
-// =================================================================
-
-const SERVICE_WIZARD_STEPS = [
-  { id: 1, label: 'Type' },
-  { id: 2, label: 'Basic Info' },
-  { id: 3, label: 'Resources' },       // ResourceDependencyStep
-  { id: 4, label: 'Delivery' },
-  { id: 5, label: 'Pricing' },
-  { id: 6, label: 'Evidence' },
-  { id: 7, label: 'Rules' },
-  { id: 8, label: 'Business Rules' },  // BusinessRulesStep
-];
-
-// =================================================================
-// MODAL WRAPPER COMPONENT (Legacy - for blocks.tsx)
+// COMPONENT
 // =================================================================
 
 const BlockWizard: React.FC<BlockWizardProps> = ({
@@ -91,27 +77,16 @@ const BlockWizard: React.FC<BlockWizardProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // ✅ FIXED: Use DB-driven categories with fallback
+  // Use DB-driven categories with fallback
   const { categories: dbCategories, isLoading: categoriesLoading } = useBlockCategories();
-  // DEBUG - ADD THESE 3 LINES:
-console.log('🔍 dbCategories length:', dbCategories.length);
-console.log('🔍 dbCategories[1]:', dbCategories[1]);
-console.log('🔍 Using fallback?:', dbCategories.length === 0);
   const categories: BlockCategory[] = propCategories
     || (dbCategories.length > 0 ? dbCategories : BLOCK_CATEGORIES);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<Partial<Block>>(editingBlock || {});
 
-  // ✅ Use updated steps for service blocks
-  const getWizardSteps = () => {
-    if (blockType === 'service') {
-      return SERVICE_WIZARD_STEPS;
-    }
-    return WIZARD_STEPS[blockType] || WIZARD_STEPS.service;
-  };
-
-  const wizardSteps = getWizardSteps();
+  // Get wizard steps from centralized config
+  const wizardSteps = WIZARD_STEPS[blockType] || WIZARD_STEPS.service;
   const totalSteps = wizardSteps.length;
 
   // Reset when modal opens/closes or editing block changes
@@ -150,8 +125,66 @@ console.log('🔍 Using fallback?:', dbCategories.length === 0);
 
   if (!isOpen) return null;
 
+  // =================================================================
+  // FULL PAGE LAYOUT - Uses BlockWizardContent with side wizard
+  // =================================================================
+
+  if (fullPage) {
+    return (
+      <div
+        className="h-full flex flex-col"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        {/* Header with close button */}
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
+          style={{
+            backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+            borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
+          }}
+        >
+          <div>
+            <h1 className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
+              {mode === 'edit' ? 'Edit Block' : 'Create New Block'}
+            </h1>
+            <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+              {categories.find(c => c.id === blockType)?.name || 'Service'} Block
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
+          </button>
+        </div>
+
+        {/* Main content area with side wizard */}
+        <div className="flex-1 overflow-hidden">
+          <BlockWizardContent
+            mode={mode}
+            blockType={blockType}
+            editingBlock={editingBlock}
+            initialStep={currentStep}
+            categories={categories}
+            showTypeSelection={true}
+            onSave={onSave}
+            onCancel={onClose}
+            onBlockTypeChange={onBlockTypeChange}
+            onStepChange={setCurrentStep}
+            onFormDataChange={setFormData}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // =================================================================
+  // MODAL LAYOUT (Original - for backward compatibility)
+  // =================================================================
+
   const renderStepContent = () => {
-    // Step 1 - Type Selection (common for all)
+    // Step 1 - Type Selection
     if (currentStep === 1) {
       return (
         <TypeSelectionStep
@@ -163,7 +196,7 @@ console.log('🔍 Using fallback?:', dbCategories.length === 0);
       );
     }
 
-    // Step 2 - Basic Info (common for all)
+    // Step 2 - Basic Info
     if (currentStep === 2) {
       return (
         <BasicInfoStep
@@ -178,12 +211,9 @@ console.log('🔍 Using fallback?:', dbCategories.length === 0);
     switch (blockType) {
       case 'service':
         switch (currentStep) {
-          case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
-          case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 6: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
-          case 7: return <RulesStep formData={formData} onChange={handleFormChange} />;
-          case 8: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
+          case 3: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 
@@ -237,7 +267,7 @@ console.log('🔍 Using fallback?:', dbCategories.length === 0);
         break;
     }
 
-    // Fallback for any unhandled steps
+    // Fallback
     const stepLabel = wizardSteps.find((s) => s.id === currentStep)?.label || 'Configuration';
     return (
       <div className="animate-in fade-in slide-in-from-right-4 duration-200">
@@ -262,63 +292,6 @@ console.log('🔍 Using fallback?:', dbCategories.length === 0);
       </div>
     );
   };
-
-  // =================================================================
-  // FULL PAGE LAYOUT
-  // =================================================================
-
-  if (fullPage) {
-    return (
-      <div
-        className="min-h-screen flex flex-col"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
-      >
-        {/* Fixed Header */}
-        <div
-          className="sticky top-0 z-10 border-b"
-          style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
-          }}
-        >
-          <div className="max-w-6xl mx-auto">
-            <WizardHeader mode={mode} blockType={blockType} categories={categories} onClose={onClose} />
-            <WizardProgress steps={wizardSteps} currentStep={currentStep} />
-          </div>
-        </div>
-
-        {/* Scrollable Content - Full width */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto px-8 py-10">
-            {renderStepContent()}
-          </div>
-        </div>
-
-        {/* Fixed Footer */}
-        <div
-          className="sticky bottom-0 border-t"
-          style={{
-            backgroundColor: colors.utility.primaryBackground,
-            borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'
-          }}
-        >
-          <div className="max-w-5xl mx-auto">
-            <WizardFooter
-              currentStep={currentStep}
-              totalSteps={totalSteps}
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              onSaveDraft={handleSaveDraft}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // =================================================================
-  // MODAL LAYOUT (Original - for backward compatibility)
-  // =================================================================
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">

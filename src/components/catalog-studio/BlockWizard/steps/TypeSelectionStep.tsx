@@ -1,4 +1,6 @@
 // src/components/catalog-studio/BlockWizard/steps/TypeSelectionStep.tsx
+// Updated: Improved card styling with shadows, better hover states, CheckCircle indicator
+
 import React from 'react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
@@ -12,13 +14,19 @@ interface TypeSelectionStepProps {
 
 // Helper to get Lucide icon component by name
 const getIconComponent = (iconName: string) => {
-  const iconsMap = LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string; size?: number }>>;
+  const iconsMap = LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string; size?: number; style?: React.CSSProperties }>>;
   return iconsMap[iconName] || LucideIcons.Circle;
 };
 
 const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selectedType, onSelectType }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // Card style matching other steps
+  const cardStyle = {
+    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+    boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)'
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-200">
@@ -34,7 +42,9 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
       >
         Each block type has different fields and behaviors.
       </p>
-      <div className="grid grid-cols-4 gap-3">
+
+      {/* Block Type Cards - 2 column layout on larger screens */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {categories.map((cat) => {
           const IconComponent = getIconComponent(cat.icon);
           const isSelected = selectedType === cat.id;
@@ -43,32 +53,31 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
             <div
               key={cat.id}
               onClick={() => onSelectType(cat.id)}
-              className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all"
+              className="p-5 border-2 rounded-xl cursor-pointer text-center transition-all hover:shadow-lg"
               style={{
-                backgroundColor: isSelected ? `${colors.brand.primary}10` : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
-                borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')
-              }}
-              onMouseEnter={(e) => {
-                if (!isSelected) {
-                  e.currentTarget.style.borderColor = `${colors.brand.primary}80`;
-                  e.currentTarget.style.backgroundColor = `${colors.brand.primary}05`;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isSelected) {
-                  e.currentTarget.style.borderColor = isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB';
-                  e.currentTarget.style.backgroundColor = isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF';
-                }
+                ...cardStyle,
+                backgroundColor: isSelected
+                  ? `${colors.brand.primary}08`
+                  : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
+                borderColor: isSelected
+                  ? colors.brand.primary
+                  : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
+                transform: isSelected ? 'scale(1.02)' : 'scale(1)',
               }}
             >
               <div
-                className="w-10 h-10 mx-auto mb-2 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: cat.bgColor }}
+                className="w-14 h-14 mx-auto mb-3 rounded-xl flex items-center justify-center transition-all"
+                style={{
+                  backgroundColor: isSelected ? colors.brand.primary : cat.bgColor,
+                }}
               >
-                <IconComponent className="w-5 h-5" style={{ color: cat.color }} />
+                <IconComponent
+                  className="w-7 h-7"
+                  style={{ color: isSelected ? '#FFFFFF' : cat.color }}
+                />
               </div>
               <div
-                className="text-sm font-bold"
+                className="text-sm font-bold mb-1"
                 style={{ color: colors.utility.primaryText }}
               >
                 {cat.name}
@@ -77,25 +86,43 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
                 className="text-xs"
                 style={{ color: colors.utility.secondaryText }}
               >
-                {cat.description.split(' ').slice(0, 3).join(' ')}
+                {cat.description.split(' ').slice(0, 4).join(' ')}
               </div>
+              {isSelected && (
+                <LucideIcons.CheckCircle2
+                  className="w-5 h-5 mx-auto mt-3"
+                  style={{ color: colors.brand.primary }}
+                />
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Tip Card */}
       <div
-        className="mt-6 p-4 rounded-lg flex gap-3"
+        className="mt-6 p-5 rounded-xl flex gap-4"
         style={{
-          backgroundColor: `${colors.semantic.info}15`,
-          borderColor: `${colors.semantic.info}30`
+          backgroundColor: isDarkMode ? `${colors.semantic.info}15` : '#EFF6FF',
+          border: `1px solid ${isDarkMode ? colors.semantic.info + '30' : '#BFDBFE'}`,
         }}
       >
-        <LucideIcons.Lightbulb className="w-5 h-5 flex-shrink-0" style={{ color: colors.semantic.info }} />
         <div
-          className="text-sm"
-          style={{ color: isDarkMode ? colors.utility.primaryText : '#1E40AF' }}
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: isDarkMode ? colors.semantic.info : '#2563EB' }}
         >
-          <strong>Tip:</strong> Service blocks are for work that needs to be done. Spare Parts are physical products. Billing blocks define payment structures.
+          <LucideIcons.Lightbulb className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h4 className="font-semibold text-sm mb-1" style={{ color: isDarkMode ? colors.utility.primaryText : '#1E3A8A' }}>
+            Choosing the Right Block Type
+          </h4>
+          <p
+            className="text-sm"
+            style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}
+          >
+            <strong>Service:</strong> Work that needs to be done. <strong>Spare Parts:</strong> Physical products. <strong>Billing:</strong> Payment structures.
+          </p>
         </div>
       </div>
     </div>

@@ -1,24 +1,26 @@
 // src/components/catalog-studio/BlockWizard/steps/service/BusinessRulesStep.tsx
 // Phase 7: Business Rules Configuration
-// Free followups, warranty, cancellation, reschedule policies
+// Updated: Mandatory fields, hidden cancellation, only advance deposit option
 
 import React, { useState } from 'react';
 import {
   RefreshCw,
   Shield,
-  XCircle,
-  Calendar,
-  Clock,
-  Info,
   ChevronDown,
   ChevronUp,
   Plus,
   Trash2,
-  AlertCircle,
   Check,
+  Lightbulb,
+  Info,
+  CheckCircle2,
+  Wallet,
+  // Hidden icons
+  // XCircle,
+  // Calendar,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
-import { Block, FollowupConfig, WarrantyConfig, CancellationConfig, RescheduleConfig } from '../../../../../types/catalogStudio';
+import { Block, FollowupConfig, WarrantyConfig } from '../../../../../types/catalogStudio';
 
 // =================================================================
 // TYPES
@@ -40,15 +42,13 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
   // State for accordion sections
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     followup: true,
-    warranty: false,
-    cancellation: true,
-    reschedule: true,
+    warranty: true,
   });
 
   // Get current values from formData.meta
   const followup: FollowupConfig = (formData.meta?.followup as FollowupConfig) || {
     enabled: false,
-    freeFollowups: 0,
+    freeFollowups: 1,
     followupPeriod: 7,
     followupPeriodUnit: 'days',
     conditions: [],
@@ -59,23 +59,18 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
     warrantyPeriod: 30,
     warrantyPeriodUnit: 'days',
     warrantyType: 'limited',
+    warrantyTerms: '',
   };
 
-  const cancellation: CancellationConfig = (formData.meta?.cancellation as CancellationConfig) || {
-    policy: 'moderate',
-    refundPercentage: 50,
-    cutoffHours: 24,
-  };
-
-  const reschedule: RescheduleConfig = (formData.meta?.reschedule as RescheduleConfig) || {
-    maxReschedules: 2,
-    rescheduleBuffer: 24,
-    freeReschedules: 1,
-  };
-
-  // Styles - white background for light mode
-  const inputStyle = {
+  // Styles
+  const cardStyle = {
     backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+    borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+    boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)'
+  };
+
+  const inputStyle = {
+    backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText,
   };
@@ -97,16 +92,6 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
     onChange('meta', { ...formData.meta, warranty: updated });
   };
 
-  const updateCancellation = (updates: Partial<CancellationConfig>) => {
-    const updated = { ...cancellation, ...updates };
-    onChange('meta', { ...formData.meta, cancellation: updated });
-  };
-
-  const updateReschedule = (updates: Partial<RescheduleConfig>) => {
-    const updated = { ...reschedule, ...updates };
-    onChange('meta', { ...formData.meta, reschedule: updated });
-  };
-
   const addCondition = () => {
     const conditions = [...(followup.conditions || []), ''];
     updateFollowup({ conditions });
@@ -123,14 +108,6 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
     updateFollowup({ conditions });
   };
 
-  // Cancellation policy presets
-  const cancellationPresets = [
-    { id: 'flexible', name: 'Flexible', description: 'Full refund until 24h before', refund: 100, hours: 24 },
-    { id: 'moderate', name: 'Moderate', description: '50% refund until 24h before', refund: 50, hours: 24 },
-    { id: 'strict', name: 'Strict', description: 'No refund after booking', refund: 0, hours: 0 },
-    { id: 'custom', name: 'Custom', description: 'Define your own policy', refund: null, hours: null },
-  ];
-
   // Section Header Component
   const SectionHeader = ({
     icon: Icon,
@@ -140,7 +117,7 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
     enabled,
     onToggle,
   }: {
-    icon: React.ComponentType<{ className?: string }>;
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
     title: string;
     subtitle: string;
     section: string;
@@ -148,18 +125,24 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
     onToggle?: () => void;
   }) => (
     <div
-      className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-t-xl"
+      className="flex items-center justify-between p-5 cursor-pointer transition-colors rounded-t-xl"
       onClick={() => toggleSection(section)}
+      style={{
+        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FAFAFA',
+      }}
     >
       <div className="flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center"
-          style={{ backgroundColor: `${colors.brand.primary}15` }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center"
+          style={{ backgroundColor: enabled ? colors.brand.primary : `${colors.brand.primary}15` }}
         >
-          <Icon className="w-5 h-5" style={{ color: colors.brand.primary }} />
+          <Icon
+            className="w-6 h-6"
+            style={{ color: enabled ? '#FFFFFF' : colors.brand.primary }}
+          />
         </div>
         <div>
-          <h4 className="font-semibold text-sm" style={{ color: colors.utility.primaryText }}>
+          <h4 className="font-semibold" style={{ color: colors.utility.primaryText }}>
             {title}
           </h4>
           <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
@@ -175,16 +158,14 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
               e.stopPropagation();
               onToggle();
             }}
-            className={`w-10 h-6 rounded-full transition-colors relative ${
-              enabled ? '' : 'opacity-60'
-            }`}
+            className="w-12 h-7 rounded-full transition-colors relative"
             style={{
               backgroundColor: enabled ? colors.brand.primary : isDarkMode ? '#4B5563' : '#D1D5DB',
             }}
           >
             <div
-              className="absolute w-4 h-4 rounded-full bg-white top-1 transition-all"
-              style={{ left: enabled ? '22px' : '4px' }}
+              className="absolute w-5 h-5 rounded-full bg-white top-1 transition-all shadow-sm"
+              style={{ left: enabled ? '26px' : '4px' }}
             />
           </button>
         )}
@@ -203,484 +184,334 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
         Business Rules
       </h2>
       <p className="text-sm mb-6" style={{ color: colors.utility.secondaryText }}>
-        Configure follow-up policies, warranties, and cancellation rules.
+        Configure follow-up policies, warranties, and payment options.
       </p>
 
-      <div className="space-y-4">
-        {/* Followup Section */}
-        <div
-          className="border rounded-xl overflow-hidden"
-          style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
-        >
-          <SectionHeader
-            icon={RefreshCw}
-            title="Free Follow-up"
-            subtitle="Allow customers to request free follow-ups within a period"
-            section="followup"
-            enabled={followup.enabled}
-            onToggle={() => updateFollowup({ enabled: !followup.enabled })}
-          />
+      {/* TWO-COLUMN LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left Column (3/5) - Rules Configuration */}
+        <div className="lg:col-span-3 space-y-5">
+          {/* Followup Section */}
+          <div
+            className="border rounded-xl overflow-hidden"
+            style={cardStyle}
+          >
+            <SectionHeader
+              icon={RefreshCw}
+              title="Free Follow-up"
+              subtitle="Allow customers to request free follow-ups within a period"
+              section="followup"
+              enabled={followup.enabled}
+              onToggle={() => updateFollowup({ enabled: !followup.enabled })}
+            />
 
-          {expandedSections.followup && followup.enabled && (
-            <div
-              className="p-4 border-t space-y-4"
-              style={{
-                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground + '50' : '#F9FAFB',
-              }}
-            >
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Free Follow-ups
-                  </label>
-                  <input
-                    type="number"
-                    value={followup.freeFollowups}
-                    onChange={(e) => updateFollowup({ freeFollowups: parseInt(e.target.value) || 0 })}
-                    min={0}
-                    max={10}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Valid For
-                  </label>
-                  <input
-                    type="number"
-                    value={followup.followupPeriod}
-                    onChange={(e) => updateFollowup({ followupPeriod: parseInt(e.target.value) || 7 })}
-                    min={1}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Period
-                  </label>
-                  <select
-                    value={followup.followupPeriodUnit}
-                    onChange={(e) =>
-                      updateFollowup({ followupPeriodUnit: e.target.value as 'days' | 'weeks' | 'months' })
-                    }
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  >
-                    <option value="days">Days</option>
-                    <option value="weeks">Weeks</option>
-                    <option value="months">Months</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Paid Followup Price */}
-              <div>
-                <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                  Price for Additional Follow-ups (Optional)
-                </label>
-                <div className="relative w-48">
-                  <span
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    {(formData.meta?.currency as string)?.substring(0, 1) || '₹'}
-                  </span>
-                  <input
-                    type="number"
-                    value={followup.paidFollowupPrice || ''}
-                    onChange={(e) =>
-                      updateFollowup({ paidFollowupPrice: parseFloat(e.target.value) || undefined })
-                    }
-                    placeholder="Free"
-                    className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
-
-              {/* Conditions */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium" style={labelStyle}>
-                    Conditions (Optional)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addCondition}
-                    className="text-xs flex items-center gap-1"
-                    style={{ color: colors.brand.primary }}
-                  >
-                    <Plus className="w-3 h-3" /> Add Condition
-                  </button>
-                </div>
-
-                {followup.conditions && followup.conditions.length > 0 ? (
-                  <div className="space-y-2">
-                    {followup.conditions.map((condition, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={condition}
-                          onChange={(e) => updateCondition(index, e.target.value)}
-                          placeholder={`Condition ${index + 1}`}
-                          className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                          style={inputStyle}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeCondition(index)}
-                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" style={{ color: colors.semantic.error }} />
-                        </button>
-                      </div>
-                    ))}
+            {expandedSections.followup && followup.enabled && (
+              <div
+                className="p-5 border-t space-y-5 animate-in fade-in slide-in-from-top-2 duration-200"
+                style={{
+                  borderColor: isDarkMode ? colors.utility.primaryBackground : '#E5E7EB',
+                  backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+                }}
+              >
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Free Follow-ups <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={followup.freeFollowups}
+                      onChange={(e) => updateFollowup({ freeFollowups: parseInt(e.target.value) || 0 })}
+                      min={0}
+                      max={10}
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    />
                   </div>
-                ) : (
-                  <p className="text-xs italic" style={{ color: colors.utility.secondaryText }}>
-                    No conditions added. Follow-ups will be available unconditionally.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Warranty Section */}
-        <div
-          className="border rounded-xl overflow-hidden"
-          style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
-        >
-          <SectionHeader
-            icon={Shield}
-            title="Warranty"
-            subtitle="Offer warranty coverage for this service"
-            section="warranty"
-            enabled={warranty.enabled}
-            onToggle={() => updateWarranty({ enabled: !warranty.enabled })}
-          />
-
-          {expandedSections.warranty && warranty.enabled && (
-            <div
-              className="p-4 border-t space-y-4"
-              style={{
-                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground + '50' : '#F9FAFB',
-              }}
-            >
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Warranty Period
-                  </label>
-                  <input
-                    type="number"
-                    value={warranty.warrantyPeriod}
-                    onChange={(e) => updateWarranty({ warrantyPeriod: parseInt(e.target.value) || 30 })}
-                    min={1}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Period Unit
-                  </label>
-                  <select
-                    value={warranty.warrantyPeriodUnit}
-                    onChange={(e) =>
-                      updateWarranty({ warrantyPeriodUnit: e.target.value as 'days' | 'months' | 'years' })
-                    }
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  >
-                    <option value="days">Days</option>
-                    <option value="months">Months</option>
-                    <option value="years">Years</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Warranty Type
-                  </label>
-                  <select
-                    value={warranty.warrantyType}
-                    onChange={(e) =>
-                      updateWarranty({
-                        warrantyType: e.target.value as 'full' | 'limited' | 'parts_only' | 'labor_only',
-                      })
-                    }
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  >
-                    <option value="full">Full Warranty</option>
-                    <option value="limited">Limited Warranty</option>
-                    <option value="parts_only">Parts Only</option>
-                    <option value="labor_only">Labor Only</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                  Warranty Terms (Optional)
-                </label>
-                <textarea
-                  value={warranty.warrantyTerms || ''}
-                  onChange={(e) => updateWarranty({ warrantyTerms: e.target.value })}
-                  placeholder="Describe warranty terms and conditions..."
-                  rows={3}
-                  className="w-full px-3 py-2 border rounded-lg text-sm resize-none"
-                  style={inputStyle}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Cancellation Section */}
-        <div
-          className="border rounded-xl overflow-hidden"
-          style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
-        >
-          <SectionHeader
-            icon={XCircle}
-            title="Cancellation Policy"
-            subtitle="Define refund rules for cancellations"
-            section="cancellation"
-          />
-
-          {expandedSections.cancellation && (
-            <div
-              className="p-4 border-t space-y-4"
-              style={{
-                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground + '50' : '#F9FAFB',
-              }}
-            >
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {cancellationPresets.map((preset) => {
-                  const isSelected = cancellation.policy === preset.id;
-                  return (
-                    <div
-                      key={preset.id}
-                      onClick={() => {
-                        updateCancellation({
-                          policy: preset.id as CancellationConfig['policy'],
-                          ...(preset.refund !== null ? { refundPercentage: preset.refund } : {}),
-                          ...(preset.hours !== null ? { cutoffHours: preset.hours } : {}),
-                        });
-                      }}
-                      className={`p-3 border-2 rounded-xl cursor-pointer transition-all ${
-                        isSelected ? 'ring-2' : ''
-                      }`}
-                      style={{
-                        backgroundColor: isSelected
-                          ? `${colors.brand.primary}08`
-                          : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
-                        borderColor: isSelected
-                          ? colors.brand.primary
-                          : isDarkMode
-                          ? colors.utility.secondaryBackground
-                          : '#E5E7EB',
-                        '--tw-ring-color': colors.brand.primary,
-                      } as React.CSSProperties}
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Valid For <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={followup.followupPeriod}
+                      onChange={(e) => updateFollowup({ followupPeriod: parseInt(e.target.value) || 7 })}
+                      min={1}
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Period <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <select
+                      value={followup.followupPeriodUnit}
+                      onChange={(e) =>
+                        updateFollowup({ followupPeriodUnit: e.target.value as 'days' | 'weeks' | 'months' })
+                      }
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-                          {preset.name}
-                        </span>
-                        {isSelected && <Check className="w-4 h-4" style={{ color: colors.brand.primary }} />}
-                      </div>
-                      <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                        {preset.description}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
+                      <option value="days">Days</option>
+                      <option value="weeks">Weeks</option>
+                      <option value="months">Months</option>
+                    </select>
+                  </div>
+                </div>
 
-              {cancellation.policy === 'custom' && (
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                      Refund Percentage
+                {/* HIDDEN: Paid Followup Price - removed as per requirement */}
+
+                {/* Conditions */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium" style={labelStyle}>
+                      Conditions (Optional)
                     </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={cancellation.refundPercentage}
-                        onChange={(e) =>
-                          updateCancellation({ refundPercentage: parseInt(e.target.value) || 0 })
-                        }
-                        min={0}
-                        max={100}
-                        className="w-full px-3 py-2 border rounded-lg text-sm"
-                        style={inputStyle}
-                      />
-                      <span
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        %
-                      </span>
+                    <button
+                      type="button"
+                      onClick={addCondition}
+                      className="text-sm flex items-center gap-1 px-3 py-1.5 rounded-lg border-2 font-medium transition-all hover:shadow-sm"
+                      style={{ color: colors.brand.primary, borderColor: colors.brand.primary }}
+                    >
+                      <Plus className="w-4 h-4" /> Add Condition
+                    </button>
+                  </div>
+
+                  {followup.conditions && followup.conditions.length > 0 ? (
+                    <div className="space-y-2">
+                      {followup.conditions.map((condition, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={condition}
+                            onChange={(e) => updateCondition(index, e.target.value)}
+                            placeholder={`Condition ${index + 1}`}
+                            className="flex-1 px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                            style={inputStyle}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeCondition(index)}
+                            className="p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" style={{ color: colors.semantic.error }} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
+                  ) : (
+                    <p className="text-xs italic p-3 rounded-lg" style={{ color: colors.utility.secondaryText, backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F9FAFB' }}>
+                      No conditions added. Follow-ups will be available unconditionally.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Warranty Section */}
+          <div
+            className="border rounded-xl overflow-hidden"
+            style={cardStyle}
+          >
+            <SectionHeader
+              icon={Shield}
+              title="Warranty"
+              subtitle="Offer warranty coverage for this service"
+              section="warranty"
+              enabled={warranty.enabled}
+              onToggle={() => updateWarranty({ enabled: !warranty.enabled })}
+            />
+
+            {expandedSections.warranty && warranty.enabled && (
+              <div
+                className="p-5 border-t space-y-5 animate-in fade-in slide-in-from-top-2 duration-200"
+                style={{
+                  borderColor: isDarkMode ? colors.utility.primaryBackground : '#E5E7EB',
+                  backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+                }}
+              >
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Warranty Period <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={warranty.warrantyPeriod}
+                      onChange={(e) => updateWarranty({ warrantyPeriod: parseInt(e.target.value) || 30 })}
+                      min={1}
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                      Cutoff Time
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Period Unit <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={cancellation.cutoffHours}
-                        onChange={(e) => updateCancellation({ cutoffHours: parseInt(e.target.value) || 0 })}
-                        min={0}
-                        className="w-full px-3 py-2 border rounded-lg text-sm"
-                        style={inputStyle}
-                      />
-                      <span
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-sm"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        hours
-                      </span>
-                    </div>
+                    <select
+                      value={warranty.warrantyPeriodUnit}
+                      onChange={(e) =>
+                        updateWarranty({ warrantyPeriodUnit: e.target.value as 'days' | 'months' | 'years' })
+                      }
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    >
+                      <option value="days">Days</option>
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                      Warranty Type <span style={{ color: colors.semantic.error }}>*</span>
+                    </label>
+                    <select
+                      value={warranty.warrantyType}
+                      onChange={(e) =>
+                        updateWarranty({
+                          warrantyType: e.target.value as 'full' | 'limited' | 'parts_only' | 'labor_only',
+                        })
+                      }
+                      className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    >
+                      <option value="full">Full Warranty</option>
+                      <option value="limited">Limited Warranty</option>
+                      <option value="parts_only">Parts Only</option>
+                      <option value="labor_only">Labor Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                    Warranty Terms <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <textarea
+                    value={warranty.warrantyTerms || ''}
+                    onChange={(e) => updateWarranty({ warrantyTerms: e.target.value })}
+                    placeholder="Describe warranty terms and conditions..."
+                    rows={4}
+                    className="w-full px-4 py-3 border rounded-xl text-sm resize-none focus:outline-none focus:ring-2"
+                    style={inputStyle}
+                    required
+                  />
+                  <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+                    Clearly describe what is covered and any exclusions
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* HIDDEN: Cancellation Policy Section */}
+          {/*
+          <div className="border rounded-xl overflow-hidden" style={cardStyle}>
+            <SectionHeader
+              icon={XCircle}
+              title="Cancellation Policy"
+              subtitle="Define refund rules for cancellations"
+              section="cancellation"
+            />
+            ... cancellation policy content ...
+          </div>
+          */}
+
+          {/* HIDDEN: Reschedule Rules Section */}
+          {/*
+          <div className="border rounded-xl overflow-hidden" style={cardStyle}>
+            <SectionHeader
+              icon={Calendar}
+              title="Reschedule Rules"
+              subtitle="Control how often customers can reschedule"
+              section="reschedule"
+            />
+            ... reschedule rules content ...
+          </div>
+          */}
+
+          {/* Additional Options - Only Require Advance Deposit */}
+          <div
+            className="p-5 rounded-xl border"
+            style={cardStyle}
+          >
+            <h4 className="text-base font-semibold mb-4 flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
+              <Wallet className="w-5 h-5" style={{ color: colors.brand.primary }} />
+              Payment Options
+            </h4>
+            <div className="space-y-4">
+              <label className="flex items-start gap-4 cursor-pointer p-4 rounded-xl border-2 transition-all hover:shadow-sm"
+                style={{
+                  backgroundColor: (formData.meta?.requiresDeposit as boolean)
+                    ? `${colors.brand.primary}08`
+                    : (isDarkMode ? colors.utility.primaryBackground : '#FFFFFF'),
+                  borderColor: (formData.meta?.requiresDeposit as boolean)
+                    ? colors.brand.primary
+                    : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={(formData.meta?.requiresDeposit as boolean) || false}
+                  onChange={(e) => onChange('meta', { ...formData.meta, requiresDeposit: e.target.checked })}
+                  className="w-5 h-5 rounded mt-0.5"
+                  style={{ accentColor: colors.brand.primary }}
+                />
+                <div className="flex-1">
+                  <span className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
+                    Require Advance Deposit
+                    {(formData.meta?.requiresDeposit as boolean) && (
+                      <CheckCircle2 className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                    )}
+                  </span>
+                  <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
+                    Collect partial payment when booking to confirm the service
+                  </p>
+                </div>
+              </label>
+
+              {(formData.meta?.requiresDeposit as boolean) && (
+                <div className="pl-9 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                    Deposit Amount <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={(formData.meta?.depositPercentage as number) || 25}
+                      onChange={(e) =>
+                        onChange('meta', { ...formData.meta, depositPercentage: parseInt(e.target.value) || 25 })
+                      }
+                      min={1}
+                      max={100}
+                      className="w-24 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      style={inputStyle}
+                      required
+                    />
+                    <span
+                      className="px-4 py-3 rounded-xl text-sm font-medium"
+                      style={{
+                        backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+                        color: colors.utility.secondaryText
+                      }}
+                    >
+                      % of total
+                    </span>
                   </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Reschedule Section */}
-        <div
-          className="border rounded-xl overflow-hidden"
-          style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
-        >
-          <SectionHeader
-            icon={Calendar}
-            title="Reschedule Rules"
-            subtitle="Control how often customers can reschedule"
-            section="reschedule"
-          />
-
-          {expandedSections.reschedule && (
-            <div
-              className="p-4 border-t space-y-4"
-              style={{
-                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground + '50' : '#F9FAFB',
-              }}
-            >
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Max Reschedules
-                  </label>
-                  <input
-                    type="number"
-                    value={reschedule.maxReschedules}
-                    onChange={(e) => updateReschedule({ maxReschedules: parseInt(e.target.value) || 0 })}
-                    min={0}
-                    max={10}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Free Reschedules
-                  </label>
-                  <input
-                    type="number"
-                    value={reschedule.freeReschedules}
-                    onChange={(e) => updateReschedule({ freeReschedules: parseInt(e.target.value) || 0 })}
-                    min={0}
-                    max={reschedule.maxReschedules}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Buffer Time
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={reschedule.rescheduleBuffer}
-                      onChange={(e) => updateReschedule({ rescheduleBuffer: parseInt(e.target.value) || 0 })}
-                      min={0}
-                      className="w-full px-3 py-2 border rounded-lg text-sm"
-                      style={inputStyle}
-                    />
-                    <span
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      hours
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                    Reschedule Fee
-                  </label>
-                  <div className="relative">
-                    <span
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      {(formData.meta?.currency as string)?.substring(0, 1) || '₹'}
-                    </span>
-                    <input
-                      type="number"
-                      value={reschedule.rescheduleCharge || ''}
-                      onChange={(e) =>
-                        updateReschedule({ rescheduleCharge: parseFloat(e.target.value) || undefined })
-                      }
-                      placeholder="Free"
-                      className="w-full pl-8 pr-3 py-2 border rounded-lg text-sm"
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Info box */}
-              <div
-                className="flex items-start gap-2 p-3 rounded-lg"
-                style={{
-                  backgroundColor: `${colors.semantic.info}10`,
-                  border: `1px solid ${colors.semantic.info}30`,
-                }}
-              >
-                <Info className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: colors.semantic.info }} />
-                <p className="text-xs" style={{ color: colors.utility.primaryText }}>
-                  Customers must reschedule at least {reschedule.rescheduleBuffer} hours before the
-                  service. The first {reschedule.freeReschedules} reschedule(s) are free.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Additional Options */}
-        <div
-          className="p-4 rounded-xl border"
-          style={{
-            backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F9FAFB',
-            borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-          }}
-        >
-          <h4 className="text-sm font-semibold mb-4" style={{ color: colors.utility.primaryText }}>
-            Additional Options
-          </h4>
-          <div className="space-y-3">
+            {/* HIDDEN: Other additional options */}
+            {/*
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -715,41 +546,107 @@ const BusinessRulesStep: React.FC<BusinessRulesStepProps> = ({ formData, onChang
                 </p>
               </div>
             </label>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={(formData.meta?.requiresDeposit as boolean) || false}
-                onChange={(e) => onChange('meta', { ...formData.meta, requiresDeposit: e.target.checked })}
-                className="w-4 h-4 rounded"
-                style={{ accentColor: colors.brand.primary }}
-              />
+            */}
+          </div>
+        </div>
+
+        {/* Right Column (2/5) - Explanation Card */}
+        <div className="lg:col-span-2">
+          <div
+            className="p-6 rounded-xl border h-full"
+            style={{
+              backgroundColor: isDarkMode ? `${colors.semantic.warning}10` : '#FFFBEB',
+              borderColor: isDarkMode ? `${colors.semantic.warning}30` : '#FCD34D'
+            }}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div
+                className="p-2.5 rounded-xl"
+                style={{
+                  backgroundColor: isDarkMode ? colors.semantic.warning : '#F59E0B',
+                }}
+              >
+                <Lightbulb className="w-5 h-5 text-white" />
+              </div>
               <div>
-                <span className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
-                  Require advance deposit
+                <h4 className="font-semibold text-base" style={{ color: isDarkMode ? colors.utility.primaryText : '#78350F' }}>
+                  Business Rules Guide
+                </h4>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-sm" style={{ color: isDarkMode ? colors.utility.secondaryText : '#92400E' }}>
+              <div className="space-y-3">
+                <div className="flex items-start gap-2">
+                  <RefreshCw className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.warning : '#D97706' }} />
+                  <div>
+                    <strong>Free Follow-up</strong>
+                    <p className="text-xs mt-0.5 opacity-80">
+                      Offer customers free revisits within a specified period. Great for building trust and ensuring customer satisfaction.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.warning : '#D97706' }} />
+                  <div>
+                    <strong>Warranty</strong>
+                    <p className="text-xs mt-0.5 opacity-80">
+                      Provide warranty coverage to protect customers. Clearly define terms to avoid disputes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <Wallet className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.warning : '#D97706' }} />
+                  <div>
+                    <strong>Advance Deposit</strong>
+                    <p className="text-xs mt-0.5 opacity-80">
+                      Collect upfront payment to reduce no-shows and confirm serious bookings.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="mt-5 p-4 rounded-xl"
+              style={{
+                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4" style={{ color: isDarkMode ? colors.semantic.warning : '#D97706' }} />
+                <span className="font-semibold text-sm" style={{ color: isDarkMode ? colors.utility.primaryText : '#78350F' }}>
+                  Best Practices
                 </span>
-                <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                  Collect partial payment when booking
-                </p>
               </div>
-            </label>
-            {(formData.meta?.requiresDeposit as boolean) && (
-              <div className="pl-7">
-                <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                  Deposit Amount (%)
-                </label>
-                <input
-                  type="number"
-                  value={(formData.meta?.depositPercentage as number) || 25}
-                  onChange={(e) =>
-                    onChange('meta', { ...formData.meta, depositPercentage: parseInt(e.target.value) || 25 })
-                  }
-                  min={1}
-                  max={100}
-                  className="w-24 px-3 py-2 border rounded-lg text-sm"
-                  style={inputStyle}
-                />
+              <ul className="text-xs space-y-1" style={{ color: isDarkMode ? colors.utility.secondaryText : '#92400E' }}>
+                <li>• Offer at least 1 free follow-up for complex services</li>
+                <li>• Set warranty period based on service type</li>
+                <li>• 10-25% deposit is common for most services</li>
+                <li>• Clear terms prevent misunderstandings</li>
+              </ul>
+            </div>
+
+            <div
+              className="mt-4 p-4 rounded-xl"
+              style={{
+                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="w-4 h-4" style={{ color: isDarkMode ? colors.semantic.warning : '#D97706' }} />
+                <span className="font-semibold text-sm" style={{ color: isDarkMode ? colors.utility.primaryText : '#78350F' }}>
+                  Required Fields
+                </span>
               </div>
-            )}
+              <ul className="text-xs space-y-1" style={{ color: isDarkMode ? colors.utility.secondaryText : '#92400E' }}>
+                <li>• All fields marked with <span style={{ color: colors.semantic.error }}>*</span> are mandatory</li>
+                <li>• When a section is enabled, fill all required fields</li>
+                <li>• Warranty terms must be clearly written</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

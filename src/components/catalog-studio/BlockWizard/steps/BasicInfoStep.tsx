@@ -1,9 +1,17 @@
 // src/components/catalog-studio/BlockWizard/steps/BasicInfoStep.tsx
-// Phase 5: Enhanced with RichTextEditor, Image Upload, IconPicker
-// Follows patterns from ServiceForm/BasicInfoStep.tsx
+// Updated: Confined Quick Tips height, increased Description, Terms beside Description, removed Duration
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, Image as ImageIcon, X, AlertTriangle, Clock, Tag } from 'lucide-react';
+import {
+  Upload,
+  Image as ImageIcon,
+  X,
+  Tag,
+  Lightbulb,
+  Info,
+  CheckCircle2,
+  FileText,
+} from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { Block } from '../../../../types/catalogStudio';
 import { RichTextEditor } from '../../../ui/RichTextEditor';
@@ -44,9 +52,9 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isServiceBlock = blockType === 'service';
   const isSpareBlock = blockType === 'spare';
   const isBillingBlock = blockType === 'billing';
+  const isServiceBlock = blockType === 'service';
 
   // Get block type label
   const blockTypeLabel = BLOCK_TYPE_LABELS[blockType] || 'Block';
@@ -67,9 +75,15 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
     }
   }, [formData.meta?.image, formData.meta?.image_url]);
 
-  // Input styles - white background for light mode
-  const inputStyle = {
+  // Styles
+  const cardStyle = {
     backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+    borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+    boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)'
+  };
+
+  const inputStyle = {
+    backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
     color: colors.utility.primaryText,
   };
@@ -150,295 +164,330 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
         Define the fundamental details of this {blockTypeLabel.toLowerCase()}.
       </p>
 
-      <div className="space-y-6">
-        {/* Row 1: Name and Icon */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Block Name */}
-          <div>
-            <label className="block text-sm font-medium mb-1" style={labelStyle}>
-              {blockTypeLabel} Name <span style={{ color: colors.semantic.error }}>*</span>
+      {/* TWO-COLUMN LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Left Column (3/5) - Form Fields */}
+        <div className="lg:col-span-3 space-y-5">
+          {/* Name and Icon Card */}
+          <div className="p-5 rounded-xl border" style={cardStyle}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Block Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                  {blockTypeLabel} Name <span style={{ color: colors.semantic.error }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={`e.g., ${isServiceBlock ? 'Yoga Session' : isSpareBlock ? 'Air Filter' : 'Monthly Plan'}`}
+                  value={formData.name || ''}
+                  onChange={(e) => onChange('name', e.target.value)}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                  style={inputStyle}
+                  required
+                />
+              </div>
+
+              {/* Icon Picker */}
+              <IconPicker
+                value={formData.icon || 'Circle'}
+                onChange={(icon) => onChange('icon', icon)}
+                label="Block Icon"
+              />
+            </div>
+          </div>
+
+          {/* Image Upload Card */}
+          <div className="p-5 rounded-xl border" style={cardStyle}>
+            <label className="block text-sm font-medium mb-3" style={labelStyle}>
+              Block Image <span className="text-xs font-normal" style={{ color: colors.utility.secondaryText }}>(Optional)</span>
             </label>
-            <input
-              type="text"
-              placeholder={`e.g., ${isServiceBlock ? 'Yoga Session' : isSpareBlock ? 'Air Filter' : 'Monthly Plan'}`}
-              value={formData.name || ''}
-              onChange={(e) => onChange('name', e.target.value)}
-              className="w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2"
+
+            <div
+              className={`border-2 border-dashed rounded-xl transition-all ${
+                isDragging ? 'border-blue-400' : ''
+              }`}
               style={{
-                ...inputStyle,
-                '--tw-ring-color': colors.brand.primary + '40',
-              } as React.CSSProperties}
+                borderColor: imagePreview
+                  ? colors.semantic.success + '60'
+                  : isDragging
+                  ? colors.brand.primary
+                  : (isDarkMode ? colors.utility.primaryBackground : '#D1D5DB'),
+                backgroundColor: isDragging
+                  ? colors.brand.primary + '10'
+                  : (isDarkMode ? colors.utility.primaryBackground : '#F9FAFB'),
+              }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              {imagePreview ? (
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="Block preview"
+                    className="w-full h-32 object-cover rounded-xl"
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all rounded-xl flex items-center justify-center">
+                    <div className="opacity-0 hover:opacity-100 transition-opacity flex gap-2">
+                      <button
+                        type="button"
+                        onClick={openFileDialog}
+                        className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
+                      >
+                        <Upload className="h-4 w-4 text-gray-700" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
+                      >
+                        <X className="h-4 w-4 text-gray-700" />
+                      </button>
+                    </div>
+                  </div>
+                  {formData.meta?.image && !formData.meta?.image_url && (
+                    <div
+                      className="absolute top-2 right-2 px-2 py-1 rounded-lg text-xs font-medium"
+                      style={{
+                        backgroundColor: colors.semantic.warning + '20',
+                        color: colors.semantic.warning,
+                        border: `1px solid ${colors.semantic.warning}`,
+                      }}
+                    >
+                      Will upload on save
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className="p-6 text-center cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={openFileDialog}
+                >
+                  <ImageIcon
+                    className="h-8 w-8 mx-auto mb-2"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                  <p className="text-sm mb-1" style={{ color: colors.utility.primaryText }}>
+                    Add Block Image
+                  </p>
+                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Drag and drop or click to browse
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+
+            <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+              Recommended: PNG, JPG up to 10MB
+            </p>
+          </div>
+
+          {/* Description Card */}
+          <div className="p-5 rounded-xl border" style={cardStyle}>
+            <RichTextEditor
+              value={formData.description || ''}
+              onChange={(value) => onChange('description', value)}
+              label="Description"
+              placeholder="Describe what this block includes..."
+              required={true}
+              maxLength={2000}
+              showCharCount={true}
+              allowFullscreen={true}
+              toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+              minHeight={150}
+              maxHeight={200}
             />
           </div>
 
-          {/* Icon Picker */}
-          <IconPicker
-            value={formData.icon || 'Circle'}
-            onChange={(icon) => onChange('icon', icon)}
-            label="Block Icon"
-          />
-        </div>
-
-        {/* Row 2: Image Upload */}
-        <div>
-          <label className="block text-sm font-medium mb-2" style={labelStyle}>
-            Block Image <span className="text-xs font-normal" style={{ color: colors.utility.secondaryText }}>(Optional)</span>
-          </label>
-
-          <div
-            className={`border-2 border-dashed rounded-lg transition-all ${
-              isDragging ? 'border-blue-400' : ''
-            }`}
-            style={{
-              borderColor: imagePreview
-                ? colors.semantic.success + '60'
-                : isDragging
-                ? colors.brand.primary
-                : (isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB'),
-              backgroundColor: isDragging
-                ? colors.brand.primary + '10'
-                : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
-            }}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {imagePreview ? (
-              <div className="relative">
-                <img
-                  src={imagePreview}
-                  alt="Block preview"
-                  className="w-full h-32 object-cover rounded-lg"
-                />
-                <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
-                  <div className="opacity-0 hover:opacity-100 transition-opacity flex gap-2">
-                    <button
-                      type="button"
-                      onClick={openFileDialog}
-                      className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-                    >
-                      <Upload className="h-4 w-4 text-gray-700" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-                    >
-                      <X className="h-4 w-4 text-gray-700" />
-                    </button>
-                  </div>
+          {/* Block-specific fields - Spare Parts */}
+          {isSpareBlock && (
+            <div className="p-5 rounded-xl border" style={cardStyle}>
+              <h4 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
+                <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                Product Details
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                    SKU <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., ACF-150"
+                    value={(formData.meta?.sku as string) || ''}
+                    onChange={(e) => onChange('meta', { ...formData.meta, sku: e.target.value })}
+                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                    style={inputStyle}
+                    required
+                  />
                 </div>
-                {formData.meta?.image && !formData.meta?.image_url && (
-                  <div
-                    className="absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium"
-                    style={{
-                      backgroundColor: colors.semantic.warning + '20',
-                      color: colors.semantic.warning,
-                      border: `1px solid ${colors.semantic.warning}`,
-                    }}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>Category</label>
+                  <select
+                    value={(formData.meta?.spareCategory as string) || 'parts'}
+                    onChange={(e) => onChange('meta', { ...formData.meta, spareCategory: e.target.value })}
+                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                    style={inputStyle}
                   >
-                    Will upload on save
-                  </div>
-                )}
+                    <option value="filter">Filters</option>
+                    <option value="gas">Gases</option>
+                    <option value="parts">Parts</option>
+                    <option value="accessories">Accessories</option>
+                  </select>
+                </div>
               </div>
-            ) : (
-              <div
-                className="p-6 text-center cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={openFileDialog}
-              >
-                <ImageIcon
-                  className="h-8 w-8 mx-auto mb-2"
-                  style={{ color: colors.utility.secondaryText }}
-                />
-                <p className="text-sm mb-1" style={{ color: colors.utility.primaryText }}>
-                  Add Block Image
-                </p>
-                <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                  Drag and drop or click to browse
-                </p>
+            </div>
+          )}
+
+          {/* Block-specific fields - Billing */}
+          {isBillingBlock && (
+            <div className="p-5 rounded-xl border" style={cardStyle}>
+              <h4 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
+                <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                Billing Settings
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                    Payment Type <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <select
+                    value={(formData.meta?.paymentType as string) || 'upfront'}
+                    onChange={(e) => onChange('meta', { ...formData.meta, paymentType: e.target.value })}
+                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                    style={inputStyle}
+                  >
+                    <option value="upfront">100% Upfront</option>
+                    <option value="emi">EMI/Installments</option>
+                    <option value="milestone">Milestone-based</option>
+                    <option value="subscription">Recurring</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={labelStyle}>Invoice Trigger</label>
+                  <select
+                    value={(formData.meta?.invoiceTrigger as string) || 'auto'}
+                    onChange={(e) => onChange('meta', { ...formData.meta, invoiceTrigger: e.target.value })}
+                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                    style={inputStyle}
+                  >
+                    <option value="auto">Auto-generate</option>
+                    <option value="manual">Manual</option>
+                    <option value="completion">On Completion</option>
+                  </select>
+                </div>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* Tags Card */}
+          <div className="p-5 rounded-xl border" style={cardStyle}>
+            <label className="block text-sm font-medium mb-2 flex items-center gap-2" style={labelStyle}>
+              <Tag className="w-4 h-4" style={{ color: colors.brand.primary }} />
+              Tags
+            </label>
+            <input
+              type="text"
+              placeholder="Add tags separated by commas..."
+              value={formData.tags?.join(', ') || ''}
+              onChange={(e) => handleTagsChange(e.target.value)}
+              className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+              style={inputStyle}
+            />
+            <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+              Tags help organize and filter blocks in your library
+            </p>
           </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileInputChange}
-            className="hidden"
-          />
-
-          <p className="text-xs mt-1.5" style={{ color: colors.utility.secondaryText }}>
-            Recommended: PNG, JPG up to 10MB
-          </p>
         </div>
 
-        {/* Row 3: Description (RichTextEditor) */}
-        <RichTextEditor
-          value={formData.description || ''}
-          onChange={(value) => onChange('description', value)}
-          label="Description"
-          placeholder="Describe what this block includes..."
-          required={true}
-          maxLength={2000}
-          showCharCount={true}
-          allowFullscreen={true}
-          toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
-          minHeight={100}
-          maxHeight={200}
-        />
-
-        {/* Row 4: Terms & Conditions (Optional - RichTextEditor) */}
-        {(isServiceBlock || isSpareBlock) && (
-          <RichTextEditor
-            value={(formData.meta?.terms as string) || ''}
-            onChange={(value) => onChange('meta', { ...formData.meta, terms: value })}
-            label="Terms & Conditions"
-            placeholder="Enter any specific terms and conditions for this block..."
-            required={false}
-            maxLength={1000}
-            showCharCount={true}
-            allowFullscreen={true}
-            toolbarButtons={['bold', 'italic', 'bulletList']}
-            minHeight={80}
-            maxHeight={150}
-          />
-        )}
-
-        {/* Block-specific fields */}
-        {isServiceBlock && (
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                Duration <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <div className="relative">
-                <Clock
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-                  style={{ color: colors.utility.secondaryText }}
-                />
-                <input
-                  type="number"
-                  value={formData.duration || 60}
-                  onChange={(e) => onChange('duration', parseInt(e.target.value))}
-                  className="w-full pl-10 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                  style={inputStyle}
-                />
+        {/* Right Column (2/5) - Tips Card + Terms */}
+        <div className="lg:col-span-2 space-y-5">
+          {/* Quick Tips Card - Confined height */}
+          <div
+            className="p-5 rounded-xl border"
+            style={{
+              backgroundColor: isDarkMode ? `${colors.brand.primary}10` : '#F0F9FF',
+              borderColor: isDarkMode ? `${colors.brand.primary}30` : '#BAE6FD'
+            }}
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <div
+                className="p-2 rounded-lg"
+                style={{
+                  backgroundColor: isDarkMode ? colors.brand.primary : '#0284C7',
+                }}
+              >
+                <Lightbulb className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm" style={{ color: isDarkMode ? colors.utility.primaryText : '#0C4A6E' }}>
+                  Quick Tips
+                </h4>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>Unit</label>
-              <select
-                value={formData.durationUnit || 'min'}
-                onChange={(e) => onChange('durationUnit', e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
-              >
-                <option value="min">Minutes</option>
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
-              </select>
+
+            <div className="space-y-2 text-sm" style={{ color: isDarkMode ? colors.utility.secondaryText : '#0369A1' }}>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.brand.primary : '#0284C7' }} />
+                <span className="text-xs">Use clear, descriptive names</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.brand.primary : '#0284C7' }} />
+                <span className="text-xs">Add a high-quality image</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.brand.primary : '#0284C7' }} />
+                <span className="text-xs">Write detailed descriptions</span>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>Buffer Time</label>
-              <select
-                value={(formData.meta?.bufferTime as string) || '0'}
-                onChange={(e) => onChange('meta', { ...formData.meta, bufferTime: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
-              >
-                <option value="0">No buffer</option>
-                <option value="15">15 min</option>
-                <option value="30">30 min</option>
-                <option value="60">1 hour</option>
-              </select>
+
+            <div
+              className="mt-3 p-3 rounded-lg"
+              style={{
+                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Info className="w-3.5 h-3.5" style={{ color: isDarkMode ? colors.brand.primary : '#0284C7' }} />
+                <span className="font-semibold text-xs" style={{ color: isDarkMode ? colors.utility.primaryText : '#0C4A6E' }}>
+                  Required Fields
+                </span>
+              </div>
+              <ul className="text-xs space-y-0.5" style={{ color: isDarkMode ? colors.utility.secondaryText : '#0369A1' }}>
+                <li>• Block Name</li>
+                <li>• Description</li>
+                {isSpareBlock && <li>• SKU</li>}
+                {isBillingBlock && <li>• Payment Type</li>}
+              </ul>
             </div>
           </div>
-        )}
 
-        {isSpareBlock && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                SKU <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g., ACF-150"
-                value={(formData.meta?.sku as string) || ''}
-                onChange={(e) => onChange('meta', { ...formData.meta, sku: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
+          {/* Terms & Conditions Card - Below Quick Tips */}
+          {(isServiceBlock || isSpareBlock) && (
+            <div className="p-5 rounded-xl border" style={cardStyle}>
+              <RichTextEditor
+                value={(formData.meta?.terms as string) || ''}
+                onChange={(value) => onChange('meta', { ...formData.meta, terms: value })}
+                label="Terms & Conditions"
+                placeholder="Enter any specific terms and conditions..."
+                required={false}
+                maxLength={1000}
+                showCharCount={true}
+                allowFullscreen={true}
+                toolbarButtons={['bold', 'italic', 'bulletList']}
+                minHeight={150}
+                maxHeight={200}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>Category</label>
-              <select
-                value={(formData.meta?.spareCategory as string) || 'parts'}
-                onChange={(e) => onChange('meta', { ...formData.meta, spareCategory: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
-              >
-                <option value="filter">Filters</option>
-                <option value="gas">Gases</option>
-                <option value="parts">Parts</option>
-                <option value="accessories">Accessories</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        {isBillingBlock && (
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>
-                Payment Type <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <select
-                value={(formData.meta?.paymentType as string) || 'upfront'}
-                onChange={(e) => onChange('meta', { ...formData.meta, paymentType: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
-              >
-                <option value="upfront">100% Upfront</option>
-                <option value="emi">EMI/Installments</option>
-                <option value="milestone">Milestone-based</option>
-                <option value="subscription">Recurring</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1" style={labelStyle}>Invoice Trigger</label>
-              <select
-                value={(formData.meta?.invoiceTrigger as string) || 'auto'}
-                onChange={(e) => onChange('meta', { ...formData.meta, invoiceTrigger: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-                style={inputStyle}
-              >
-                <option value="auto">Auto-generate</option>
-                <option value="manual">Manual</option>
-                <option value="completion">On Completion</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* Tags */}
-        <div>
-          <label className="block text-sm font-medium mb-1" style={labelStyle}>
-            <Tag className="inline w-4 h-4 mr-1" />
-            Tags
-          </label>
-          <input
-            type="text"
-            placeholder="Add tags separated by commas..."
-            value={formData.tags?.join(', ') || ''}
-            onChange={(e) => handleTagsChange(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2"
-            style={inputStyle}
-          />
-          <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
-            Tags help organize and filter blocks in your library
-          </p>
+          )}
         </div>
       </div>
     </div>

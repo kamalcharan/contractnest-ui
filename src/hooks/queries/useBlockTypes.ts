@@ -46,6 +46,7 @@ export interface BlockTypesResponse {
 
 // Category name for block types in m_category_master
 export const BLOCK_TYPES_CATEGORY = 'cat_block_type';
+export const PRICING_MODES_CATEGORY = 'cat_pricing_mode';
 
 // Default colors for block types (used when hexcolor is null)
 const DEFAULT_COLORS: Record<string, { color: string; bgColor: string }> = {
@@ -115,6 +116,7 @@ export const mapDetailToBlockCategory = (detail: BlockTypeDetail): BlockCategory
 
   return {
     id: detail.sub_cat_name,
+    dbId: detail.id, // Actual UUID for database operations
     name: detail.display_name,
     icon: detail.icon_name || DEFAULT_ICONS[detail.sub_cat_name] || 'Box',
     count: 0, // Will be updated with actual block count if needed
@@ -197,10 +199,12 @@ export const useBlockCategories = () => {
     error,
     isSuccess,
     isEmpty: categories.length === 0,
-    // Helper to get category by ID
+    // Helper to get category by ID (string like 'service')
     getCategoryById: (id: string) => categories.find(c => c.id === id),
     // Helper to get category by name
     getCategoryByName: (name: string) => categories.find(c => c.name.toLowerCase() === name.toLowerCase()),
+    // Helper to get the database UUID for a block type (for API calls)
+    getDbIdByType: (typeId: string) => categories.find(c => c.id === typeId)?.dbId,
   };
 };
 
@@ -226,6 +230,70 @@ export const useBlockTypesDropdown = () => {
 };
 
 // =================================================================
+// PRICING MODES HOOK
+// =================================================================
+
+export interface PricingMode {
+  id: string;      // e.g., 'independent', 'resource_based'
+  dbId: string;    // Actual UUID for database operations
+  name: string;
+  description?: string;
+}
+
+/**
+ * Hook to fetch pricing modes from database
+ */
+export const usePricingModes = () => {
+  const { currentTenant } = useAuth();
+
+  const query = useQuery({
+    queryKey: ['catalog-studio', 'pricing-modes'],
+    queryFn: async (): Promise<BlockTypesResponse> => {
+      console.log('🚀 Fetching pricing modes from database...');
+
+      try {
+        const url = `/api/product-masterdata/global?category_name=${PRICING_MODES_CATEGORY}&is_active=true`;
+        const response = await api.get(url);
+
+        if (response.data?.success && response.data?.data) {
+          console.log('✅ Pricing modes fetched:', response.data.data.length);
+          return {
+            success: true,
+            data: response.data.data,
+          };
+        }
+
+        return { success: true, data: [] };
+      } catch (error: any) {
+        console.error('❌ Pricing modes fetch failed:', error);
+        return { success: false, data: [], error: error.message };
+      }
+    },
+    enabled: !!currentTenant,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 2,
+  });
+
+  // Map to PricingMode format
+  const pricingModes: PricingMode[] = query.data?.data?.map(detail => ({
+    id: detail.sub_cat_name,
+    dbId: detail.id,
+    name: detail.display_name,
+    description: detail.description || undefined,
+  })) || [];
+
+  return {
+    pricingModes,
+    isLoading: query.isLoading,
+    error: query.error,
+    // Helper to get the database UUID for a pricing mode (for API calls)
+    getDbIdByMode: (modeId: string) => pricingModes.find(m => m.id === modeId)?.dbId,
+  };
+};
+
+// =================================================================
 // EXPORTS
 // =================================================================
 
@@ -233,7 +301,9 @@ export default {
   useBlockTypes,
   useBlockCategories,
   useBlockTypesDropdown,
+  usePricingModes,
   blockTypeKeys,
   mapDetailToBlockCategory,
   BLOCK_TYPES_CATEGORY,
+  PRICING_MODES_CATEGORY,
 };
