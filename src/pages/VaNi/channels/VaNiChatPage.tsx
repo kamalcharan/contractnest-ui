@@ -32,7 +32,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { chatService } from '../../../services/chatService';
+import { useTenantProfile } from '../../../hooks/useTenantProfile';
 import { aiAgentService, type AIAgentSearchResult, type AIAgentSegmentResult, type AIAgentSuccessResponse, type AIAgentResponseType, type AIAgentDetailLevel, type AvailableIntent, type OptionsConfig, type ContactAction, type OptionItem } from '../../../services/aiAgentService';
 
 // Simple markdown renderer for N8N responses
@@ -280,6 +280,10 @@ const VaNiChatPage: React.FC = () => {
   // Get groupId from URL query param (passed from GroupsListPage)
   const urlGroupId = searchParams.get('groupId');
 
+  // Get user's phone from tenant profile (prioritize WhatsApp number)
+  const { profile: tenantProfile } = useTenantProfile();
+  const userPhone = tenantProfile?.business_whatsapp || tenantProfile?.business_phone || '';
+
   // State
   const [session, setSession] = useState<ChatSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -294,76 +298,60 @@ const VaNiChatPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Initialize chat on mount
+  // Initialize chat when groupId and phone are available
   useEffect(() => {
+    if (!urlGroupId || !userPhone) {
+      // Wait for both groupId and phone to be available
+      if (urlGroupId && !userPhone) {
+        console.log('⏳ Waiting for user phone from tenant profile...');
+      }
+      return;
+    }
     initializeChat();
-  }, []);
+  }, [urlGroupId, userPhone]);
 
   const initializeChat = async () => {
     // Prevent double initialization (React StrictMode)
     if (isInitializedRef.current) return;
+    if (!urlGroupId || !userPhone) return;
     isInitializedRef.current = true;
 
     setIsInitializing(true);
     try {
-      // Step 1: Get or create session (this ensures we always have group_id)
-      console.log('🔄 Getting/creating session...');
-      const sessionResponse = await chatService.getSession('chat');
+      console.log('🔄 Initializing chat with n8n...', { groupId: urlGroupId, phone: userPhone });
 
-      // ALWAYS set session if returned (needed for group_id in all API calls)
-      if (sessionResponse.success && sessionResponse.session) {
-        setSession(sessionResponse.session);
-        console.log('✅ Session obtained:', {
-          session_id: sessionResponse.session.id,
-          group_id: sessionResponse.session.group_id,
-          intent_state: sessionResponse.session.intent_state
+      // Call n8n welcome intent directly with phone
+      const welcomeResponse = await aiAgentService.welcome(urlGroupId, userPhone);
+
+      if (aiAgentService.isSuccess(welcomeResponse)) {
+        // Show N8N's welcome message with available_intents
+        addBotMessage(welcomeResponse.message || 'Welcome to BBB Directory!', {
+          responseType: welcomeResponse.response_type || 'welcome',
+          availableIntents: welcomeResponse.available_intents,
+          options: welcomeResponse.options,
+          contactActions: welcomeResponse.contact_actions
         });
-      }
 
-      // Get group_id from session or URL
-      const groupId = sessionResponse.session?.group_id || urlGroupId;
-
-      // Step 2: Call Group Discovery API with 'welcome' intent to get dynamic buttons
-      if (groupId) {
-        console.log('🔄 Calling welcome intent...');
-        const welcomeResponse = await aiAgentService.welcome(groupId, sessionResponse.session?.id);
-
-        if (aiAgentService.isSuccess(welcomeResponse)) {
-          // Show N8N's welcome message with available_intents
-          addBotMessage(welcomeResponse.message || 'Welcome to BBB Directory!', {
-            responseType: welcomeResponse.response_type || 'welcome',
-            availableIntents: welcomeResponse.available_intents,
-            options: welcomeResponse.options,
-            contactActions: welcomeResponse.contact_actions
+        // Update session if N8N returned one
+        if (welcomeResponse.session_id) {
+          setSession({
+            id: welcomeResponse.session_id,
+            group_id: welcomeResponse.group_id || urlGroupId,
+            group_name: welcomeResponse.group_name || 'BBB',
+            intent_state: 'active',
+            current_intent: null,
+            expires_at: ''
           });
-
-          // Update session if N8N returned one
-          if (welcomeResponse.session_id) {
-            setSession(prev => ({
-              id: welcomeResponse.session_id!,
-              group_id: welcomeResponse.group_id || prev?.group_id || null,
-              group_name: welcomeResponse.group_name || prev?.group_name || 'BBB',
-              intent_state: 'active',
-              current_intent: null,
-              expires_at: prev?.expires_at || ''
-            }));
-          }
-
-          setGroupActivated(true);
-        } else {
-          // Fallback if welcome API fails
-          addBotMessage(
-            `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?`,
-            { responseType: 'welcome' }
-          );
-          setGroupActivated(true);
         }
+
+        setGroupActivated(true);
       } else {
-        // No group_id - show basic welcome
+        // Fallback if welcome API fails
         addBotMessage(
-          `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nPlease select a group to start.`,
+          `Hi, I am **VaNi**, your AI assistant.\nWelcome to **BBB Bhagyanagar**!\n\nHow can I help you today?`,
           { responseType: 'welcome' }
         );
+        setGroupActivated(true);
       }
     } catch (error) {
       console.error('Error initializing chat:', error);
@@ -446,6 +434,10 @@ const VaNiChatPage: React.FC = () => {
 
   const handleSearch = async () => {
     if (!inputValue.trim()) return;
+    if (!userPhone) {
+      toast.error('Phone number not available. Please update your profile.');
+      return;
+    }
 
     const query = inputValue.trim();
     setInputValue('');
@@ -453,10 +445,9 @@ const VaNiChatPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Use Group Discovery API with intent detection
-      // Use session group_id, fallback to URL groupId param
-      const groupId = session?.group_id || urlGroupId || undefined;
-      const response = await aiAgentService.chat(query, groupId, session?.id);
+      // Use Group Discovery API via n8n webhook
+      const groupId = session?.group_id || urlGroupId || '';
+      const response = await aiAgentService.chat(query, groupId, userPhone);
 
       if (aiAgentService.isSuccess(response)) {
         // Check if this is a "Hi BBB" activation or "Bye" goodbye
@@ -552,8 +543,8 @@ const VaNiChatPage: React.FC = () => {
    */
   const handleGetDetails = async (result: SearchResult) => {
     const groupId = session?.group_id || urlGroupId;
-    if (!groupId) {
-      toast.error('Group ID is required');
+    if (!groupId || !userPhone) {
+      toast.error('Group ID and phone are required');
       return;
     }
 
@@ -561,11 +552,11 @@ const VaNiChatPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Use getContact method with membership_id
+      // Use getContact method with membership_id via n8n
       const response = await aiAgentService.getContact(
         groupId,
-        { membership_id: result.membership_id },
-        session?.id
+        userPhone,
+        result.membership_id
       );
 
       if (aiAgentService.isSuccess(response)) {
@@ -666,16 +657,16 @@ const VaNiChatPage: React.FC = () => {
    */
   const handleViewMembers = (segment: SegmentResult) => {
     const groupId = session?.group_id || urlGroupId;
-    if (!groupId) {
-      toast.error('Group ID is required');
+    if (!groupId || !userPhone) {
+      toast.error('Group ID and phone are required');
       return;
     }
 
     addUserMessage(`Show members in ${segment.segment_name}`);
     setIsLoading(true);
 
-    // Use listMembers method with segment name
-    aiAgentService.listMembers(groupId, segment.segment_name, session?.id)
+    // Use listMembers method with segment name via n8n
+    aiAgentService.listMembers(groupId, userPhone, segment.segment_name)
       .then(response => {
         if (aiAgentService.isSuccess(response)) {
           const mappedResults = response.results?.map(mapApiResult);
@@ -1152,8 +1143,8 @@ const VaNiChatPage: React.FC = () => {
   // Handle dynamic intent button click
   const handleDynamicIntent = async (intent: AvailableIntent) => {
     const groupId = session?.group_id || urlGroupId;
-    if (!groupId) {
-      toast.error('Group ID is required');
+    if (!groupId || !userPhone) {
+      toast.error('Group ID and phone are required');
       return;
     }
 
@@ -1165,17 +1156,13 @@ const VaNiChatPage: React.FC = () => {
       return;
     }
 
-    // Direct action - send intent
+    // Direct action - send intent via n8n
     addUserMessage(intent.label);
     setIsLoading(true);
 
     try {
-      const response = await aiAgentService.sendRequest({
-        intent: intent.id as any,
-        group_id: groupId,
-        channel: 'chat',
-        session_id: session?.id
-      });
+      // Use chat method which handles intent detection
+      const response = await aiAgentService.chat(intent.label, groupId, userPhone);
 
       if (aiAgentService.isSuccess(response)) {
         const mappedResults = response.results?.map(mapApiResult);
@@ -1208,8 +1195,8 @@ const VaNiChatPage: React.FC = () => {
   // Handle option item click (from options.items)
   const handleOptionClick = async (options: OptionsConfig, item: OptionItem) => {
     const groupId = session?.group_id || urlGroupId;
-    if (!groupId) {
-      toast.error('Group ID is required');
+    if (!groupId || !userPhone) {
+      toast.error('Group ID and phone are required');
       return;
     }
 
@@ -1217,14 +1204,13 @@ const VaNiChatPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await aiAgentService.sendRequest({
-        intent: options.intent as any,
-        group_id: groupId,
-        channel: 'chat',
-        session_id: session?.id,
-        segment: item.value,
-        membership_id: item.value
-      });
+      // Use selectOption method via n8n
+      const response = await aiAgentService.selectOption(
+        groupId,
+        userPhone,
+        item,
+        options.intent
+      );
 
       if (aiAgentService.isSuccess(response)) {
         const mappedResults = response.results?.map(mapApiResult);
@@ -1405,14 +1391,14 @@ const VaNiChatPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (!groupId) {
-                    toast.error('Group ID is required');
+                  if (!groupId || !userPhone) {
+                    toast.error('Group ID and phone are required');
                     return;
                   }
                   addUserMessage('Browse Industries');
                   setIsLoading(true);
-                  // Use listSegments method
-                  aiAgentService.listSegments(groupId, session?.id)
+                  // Use listSegments method via n8n
+                  aiAgentService.listSegments(groupId, userPhone)
                     .then(response => {
                       if (aiAgentService.isSuccess(response)) {
                         // Segments come directly from response.results for segments_list type
@@ -1442,14 +1428,14 @@ const VaNiChatPage: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  if (!groupId) {
-                    toast.error('Group ID is required');
+                  if (!groupId || !userPhone) {
+                    toast.error('Group ID and phone are required');
                     return;
                   }
                   addUserMessage('View All Members');
                   setIsLoading(true);
-                  // Use search method with 'all' query
-                  aiAgentService.search(groupId, 'all', session?.id)
+                  // Use search method with 'all' query via n8n
+                  aiAgentService.search(groupId, userPhone, 'all')
                     .then(response => {
                       if (aiAgentService.isSuccess(response)) {
                         const mappedResults = response.results?.map(mapApiResult);

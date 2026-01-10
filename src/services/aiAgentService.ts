@@ -1,19 +1,22 @@
 // frontend/src/services/aiAgentService.ts
-// Group Discovery Service - Deterministic Intent-based API
-// Replaces AI Agent with predictable, intent-based requests
-
-import api from './api';
-import { API_ENDPOINTS } from './serviceURLs';
+// Group Discovery Service - Direct n8n webhook integration
+// Calls n8n webhook directly for VaNi Chat functionality
 
 /**
- * Group Discovery Service - Intent-based VaNi Chat
+ * Group Discovery Service - VaNi Chat via n8n
  *
  * Features:
- * - Deterministic responses (no AI interpretation)
- * - Intent detection from user text
- * - Predictable response format with results array
- * - Action buttons for call, email, website, etc.
+ * - Direct n8n webhook calls (no backend proxy)
+ * - Session management with session_action
+ * - Phone-based user identification
+ * - Dynamic UI elements (available_intents, options, contact_actions)
  */
+
+// =================================================================
+// CONSTANTS
+// =================================================================
+
+const N8N_WEBHOOK_URL = 'https://n8n.srv1096269.hstgr.cloud/webhook/group-discovery-agent';
 
 // =================================================================
 // TYPES
@@ -29,18 +32,27 @@ export type GroupDiscoveryIntent =
 
 export type GroupDiscoveryChannel = 'chat' | 'whatsapp';
 
+export type SessionAction = 'start' | 'continue' | 'end';
+
 export type GroupDiscoveryResponseType =
   | 'welcome'
+  | 'owner_welcome'
+  | 'session_start'
+  | 'session_end'
   | 'goodbye'
+  | 'directory_welcome'
   | 'segments_list'
+  | 'members_list'
   | 'search_results'
   | 'contact_details'
+  | 'conversation'
+  | 'access_denied'
   | 'error';
 
 export type GroupDiscoveryDetailLevel = 'none' | 'list' | 'summary' | 'full';
 
 // For backward compatibility with existing code
-export type AIAgentResponseType = GroupDiscoveryResponseType | 'conversation';
+export type AIAgentResponseType = GroupDiscoveryResponseType;
 export type AIAgentDetailLevel = GroupDiscoveryDetailLevel;
 export type AIAgentChannel = GroupDiscoveryChannel;
 
@@ -50,6 +62,29 @@ export interface GroupDiscoveryAction {
   value: string;
 }
 
+// Request format per n8n integration doc
+export interface ChatRequest {
+  message: string;
+  phone: string;
+  group_id: string;
+  channel: GroupDiscoveryChannel;
+  session_action?: SessionAction;
+  session_config?: {
+    welcome_message?: string;
+    goodbye_message?: string;
+  };
+  intent?: string;
+  user_id?: string;
+  params?: {
+    membership_id?: string;
+    segment?: string;
+    query?: string;
+    limit?: number;
+    offset?: number;
+  };
+}
+
+// Legacy request format (for backward compatibility)
 export interface GroupDiscoveryRequest {
   intent: GroupDiscoveryIntent;
   group_id: string;
@@ -65,6 +100,7 @@ export interface GroupDiscoveryRequest {
 // Segment result (for segments_list response)
 export interface AIAgentSegmentResult {
   segment_name: string;
+  industry_id?: string;
   member_count: number;
 }
 
@@ -132,127 +168,97 @@ export interface ContactAction {
 
 export interface AIAgentSuccessResponse {
   success: true;
-  intent?: GroupDiscoveryIntent;
+  intent?: GroupDiscoveryIntent | string;
   message: string;
   response_type: AIAgentResponseType;
   detail_level: AIAgentDetailLevel;
   results?: AIAgentSearchResult[];
   segments?: AIAgentSegmentResult[];
   results_count?: number;
-  session_id?: string;
+  total_count?: number;
+  // Session info
+  session_id?: string | null;
   is_new_session?: boolean;
+  is_member?: boolean;
+  // Group info
   group_id?: string;
   group_name?: string;
   channel?: string;
-  intent_detected?: string;
-  from_cache?: boolean;
-  duration_ms?: number;
-  // Dynamic UI elements from N8N
+  // UI rendering helpers
   available_intents?: AvailableIntent[];
   options?: OptionsConfig;
   contact_actions?: ContactAction[];
   expects_input?: boolean;
+  // Meta
+  from_cache?: boolean;
+  duration_ms?: number;
+  intent_detected?: string;
 }
 
 export interface AIAgentErrorResponse {
   success: false;
   error?: string;
+  error_code?: string;
   message: string;
-  response_type: 'error';
+  response_type: 'error' | 'access_denied';
   detail_level: 'none';
   results: [];
   results_count: 0;
+  is_member?: boolean;
+  available_intents?: AvailableIntent[];
 }
 
 export type AIAgentResponse = AIAgentSuccessResponse | AIAgentErrorResponse;
 
 // =================================================================
-// INTENT DETECTION
+// SESSION STORAGE HELPERS
 // =================================================================
 
-interface DetectedIntent {
-  intent: GroupDiscoveryIntent;
-  query?: string;
-  segment?: string;
-  membership_id?: string;
-  business_name?: string;
+const SESSION_STORAGE_KEY = 'vani_chat_session';
+
+interface StoredSession {
+  session_id: string;
+  group_id: string;
+  phone: string;
+  expires_at?: string;
 }
 
-/**
- * Detect intent from user message text
- * Based on N8N developer's guide
- */
-function detectIntent(userMessage: string): DetectedIntent {
-  const msg = userMessage.toLowerCase().trim();
-
-  // Exit/Goodbye
-  if (['bye', 'exit', 'quit', 'goodbye', 'bye bbb'].some(w => msg === w || msg.includes(w))) {
-    return { intent: 'goodbye' };
-  }
-
-  // Welcome/Greeting
-  if (['hi', 'hello', 'hey', 'hi bbb', 'hello bbb'].some(w => msg.startsWith(w) || msg === w)) {
-    return { intent: 'welcome' };
-  }
-
-  // List segments/industries
-  if (
-    msg.includes('segment') ||
-    msg.includes('industr') ||
-    msg.includes('categories') ||
-    msg === 'list industries' ||
-    msg === 'show industries' ||
-    msg === 'browse industries'
-  ) {
-    return { intent: 'list_segments' };
-  }
-
-  // "Who is into [segment]" pattern
-  const whoMatch = msg.match(/who.*(is|are).*(into|in)\s+(.+)/i);
-  if (whoMatch) {
-    return { intent: 'list_members', segment: whoMatch[3].trim() };
-  }
-
-  // "Show [segment] companies/members" pattern
-  const showMatch = msg.match(/(show|list)\s+(.+?)\s*(companies|businesses|members)/i);
-  if (showMatch) {
-    return { intent: 'list_members', segment: showMatch[2].trim() };
-  }
-
-  // "List members in [segment]" pattern
-  const listInMatch = msg.match(/list\s+members\s+in\s+(.+)/i);
-  if (listInMatch) {
-    return { intent: 'list_members', segment: listInMatch[1].trim() };
-  }
-
-  // "Members in [segment]" pattern
-  const membersInMatch = msg.match(/members\s+in\s+(.+)/i);
-  if (membersInMatch) {
-    return { intent: 'list_members', segment: membersInMatch[1].trim() };
-  }
-
-  // "List all members" - special case
-  if (msg.includes('all members') || msg === 'list all' || msg === 'show all') {
-    return { intent: 'search', query: 'all' };
-  }
-
-  // Get contact details - by UUID
-  const uuidMatch = msg.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  if (uuidMatch && (msg.includes('detail') || msg.includes('contact') || msg.includes('get'))) {
-    return { intent: 'get_contact', membership_id: uuidMatch[0] };
-  }
-
-  // Get contact details - by business name
-  if (msg.includes('detail') || msg.includes('contact') || msg.includes('more about')) {
-    // Extract business name from common patterns
-    const detailsMatch = msg.match(/(?:details?\s+(?:for|of|about)|contact\s+(?:for|of)|more\s+about)\s+(.+)/i);
-    if (detailsMatch) {
-      return { intent: 'get_contact', business_name: detailsMatch[1].trim() };
+function getStoredSession(groupId: string): StoredSession | null {
+  try {
+    const stored = sessionStorage.getItem(`${SESSION_STORAGE_KEY}_${groupId}`);
+    if (!stored) return null;
+    const session = JSON.parse(stored) as StoredSession;
+    // Check if session is expired (if expires_at is set)
+    if (session.expires_at && new Date(session.expires_at) < new Date()) {
+      sessionStorage.removeItem(`${SESSION_STORAGE_KEY}_${groupId}`);
+      return null;
     }
+    return session;
+  } catch {
+    return null;
   }
+}
 
-  // Default: Search
-  return { intent: 'search', query: msg };
+function storeSession(groupId: string, sessionId: string, phone: string, expiresAt?: string): void {
+  try {
+    const session: StoredSession = {
+      session_id: sessionId,
+      group_id: groupId,
+      phone,
+      expires_at: expiresAt
+    };
+    sessionStorage.setItem(`${SESSION_STORAGE_KEY}_${groupId}`, JSON.stringify(session));
+  } catch {
+    console.warn('Failed to store session in sessionStorage');
+  }
+}
+
+function clearStoredSession(groupId: string): void {
+  try {
+    sessionStorage.removeItem(`${SESSION_STORAGE_KEY}_${groupId}`);
+  } catch {
+    // Ignore
+  }
 }
 
 // =================================================================
@@ -261,59 +267,44 @@ function detectIntent(userMessage: string): DetectedIntent {
 
 class GroupDiscoveryService {
   /**
-   * Send intent-based request to Group Discovery API
+   * Send request directly to n8n webhook
    */
-  async sendRequest(request: GroupDiscoveryRequest): Promise<AIAgentResponse> {
+  async sendToN8N(request: ChatRequest): Promise<AIAgentResponse> {
     try {
-      console.log('🔍 Group Discovery: Sending request...', {
-        intent: request.intent,
-        channel: request.channel,
-        hasGroupId: !!request.group_id,
-        hasQuery: !!request.query
+      console.log('🔍 Group Discovery: Sending to n8n...', {
+        message: request.message?.substring(0, 50),
+        group_id: request.group_id,
+        session_action: request.session_action,
+        hasPhone: !!request.phone
       });
 
-      const response = await api.post<AIAgentResponse>(
-        API_ENDPOINTS.GROUPS.GROUP_DISCOVERY,
-        request
-      );
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request)
+      });
+
+      const data = await response.json();
 
       console.log('🔍 Group Discovery: Response received', {
-        success: response.data.success,
-        responseType: (response.data as AIAgentSuccessResponse).response_type,
-        resultsCount: (response.data as AIAgentSuccessResponse).results_count
+        success: data.success,
+        response_type: data.response_type,
+        results_count: data.results_count,
+        session_id: data.session_id
       });
 
-      return response.data;
+      // Store session if returned
+      if (data.session_id && request.group_id) {
+        storeSession(request.group_id, data.session_id, request.phone);
+      }
+
+      return data;
     } catch (error: any) {
       console.error('Group Discovery Service error:', error);
-
-      if (error.response?.status === 401) {
-        return {
-          success: false,
-          message: 'Please log in to use the chat.',
-          response_type: 'error',
-          detail_level: 'none',
-          results: [],
-          results_count: 0
-        };
-      }
-
-      if (error.response?.status === 400) {
-        return {
-          success: false,
-          error: error.response?.data?.error,
-          message: error.response?.data?.message || 'Invalid request',
-          response_type: 'error',
-          detail_level: 'none',
-          results: [],
-          results_count: 0
-        };
-      }
-
       return {
         success: false,
         error: error.message,
-        message: 'Something went wrong. Please try again.',
+        message: 'Failed to connect to VaNi. Please try again.',
         response_type: 'error',
         detail_level: 'none',
         results: [],
@@ -323,14 +314,29 @@ class GroupDiscoveryService {
   }
 
   /**
-   * Convenience method: Send message with auto-intent detection
-   * This provides backward compatibility with the old chat() method
+   * Start a new chat session
    */
-  async chat(message: string, groupId?: string, sessionId?: string): Promise<AIAgentResponse> {
-    if (!groupId) {
+  async startSession(groupId: string, phone: string): Promise<AIAgentResponse> {
+    // Clear any existing session
+    clearStoredSession(groupId);
+
+    return this.sendToN8N({
+      message: 'Hi',
+      phone,
+      group_id: groupId,
+      channel: 'chat',
+      session_action: 'start'
+    });
+  }
+
+  /**
+   * Send a chat message (auto-detects if session needs to start)
+   */
+  async chat(message: string, groupId: string, phone: string): Promise<AIAgentResponse> {
+    if (!groupId || !phone) {
       return {
         success: false,
-        message: 'group_id is required',
+        message: 'group_id and phone are required',
         response_type: 'error',
         detail_level: 'none',
         results: [],
@@ -338,101 +344,155 @@ class GroupDiscoveryService {
       };
     }
 
-    // Detect intent from message
-    const detected = detectIntent(message);
+    // Check for stored session
+    const storedSession = getStoredSession(groupId);
+    const sessionAction: SessionAction = storedSession ? 'continue' : 'start';
 
-    return this.sendRequest({
-      intent: detected.intent,
+    // Check if this is a goodbye message
+    const isGoodbye = ['bye', 'exit', 'quit', 'goodbye', 'bye bbb'].some(
+      w => message.toLowerCase() === w || message.toLowerCase().includes(w)
+    );
+
+    return this.sendToN8N({
+      message,
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId,
-      query: detected.query,
-      segment: detected.segment,
-      membership_id: detected.membership_id,
-      business_name: detected.business_name
+      session_action: isGoodbye ? 'end' : sessionAction
     });
+  }
+
+  /**
+   * End the chat session
+   */
+  async endSession(groupId: string, phone: string): Promise<AIAgentResponse> {
+    const response = await this.sendToN8N({
+      message: 'bye',
+      phone,
+      group_id: groupId,
+      channel: 'chat',
+      session_action: 'end'
+    });
+
+    // Clear stored session
+    clearStoredSession(groupId);
+
+    return response;
   }
 
   /**
    * Send welcome intent
    */
-  async welcome(groupId: string, sessionId?: string): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'welcome',
+  async welcome(groupId: string, phone: string): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: 'Hi BBB',
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId
+      session_action: 'start'
     });
   }
 
   /**
    * Send goodbye intent
    */
-  async goodbye(groupId: string, sessionId?: string): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'goodbye',
-      group_id: groupId,
-      channel: 'chat',
-      session_id: sessionId
-    });
+  async goodbye(groupId: string, phone: string): Promise<AIAgentResponse> {
+    return this.endSession(groupId, phone);
   }
 
   /**
    * List all segments/industries
    */
-  async listSegments(groupId: string, sessionId?: string): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'list_segments',
+  async listSegments(groupId: string, phone: string): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: 'show industries',
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId
+      session_action: 'continue',
+      intent: 'list_segments'
     });
   }
 
   /**
    * List members in a segment
    */
-  async listMembers(groupId: string, segment: string, sessionId?: string, limit?: number): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'list_members',
+  async listMembers(groupId: string, phone: string, segment: string): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: segment,
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId,
-      segment,
-      limit
+      session_action: 'continue',
+      intent: 'list_members',
+      params: { segment }
     });
   }
 
   /**
    * Search for businesses
    */
-  async search(groupId: string, query: string, sessionId?: string, limit?: number): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'search',
+  async search(groupId: string, phone: string, query: string): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: query,
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId,
-      query,
-      limit
+      session_action: 'continue',
+      params: { query }
     });
   }
 
   /**
-   * Get contact details by membership_id or business_name
+   * Get contact details by membership_id
    */
-  async getContact(
-    groupId: string,
-    identifier: { membership_id?: string; business_name?: string },
-    sessionId?: string
-  ): Promise<AIAgentResponse> {
-    return this.sendRequest({
-      intent: 'get_contact',
+  async getContact(groupId: string, phone: string, membershipId: string): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: `get contact ${membershipId}`,
+      phone,
       group_id: groupId,
       channel: 'chat',
-      session_id: sessionId,
-      membership_id: identifier.membership_id,
-      business_name: identifier.business_name
+      session_action: 'continue',
+      intent: 'get_contact',
+      params: { membership_id: membershipId }
     });
+  }
+
+  /**
+   * Select an option from options list
+   */
+  async selectOption(
+    groupId: string,
+    phone: string,
+    option: OptionItem,
+    intent: string
+  ): Promise<AIAgentResponse> {
+    return this.sendToN8N({
+      message: option.label,
+      phone,
+      group_id: groupId,
+      channel: 'chat',
+      session_action: 'continue',
+      intent,
+      params: {
+        membership_id: intent === 'get_contact' ? option.value : undefined,
+        segment: intent === 'list_members' ? option.label : undefined
+      }
+    });
+  }
+
+  /**
+   * Get stored session for a group
+   */
+  getStoredSession(groupId: string): StoredSession | null {
+    return getStoredSession(groupId);
+  }
+
+  /**
+   * Clear stored session for a group
+   */
+  clearSession(groupId: string): void {
+    clearStoredSession(groupId);
   }
 
   /**
@@ -463,6 +523,29 @@ class GroupDiscoveryService {
   hasSegments(response: AIAgentResponse): boolean {
     if (!this.isSuccess(response)) return false;
     return Array.isArray(response.segments) && response.segments.length > 0;
+  }
+
+  // =================================================================
+  // LEGACY METHODS (for backward compatibility)
+  // =================================================================
+
+  /**
+   * @deprecated Use sendToN8N instead
+   * Legacy method that wraps the new API
+   */
+  async sendRequest(request: GroupDiscoveryRequest): Promise<AIAgentResponse> {
+    console.warn('aiAgentService.sendRequest is deprecated. Use chat() or sendToN8N() instead.');
+
+    // This is a fallback - in reality, VaNiChatPage should be updated to use the new methods
+    // For now, return an error to indicate the API has changed
+    return {
+      success: false,
+      message: 'Please use the updated chat() method with phone parameter',
+      response_type: 'error',
+      detail_level: 'none',
+      results: [],
+      results_count: 0
+    };
   }
 }
 

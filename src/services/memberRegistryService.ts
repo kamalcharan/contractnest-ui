@@ -51,7 +51,7 @@ class MemberRegistryService {
     groupId: string,
     membershipId: string
   ): Promise<MemberRegistryResponse> {
-    const phone = profileData.business_phone || profileData.business_whatsapp;
+    const phone = profileData.business_whatsapp || profileData.business_phone;
 
     if (!phone) {
       console.warn('📱 Registry: No phone number provided, skipping add');
@@ -101,7 +101,7 @@ class MemberRegistryService {
     groupId: string,
     membershipId: string
   ): Promise<MemberRegistryResponse> {
-    const phone = profileData.business_phone || profileData.business_whatsapp;
+    const phone = profileData.business_whatsapp || profileData.business_phone;
 
     if (!phone) {
       console.warn('📱 Registry: No phone number provided, skipping update');

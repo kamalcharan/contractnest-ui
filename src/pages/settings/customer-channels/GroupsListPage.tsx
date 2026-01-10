@@ -613,7 +613,7 @@ const GroupsListPage: React.FC = () => {
 
                       {/* Chat - VaNi AI Chat (BBB Directory Search) - Coming Soon */}
                       <button
-                        title="Chat (Coming Soon)"
+                        title="Chat with VaNi (Coming Soon)"
                         className="p-2.5 rounded-lg transition-all cursor-not-allowed opacity-50"
                         style={{
                           backgroundColor: `${colors.brand.primary}15`,
