@@ -2,6 +2,7 @@
 // Fully integrated with Catalog Studio API hooks
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import {
   Plus,
   Download,
@@ -18,6 +19,12 @@ import {
   DollarSign,
   Clock,
   Camera,
+  Boxes,
+  Palette,
+  Layers,
+  Wand2,
+  Sparkles,
+  Tag,
   FileCheck,
   AlertCircle,
   Package,
@@ -46,6 +53,19 @@ import {
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+
+const catalogStudioFeatures = [
+  { icon: Boxes, title: 'Block Library Management', description: 'Create and manage reusable content blocks.', highlight: true },
+  { icon: Wand2, title: 'Template Builder', description: 'Design professional contract templates visually.', highlight: false },
+  { icon: Tag, title: 'Dynamic Pricing Configuration', description: 'Set up flexible pricing models.', highlight: false },
+  { icon: Palette, title: 'Brand Customization', description: 'Apply your branding to every output.', highlight: false }
+];
+const catalogStudioFloatingIcons = [
+  { Icon: Boxes, top: '10%', left: '4%', delay: '0s', duration: '20s' },
+  { Icon: Layers, top: '18%', right: '6%', delay: '2s', duration: '18s' },
+  { Icon: Wand2, top: '68%', right: '5%', delay: '1s', duration: '19s' },
+  { Icon: Sparkles, top: '38%', left: '6%', delay: '2.5s', duration: '21s' },
+];
 import { Block } from '../../types/catalogStudio';
 import { BLOCK_CATEGORIES } from '../../utils/catalog-studio';
 import { ServiceCatalogTree } from '../../components/catalog-studio';
@@ -2262,4 +2282,10 @@ const CatalogStudioTemplatePage: React.FC = () => {
   );
 };
 
-export default CatalogStudioTemplatePage;
+const CatalogStudioTemplatePageWithComingSoon: React.FC = () => (
+  <ComingSoonWrapper pageKey="catalog-studio" title="Catalog Studio" subtitle="Your creative workspace for contract building blocks." heroIcon={Boxes} features={catalogStudioFeatures} floatingIcons={catalogStudioFloatingIcons}>
+    <CatalogStudioTemplatePage />
+  </ComingSoonWrapper>
+);
+
+export default CatalogStudioTemplatePageWithComingSoon;

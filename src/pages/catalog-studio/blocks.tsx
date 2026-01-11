@@ -1,8 +1,22 @@
 // src/pages/catalog-studio/blocks.tsx - Block Library Page (API Integrated)
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Search, Filter, Grid3X3, List, Plus, Download, ChevronDown, X, Tag, Clock, DollarSign, Check, AlertCircle, MoreVertical, Edit2, Copy, Trash2, Eye, SlidersHorizontal, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Filter, Grid3X3, List, Plus, Download, ChevronDown, X, Tag, Clock, DollarSign, Check, AlertCircle, MoreVertical, Edit2, Copy, Trash2, Eye, SlidersHorizontal, Loader2, RefreshCw, Boxes, Palette, Layers, Wand2, Sparkles, Settings } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
+
+const catalogStudioFeatures = [
+  { icon: Boxes, title: 'Block Library Management', description: 'Create and manage reusable content blocks. Services, terms, pricing - all modular and drag-drop ready.', highlight: true },
+  { icon: Wand2, title: 'Template Builder', description: 'Design professional contract templates visually. Combine blocks, customize layouts, and maintain brand consistency.', highlight: false },
+  { icon: Tag, title: 'Dynamic Pricing Configuration', description: 'Set up flexible pricing models. Quantity-based, tiered, or custom formulas - all configurable without code.', highlight: false },
+  { icon: Palette, title: 'Brand Customization', description: 'Apply your branding to every output. Colors, fonts, logos - make every document unmistakably yours.', highlight: false }
+];
+const catalogStudioFloatingIcons = [
+  { Icon: Boxes, top: '10%', left: '4%', delay: '0s', duration: '20s' },
+  { Icon: Layers, top: '18%', right: '6%', delay: '2s', duration: '18s' },
+  { Icon: Wand2, top: '68%', right: '5%', delay: '1s', duration: '19s' },
+  { Icon: Sparkles, top: '38%', left: '6%', delay: '2.5s', duration: '21s' },
+];
 import { Block, WizardMode } from '../../types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '../../utils/catalog-studio';
 import { BlockWizard, BlockEditorPanel } from '../../components/catalog-studio';
@@ -1071,4 +1085,10 @@ const CatalogStudioBlocksPage: React.FC = () => {
   );
 };
 
-export default CatalogStudioBlocksPage;
+const CatalogStudioBlocksPageWithComingSoon: React.FC = () => (
+  <ComingSoonWrapper pageKey="catalog-studio" title="Catalog Studio" subtitle="Your creative workspace for contract building blocks." heroIcon={Boxes} features={catalogStudioFeatures} floatingIcons={catalogStudioFloatingIcons}>
+    <CatalogStudioBlocksPage />
+  </ComingSoonWrapper>
+);
+
+export default CatalogStudioBlocksPageWithComingSoon;

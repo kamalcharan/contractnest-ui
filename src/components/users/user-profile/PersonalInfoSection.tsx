@@ -40,7 +40,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
-    country_code: '',
+    country_code: '+91',
     mobile_number: ''
   });
   const [copied, setCopied] = useState(false);
@@ -79,18 +79,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   const handleSave = async () => {
     if (!validateForm()) return;
 
-    if (formData.mobile_number && formData.mobile_number !== profile.mobile_number) {
-      try {
-        const isValid = await onValidateMobile(formData.mobile_number, formData.country_code);
-        if (!isValid) {
-          setErrors({ mobile_number: 'This mobile number is already in use' });
-          return;
-        }
-      } catch (error) {
-        console.error('Mobile validation error:', error);
-      }
-    }
-
+    // Skip separate mobile validation - profile update API handles duplicate checks
     const success = await onUpdate(formData);
     if (success) {
       setIsEditing(false);
@@ -99,10 +88,10 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
 
   const handleCancel = () => {
     setFormData({
-      first_name: profile.first_name || '',
-      last_name: profile.last_name || '',
-      country_code: profile.country_code || '+91',
-      mobile_number: profile.mobile_number || ''
+      first_name: profile?.first_name || '',
+      last_name: profile?.last_name || '',
+      country_code: profile?.country_code || '+91',
+      mobile_number: profile?.mobile_number || ''
     });
     setErrors({});
     setIsEditing(false);

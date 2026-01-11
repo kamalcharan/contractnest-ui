@@ -1,6 +1,7 @@
 // src/pages/catalog-studio/templates-list.tsx (API Integrated)
 import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import {
   Search,
   Grid3X3,
@@ -28,9 +29,28 @@ import {
   CheckCircle,
   Globe,
   Building2,
+  Boxes,
+  Palette,
+  Layers,
+  Wand2,
+  Sparkles,
+  Tag,
   RefreshCw,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+
+const catalogStudioFeatures = [
+  { icon: Boxes, title: 'Block Library Management', description: 'Create and manage reusable content blocks.', highlight: true },
+  { icon: Wand2, title: 'Template Builder', description: 'Design professional contract templates visually.', highlight: false },
+  { icon: Tag, title: 'Dynamic Pricing Configuration', description: 'Set up flexible pricing models.', highlight: false },
+  { icon: Palette, title: 'Brand Customization', description: 'Apply your branding to every output.', highlight: false }
+];
+const catalogStudioFloatingIcons = [
+  { Icon: Boxes, top: '10%', left: '4%', delay: '0s', duration: '20s' },
+  { Icon: Layers, top: '18%', right: '6%', delay: '2s', duration: '18s' },
+  { Icon: Wand2, top: '68%', right: '5%', delay: '1s', duration: '19s' },
+  { Icon: Sparkles, top: '38%', left: '6%', delay: '2.5s', duration: '21s' },
+];
 
 // API Hooks
 import {
@@ -1197,4 +1217,10 @@ const CatalogStudioTemplatesListPage: React.FC = () => {
   );
 };
 
-export default CatalogStudioTemplatesListPage;
+const CatalogStudioTemplatesListPageWithComingSoon: React.FC = () => (
+  <ComingSoonWrapper pageKey="catalog-studio" title="Catalog Studio" subtitle="Your creative workspace for contract building blocks." heroIcon={Boxes} features={catalogStudioFeatures} floatingIcons={catalogStudioFloatingIcons}>
+    <CatalogStudioTemplatesListPage />
+  </ComingSoonWrapper>
+);
+
+export default CatalogStudioTemplatesListPageWithComingSoon;

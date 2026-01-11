@@ -498,30 +498,9 @@ export const useCurrentUserProfile = () => {
   // In src/hooks/useUsers.ts - update the validateMobile function in useCurrentUserProfile
 
 const validateMobile = async (mobile: string, countryCode: string): Promise<boolean> => {
-  try {
-    // If mobile is empty, it's valid (optional field)
-    if (!mobile) return true;
-    
-    const response = await api.post('/api/user-management/me/validate-mobile', {
-      mobile_number: mobile,
-      country_code: countryCode
-    });
-    
-    // Check the actual response structure
-    // The API might return { valid: true/false } or { isValid: true/false }
-    console.log('Mobile validation response:', response.data);
-    
-    // Handle different possible response formats
-    return response.data?.valid ?? response.data?.isValid ?? true;
-  } catch (err: any) {
-    console.error('Error validating mobile:', err);
-    // If the API returns 409 (conflict), the number is in use
-    if (err.response?.status === 409) {
-      return false;
-    }
-    // For other errors, assume valid to not block the user
-    return true;
-  }
+  // Skip separate validation - profile update API handles duplicate mobile checks
+  // This avoids 404 errors from missing endpoint and simplifies the flow
+  return true;
 };
   
   useEffect(() => {

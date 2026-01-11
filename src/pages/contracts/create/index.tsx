@@ -20,9 +20,30 @@ import {
   Calendar,
   DollarSign,
   Send,
-  Handshake
+  Handshake,
+  FileSignature,
+  Shield,
+  BarChart3,
+  Bell,
+  Search,
+  Layers
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
+
+// Coming soon features for Contracts
+const contractsFeatures = [
+  { icon: FileSignature, title: 'Digital Contract Creation', description: 'Create professional contracts with customizable templates, clause libraries, and smart field mapping.', highlight: true },
+  { icon: Shield, title: 'Compliance & Audit Trail', description: 'Every action tracked. Full audit history for regulatory compliance and dispute resolution.', highlight: false },
+  { icon: Clock, title: 'Lifecycle Management', description: 'Track contract stages from draft to signed. Automated reminders for renewals and expirations.', highlight: false },
+  { icon: BarChart3, title: 'Contract Analytics', description: 'Insights on contract value, turnaround time, and performance metrics across your portfolio.', highlight: false }
+];
+const contractsFloatingIcons = [
+  { Icon: FileText, top: '8%', left: '4%', delay: '0s', duration: '22s' },
+  { Icon: FileSignature, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
+  { Icon: Shield, top: '60%', left: '5%', delay: '3s', duration: '21s' },
+  { Icon: Layers, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
+];
 
 // Import types
 import { ContractType } from '../../../types/contracts/contract';
@@ -414,4 +435,20 @@ const ContractCreatePage: React.FC = () => {
   );
 };
 
-export default ContractCreatePage;
+// Wrapped with Coming Soon
+const ContractCreatePageWithComingSoon: React.FC = () => {
+  return (
+    <ComingSoonWrapper
+      pageKey="contracts"
+      title="Contract Management"
+      subtitle="End-to-end contract lifecycle management. From creation to signature, renewal tracking to compliance - all in one powerful platform."
+      heroIcon={FileText}
+      features={contractsFeatures}
+      floatingIcons={contractsFloatingIcons}
+    >
+      <ContractCreatePage />
+    </ComingSoonWrapper>
+  );
+};
+
+export default ContractCreatePageWithComingSoon;
