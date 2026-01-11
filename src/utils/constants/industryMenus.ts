@@ -69,7 +69,7 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/contracts',
     hasSubmenu: true,
     submenuItems: [
-      { id: 'contracts-create', label: 'Create Contract', icon: 'FilePlus', path: '/contracts/create' }
+      { id: 'contracts-create', label: 'My Contracts', icon: 'FilePlus', path: '/contracts/create' }
       // HIDDEN: All Contracts, Contract Preview, PDF View, Invite Sellers, Drafts, Pending, Active
       // { id: 'contracts-all', label: 'All Contracts', icon: 'FileText', path: '/service-contracts/contracts' },
       // { id: 'contracts-preview', label: 'Contract Preview', icon: 'Eye', path: '/contracts/preview' },

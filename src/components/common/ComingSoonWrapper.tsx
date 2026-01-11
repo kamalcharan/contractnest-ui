@@ -75,28 +75,49 @@ const ComingSoonWrapper: React.FC<ComingSoonWrapperProps> = ({
   const [showUnlockPanel, setShowUnlockPanel] = useState(false);
   const [error, setError] = useState('');
   const [unlockAnimation, setUnlockAnimation] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // Generate per-user storage key
-  const getStorageKey = () => {
-    const userId = user?.id || 'anonymous';
-    return `comingsoon_unlocked_${userId}_${pageKey}`;
+  // Generate per-user storage key - returns null if no authenticated user
+  const getStorageKey = (): string | null => {
+    // Only create storage key if we have a valid user ID
+    if (!user?.id) {
+      return null;
+    }
+    return `comingsoon_unlocked_${user.id}_${pageKey}`;
   };
 
-  // Check localStorage on mount (per-user key)
+  // Check localStorage on mount (per-user key) - only after user is loaded
   useEffect(() => {
-    const storageKey = getStorageKey();
-    const unlocked = localStorage.getItem(storageKey);
-    if (unlocked === 'true') {
-      setIsUnlocked(true);
+    // Wait for user to be defined (auth loaded)
+    if (user === undefined) {
+      // Auth still loading, wait
+      return;
     }
-  }, [pageKey, user?.id]);
+
+    // Auth loaded - now check unlock status
+    setIsCheckingAuth(false);
+
+    const storageKey = getStorageKey();
+    if (storageKey) {
+      const unlocked = localStorage.getItem(storageKey);
+      if (unlocked === 'true') {
+        setIsUnlocked(true);
+      }
+    }
+    // If no storageKey (no user), keep isUnlocked as false
+  }, [pageKey, user]);
 
   // Handle unlock
   const handleUnlock = () => {
     if (password === UNLOCK_PASSWORD) {
+      const storageKey = getStorageKey();
+      if (!storageKey) {
+        setError('Please log in to unlock this feature');
+        setTimeout(() => setError(''), 3000);
+        return;
+      }
       setUnlockAnimation(true);
       setTimeout(() => {
-        const storageKey = getStorageKey();
         localStorage.setItem(storageKey, 'true');
         setIsUnlocked(true);
       }, 600);
@@ -111,6 +132,28 @@ const ComingSoonWrapper: React.FC<ComingSoonWrapperProps> = ({
       handleUnlock();
     }
   };
+
+  // While checking auth, show nothing (or could show loading)
+  // This prevents flash of unlocked content before auth loads
+  if (isCheckingAuth) {
+    return (
+      <div
+        className="h-full min-h-[500px] flex items-center justify-center"
+        style={{ backgroundColor: colors.utility.primaryBackground }}
+      >
+        <div className="animate-pulse text-center">
+          <div
+            className="w-16 h-16 rounded-full mx-auto mb-4"
+            style={{ backgroundColor: `${accent}20` }}
+          />
+          <div
+            className="h-4 w-32 rounded mx-auto"
+            style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // If unlocked, show actual content
   if (isUnlocked) {

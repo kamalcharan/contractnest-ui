@@ -416,15 +416,17 @@ const AppContent: React.FC = () => {
             </Route>
           </Route>
 
-          {/* ✅ NEW: Contract Builder Route - Full page without sidebar */}
+          {/* ✅ FIXED: Contract Builder Route - Now uses MainLayout for Coming Soon */}
           <Route
             path="/contracts/create"
             element={
               <ProtectedRoute>
-                <ContractCreatePage />
+                <MainLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<ContractCreatePage />} />
+          </Route>
 
           {/* ✅ NEW: Contract Preview Route */}
           <Route

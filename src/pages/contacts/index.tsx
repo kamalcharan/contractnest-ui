@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../contexts/ThemeContext';
-import { 
-  Users, 
-  Plus, 
-  Search, 
-  Filter, 
+import {
+  Users,
+  Plus,
+  Search,
+  Filter,
   MoreHorizontal,
   Building2,
   User,
@@ -36,12 +36,31 @@ import {
   Tag,
   UserCheck,
   UserX,
-  Copy
+  Copy,
+  UserPlus,
+  Network,
+  Briefcase
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
+
+// Coming Soon features for Contacts
+const contactsFeatures = [
+  { icon: Users, title: 'Contact Management', description: 'Centralized hub for all your business contacts - customers, vendors, partners, and team members.', highlight: true },
+  { icon: Network, title: 'Relationship Mapping', description: 'Visualize connections between contacts and track interaction history.', highlight: false },
+  { icon: Briefcase, title: 'Business Classification', description: 'Categorize contacts by type, industry, and custom tags for easy filtering.', highlight: false },
+  { icon: UserPlus, title: 'Smart Import', description: 'Bulk import contacts from CSV, vCard, or sync with external systems.', highlight: false }
+];
+
+const contactsFloatingIcons = [
+  { Icon: Users, top: '8%', left: '4%', delay: '0s', duration: '22s' },
+  { Icon: UserPlus, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
+  { Icon: Network, top: '60%', left: '5%', delay: '3s', duration: '21s' },
+  { Icon: Briefcase, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
+];
 
 // Import API hooks
 import { useContactList, useContactStats } from '../../hooks/useContacts';
@@ -1742,4 +1761,20 @@ const ContactsPage: React.FC = () => {
   );
 };
 
-export default ContactsPage;
+// Wrapped with Coming Soon
+const ContactsPageWithComingSoon: React.FC = () => {
+  return (
+    <ComingSoonWrapper
+      pageKey="contacts"
+      title="Contacts Management"
+      subtitle="Your complete contact management solution. Organize, track, and nurture all your business relationships in one place."
+      heroIcon={Users}
+      features={contactsFeatures}
+      floatingIcons={contactsFloatingIcons}
+    >
+      <ContactsPage />
+    </ComingSoonWrapper>
+  );
+};
+
+export default ContactsPageWithComingSoon;
