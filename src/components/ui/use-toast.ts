@@ -1,4 +1,7 @@
+// src/components/ui/use-toast.ts
+// BRIDGED: This now uses VaNiToast internally for all toast calls
 import * as React from "react"
+import { vaniToast } from "@/components/common/toast"
 
 import type {
   ToastActionElement,
@@ -74,8 +77,6 @@ const reducer = (state: State, action: Action): State => {
     case actionTypes.DISMISS_TOAST: {
       const { toastId } = action
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId)
       } else {
@@ -123,8 +124,31 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
+// BRIDGED: toast() now uses VaNiToast internally
 function toast({ ...props }: Toast) {
   const id = genId()
+
+  // Determine toast type and message
+  const message = typeof props.title === 'string'
+    ? props.title
+    : typeof props.description === 'string'
+    ? props.description
+    : 'Notification';
+
+  // Bridge to VaNiToast based on variant
+  if (props.variant === 'destructive') {
+    vaniToast.error(message);
+  } else if (props.title?.toString().toLowerCase().includes('success')) {
+    vaniToast.success(message);
+  } else if (props.title?.toString().toLowerCase().includes('error') || props.title?.toString().toLowerCase().includes('failed')) {
+    vaniToast.error(message);
+  } else if (props.title?.toString().toLowerCase().includes('warning')) {
+    vaniToast.warning(message);
+  } else if (props.title?.toString().toLowerCase().includes('loading') || props.title?.toString().toLowerCase().includes('processing')) {
+    vaniToast.loading(message);
+  } else {
+    vaniToast.info(message);
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({

@@ -28,6 +28,20 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/dashboard',
     hasSubmenu: false
   },
+  // Operations menu - moved after Dashboard for better UX
+  {
+    id: 'operations',
+    label: 'Operations',
+    icon: 'Activity',
+    path: '/ops/cockpit',
+    hasSubmenu: true,
+    submenuItems: [
+      { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
+      { id: 'entities', label: 'Entities', icon: 'Building2', path: '/contacts' },
+      { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' },
+      { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
+    ]
+  },
   {
     id: 'contacts',
     label: 'Contacts',
@@ -122,19 +136,6 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   */
-  // Operations menu - all submenus visible
-  {
-    id: 'operations',
-    label: 'Operations',
-    icon: 'Activity',
-    path: '/ops/cockpit',
-    hasSubmenu: true,
-    submenuItems: [
-      { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
-      { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' },
-      { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
-    ]
-  },
   // Catalog Studio - all submenus visible
   {
     id: 'catalog-studio',

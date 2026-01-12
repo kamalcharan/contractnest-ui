@@ -15,18 +15,18 @@ interface NavItemProps {
 const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
   const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Safely get the icon from Lucide icons with proper typing
   const getIconComponent = (iconName: string) => {
     const iconsMap = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number }>>;
     return iconsMap[iconName] || LucideIcons.Circle;
   };
-  
+
   const IconComponent = getIconComponent(item.icon);
-  
+
   const toggleSubmenu = (e: React.MouseEvent) => {
     if (item.hasSubmenu && item.submenuItems) {
       e.preventDefault();
@@ -36,19 +36,19 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
 
   return (
     <div className="mb-1">
-      <NavLink 
-        to={item.hasSubmenu ? '#' : item.path} 
+      <NavLink
+        to={item.hasSubmenu ? '#' : item.path}
         className={({ isActive }) => `
           flex items-center gap-3 px-4 py-3 rounded-lg transition-all sidebar-nav-item
           ${item.hasSubmenu && isSubmenuOpen ? 'submenu-open' : ''}
         `}
         style={({ isActive }) => ({
-          backgroundColor: (isActive && !item.hasSubmenu) 
+          backgroundColor: (isActive && !item.hasSubmenu)
             ? colors.brand.primary
-            : (item.hasSubmenu && isSubmenuOpen) 
+            : (item.hasSubmenu && isSubmenuOpen)
               ? `${colors.utility.primaryText}10`
               : 'transparent',
-          color: (isActive && !item.hasSubmenu) 
+          color: (isActive && !item.hasSubmenu)
             ? 'white'
             : colors.utility.primaryText,
           fontWeight: (isActive && !item.hasSubmenu) ? '500' : 'normal'
@@ -74,7 +74,7 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
         <div className="relative">
           <IconComponent size={20} />
           {badge !== undefined && badge > 0 && (
-            <span 
+            <span
               className="absolute -top-1 -right-1 text-xs rounded-full h-4 w-4 flex items-center justify-center text-white"
               style={{ backgroundColor: colors.semantic.error }}
             >
@@ -82,20 +82,20 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
             </span>
           )}
         </div>
-        
+
         {!collapsed && (
           <div className="flex justify-between items-center w-full">
             <span>{item.label}</span>
-            
+
             {item.hasSubmenu && item.submenuItems && (
-              <LucideIcons.ChevronRight 
-                size={16} 
-                className={`transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`} 
+              <LucideIcons.ChevronRight
+                size={16}
+                className={`transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`}
               />
             )}
-            
+
             {badge !== undefined && badge > 0 && (
-              <span 
+              <span
                 className="text-xs rounded-full px-2 py-0.5"
                 style={{
                   backgroundColor: `${colors.brand.primary}20`,
@@ -108,25 +108,25 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
           </div>
         )}
       </NavLink>
-      
+
       {!collapsed && item.hasSubmenu && item.submenuItems && isSubmenuOpen && (
-        <div 
+        <div
           className="ml-5 pl-4 border-l space-y-1 mt-1 transition-colors"
           style={{ borderColor: `${colors.utility.primaryText}20` }}
         >
           {item.submenuItems.map((subItem) => {
             const SubIconComponent = getIconComponent(subItem.icon);
-            
+
             return (
               <NavLink
                 key={subItem.id}
                 to={subItem.path}
                 className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all"
                 style={({ isActive }) => ({
-                  backgroundColor: isActive 
+                  backgroundColor: isActive
                     ? `${colors.brand.primary}20`
                     : 'transparent',
-                  color: isActive 
+                  color: isActive
                     ? colors.brand.primary
                     : colors.utility.secondaryText,
                   fontWeight: isActive ? '500' : 'normal'
@@ -171,17 +171,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const [logoError, setLogoError] = useState(false);
   const [iconError, setIconError] = useState(false);
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Get industry-specific menu items
   const menuItems = getMenuItemsForIndustry(user?.industry || currentTenant?.id);
-  
+
   // Filter items into regular and admin groups
   const regularMenuItems = menuItems.filter(item => !item.adminOnly);
   const adminMenuItems = menuItems.filter(item => item.adminOnly);
-  
+
   // Mock badge counts - in a real app, these would come from API/state
   const notificationCounts: Record<string, number> = {
     contracts: 3,
@@ -198,9 +198,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
     if (collapsed) {
       if (!iconError) {
         return (
-          <img 
-            src="/assets/images/contractnest-icon.png" 
-            alt="CN" 
+          <img
+            src="/assets/images/contractnest-icon.png"
+            alt="CN"
             className="h-8 w-8"
             onError={() => setIconError(true)}
           />
@@ -208,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
       } else {
         // Fallback for collapsed state if image fails to load
         return (
-          <div 
+          <div
             className="h-8 w-8 rounded-full flex items-center justify-center text-white"
             style={{ backgroundColor: colors.brand.primary }}
           >
@@ -220,9 +220,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
       if (!logoError) {
         return (
           <div className="flex items-center">
-            <img 
-              src="assets/assets/images/contractnest-logo.png" 
-              alt="ContractNest" 
+            <img
+              src="/assets/images/contractnest-logo.png"
+              alt="ContractNest"
               className="h-8"
               onError={() => setLogoError(true)}
             />
@@ -230,35 +230,39 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
         );
       } else {
         // Fallback for expanded state if image fails to load
+        // Theme-stable design: icon badge + text
         return (
-          <h1 
-            className="text-xl font-bold transition-colors"
-            style={{
-              background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
-            }}
-          >
-            ContractNest
-          </h1>
+          <div className="flex items-center gap-2">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+              style={{ backgroundColor: colors.brand.primary }}
+            >
+              CN
+            </span>
+            <span
+              className="text-xl font-bold tracking-tight"
+              style={{ color: colors.utility.primaryText }}
+            >
+              ContractNest
+            </span>
+          </div>
         );
       }
     }
   };
 
   return (
-    <aside 
+    <aside
       className={`
         flex flex-col transition-all duration-300 ease-in-out sidebar shadow-sm h-full
         ${collapsed ? 'w-16' : 'w-64'}
       `}
-      style={{ 
+      style={{
         backgroundColor: colors.utility.secondaryBackground,
         color: colors.utility.primaryText
       }}
     >
-      <div 
+      <div
         className="flex items-center justify-between p-4 border-b transition-colors"
         style={{ borderColor: `${colors.utility.primaryText}20` }}
       >
@@ -271,40 +275,40 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
         <nav className="py-4 space-y-1">
           {/* Regular menu items */}
           {regularMenuItems.map((item) => (
-            <NavItem 
-              key={item.id} 
-              item={item} 
+            <NavItem
+              key={item.id}
+              item={item}
               collapsed={collapsed}
               badge={notificationCounts[item.id]}
             />
           ))}
-          
+
           {/* Admin menu separator - only show if user is admin and there are admin items */}
           {isAdmin && adminMenuItems.length > 0 && (
             <div className="my-4 px-4">
               <div className="flex items-center">
                 {!collapsed && (
-                  <span 
+                  <span
                     className="text-xs font-semibold uppercase tracking-wider transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
                     Admin
                   </span>
                 )}
-                <div 
+                <div
                   className={`${collapsed ? 'w-full' : 'ml-2 flex-1'} h-px transition-colors`}
                   style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                 />
               </div>
             </div>
           )}
-          
+
           {/* Admin menu items - only show if user is admin */}
           {isAdmin && adminMenuItems.map((item) => (
-            <NavItem 
-              key={item.id} 
-              item={item} 
-              collapsed={collapsed} 
+            <NavItem
+              key={item.id}
+              item={item}
+              collapsed={collapsed}
             />
           ))}
         </nav>
@@ -312,27 +316,27 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
 
       <div className="mt-auto">
         {!collapsed && (
-          <div 
+          <div
             className="p-4 border-t transition-colors"
             style={{ borderColor: `${colors.utility.primaryText}20` }}
           >
-            <div 
+            <div
               className="rounded-lg p-4 shadow-sm transition-colors"
               style={{ backgroundColor: `${colors.utility.primaryText}10` }}
             >
-              <p 
+              <p
                 className="text-sm font-medium transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Need help?
               </p>
-              <p 
+              <p
                 className="text-xs mt-1 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 Check our documentation or contact support
               </p>
-              <button 
+              <button
                 className="mt-3 text-xs font-medium flex items-center transition-colors hover:opacity-80"
                 style={{ color: colors.brand.primary }}
               >

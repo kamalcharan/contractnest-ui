@@ -6,11 +6,12 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
-import { QueryProvider } from './providers/QueryProvider'; // ✅ NEW: TanStack Query Provider
+import { QueryProvider } from './providers/QueryProvider'; // TanStack Query Provider
 
 import './styles/globals.css';
 import './styles/layout.css';
-import { Toaster } from 'react-hot-toast';
+// import { Toaster } from 'react-hot-toast'; // Replaced with VaNiToast
+import { VaNiToastProviderWithGlobal } from './components/common/toast'; // VaNiToast
 import { initSentry } from './utils/sentry';
 import ErrorBoundary from './components/ErrorBoundary';
 import { MiscPageWrapper } from './components/misc';
@@ -87,15 +88,15 @@ import WebsiteIntegrationPage from './vani/pages/channels/WebsiteIntegrationPage
 import ChatBotIntegrationPage from './vani/pages/channels/ChatBotIntegrationPage';
 import WhatsAppIntegrationPage from './vani/pages/channels/WhatsAppIntegrationPage';
 
-// ✅ NEW: BBB Directory Pages
+// BBB Directory Pages
 import BBBProfileOnboardingPage from './pages/VaNi/channels/BBBProfileOnboardingPage';
 import BBBAdminDashboard from './pages/VaNi/channels/BBBAdminDashboard';
 import VaNiChatPage from './pages/VaNi/channels/VaNiChatPage';
 
-// ✅ Implementation Toolkit
+// Implementation Toolkit
 import TenantProfilesPage from './pages/VaNi/TenantProfilesPage';
 
-// ✅ NEW: Groups Pages (Customer Channels)
+// Groups Pages (Customer Channels)
 import GroupsListPage from './pages/settings/customer-channels/GroupsListPage';
 import GroupProfileDashboard from './pages/settings/customer-channels/GroupProfileDashboard';
 
@@ -119,7 +120,7 @@ import SettingsPage from './pages/settings';
 import ListOfValuesPage from './pages/settings/LOV';
 import StorageSettingsPage from './pages/settings/storagesettings';
 
-// ✅ FIXED: Import the actual Resources page instead of placeholder
+// FIXED: Import the actual Resources page instead of placeholder
 import ResourcesPage from './pages/settings/Resources';
 
 // Service Contracts - Templates
@@ -131,10 +132,10 @@ import TemplateDesignerPage from './pages/service-contracts/templates/designer';
 // Service Contracts - Contracts
 import ContractsPage from './pages/service-contracts/contracts';
 
-// ✅ NEW: Contract Builder
+// Contract Builder
 import ContractCreatePage from './pages/contracts/create';
 
-// ✅ NEW: Contract Preview, PDF View, Ops Cockpit, Invite Sellers
+// Contract Preview, PDF View, Ops Cockpit, Invite Sellers
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
@@ -196,8 +197,8 @@ const testAPIConnection = () => {
   // Test with your api service
   import('./services/api').then(({ default: api }) => {
     api.get('/')
-      .then(response => console.log('✅ API Connected:', response.data))
-      .catch(err => console.error('❌ API Error:', err));
+      .then(response => console.log('API Connected:', response.data))
+      .catch(err => console.error('API Error:', err));
   });
 };
 
@@ -208,14 +209,12 @@ testAPIConnection();
 const ProfilePage = () => <div className="p-8">Profile Page (Coming Soon)</div>;
 const TeamEditPage = () => <div className="p-8">Edit Team Member Page (Coming Soon)</div>;
 
-// ✅ REMOVED: Placeholder ResourcesPage - now using real import
-
 // Smart Home Page Component - Shows landing page OR redirects based on auth
 const SmartHomePage: React.FC = () => {
   const { isAuthenticated, isLoading, currentTenant } = useAuth();
   const location = useLocation();
 
-  // ✅ Don't redirect if user is on auth pages
+  // Don't redirect if user is on auth pages
   const isAuthPage = ['/login', '/signup', '/register', '/forgot-password', '/reset-password'].includes(location.pathname);
 
   if (isLoading) {
@@ -278,7 +277,8 @@ const AppContent: React.FC = () => {
       <NetworkStatusHandler />
       <SessionConflictNotification />
       <EnvironmentSwitchModal />
-      <Toaster position="bottom-right" />
+      {/* Replaced react-hot-toast Toaster with VaNiToastProviderWithGlobal */}
+      {/* <Toaster position="bottom-right" /> */}
       <MiscPageWrapper>
         <Routes>
           {/* MISC Routes - Outside of MainLayout */}
@@ -416,7 +416,7 @@ const AppContent: React.FC = () => {
             </Route>
           </Route>
 
-          {/* ✅ FIXED: Contract Builder Route - Now uses MainLayout for Coming Soon */}
+          {/* FIXED: Contract Builder Route - Now uses MainLayout for Coming Soon */}
           <Route
             path="/contracts/create"
             element={
@@ -428,7 +428,7 @@ const AppContent: React.FC = () => {
             <Route index element={<ContractCreatePage />} />
           </Route>
 
-          {/* ✅ NEW: Contract Preview Route */}
+          {/* NEW: Contract Preview Route */}
           <Route
             path="/contracts/preview"
             element={
@@ -441,7 +441,7 @@ const AppContent: React.FC = () => {
             <Route path=":id" element={<ContractPreviewPage />} />
           </Route>
 
-          {/* ✅ NEW: PDF View Route */}
+          {/* NEW: PDF View Route */}
           <Route
             path="/contracts/pdf"
             element={
@@ -454,7 +454,7 @@ const AppContent: React.FC = () => {
             <Route path=":id" element={<PDFViewPage />} />
           </Route>
 
-          {/* ✅ NEW: Ops Cockpit Route */}
+          {/* NEW: Ops Cockpit Route */}
           <Route
             path="/ops/cockpit"
             element={
@@ -466,7 +466,7 @@ const AppContent: React.FC = () => {
             <Route index element={<OpsCockpitPage />} />
           </Route>
 
-          {/* ✅ NEW: Invite Sellers Route */}
+          {/* NEW: Invite Sellers Route */}
           <Route
             path="/contracts/invite"
             element={
@@ -481,8 +481,8 @@ const AppContent: React.FC = () => {
          {/* Catalog Studio Routes */}
 <Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
   <Route index element={<Navigate to="configure" replace />} />
-  <Route path="configure" element={<CatalogStudioConfigurePage />} />  {/* ✅ FIXED */}
-  <Route path="blocks" element={<CatalogStudioBlocksPage />} />        {/* ✅ ADD THIS */}
+  <Route path="configure" element={<CatalogStudioConfigurePage />} />
+  <Route path="blocks" element={<CatalogStudioBlocksPage />} />
   <Route path="template" element={<CatalogStudioTemplatePage />} />
   <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
 </Route>
@@ -535,7 +535,7 @@ const AppContent: React.FC = () => {
             {/* Integration Settings */}
             <Route path="integrations" element={<IntegrationsPage />} />
 
-            {/* ✅ NEW: Customer Channels - Groups */}
+            {/* NEW: Customer Channels - Groups */}
             <Route path="configure/customer-channels/groups" element={<GroupsListPage />} />
             <Route path="configure/customer-channels/groups/:groupId" element={<GroupProfileDashboard />} />
 
@@ -599,12 +599,12 @@ const AppContent: React.FC = () => {
             <Route path="channels/chatbot" element={<ChatBotIntegrationPage />} />
             <Route path="channels/whatsapp" element={<WhatsAppIntegrationPage />} />
 
-            {/* ✅ NEW: BBB Directory Routes */}
+            {/* NEW: BBB Directory Routes */}
             <Route path="channels/bbb/onboarding" element={<BBBProfileOnboardingPage />} />
             <Route path="channels/bbb/admin" element={<BBBAdminDashboard />} />
             <Route path="channels/bbb/chat" element={<VaNiChatPage />} />
 
-            {/* ✅ Implementation Toolkit Routes */}
+            {/* Implementation Toolkit Routes */}
             <Route path="tenant-profiles" element={<TenantProfilesPage />} />
 
             <Route path="analytics" element={<AnalyticsPage />} />
@@ -656,7 +656,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-// ✅ UPDATED: App component with QueryProvider
+// UPDATED: App component with VaNiToastProviderWithGlobal
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
@@ -664,13 +664,16 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-              
-                <QueryProvider> {/* ✅ NEW: Wrap with QueryProvider */}
+
+                <QueryProvider>
                   <MasterDataProvider>
-                    <AppContent />
+                    {/* VaNiToast Provider wrapping the entire app */}
+                    <VaNiToastProviderWithGlobal position="bottom-right" maxToasts={5}>
+                      <AppContent />
+                    </VaNiToastProviderWithGlobal>
                   </MasterDataProvider>
                 </QueryProvider>
-             
+
             </AuthProvider>
           </Router>
         </ThemeProvider>
