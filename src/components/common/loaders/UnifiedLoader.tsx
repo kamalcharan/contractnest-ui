@@ -21,6 +21,8 @@ interface ContentSkeletonProps {
   variant?: 'list' | 'card' | 'table';
   /** Number of items for card/list variant */
   count?: number;
+  /** Whether to dim the skeleton (used in VaNiLoader) */
+  dimmed?: boolean;
 }
 
 interface VaNiLoaderProps {
@@ -30,6 +32,12 @@ interface VaNiLoaderProps {
   message?: string;
   /** Whether to show full screen */
   fullScreen?: boolean;
+  /** Show skeleton placeholders below the orb */
+  showSkeleton?: boolean;
+  /** Skeleton layout variant */
+  skeletonVariant?: 'list' | 'card' | 'table';
+  /** Number of skeleton items */
+  skeletonCount?: number;
 }
 
 interface PageLoaderProps {
@@ -45,6 +53,13 @@ interface InlineLoaderProps {
   /** Optional text */
   text?: string;
 }
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// VaNi orb background - consistent dark color for brand recognition
+const VANI_ORB_BG = '#1e293b'; // slate-800
 
 // ============================================================================
 // SKELETON COMPONENTS (Theme-aware)
@@ -82,6 +97,7 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
   showAvatar = true,
   variant = 'list',
   count = 3,
+  dimmed = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -90,10 +106,13 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
   const cardBg = colors.utility.secondaryBackground;
   const borderColor = `${colors.utility.primaryText}10`;
 
+  // Wrapper style for dimmed mode
+  const wrapperStyle = dimmed ? { opacity: 0.4 } : {};
+
   // Single skeleton item
   const SkeletonItem = () => (
     <div
-      className="flex items-center space-x-4 p-4 rounded-2xl border transition-colors"
+      className="flex items-center space-x-4 p-4 rounded-2xl border transition-colors skeleton-shimmer"
       style={{
         backgroundColor: cardBg,
         borderColor: borderColor,
@@ -127,7 +146,7 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
   // Card variant skeleton
   const CardSkeletonItem = () => (
     <div
-      className="p-4 rounded-2xl border transition-colors"
+      className="p-4 rounded-[24px] border transition-colors skeleton-shimmer"
       style={{
         backgroundColor: cardBg,
         borderColor: borderColor,
@@ -195,7 +214,7 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
 
   if (variant === 'card') {
     return (
-      <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style={wrapperStyle}>
         {[...Array(count)].map((_, i) => (
           <CardSkeletonItem key={i} />
         ))}
@@ -206,10 +225,11 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
   if (variant === 'table') {
     return (
       <div
-        className="animate-pulse rounded-2xl border overflow-hidden"
+        className="rounded-2xl border overflow-hidden"
         style={{
           backgroundColor: cardBg,
           borderColor: borderColor,
+          ...wrapperStyle,
         }}
       >
         {/* Table header */}
@@ -247,7 +267,7 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
 
   // Default list variant
   return (
-    <div className="animate-pulse space-y-4">
+    <div className="space-y-4" style={wrapperStyle}>
       {[...Array(count)].map((_, i) => (
         <SkeletonItem key={i} />
       ))}
@@ -256,69 +276,112 @@ export const ContentSkeleton: React.FC<ContentSkeletonProps> = ({
 };
 
 // ============================================================================
-// VANI LOADER (Branded pulse loader)
+// VANI LOADER (Branded hybrid loader with orb + skeletons)
 // ============================================================================
 
 /**
- * VaNi branded loader with pulse animation
- * Uses theme primary color
+ * VaNi branded loader with pulse animation and optional skeleton placeholders
+ * Uses theme primary color for pulse ring, consistent dark orb background
  */
 export const VaNiLoader: React.FC<VaNiLoaderProps> = ({
   size = 'md',
   message,
   fullScreen = false,
+  showSkeleton = false,
+  skeletonVariant = 'card',
+  skeletonCount = 6,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const sizeClasses = {
-    sm: { container: 'w-8 h-8', icon: 14 },
-    md: { container: 'w-10 h-10', icon: 18 },
-    lg: { container: 'w-14 h-14', icon: 24 },
+  const sizeConfig = {
+    sm: { container: 'w-12 h-12', icon: 18, rounded: 'rounded-[14px]', ringOffset: '-3px', ringRadius: '17px' },
+    md: { container: 'w-[60px] h-[60px]', icon: 24, rounded: 'rounded-[20px]', ringOffset: '-4px', ringRadius: '24px' },
+    lg: { container: 'w-20 h-20', icon: 32, rounded: 'rounded-[24px]', ringOffset: '-5px', ringRadius: '29px' },
   };
 
+  const config = sizeConfig[size];
+
   const loaderContent = (
-    <div className="flex flex-col items-center justify-center gap-4">
-      <div
-        className={`relative ${sizeClasses[size].container} flex items-center justify-center`}
-      >
-        {/* Pulse rings */}
-        <span
-          className="absolute inset-0 rounded-xl animate-vani-pulse"
-          style={{ borderColor: colors.brand.primary }}
-        />
-        <span
-          className="absolute inset-0 rounded-xl animate-vani-pulse-delayed"
-          style={{ borderColor: colors.brand.primary }}
-        />
-        {/* Center icon */}
-        <Sparkles
-          size={sizeClasses[size].icon}
-          style={{ color: colors.brand.primary }}
-          className="relative z-10"
-        />
-      </div>
-      {message && (
-        <p
-          className="text-sm font-medium"
-          style={{ color: colors.utility.secondaryText }}
+    <div className="flex flex-col items-center justify-center">
+      {/* VaNi Orb Container */}
+      <div className="vani-thinking-container mb-8">
+        {/* Orb with pulse ring */}
+        <div
+          className={`vani-orb relative ${config.container} ${config.rounded} flex items-center justify-center shadow-lg`}
+          style={{
+            backgroundColor: VANI_ORB_BG,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+          }}
         >
-          {message}
-        </p>
+          {/* Sparkles Icon */}
+          <Sparkles
+            size={config.icon}
+            style={{ color: colors.brand.primary }}
+            className="relative z-10"
+          />
+          {/* Pulse Ring */}
+          <span
+            className="vani-pulse-ring absolute"
+            style={{
+              inset: config.ringOffset,
+              borderRadius: config.ringRadius,
+              border: `2px solid ${colors.brand.primary}`,
+            }}
+          />
+        </div>
+
+        {/* Message */}
+        {message && (
+          <p
+            className="text-[10px] font-black uppercase tracking-widest mt-6 vani-message-pulse"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {message}
+          </p>
+        )}
+      </div>
+
+      {/* Dimmed Skeleton Placeholders */}
+      {showSkeleton && (
+        <div className="w-full max-w-4xl">
+          <ContentSkeleton
+            variant={skeletonVariant}
+            count={skeletonCount}
+            dimmed={true}
+          />
+        </div>
       )}
 
-      {/* Keyframes injected via style tag */}
+      {/* Keyframes */}
       <style>{`
-        @keyframes vani-pulse {
-          0% { transform: scale(0.5); opacity: 1; border-width: 3px; border-style: solid; }
-          100% { transform: scale(1.5); opacity: 0; border-width: 3px; border-style: solid; }
+        @keyframes vani-orb-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.3; transform: scale(1.15); }
         }
-        .animate-vani-pulse {
-          animation: vani-pulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+
+        @keyframes vani-message-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
-        .animate-vani-pulse-delayed {
-          animation: vani-pulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
-          animation-delay: 1s;
+
+        @keyframes skeleton-shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+
+        .vani-pulse-ring {
+          animation: vani-orb-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .vani-message-pulse {
+          animation: vani-message-pulse 2s ease-in-out infinite;
+        }
+
+        .skeleton-shimmer {
+          background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%);
+          background-size: 200% 100%;
+          animation: skeleton-shimmer 1.5s infinite;
         }
       `}</style>
     </div>
@@ -327,7 +390,7 @@ export const VaNiLoader: React.FC<VaNiLoaderProps> = ({
   if (fullScreen) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center p-10"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
         {loaderContent}
@@ -335,7 +398,11 @@ export const VaNiLoader: React.FC<VaNiLoaderProps> = ({
     );
   }
 
-  return loaderContent;
+  return (
+    <div className="flex flex-col items-center justify-center py-10">
+      {loaderContent}
+    </div>
+  );
 };
 
 // ============================================================================
@@ -447,7 +514,7 @@ interface SectionLoaderProps {
 export const SectionLoader: React.FC<SectionLoaderProps> = ({
   message,
   height = 'md',
-  variant = 'skeleton',
+  variant = 'vani',
   skeletonVariant = 'list',
   skeletonCount = 3,
 }) => {
@@ -469,28 +536,38 @@ export const SectionLoader: React.FC<SectionLoaderProps> = ({
     );
   }
 
+  if (variant === 'vani') {
+    return (
+      <div className={heightClasses[height]}>
+        <VaNiLoader
+          size="md"
+          message={message}
+          showSkeleton={true}
+          skeletonVariant={skeletonVariant}
+          skeletonCount={skeletonCount}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={`${heightClasses[height]} flex items-center justify-center`}
     >
-      {variant === 'vani' ? (
-        <VaNiLoader size="md" message={message} />
-      ) : (
-        <div className="text-center">
-          <Loader2
-            className="w-8 h-8 animate-spin mx-auto mb-2"
-            style={{ color: colors.brand.primary }}
-          />
-          {message && (
-            <p
-              className="text-sm"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              {message}
-            </p>
-          )}
-        </div>
-      )}
+      <div className="text-center">
+        <Loader2
+          className="w-8 h-8 animate-spin mx-auto mb-2"
+          style={{ color: colors.brand.primary }}
+        />
+        {message && (
+          <p
+            className="text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {message}
+          </p>
+        )}
+      </div>
     </div>
   );
 };

@@ -19,7 +19,6 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useToast } from '@/components/ui/use-toast';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { countries } from '@/utils/constants/countries';
 import { 
@@ -91,8 +90,8 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
   disabled = false,
   mode = 'create'
 }) => {
-  const { isDarkMode } = useTheme();
-  const { toast } = useToast();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -170,11 +169,7 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     const apiFormatAddress = convertToApiFormat(addressWithId);
     onChange([...updatedAddresses, apiFormatAddress]);
     setIsAddingAddress(false);
-    
-    toast({
-      title: "Success",
-      description: `${getAddressTypeInfo(addressWithId.address_type).label} added successfully`
-    });
+    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
   // Remove address
@@ -192,11 +187,7 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
     onChange(newAddresses);
     setShowDeleteDialog(false);
     setDeleteIndex(null);
-    
-    toast({
-      title: "Success",
-      description: "Address removed successfully"
-    });
+    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
   // Update existing address
@@ -255,7 +246,11 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
           <button
             onClick={() => setIsAddingAddress(true)}
             disabled={disabled}
-            className="flex items-center px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
+            className="flex items-center px-3 py-2 rounded-md hover:opacity-90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Address
@@ -287,7 +282,11 @@ const AddressesSection: React.FC<AddressesSectionProps> = ({
           <button
             onClick={() => setIsAddingAddress(true)}
             disabled={disabled}
-            className="flex items-center px-4 py-2 rounded-md hover:bg-primary/90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
+            className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Address
@@ -446,7 +445,8 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
   defaultState,
   isPrimary
 }) => {
-  const { toast } = useToast();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [selectedCountry, setSelectedCountry] = useState<string>(defaultCountry.code);
   const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
     address_type: ADDRESS_TYPES.OFFICE,
@@ -528,11 +528,7 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
     
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: Object.values(errors)[0]
-      });
+      // Validation error is shown in the form UI via validationErrors state
       return;
     }
 
@@ -737,7 +733,11 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
         <div className="flex gap-2">
           <button
             type="submit"
-            className="px-4 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+            className="px-4 py-2 rounded-md hover:opacity-90 transition-colors text-sm"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             <Check className="mr-2 h-4 w-4 inline" />
             Add Address
@@ -745,7 +745,12 @@ const AddAddressForm: React.FC<AddAddressFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+            className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors text-sm"
+            style={{
+              borderColor: colors.utility.primaryText + '40',
+              color: colors.utility.primaryText,
+              backgroundColor: 'transparent'
+            }}
           >
             <X className="mr-2 h-4 w-4 inline" />
             Cancel
@@ -768,6 +773,8 @@ const EditAddressForm: React.FC<EditAddressFormProps> = ({
   onSave,
   onCancel
 }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [editedAddress, setEditedAddress] = useState(address);
 
   const handleSave = () => {
@@ -809,14 +816,23 @@ const EditAddressForm: React.FC<EditAddressFormProps> = ({
       <div className="flex gap-2">
         <button
           onClick={handleSave}
-          className="flex-1 px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+          className="flex-1 px-3 py-1.5 rounded-md hover:opacity-90 transition-colors text-sm"
+          style={{
+            backgroundColor: colors.brand.primary,
+            color: '#ffffff'
+          }}
         >
           <Check className="mr-2 h-4 w-4 inline" />
           Save
         </button>
         <button
           onClick={onCancel}
-          className="flex-1 px-3 py-1.5 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+          className="flex-1 px-3 py-1.5 border rounded-md hover:opacity-80 transition-colors text-sm"
+          style={{
+            borderColor: colors.utility.primaryText + '40',
+            color: colors.utility.primaryText,
+            backgroundColor: 'transparent'
+          }}
         >
           <X className="mr-2 h-4 w-4 inline" />
           Cancel

@@ -21,7 +21,6 @@ import {
   Instagram
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useToast } from '@/components/ui/use-toast';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
 
@@ -77,8 +76,8 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
   mode = 'create',
   showValidation = true
 }) => {
-  const { isDarkMode } = useTheme();
-  const { toast } = useToast();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -145,11 +144,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     const error = validateChannelValue(newChannel);
     if (error) {
       setValidationErrors({ new: error });
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: error
-      });
+      // Validation error is shown in the form UI via validationErrors state
       return;
     }
 
@@ -188,11 +183,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     });
     setIsAddingChannel(false);
     setValidationErrors({});
-    
-    toast({
-      title: "Channel Added",
-      description: `${channelConfig.displayName} added successfully`
-    });
+    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
   // Update existing channel
@@ -234,12 +225,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     }
     
     onChange(newChannels);
-    
-    const channelConfig = getChannelByCode(removedChannel.channel_type);
-    toast({
-      title: "Channel Removed",
-      description: `${channelConfig?.displayName || 'Channel'} removed`
-    });
+    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
   // Mark field as touched for validation display
@@ -257,7 +243,11 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
           <button
             onClick={() => setIsAddingChannel(true)}
             disabled={disabled}
-            className="flex items-center px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed bg-primary text-primary-foreground"
+            className="flex items-center px-3 py-2 rounded-md hover:opacity-90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Channel
@@ -345,9 +335,22 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                     type="text"
                     value={newChannel.value}
                     onChange={(e) => {
-                      setNewChannel({ ...newChannel, value: e.target.value });
+                      let inputValue = e.target.value;
+                      const channelConfig = getChannelByCode(newChannel.channel_type);
+
+                      // FIXED: For phone/mobile channels, strip non-numeric characters except + at start
+                      if (channelConfig?.validation.type === 'phone') {
+                        // Allow only digits, with optional + at start
+                        inputValue = inputValue.replace(/[^\d+]/g, '');
+                        // Ensure + only appears at the start
+                        if (inputValue.includes('+')) {
+                          inputValue = '+' + inputValue.replace(/\+/g, '');
+                        }
+                      }
+
+                      setNewChannel({ ...newChannel, value: inputValue });
                       if (validationErrors.new) {
-                        const error = validateChannelValue({ ...newChannel, value: e.target.value });
+                        const error = validateChannelValue({ ...newChannel, value: inputValue });
                         setValidationErrors({ new: error || '' });
                       }
                     }}
@@ -405,7 +408,11 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={addChannel}
-                className="px-4 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+                className="px-4 py-2 rounded-md hover:opacity-90 transition-colors text-sm"
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: '#ffffff'
+                }}
               >
                 <Check className="mr-2 h-4 w-4 inline" />
                 Add Channel
@@ -423,7 +430,12 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                   });
                   setValidationErrors({});
                 }}
-                className="px-4 py-2 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+                className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors text-sm"
+                style={{
+                  borderColor: colors.utility.primaryText + '40',
+                  color: colors.utility.primaryText,
+                  backgroundColor: 'transparent'
+                }}
               >
                 <X className="mr-2 h-4 w-4 inline" />
                 Cancel
@@ -499,7 +511,17 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         <input
                           type="text"
                           value={channel.value}
-                          onChange={(e) => updateChannel(index, { value: e.target.value })}
+                          onChange={(e) => {
+                            let inputValue = e.target.value;
+                            // FIXED: For phone channels, strip non-numeric characters except + at start
+                            if (channelConfig.validation.type === 'phone') {
+                              inputValue = inputValue.replace(/[^\d+]/g, '');
+                              if (inputValue.includes('+')) {
+                                inputValue = '+' + inputValue.replace(/\+/g, '');
+                              }
+                            }
+                            updateChannel(index, { value: inputValue });
+                          }}
                           onBlur={() => markFieldTouched(fieldId)}
                           className={`w-full p-2 border rounded-md bg-background text-foreground text-sm ${
                             validationErrors[index] ? 'border-destructive' : 'border-input'

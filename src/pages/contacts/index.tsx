@@ -7,7 +7,6 @@ import {
   Plus,
   Search,
   Filter,
-  MoreHorizontal,
   Building2,
   User,
   Mail,
@@ -28,7 +27,6 @@ import {
   Star,
   Edit,
   Trash2,
-  CheckSquare,
   X,
   MessageSquare,
   Globe,
@@ -43,11 +41,12 @@ import {
 } from 'lucide-react';
 // import { useToast } from '@/components/ui/use-toast'; // Replaced with vaniToast
 import { captureException } from '@/utils/sentry';
+import { useAuth } from '../../context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import QuickAddContactDrawer from '@/components/contacts/QuickAddContactDrawer';
-import { ContentSkeleton } from '@/components/common/loaders';
+import { VaNiLoader } from '@/components/common/loaders';
 import { vaniToast } from '@/components/common/toast';
 
 // Coming Soon features for Entities
@@ -66,7 +65,7 @@ const contactsFloatingIcons = [
 ];
 
 // Import API hooks
-import { useContactList, useContactStats } from '../../hooks/useContacts';
+import { useContactList, useContactStats, useUpdateContactStatus, invalidateContactsCache } from '../../hooks/useContacts';
 import { ContactFilters } from '../../types/contact';
 
 // Import constants
@@ -159,49 +158,6 @@ const FilterDropdown: React.FC<{
       </div>
 
       <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
-        {/* Classifications Filter */}
-        <div>
-          <label 
-            className="text-sm font-medium mb-2 block transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Classifications
-          </label>
-          <div className="space-y-2">
-            {Object.values(CONTACT_CLASSIFICATIONS).map(classification => {
-              const config = getClassificationConfig(classification);
-              return (
-                <label key={classification} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localFilters.classifications.includes(classification)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setLocalFilters(prev => ({
-                          ...prev,
-                          classifications: [...prev.classifications, classification]
-                        }));
-                      } else {
-                        setLocalFilters(prev => ({
-                          ...prev,
-                          classifications: prev.classifications.filter(c => c !== classification)
-                        }));
-                      }
-                    }}
-                    style={{ accentColor: colors.brand.primary }}
-                  />
-                  <span 
-                    className="text-sm transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    {config?.icon} {config?.label}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Contact Status Filter (Active/Inactive/Archived) */}
         <div>
           <label
@@ -402,8 +358,9 @@ const FilterDropdown: React.FC<{
 const ContactsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
+  const { currentTenant, isLive } = useAuth();
   // const { toast } = useToast(); // Replaced with vaniToast
-  
+
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   
   // UI State
@@ -478,10 +435,33 @@ const ContactsPage: React.FC = () => {
     updateFilters 
   } = useContactList(apiFilters);
 
-  const { 
-    data: stats, 
-    loading: statsLoading 
+  const {
+    data: stats,
+    loading: statsLoading
   } = useContactStats();
+
+  // Soft delete (archive) hook
+  const { mutate: updateContactStatus, loading: archiving } = useUpdateContactStatus();
+
+  // Handle soft delete (archive) - single entity
+  const handleSoftDelete = async (contactId: string, contactName: string) => {
+    try {
+      vaniToast.loading(`Archiving ${contactName}...`);
+      await updateContactStatus(contactId, 'archived');
+      vaniToast.success(`${contactName} archived successfully`);
+
+      // Invalidate cache and force refresh
+      if (currentTenant?.id) {
+        invalidateContactsCache(currentTenant.id, isLive);
+      }
+      refetch(true); // Force refresh to bypass cache
+    } catch (error) {
+      captureException(error, {
+        tags: { component: 'ContactsPage', action: 'softDelete' }
+      });
+      vaniToast.error(`Failed to archive ${contactName}`);
+    }
+  };
 
   // Track page views
   useEffect(() => {
@@ -652,13 +632,23 @@ const ContactsPage: React.FC = () => {
 
   const currentFilters = tabConfigs[activeTab].filters;
 
-  // Loading skeleton
-  // Use unified loader for skeleton
-  const EntitySkeleton = () => (
-    <ContentSkeleton
-      variant={viewType === 'grid' ? 'card' : 'list'}
-      count={viewType === 'grid' ? 6 : 8}
-      showHeader={false}
+  // Loading state with VaNi hybrid loader
+  // Dynamic message based on active filter
+  const getLoadingMessage = () => {
+    const filterConfig = currentFilters.find((f: any) => f.id === activeFilter);
+    if (activeFilter === 'all') {
+      return 'VaNi is Loading Entities...';
+    }
+    return `VaNi is Loading ${filterConfig?.label || 'Entities'}...`;
+  };
+
+  const EntityLoader = () => (
+    <VaNiLoader
+      size="md"
+      message={getLoadingMessage()}
+      showSkeleton={true}
+      skeletonVariant={viewType === 'grid' ? 'card' : 'list'}
+      skeletonCount={viewType === 'grid' ? 6 : 8}
     />
   );
 
@@ -1159,7 +1149,7 @@ const ContactsPage: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {loading && <EntitySkeleton />}
+      {loading && <EntityLoader />}
 
       {/* Contact List */}
       {!loading && !error && (
@@ -1210,33 +1200,6 @@ const ContactsPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* Select All Row for List View */}
-              {viewType === 'list' && contacts.length > 0 && (
-                <div 
-                  className="mb-2 p-3 rounded-lg border transition-colors"
-                  style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderColor: colors.utility.primaryText + '20'
-                  }}
-                >
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedContacts.size === contacts.length}
-                      onChange={handleSelectAll}
-                      className="mr-3"
-                      style={{ accentColor: colors.brand.primary }}
-                    />
-                    <span 
-                      className="text-sm transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Select all {contacts.length} entities
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* FIXED CONTACT DISPLAY */}
               <div className={`
                 ${viewType === 'grid' 
@@ -1255,49 +1218,38 @@ const ContactsPage: React.FC = () => {
                     // GRID VIEW with glass effect
                     <div
                       key={contact.id}
-                      className={`rounded-2xl shadow-sm border hover:shadow-lg hover:border-opacity-50 transition-all duration-200 flex flex-col group ${
-                        isSelected ? 'ring-2' : ''
-                      }`}
+                      className="rounded-2xl shadow-sm border hover:shadow-lg hover:border-opacity-50 transition-all duration-200 flex flex-col group"
                       style={{
                         background: isDarkMode
                           ? 'rgba(30, 41, 59, 0.8)'
                           : 'rgba(255, 255, 255, 0.8)',
                         backdropFilter: 'blur(10px)',
-                        borderColor: isSelected
-                          ? colors.brand.primary
-                          : isDarkMode
-                            ? 'rgba(255,255,255,0.1)'
-                            : 'rgba(255,255,255,0.5)',
+                        borderColor: isDarkMode
+                          ? 'rgba(255,255,255,0.1)'
+                          : 'rgba(255,255,255,0.5)',
                         boxShadow: '0 4px 20px -5px rgba(0,0,0,0.05)',
-                        '--tw-ring-color': colors.brand.primary,
                         minHeight: '260px'
                       } as React.CSSProperties}
                     >
-                      {/* FIXED: Header Section - Fixed Height */}
+                      {/* Header Section - Status Badge */}
                       <div className="p-4 flex-none">
-                        <div className="flex items-center justify-between mb-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectContact(contact.id)}
-                            style={{ accentColor: colors.brand.primary }}
-                          />
-                          <span 
+                        <div className="flex items-center justify-end mb-3">
+                          <span
                             className="px-2 py-1 rounded-full text-xs font-medium border"
                             style={{
-                              backgroundColor: contact.status === 'active' 
+                              backgroundColor: contact.status === 'active'
                                 ? colors.semantic.success + '20'
-                                : contact.status === 'inactive' 
+                                : contact.status === 'inactive'
                                 ? colors.semantic.warning + '20'
                                 : colors.utility.secondaryText + '20',
-                              borderColor: contact.status === 'active' 
+                              borderColor: contact.status === 'active'
                                 ? colors.semantic.success + '40'
-                                : contact.status === 'inactive' 
+                                : contact.status === 'inactive'
                                 ? colors.semantic.warning + '40'
                                 : colors.utility.secondaryText + '40',
-                              color: contact.status === 'active' 
+                              color: contact.status === 'active'
                                 ? colors.semantic.success
-                                : contact.status === 'inactive' 
+                                : contact.status === 'inactive'
                                 ? colors.semantic.warning
                                 : colors.utility.secondaryText
                             }}
@@ -1455,40 +1407,38 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSoftDelete(contact.id, contact.displayName);
+                              }}
+                              className="p-1.5 rounded-md hover:opacity-80 transition-colors"
+                              style={{
+                                backgroundColor: colors.semantic.error + '20',
+                                color: colors.semantic.error
+                              }}
+                              title="Archive entity"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
-                          <button 
-                            className="p-1 rounded-md hover:opacity-80 transition-colors"
-                            style={{ color: colors.utility.secondaryText }}
-                            title="More options"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </button>
                         </div>
                       </div>
                     </div>
                   ) : (
                     // FIXED LIST VIEW - Better alignment
-                    <div 
-                      key={contact.id} 
-                      className={`rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-3 ${
-                        isSelected ? 'ring-2' : ''
-                      }`}
+                    <div
+                      key={contact.id}
+                      className="rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-3"
                       style={{
                         backgroundColor: colors.utility.secondaryBackground,
-                        borderColor: colors.utility.primaryText + '20',
-                        '--tw-ring-color': colors.brand.primary
-                      } as React.CSSProperties}
+                        borderColor: colors.utility.primaryText + '20'
+                      }}
                     >
                       <div className="flex items-center justify-between">
-                        {/* FIXED: Left Section - Checkbox + Avatar + Name + Status */}
+                        {/* Left Section - Avatar + Name + Status */}
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleSelectContact(contact.id)}
-                            style={{ accentColor: colors.brand.primary }}
-                          />
-                          <div 
+                          <div
                             className="w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm border flex-shrink-0"
                             style={{
                               backgroundColor: colors.brand.primary + '20',
@@ -1638,7 +1588,7 @@ const ContactsPage: React.FC = () => {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button 
+                            <button
                               className="p-1.5 rounded-md transition-colors"
                               style={{
                                 backgroundColor: colors.semantic.success,
@@ -1648,12 +1598,19 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
-                            <button 
-                              className="p-1 rounded-md hover:opacity-80 transition-colors"
-                              style={{ color: colors.utility.secondaryText }}
-                              title="More options"
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSoftDelete(contact.id, contact.displayName);
+                              }}
+                              className="p-1.5 rounded-md hover:opacity-80 transition-colors"
+                              style={{
+                                backgroundColor: colors.semantic.error + '20',
+                                color: colors.semantic.error
+                              }}
+                              title="Archive entity"
                             >
-                              <MoreHorizontal className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </div>

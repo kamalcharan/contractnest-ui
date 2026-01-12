@@ -1,10 +1,10 @@
 // src/pages/contacts/create.tsx - PRODUCTION READY VERSION
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
- ArrowLeft, 
- Save, 
- X, 
+import {
+ ArrowLeft,
+ Save,
+ X,
  HelpCircle,
  AlertCircle,
  Loader2,
@@ -12,7 +12,8 @@ import {
  User,
  Building2,
  Archive,
- AlertTriangle
+ AlertTriangle,
+ Sparkles
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -27,13 +28,15 @@ import { FormSkeleton } from '@/components/common/skeletons';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 // Import API hooks
-import { 
- useCreateContact, 
- useUpdateContact, 
+import {
+ useCreateContact,
+ useUpdateContact,
  useContact,
  useCheckDuplicates,
  useSendInvitation,
- useUpdateContactStatus 
+ useUpdateContactStatus,
+ invalidateContactsCache,
+ invalidateSingleContactCache
 } from '../../hooks/useContacts';
 
 // Import form components
@@ -376,38 +379,58 @@ const ContactStatusSection: React.FC<{
  );
 };
 
-// Full Page Loader Component
-const FullPageSaveLoader: React.FC<{ message?: string }> = ({ message = "Saving contact..." }) => {
+// VaNi Full Page Loader Component - Branded loader with orb and pulse
+const VANI_ORB_BG = '#1e293b'; // Dark slate for brand consistency
+
+const FullPageSaveLoader: React.FC<{ message?: string }> = ({ message = "Saving entity..." }) => {
  const { isDarkMode, currentTheme } = useTheme();
  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
  return (
-   <div 
+   <div
      className="fixed inset-0 backdrop-blur-sm z-50 flex items-center justify-center"
      style={{ backgroundColor: colors.utility.primaryBackground + 'CC' }}
    >
-     <div 
-       className="p-8 rounded-lg shadow-xl border text-center transition-colors"
-       style={{
-         backgroundColor: colors.utility.secondaryBackground,
-         borderColor: colors.utility.primaryText + '20'
-       }}
-     >
-       <Loader2 
-         className="h-12 w-12 animate-spin mx-auto mb-4"
-         style={{ color: colors.brand.primary }}
-       />
-       <p 
-         className="text-lg font-medium transition-colors"
+     <div className="flex flex-col items-center">
+       {/* VaNi Orb */}
+       <div className="relative mb-6">
+         {/* Pulse ring */}
+         <div
+           className="absolute inset-0 rounded-full animate-ping opacity-30"
+           style={{ backgroundColor: colors.brand.primary }}
+         />
+         {/* Outer glow */}
+         <div
+           className="absolute -inset-2 rounded-full blur-md opacity-40 animate-pulse"
+           style={{ backgroundColor: colors.brand.primary }}
+         />
+         {/* Orb */}
+         <div
+           className="relative w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
+           style={{
+             backgroundColor: VANI_ORB_BG,
+             boxShadow: `0 0 30px ${colors.brand.primary}40`
+           }}
+         >
+           <Sparkles
+             className="h-8 w-8 animate-pulse"
+             style={{ color: colors.brand.primary }}
+           />
+         </div>
+       </div>
+
+       {/* Message */}
+       <p
+         className="text-lg font-semibold tracking-wide uppercase animate-pulse transition-colors"
          style={{ color: colors.utility.primaryText }}
        >
          {message}
        </p>
-       <p 
+       <p
          className="text-sm mt-2 transition-colors"
          style={{ color: colors.utility.secondaryText }}
        >
-         Please wait while we process your request...
+         Please wait while VaNi processes your request...
        </p>
      </div>
    </div>
@@ -466,24 +489,10 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
  const [duplicateContacts, setDuplicateContacts] = useState<any[]>([]);
  const [showFullPageLoader, setShowFullPageLoader] = useState(false);
 
- // Add authentication check
- if (!isAuthenticated || !currentTenant) {
-   return (
-     <div 
-       className="p-4 md:p-6 min-h-screen transition-colors"
-       style={{ backgroundColor: colors.utility.primaryBackground }}
-     >
-       <div className="flex items-center justify-center py-12">
-         <FormSkeleton />
-       </div>
-     </div>
-   );
- }
- 
- // Get current industry
+ // Get current industry - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  const [currentIndustry, setCurrentIndustry] = useState<string>('default');
- 
- // Form state
+
+ // Form state - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  const [formData, setFormData] = useState<ContactFormData>({
    type: CONTACT_FORM_TYPES.INDIVIDUAL,
    classifications: [],
@@ -496,20 +505,20 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
    ...initialData
  });
 
- // UI state
+ // UI state - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  const [showVideoHelp, setShowVideoHelp] = useState<boolean>(false);
  const [validationErrors, setValidationErrors] = useState<string[]>([]);
  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
  const [userAccountStatus, setUserAccountStatus] = useState<string>(USER_ACCOUNT_STATUS.NO_ACCOUNT);
 
- // Initialize form data ref
+ // Initialize form data ref - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  useEffect(() => {
    if (!initialFormDataRef.current) {
      initialFormDataRef.current = { ...formData };
    }
  }, []);
 
- // Load existing contact data in edit mode
+ // Load existing contact data in edit mode - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  useEffect(() => {
    if (isEditMode && existingContact) {
      // Transform classifications to match UI component expectations
@@ -539,16 +548,30 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        notes: existingContact.notes,
        tags: existingContact.tags || []
      };
-     
+
      setFormData(loadedData);
      initialFormDataRef.current = { ...loadedData };
      setHasUnsavedChanges(false);
-     
+
      if (existingContact.user_account_status) {
        setUserAccountStatus(existingContact.user_account_status);
      }
    }
  }, [isEditMode, existingContact]);
+
+ // Add authentication check - AFTER ALL HOOKS
+ if (!isAuthenticated || !currentTenant) {
+   return (
+     <div
+       className="p-4 md:p-6 min-h-screen transition-colors"
+       style={{ backgroundColor: colors.utility.primaryBackground }}
+     >
+       <div className="flex items-center justify-center py-12">
+         <FormSkeleton />
+       </div>
+     </div>
+   );
+ }
 
  // Check if form has actual changes
  const checkForChanges = (currentData: ContactFormData, initialData: ContactFormData | null): boolean => {
@@ -748,7 +771,17 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        );
 
        setHasUnsavedChanges(false);
-       
+
+       // Invalidate caches so returning to list/view shows fresh data
+       if (currentTenant?.id) {
+         invalidateContactsCache(currentTenant.id, isLive);
+         // Also invalidate the specific contact cache if editing
+         if (isEditMode && savedContactId) {
+           invalidateSingleContactCache(savedContactId, currentTenant.id, isLive);
+         }
+         console.log('📦 Caches invalidated after save');
+       }
+
        setTimeout(() => {
          navigate(`/contacts/${savedContactId}`);
        }, 500);
@@ -868,16 +901,50 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
  // Show loading state while fetching existing contact
  if (isEditMode && isLoadingContact) {
    return (
-     <div 
-       className="p-4 md:p-6 min-h-screen transition-colors"
+     <div
+       className="p-4 md:p-6 min-h-screen transition-colors flex items-center justify-center"
        style={{ backgroundColor: colors.utility.primaryBackground }}
      >
-       <FormSkeleton 
-         title={true}
-         subtitle={true}
-         sections={3}
-         showActions={true}
-       />
+       {/* VaNi Loading Orb */}
+       <div className="flex flex-col items-center">
+         <div className="relative mb-6">
+           {/* Pulse ring */}
+           <div
+             className="absolute inset-0 rounded-full animate-ping opacity-30"
+             style={{ backgroundColor: colors.brand.primary }}
+           />
+           {/* Outer glow */}
+           <div
+             className="absolute -inset-2 rounded-full blur-md opacity-40 animate-pulse"
+             style={{ backgroundColor: colors.brand.primary }}
+           />
+           {/* Orb */}
+           <div
+             className="relative w-16 h-16 rounded-full flex items-center justify-center shadow-xl"
+             style={{
+               backgroundColor: VANI_ORB_BG,
+               boxShadow: `0 0 30px ${colors.brand.primary}40`
+             }}
+           >
+             <Sparkles
+               className="h-8 w-8 animate-pulse"
+               style={{ color: colors.brand.primary }}
+             />
+           </div>
+         </div>
+         <p
+           className="text-lg font-semibold tracking-wide uppercase animate-pulse"
+           style={{ color: colors.utility.primaryText }}
+         >
+           Loading Entity...
+         </p>
+         <p
+           className="text-sm mt-2"
+           style={{ color: colors.utility.secondaryText }}
+         >
+           Please wait while we fetch the data
+         </p>
+       </div>
      </div>
    );
  }
@@ -888,7 +955,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
      style={{ backgroundColor: colors.utility.primaryBackground }}
    >
      {/* Full Page Save Loader */}
-     {showFullPageLoader && <FullPageSaveLoader message={isEditMode ? "Updating contact..." : "Creating contact..."} />}
+     {showFullPageLoader && <FullPageSaveLoader message={isEditMode ? "Updating Entity..." : "Creating Entity..."} />}
      
      {/* Header */}
      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
@@ -908,7 +975,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              className="text-2xl font-bold flex items-center gap-2 transition-colors"
              style={{ color: colors.utility.primaryText }}
            >
-             {isEditMode ? 'Edit Contact' : 'Create Contact'}
+             {isEditMode ? 'Edit Entity' : 'Create Entity'}
              <button
                onClick={() => setShowVideoHelp(true)}
                className="p-1 rounded-full hover:opacity-80 transition-colors"
@@ -924,16 +991,33 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              className="transition-colors"
              style={{ color: colors.utility.secondaryText }}
            >
-             {isEditMode 
-               ? 'Update contact information and details' 
-               : 'Add a new contact to your directory'
+             {isEditMode
+               ? 'Update entity information and details'
+               : 'Add a new entity to your directory'
              }
            </p>
          </div>
        </div>
        
-       <div className="flex gap-3">
-         <button 
+       <div className="flex items-center gap-3">
+         {/* Unsaved Changes Indicator */}
+         {hasUnsavedChanges && !isSaving && (
+           <div
+             className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium animate-pulse"
+             style={{
+               backgroundColor: colors.semantic.warning + '20',
+               color: colors.semantic.warning
+             }}
+           >
+             <div
+               className="w-2 h-2 rounded-full"
+               style={{ backgroundColor: colors.semantic.warning }}
+             />
+             Unsaved changes
+           </div>
+         )}
+
+         <button
            onClick={handleCancel}
            disabled={isSaving}
            className="flex items-center px-4 py-2 border rounded-md hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -946,7 +1030,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
            <X className="mr-2 h-4 w-4" />
            Cancel
          </button>
-         <button 
+         <button
            onClick={handleSave}
            disabled={isSaving}
            className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px]"
@@ -963,7 +1047,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
            ) : (
              <>
                <Save className="mr-2 h-4 w-4" />
-               {isEditMode ? 'Update Contact' : 'Save Contact'}
+               {isEditMode ? 'Update Entity' : 'Save Entity'}
              </>
            )}
          </button>

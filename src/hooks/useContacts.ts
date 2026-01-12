@@ -1,9 +1,143 @@
-// src/hooks/useContacts.ts - COMPLETE FIXED VERSION
+// src/hooks/useContacts.ts - COMPLETE FIXED VERSION WITH CACHING
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { useToast } from '@/components/ui/use-toast';
+
+// =================================================================
+// CACHE CONFIGURATION
+// =================================================================
+
+interface CacheEntry<T> {
+  data: T;
+  pagination: any;
+  timestamp: number;
+  key: string;
+}
+
+// Global in-memory cache for contacts list
+const contactsCache: Map<string, CacheEntry<any[]>> = new Map();
+
+// Cache TTL in milliseconds (5 minutes)
+const CACHE_TTL = 5 * 60 * 1000;
+
+// Generate cache key from filters
+const generateCacheKey = (tenantId: string, isLive: boolean, filters: any): string => {
+  const filterKey = JSON.stringify({
+    page: filters.page || 1,
+    limit: filters.limit || 20,
+    status: filters.status || 'active',
+    type: filters.type,
+    search: filters.search,
+    classifications: filters.classifications,
+    sort_by: filters.sort_by,
+    sort_order: filters.sort_order
+  });
+  return `${tenantId}_${isLive ? 'live' : 'test'}_${filterKey}`;
+};
+
+// Check if cache entry is still valid
+const isCacheValid = (entry: CacheEntry<any[]> | undefined): boolean => {
+  if (!entry) return false;
+  return Date.now() - entry.timestamp < CACHE_TTL;
+};
+
+// Get cached data
+const getCachedData = (key: string): CacheEntry<any[]> | null => {
+  const entry = contactsCache.get(key);
+  if (isCacheValid(entry)) {
+    console.log('📦 Cache HIT for contacts list');
+    return entry!;
+  }
+  if (entry) {
+    console.log('📦 Cache EXPIRED for contacts list');
+    contactsCache.delete(key);
+  }
+  return null;
+};
+
+// Set cache data
+const setCacheData = (key: string, data: any[], pagination: any): void => {
+  contactsCache.set(key, {
+    data,
+    pagination,
+    timestamp: Date.now(),
+    key
+  });
+  console.log('📦 Cache SET for contacts list');
+};
+
+// =================================================================
+// SINGLE CONTACT CACHE
+// =================================================================
+
+interface SingleContactCacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+// Cache for individual contacts (keyed by contactId)
+const singleContactCache: Map<string, SingleContactCacheEntry> = new Map();
+
+// Single contact cache TTL (10 minutes - longer since individual contact data changes less frequently)
+const SINGLE_CONTACT_CACHE_TTL = 10 * 60 * 1000;
+
+// Get cached single contact
+const getCachedContact = (contactId: string, tenantId: string, isLive: boolean): any | null => {
+  const cacheKey = `${tenantId}_${isLive ? 'live' : 'test'}_${contactId}`;
+  const entry = singleContactCache.get(cacheKey);
+  if (entry && Date.now() - entry.timestamp < SINGLE_CONTACT_CACHE_TTL) {
+    console.log('📦 Cache HIT for single contact:', contactId);
+    return entry.data;
+  }
+  if (entry) {
+    console.log('📦 Cache EXPIRED for single contact:', contactId);
+    singleContactCache.delete(cacheKey);
+  }
+  return null;
+};
+
+// Set single contact cache
+const setCachedContact = (contactId: string, tenantId: string, isLive: boolean, data: any): void => {
+  const cacheKey = `${tenantId}_${isLive ? 'live' : 'test'}_${contactId}`;
+  singleContactCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  });
+  console.log('📦 Cache SET for single contact:', contactId);
+};
+
+// Invalidate single contact cache
+export const invalidateSingleContactCache = (contactId?: string, tenantId?: string, isLive?: boolean): void => {
+  if (!contactId) {
+    // Clear all single contact cache
+    singleContactCache.clear();
+    console.log('📦 Single contact cache CLEARED (all)');
+  } else if (tenantId) {
+    const cacheKey = `${tenantId}_${isLive !== undefined ? (isLive ? 'live' : 'test') : ''}_${contactId}`;
+    singleContactCache.delete(cacheKey);
+    console.log(`📦 Single contact cache CLEARED for ${contactId}`);
+  }
+};
+
+// Invalidate cache for a tenant/environment
+export const invalidateContactsCache = (tenantId?: string, isLive?: boolean): void => {
+  if (!tenantId) {
+    // Clear all cache
+    contactsCache.clear();
+    console.log('📦 Cache CLEARED (all)');
+  } else {
+    // Clear specific tenant/environment cache
+    const prefix = `${tenantId}_${isLive !== undefined ? (isLive ? 'live' : 'test') : ''}`;
+    for (const key of contactsCache.keys()) {
+      if (key.startsWith(prefix)) {
+        contactsCache.delete(key);
+      }
+    }
+    console.log(`📦 Cache CLEARED for ${prefix}`);
+  }
+};
 
 // =================================================================
 // TYPES
@@ -137,7 +271,7 @@ export const useContactList = (initialFilters: ContactFilters) => {
     setFilters(initialFilters);
   }, [JSON.stringify(initialFilters)]); // Use JSON.stringify to detect deep changes
 
-  const fetchContacts = useCallback(async () => {
+  const fetchContacts = useCallback(async (forceRefresh: boolean = false) => {
     // Check if fetching is enabled
     if (filters.enabled === false) {
       console.log('Contact fetching disabled by enabled flag');
@@ -154,6 +288,22 @@ export const useContactList = (initialFilters: ContactFilters) => {
       return;
     }
 
+    // Generate cache key
+    const cacheKey = generateCacheKey(currentTenant.id, isLive, filters);
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        console.log('✅ Using cached contacts data - instant load!');
+        setData(cached.data);
+        setPagination(cached.pagination);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
+
     const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
@@ -161,7 +311,7 @@ export const useContactList = (initialFilters: ContactFilters) => {
     try {
       // Build query parameters
       const params = new URLSearchParams();
-      
+
       // Add all filters to params
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -186,15 +336,10 @@ export const useContactList = (initialFilters: ContactFilters) => {
       });
 
       // Debug logging
-      console.log('=== CONTACT LIST REQUEST ===');
+      console.log('=== CONTACT LIST REQUEST (API) ===');
       console.log('Tenant ID:', currentTenant.id);
       console.log('Environment:', isLive ? 'live' : 'test');
-      console.log('Filters:', filters);
-      console.log('Query params:', params.toString());
-      console.log('Headers being sent:', {
-        'x-tenant-id': currentTenant.id,
-        'x-environment': isLive ? 'live' : 'test'
-      });
+      console.log('Force Refresh:', forceRefresh);
 
       // Make the API request with proper headers
       const response = await api.get(`/api/contacts?${params.toString()}`, {
@@ -207,10 +352,16 @@ export const useContactList = (initialFilters: ContactFilters) => {
       // Only update state if this is still the latest request
       if (currentRequestId === requestIdRef.current) {
         if (response.data.success) {
-          setData(response.data.data || []);
-          setPagination(response.data.pagination);
-          
-          console.log(`Fetched ${response.data.data?.length || 0} contacts for ${isLive ? 'LIVE' : 'TEST'} environment`);
+          const contactsData = response.data.data || [];
+          const paginationData = response.data.pagination;
+
+          setData(contactsData);
+          setPagination(paginationData);
+
+          // Cache the response
+          setCacheData(cacheKey, contactsData, paginationData);
+
+          console.log(`✅ Fetched ${contactsData.length} contacts for ${isLive ? 'LIVE' : 'TEST'} environment`);
         } else {
           const errorMsg = response.data.error || 'Failed to fetch contacts';
           setError(errorMsg);
@@ -223,7 +374,7 @@ export const useContactList = (initialFilters: ContactFilters) => {
         console.error('Error fetching contacts:', err);
         const errorMsg = err.response?.data?.error || err.message || 'Failed to fetch contacts';
         setError(errorMsg);
-        
+
         // Show toast for errors (except initial load)
         if (filters.page !== 1) {
           toast({
@@ -261,9 +412,17 @@ export const useContactList = (initialFilters: ContactFilters) => {
     setFilters(newFilters);
   }, []);
 
-  const refetch = useCallback(() => {
-    fetchContacts();
+  const refetch = useCallback((forceRefresh: boolean = false) => {
+    fetchContacts(forceRefresh);
   }, [fetchContacts]);
+
+  // Force refresh that also invalidates cache
+  const hardRefresh = useCallback(() => {
+    if (currentTenant?.id) {
+      invalidateContactsCache(currentTenant.id, isLive);
+    }
+    fetchContacts(true);
+  }, [fetchContacts, currentTenant?.id, isLive]);
 
   return {
     data,
@@ -272,6 +431,7 @@ export const useContactList = (initialFilters: ContactFilters) => {
     error,
     pagination,
     refetch,
+    hardRefresh, // Use this after create/update/delete
     updateFilters,
     filters,
     currentEnvironment: isLive ? 'live' : 'test'
@@ -350,6 +510,7 @@ export const useContactStats = (filters?: Partial<ContactFilters>) => {
 /**
  * Hook to get a single contact by ID
  * FIXED: Properly handles environment filtering
+ * OPTIMIZED: Uses in-memory cache for instant loading on return visits
  */
 export const useContact = (contactId: string) => {
   const { currentTenant, isLive } = useAuth();
@@ -357,16 +518,30 @@ export const useContact = (contactId: string) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchContact = useCallback(async () => {
+  const fetchContact = useCallback(async (forceRefresh: boolean = false) => {
     if (!currentTenant?.id || !contactId) {
       return;
+    }
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = getCachedContact(contactId, currentTenant.id, isLive);
+      if (cached) {
+        console.log('✅ Using cached contact data - instant load!');
+        setData(cached);
+        setLoading(false);
+        setError(null);
+        return;
+      }
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      console.log(`Fetching contact ${contactId} for ${isLive ? 'LIVE' : 'TEST'} environment`);
+      console.log(`=== FETCHING CONTACT (API) ===`);
+      console.log(`Contact ID: ${contactId}`);
+      console.log(`Environment: ${isLive ? 'LIVE' : 'TEST'}`);
 
       const response = await api.get(`/api/contacts/${contactId}`, {
         headers: {
@@ -376,7 +551,12 @@ export const useContact = (contactId: string) => {
       });
 
       if (response.data.success) {
-        setData(response.data.data);
+        const contactData = response.data.data;
+        setData(contactData);
+
+        // Cache the response
+        setCachedContact(contactId, currentTenant.id, isLive, contactData);
+        console.log('✅ Contact data fetched and cached');
       } else {
         setError(response.data.error || 'Contact not found');
       }
@@ -392,11 +572,20 @@ export const useContact = (contactId: string) => {
     fetchContact();
   }, [fetchContact]);
 
+  // Hard refresh that also invalidates cache
+  const hardRefresh = useCallback(() => {
+    if (currentTenant?.id && contactId) {
+      invalidateSingleContactCache(contactId, currentTenant.id, isLive);
+    }
+    fetchContact(true);
+  }, [fetchContact, contactId, currentTenant?.id, isLive]);
+
   return {
     data,
     loading,
     error,
-    refetch: fetchContact
+    refetch: fetchContact,
+    hardRefresh // Use after edit to force fresh data
   };
 };
 
@@ -524,8 +713,8 @@ export const useUpdateContactStatus = () => {
     try {
       console.log(`Updating contact ${contactId} status to ${status} in ${isLive ? 'LIVE' : 'TEST'} environment`);
 
-      const response = await api.patch(`/api/contacts/${contactId}`, 
-        { status }, 
+      const response = await api.patch(`/api/contacts/${contactId}/status`,
+        { status },
         {
           headers: {
             'x-tenant-id': currentTenant.id,
