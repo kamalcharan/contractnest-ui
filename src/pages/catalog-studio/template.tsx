@@ -2282,10 +2282,11 @@ const CatalogStudioTemplatePage: React.FC = () => {
   );
 };
 
-const CatalogStudioTemplatePageWithComingSoon: React.FC = () => (
-  <ComingSoonWrapper pageKey="catalog-studio" title="Catalog Studio" subtitle="Your creative workspace for contract building blocks." heroIcon={Boxes} features={catalogStudioFeatures} floatingIcons={catalogStudioFloatingIcons}>
-    <CatalogStudioTemplatePage />
-  </ComingSoonWrapper>
-);
+// ComingSoonWrapper - DISABLED to open up menu
+// const CatalogStudioTemplatePageWithComingSoon: React.FC = () => (
+//   <ComingSoonWrapper pageKey="catalog-studio" title="Catalog Studio" subtitle="Your creative workspace for contract building blocks." heroIcon={Boxes} features={catalogStudioFeatures} floatingIcons={catalogStudioFloatingIcons}>
+//     <CatalogStudioTemplatePage />
+//   </ComingSoonWrapper>
+// );
 
-export default CatalogStudioTemplatePageWithComingSoon;
+export default CatalogStudioTemplatePage;

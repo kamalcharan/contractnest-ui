@@ -210,77 +210,9 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://www.contractnest.com
             </div>
           </div>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - Hidden for now */}
           <div className="hidden md:flex items-center space-x-8">
-            {/* Industries Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowIndustriesDropdown(!showIndustriesDropdown)}
-                className="flex items-center text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors"
-              >
-                Industries
-                <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${showIndustriesDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {showIndustriesDropdown && (
-                <div className="absolute top-full left-0 mt-1 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 gap-2">
-                      {industries.slice(0, 10).map((industry) => (
-                        <button
-                          key={industry.id}
-                          onClick={() => handleIndustryClick(industry.id)}
-                          className="flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-lg text-sm transition-colors group"
-                        >
-                          <div className="text-red-500 group-hover:text-red-600 transition-colors">
-                            {getIndustryIcon(industry.icon)}
-                          </div>
-                          <div>
-                            <div className="text-gray-900 font-medium">{industry.name}</div>
-                            {industry.description && (
-                              <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                                {industry.description}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {industries.length > 10 && (
-                      <button
-                        onClick={handleAllIndustriesClick}
-                        className="w-full mt-4 pt-3 border-t border-gray-200 text-sm text-red-600 hover:text-red-700 font-medium transition-colors"
-                      >
-                        View All {industries.length} Industries →
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Navigation Links */}
-            <button
-              onClick={() => handleNavClick('pricing')}
-              className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors"
-            >
-              Pricing
-            </button>
-            
-            <button
-              onClick={() => handleNavClick('features')}
-              className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors"
-            >
-              Features
-            </button>
-            
-            <button
-              onClick={() => handleNavClick('testimonials')}
-              className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium transition-colors"
-            >
-              Reviews
-            </button>
+            {/* Menu items hidden - keeping space for future use */}
           </div>
           
           {/* Desktop CTA Buttons */}
@@ -313,57 +245,8 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://www.contractnest.com
       {showMobileMenu && (
         <div className="md:hidden border-t border-gray-200" ref={mobileMenuRef}>
           <div className="px-4 py-4 space-y-4">
-            {/* Mobile Industries */}
-            <div>
-              <div className="text-sm font-medium text-gray-900 mb-3">Industries</div>
-              <div className="grid grid-cols-1 gap-2 pl-4">
-                {industries.slice(0, 6).map((industry) => (
-                  <button
-                    key={industry.id}
-                    onClick={() => handleIndustryClick(industry.id)}
-                    className="flex items-center space-x-2 p-2 text-left hover:bg-gray-50 rounded text-sm transition-colors"
-                  >
-                    <div className="text-red-500">
-                      {getIndustryIcon(industry.icon)}
-                    </div>
-                    <span className="text-gray-900">{industry.name}</span>
-                  </button>
-                ))}
-                {industries.length > 6 && (
-                  <button
-                    onClick={handleAllIndustriesClick}
-                    className="text-left p-2 text-sm text-red-600 hover:text-red-700 transition-colors"
-                  >
-                    View All Industries →
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile Navigation Links */}
-            <div className="space-y-2">
-              <button
-                onClick={() => handleNavClick('pricing')}
-                className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
-              >
-                Pricing
-              </button>
-              <button
-                onClick={() => handleNavClick('features')}
-                className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
-              >
-                Features
-              </button>
-              <button
-                onClick={() => handleNavClick('testimonials')}
-                className="block w-full text-left px-2 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
-              >
-                Reviews
-              </button>
-            </div>
-
-            {/* Mobile CTA Buttons */}
-            <div className="pt-4 border-t border-gray-200 space-y-3">
+            {/* Mobile CTA Buttons Only */}
+            <div className="space-y-3">
               <Button variant="outline" onClick={handleSignIn} className="w-full">
                 Sign In
               </Button>

@@ -1761,20 +1761,20 @@ const ContactsPage: React.FC = () => {
   );
 };
 
-// Wrapped with Coming Soon
-const ContactsPageWithComingSoon: React.FC = () => {
-  return (
-    <ComingSoonWrapper
-      pageKey="contacts"
-      title="Contacts Management"
-      subtitle="Your complete contact management solution. Organize, track, and nurture all your business relationships in one place."
-      heroIcon={Users}
-      features={contactsFeatures}
-      floatingIcons={contactsFloatingIcons}
-    >
-      <ContactsPage />
-    </ComingSoonWrapper>
-  );
-};
+// Wrapped with Coming Soon - DISABLED to open up menu
+// const ContactsPageWithComingSoon: React.FC = () => {
+//   return (
+//     <ComingSoonWrapper
+//       pageKey="contacts"
+//       title="Contacts Management"
+//       subtitle="Your complete contact management solution. Organize, track, and nurture all your business relationships in one place."
+//       heroIcon={Users}
+//       features={contactsFeatures}
+//       floatingIcons={contactsFloatingIcons}
+//     >
+//       <ContactsPage />
+//     </ComingSoonWrapper>
+//   );
+// };
 
-export default ContactsPageWithComingSoon;
+export default ContactsPage;

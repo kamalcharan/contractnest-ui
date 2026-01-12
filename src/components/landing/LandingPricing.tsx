@@ -379,7 +379,7 @@ const LandingPricing: React.FC<PricingProps> = ({
   onContactSales,
   className = ''
 }) => {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true); // Default to true to ensure content is visible
   const [showCalculator, setShowCalculator] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
 
@@ -556,7 +556,8 @@ const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-pr
             </div>
           </div>
 
-          {/* Pricing Cards */}
+          {/* Pricing Cards - Hidden for now */}
+          {/*
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
             {pricingPlans.map((plan, index) => (
               <PricingCard
@@ -568,14 +569,17 @@ const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-pr
               />
             ))}
           </div>
+          */}
 
-          {/* ROI Calculator */}
+          {/* ROI Calculator - Hidden for now */}
+          {/*
           <div className="mb-16">
-            <ROICalculator 
+            <ROICalculator
               isVisible={isVisible}
               onCalculatorOpen={handleCalculatorOpen}
             />
           </div>
+          */}
 
           {/* Value Proposition */}
           <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200 mb-16">
@@ -621,143 +625,31 @@ const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-pr
             </div>
           </div>
 
-          {/* Comparison Table */}
+          {/* Comparison Table - Hidden for now */}
+          {/*
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden mb-16">
             <div className="p-8 pb-4">
               <h3 className="text-2xl font-bold text-gray-900 text-center mb-6">
                 Compare ContractNest vs Traditional Solutions
               </h3>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Feature</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Manual Process</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Traditional Software</th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-green-700 bg-green-50">ContractNest</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  <tr>
-                    <td className="px-6 py-4 text-sm text-gray-900">Setup Time</td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-600">Weeks</td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-600">3-6 months</td>
-                    <td className="px-6 py-4 text-center text-sm font-semibold text-green-700">Same day</td>
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-900">Monthly Cost (25 contracts)</td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-600">₹50,000+ (staff time)</td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-600">₹75,000+ (licenses)</td>
-                    <td className="px-6 py-4 text-center text-sm font-semibold text-green-700">₹1,250</td>
-                  </tr>
-                  <tr>
-                    <td className="px-6 py-4 text-sm text-gray-900">SLA Tracking</td>
-                    <td className="px-6 py-4 text-center text-sm text-red-600">Manual</td>
-                    <td className="px-6 py-4 text-center text-sm text-yellow-600">Basic</td>
-                    <td className="px-6 py-4 text-center text-sm font-semibold text-green-700">Automated</td>
-                  </tr>
-                  <tr className="bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-900">Integration</td>
-                    <td className="px-6 py-4 text-center text-sm text-red-600">None</td>
-                    <td className="px-6 py-4 text-center text-sm text-yellow-600">Limited</td>
-                    <td className="px-6 py-4 text-center text-sm font-semibold text-green-700">Comprehensive</td>
-                  </tr>
-                  <tr>
-                    <td className="px-6 py-4 text-sm text-gray-900">Support</td>
-                    <td className="px-6 py-4 text-center text-sm text-red-600">None</td>
-                    <td className="px-6 py-4 text-center text-sm text-yellow-600">Business hours</td>
-                    <td className="px-6 py-4 text-center text-sm font-semibold text-green-700">24/7</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            ...
           </div>
+          */}
 
-          {/* FAQ Section */}
+          {/* FAQ Section - Hidden for now */}
+          {/*
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-8 border border-blue-200 mb-16">
             <div className="text-center mb-8">
               <h3 className="text-2xl font-bold text-gray-900 mb-4">
                 Pricing Questions & Answers
               </h3>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Why contract-based pricing?</h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  You pay for what you use. Whether you have 1 user or 100 users managing contracts, 
-                  the price stays the same. This encourages collaboration and transparency.
-                </p>
-
-                <h4 className="font-semibold text-gray-900 mb-2">What happens after 10 free contracts?</h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  Your first 10 contracts remain free forever. Starting with contract #11, 
-                  you pay ₹150 per contract per quarter (₹50/month per contract).
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-2">Can I cancel anytime?</h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  Yes, absolutely. No long-term contracts or cancellation fees. 
-                  Your data remains accessible for 90 days after cancellation.
-                </p>
-
-                <h4 className="font-semibold text-gray-900 mb-2">Is there a setup fee?</h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  No setup fees, no hidden costs. What you see is what you pay. 
-                  We believe in transparent, honest pricing.
-                </p>
-              </div>
-            </div>
+            ...
           </div>
+          */}
 
-          {/* Final CTA */}
-          <div className="text-center">
-            <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-2xl p-8 text-white">
-              <h3 className="text-2xl md:text-3xl font-bold mb-4">
-                Ready to Transform Your Service Contracts?
-              </h3>
-              <p className="text-xl text-red-100 mb-8 max-w-2xl mx-auto">
-                Join early adopters who are already saving 70% of their contract management time
-              </p>
-              
-              <div className="flex flex-col sm:flex-row justify-center items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
-                <Button 
-                  onClick={() => handlePlanSelect('professional')}
-                  className="bg-white text-red-600 hover:bg-gray-100 focus:ring-white text-lg px-8 py-4"
-                >
-                  Start Free Trial
-                  <Sparkles className="ml-2 h-5 w-5" />
-                </Button>
-                <Button 
-                  onClick={handleContactSales}
-                  variant="outline" 
-                  className="border-white text-white hover:bg-white hover:text-red-600 text-lg px-8 py-4"
-                >
-                  <Phone className="mr-2 h-5 w-5" />
-                  Talk to Sales
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-red-100">
-                <div className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span>First 10 contracts free</span>
-                </div>
-                <div className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span>No setup fees</span>
-                </div>
-                <div className="flex items-center">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  <span>Cancel anytime</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Final CTA - Hidden for now */}
         </div>
       </section>
 

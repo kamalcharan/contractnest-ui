@@ -127,7 +127,7 @@ export const defaultMenuItems: MenuItem[] = [
       // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
     ]
   },
-  // Catalog Studio - Configure hidden (no empty state)
+  // Catalog Studio
   {
     id: 'catalog-studio',
     label: 'Catalog Studio',
@@ -135,8 +135,7 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/catalog-studio',
     hasSubmenu: true,
     submenuItems: [
-      // HIDDEN: Configure (no empty state)
-      // { id: 'catalog-studio-configure', label: 'Configure', icon: 'Settings', path: '/catalog-studio/configure' },
+      { id: 'catalog-studio-configure', label: 'Configure', icon: 'Settings', path: '/catalog-studio/configure' },
       { id: 'catalog-studio-template', label: 'Template Builder', icon: 'FileTemplate', path: '/catalog-studio/template' },
       { id: 'catalog-studio-templates-list', label: 'Templates List', icon: 'List', path: '/catalog-studio/templates-list' }
     ]

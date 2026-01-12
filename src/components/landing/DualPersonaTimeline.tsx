@@ -257,7 +257,7 @@ const DualPersonaTimeline: React.FC<DualPersonaTimelineProps> = ({
   const [activeStep, setActiveStep] = useState(0);
   const [selectedPersona, setSelectedPersona] = useState<'buyer' | 'seller' | 'both'>('both');
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true); // Default to true to ensure content is visible
   const sectionRef = useRef<HTMLDivElement>(null);
 
   // Industry-specific contexts

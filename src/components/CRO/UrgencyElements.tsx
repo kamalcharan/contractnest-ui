@@ -1,18 +1,28 @@
 // src/components/CRO/UrgencyElements.tsx
 import React, { useState, useEffect } from 'react';
-import { 
-  Clock, 
-  Users, 
-  Zap, 
-  AlertCircle, 
-  X, 
+import {
+  Clock,
+  Users,
+  Zap,
+  AlertCircle,
+  X,
   Calendar,
   TrendingUp,
   CheckCircle,
   Star,
   Timer,
-  Bell
+  Bell,
+  Sparkles,
+  User,
+  Building2,
+  Phone,
+  Loader2,
+  Gift,
+  Shield,
+  ArrowRight,
+  PartyPopper
 } from 'lucide-react';
+import { supabase } from '../../utils/supabase';
 
 const UrgencyElements = ({ 
   variant = 'countdown', // 'countdown', 'limited-spots', 'exit-intent', 'scarcity-banner', 'demo-slots'
@@ -21,7 +31,7 @@ const UrgencyElements = ({
   autoShow = true
 }) => {
   const [timeLeft, setTimeLeft] = useState({
-    days: 7,
+    days: 20,
     hours: 23,
     minutes: 45,
     seconds: 30
@@ -32,6 +42,13 @@ const UrgencyElements = ({
   const [demoSlotsLeft, setDemoSlotsLeft] = useState(5);
   const [exitIntentShown, setExitIntentShown] = useState(false);
   const [mouseY, setMouseY] = useState(0);
+
+  // Form state for stylish capture
+  const [formData, setFormData] = useState({ name: '', mobile: '', company: '' });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   // Countdown timer logic
   useEffect(() => {
@@ -154,7 +171,7 @@ const UrgencyElements = ({
     if (onTrigger) {
       onTrigger('urgency-cta-clicked', { variant, spotsRemaining, demoSlotsLeft });
     }
-    
+
     if (typeof gtag !== 'undefined') {
       gtag('event', 'urgency_cta_click', {
         event_category: 'conversion',
@@ -164,52 +181,265 @@ const UrgencyElements = ({
     }
   };
 
-  // Countdown Timer Component
+  // Form validation
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!formData.name.trim()) errors.name = 'Name is required';
+    if (!formData.mobile.trim()) errors.mobile = 'Mobile is required';
+    else if (!/^[0-9]{10}$/.test(formData.mobile.replace(/\s/g, ''))) errors.mobile = 'Enter valid 10-digit mobile';
+    if (!formData.company.trim()) errors.company = 'Company is required';
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Form submission
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    setIsSubmitting(true);
+
+    try {
+      await supabase.from('leads_contractnest').insert([{
+        name: formData.name.trim(),
+        email: `${formData.mobile}@earlyaccess.contractnest.com`,
+        phone: formData.mobile.trim(),
+        industry: 'early_access',
+        persona: 'founder',
+        completed_demo: false,
+        source: 'early_access_countdown'
+      }]);
+
+      // Track conversion
+      if (typeof gtag !== 'undefined') {
+        gtag('event', 'early_access_signup', {
+          event_category: 'conversion',
+          event_label: 'countdown_form',
+          value: 1
+        });
+      }
+
+      if (onTrigger) {
+        onTrigger('early-access-claimed', formData);
+      }
+
+      setIsSuccess(true);
+    } catch (err) {
+      console.error('Error saving lead:', err);
+    }
+
+    setIsSubmitting(false);
+  };
+
+  // Countdown Timer Component with Stylish Capture Form
   const CountdownTimer = () => (
-    <div className={`bg-gradient-to-r from-red-500 to-red-600 text-white py-4 px-6 rounded-lg shadow-lg ${className}`}>
-      <div className="text-center">
-        <div className="flex items-center justify-center mb-3">
-          <Timer className="h-5 w-5 mr-2" />
-          <span className="font-semibold text-lg">Early Access Ends In:</span>
-        </div>
-        
-        <div className="flex justify-center space-x-4 mb-4">
-          <div className="text-center">
-            <div className="bg-white text-red-600 font-bold text-2xl px-3 py-2 rounded">
-              {timeLeft.days.toString().padStart(2, '0')}
+    <div className={`relative overflow-hidden ${className}`}>
+      {/* Background with animated gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-600 via-red-500 to-orange-500 opacity-95" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.2),transparent_50%)]" />
+
+      {/* Animated particles */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute w-2 h-2 bg-white/20 rounded-full animate-pulse"
+            style={{
+              left: `${15 + i * 15}%`,
+              top: `${20 + (i % 3) * 25}%`,
+              animationDelay: `${i * 0.3}s`,
+              animationDuration: '2s'
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 py-8 px-6 md:px-12">
+        {!isSuccess ? (
+          <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-4 border border-white/30">
+                <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                Founding Member Exclusive
+              </div>
+
+              <h3 className="text-2xl md:text-3xl font-bold text-white mb-2">
+                Lock In 50% Off Forever
+              </h3>
+
+              {/* Countdown */}
+              <div className="flex justify-center items-center gap-3 md:gap-4 mb-4">
+                {[
+                  { value: timeLeft.days, label: 'DAYS' },
+                  { value: timeLeft.hours, label: 'HRS' },
+                  { value: timeLeft.minutes, label: 'MIN' },
+                  { value: timeLeft.seconds, label: 'SEC' }
+                ].map((item, i) => (
+                  <div key={i} className="text-center">
+                    <div className="bg-white/95 backdrop-blur text-red-600 font-bold text-xl md:text-3xl w-12 md:w-16 h-12 md:h-16 rounded-xl flex items-center justify-center shadow-lg border-2 border-white/50">
+                      {item.value.toString().padStart(2, '0')}
+                    </div>
+                    <div className="text-[10px] md:text-xs text-white/80 mt-1 font-medium">{item.label}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="text-xs mt-1">DAYS</div>
-          </div>
-          <div className="text-center">
-            <div className="bg-white text-red-600 font-bold text-2xl px-3 py-2 rounded">
-              {timeLeft.hours.toString().padStart(2, '0')}
+
+            {/* Stylish Form Card */}
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 border border-white/20 shadow-2xl max-w-2xl mx-auto">
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                {/* Mobile Input */}
+                <div className="relative">
+                  <div className={`flex rounded-xl overflow-hidden border-2 transition-all duration-300 ${focusedField === 'mobile' ? 'border-white shadow-lg shadow-white/20' : 'border-white/30'} ${formErrors.mobile ? 'border-red-300' : ''}`}>
+                    <span className="flex items-center px-4 bg-white/20 text-white font-medium border-r border-white/20">
+                      <Phone className="h-4 w-4 mr-2" />
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      value={formData.mobile}
+                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                      onFocus={() => setFocusedField('mobile')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="98765 43210"
+                      maxLength={10}
+                      className="flex-1 px-4 py-3.5 bg-white/10 text-white placeholder-white/50 focus:outline-none text-lg"
+                    />
+                  </div>
+                  {formErrors.mobile && <p className="text-red-200 text-xs mt-1 ml-1">{formErrors.mobile}</p>}
+                </div>
+
+                {/* Name & Company Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name Input */}
+                  <div className="relative">
+                    <div className={`flex items-center rounded-xl overflow-hidden border-2 transition-all duration-300 ${focusedField === 'name' ? 'border-white shadow-lg shadow-white/20' : 'border-white/30'} ${formErrors.name ? 'border-red-300' : ''}`}>
+                      <span className="flex items-center px-4 bg-white/20 text-white">
+                        <User className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onFocus={() => setFocusedField('name')}
+                        onBlur={() => setFocusedField(null)}
+                        placeholder="Your Name"
+                        className="flex-1 px-4 py-3.5 bg-white/10 text-white placeholder-white/50 focus:outline-none"
+                      />
+                    </div>
+                    {formErrors.name && <p className="text-red-200 text-xs mt-1 ml-1">{formErrors.name}</p>}
+                  </div>
+
+                  {/* Company Input */}
+                  <div className="relative">
+                    <div className={`flex items-center rounded-xl overflow-hidden border-2 transition-all duration-300 ${focusedField === 'company' ? 'border-white shadow-lg shadow-white/20' : 'border-white/30'} ${formErrors.company ? 'border-red-300' : ''}`}>
+                      <span className="flex items-center px-4 bg-white/20 text-white">
+                        <Building2 className="h-4 w-4" />
+                      </span>
+                      <input
+                        type="text"
+                        value={formData.company}
+                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        onFocus={() => setFocusedField('company')}
+                        onBlur={() => setFocusedField(null)}
+                        placeholder="Company Name"
+                        className="flex-1 px-4 py-3.5 bg-white/10 text-white placeholder-white/50 focus:outline-none"
+                      />
+                    </div>
+                    {formErrors.company && <p className="text-red-200 text-xs mt-1 ml-1">{formErrors.company}</p>}
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full relative group overflow-hidden bg-white text-red-600 font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-white/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {/* Glow effect on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-red-50 via-white to-red-50 opacity-0 group-hover:opacity-50 transition-opacity duration-300" />
+
+                  <span className="relative flex items-center justify-center gap-2">
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Securing Your Spot...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-5 w-5" />
+                        Claim My Founding Member Pricing
+                        <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </span>
+                </button>
+              </form>
+
+              {/* Trust Badges */}
+              <div className="flex flex-wrap justify-center items-center gap-4 md:gap-6 mt-6 pt-6 border-t border-white/20">
+                <div className="flex items-center text-white/90 text-sm">
+                  <Gift className="h-4 w-4 mr-2 text-yellow-300" />
+                  <span>50% off locked forever</span>
+                </div>
+                <div className="flex items-center text-white/90 text-sm">
+                  <Shield className="h-4 w-4 mr-2 text-green-300" />
+                  <span>Priority onboarding</span>
+                </div>
+                <div className="flex items-center text-white/90 text-sm">
+                  <Star className="h-4 w-4 mr-2 text-yellow-300" />
+                  <span>Founding member badge</span>
+                </div>
+              </div>
             </div>
-            <div className="text-xs mt-1">HRS</div>
           </div>
-          <div className="text-center">
-            <div className="bg-white text-red-600 font-bold text-2xl px-3 py-2 rounded">
-              {timeLeft.minutes.toString().padStart(2, '0')}
+        ) : (
+          /* Success State */
+          <div className="max-w-lg mx-auto text-center py-8">
+            <div className="relative inline-block mb-6">
+              <div className="w-24 h-24 bg-white/20 backdrop-blur rounded-full flex items-center justify-center mx-auto animate-bounce">
+                <PartyPopper className="h-12 w-12 text-white" />
+              </div>
+              {/* Confetti-like elements */}
+              {[...Array(8)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute w-3 h-3 rounded-full animate-ping"
+                  style={{
+                    backgroundColor: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1'][i % 4],
+                    left: `${50 + 40 * Math.cos(i * 45 * Math.PI / 180)}%`,
+                    top: `${50 + 40 * Math.sin(i * 45 * Math.PI / 180)}%`,
+                    animationDelay: `${i * 0.1}s`,
+                    animationDuration: '1.5s'
+                  }}
+                />
+              ))}
             </div>
-            <div className="text-xs mt-1">MIN</div>
-          </div>
-          <div className="text-center">
-            <div className="bg-white text-red-600 font-bold text-2xl px-3 py-2 rounded">
-              {timeLeft.seconds.toString().padStart(2, '0')}
+
+            <h3 className="text-3xl font-bold text-white mb-3">
+              Welcome, {formData.name.split(' ')[0]}! 🎉
+            </h3>
+            <p className="text-white/90 text-lg mb-6">
+              You've secured your founding member status!
+            </p>
+
+            <div className="bg-white/20 backdrop-blur rounded-xl p-6 border border-white/30">
+              <h4 className="text-white font-semibold mb-4">What happens next?</h4>
+              <div className="space-y-3 text-left">
+                {[
+                  'You\'ll receive a call within 24 hours',
+                  'Personalized demo scheduled for your industry',
+                  'Your 50% founding member discount is locked in'
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center text-white/90">
+                    <CheckCircle className="h-5 w-5 text-green-300 mr-3 flex-shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="text-xs mt-1">SEC</div>
           </div>
-        </div>
-        
-        <p className="text-sm mb-4">
-          🔥 Lock in founding member pricing before it expires
-        </p>
-        
-        <button
-          onClick={handleCTAClick}
-          className="bg-white text-red-600 font-semibold px-6 py-2 rounded hover:bg-gray-100 transition-colors"
-        >
-          Claim Your Spot Now
-        </button>
+        )}
       </div>
     </div>
   );
