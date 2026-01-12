@@ -122,11 +122,18 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
           
           {/* Classification Tags */}
           <div className="flex flex-wrap gap-1 mb-3">
-            {contact.classifications.map((classification) => {
-              const config = getClassificationConfig(classification.classification_value);
+            {contact.classifications.map((classification, index) => {
+              // Handle both string and object formats
+              const classValue = typeof classification === 'string'
+                ? classification
+                : classification.classification_value;
+              const classLabel = typeof classification === 'string'
+                ? classification
+                : classification.classification_label;
+              const config = getClassificationConfig(classValue);
               return (
                 <span
-                  key={classification.id}
+                  key={typeof classification === 'string' ? `class-${index}` : (classification.id || `class-${index}`)}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${
                     config?.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
                     config?.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' :
@@ -136,7 +143,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                   }`}
                 >
                   {config?.icon && <span>{config.icon}</span>}
-                  {classification.classification_label}
+                  {classLabel}
                 </span>
               );
             })}

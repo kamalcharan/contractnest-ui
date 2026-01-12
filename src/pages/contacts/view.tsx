@@ -1004,19 +1004,25 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
                     {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
                   </span>
                   
-                  {contact.classifications.map((classification) => (
-                    <span
-                      key={classification.id}
-                      className="px-2 py-1 rounded-full text-xs font-medium border"
-                      style={{
-                        backgroundColor: colors.utility.secondaryText + '20',
-                        borderColor: colors.utility.secondaryText + '40',
-                        color: colors.utility.secondaryText
-                      }}
-                    >
-                      {classification.classification_label}
-                    </span>
-                  ))}
+                  {contact.classifications.map((classification, index) => {
+                    // Handle both string and object formats
+                    const classLabel = typeof classification === 'string'
+                      ? classification
+                      : classification.classification_label;
+                    return (
+                      <span
+                        key={typeof classification === 'string' ? `class-${index}` : (classification.id || `class-${index}`)}
+                        className="px-2 py-1 rounded-full text-xs font-medium border"
+                        style={{
+                          backgroundColor: colors.utility.secondaryText + '20',
+                          borderColor: colors.utility.secondaryText + '40',
+                          color: colors.utility.secondaryText
+                        }}
+                      >
+                        {classLabel}
+                      </span>
+                    );
+                  })}
                 </div>
                 
                 {/* Quick Contact Info */}

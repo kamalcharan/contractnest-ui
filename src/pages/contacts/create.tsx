@@ -47,6 +47,9 @@ import ComplianceNumbersSection from '../../components/contacts/forms/Compliance
 import ContactPersonsSection from '../../components/contacts/forms/ContactPersonsSection';
 import ContactTagsSection from '../../components/contacts/forms/ContactTagsSection';
 
+// Import RichTextEditor for Notes field
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
+
 // Import types
 import { CreateContactRequest, UpdateContactRequest } from '../../types/contact';
 
@@ -739,6 +742,20 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        t_userprofile_id: contactData.t_userprofile_id
      });
 
+     // DEBUG: Log all array fields to verify data is being sent
+     console.log('=== DEBUG SAVE DATA - ALL FIELDS ===');
+     console.log('tags:', JSON.stringify(contactData.tags, null, 2));
+     console.log('tags count:', contactData.tags?.length || 0);
+     console.log('addresses:', JSON.stringify(contactData.addresses, null, 2));
+     console.log('addresses count:', contactData.addresses?.length || 0);
+     console.log('contact_channels:', JSON.stringify(contactData.contact_channels, null, 2));
+     console.log('contact_channels count:', contactData.contact_channels?.length || 0);
+     console.log('contact_persons:', JSON.stringify(contactData.contact_persons, null, 2));
+     console.log('contact_persons count:', contactData.contact_persons?.length || 0);
+     console.log('compliance_numbers:', JSON.stringify(contactData.compliance_numbers, null, 2));
+     console.log('compliance_numbers count:', contactData.compliance_numbers?.length || 0);
+     console.log('==========================================');
+
      let savedContactId: string;
      
      try {
@@ -975,7 +992,9 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              className="text-2xl font-bold flex items-center gap-2 transition-colors"
              style={{ color: colors.utility.primaryText }}
            >
-             {isEditMode ? 'Edit Entity' : 'Create Entity'}
+             {isEditMode
+               ? `Edit - ${formData.type === 'corporate' ? formData.company_name : formData.name || 'Entity'}`
+               : 'Create Entity'}
              <button
                onClick={() => setShowVideoHelp(true)}
                className="p-1 rounded-full hover:opacity-80 transition-colors"
@@ -1270,25 +1289,17 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              borderColor: colors.utility.primaryText + '20'
            }}
          >
-           <h2 
-             className="text-lg font-semibold mb-4 transition-colors"
-             style={{ color: colors.utility.primaryText }}
-           >
-             Notes
-           </h2>
-           <textarea
-             value={formData.notes || ''}
-             onChange={(e) => updateFormData({ notes: e.target.value })}
-             disabled={isSaving}
-             placeholder={PLACEHOLDER_TEXTS.NOTES}
-             rows={4}
-             className="w-full p-3 border rounded-md resize-none disabled:opacity-50 transition-colors"
-             style={{
-               backgroundColor: colors.utility.primaryBackground,
-               borderColor: colors.utility.primaryText + '40',
-               color: colors.utility.primaryText
-             }}
-           />
+           <RichTextEditor
+            value={formData.notes || ''}
+            onChange={(value) => updateFormData({ notes: value })}
+            label="Notes"
+            placeholder={PLACEHOLDER_TEXTS.NOTES || "Add notes about this entity..."}
+            disabled={isSaving}
+            minHeight={120}
+            maxHeight={300}
+            toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+            outputFormat="html"
+          />
          </div>
        </div>
 
