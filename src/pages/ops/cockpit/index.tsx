@@ -8,37 +8,13 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  TrendingUp,
   Users,
-  Calendar,
-  DollarSign,
   RefreshCw,
-  Filter,
   Download,
   Bell,
-  Eye,
-  Gauge,
-  BarChart3,
-  Zap,
-  Target
+  Eye
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
-
-// Coming soon features for Operations Cockpit
-const opsFeatures = [
-  { icon: Gauge, title: 'Real-time Monitoring', description: 'Live dashboard tracking contract status, approvals, and deadlines across your entire portfolio.', highlight: true },
-  { icon: BarChart3, title: 'Performance Analytics', description: 'Insights on contract velocity, completion rates, and value metrics to optimize operations.', highlight: false },
-  { icon: Zap, title: 'Workflow Automation', description: 'Automated alerts, reminders, and escalations to keep contracts moving forward.', highlight: false },
-  { icon: Target, title: 'Goal Tracking', description: 'Set and monitor KPIs for contract turnaround, renewal rates, and team performance.', highlight: false }
-];
-
-const opsFloatingIcons = [
-  { Icon: Activity, top: '8%', left: '4%', delay: '0s', duration: '22s' },
-  { Icon: Gauge, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
-  { Icon: BarChart3, top: '60%', left: '5%', delay: '3s', duration: '21s' },
-  { Icon: TrendingUp, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
-];
 
 // Reusing existing components
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
@@ -451,20 +427,4 @@ const OpsCockpitPage: React.FC = () => {
   );
 };
 
-// Wrapped with Coming Soon
-const OpsCockpitPageWithComingSoon: React.FC = () => {
-  return (
-    <ComingSoonWrapper
-      pageKey="ops-cockpit"
-      title="Operations Cockpit"
-      subtitle="Real-time contract operations monitoring. Track performance, manage workflows, and optimize your contract lifecycle from a single command center."
-      heroIcon={Activity}
-      features={opsFeatures}
-      floatingIcons={opsFloatingIcons}
-    >
-      <OpsCockpitPage />
-    </ComingSoonWrapper>
-  );
-};
-
-export default OpsCockpitPageWithComingSoon;
+export default OpsCockpitPage;

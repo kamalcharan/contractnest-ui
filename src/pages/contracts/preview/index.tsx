@@ -2,10 +2,8 @@
 // Contract Preview Page - Buyer/Seller View
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import {
   ArrowLeft,
-  Eye,
   FileText,
   Download,
   Share2,
@@ -13,29 +11,11 @@ import {
   User,
   Building2,
   Calendar,
-  DollarSign,
   CheckCircle,
   Clock,
-  AlertCircle,
-  FileSignature,
-  Shield,
-  BarChart3,
-  Layers
+  AlertCircle
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-
-const contractsFeatures = [
-  { icon: FileSignature, title: 'Digital Contract Creation', description: 'Create professional contracts with customizable templates.', highlight: true },
-  { icon: Shield, title: 'Compliance & Audit Trail', description: 'Full audit history for regulatory compliance.', highlight: false },
-  { icon: Clock, title: 'Lifecycle Management', description: 'Track contract stages from draft to signed.', highlight: false },
-  { icon: BarChart3, title: 'Contract Analytics', description: 'Insights on contract value and performance.', highlight: false }
-];
-const contractsFloatingIcons = [
-  { Icon: FileText, top: '8%', left: '4%', delay: '0s', duration: '22s' },
-  { Icon: FileSignature, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
-  { Icon: Shield, top: '60%', left: '5%', delay: '3s', duration: '21s' },
-  { Icon: Layers, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
-];
 import ContractStatsGrid from '@/components/contracts/ContractStatsGrid';
 import RecentContractsCard from '@/components/contracts/RecentContractsCard';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
@@ -471,10 +451,4 @@ const ContractPreviewPage: React.FC<ContractPreviewPageProps> = () => {
   );
 };
 
-const ContractPreviewPageWithComingSoon: React.FC = () => (
-  <ComingSoonWrapper pageKey="contracts" title="Contract Management" subtitle="End-to-end contract lifecycle management." heroIcon={FileText} features={contractsFeatures} floatingIcons={contractsFloatingIcons}>
-    <ContractPreviewPage />
-  </ComingSoonWrapper>
-);
-
-export default ContractPreviewPageWithComingSoon;
+export default ContractPreviewPage;

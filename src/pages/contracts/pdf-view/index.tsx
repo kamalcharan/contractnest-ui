@@ -2,7 +2,6 @@
 // PDF View Page - Contract Document Viewer
 import React, { useState, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import {
   ArrowLeft,
   Download,
@@ -17,27 +16,9 @@ import {
   FileText,
   Search,
   Bookmark,
-  MessageSquare,
-  FileSignature,
-  Shield,
-  BarChart3,
-  Layers,
-  Clock
+  MessageSquare
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-
-const contractsFeatures = [
-  { icon: FileSignature, title: 'Digital Contract Creation', description: 'Create professional contracts with customizable templates.', highlight: true },
-  { icon: Shield, title: 'Compliance & Audit Trail', description: 'Full audit history for regulatory compliance.', highlight: false },
-  { icon: Clock, title: 'Lifecycle Management', description: 'Track contract stages from draft to signed.', highlight: false },
-  { icon: BarChart3, title: 'Contract Analytics', description: 'Insights on contract value and performance.', highlight: false }
-];
-const contractsFloatingIcons = [
-  { Icon: FileText, top: '8%', left: '4%', delay: '0s', duration: '22s' },
-  { Icon: FileSignature, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
-  { Icon: Shield, top: '60%', left: '5%', delay: '3s', duration: '21s' },
-  { Icon: Layers, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
-];
 
 interface PDFViewPageProps {
   contractId?: string;
@@ -396,10 +377,4 @@ const PDFViewPage: React.FC<PDFViewPageProps> = () => {
   );
 };
 
-const PDFViewPageWithComingSoon: React.FC = () => (
-  <ComingSoonWrapper pageKey="contracts" title="Contract Management" subtitle="End-to-end contract lifecycle management." heroIcon={FileText} features={contractsFeatures} floatingIcons={contractsFloatingIcons}>
-    <PDFViewPage />
-  </ComingSoonWrapper>
-);
-
-export default PDFViewPageWithComingSoon;
+export default PDFViewPage;

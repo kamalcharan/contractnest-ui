@@ -2,40 +2,17 @@
 // Invite Sellers Page - Uses existing invitation components
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ComingSoonWrapper from '@/components/common/ComingSoonWrapper';
 import {
   ArrowLeft,
   UserPlus,
-  Mail,
-  Phone,
-  MessageSquare,
   Search,
   Filter,
-  RefreshCw,
   Users,
   CheckCircle,
   Clock,
-  XCircle,
-  FileText,
-  FileSignature,
-  Shield,
-  BarChart3,
-  Layers
+  XCircle
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-
-const contractsFeatures = [
-  { icon: FileSignature, title: 'Digital Contract Creation', description: 'Create professional contracts with customizable templates.', highlight: true },
-  { icon: Shield, title: 'Compliance & Audit Trail', description: 'Full audit history for regulatory compliance.', highlight: false },
-  { icon: Clock, title: 'Lifecycle Management', description: 'Track contract stages from draft to signed.', highlight: false },
-  { icon: BarChart3, title: 'Contract Analytics', description: 'Insights on contract value and performance.', highlight: false }
-];
-const contractsFloatingIcons = [
-  { Icon: FileText, top: '8%', left: '4%', delay: '0s', duration: '22s' },
-  { Icon: FileSignature, top: '18%', right: '6%', delay: '1.5s', duration: '19s' },
-  { Icon: Shield, top: '60%', left: '5%', delay: '3s', duration: '21s' },
-  { Icon: Layers, top: '70%', right: '4%', delay: '0.5s', duration: '18s' },
-];
 import toast from 'react-hot-toast';
 
 // Reusing existing invitation components
@@ -384,10 +361,4 @@ const InviteSellersPage: React.FC = () => {
   );
 };
 
-const InviteSellersPageWithComingSoon: React.FC = () => (
-  <ComingSoonWrapper pageKey="contracts" title="Contract Management" subtitle="End-to-end contract lifecycle management." heroIcon={FileText} features={contractsFeatures} floatingIcons={contractsFloatingIcons}>
-    <InviteSellersPage />
-  </ComingSoonWrapper>
-);
-
-export default InviteSellersPageWithComingSoon;
+export default InviteSellersPage;
