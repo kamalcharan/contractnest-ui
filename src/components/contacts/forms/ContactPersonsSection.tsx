@@ -1,13 +1,12 @@
-// src/components/contacts/forms/ContactPersonsSection.tsx - Theme Integrated with Modals
+// src/components/contacts/forms/ContactPersonsSection.tsx - Glass Morphism Theme
 import React, { useState } from 'react';
 import { Plus, Users, Trash2, User, Edit2, Building2, Star, Mail, Phone, X, CheckCircle, Loader2 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useToast } from '@/components/ui/use-toast';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
 import ContactChannelsSection from './ContactChannelsSection';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
-import { 
+import {
   SALUTATIONS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
@@ -15,10 +14,8 @@ import {
   VALIDATION_RULES
 } from '../../../utils/constants/contacts';
 
-// Extract salutation type from constants
 type SalutationType = typeof SALUTATIONS[number]['value'];
 
-// Updated interface to match API structure
 interface ContactChannel {
   id?: string;
   channel_type: string;
@@ -53,8 +50,8 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
   disabled = false,
   contactType = 'corporate'
 }) => {
-  const { isDarkMode } = useTheme();
-  const { toast } = useToast();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingPerson, setEditingPerson] = useState<ContactPerson | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -76,10 +73,32 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
     return null;
   }
 
+  // Glass morphism styles
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(30, 41, 59, 0.8)'
+      : 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(255,255,255,0.5)',
+    boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)',
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: isDarkMode
+      ? 'rgba(255,255,255,0.05)'
+      : 'rgba(0,0,0,0.02)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(0,0,0,0.08)',
+  };
+
   // Add new contact person
   const addContactPerson = (newPerson: Omit<ContactPerson, 'id'>) => {
     if (disabled) return;
-    
+
     try {
       const personWithId: ContactPerson = {
         ...newPerson,
@@ -87,7 +106,6 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
         is_primary: value.length === 0 ? true : newPerson.is_primary
       };
 
-      // If marking as primary, unset others
       let updatedPersons = [...value];
       if (personWithId.is_primary) {
         updatedPersons = updatedPersons.map(person => ({ ...person, is_primary: false }));
@@ -95,11 +113,7 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
 
       onChange([...updatedPersons, personWithId]);
       setIsAddModalOpen(false);
-      
-      toast({
-        title: "Success",
-        description: `${newPerson.name} added successfully`
-      });
+      // Note: Toast removed - will show on actual save
 
       analyticsService.trackEvent('contact_person_added', {
         contact_type: contactType,
@@ -109,35 +123,25 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
       captureException(error, {
         tags: { component: 'ContactPersonsSection', action: 'addContactPerson' }
       });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to add contact person"
-      });
     }
   };
 
   // Remove contact person
   const removeContactPerson = (index: number) => {
     if (disabled) return;
-    
+
     try {
       const removedPerson = value[index];
       const newPersons = value.filter((_, i) => i !== index);
-      
-      // If we removed the primary person, make the first remaining person primary
+
       if (removedPerson.is_primary && newPersons.length > 0) {
         newPersons[0] = { ...newPersons[0], is_primary: true };
       }
-      
+
       onChange(newPersons);
       setShowDeleteDialog(false);
       setDeleteIndex(null);
-      
-      toast({
-        title: "Success",
-        description: "Contact person removed"
-      });
+      // Note: Toast removed - will show on actual save
 
       analyticsService.trackEvent('contact_person_removed', {
         was_primary: removedPerson.is_primary
@@ -146,22 +150,16 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
       captureException(error, {
         tags: { component: 'ContactPersonsSection', action: 'removeContactPerson' }
       });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to remove contact person"
-      });
     }
   };
 
   // Update contact person
   const updateContactPerson = (index: number, updates: Partial<ContactPerson>) => {
     if (disabled) return;
-    
+
     try {
       const newPersons = [...value];
-      
-      // If setting this person as primary, unset others
+
       if (updates.is_primary) {
         newPersons.forEach((person, i) => {
           if (i !== index) {
@@ -169,48 +167,37 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
           }
         });
       }
-      
+
       newPersons[index] = { ...newPersons[index], ...updates };
       onChange(newPersons);
       setEditingPerson(null);
       setEditingIndex(null);
-
-      toast({
-        title: "Success",
-        description: "Contact person updated"
-      });
+      // Note: Toast removed - will show on actual save
     } catch (error) {
       captureException(error, {
         tags: { component: 'ContactPersonsSection', action: 'updateContactPerson' }
-      });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to update contact person"
       });
     }
   };
 
   // Get person display name
   const getPersonDisplayName = (person: ContactPerson): string => {
-    const salutation = person.salutation ? 
+    const salutation = person.salutation ?
       SALUTATIONS.find(s => s.value === person.salutation)?.label + ' ' : '';
     return `${salutation}${person.name}`.trim() || 'New Contact Person';
   };
 
   // Get primary contact channel for person
   const getPrimaryChannel = (channels: ContactChannel[], type: string) => {
-    return channels.find(ch => ch.channel_type === type && ch.is_primary) || 
+    return channels.find(ch => ch.channel_type === type && ch.is_primary) ||
            channels.find(ch => ch.channel_type === type);
   };
 
-  // Handle edit click
   const handleEditClick = (person: ContactPerson, index: number) => {
     setEditingPerson(person);
     setEditingIndex(index);
   };
 
-  // Handle delete click
   const handleDeleteClick = (index: number) => {
     setDeleteIndex(index);
     setShowDeleteDialog(true);
@@ -218,45 +205,70 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
 
   return (
     <>
-      <div className="rounded-lg shadow-sm border p-6 bg-card border-border">
+      <div className="rounded-2xl shadow-sm border p-6" style={glassStyle}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-foreground">Contact Persons</h2>
-            <div className="px-2 py-1 text-xs rounded-full bg-primary/20 text-primary">
+            <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>Contact Persons</h2>
+            <div
+              className="px-2 py-1 text-xs rounded-full"
+              style={{
+                backgroundColor: `${colors.brand.primary}20`,
+                color: colors.brand.primary
+              }}
+            >
               Corporate Only
             </div>
           </div>
-          {value.length < 10 && ( // Limit number of contact persons
+          {value.length < 10 && (
             <button
               onClick={() => setIsAddModalOpen(true)}
               disabled={disabled}
-              className="flex items-center px-3 py-2 rounded-md hover:bg-primary/90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground bg-primary"
+              className="flex items-center px-3 py-2 rounded-md hover:opacity-90 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: '#ffffff'
+              }}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Person
             </button>
           )}
         </div>
-        
-        <div className="mb-4 p-3 rounded-md border bg-primary/10 border-primary/20">
-          <p className="text-sm text-primary">
+
+        <div
+          className="mb-4 p-3 rounded-xl border"
+          style={{
+            backgroundColor: `${colors.brand.primary}10`,
+            borderColor: `${colors.brand.primary}20`,
+          }}
+        >
+          <p className="text-sm" style={{ color: colors.brand.primary }}>
             <Building2 className="inline h-4 w-4 mr-1" />
             Add individual contact persons who work for this corporate entity.
           </p>
         </div>
-        
+
         {/* Contact Person Cards */}
         {value.length === 0 ? (
-          <div className="text-center p-8 border-2 border-dashed rounded-lg border-border">
-            <Users className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-            <p className="mb-4 text-muted-foreground">No contact persons added yet</p>
-            <p className="text-sm mb-4 text-muted-foreground">
+          <div
+            className="text-center p-8 border-2 border-dashed rounded-xl"
+            style={{
+              borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+            }}
+          >
+            <Users className="h-12 w-12 mx-auto mb-3" style={{ color: colors.utility.secondaryText }} />
+            <p className="mb-4" style={{ color: colors.utility.secondaryText }}>No contact persons added yet</p>
+            <p className="text-sm mb-4" style={{ color: colors.utility.secondaryText }}>
               Add employees, managers, or other individuals who represent this company
             </p>
             <button
               onClick={() => setIsAddModalOpen(true)}
               disabled={disabled}
-              className="flex items-center px-4 py-2 rounded-md hover:bg-primary/90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed text-primary-foreground bg-primary"
+              className="flex items-center px-4 py-2 rounded-md hover:opacity-90 transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: '#ffffff'
+              }}
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Contact Person
@@ -267,15 +279,22 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
             {value.map((person, index) => {
               const primaryEmail = getPrimaryChannel(person.contact_channels, 'email');
               const primaryPhone = getPrimaryChannel(person.contact_channels, 'mobile');
-              
+
               return (
-                <div 
-                  key={person.id || index} 
-                  className="relative p-4 rounded-lg border hover:shadow-md transition-all bg-card border-border group"
+                <div
+                  key={person.id || index}
+                  className="relative p-4 rounded-xl border hover:shadow-md transition-all group"
+                  style={cardStyle}
                 >
                   {/* Primary Badge */}
                   {person.is_primary && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-primary/20 text-primary">
+                    <div
+                      className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 text-xs rounded-full"
+                      style={{
+                        backgroundColor: `${colors.brand.primary}20`,
+                        color: colors.brand.primary
+                      }}
+                    >
                       <Star className="h-3 w-3" />
                       Primary
                     </div>
@@ -283,17 +302,23 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
 
                   {/* Person Header */}
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm bg-primary/20 text-primary">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
+                      style={{
+                        backgroundColor: `${colors.brand.primary}20`,
+                        color: colors.brand.primary
+                      }}
+                    >
                       {person.name.charAt(0)?.toUpperCase() || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm text-foreground">
+                        <span className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
                           {getPersonDisplayName(person)}
                         </span>
                       </div>
                       {(person.designation || person.department) && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
                           {person.designation}
                           {person.designation && person.department && ' • '}
                           {person.department}
@@ -306,35 +331,35 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
                   <div className="mb-4 space-y-2">
                     {primaryEmail && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                        <span className="truncate text-foreground">{primaryEmail.value}</span>
+                        <Mail className="h-3 w-3 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                        <span className="truncate" style={{ color: colors.utility.primaryText }}>{primaryEmail.value}</span>
                         {primaryEmail.is_verified && (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
+                          <CheckCircle className="h-3 w-3" style={{ color: colors.semantic.success }} />
                         )}
                       </div>
                     )}
-                    
+
                     {primaryPhone && (
                       <div className="flex items-center gap-2 text-sm">
-                        <Phone className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                        <span className="text-foreground">
+                        <Phone className="h-3 w-3 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                        <span style={{ color: colors.utility.primaryText }}>
                           {primaryPhone.country_code && `${primaryPhone.country_code} `}
                           {primaryPhone.value}
                         </span>
                         {primaryPhone.is_verified && (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
+                          <CheckCircle className="h-3 w-3" style={{ color: colors.semantic.success }} />
                         )}
                       </div>
                     )}
 
                     {person.contact_channels.length === 0 && (
-                      <p className="text-xs italic text-muted-foreground">
+                      <p className="text-xs italic" style={{ color: colors.utility.secondaryText }}>
                         No contact channels added
                       </p>
                     )}
 
                     {person.contact_channels.length > 2 && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
                         +{person.contact_channels.length - 2} more contact methods
                       </p>
                     )}
@@ -343,32 +368,43 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
                   {/* Notes */}
                   {person.notes && (
                     <div className="mb-4">
-                      <p className="text-xs p-2 rounded bg-muted text-muted-foreground">
+                      <p
+                        className="text-xs p-2 rounded-lg"
+                        style={{
+                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                          color: colors.utility.secondaryText
+                        }}
+                      >
                         💡 {person.notes}
                       </p>
                     </div>
                   )}
 
                   {/* Actions */}
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                  <div
+                    className="flex items-center justify-between pt-3 border-t"
+                    style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }}
+                  >
                     <div className="flex gap-2">
                       {!person.is_primary && (
                         <button
                           onClick={() => updateContactPerson(index, { is_primary: true })}
                           disabled={disabled}
-                          className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50 text-muted-foreground"
+                          className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                          style={{ color: colors.utility.secondaryText }}
                           title="Make primary contact"
                         >
                           <Star className="h-3 w-3" />
                         </button>
                       )}
                     </div>
-                    
+
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleEditClick(person, index)}
                         disabled={disabled}
-                        className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50 text-muted-foreground"
+                        className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                        style={{ color: colors.utility.secondaryText }}
                         title="Edit person"
                       >
                         <Edit2 className="h-3 w-3" />
@@ -376,7 +412,8 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
                       <button
                         onClick={() => handleDeleteClick(index)}
                         disabled={disabled}
-                        className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50 text-destructive"
+                        className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                        style={{ color: colors.semantic.error }}
                         title="Remove person"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -391,8 +428,14 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
 
         {/* Summary Information */}
         {value.length > 0 && (
-          <div className="mt-4 p-3 rounded-md border bg-primary/10 border-primary/20">
-            <div className="text-sm text-primary">
+          <div
+            className="mt-4 p-3 rounded-xl border"
+            style={{
+              backgroundColor: `${colors.brand.primary}10`,
+              borderColor: `${colors.brand.primary}20`,
+            }}
+          >
+            <div className="text-sm" style={{ color: colors.brand.primary }}>
               <strong>{value.length}</strong> contact person{value.length !== 1 ? 's' : ''} added
               {value.filter(p => p.is_primary).length > 0 && (
                 <span>
@@ -410,16 +453,28 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
 
         {/* Validation Messages */}
         {value.length > 0 && !value.some(p => p.is_primary) && (
-          <div className="mt-4 p-3 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+          <div
+            className="mt-4 p-3 rounded-xl border"
+            style={{
+              backgroundColor: `${colors.semantic.warning}10`,
+              borderColor: `${colors.semantic.warning}25`,
+            }}
+          >
+            <p className="text-sm" style={{ color: colors.semantic.warning }}>
               💡 Tip: Mark one person as "Primary Contact" for the main point of contact.
             </p>
           </div>
         )}
 
         {value.length >= 10 && (
-          <div className="mt-4 p-3 rounded-md border bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/20">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
+          <div
+            className="mt-4 p-3 rounded-xl border"
+            style={{
+              backgroundColor: `${colors.brand.primary}10`,
+              borderColor: `${colors.brand.primary}20`,
+            }}
+          >
+            <p className="text-sm" style={{ color: colors.brand.primary }}>
               ℹ️ Maximum of 10 contact persons allowed per company.
             </p>
           </div>
@@ -453,6 +508,8 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
           onSave={addContactPerson}
           onClose={() => setIsAddModalOpen(false)}
           existingPersons={value}
+          colors={colors}
+          isDarkMode={isDarkMode}
         />
       )}
 
@@ -467,6 +524,8 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
             setEditingIndex(null);
           }}
           existingPersons={value}
+          colors={colors}
+          isDarkMode={isDarkMode}
         />
       )}
     </>
@@ -480,16 +539,19 @@ interface ContactPersonModalProps {
   onSave: (person: Omit<ContactPerson, 'id'> | ContactPerson) => void;
   onClose: () => void;
   existingPersons: ContactPerson[];
+  colors: any;
+  isDarkMode: boolean;
 }
 
-const ContactPersonModal: React.FC<ContactPersonModalProps> = ({ 
+const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
   mode,
   person,
-  onSave, 
-  onClose, 
-  existingPersons
+  onSave,
+  onClose,
+  existingPersons,
+  colors,
+  isDarkMode
 }) => {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [personData, setPersonData] = useState<Omit<ContactPerson, 'id'>>({
     salutation: person?.salutation || undefined,
@@ -501,6 +563,24 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
     notes: person?.notes || ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const modalGlassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(30, 41, 59, 0.95)'
+      : 'rgba(255, 255, 255, 0.95)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: isDarkMode
+      ? 'rgba(15, 23, 42, 0.6)'
+      : 'rgba(255, 255, 255, 0.8)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.2)'
+      : 'rgba(0,0,0,0.15)',
+    color: colors.utility.primaryText,
+  };
 
   // Validate form
   const validateForm = (): boolean => {
@@ -532,31 +612,23 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please fix the errors in the form"
-      });
       return;
     }
 
     setLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       if (mode === 'edit' && person) {
         onSave({ ...person, ...personData });
       } else {
         onSave(personData);
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to save contact person"
+      captureException(error, {
+        tags: { component: 'ContactPersonModal', action: 'handleSubmit' }
       });
     } finally {
       setLoading(false);
@@ -565,40 +637,48 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col bg-card">
+      <div
+        className="rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+        style={modalGlassStyle}
+      >
         {/* Header */}
-        <div className="p-6 flex-shrink-0 border-b border-border">
+        <div
+          className="p-6 flex-shrink-0 border-b"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-foreground">
+            <h2 className="text-xl font-semibold" style={{ color: colors.utility.primaryText }}>
               {mode === 'add' ? 'Add Contact Person' : 'Edit Contact Person'}
             </h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-accent rounded-md transition-colors text-muted-foreground"
+              className="p-2 rounded-md transition-colors"
+              style={{ color: colors.utility.secondaryText }}
               disabled={loading}
             >
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
-        
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           <form onSubmit={handleSubmit} className="p-6">
             <div className="space-y-6">
               {/* Basic Information */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 text-foreground">Basic Information</h3>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: colors.utility.primaryText }}>Basic Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-foreground">Salutation</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Salutation</label>
                     <select
                       value={personData.salutation || ''}
-                      onChange={(e) => setPersonData(prev => ({ 
-                        ...prev, 
-                        salutation: e.target.value as SalutationType || undefined 
+                      onChange={(e) => setPersonData(prev => ({
+                        ...prev,
+                        salutation: e.target.value as SalutationType || undefined
                       }))}
-                      className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+                      className="w-full p-2 border rounded-md"
+                      style={inputStyle}
                       disabled={loading}
                     >
                       <option value="">Select</option>
@@ -609,10 +689,10 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                       ))}
                     </select>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-foreground">
-                      Name <span className="text-destructive">*</span>
+                    <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>
+                      Name <span style={{ color: colors.semantic.error }}>*</span>
                     </label>
                     <input
                       type="text"
@@ -622,24 +702,26 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                         if (errors.name) setErrors(prev => ({ ...prev, name: '' }));
                       }}
                       placeholder={PLACEHOLDER_TEXTS.FULL_NAME}
-                      className={`w-full p-2 border rounded-md bg-background text-foreground ${
-                        errors.name ? 'border-destructive' : 'border-input'
-                      }`}
+                      className="w-full p-2 border rounded-md"
+                      style={{
+                        ...inputStyle,
+                        borderColor: errors.name ? colors.semantic.error : inputStyle.borderColor,
+                      }}
                       disabled={loading}
                     />
                     {errors.name && (
-                      <p className="text-xs text-destructive mt-1">{errors.name}</p>
+                      <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>{errors.name}</p>
                     )}
                   </div>
                 </div>
               </div>
-              
+
               {/* Job Information */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 text-foreground">Job Information</h3>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: colors.utility.primaryText }}>Job Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-foreground">Designation</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Designation</label>
                     <input
                       type="text"
                       value={personData.designation}
@@ -648,18 +730,20 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                         if (errors.designation) setErrors(prev => ({ ...prev, designation: '' }));
                       }}
                       placeholder={PLACEHOLDER_TEXTS.DESIGNATION}
-                      className={`w-full p-2 border rounded-md bg-background text-foreground ${
-                        errors.designation ? 'border-destructive' : 'border-input'
-                      }`}
+                      className="w-full p-2 border rounded-md"
+                      style={{
+                        ...inputStyle,
+                        borderColor: errors.designation ? colors.semantic.error : inputStyle.borderColor,
+                      }}
                       disabled={loading}
                     />
                     {errors.designation && (
-                      <p className="text-xs text-destructive mt-1">{errors.designation}</p>
+                      <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>{errors.designation}</p>
                     )}
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-foreground">Department</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Department</label>
                     <input
                       type="text"
                       value={personData.department}
@@ -668,13 +752,15 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                         if (errors.department) setErrors(prev => ({ ...prev, department: '' }));
                       }}
                       placeholder={PLACEHOLDER_TEXTS.DEPARTMENT}
-                      className={`w-full p-2 border rounded-md bg-background text-foreground ${
-                        errors.department ? 'border-destructive' : 'border-input'
-                      }`}
+                      className="w-full p-2 border rounded-md"
+                      style={{
+                        ...inputStyle,
+                        borderColor: errors.department ? colors.semantic.error : inputStyle.borderColor,
+                      }}
                       disabled={loading}
                     />
                     {errors.department && (
-                      <p className="text-xs text-destructive mt-1">{errors.department}</p>
+                      <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>{errors.department}</p>
                     )}
                   </div>
                 </div>
@@ -682,12 +768,13 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
 
               {/* Contact Channels */}
               <div>
-                <h3 className="text-lg font-semibold mb-4 text-foreground">Contact Channels</h3>
+                <h3 className="text-lg font-semibold mb-4" style={{ color: colors.utility.primaryText }}>Contact Channels</h3>
                 <ContactChannelsSection
                   value={personData.contact_channels}
                   onChange={(contact_channels) => setPersonData(prev => ({ ...prev, contact_channels }))}
                   disabled={loading}
                   mode={mode === 'add' ? 'create' : 'edit'}
+                  showValidation={false}
                 />
               </div>
 
@@ -699,16 +786,17 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                     id="is_primary"
                     checked={personData.is_primary}
                     onChange={(e) => setPersonData(prev => ({ ...prev, is_primary: e.target.checked }))}
-                    className="mr-2 accent-primary"
+                    className="mr-2"
+                    style={{ accentColor: colors.brand.primary }}
                     disabled={loading}
                   />
-                  <label htmlFor="is_primary" className="text-sm text-foreground">
+                  <label htmlFor="is_primary" className="text-sm" style={{ color: colors.utility.primaryText }}>
                     Make this the primary contact person
                   </label>
                 </div>
-                
+
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-foreground">Notes (Optional)</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Notes (Optional)</label>
                   <textarea
                     value={personData.notes}
                     onChange={(e) => {
@@ -717,15 +805,17 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                     }}
                     placeholder="Add any notes about this contact person..."
                     rows={3}
-                    className={`w-full p-2 border rounded-md bg-background text-foreground resize-none ${
-                      errors.notes ? 'border-destructive' : 'border-input'
-                    }`}
+                    className="w-full p-2 border rounded-md resize-none"
+                    style={{
+                      ...inputStyle,
+                      borderColor: errors.notes ? colors.semantic.error : inputStyle.borderColor,
+                    }}
                     disabled={loading}
                   />
                   {errors.notes && (
-                    <p className="text-xs text-destructive mt-1">{errors.notes}</p>
+                    <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>{errors.notes}</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
                     {personData.notes?.length || 0}/{VALIDATION_RULES.NOTES_MAX_LENGTH} characters
                   </p>
                 </div>
@@ -735,13 +825,21 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 flex-shrink-0 border-t border-border">
+        <div
+          className="p-6 flex-shrink-0 border-t"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 px-4 py-2 border rounded-md hover:bg-accent transition-colors border-input text-foreground disabled:opacity-50"
+              className="flex-1 px-4 py-2 border rounded-md transition-colors disabled:opacity-50"
+              style={{
+                borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                color: colors.utility.primaryText,
+                backgroundColor: 'transparent'
+              }}
             >
               Cancel
             </button>
@@ -749,7 +847,11 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
               type="submit"
               onClick={handleSubmit}
               disabled={loading}
-              className="flex-1 px-4 py-2 rounded-md hover:bg-primary/90 transition-colors bg-primary text-primary-foreground disabled:opacity-50"
+              className="flex-1 px-4 py-2 rounded-md hover:opacity-90 transition-colors disabled:opacity-50"
+              style={{
+                backgroundColor: colors.brand.primary,
+                color: '#ffffff'
+              }}
             >
               {loading ? (
                 <>

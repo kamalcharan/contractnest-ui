@@ -1,15 +1,15 @@
-// src/components/contacts/forms/ContactChannelsSection.tsx - FIXED VERSION
+// src/components/contacts/forms/ContactChannelsSection.tsx - Glass Morphism Theme
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Phone, 
-  Mail, 
-  Globe, 
-  MessageSquare, 
-  Trash2, 
-  Star, 
-  Edit2, 
-  Check, 
+import {
+  Plus,
+  Phone,
+  Mail,
+  Globe,
+  MessageSquare,
+  Trash2,
+  Star,
+  Edit2,
+  Check,
   X,
   AlertCircle,
   CheckCircle,
@@ -24,12 +24,12 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
 
-// FIXED: Import from constants instead of hardcoding
-import { 
-  CHANNELS, 
-  getChannelByCode, 
+// Import from constants
+import {
+  CHANNELS,
+  getChannelByCode,
   validateChannelValue as validateChannel,
-  formatChannelValue 
+  formatChannelValue
 } from '@/utils/constants/channels';
 import { countries } from '@/utils/constants/countries';
 
@@ -53,7 +53,7 @@ interface ContactChannelsSectionProps {
   showValidation?: boolean;
 }
 
-// FIXED: Icon mapping for channel types
+// Icon mapping for channel types
 const getChannelIcon = (iconName?: string) => {
   const iconMap: Record<string, any> = {
     'phone': Phone,
@@ -78,7 +78,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -98,40 +98,37 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
   const [newChannel, setNewChannel] = useState<ContactChannel>({
     channel_type: 'mobile',
     value: '',
-    country_code: 'IN', // Default to India
+    country_code: 'IN',
     is_primary: value.length === 0,
     is_verified: false,
     notes: ''
   });
 
-  // FIXED: Get commonly used countries for quick selection
+  // Get commonly used countries for quick selection
   const commonCountries = ['IN', 'US', 'GB', 'AE', 'SG', 'MY', 'AU'];
   const sortedCountries = [
     ...countries.filter(c => commonCountries.includes(c.code)),
     ...countries.filter(c => !commonCountries.includes(c.code))
   ];
 
-  // Validate a channel value using imported validation
+  // Validate a channel value
   const validateChannelValue = (channel: ContactChannel): string | null => {
     const channelConfig = getChannelByCode(channel.channel_type);
     if (!channelConfig) return 'Invalid channel type';
 
-    // Skip validation for empty values
     if (!channel.value) return 'This field is required';
 
-    // Use the imported validation function
     const isValid = validateChannel(channelConfig, channel.value, channel.country_code);
     if (!isValid) {
       return `Invalid ${channelConfig.displayName}`;
     }
 
-    // Check for duplicates
-    const duplicate = value.find((ch, idx) => 
-      ch.channel_type === channel.channel_type && 
+    const duplicate = value.find((ch, idx) =>
+      ch.channel_type === channel.channel_type &&
       ch.value === channel.value &&
       (editingIndex === null || idx !== editingIndex)
     );
-    
+
     if (duplicate) {
       return `This ${channelConfig.displayName} is already added`;
     }
@@ -144,17 +141,15 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     const error = validateChannelValue(newChannel);
     if (error) {
       setValidationErrors({ new: error });
-      // Validation error is shown in the form UI via validationErrors state
       return;
     }
 
     const channelConfig = getChannelByCode(newChannel.channel_type);
     if (!channelConfig) return;
 
-    // Format the value if needed
     const formattedValue = formatChannelValue(
-      channelConfig, 
-      newChannel.value, 
+      channelConfig,
+      newChannel.value,
       newChannel.country_code
     );
 
@@ -164,15 +159,13 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
       id: `temp_${Date.now()}`
     };
 
-    // If marking as primary, unset others
     let updatedChannels = [...value];
     if (channelWithId.is_primary) {
       updatedChannels = updatedChannels.map(ch => ({ ...ch, is_primary: false }));
     }
 
     onChange([...updatedChannels, channelWithId]);
-    
-    // Reset form
+
     setNewChannel({
       channel_type: 'mobile',
       value: '',
@@ -183,14 +176,12 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     });
     setIsAddingChannel(false);
     setValidationErrors({});
-    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
   // Update existing channel
   const updateChannel = (index: number, updates: Partial<ContactChannel>) => {
     const updatedChannels = [...value];
-    
-    // If setting as primary, unset others
+
     if (updates.is_primary) {
       updatedChannels.forEach((ch, i) => {
         if (i !== index) {
@@ -198,10 +189,9 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
         }
       });
     }
-    
+
     updatedChannels[index] = { ...updatedChannels[index], ...updates };
-    
-    // Validate the updated channel
+
     const error = validateChannelValue(updatedChannels[index]);
     if (error) {
       setValidationErrors({ [index]: error });
@@ -210,7 +200,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
       delete newErrors[index];
       setValidationErrors(newErrors);
     }
-    
+
     onChange(updatedChannels);
   };
 
@@ -218,26 +208,55 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
   const removeChannel = (index: number) => {
     const removedChannel = value[index];
     const newChannels = value.filter((_, i) => i !== index);
-    
-    // If removed channel was primary, make first remaining channel primary
+
     if (removedChannel.is_primary && newChannels.length > 0) {
       newChannels[0] = { ...newChannels[0], is_primary: true };
     }
-    
+
     onChange(newChannels);
-    // Note: Toast removed - user will see "Unsaved changes" indicator instead
   };
 
-  // Mark field as touched for validation display
   const markFieldTouched = (fieldId: string) => {
     setTouchedFields(prev => new Set(prev).add(fieldId));
   };
 
+  // Glass morphism styles
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(30, 41, 59, 0.8)'
+      : 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(255,255,255,0.5)',
+    boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: isDarkMode
+      ? 'rgba(15, 23, 42, 0.6)'
+      : 'rgba(255, 255, 255, 0.8)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.2)'
+      : 'rgba(0,0,0,0.15)',
+    color: colors.utility.primaryText,
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: isDarkMode
+      ? 'rgba(255,255,255,0.05)'
+      : 'rgba(0,0,0,0.02)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(0,0,0,0.08)',
+  };
+
   return (
-    <div className="rounded-lg shadow-sm border p-6 bg-card border-border">
+    <div className="rounded-2xl shadow-sm border p-6" style={glassStyle}>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-foreground">
-          Contact Channels <span className="text-destructive">*</span>
+        <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+          Contact Channels <span style={{ color: colors.semantic.error }}>*</span>
         </h2>
         {!isAddingChannel && (
           <button
@@ -257,8 +276,14 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Validation Summary */}
       {showValidation && value.length === 0 && (
-        <div className="mb-4 p-3 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+        <div
+          className="mb-4 p-3 rounded-xl border"
+          style={{
+            backgroundColor: `${colors.semantic.warning}15`,
+            borderColor: `${colors.semantic.warning}30`,
+          }}
+        >
+          <p className="text-sm" style={{ color: colors.semantic.warning }}>
             <AlertCircle className="inline h-4 w-4 mr-1" />
             At least one contact channel is required
           </p>
@@ -267,12 +292,18 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Duplicate Warnings */}
       {duplicateWarnings.length > 0 && (
-        <div className="mb-4 p-3 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-          <p className="text-sm font-medium mb-1 text-yellow-800 dark:text-yellow-200">
+        <div
+          className="mb-4 p-3 rounded-xl border"
+          style={{
+            backgroundColor: `${colors.semantic.warning}15`,
+            borderColor: `${colors.semantic.warning}30`,
+          }}
+        >
+          <p className="text-sm font-medium mb-1" style={{ color: colors.semantic.warning }}>
             <AlertCircle className="inline h-4 w-4 mr-1" />
             Potential Duplicates Found:
           </p>
-          <ul className="text-xs space-y-1 text-yellow-700 dark:text-yellow-300">
+          <ul className="text-xs space-y-1" style={{ color: colors.semantic.warning }}>
             {duplicateWarnings.map((warning, idx) => (
               <li key={idx}>{warning}</li>
             ))}
@@ -282,16 +313,23 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Add Channel Form */}
       {isAddingChannel && (
-        <div className="mb-4 p-4 rounded-lg border bg-muted/30 border-border">
+        <div
+          className="mb-4 p-4 rounded-xl border"
+          style={{
+            backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+          }}
+        >
           <div className="space-y-4">
             {/* Channel Type Selection */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-foreground">Type</label>
+                <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Type</label>
                 <select
                   value={newChannel.channel_type}
                   onChange={(e) => setNewChannel({ ...newChannel, channel_type: e.target.value })}
-                  className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+                  className="w-full p-2 border rounded-md"
+                  style={inputStyle}
                 >
                   {CHANNELS.sort((a, b) => a.order - b.order).map(channel => (
                     <option key={channel.code} value={channel.code}>
@@ -306,11 +344,12 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                 const channelConfig = getChannelByCode(newChannel.channel_type);
                 return channelConfig?.validation.requiresCountryCode ? (
                   <div>
-                    <label className="block text-sm font-medium mb-2 text-foreground">Country</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Country</label>
                     <select
                       value={newChannel.country_code}
                       onChange={(e) => setNewChannel({ ...newChannel, country_code: e.target.value })}
-                      className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+                      className="w-full p-2 border rounded-md"
+                      style={inputStyle}
                     >
                       {sortedCountries.map(country => (
                         <option key={country.code} value={country.code}>
@@ -327,7 +366,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                 const channelConfig = getChannelByCode(newChannel.channel_type);
                 return channelConfig?.validation.requiresCountryCode ? '' : 'md:col-span-2';
               })()}>
-                <label className="block text-sm font-medium mb-2 text-foreground">
+                <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>
                   {getChannelByCode(newChannel.channel_type)?.displayName || 'Value'} *
                 </label>
                 <div className="relative">
@@ -338,11 +377,8 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                       let inputValue = e.target.value;
                       const channelConfig = getChannelByCode(newChannel.channel_type);
 
-                      // FIXED: For phone/mobile channels, strip non-numeric characters except + at start
                       if (channelConfig?.validation.type === 'phone') {
-                        // Allow only digits, with optional + at start
                         inputValue = inputValue.replace(/[^\d+]/g, '');
-                        // Ensure + only appears at the start
                         if (inputValue.includes('+')) {
                           inputValue = '+' + inputValue.replace(/\+/g, '');
                         }
@@ -360,33 +396,36 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                       if (error) setValidationErrors({ new: error });
                     }}
                     placeholder={getChannelByCode(newChannel.channel_type)?.placeholder}
-                    className={`w-full p-2 pr-8 border rounded-md bg-background text-foreground ${
-                      validationErrors.new && touchedFields.has('new')
-                        ? 'border-destructive focus:ring-destructive/20' 
-                        : 'border-input'
-                    }`}
+                    className="w-full p-2 pr-8 border rounded-md"
+                    style={{
+                      ...inputStyle,
+                      borderColor: validationErrors.new && touchedFields.has('new')
+                        ? colors.semantic.error
+                        : inputStyle.borderColor,
+                    }}
                   />
                   {validationErrors.new && touchedFields.has('new') && (
                     <div className="absolute right-2 top-2.5">
-                      <AlertCircle className="h-5 w-5 text-destructive" />
+                      <AlertCircle className="h-5 w-5" style={{ color: colors.semantic.error }} />
                     </div>
                   )}
                 </div>
                 {validationErrors.new && touchedFields.has('new') && (
-                  <p className="text-xs text-destructive mt-1">{validationErrors.new}</p>
+                  <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>{validationErrors.new}</p>
                 )}
               </div>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="block text-sm font-medium mb-2 text-foreground">Notes (Optional)</label>
+              <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Notes (Optional)</label>
               <input
                 type="text"
                 value={newChannel.notes || ''}
                 onChange={(e) => setNewChannel({ ...newChannel, notes: e.target.value })}
                 placeholder="Add any notes..."
-                className="w-full p-2 border rounded-md bg-background border-input text-foreground"
+                className="w-full p-2 border rounded-md"
+                style={inputStyle}
               />
             </div>
 
@@ -397,9 +436,10 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                 id="new_is_primary"
                 checked={newChannel.is_primary}
                 onChange={(e) => setNewChannel({ ...newChannel, is_primary: e.target.checked })}
-                className="mr-2 accent-primary"
+                className="mr-2"
+                style={{ accentColor: colors.brand.primary }}
               />
-              <label htmlFor="new_is_primary" className="text-sm text-foreground">
+              <label htmlFor="new_is_primary" className="text-sm" style={{ color: colors.utility.primaryText }}>
                 Set as primary contact channel
               </label>
             </div>
@@ -432,7 +472,7 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                 }}
                 className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors text-sm"
                 style={{
-                  borderColor: colors.utility.primaryText + '40',
+                  borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
                   color: colors.utility.primaryText,
                   backgroundColor: 'transparent'
                 }}
@@ -447,10 +487,15 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Existing Channels */}
       {value.length === 0 ? (
-        <div className="text-center p-8 border-2 border-dashed rounded-lg border-border">
-          <Phone className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="mb-4 text-muted-foreground">No contact channels added yet</p>
-          <p className="text-sm mb-4 text-muted-foreground">
+        <div
+          className="text-center p-8 border-2 border-dashed rounded-xl"
+          style={{
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+          }}
+        >
+          <Phone className="h-12 w-12 mx-auto mb-3" style={{ color: colors.utility.secondaryText }} />
+          <p className="mb-4" style={{ color: colors.utility.secondaryText }}>No contact channels added yet</p>
+          <p className="text-sm mb-4" style={{ color: colors.utility.secondaryText }}>
             Add email, phone, or other ways to reach this contact
           </p>
         </div>
@@ -459,19 +504,24 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
           {value.map((channel, index) => {
             const channelConfig = getChannelByCode(channel.channel_type);
             if (!channelConfig) return null;
-            
+
             const IconComponent = getChannelIcon(channelConfig.icon);
             const isEditing = editingIndex === index;
             const fieldId = `channel_${index}`;
-            
+
             return (
-              <div 
-                key={channel.id || index} 
-                className={`p-4 rounded-lg border transition-all ${
-                  validationErrors[index] && touchedFields.has(fieldId)
-                    ? 'border-destructive bg-destructive/5' 
-                    : 'border-border bg-card hover:shadow-sm'
-                }`}
+              <div
+                key={channel.id || index}
+                className="p-4 rounded-xl border transition-all"
+                style={{
+                  ...cardStyle,
+                  borderColor: validationErrors[index] && touchedFields.has(fieldId)
+                    ? colors.semantic.error
+                    : cardStyle.borderColor,
+                  backgroundColor: validationErrors[index] && touchedFields.has(fieldId)
+                    ? `${colors.semantic.error}10`
+                    : cardStyle.backgroundColor,
+                }}
               >
                 {isEditing ? (
                   // Edit Mode
@@ -481,7 +531,8 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         <select
                           value={channel.channel_type}
                           onChange={(e) => updateChannel(index, { channel_type: e.target.value })}
-                          className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
+                          className="w-full p-2 border rounded-md text-sm"
+                          style={inputStyle}
                         >
                           {CHANNELS.sort((a, b) => a.order - b.order).map(ch => (
                             <option key={ch.code} value={ch.code}>
@@ -496,7 +547,8 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                           <select
                             value={channel.country_code}
                             onChange={(e) => updateChannel(index, { country_code: e.target.value })}
-                            className="w-full p-2 border rounded-md bg-background border-input text-foreground text-sm"
+                            className="w-full p-2 border rounded-md text-sm"
+                            style={inputStyle}
                           >
                             {sortedCountries.map(country => (
                               <option key={country.code} value={country.code}>
@@ -513,7 +565,6 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                           value={channel.value}
                           onChange={(e) => {
                             let inputValue = e.target.value;
-                            // FIXED: For phone channels, strip non-numeric characters except + at start
                             if (channelConfig.validation.type === 'phone') {
                               inputValue = inputValue.replace(/[^\d+]/g, '');
                               if (inputValue.includes('+')) {
@@ -523,9 +574,13 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                             updateChannel(index, { value: inputValue });
                           }}
                           onBlur={() => markFieldTouched(fieldId)}
-                          className={`w-full p-2 border rounded-md bg-background text-foreground text-sm ${
-                            validationErrors[index] ? 'border-destructive' : 'border-input'
-                          }`}
+                          className="w-full p-2 border rounded-md text-sm"
+                          style={{
+                            ...inputStyle,
+                            borderColor: validationErrors[index]
+                              ? colors.semantic.error
+                              : inputStyle.borderColor,
+                          }}
                         />
                       </div>
                     </div>
@@ -536,68 +591,97 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                           setEditingIndex(null);
                           markFieldTouched(fieldId);
                         }}
-                        className="px-3 py-1.5 rounded-md hover:bg-primary/90 transition-colors text-sm bg-primary text-primary-foreground"
+                        className="px-3 py-1.5 rounded-md hover:opacity-90 transition-colors text-sm"
+                        style={{
+                          backgroundColor: colors.brand.primary,
+                          color: '#ffffff'
+                        }}
                       >
                         <Check className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setEditingIndex(null)}
-                        className="px-3 py-1.5 border rounded-md hover:bg-accent transition-colors text-sm border-input text-foreground"
+                        className="px-3 py-1.5 border rounded-md hover:opacity-80 transition-colors text-sm"
+                        style={{
+                          borderColor: isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+                          color: colors.utility.primaryText,
+                          backgroundColor: 'transparent'
+                        }}
                       >
                         <X className="h-4 w-4" />
                       </button>
                     </div>
 
                     {validationErrors[index] && (
-                      <p className="text-xs text-destructive">{validationErrors[index]}</p>
+                      <p className="text-xs" style={{ color: colors.semantic.error }}>{validationErrors[index]}</p>
                     )}
                   </div>
                 ) : (
                   // View Mode
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3 flex-1">
-                      <div className={`p-2 rounded-lg ${
-                        channel.is_primary 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
+                      <div
+                        className="p-2 rounded-lg"
+                        style={{
+                          backgroundColor: channel.is_primary
+                            ? colors.brand.primary
+                            : (isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'),
+                          color: channel.is_primary
+                            ? '#ffffff'
+                            : colors.utility.secondaryText
+                        }}
+                      >
                         <IconComponent className="h-4 w-4" />
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm text-foreground">
+                          <span className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
                             {channelConfig.displayName}
                           </span>
                           {channel.is_primary && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary border border-primary/20">
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                              style={{
+                                backgroundColor: `${colors.brand.primary}15`,
+                                color: colors.brand.primary,
+                                borderColor: `${colors.brand.primary}30`,
+                              }}
+                            >
                               <Star className="h-3 w-3" />
                               Primary
                             </span>
                           )}
                           {channel.is_verified && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                              style={{
+                                backgroundColor: `${colors.semantic.success}15`,
+                                color: colors.semantic.success,
+                                borderColor: `${colors.semantic.success}30`,
+                              }}
+                            >
                               <CheckCircle className="h-3 w-3" />
                               Verified
                             </span>
                           )}
                         </div>
-                        
-                        <p className="text-sm text-foreground break-all">
+
+                        <p className="text-sm break-all" style={{ color: colors.utility.primaryText }}>
                           {channel.country_code && channelConfig.validation.requiresCountryCode
                             ? `+${countries.find(c => c.code === channel.country_code)?.phoneCode || ''} ${channel.value}`
                             : channel.value
                           }
                         </p>
-                        
+
                         {channel.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
                             💡 {channel.notes}
                           </p>
                         )}
 
                         {validationErrors[index] && touchedFields.has(fieldId) && (
-                          <p className="text-xs text-destructive mt-1">
+                          <p className="text-xs mt-1" style={{ color: colors.semantic.error }}>
                             <AlertCircle className="inline h-3 w-3 mr-1" />
                             {validationErrors[index]}
                           </p>
@@ -610,27 +694,30 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         <button
                           onClick={() => updateChannel(index, { is_primary: true })}
                           disabled={disabled}
-                          className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                          className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                          style={{ color: colors.utility.secondaryText }}
                           title="Set as primary"
                         >
-                          <Star className="h-4 w-4 text-muted-foreground" />
+                          <Star className="h-4 w-4" />
                         </button>
                       )}
                       <button
                         onClick={() => setEditingIndex(index)}
                         disabled={disabled}
-                        className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                        style={{ color: colors.utility.secondaryText }}
                         title="Edit channel"
                       >
-                        <Edit2 className="h-4 w-4 text-muted-foreground" />
+                        <Edit2 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => removeChannel(index)}
                         disabled={disabled}
-                        className="p-1.5 rounded-md hover:bg-accent transition-colors disabled:opacity-50"
+                        className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+                        style={{ color: colors.semantic.error }}
                         title="Remove channel"
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
@@ -643,17 +730,23 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Summary */}
       {value.length > 0 && (
-        <div className="mt-4 p-3 rounded-md border bg-muted/50 border-border">
-          <div className="text-sm text-muted-foreground">
-            <strong className="text-foreground">{value.length}</strong> contact channel{value.length !== 1 ? 's' : ''} added
+        <div
+          className="mt-4 p-3 rounded-xl border"
+          style={{
+            backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+          }}
+        >
+          <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
+            <strong style={{ color: colors.utility.primaryText }}>{value.length}</strong> contact channel{value.length !== 1 ? 's' : ''} added
             {value.filter(ch => ch.is_primary).length > 0 && (
               <>
-                {' '} • <strong className="text-foreground">1</strong> primary channel
+                {' '} • <strong style={{ color: colors.utility.primaryText }}>1</strong> primary channel
               </>
             )}
             {value.filter(ch => ch.is_verified).length > 0 && (
               <>
-                {' '} • <strong className="text-foreground">{value.filter(ch => ch.is_verified).length}</strong> verified
+                {' '} • <strong style={{ color: colors.utility.primaryText }}>{value.filter(ch => ch.is_verified).length}</strong> verified
               </>
             )}
           </div>
@@ -662,8 +755,14 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
 
       {/* Help Text */}
       {value.length > 0 && !value.some(ch => ch.is_primary) && (
-        <div className="mt-4 p-3 rounded-md border bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/20">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+        <div
+          className="mt-4 p-3 rounded-xl border"
+          style={{
+            backgroundColor: `${colors.semantic.warning}10`,
+            borderColor: `${colors.semantic.warning}25`,
+          }}
+        >
+          <p className="text-sm" style={{ color: colors.semantic.warning }}>
             💡 Tip: Mark one channel as "Primary" for the main contact method.
           </p>
         </div>

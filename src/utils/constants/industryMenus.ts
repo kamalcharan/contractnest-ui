@@ -42,6 +42,8 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
     ]
   },
+  // REMOVED: Contacts menu - now available under Operations > Entities
+  /*
   {
     id: 'contacts',
     label: 'Contacts',
@@ -75,7 +77,8 @@ export const defaultMenuItems: MenuItem[] = [
       }
     ]
   },
-  // Contracts menu - all submenus visible
+  */
+  // Contracts menu - simplified (hidden: PDF View, Drafts, Pending Acceptance, Active Contracts)
   {
     id: 'contracts',
     label: 'Contracts',
@@ -86,14 +89,18 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-create', label: 'My Contracts', icon: 'FilePlus', path: '/contracts/create' },
       { id: 'contracts-all', label: 'All Contracts', icon: 'FileText', path: '/service-contracts/contracts' },
       { id: 'contracts-preview', label: 'Contract Preview', icon: 'Eye', path: '/contracts/preview' },
+      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' }
+      // HIDDEN: PDF View, Drafts, Pending Acceptance, Active Contracts
+      /*
       { id: 'contracts-pdf', label: 'PDF View', icon: 'FileSearch', path: '/contracts/pdf' },
-      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' },
       { id: 'contracts-drafts', label: 'Drafts', icon: 'FileEdit', path: '/service-contracts/contracts?status=draft' },
       { id: 'contracts-pending', label: 'Pending Acceptance', icon: 'Clock', path: '/service-contracts/contracts?status=pending' },
       { id: 'contracts-active', label: 'Active Contracts', icon: 'CheckCircle', path: '/service-contracts/contracts?status=active' }
+      */
     ]
   },
-  // VaNi menu - all submenus visible
+  // HIDDEN: VaNi menu - commented out for now
+  /*
   {
     id: 'vani',
     label: 'VaNi',
@@ -111,6 +118,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-chat', label: 'Chat', icon: 'MessageCircle', path: '/vani/chat' }
     ]
   },
+  */
   // HIDDEN: Templates, Appointments, Tasks - commented out for now
   /*
   {
