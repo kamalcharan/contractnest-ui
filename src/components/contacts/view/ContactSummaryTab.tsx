@@ -1,4 +1,5 @@
 // src/components/contacts/view/ContactSummaryTab.tsx - View Cards with Modal Edit
+// FIXED: All save issues, classification preselection, contact channels display, persons display
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -16,14 +17,15 @@ import {
   X,
   Loader2,
   MessageSquare,
-  Globe
+  Globe,
+  Linkedin,
+  Send
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 
 // Import original left side card components
 import QuickStatsGrid from './cards/QuickStatsGrid';
-import ImportantNotesCard from './cards/ImportantNotesCard';
 import RecentActivityCard from './cards/RecentActivityCard';
 
 // Import form components for modal
@@ -38,7 +40,7 @@ import ContactClassificationSelector from '../../contacts/forms/ContactClassific
 import { useUpdateContact } from '../../../hooks/useContacts';
 
 // Import constants
-import { canPerformOperation } from '@/utils/constants/contacts';
+import { canPerformOperation, CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 
 // Types
 interface Contact {
@@ -205,7 +207,8 @@ const ViewCard: React.FC<{
   onEdit: () => void;
   children: React.ReactNode;
   count?: number;
-}> = ({ title, icon, iconBg, onEdit, children, count }) => {
+  onMoreClick?: () => void;
+}> = ({ title, icon, iconBg, onEdit, children, count, onMoreClick }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -299,7 +302,8 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
         setFormData({ contact_channels: [...contact.contact_channels] });
         break;
       case 'classification':
-        setFormData({ classifications: [...contact.classifications] });
+        // FIXED: Use normalized classifications (converts strings to objects)
+        setFormData({ classifications: normalizeClassifications(contact.classifications) });
         break;
       case 'persons':
         setFormData({ contact_persons: [...contact.contact_persons] });
@@ -317,13 +321,249 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
     setActiveModal(type);
   };
 
-  // Save modal changes
+  // Helper: Remove undefined/null values from object (clean for JSON)
+  const cleanObject = (obj: any): any => {
+    if (obj === null || obj === undefined) return obj;
+    if (Array.isArray(obj)) return obj.map(cleanObject);
+    if (typeof obj !== 'object') return obj;
+
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined && value !== null && value !== '') {
+        cleaned[key] = typeof value === 'object' ? cleanObject(value) : value;
+      }
+    }
+    return cleaned;
+  };
+
+  // Helper: Transform classifications for API (MUST be strings only)
+  const transformClassificationsForAPI = (classifications: any[]): string[] => {
+    if (!classifications || !Array.isArray(classifications)) return [];
+
+    return classifications
+      .map((c: any) => {
+        // Already a string - return as-is
+        if (typeof c === 'string') return c;
+        // Object with classification_value - extract it
+        if (c && typeof c === 'object' && c.classification_value) {
+          return c.classification_value;
+        }
+        // Object with value property
+        if (c && typeof c === 'object' && c.value) {
+          return c.value;
+        }
+        // Fallback - convert to string
+        return String(c);
+      })
+      .filter((c: string) => c && c.length > 0); // Remove empty strings
+  };
+
+  // Helper: Transform contact channels for API (clean format)
+  const transformChannelsForAPI = (channels: any[]): any[] => {
+    if (!channels || !Array.isArray(channels)) return [];
+
+    return channels.map((ch: any) => {
+      const channel: any = {
+        channel_type: ch.channel_type,
+        value: ch.value,
+        is_primary: Boolean(ch.is_primary),
+        is_verified: Boolean(ch.is_verified)
+      };
+
+      // Only include id if it's a valid UUID (not temp_)
+      if (ch.id && typeof ch.id === 'string' && !ch.id.startsWith('temp_')) {
+        channel.id = ch.id;
+      }
+
+      // Only include optional fields if they have values
+      if (ch.country_code) channel.country_code = ch.country_code;
+      if (ch.notes) channel.notes = ch.notes;
+
+      return channel;
+    }).filter((ch: any) => ch.channel_type && ch.value); // Remove invalid channels
+  };
+
+  // FIXED: Transform form data to API-expected format
+  // CRITICAL: API validation requires BOTH classifications AND contact_channels on EVERY update
+  const transformFormDataForAPI = (modalType: ModalType, data: any): any => {
+    // ALWAYS include the two required fields from existing contact data
+    const existingClassifications = transformClassificationsForAPI(contact.classifications);
+    const existingChannels = transformChannelsForAPI(contact.contact_channels);
+
+    // Start with required fields
+    const transformed: any = {
+      classifications: existingClassifications,
+      contact_channels: existingChannels
+    };
+
+    // Debug logging
+    console.log('=== transformFormDataForAPI ===');
+    console.log('Modal type:', modalType);
+    console.log('Existing classifications:', existingClassifications);
+    console.log('Existing channels count:', existingChannels.length);
+    console.log('Form data:', data);
+
+    // Now overlay the specific changes being made
+    switch (modalType) {
+      case 'classification':
+        // Override with new classifications
+        if (data.classifications && Array.isArray(data.classifications)) {
+          transformed.classifications = transformClassificationsForAPI(data.classifications);
+        }
+        break;
+
+      case 'channels':
+        // Override with new contact_channels
+        if (data.contact_channels && Array.isArray(data.contact_channels)) {
+          transformed.contact_channels = transformChannelsForAPI(data.contact_channels);
+        }
+        break;
+
+      case 'tags':
+        // Add tags to the update
+        if (data.tags && Array.isArray(data.tags)) {
+          transformed.tags = data.tags
+            .filter((t: any) => t.tag_value) // Only include tags with values
+            .map((t: any) => {
+              const tag: any = {
+                tag_value: t.tag_value,
+                tag_label: t.tag_label || t.tag_value
+              };
+              // Only include id if valid
+              if (t.id && typeof t.id === 'string' && !t.id.startsWith('temp_')) {
+                tag.id = t.id;
+              }
+              if (t.tag_color) tag.tag_color = t.tag_color;
+              return tag;
+            });
+        }
+        break;
+
+      case 'address':
+        // Add addresses to the update
+        if (data.addresses && Array.isArray(data.addresses)) {
+          transformed.addresses = data.addresses
+            .filter((addr: any) => addr.address_line1 && addr.city) // Required fields
+            .map((addr: any) => {
+              const address: any = {
+                type: addr.type || 'office',
+                address_line1: addr.address_line1,
+                city: addr.city,
+                country_code: addr.country_code || 'IN',
+                is_primary: Boolean(addr.is_primary)
+              };
+              // Only include id if valid
+              if (addr.id && typeof addr.id === 'string' && !addr.id.startsWith('temp_')) {
+                address.id = addr.id;
+              }
+              // Optional fields
+              if (addr.label) address.label = addr.label;
+              if (addr.address_line2) address.address_line2 = addr.address_line2;
+              if (addr.state_code) address.state_code = addr.state_code;
+              if (addr.postal_code) address.postal_code = addr.postal_code;
+              if (addr.google_pin) address.google_pin = addr.google_pin;
+              if (addr.notes) address.notes = addr.notes;
+              return address;
+            });
+        }
+        break;
+
+      case 'compliance':
+        // Add compliance_numbers to the update
+        if (data.compliance_numbers && Array.isArray(data.compliance_numbers)) {
+          transformed.compliance_numbers = data.compliance_numbers
+            .filter((comp: any) => comp.type_value && comp.number) // Required fields
+            .map((comp: any) => {
+              const compliance: any = {
+                type_value: comp.type_value,
+                number: comp.number,
+                is_verified: Boolean(comp.is_verified)
+              };
+              // Only include id if valid
+              if (comp.id && typeof comp.id === 'string' && !comp.id.startsWith('temp_')) {
+                compliance.id = comp.id;
+              }
+              // Optional fields
+              if (comp.type_label) compliance.type_label = comp.type_label;
+              if (comp.valid_from) compliance.valid_from = comp.valid_from;
+              if (comp.valid_to) compliance.valid_to = comp.valid_to;
+              if (comp.verified_at) compliance.verified_at = comp.verified_at;
+              if (comp.issuing_authority) compliance.issuing_authority = comp.issuing_authority;
+              if (comp.notes) compliance.notes = comp.notes;
+              return compliance;
+            });
+        }
+        break;
+
+      case 'persons':
+        // Add contact_persons to the update
+        if (data.contact_persons && Array.isArray(data.contact_persons)) {
+          transformed.contact_persons = data.contact_persons
+            .filter((person: any) => person.name) // Name is required
+            .map((person: any) => {
+              const p: any = {
+                name: person.name,
+                is_primary: Boolean(person.is_primary),
+                contact_channels: (person.contact_channels || [])
+                  .filter((ch: any) => ch.channel_type && ch.value)
+                  .map((ch: any) => {
+                    const channel: any = {
+                      channel_type: ch.channel_type,
+                      value: ch.value,
+                      is_primary: Boolean(ch.is_primary)
+                    };
+                    if (ch.id && typeof ch.id === 'string' && !ch.id.startsWith('temp_')) {
+                      channel.id = ch.id;
+                    }
+                    if (ch.country_code) channel.country_code = ch.country_code;
+                    return channel;
+                  })
+              };
+              // Only include id if valid
+              if (person.id && typeof person.id === 'string' && !person.id.startsWith('temp_')) {
+                p.id = person.id;
+              }
+              // Optional fields
+              if (person.salutation) p.salutation = person.salutation;
+              if (person.designation) p.designation = person.designation;
+              if (person.department) p.department = person.department;
+              if (person.notes) p.notes = person.notes;
+              return p;
+            });
+        }
+        break;
+    }
+
+    // Final validation check
+    if (!transformed.classifications || transformed.classifications.length === 0) {
+      console.error('ERROR: No classifications in transformed data!');
+    }
+    if (!transformed.contact_channels || transformed.contact_channels.length === 0) {
+      console.error('ERROR: No contact_channels in transformed data!');
+    }
+    if (transformed.contact_channels && !transformed.contact_channels.some((ch: any) => ch.is_primary)) {
+      console.error('ERROR: No primary contact channel!');
+    }
+
+    console.log('Final transformed data:', JSON.stringify(transformed, null, 2));
+    return transformed;
+  };
+
+  // Save modal changes - FIXED with proper data transformation
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Transform data to API-expected format
+      const transformedData = transformFormDataForAPI(activeModal, formData);
+
+      console.log('=== SAVE REQUEST ===');
+      console.log('Contact ID:', contact.id);
+      console.log('Modal type:', activeModal);
+      console.log('Transformed data:', JSON.stringify(transformedData, null, 2));
+
       await updateContactHook.mutate({
         contactId: contact.id,
-        updates: formData
+        updates: transformedData
       });
 
       toast({
@@ -336,24 +576,72 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
       if (onRefresh) {
         onRefresh();
       }
-    } catch (error) {
-      console.error('Save failed:', error);
+    } catch (error: any) {
+      console.error('=== SAVE FAILED ===');
+      console.error('Error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+
+      // Extract detailed error message
+      let errorMessage = "Could not save changes. Please try again.";
+
+      if (error.response?.data?.validation_errors && Array.isArray(error.response.data.validation_errors)) {
+        // Show all validation errors
+        errorMessage = error.response.data.validation_errors.join(', ');
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      console.error('Error message for toast:', errorMessage);
+
       toast({
         variant: "destructive",
         title: "Save Failed",
-        description: "Could not save changes. Please try again."
+        description: errorMessage
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Handle notes update
+  // Handle notes update - FIXED: Include required fields for validation
   const handleNotesUpdate = async (updates: { notes?: string; tags?: any[] }) => {
     try {
+      // CRITICAL: Always include required fields for validation
+      const transformedUpdates: any = {
+        classifications: transformClassificationsForAPI(contact.classifications),
+        contact_channels: transformChannelsForAPI(contact.contact_channels)
+      };
+
+      // Add notes if present
+      if (updates.notes !== undefined) {
+        transformedUpdates.notes = updates.notes;
+      }
+
+      // Transform tags if present
+      if (updates.tags) {
+        transformedUpdates.tags = updates.tags
+          .filter((t: any) => t.tag_value)
+          .map((t: any) => {
+            const tag: any = {
+              tag_value: t.tag_value,
+              tag_label: t.tag_label || t.tag_value
+            };
+            if (t.id && typeof t.id === 'string' && !t.id.startsWith('temp_')) {
+              tag.id = t.id;
+            }
+            if (t.tag_color) tag.tag_color = t.tag_color;
+            return tag;
+          });
+      }
+
+      console.log('handleNotesUpdate - transformedUpdates:', transformedUpdates);
+
       await updateContactHook.mutate({
         contactId: contact.id,
-        updates
+        updates: transformedUpdates
       });
       if (onRefresh) {
         onRefresh();
@@ -364,11 +652,58 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
     }
   };
 
-  // Get primary channel
-  const getPrimaryChannel = (type: string) => {
-    return contact.contact_channels.find(ch => ch.channel_type === type && ch.is_primary) ||
-           contact.contact_channels.find(ch => ch.channel_type === type);
+  // Get channel icon based on type
+  const getChannelIcon = (channelType: string) => {
+    switch (channelType) {
+      case CONTACT_CHANNEL_TYPES.MOBILE:
+        return Phone;
+      case CONTACT_CHANNEL_TYPES.EMAIL:
+        return Mail;
+      case CONTACT_CHANNEL_TYPES.WHATSAPP:
+        return MessageSquare;
+      case CONTACT_CHANNEL_TYPES.WEBSITE:
+        return Globe;
+      case CONTACT_CHANNEL_TYPES.LINKEDIN:
+        return Linkedin;
+      case CONTACT_CHANNEL_TYPES.TELEGRAM:
+        return Send;
+      case CONTACT_CHANNEL_TYPES.SKYPE:
+        return MessageSquare;
+      default:
+        return Phone;
+    }
   };
+
+  // Get channel label
+  const getChannelLabel = (channelType: string): string => {
+    switch (channelType) {
+      case CONTACT_CHANNEL_TYPES.MOBILE: return 'Mobile';
+      case CONTACT_CHANNEL_TYPES.EMAIL: return 'Email';
+      case CONTACT_CHANNEL_TYPES.WHATSAPP: return 'WhatsApp';
+      case CONTACT_CHANNEL_TYPES.WEBSITE: return 'Website';
+      case CONTACT_CHANNEL_TYPES.LINKEDIN: return 'LinkedIn';
+      case CONTACT_CHANNEL_TYPES.TELEGRAM: return 'Telegram';
+      case CONTACT_CHANNEL_TYPES.SKYPE: return 'Skype';
+      default: return channelType;
+    }
+  };
+
+  // Get primary contact channel for a person
+  const getPersonPrimaryChannel = (person: any): string | null => {
+    if (!person.contact_channels || person.contact_channels.length === 0) {
+      return null;
+    }
+    const primary = person.contact_channels.find((ch: any) => ch.is_primary);
+    const channel = primary || person.contact_channels[0];
+    return channel?.value || null;
+  };
+
+  // Sort channels: primary first
+  const sortedChannels = [...contact.contact_channels].sort((a, b) => {
+    if (a.is_primary && !b.is_primary) return -1;
+    if (!a.is_primary && b.is_primary) return 1;
+    return 0;
+  });
 
   // Render modal content based on type
   const renderModalContent = () => {
@@ -438,6 +773,63 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
     }
   };
 
+  // Get classification color
+  const getClassificationColor = (classificationValue: string): string => {
+    const colorMap: Record<string, string> = {
+      'buyer': '#3b82f6',
+      'seller': '#22c55e',
+      'vendor': '#8b5cf6',
+      'partner': '#f59e0b',
+      'team_member': '#6366f1'
+    };
+    return colorMap[classificationValue] || '#8b5cf6';
+  };
+
+  // Get classification label from value (must be defined before normalizeClassifications)
+  const getClassificationLabel = (value: string): string => {
+    const config = CONTACT_CLASSIFICATION_CONFIG?.find(c => c.id === value);
+    if (config) return config.label;
+
+    // Fallback: capitalize and replace underscores
+    return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ');
+  };
+
+  // FIXED: Normalize classifications - API returns strings, UI needs objects
+  // This handles both formats: ['buyer'] and [{classification_value: 'buyer', ...}]
+  const normalizeClassifications = (classifications: any[]): Array<{id: string; classification_value: string; classification_label: string}> => {
+    if (!classifications || !Array.isArray(classifications)) return [];
+
+    return classifications.map((cls, index) => {
+      // If already an object with classification_value, return as-is
+      if (typeof cls === 'object' && cls.classification_value) {
+        return {
+          id: cls.id || `cls-${index}`,
+          classification_value: cls.classification_value,
+          classification_label: cls.classification_label || getClassificationLabel(cls.classification_value)
+        };
+      }
+
+      // If it's a string (from API), convert to object
+      if (typeof cls === 'string') {
+        return {
+          id: `cls-${index}`,
+          classification_value: cls,
+          classification_label: getClassificationLabel(cls)
+        };
+      }
+
+      // Fallback
+      return {
+        id: `cls-${index}`,
+        classification_value: String(cls),
+        classification_label: String(cls)
+      };
+    });
+  };
+
+  // Get normalized classifications for display
+  const normalizedClassifications = normalizeClassifications(contact.classifications);
+
   return (
     <div className="space-y-6">
       {/* Main Content Grid */}
@@ -452,18 +844,6 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
             <QuickStatsGrid
               contact={contact}
               className="!bg-transparent !border-0 !shadow-none !p-0"
-            />
-          </div>
-
-          {/* Important Notes & Tags */}
-          <div
-            className="rounded-2xl border transition-all hover:shadow-lg"
-            style={glassStyle}
-          >
-            <ImportantNotesCard
-              contact={contact}
-              onUpdate={handleNotesUpdate}
-              className="!bg-transparent !border-0 !shadow-none"
             />
           </div>
 
@@ -484,72 +864,89 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
 
         {/* Right Sidebar - 30% (3/10 cols) */}
         <div className="xl:col-span-3 space-y-4">
-          {/* 1. Contact Info Card */}
+          {/* 1. Contact Channels Card - FIXED: Show ALL channels */}
           <ViewCard
-            title="Contact"
+            title="Contact Channels"
             icon={contact.type === 'corporate' ?
               <Building2 className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} /> :
               <User className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} />
             }
             iconBg={colors.brand.primary + '20'}
             onEdit={() => openModal('channels')}
+            count={contact.contact_channels.length}
           >
             <div className="space-y-2">
-              <p className="font-medium" style={{ color: colors.utility.primaryText }}>
+              {/* Contact Name */}
+              <p className="font-medium mb-3" style={{ color: colors.utility.primaryText }}>
                 {contact.type === 'corporate' ? contact.company_name : contact.name}
               </p>
-              {getPrimaryChannel('email') && (
-                <div className="flex items-center gap-2 text-xs">
-                  <Mail className="h-3 w-3" />
-                  <span className="truncate">{getPrimaryChannel('email')?.value}</span>
-                </div>
-              )}
-              {getPrimaryChannel('mobile') && (
-                <div className="flex items-center gap-2 text-xs">
-                  <Phone className="h-3 w-3" />
-                  <span>
-                    {getPrimaryChannel('mobile')?.country_code === 'IN' ? '+91 ' : ''}
-                    {getPrimaryChannel('mobile')?.value}
-                  </span>
-                </div>
-              )}
-              {contact.contact_channels.length > 2 && (
-                <p className="text-xs" style={{ color: colors.brand.primary }}>
-                  +{contact.contact_channels.length - 2} more channels
-                </p>
+
+              {/* Show all channels (max 4, then +more) */}
+              {sortedChannels.length === 0 ? (
+                <p className="text-xs italic">No contact channels</p>
+              ) : (
+                <>
+                  {sortedChannels.slice(0, 4).map((channel) => {
+                    const IconComponent = getChannelIcon(channel.channel_type);
+                    return (
+                      <div key={channel.id} className="flex items-center gap-2 text-xs">
+                        <IconComponent className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate flex-1">
+                          {channel.channel_type === 'mobile' && channel.country_code === 'IN' ? '+91 ' : ''}
+                          {channel.value}
+                        </span>
+                        {channel.is_primary && (
+                          <Star className="h-3 w-3 flex-shrink-0" style={{ color: colors.brand.primary, fill: colors.brand.primary }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                  {sortedChannels.length > 4 && (
+                    <button
+                      onClick={() => openModal('channels')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: colors.brand.primary }}
+                    >
+                      +{sortedChannels.length - 4} more channels
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </ViewCard>
 
-          {/* 2. Classification Card */}
+          {/* 2. Classification Card - FIXED: Show actual labels */}
           <ViewCard
             title="Classification"
             icon={<Shield className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} />}
             iconBg="#8b5cf620"
             onEdit={() => openModal('classification')}
-            count={contact.classifications.length}
+            count={normalizedClassifications.length}
           >
-            {contact.classifications.length > 0 ? (
+            {normalizedClassifications.length > 0 ? (
               <div className="flex flex-wrap gap-1">
-                {contact.classifications.map((cls) => (
-                  <span
-                    key={cls.id}
-                    className="px-2 py-0.5 rounded-full text-xs"
-                    style={{
-                      backgroundColor: '#8b5cf620',
-                      color: '#8b5cf6'
-                    }}
-                  >
-                    {cls.classification_label}
-                  </span>
-                ))}
+                {normalizedClassifications.map((cls) => {
+                  const color = getClassificationColor(cls.classification_value);
+                  return (
+                    <span
+                      key={cls.id}
+                      className="px-2 py-0.5 rounded-full text-xs"
+                      style={{
+                        backgroundColor: color + '20',
+                        color: color
+                      }}
+                    >
+                      {cls.classification_label}
+                    </span>
+                  );
+                })}
               </div>
             ) : (
               <span className="text-xs italic">No classifications</span>
             )}
           </ViewCard>
 
-          {/* 3. Contact Persons Card (Corporate only) */}
+          {/* 3. Contact Persons Card (Corporate only) - FIXED: Show primary channel */}
           {contact.type === 'corporate' && (
             <ViewCard
               title="Persons"
@@ -559,28 +956,46 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
               count={contact.contact_persons.length}
             >
               {contact.contact_persons.length > 0 ? (
-                <div className="space-y-1">
-                  {contact.contact_persons.slice(0, 3).map((person) => (
-                    <div key={person.id} className="flex items-center gap-2">
-                      <div
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium"
-                        style={{
-                          backgroundColor: person.is_primary ? '#f59e0b' : '#f59e0b20',
-                          color: person.is_primary ? '#fff' : '#f59e0b'
-                        }}
-                      >
-                        {person.name.charAt(0)}
+                <div className="space-y-2">
+                  {contact.contact_persons.slice(0, 3).map((person) => {
+                    const primaryChannel = getPersonPrimaryChannel(person);
+                    return (
+                      <div key={person.id} className="flex items-start gap-2">
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+                          style={{
+                            backgroundColor: person.is_primary ? '#f59e0b' : '#f59e0b20',
+                            color: person.is_primary ? '#fff' : '#f59e0b'
+                          }}
+                        >
+                          {person.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs truncate font-medium" style={{ color: colors.utility.primaryText }}>
+                              {person.name}
+                            </span>
+                            {person.is_primary && (
+                              <Star className="h-2.5 w-2.5 flex-shrink-0" style={{ color: '#f59e0b', fill: '#f59e0b' }} />
+                            )}
+                          </div>
+                          {primaryChannel && (
+                            <p className="text-xs truncate" style={{ color: colors.utility.secondaryText }}>
+                              {primaryChannel}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-xs truncate">{person.name}</span>
-                      {person.is_primary && (
-                        <Star className="h-2.5 w-2.5" style={{ color: '#f59e0b' }} />
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                   {contact.contact_persons.length > 3 && (
-                    <p className="text-xs" style={{ color: '#f59e0b' }}>
+                    <button
+                      onClick={() => openModal('persons')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: '#f59e0b' }}
+                    >
                       +{contact.contact_persons.length - 3} more
-                    </p>
+                    </button>
                   )}
                 </div>
               ) : (
@@ -612,9 +1027,13 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
                   </span>
                 ))}
                 {contact.tags.length > 5 && (
-                  <span className="text-xs" style={{ color: '#ec4899' }}>
-                    +{contact.tags.length - 5}
-                  </span>
+                  <button
+                    onClick={() => openModal('tags')}
+                    className="text-xs hover:underline cursor-pointer"
+                    style={{ color: '#ec4899' }}
+                  >
+                    +{contact.tags.length - 5} more
+                  </button>
                 )}
               </div>
             ) : (
@@ -635,7 +1054,7 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
                 {contact.addresses.slice(0, 2).map((addr: any, idx: number) => (
                   <div key={addr.id || idx} className="flex items-start gap-2">
                     {addr.is_primary && (
-                      <Star className="h-2.5 w-2.5 mt-0.5 flex-shrink-0" style={{ color: '#10b981' }} />
+                      <Star className="h-2.5 w-2.5 mt-0.5 flex-shrink-0" style={{ color: '#10b981', fill: '#10b981' }} />
                     )}
                     <p className="text-xs line-clamp-2">
                       {addr.address_line1 || addr.line1}, {addr.city}
@@ -643,9 +1062,13 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
                   </div>
                 ))}
                 {contact.addresses.length > 2 && (
-                  <p className="text-xs" style={{ color: '#10b981' }}>
+                  <button
+                    onClick={() => openModal('address')}
+                    className="text-xs hover:underline cursor-pointer"
+                    style={{ color: '#10b981' }}
+                  >
                     +{contact.addresses.length - 2} more
-                  </p>
+                  </button>
                 )}
               </div>
             ) : (
@@ -671,9 +1094,13 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
                     </div>
                   ))}
                   {contact.compliance_numbers.length > 3 && (
-                    <p className="text-xs" style={{ color: '#3b82f6' }}>
+                    <button
+                      onClick={() => openModal('compliance')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: '#3b82f6' }}
+                    >
                       +{contact.compliance_numbers.length - 3} more
-                    </p>
+                    </button>
                   )}
                 </div>
               ) : (

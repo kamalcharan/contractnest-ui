@@ -1,14 +1,28 @@
-// src/components/contacts/view/cards/ContactHeaderCard.tsx - Full Production Version
+// src/components/contacts/view/cards/ContactHeaderCard.tsx - Compact Production Version
 import React from 'react';
-import { Building2, User, Edit, Star, CheckCircle, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { 
-  CONTACT_STATUS_LABELS,
-  getStatusColor,
-  getClassificationConfig,
-  formatContactDisplayName,
-  canPerformOperation
-} from '@/utils/constants/contacts';
+import { Building2, User, Phone, Mail, Star } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+import { formatContactDisplayName } from '@/utils/constants/contacts';
+
+interface ContactChannel {
+  id?: string;
+  channel_type: string;
+  value: string;
+  is_primary?: boolean;
+}
+
+interface ContactTag {
+  id: string;
+  tag_label: string;
+  tag_value?: string;
+  tag_color?: string;
+}
+
+interface Classification {
+  id?: string;
+  classification_value: string;
+  classification_label: string;
+}
 
 interface ContactHeaderCardProps {
   contact: {
@@ -18,28 +32,33 @@ interface ContactHeaderCardProps {
     name?: string;
     salutation?: string;
     company_name?: string;
-    registration_number?: string;
-    classifications: Array<{
-      id: string;
-      classification_value: string;
-      classification_label: string;
-    }>;
-    user_account_status?: string;
-    potential_duplicate?: boolean;
-    duplicate_reasons?: string[];
+    classifications: Array<Classification | string>;
+    contact_channels?: ContactChannel[];
+    tags?: ContactTag[];
     created_at: string;
     updated_at: string;
   };
-  onEdit?: () => void;
   className?: string;
 }
 
-const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({ 
-  contact, 
-  onEdit, 
-  className = '' 
+const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
+  contact,
+  className = ''
 }) => {
-  const navigate = useNavigate();
+  const themeContext = useTheme();
+
+  // Fallback colors if theme context is not available
+  const colors = themeContext?.colors || {
+    brand: {
+      primary: '#6366f1',
+      secondary: '#8b5cf6'
+    },
+    utility: {
+      primaryText: '#1f2937',
+      secondaryText: '#6b7280'
+    }
+  };
+  const isDarkMode = themeContext?.isDarkMode || false;
 
   // Generate avatar initials
   const getAvatarInitials = (): string => {
@@ -53,158 +72,169 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
   // Get display name using utility function
   const displayName = formatContactDisplayName(contact);
 
-  // Handle edit action
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit();
-    } else {
-      navigate(`/contacts/${contact.id}/edit`);
+  // Get primary contact channel
+  const getPrimaryChannel = () => {
+    if (!contact.contact_channels || contact.contact_channels.length === 0) {
+      return { phone: null, email: null };
     }
+
+    const primaryPhone = contact.contact_channels.find(
+      ch => ch.channel_type === 'mobile' && ch.is_primary
+    ) || contact.contact_channels.find(ch => ch.channel_type === 'mobile');
+
+    const primaryEmail = contact.contact_channels.find(
+      ch => ch.channel_type === 'email' && ch.is_primary
+    ) || contact.contact_channels.find(ch => ch.channel_type === 'email');
+
+    return { phone: primaryPhone, email: primaryEmail };
   };
 
-  // Check if edit is allowed
-  const canEdit = canPerformOperation(contact.status, 'edit');
+  // Format phone number
+  const formatPhoneNumber = (channel: ContactChannel | null): string => {
+    if (!channel) return '';
+    const value = channel.value;
+    // Simple formatting - add spaces for readability
+    if (value.length === 10) {
+      return `${value.slice(0, 3)} ${value.slice(3, 6)} ${value.slice(6)}`;
+    }
+    return value;
+  };
+
+  const { phone: primaryPhone, email: primaryEmail } = getPrimaryChannel();
 
   return (
-    <div className={`bg-card rounded-lg shadow-sm border border-border p-4 ${className}`}>
-      {/* Header with Edit Button */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-foreground">Contact Information</h3>
-        {canEdit && (
-          <button
-            onClick={handleEdit}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            title="Edit contact"
-          >
-            <Edit className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-      
-      {/* Main Content */}
-      <div className="flex items-start gap-3">
-        {/* Enhanced Avatar */}
-        <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/30 text-primary flex items-center justify-center font-semibold text-lg border-2 border-primary/20 shadow-sm flex-shrink-0">
+    <div
+      className={`rounded-xl border p-4 transition-colors ${className}`}
+      style={{
+        background: isDarkMode
+          ? `linear-gradient(135deg, ${colors.brand.primary}35 0%, ${colors.brand.secondary}25 100%)`
+          : `linear-gradient(135deg, ${colors.brand.primary}18 0%, ${colors.brand.secondary}12 100%)`,
+        backdropFilter: 'blur(12px)',
+        borderColor: isDarkMode ? `${colors.brand.primary}50` : `${colors.brand.primary}35`
+      }}
+    >
+      {/* Row 1: Avatar + Name + Primary Channel */}
+      <div className="flex items-center gap-3">
+        {/* Avatar with theme gradient */}
+        <div
+          className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm"
+          style={{
+            background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
+            color: '#ffffff'
+          }}
+        >
           {getAvatarInitials()}
         </div>
-        
-        {/* Contact Details */}
+
+        {/* Name + Primary Channel */}
         <div className="flex-1 min-w-0">
-          {/* Name and Type */}
-          <div className="flex items-center gap-2 mb-2">
-            <h4 className="font-medium text-foreground truncate">{displayName}</h4>
+          <div className="flex items-center gap-2">
+            <h1
+              className="font-semibold text-lg truncate"
+              style={{ color: colors.utility.primaryText }}
+            >
+              {displayName}
+            </h1>
             {contact.type === 'corporate' ? (
-              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Building2 className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
             ) : (
-              <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <User className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
             )}
           </div>
-          
-          {/* Registration Number for Corporate */}
-          {contact.type === 'corporate' && contact.registration_number && (
-            <div className="mb-2">
-              <span className="text-xs text-muted-foreground">
-                Reg: {contact.registration_number}
-              </span>
+
+          {/* Primary Contact Channel */}
+          {(primaryPhone || primaryEmail) && (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {primaryPhone ? (
+                <>
+                  <Phone className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                    {formatPhoneNumber(primaryPhone)}
+                  </span>
+                </>
+              ) : primaryEmail ? (
+                <>
+                  <Mail className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-sm truncate" style={{ color: colors.utility.secondaryText }}>
+                    {primaryEmail.value}
+                  </span>
+                </>
+              ) : null}
+              <Star
+                className="h-3 w-3 flex-shrink-0"
+                style={{ color: colors.brand.primary, fill: colors.brand.primary }}
+              />
             </div>
           )}
-          
-          {/* Status Badge */}
-          <div className="mb-3">
-            <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusColor(contact.status)}`}>
-              <div className={`w-2 h-2 rounded-full ${
-                contact.status === 'active' ? 'bg-green-600' :
-                contact.status === 'inactive' ? 'bg-yellow-600' : 'bg-gray-600'
-              }`} />
-              {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
-            </span>
-          </div>
-          
-          {/* Classification Tags */}
-          <div className="flex flex-wrap gap-1 mb-3">
-            {contact.classifications.map((classification, index) => {
-              // Handle both string and object formats
-              const classValue = typeof classification === 'string'
-                ? classification
-                : classification.classification_value;
-              const classLabel = typeof classification === 'string'
-                ? classification
-                : classification.classification_label;
-              const config = getClassificationConfig(classValue);
-              return (
-                <span
-                  key={typeof classification === 'string' ? `class-${index}` : (classification.id || `class-${index}`)}
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${
-                    config?.color === 'blue' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800' :
-                    config?.color === 'green' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' :
-                    config?.color === 'purple' ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800' :
-                    config?.color === 'orange' ? 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:border-orange-800' :
-                    'bg-secondary text-secondary-foreground border-secondary'
-                  }`}
-                >
-                  {config?.icon && <span>{config.icon}</span>}
-                  {classLabel}
-                </span>
-              );
-            })}
-          </div>
-
-          {/* User Account Status */}
-          {contact.user_account_status && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2">
-                {contact.user_account_status === 'has_account' ? (
-                  <>
-                    <CheckCircle className="h-3 w-3 text-green-600" />
-                    <span className="text-xs text-green-700 dark:text-green-400">Has User Account</span>
-                  </>
-                ) : contact.user_account_status === 'invitation_sent' ? (
-                  <>
-                    <AlertCircle className="h-3 w-3 text-yellow-600" />
-                    <span className="text-xs text-yellow-700 dark:text-yellow-400">Invitation Sent</span>
-                  </>
-                ) : (
-                  <>
-                    <User className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">No User Account</span>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Duplicate Warning */}
-          {contact.potential_duplicate && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                <AlertCircle className="h-3 w-3 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-                <span className="text-xs text-yellow-700 dark:text-yellow-300">
-                  Potential duplicate contact
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Metadata */}
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Created:</span> {new Date(contact.created_at).toLocaleDateString()}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <span className="font-medium">Updated:</span> {new Date(contact.updated_at).toLocaleDateString()}
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Contact ID at bottom */}
-      <div className="mt-4 pt-3 border-t border-border">
-        <div className="text-xs text-muted-foreground">
-          <span className="font-medium">Contact ID:</span> 
-          <code className="ml-1 px-1 py-0.5 rounded bg-muted font-mono text-xs">
-            {contact.id}
+      {/* Row 2: Classifications + Tags */}
+      <div className="flex flex-wrap items-center gap-1.5 mt-3">
+        {/* Classifications */}
+        {contact.classifications.map((classification, index) => {
+          const classLabel = typeof classification === 'string'
+            ? classification
+            : classification.classification_label;
+          return (
+            <span
+              key={typeof classification === 'string' ? `class-${index}` : ((classification as Classification).id || `class-${index}`)}
+              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: `${colors.brand.primary}30`,
+                color: isDarkMode ? '#ffffff' : colors.brand.primary
+              }}
+            >
+              {classLabel}
+            </span>
+          );
+        })}
+
+        {/* Separator */}
+        {contact.classifications.length > 0 && contact.tags && contact.tags.length > 0 && (
+          <span className="text-xs mx-1" style={{ color: colors.utility.secondaryText }}>•</span>
+        )}
+
+        {/* Tags */}
+        {contact.tags?.slice(0, 3).map((tag: ContactTag) => (
+          <span
+            key={tag.id}
+            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+            style={{
+              backgroundColor: (tag.tag_color || colors.brand.secondary) + '30',
+              color: isDarkMode ? '#ffffff' : (tag.tag_color || colors.brand.secondary)
+            }}
+          >
+            {tag.tag_label}
+          </span>
+        ))}
+        {contact.tags && contact.tags.length > 3 && (
+          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+            +{contact.tags.length - 3}
+          </span>
+        )}
+      </div>
+
+      {/* Row 3: Contact ID + Created Date */}
+      <div
+        className="flex items-center justify-between mt-3 pt-2 border-t"
+        style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>ID:</span>
+          <code
+            className="text-xs font-mono px-1.5 py-0.5 rounded"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+              color: colors.utility.secondaryText
+            }}
+          >
+            {contact.id.substring(0, 8)}...
           </code>
         </div>
+        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+          Created {new Date(contact.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+        </span>
       </div>
     </div>
   );
