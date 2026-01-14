@@ -1,12 +1,14 @@
-// src/pages/settings/business-profile/edit.tsx - Theme Integrated Version
+// src/pages/settings/business-profile/edit.tsx - Updated with VaNiLoader & VaNiToast
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import BusinessTypeSelector from '@/components/tenantprofile/BusinessTypeSelector';
 import IndustrySelector from '@/components/tenantprofile/IndustrySelector';
 import OrganizationDetailsForm from '@/components/tenantprofile/OrganizationDetailsForm';
+import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
+import { vaniToast } from '@/components/common/toast/VaNiToast';
 
 const EditBusinessProfilePage = () => {
   const navigate = useNavigate();
@@ -40,12 +42,7 @@ const EditBusinessProfilePage = () => {
   const renderStep = () => {
     if (loading) {
       return (
-        <div className="flex justify-center py-12">
-          <div 
-            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full"
-            style={{ borderColor: colors.brand.primary }}
-          ></div>
-        </div>
+        <VaNiLoader size="md" message="Loading profile..." />
       );
     }
     
@@ -374,13 +371,13 @@ const EditBusinessProfilePage = () => {
               type="button"
               onClick={submitProfile}
               disabled={submitting}
-              className="px-6 py-2 rounded hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[80px]"
+              className="px-6 py-2 rounded hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] flex items-center justify-center"
               style={{
                 backgroundColor: colors.brand.primary,
                 color: '#ffffff'
               }}
             >
-              {submitting ? 'Saving...' : 'Submit'}
+              {submitting ? <InlineLoader size="sm" text="Saving..." /> : 'Submit'}
             </button>
           )}
         </div>

@@ -1,13 +1,12 @@
 // src/pages/settings/business-profile/smart-profile.tsx
 // SmartProfile - AI-enhanced tenant profile with 65:35 split view
-// Follows GroupProfileDashboard pattern for consistency
+// Updated with VaNiLoader & VaNiToast
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Sparkles,
-  Loader2,
   CheckCircle,
   AlertCircle,
   RefreshCw,
@@ -46,7 +45,8 @@ import {
   smartProfileQueryKeys
 } from '../../../hooks/queries/useGroupQueries';
 import { useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast/VaNiToast';
+import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
 import { analyticsService } from '@/services/analytics.service';
 
 // Types
@@ -224,7 +224,7 @@ const SmartProfilePage: React.FC = () => {
       setKeywords(kws);
       setWizardStep('enhanced');
 
-      toast.success('AI enhancement complete!');
+      vaniToast.success('AI enhancement complete!');
     } catch (error: any) {
       // Fallback: Use basic enhancement when AI is unavailable
       console.warn('AI enhancement failed, using fallback:', error.message);
@@ -235,7 +235,7 @@ const SmartProfilePage: React.FC = () => {
       setKeywords(fallbackKeywords);
       setWizardStep('enhanced');
 
-      toast.success('Profile prepared (AI temporarily unavailable)');
+      vaniToast.success('Profile prepared (AI temporarily unavailable)');
     }
   };
 
@@ -259,7 +259,7 @@ const SmartProfilePage: React.FC = () => {
       setKeywords(kws);
       setWizardStep('enhanced');
 
-      toast.success('Website analyzed successfully!');
+      vaniToast.success('Website analyzed successfully!');
     } catch (error: any) {
       // Fallback: Use basic enhancement when website scraping is unavailable
       console.warn('Website scraping failed, using fallback:', error.message);
@@ -270,7 +270,7 @@ const SmartProfilePage: React.FC = () => {
       setKeywords(fallbackKeywords);
       setWizardStep('enhanced');
 
-      toast.success('Profile prepared (website analysis temporarily unavailable)');
+      vaniToast.success('Profile prepared (website analysis temporarily unavailable)');
     }
   };
 
@@ -297,9 +297,9 @@ const SmartProfilePage: React.FC = () => {
       setShowCreateWizard(false);
       setWizardStep('entry');
 
-      toast.success('Profile saved successfully!');
+      vaniToast.success('Profile saved successfully!');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save profile');
+      vaniToast.error(error.message || 'Failed to save profile');
     }
   };
 
@@ -326,9 +326,9 @@ const SmartProfilePage: React.FC = () => {
       setClusters([...newClusters, ...manualClusters]);
       setHasClusterChanges(true);
 
-      toast.success(`Generated ${result.clusters_generated} clusters!`);
+      vaniToast.success(`Generated ${result.clusters_generated} clusters!`);
     } catch (error: any) {
-      toast.error(error.message || 'Cluster generation failed');
+      vaniToast.error(error.message || 'Cluster generation failed');
     }
   };
 
@@ -338,7 +338,7 @@ const SmartProfilePage: React.FC = () => {
 
     const invalidClusters = clusters.filter(c => !c.primary_term.trim());
     if (invalidClusters.length > 0) {
-      toast.error('All clusters must have a primary term');
+      vaniToast.error('All clusters must have a primary term');
       return;
     }
 
@@ -358,9 +358,9 @@ const SmartProfilePage: React.FC = () => {
       setHasClusterChanges(false);
       setClusters(clusters.map(c => ({ ...c, isNew: false })));
 
-      toast.success('Clusters saved successfully!');
+      vaniToast.success('Clusters saved successfully!');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save clusters');
+      vaniToast.error(error.message || 'Failed to save clusters');
     }
   };
 
@@ -392,7 +392,7 @@ const SmartProfilePage: React.FC = () => {
   // Save cluster edit
   const handleSaveClusterEdit = (index: number) => {
     if (!editForm || !editForm.primary_term.trim()) {
-      toast.error('Primary term is required');
+      vaniToast.error('Primary term is required');
       return;
     }
 
@@ -429,7 +429,7 @@ const SmartProfilePage: React.FC = () => {
 
     const term = newTermInput.trim().toLowerCase();
     if (editForm.related_terms.includes(term)) {
-      toast.error('Term already exists');
+      vaniToast.error('Term already exists');
       return;
     }
 
@@ -464,11 +464,8 @@ const SmartProfilePage: React.FC = () => {
   // Loading state
   if (loading) {
     return (
-      <div className="p-6 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: colors.brand.primary }} />
-          <p style={{ color: colors.utility.secondaryText }}>Loading Smart Profile...</p>
-        </div>
+      <div className="p-6 min-h-screen">
+        <VaNiLoader size="lg" message="Loading Smart Profile..." fullScreen />
       </div>
     );
   }
@@ -582,10 +579,7 @@ const SmartProfilePage: React.FC = () => {
                       style={{ backgroundColor: colors.semantic.success, color: '#FFF' }}
                     >
                       {enhanceSmartProfileMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Enhancing...</span>
-                        </>
+                        <InlineLoader size="sm" text="Enhancing..." />
                       ) : (
                         <>
                           <Sparkles className="w-5 h-5" />
@@ -619,10 +613,7 @@ const SmartProfilePage: React.FC = () => {
                       style={{ background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`, color: '#FFF' }}
                     >
                       {scrapeWebsiteMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          <span>Analyzing...</span>
-                        </>
+                        <InlineLoader size="sm" text="Analyzing..." />
                       ) : (
                         <>
                           <Globe className="w-5 h-5" />
@@ -682,10 +673,7 @@ const SmartProfilePage: React.FC = () => {
                     style={{ background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})` }}
                   >
                     {saveSmartProfileMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Saving...</span>
-                      </>
+                      <InlineLoader size="sm" text="Saving..." />
                     ) : (
                       <>
                         <Save className="w-5 h-5" />
@@ -909,7 +897,7 @@ const SmartProfilePage: React.FC = () => {
                   style={{ background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`, color: '#FFF' }}
                 >
                   {generateClustersMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <InlineLoader size="sm" />
                   ) : (
                     <RefreshCw className="w-4 h-4" />
                   )}
@@ -1097,10 +1085,7 @@ const SmartProfilePage: React.FC = () => {
                   style={{ background: `linear-gradient(to right, ${colors.semantic.success}, ${colors.brand.primary})`, color: '#FFF' }}
                 >
                   {saveClustersMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Saving...</span>
-                    </>
+                    <InlineLoader size="sm" text="Saving..." />
                   ) : (
                     <>
                       <Save className="w-4 h-4" />

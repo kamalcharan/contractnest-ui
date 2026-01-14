@@ -1,4 +1,4 @@
-// src/pages/settings/business-profile/index.tsx - Updated with WhatsApp display
+// src/pages/settings/business-profile/index.tsx - Updated with VaNiLoader & VaNiToast
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText } from 'lucide-react';
@@ -9,6 +9,8 @@ import { businessTypes } from '@/utils/constants/businessTypes';
 import { useIndustries } from '@/hooks/queries/useProductMasterdata';
 import { countries } from '@/utils/constants/countries';
 import { cn } from '@/lib/utils';
+import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
+import { vaniToast } from '@/components/common/toast/VaNiToast';
 
 const BusinessProfilePage = () => {
   const navigate = useNavigate();
@@ -100,12 +102,7 @@ const BusinessProfilePage = () => {
       {/* Profile Content */}
       <div className="mt-6">
         {loading ? (
-          <div className="flex justify-center py-12">
-            <div 
-              className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full"
-              style={{ borderColor: colors.brand.primary }}
-            ></div>
-          </div>
+          <VaNiLoader size="md" message="Loading business profile..." />
         ) : !profile ? (
           <div 
             className="rounded-lg shadow-sm border p-10 text-center transition-colors"
