@@ -135,10 +135,11 @@ import ContractsPage from './pages/service-contracts/contracts';
 // Contract Builder
 import ContractCreatePage from './pages/contracts/create';
 
-// Contract Preview, PDF View, Ops Cockpit, Invite Sellers
+// Contract Preview, PDF View, Ops Cockpit, Invite Sellers, Reports
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
+import ReportsPage from './pages/ops/reports';
 import InviteSellersPage from './pages/contracts/invite';
 
 // Team Management pages (using existing components)
@@ -464,6 +465,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* NEW: Reports Route */}
+          <Route
+            path="/ops/reports"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ReportsPage />} />
           </Route>
 
           {/* NEW: Invite Sellers Route */}

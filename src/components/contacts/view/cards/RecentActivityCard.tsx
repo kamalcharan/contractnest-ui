@@ -71,11 +71,11 @@ const RecentActivityCard: React.FC<RecentActivityCardProps> = ({
 
   // Initialize activities from contact data
   useEffect(() => {
-    if (contact.audit_trail) {
+    if (contact.audit_trail && contact.audit_trail.length > 0) {
       setActivities(contact.audit_trail);
     } else {
-      // Generate mock recent activities if no audit trail exists
-      generateMockActivities();
+      // No audit trail - show empty state
+      setActivities([]);
     }
   }, [contact]);
 
@@ -313,12 +313,14 @@ const RecentActivityCard: React.FC<RecentActivityCardProps> = ({
       
       {/* Activity List */}
       {filteredActivities.length === 0 ? (
-        // Empty state
-        <div className="text-center py-8">
-          <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground mb-2">No recent activity</p>
-          <p className="text-xs text-muted-foreground">
-            Activity will appear here as interactions occur with this contact
+        // Empty state - Coming Soon
+        <div className="text-center py-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+            <Activity className="h-8 w-8 text-primary" />
+          </div>
+          <p className="text-lg font-semibold text-foreground mb-1">Coming Soon</p>
+          <p className="text-sm text-muted-foreground">
+            Activity tracking will be available shortly
           </p>
         </div>
       ) : (

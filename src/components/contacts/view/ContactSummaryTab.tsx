@@ -19,7 +19,8 @@ import {
   MessageSquare,
   Globe,
   Linkedin,
-  Send
+  Send,
+  Archive
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -37,7 +38,10 @@ import ContactTagsSection from '../../contacts/forms/ContactTagsSection';
 import ContactClassificationSelector from '../../contacts/forms/ContactClassificationSelector';
 
 // Import hooks
-import { useUpdateContact } from '../../../hooks/useContacts';
+import { useUpdateContact, useUpdateContactStatus } from '../../../hooks/useContacts';
+
+// Import UI components
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 // Import constants
 import { canPerformOperation, CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
@@ -272,10 +276,63 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { toast } = useToast();
   const updateContactHook = useUpdateContact();
+  const updateStatusHook = useUpdateContactStatus();
 
   // Modal state
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+  // Handle status toggle (active/inactive)
+  const handleStatusChange = async (newStatus: 'active' | 'inactive') => {
+    setIsUpdatingStatus(true);
+    try {
+      await updateStatusHook.mutate(contact.id, newStatus);
+      toast({
+        title: "Success",
+        description: `Contact ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`,
+        duration: 3000
+      });
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update contact status"
+      });
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Handle archive contact
+  const handleArchive = async () => {
+    setIsArchiving(true);
+    try {
+      await updateStatusHook.mutate(contact.id, 'archived');
+      toast({
+        title: "Contact Archived",
+        description: "The contact has been permanently archived",
+        duration: 3000
+      });
+      setShowArchiveConfirm(false);
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Archive Failed",
+        description: "Could not archive contact. Please try again."
+      });
+    } finally {
+      setIsArchiving(false);
+    }
+  };
 
   // Form data state for modal editing
   const [formData, setFormData] = useState<any>({});
@@ -1108,6 +1165,128 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
               )}
             </ViewCard>
           )}
+
+          {/* 7. Contact Status Card - Active/Inactive Toggle */}
+          {contact.status !== 'archived' && (
+            <div
+              className="rounded-xl border p-4 transition-all"
+              style={{
+                background: isDarkMode
+                  ? 'rgba(30, 41, 59, 0.8)'
+                  : 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderColor: isDarkMode
+                  ? 'rgba(255,255,255,0.1)'
+                  : 'rgba(0,0,0,0.08)'
+              }}
+            >
+              <h3
+                className="text-sm font-semibold mb-3 transition-colors"
+                style={{ color: colors.utility.primaryText }}
+              >
+                Contact Status
+              </h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p
+                    className="font-medium text-xs transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {contact.status === 'active' ? 'Active' : 'Inactive'}
+                  </p>
+                  <p
+                    className="text-xs transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    {contact.status === 'active'
+                      ? 'Contact is available for business'
+                      : 'Contact is temporarily disabled'}
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={contact.status === 'active'}
+                    onChange={(e) => handleStatusChange(e.target.checked ? 'active' : 'inactive')}
+                    disabled={isUpdatingStatus}
+                    className="sr-only peer"
+                  />
+                  <div
+                    className={`
+                      w-11 h-6 peer-focus:outline-none peer-focus:ring-4
+                      rounded-full peer
+                      peer-checked:after:translate-x-full peer-checked:after:border-white
+                      after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                      after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
+                      ${isUpdatingStatus ? 'opacity-50' : ''}
+                    `}
+                    style={{
+                      backgroundColor: contact.status === 'active' ? colors.brand.primary : colors.utility.secondaryText + '40',
+                    }}
+                  ></div>
+                </label>
+              </div>
+              {isUpdatingStatus && (
+                <div
+                  className="mt-2 flex items-center text-xs"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                  Updating status...
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 8. Archive Card - Only show if not already archived */}
+          {contact.status !== 'archived' && (
+            <div
+              className="rounded-xl border p-4 transition-all"
+              style={{
+                background: isDarkMode
+                  ? 'rgba(30, 41, 59, 0.8)'
+                  : 'rgba(255, 255, 255, 0.8)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderColor: colors.semantic.error + '40'
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <Archive
+                  className="h-5 w-5 flex-shrink-0 mt-0.5"
+                  style={{ color: colors.semantic.error }}
+                />
+                <div className="flex-1">
+                  <h3
+                    className="text-sm font-semibold mb-2 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Archive Contact
+                  </h3>
+                  <p
+                    className="text-xs mb-3 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Once archived, this contact cannot be reverted back.
+                  </p>
+
+                  <button
+                    onClick={() => setShowArchiveConfirm(true)}
+                    disabled={isArchiving}
+                    className="flex items-center px-3 py-1.5 rounded-md transition-colors text-xs disabled:opacity-50"
+                    style={{
+                      backgroundColor: colors.semantic.error,
+                      color: '#ffffff'
+                    }}
+                  >
+                    <Archive className="mr-2 h-3 w-3" />
+                    Archive Contact
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1121,6 +1300,18 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
       >
         {renderModalContent()}
       </EditModal>
+
+      {/* Archive Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        onConfirm={handleArchive}
+        title="Archive Contact"
+        description="Are you sure you want to archive this contact? This action cannot be undone. The contact will be permanently disabled."
+        confirmText={isArchiving ? "Archiving..." : "Archive"}
+        type="danger"
+        icon={<Archive className="h-6 w-6" />}
+      />
     </div>
   );
 };

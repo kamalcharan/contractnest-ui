@@ -455,7 +455,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   // Loading State
   if (loading) {
     return (
-      <div 
+      <div
         className="p-4 md:p-6 min-h-screen transition-colors"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
@@ -463,64 +463,64 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
           {/* Header Skeleton */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div 
+              <div
                 className="w-8 h-8 rounded-full"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-4 rounded w-48"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
             </div>
             <div className="flex gap-3">
-              <div 
+              <div
                 className="h-10 rounded w-24"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-10 rounded w-24"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-10 rounded w-24"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
             </div>
           </div>
-          
+
           {/* Tabs Skeleton */}
           <div className="flex gap-6 mb-6">
             {[1, 2, 3, 4].map(i => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className="h-10 rounded w-24"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
             ))}
           </div>
-          
+
           {/* Content Skeleton */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 space-y-6">
-              <div 
+              <div
                 className="h-64 rounded-lg"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-48 rounded-lg"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
             </div>
             <div className="space-y-6">
-              <div 
+              <div
                 className="h-32 rounded-lg"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-40 rounded-lg"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
-              <div 
+              <div
                 className="h-24 rounded-lg"
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>

@@ -25,7 +25,6 @@ import {
   Loader2,
   AlertCircle,
   Star,
-  Edit,
   Trash2,
   X,
   MessageSquare,
@@ -594,8 +593,9 @@ const ContactsPage: React.FC = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3">
+{/* Import/Export buttons hidden for now
           <div className="flex gap-2">
-            <button 
+            <button
               className="flex items-center px-3 py-2 rounded-md hover:opacity-80 transition-colors text-sm border"
               style={{
                 borderColor: colors.brand.primary,
@@ -606,7 +606,7 @@ const ContactsPage: React.FC = () => {
               <Upload className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Import</span>
             </button>
-            <button 
+            <button
               className="flex items-center px-3 py-2 rounded-md hover:opacity-80 transition-colors text-sm border"
               style={{
                 borderColor: colors.brand.primary,
@@ -618,6 +618,7 @@ const ContactsPage: React.FC = () => {
               <span className="hidden sm:inline">Export</span>
             </button>
           </div>
+          */}
           
           <button
             onClick={() => setIsQuickAddOpen(true)}
@@ -1067,12 +1068,14 @@ const ContactsPage: React.FC = () => {
             <>
               {/* FIXED CONTACT DISPLAY */}
               <div className={`
-                ${viewType === 'grid' 
-                  ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4' 
+                ${viewType === 'grid'
+                  ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
                   : 'space-y-2'
                 }
               `}>
-                {contacts.map((contact) => {
+                {contacts
+                  .filter((contact) => !contact.parent_contact_id) // Hide child contacts (persons linked to corporate)
+                  .map((contact) => {
                   const isSelected = selectedContacts.has(contact.id);
                   const classificationConfig = contact.classifications?.[0] 
                     ? getClassificationConfig(contact.classifications[0])
@@ -1240,7 +1243,7 @@ const ContactsPage: React.FC = () => {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex gap-1">
-                            <button 
+                            <button
                               onClick={() => navigate(`/contacts/${contact.id}`)}
                               className="p-1.5 rounded-md transition-colors"
                               style={{
@@ -1251,18 +1254,7 @@ const ContactsPage: React.FC = () => {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            <button 
-                              onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                              className="p-1.5 rounded-md transition-colors"
-                              style={{
-                                backgroundColor: colors.brand.primary,
-                                color: '#ffffff'
-                              }}
-                              title="Edit entity"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button 
+                            <button
                               className="p-1.5 rounded-md transition-colors"
                               style={{
                                 backgroundColor: colors.semantic.success,
@@ -1272,20 +1264,22 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSoftDelete(contact.id, contact.displayName);
-                              }}
-                              className="p-1.5 rounded-md hover:opacity-80 transition-colors"
-                              style={{
-                                backgroundColor: colors.semantic.error + '20',
-                                color: colors.semantic.error
-                              }}
-                              title="Archive entity"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {contact.status !== 'archived' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSoftDelete(contact.id, contact.displayName);
+                                }}
+                                className="p-1.5 rounded-md hover:opacity-80 transition-colors"
+                                style={{
+                                  backgroundColor: colors.semantic.error + '20',
+                                  color: colors.semantic.error
+                                }}
+                                title="Archive entity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1431,7 +1425,7 @@ const ContactsPage: React.FC = () => {
 
                           {/* Action Buttons */}
                           <div className="flex gap-1">
-                            <button 
+                            <button
                               onClick={() => navigate(`/contacts/${contact.id}`)}
                               className="p-1.5 rounded-md transition-colors"
                               style={{
@@ -1441,17 +1435,6 @@ const ContactsPage: React.FC = () => {
                               title="View entity details"
                             >
                               <Eye className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                              className="p-1.5 rounded-md transition-colors"
-                              style={{
-                                backgroundColor: colors.brand.primary,
-                                color: '#ffffff'
-                              }}
-                              title="Edit entity"
-                            >
-                              <Edit className="h-4 w-4" />
                             </button>
                             <button
                               className="p-1.5 rounded-md transition-colors"
@@ -1463,20 +1446,22 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSoftDelete(contact.id, contact.displayName);
-                              }}
-                              className="p-1.5 rounded-md hover:opacity-80 transition-colors"
-                              style={{
-                                backgroundColor: colors.semantic.error + '20',
-                                color: colors.semantic.error
-                              }}
-                              title="Archive entity"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {contact.status !== 'archived' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSoftDelete(contact.id, contact.displayName);
+                                }}
+                                className="p-1.5 rounded-md hover:opacity-80 transition-colors"
+                                style={{
+                                  backgroundColor: colors.semantic.error + '20',
+                                  color: colors.semantic.error
+                                }}
+                                title="Archive entity"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

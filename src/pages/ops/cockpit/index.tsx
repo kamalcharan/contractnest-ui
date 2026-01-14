@@ -17,7 +17,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 
 // Reusing existing components
-import ActivityFeed from '@/components/dashboard/ActivityFeed';
+// import ActivityFeed from '@/components/dashboard/ActivityFeed'; // HIDDEN: Activity Feed
 import StatsCard from '@/components/dashboard/StatsCard';
 import ContractStatsGrid from '@/components/contracts/ContractStatsGrid';
 import RecentContractsCard from '@/components/contracts/RecentContractsCard';
@@ -366,8 +366,8 @@ const OpsCockpitPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Activity Feed - Reusing existing component */}
-          <ActivityFeed />
+          {/* HIDDEN: Activity Feed - commented out */}
+          {/* <ActivityFeed /> */}
 
           {/* Upcoming Deadlines */}
           <div
