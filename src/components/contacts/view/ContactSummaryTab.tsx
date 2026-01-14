@@ -1,63 +1,56 @@
-// src/components/contacts/view/ContactSummaryTab.tsx - QuickStatsGrid UNHIDDEN
+// src/components/contacts/view/ContactSummaryTab.tsx - View Cards with Modal Edit
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Clock, 
-  TrendingUp, 
-  FileText, 
-  DollarSign, 
-  Settings, 
-  Users, 
-  Calendar,
-  MessageCircle,
-  Edit,
-  ExternalLink,
-  Activity,
-  User,
-  Building2,
+import {
+  Users,
   Mail,
   Phone,
   MapPin,
   Shield,
-  Tag,
-  AlertCircle,
   CheckCircle,
-  Star
+  Star,
+  Edit,
+  Tag,
+  User,
+  Building2,
+  X,
+  Loader2,
+  MessageSquare,
+  Globe
 } from 'lucide-react';
+import { useTheme } from '../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 
-// Import all the card components we just built
-import ContactHeaderCard from './cards/ContactHeaderCard';
-import ContactChannelsCard from './cards/ContactChannelsCard';
-import ContactAddressCard from './cards/ContactAddressCard';
-import ContactComplianceCard from './cards/ContactComplianceCard';
-import RecentActivityCard from './cards/RecentActivityCard';
+// Import original left side card components
 import QuickStatsGrid from './cards/QuickStatsGrid';
 import ImportantNotesCard from './cards/ImportantNotesCard';
+import RecentActivityCard from './cards/RecentActivityCard';
 
-// Import hooks for data updates
+// Import form components for modal
+import ContactChannelsSection from '../../contacts/forms/ContactChannelsSection';
+import AddressesSection from '../../contacts/forms/AddressesSection';
+import ComplianceNumbersSection from '../../contacts/forms/ComplianceNumbersSection';
+import ContactPersonsSection from '../../contacts/forms/ContactPersonsSection';
+import ContactTagsSection from '../../contacts/forms/ContactTagsSection';
+import ContactClassificationSelector from '../../contacts/forms/ContactClassificationSelector';
+
+// Import hooks
 import { useUpdateContact } from '../../../hooks/useContacts';
 
 // Import constants
-import { canPerformOperation, formatContactDisplayName } from '@/utils/constants/contacts';
+import { canPerformOperation } from '@/utils/constants/contacts';
 
-// Define the complete contact interface for the summary tab
+// Types
 interface Contact {
   id: string;
   type: 'individual' | 'corporate';
   status: 'active' | 'inactive' | 'archived';
-  
-  // Individual fields
   name?: string;
   salutation?: string;
-  
-  // Corporate fields
   company_name?: string;
   registration_number?: string;
   website?: string;
   industry?: string;
-  
-  // Arrays
   classifications: Array<{
     id: string;
     classification_value: string;
@@ -69,18 +62,7 @@ interface Contact {
     tag_label: string;
     tag_color?: string;
   }>;
-  compliance_numbers: Array<{
-    id: string;
-    type_value: string;
-    type_label: string;
-    number: string;
-    issuing_authority?: string;
-    valid_from?: string;
-    valid_to?: string;
-    is_verified: boolean;
-    hexcolor?: string;
-    notes?: string;
-  }>;
+  compliance_numbers: Array<any>;
   contact_channels: Array<{
     id: string;
     channel_type: string;
@@ -90,22 +72,7 @@ interface Contact {
     is_verified: boolean;
     notes?: string;
   }>;
-  addresses: Array<{
-    id: string;
-    address_type: 'home' | 'office' | 'billing' | 'shipping' | 'factory' | 'warehouse' | 'other';
-    label?: string;
-    line1: string;
-    line2?: string;
-    line3?: string;
-    city: string;
-    state: string;
-    country: string;
-    postal_code?: string;
-    google_pin?: string;
-    is_primary: boolean;
-    is_verified: boolean;
-    notes?: string;
-  }>;
+  addresses: Array<any>;
   contact_persons: Array<{
     id: string;
     name: string;
@@ -116,406 +83,617 @@ interface Contact {
     contact_channels: any[];
     notes?: string;
   }>;
-  
-  // Other fields
   notes?: string;
-  user_account_status?: string;
-  potential_duplicate?: boolean;
-  duplicate_reasons?: string[];
-  
-  // Metadata
   created_at: string;
   updated_at: string;
-  last_contact_date?: string;
-  created_by?: {
-    id: string;
-    name: string;
-  };
-  audit_trail?: Array<{
-    id: string;
-    event_type: string;
-    event_description: string;
-    performed_by: string;
-    performed_at: string;
-    metadata?: Record<string, any>;
-  }>;
+  created_by?: { id: string; name: string; };
+  audit_trail?: any[];
 }
+
+type ModalType = 'contact' | 'classification' | 'persons' | 'tags' | 'address' | 'compliance' | 'channels' | null;
 
 interface ContactSummaryTabProps {
   contact: Contact;
+  onRefresh?: () => void;
 }
 
-const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact }) => {
+// Edit Modal Component
+const EditModal: React.FC<{
+  isOpen: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  onSave: () => Promise<void>;
+  isSaving: boolean;
+}> = ({ isOpen, title, onClose, children, onSave, isSaving }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  if (!isOpen) return null;
+
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(15, 23, 42, 0.95)'
+      : 'rgba(255, 255, 255, 0.98)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl border animate-in zoom-in-95 duration-200"
+        style={{
+          ...glassStyle,
+          borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:opacity-70 transition-colors"
+            style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+          >
+            <X className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[calc(85vh-140px)] p-6">
+          {children}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-end gap-3 px-6 py-4 border-t"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-xl font-medium transition-colors"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+              color: colors.utility.primaryText
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-6 py-2 rounded-xl font-medium transition-colors flex items-center gap-2"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff'
+            }}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Compact View Card Component
+const ViewCard: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+  count?: number;
+}> = ({ title, icon, iconBg, onEdit, children, count }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(30, 41, 59, 0.8)'
+      : 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(0,0,0,0.08)',
+  };
+
+  return (
+    <div
+      className="rounded-xl border p-4 transition-all hover:shadow-md"
+      style={glassStyle}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div
+            className="p-1.5 rounded-lg"
+            style={{ backgroundColor: iconBg }}
+          >
+            {icon}
+          </div>
+          <span className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+            {title}
+          </span>
+          {count !== undefined && (
+            <span
+              className="px-1.5 py-0.5 rounded-full text-xs"
+              style={{
+                backgroundColor: iconBg,
+                color: colors.utility.primaryText
+              }}
+            >
+              {count}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={onEdit}
+          className="p-1.5 rounded-lg hover:opacity-70 transition-colors"
+          style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+        >
+          <Edit className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+        </button>
+      </div>
+      <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefresh }) => {
   const navigate = useNavigate();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { toast } = useToast();
   const updateContactHook = useUpdateContact();
-  const [isUpdating, setIsUpdating] = useState(false);
-  
-  // Get primary contact channel for quick actions  
-  const getPrimaryChannel = (type: string) => {
-    return contact.contact_channels.find(ch => ch.channel_type === type && ch.is_primary) || 
-           contact.contact_channels.find(ch => ch.channel_type === type);
+
+  // Modal state
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form data state for modal editing
+  const [formData, setFormData] = useState<any>({});
+
+  // Glass morphism styles
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(30, 41, 59, 0.8)'
+      : 'rgba(255, 255, 255, 0.8)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderColor: isDarkMode
+      ? 'rgba(255,255,255,0.1)'
+      : 'rgba(0,0,0,0.08)',
+    boxShadow: isDarkMode
+      ? '0 4px 24px rgba(0,0,0,0.2)'
+      : '0 4px 24px rgba(0,0,0,0.06)',
   };
 
-  // Get primary address
-  const getPrimaryAddress = () => {
-    return contact.addresses.find(addr => addr.is_primary) || contact.addresses[0];
-  };
-
-  // Quick action handlers for when cards are reactivated
-  const handleQuickCall = () => {
-    const primaryPhone = getPrimaryChannel('mobile');
-    if (primaryPhone) {
-      const phoneNumber = primaryPhone.country_code ? 
-        `+${primaryPhone.country_code === 'IN' ? '91' : primaryPhone.country_code} ${primaryPhone.value}` : 
-        primaryPhone.value;
-      window.location.href = `tel:${phoneNumber}`;
-    } else {
-      toast({
-        variant: "destructive",
-        title: "No phone number",
-        description: "No phone number available for this contact"
-      });
+  // Open modal with current data
+  const openModal = (type: ModalType) => {
+    switch (type) {
+      case 'channels':
+        setFormData({ contact_channels: [...contact.contact_channels] });
+        break;
+      case 'classification':
+        setFormData({ classifications: [...contact.classifications] });
+        break;
+      case 'persons':
+        setFormData({ contact_persons: [...contact.contact_persons] });
+        break;
+      case 'tags':
+        setFormData({ tags: [...contact.tags] });
+        break;
+      case 'address':
+        setFormData({ addresses: [...contact.addresses] });
+        break;
+      case 'compliance':
+        setFormData({ compliance_numbers: [...contact.compliance_numbers] });
+        break;
     }
+    setActiveModal(type);
   };
 
-  const handleQuickEmail = () => {
-    const primaryEmail = getPrimaryChannel('email');
-    if (primaryEmail) {
-      window.location.href = `mailto:${primaryEmail.value}`;
-    } else {
-      toast({
-        variant: "destructive",
-        title: "No email address",
-        description: "No email address available for this contact"
-      });
-    }
-  };
-
-  const handleCreateContract = () => {
-    if (!canPerformOperation(contact.status, 'create_contract')) {
-      toast({
-        variant: "destructive",
-        title: "Action not allowed",
-        description: "Cannot create contracts for inactive or archived contacts"
-      });
-      return;
-    }
-    navigate(`/contracts/create?contactId=${contact.id}`);
-  };
-
-  // Handle contact updates (for notes and tags)
-  const handleContactUpdate = async (updates: { notes?: string; tags?: any[] }) => {
+  // Save modal changes
+  const handleSave = async () => {
+    setIsSaving(true);
     try {
-      setIsUpdating(true);
-      
+      await updateContactHook.mutate({
+        contactId: contact.id,
+        updates: formData
+      });
+
+      toast({
+        title: "Saved!",
+        description: "Changes saved successfully",
+        duration: 2000
+      });
+
+      setActiveModal(null);
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Save failed:', error);
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: "Could not save changes. Please try again."
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle notes update
+  const handleNotesUpdate = async (updates: { notes?: string; tags?: any[] }) => {
+    try {
       await updateContactHook.mutate({
         contactId: contact.id,
         updates
       });
-      
-      // The contact data will be refreshed by the parent component
-      // through the useContact hook's refetch mechanism
-      
+      if (onRefresh) {
+        onRefresh();
+      }
     } catch (error) {
-      console.error('Failed to update contact:', error);
-      throw error; // Re-throw to let the card component handle the error
-    } finally {
-      setIsUpdating(false);
+      console.error('Failed to update:', error);
+      throw error;
+    }
+  };
+
+  // Get primary channel
+  const getPrimaryChannel = (type: string) => {
+    return contact.contact_channels.find(ch => ch.channel_type === type && ch.is_primary) ||
+           contact.contact_channels.find(ch => ch.channel_type === type);
+  };
+
+  // Render modal content based on type
+  const renderModalContent = () => {
+    switch (activeModal) {
+      case 'channels':
+        return (
+          <ContactChannelsSection
+            value={formData.contact_channels || []}
+            onChange={(channels) => setFormData({ ...formData, contact_channels: channels })}
+            mode="edit"
+          />
+        );
+      case 'classification':
+        return (
+          <ContactClassificationSelector
+            value={formData.classifications || []}
+            onChange={(classifications) => setFormData({ ...formData, classifications })}
+            industry={contact.industry}
+          />
+        );
+      case 'persons':
+        return (
+          <ContactPersonsSection
+            value={formData.contact_persons || []}
+            onChange={(persons) => setFormData({ ...formData, contact_persons: persons })}
+            contactType={contact.type}
+          />
+        );
+      case 'tags':
+        return (
+          <ContactTagsSection
+            value={formData.tags || []}
+            onChange={(tags) => setFormData({ ...formData, tags })}
+          />
+        );
+      case 'address':
+        return (
+          <AddressesSection
+            value={formData.addresses || []}
+            onChange={(addresses) => setFormData({ ...formData, addresses })}
+            mode="edit"
+          />
+        );
+      case 'compliance':
+        return (
+          <ComplianceNumbersSection
+            value={formData.compliance_numbers || []}
+            onChange={(compliance) => setFormData({ ...formData, compliance_numbers: compliance })}
+            contactType={contact.type}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Get modal title
+  const getModalTitle = () => {
+    switch (activeModal) {
+      case 'channels': return 'Edit Contact Channels';
+      case 'classification': return 'Edit Classifications';
+      case 'persons': return 'Edit Contact Persons';
+      case 'tags': return 'Edit Tags';
+      case 'address': return 'Edit Addresses';
+      case 'compliance': return 'Edit Compliance Numbers';
+      default: return 'Edit';
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* 
-        HIDDEN - Contact Overview Banner (Card 1)
-        Will be activated later - just uncomment this entire block
-        
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-lg border border-primary/20 p-6">
-          <div className="flex items-start justify-between gap-6">
-            <div className="flex items-start gap-4 flex-1">
-              <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary/30 to-primary/20 text-primary flex items-center justify-center font-bold text-xl border-2 border-primary/30 shadow-sm">
-                {contact.type === 'corporate' 
-                  ? contact.company_name?.substring(0, 2).toUpperCase() || 'UC'
-                  : contact.name?.substring(0, 2).toUpperCase() || 'UN'
-                }
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 className="text-xl font-bold text-foreground">{formatContactDisplayName(contact)}</h2>
-                  {contact.type === 'corporate' ? (
-                    <Building2 className="h-5 w-5 text-muted-foreground" />
-                  ) : (
-                    <User className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-muted-foreground">
-                  {getPrimaryChannel('email') && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      <span className="truncate">{getPrimaryChannel('email')?.value}</span>
-                      {getPrimaryChannel('email')?.is_verified && (
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                      )}
-                    </div>
-                  )}
-                  
-                  {getPrimaryChannel('mobile') && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      <span>{getPrimaryChannel('mobile')?.country_code ? `+${getPrimaryChannel('mobile')?.country_code === 'IN' ? '91' : getPrimaryChannel('mobile')?.country_code} ` : ''}{getPrimaryChannel('mobile')?.value}</span>
-                      {getPrimaryChannel('mobile')?.is_verified && (
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                      )}
-                    </div>
-                  )}
-                  
-                  {getPrimaryAddress() && (
-                    <div className="flex items-center gap-2 md:col-span-2">
-                      <MapPin className="h-4 w-4" />
-                      <span className="truncate">{getPrimaryAddress()?.line1}, {getPrimaryAddress()?.city}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              {getPrimaryChannel('mobile') && (
-                <button
-                  onClick={handleQuickCall}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
-                >
-                  <Phone className="h-4 w-4" />
-                  Call
-                </button>
-              )}
-              
-              {getPrimaryChannel('email') && (
-                <button
-                  onClick={handleQuickEmail}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                >
-                  <Mail className="h-4 w-4" />
-                  Email
-                </button>
-              )}
-              
-              <button
-                onClick={handleCreateContract}
-                disabled={!canPerformOperation(contact.status, 'create_contract')}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FileText className="h-4 w-4" />
-                Contract
-              </button>
-            </div>
-          </div>
-          
-          {contact.classifications.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-primary/20">
-              {contact.classifications.map((classification) => (
-                <span
-                  key={classification.id}
-                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary border border-primary/20"
-                >
-                  <Shield className="h-3 w-3" />
-                  {classification.classification_label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      */}
-
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Left Content Area - 2/3 width */}
-        <div className="xl:col-span-2 space-y-6">
-          {/* ✅ UNHIDDEN - Quick Stats Grid (Card 2) - NOW VISIBLE! */}
-          <QuickStatsGrid 
-            contact={contact}
-            className="hover:shadow-md transition-shadow"
-          />
-          
-          {/* Important Notes & Tags */}
-          <ImportantNotesCard 
-            contact={contact}
-            onUpdate={handleContactUpdate}
-            className="hover:shadow-md transition-shadow"
-          />
-        </div>
-        
-        {/* Right Sidebar - 1/3 width */}
-        <div className="xl:col-span-1 space-y-6">
-          {/* Contact Header Card */}
-          <ContactHeaderCard 
-            contact={contact}
-            onEdit={() => navigate(`/contacts/${contact.id}/edit`)}
-            className="hover:shadow-md transition-shadow"
-          />
-          
-          {/* Contact Channels */}
-          <ContactChannelsCard 
-            contact={contact}
-            onEdit={() => navigate(`/contacts/${contact.id}/edit`)}
-            className="hover:shadow-md transition-shadow"
-          />
-          
-          {/* Address Information */}
-          <ContactAddressCard 
-            contact={contact}
-            onEdit={() => navigate(`/contacts/${contact.id}/edit`)}
-            className="hover:shadow-md transition-shadow"
-          />
-          
-          {/* Corporate Compliance Numbers */}
-          {contact.type === 'corporate' && contact.compliance_numbers.length > 0 && (
-            <ContactComplianceCard 
+      <div className="grid grid-cols-1 xl:grid-cols-10 gap-6">
+        {/* Left Content Area - 70% (7/10 cols) */}
+        <div className="xl:col-span-7 space-y-6">
+          {/* Quick Stats Grid */}
+          <div
+            className="rounded-2xl border p-6 transition-all hover:shadow-lg"
+            style={glassStyle}
+          >
+            <QuickStatsGrid
               contact={contact}
-              onEdit={() => navigate(`/contacts/${contact.id}/edit`)}
-              className="hover:shadow-md transition-shadow"
+              className="!bg-transparent !border-0 !shadow-none !p-0"
             />
-          )}
-          
-          {/* Recent Activity - Moved below compliance, same width, with scroll */}
-          <div className="bg-card rounded-lg shadow-sm border border-border hover:shadow-md transition-shadow">
-            <div className="p-4 border-b border-border">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-base font-semibold text-foreground">Recent Activity</h3>
-                </div>
-              </div>
-            </div>
-            
-            {/* Scrollable content area */}
-            <div className="max-h-80 overflow-y-auto">
-              <div className="p-4">
-                <RecentActivityCard 
-                  contact={contact}
-                  limit={15} // Show more items since it's scrollable
-                  className="!p-0 !border-0 !shadow-none !bg-transparent" // Remove card styling since it's embedded
-                />
-              </div>
+          </div>
+
+          {/* Important Notes & Tags */}
+          <div
+            className="rounded-2xl border transition-all hover:shadow-lg"
+            style={glassStyle}
+          >
+            <ImportantNotesCard
+              contact={contact}
+              onUpdate={handleNotesUpdate}
+              className="!bg-transparent !border-0 !shadow-none"
+            />
+          </div>
+
+          {/* Recent Activity */}
+          <div
+            className="rounded-2xl border transition-all hover:shadow-lg"
+            style={glassStyle}
+          >
+            <div className="p-5">
+              <RecentActivityCard
+                contact={contact}
+                limit={10}
+                className="!bg-transparent !border-0 !shadow-none !p-0"
+              />
             </div>
           </div>
-          
-          {/* Contact Persons Summary (for corporate) */}
-          {contact.type === 'corporate' && contact.contact_persons.length > 0 && (
-            <div className="bg-card rounded-lg shadow-sm border border-border p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-foreground">Contact Persons</h3>
-                <button
-                  onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                  className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                  title="Edit contact persons"
-                >
-                  <Edit className="h-4 w-4" />
-                </button>
+        </div>
+
+        {/* Right Sidebar - 30% (3/10 cols) */}
+        <div className="xl:col-span-3 space-y-4">
+          {/* 1. Contact Info Card */}
+          <ViewCard
+            title="Contact"
+            icon={contact.type === 'corporate' ?
+              <Building2 className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} /> :
+              <User className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} />
+            }
+            iconBg={colors.brand.primary + '20'}
+            onEdit={() => openModal('channels')}
+          >
+            <div className="space-y-2">
+              <p className="font-medium" style={{ color: colors.utility.primaryText }}>
+                {contact.type === 'corporate' ? contact.company_name : contact.name}
+              </p>
+              {getPrimaryChannel('email') && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Mail className="h-3 w-3" />
+                  <span className="truncate">{getPrimaryChannel('email')?.value}</span>
+                </div>
+              )}
+              {getPrimaryChannel('mobile') && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Phone className="h-3 w-3" />
+                  <span>
+                    {getPrimaryChannel('mobile')?.country_code === 'IN' ? '+91 ' : ''}
+                    {getPrimaryChannel('mobile')?.value}
+                  </span>
+                </div>
+              )}
+              {contact.contact_channels.length > 2 && (
+                <p className="text-xs" style={{ color: colors.brand.primary }}>
+                  +{contact.contact_channels.length - 2} more channels
+                </p>
+              )}
+            </div>
+          </ViewCard>
+
+          {/* 2. Classification Card */}
+          <ViewCard
+            title="Classification"
+            icon={<Shield className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} />}
+            iconBg="#8b5cf620"
+            onEdit={() => openModal('classification')}
+            count={contact.classifications.length}
+          >
+            {contact.classifications.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {contact.classifications.map((cls) => (
+                  <span
+                    key={cls.id}
+                    className="px-2 py-0.5 rounded-full text-xs"
+                    style={{
+                      backgroundColor: '#8b5cf620',
+                      color: '#8b5cf6'
+                    }}
+                  >
+                    {cls.classification_label}
+                  </span>
+                ))}
               </div>
-              
-              <div className="space-y-3">
-                {contact.contact_persons.slice(0, 4).map((person) => (
-                  <div key={person.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold text-sm">
-                      {person.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-foreground truncate">
-                          {person.name}
-                        </span>
-                        {person.is_primary && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs bg-primary/10 text-primary">
-                            <Star className="h-2 w-2" />
-                            Primary
-                          </span>
-                        )}
+            ) : (
+              <span className="text-xs italic">No classifications</span>
+            )}
+          </ViewCard>
+
+          {/* 3. Contact Persons Card (Corporate only) */}
+          {contact.type === 'corporate' && (
+            <ViewCard
+              title="Persons"
+              icon={<Users className="h-3.5 w-3.5" style={{ color: '#f59e0b' }} />}
+              iconBg="#f59e0b20"
+              onEdit={() => openModal('persons')}
+              count={contact.contact_persons.length}
+            >
+              {contact.contact_persons.length > 0 ? (
+                <div className="space-y-1">
+                  {contact.contact_persons.slice(0, 3).map((person) => (
+                    <div key={person.id} className="flex items-center gap-2">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium"
+                        style={{
+                          backgroundColor: person.is_primary ? '#f59e0b' : '#f59e0b20',
+                          color: person.is_primary ? '#fff' : '#f59e0b'
+                        }}
+                      >
+                        {person.name.charAt(0)}
                       </div>
-                      {(person.designation || person.department) && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {person.designation}
-                          {person.designation && person.department && ' • '}
-                          {person.department}
-                        </p>
+                      <span className="text-xs truncate">{person.name}</span>
+                      {person.is_primary && (
+                        <Star className="h-2.5 w-2.5" style={{ color: '#f59e0b' }} />
                       )}
                     </div>
+                  ))}
+                  {contact.contact_persons.length > 3 && (
+                    <p className="text-xs" style={{ color: '#f59e0b' }}>
+                      +{contact.contact_persons.length - 3} more
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs italic">No contact persons</span>
+              )}
+            </ViewCard>
+          )}
+
+          {/* 4. Tags Card */}
+          <ViewCard
+            title="Tags"
+            icon={<Tag className="h-3.5 w-3.5" style={{ color: '#ec4899' }} />}
+            iconBg="#ec489920"
+            onEdit={() => openModal('tags')}
+            count={contact.tags.length}
+          >
+            {contact.tags.length > 0 ? (
+              <div className="flex flex-wrap gap-1">
+                {contact.tags.slice(0, 5).map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="px-2 py-0.5 rounded-full text-xs"
+                    style={{
+                      backgroundColor: (tag.tag_color || '#ec4899') + '20',
+                      color: tag.tag_color || '#ec4899'
+                    }}
+                  >
+                    {tag.tag_label}
+                  </span>
+                ))}
+                {contact.tags.length > 5 && (
+                  <span className="text-xs" style={{ color: '#ec4899' }}>
+                    +{contact.tags.length - 5}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-xs italic">No tags</span>
+            )}
+          </ViewCard>
+
+          {/* 5. Address Card */}
+          <ViewCard
+            title="Address"
+            icon={<MapPin className="h-3.5 w-3.5" style={{ color: '#10b981' }} />}
+            iconBg="#10b98120"
+            onEdit={() => openModal('address')}
+            count={contact.addresses.length}
+          >
+            {contact.addresses.length > 0 ? (
+              <div className="space-y-1">
+                {contact.addresses.slice(0, 2).map((addr: any, idx: number) => (
+                  <div key={addr.id || idx} className="flex items-start gap-2">
+                    {addr.is_primary && (
+                      <Star className="h-2.5 w-2.5 mt-0.5 flex-shrink-0" style={{ color: '#10b981' }} />
+                    )}
+                    <p className="text-xs line-clamp-2">
+                      {addr.address_line1 || addr.line1}, {addr.city}
+                    </p>
                   </div>
                 ))}
-                
-                {contact.contact_persons.length > 4 && (
-                  <div className="text-center pt-2 border-t border-border">
-                    <button
-                      onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      +{contact.contact_persons.length - 4} more contact persons
-                    </button>
-                  </div>
+                {contact.addresses.length > 2 && (
+                  <p className="text-xs" style={{ color: '#10b981' }}>
+                    +{contact.addresses.length - 2} more
+                  </p>
                 )}
               </div>
-            </div>
+            ) : (
+              <span className="text-xs italic">No addresses</span>
+            )}
+          </ViewCard>
+
+          {/* 6. Compliance Card (Corporate only) */}
+          {contact.type === 'corporate' && (
+            <ViewCard
+              title="Compliance"
+              icon={<Shield className="h-3.5 w-3.5" style={{ color: '#3b82f6' }} />}
+              iconBg="#3b82f620"
+              onEdit={() => openModal('compliance')}
+              count={contact.compliance_numbers.length}
+            >
+              {contact.compliance_numbers.length > 0 ? (
+                <div className="space-y-1">
+                  {contact.compliance_numbers.slice(0, 3).map((comp: any, idx: number) => (
+                    <div key={comp.id || idx} className="flex items-center justify-between">
+                      <span className="text-xs font-medium">{comp.type_label || comp.type_value}</span>
+                      <span className="text-xs font-mono">{comp.number?.slice(0, 10)}...</span>
+                    </div>
+                  ))}
+                  {contact.compliance_numbers.length > 3 && (
+                    <p className="text-xs" style={{ color: '#3b82f6' }}>
+                      +{contact.compliance_numbers.length - 3} more
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs italic">No compliance numbers</span>
+              )}
+            </ViewCard>
           )}
-          
-          {/* 
-            HIDDEN - Relationship Insights
-            Will be activated later - just uncomment this entire block
-            
-            <div className="bg-card rounded-lg shadow-sm border border-border p-4 hover:shadow-md transition-shadow">
-              <h3 className="text-base font-semibold mb-3 text-foreground">Relationship Insights</h3>
-              
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Relationship Duration</span>
-                  <span className="font-medium text-foreground">
-                    {Math.floor((new Date().getTime() - new Date(contact.created_at).getTime()) / (1000 * 60 * 60 * 24 * 365))} years
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Contact Quality</span>
-                  <span className="font-medium text-green-600">
-                    {contact.contact_channels.filter(ch => ch.is_verified).length > 0 ? 'High' : 'Medium'}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Last Activity</span>
-                  <span className="font-medium text-foreground">
-                    {contact.last_contact_date ? 
-                      new Date(contact.last_contact_date).toLocaleDateString() : 
-                      'No recent activity'
-                    }
-                  </span>
-                </div>
-                
-                {contact.potential_duplicate && (
-                  <div className="flex items-center gap-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded-md border border-yellow-200 dark:border-yellow-800">
-                    <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-                    <span className="text-sm text-yellow-700 dark:text-yellow-300">
-                      Potential duplicate detected
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="mt-4 pt-3 border-t border-border">
-                <button
-                  onClick={() => navigate(`/contacts/${contact.id}/analytics`)}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-primary hover:bg-primary/5 rounded-md transition-colors"
-                >
-                  <Activity className="h-4 w-4" />
-                  View Detailed Analytics
-                  <ExternalLink className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          */}
         </div>
       </div>
+
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={activeModal !== null}
+        title={getModalTitle()}
+        onClose={() => setActiveModal(null)}
+        onSave={handleSave}
+        isSaving={isSaving}
+      >
+        {renderModalContent()}
+      </EditModal>
     </div>
   );
 };

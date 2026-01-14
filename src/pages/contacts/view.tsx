@@ -424,7 +424,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
 
     switch (activeTab) {
       case 'summary':
-        return <ContactSummaryTab contact={contact} />;
+        return <ContactSummaryTab contact={contact} onRefresh={refetch} />;
       case 'contracts':
         return (
           <ContractTab 

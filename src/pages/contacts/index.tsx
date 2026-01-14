@@ -32,9 +32,6 @@ import {
   Globe,
   Hash,
   Tag,
-  UserCheck,
-  UserX,
-  Copy,
   UserPlus,
   Network,
   Briefcase
@@ -101,9 +98,7 @@ const FilterDropdown: React.FC<{
   const [localFilters, setLocalFilters] = useState({
     classifications: currentFilters.classifications || [],
     tags: currentFilters.tags || [],
-    userStatus: currentFilters.userStatus || 'all',
-    contactStatus: currentFilters.contactStatus || 'all',
-    duplicates: currentFilters.duplicates || false
+    contactStatus: currentFilters.contactStatus || 'all'
   });
 
   if (!isOpen) return null;
@@ -117,9 +112,7 @@ const FilterDropdown: React.FC<{
     const resetFilters = {
       classifications: [],
       tags: [],
-      userStatus: 'all',
-      contactStatus: 'all',
-      duplicates: false
+      contactStatus: 'all'
     };
     setLocalFilters(resetFilters);
     onApplyFilters(resetFilters);
@@ -237,92 +230,6 @@ const FilterDropdown: React.FC<{
           </div>
         </div>
 
-        {/* User Status Filter */}
-        <div>
-          <label
-            className="text-sm font-medium mb-2 block transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            User Account
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="userStatus"
-                value="all"
-                checked={localFilters.userStatus === 'all'}
-                onChange={(e) => setLocalFilters(prev => ({ ...prev, userStatus: e.target.value }))}
-                style={{ accentColor: colors.brand.primary }}
-              />
-              <span
-                className="text-sm transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                All Contacts
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="userStatus"
-                value="user"
-                checked={localFilters.userStatus === 'user'}
-                onChange={(e) => setLocalFilters(prev => ({ ...prev, userStatus: e.target.value }))}
-                style={{ accentColor: colors.brand.primary }}
-              />
-              <span
-                className="text-sm flex items-center gap-1 transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                <UserCheck
-                  className="h-4 w-4"
-                  style={{ color: colors.semantic.success }}
-                />
-                Has User Account
-              </span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="userStatus"
-                value="not_user"
-                checked={localFilters.userStatus === 'not_user'}
-                onChange={(e) => setLocalFilters(prev => ({ ...prev, userStatus: e.target.value }))}
-                style={{ accentColor: colors.brand.primary }}
-              />
-              <span
-                className="text-sm flex items-center gap-1 transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                <UserX
-                  className="h-4 w-4"
-                  style={{ color: colors.utility.secondaryText }}
-                />
-                No User Account
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* Duplicates Filter */}
-        <div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={localFilters.duplicates}
-              onChange={(e) => setLocalFilters(prev => ({ ...prev, duplicates: e.target.checked }))}
-              style={{ accentColor: colors.brand.primary }}
-            />
-            <span 
-              className="text-sm flex items-center gap-1 transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              <Copy className="h-4 w-4" />
-              Show Potential Duplicates Only
-            </span>
-          </label>
-        </div>
       </div>
 
       <div 
@@ -381,9 +288,7 @@ const ContactsPage: React.FC = () => {
   const [advancedFilters, setAdvancedFilters] = useState({
     classifications: [],
     tags: [],
-    userStatus: 'all',
-    contactStatus: 'all',
-    duplicates: false
+    contactStatus: 'all'
   });
   
   const itemsPerPage = UI_CONFIG.ITEMS_PER_PAGE;
@@ -412,6 +317,12 @@ const ContactsPage: React.FC = () => {
 
   // Build filters for API
   // activeFilter now holds classification filter (buyer, seller, etc.)
+  // FIX: Combine activeFilter with advancedFilters.classifications and send as array
+  const combinedClassifications = [
+    ...(activeFilter !== 'all' ? [activeFilter] : []),
+    ...((advancedFilters.classifications || []).filter((c: string) => c !== activeFilter))
+  ];
+
   const apiFilters: ContactFilters = {
     page: currentPage,
     limit: itemsPerPage,
@@ -419,10 +330,7 @@ const ContactsPage: React.FC = () => {
     status: advancedFilters.contactStatus !== 'all' ? (advancedFilters.contactStatus as any) : undefined,
     sort_by: sortBy,
     sort_order: sortOrder,
-    ...(activeFilter !== 'all' && { classification: activeFilter }),
-    ...(advancedFilters.classifications.length > 0 && { classifications: advancedFilters.classifications }),
-    ...(advancedFilters.userStatus !== 'all' && { user_status: advancedFilters.userStatus }),
-    ...(advancedFilters.duplicates && { show_duplicates: true })
+    ...(combinedClassifications.length > 0 && { classifications: combinedClassifications })
   };
 
   // API Hooks
@@ -470,6 +378,12 @@ const ContactsPage: React.FC = () => {
 
   // Update filters when UI state changes
   useEffect(() => {
+    // FIX: Combine activeFilter with advancedFilters.classifications and send as array
+    const updatedClassifications = [
+      ...(activeFilter !== 'all' ? [activeFilter] : []),
+      ...((advancedFilters.classifications || []).filter((c: string) => c !== activeFilter))
+    ];
+
     const newFilters: ContactFilters = {
       page: currentPage,
       limit: itemsPerPage,
@@ -477,10 +391,7 @@ const ContactsPage: React.FC = () => {
       status: advancedFilters.contactStatus !== 'all' ? (advancedFilters.contactStatus as any) : undefined,
       sort_by: sortBy,
       sort_order: sortOrder,
-      ...(activeFilter !== 'all' && { classification: activeFilter }),
-      ...(advancedFilters.classifications.length > 0 && { classifications: advancedFilters.classifications }),
-      ...(advancedFilters.userStatus !== 'all' && { user_status: advancedFilters.userStatus }),
-      ...(advancedFilters.duplicates && { show_duplicates: true })
+      ...(updatedClassifications.length > 0 && { classifications: updatedClassifications })
     };
 
     updateFilters(newFilters);
@@ -884,15 +795,15 @@ const ContactsPage: React.FC = () => {
               
               {/* Filter Button with Dropdown */}
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowMoreFilters(!showMoreFilters)}
                   className="p-2 border rounded-lg hover:opacity-80 transition-colors"
                   style={{
-                    borderColor: Object.values(advancedFilters).some(v => 
-                      Array.isArray(v) ? v.length > 0 : v !== 'all' && v !== false
+                    borderColor: Object.values(advancedFilters).some(v =>
+                      Array.isArray(v) ? v.length > 0 : v !== 'all'
                     ) ? colors.brand.primary : colors.utility.primaryText + '40',
-                    backgroundColor: Object.values(advancedFilters).some(v => 
-                      Array.isArray(v) ? v.length > 0 : v !== 'all' && v !== false
+                    backgroundColor: Object.values(advancedFilters).some(v =>
+                      Array.isArray(v) ? v.length > 0 : v !== 'all'
                     ) ? colors.brand.primary + '20' : colors.utility.secondaryBackground,
                     color: colors.utility.primaryText
                   }}
@@ -944,8 +855,8 @@ const ContactsPage: React.FC = () => {
           )}
 
           {/* Active Filters Display */}
-          {Object.values(advancedFilters).some(v => 
-            Array.isArray(v) ? v.length > 0 : v !== 'all' && v !== false
+          {Object.values(advancedFilters).some(v =>
+            Array.isArray(v) ? v.length > 0 : v !== 'all'
           ) && (
             <div className="flex items-center gap-2 flex-wrap">
               <span 
@@ -981,29 +892,6 @@ const ContactsPage: React.FC = () => {
                   </span>
                 );
               })}
-              {advancedFilters.userStatus !== 'all' && (
-                <span 
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border"
-                  style={{
-                    backgroundColor: colors.brand.primary + '20',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '40'
-                  }}
-                >
-                  {advancedFilters.userStatus === 'user' ? 'Has User Account' : 'No User Account'}
-                  <button
-                    onClick={() => {
-                      handleAdvancedFiltersChange({
-                        ...advancedFilters,
-                        userStatus: 'all'
-                      });
-                    }}
-                    className="ml-1"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
               {advancedFilters.contactStatus !== 'all' && (
                 <span
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border"
@@ -1031,29 +919,6 @@ const ContactsPage: React.FC = () => {
                       handleAdvancedFiltersChange({
                         ...advancedFilters,
                         contactStatus: 'all'
-                      });
-                    }}
-                    className="ml-1"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {advancedFilters.duplicates && (
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border"
-                  style={{
-                    backgroundColor: colors.brand.primary + '20',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '40'
-                  }}
-                >
-                  Potential Duplicates
-                  <button
-                    onClick={() => {
-                      handleAdvancedFiltersChange({
-                        ...advancedFilters,
-                        duplicates: false
                       });
                     }}
                     className="ml-1"
@@ -1176,8 +1041,8 @@ const ContactsPage: React.FC = () => {
                 className="mb-6 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                {searchTerm || Object.values(advancedFilters).some(v => 
-                  Array.isArray(v) ? v.length > 0 : v !== 'all' && v !== false
+                {searchTerm || Object.values(advancedFilters).some(v =>
+                  Array.isArray(v) ? v.length > 0 : v !== 'all'
                 )
                   ? shouldShowSearchHint()
                     ? `Type at least ${MINIMUM_SEARCH_LENGTH} characters to search entities.`
