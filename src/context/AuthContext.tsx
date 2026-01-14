@@ -3,7 +3,7 @@ import React, { createContext, useState, useContext, useEffect, useRef } from 'r
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { API_ENDPOINTS } from '../services/serviceURLs';
-import toast from 'react-hot-toast';
+import { vaniToast } from '../components/common/toast';
 import { setUserContext } from '../utils/sentry';
 import { sessionService } from '../services/sessionService';
 
@@ -41,9 +41,9 @@ interface User {
   first_name: string;
   last_name: string;
   user_code?: string;
-  preferred_language?: string;  
-  preferred_theme?: string; 
-  is_dark_mode?: boolean; 
+  preferred_language?: string;
+  preferred_theme?: string;
+  is_dark_mode?: boolean;
   industry?: string;
   user_metadata?: Record<string, any>;
   app_metadata?: Record<string, any>;
@@ -159,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Environment switch modal state
   const [showEnvironmentSwitchModal, setShowEnvironmentSwitchModal] = useState<boolean>(false);
   const [pendingEnvironment, setPendingEnvironment] = useState<'live' | 'test' | null>(null);
-  
+
   // Google OAuth state
   const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean>(false);
 
@@ -188,75 +188,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getStorage: () => {
       return rememberMe ? localStorage : sessionStorage;
     },
-    
+
     setAuthToken: (token: string, refreshToken?: string) => {
       const store = storage.getStorage();
       store.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-      
+
       if (refreshToken) {
         store.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
       }
-      
+
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     },
-    
+
     getAuthToken: (): string | null => {
       return storage.getStorage().getItem(STORAGE_KEYS.AUTH_TOKEN);
     },
-    
+
     setTenantId: (tenantId: string) => {
       if (!tenantId) return;
-      
+
       storage.getStorage().setItem(STORAGE_KEYS.TENANT_ID, tenantId);
       api.defaults.headers.common['x-tenant-id'] = tenantId;
     },
-    
+
     getTenantId: (): string | null => {
       return storage.getStorage().getItem(STORAGE_KEYS.TENANT_ID);
     },
-    
+
     setUserId: (userId: string) => {
       if (!userId) return;
       storage.getStorage().setItem(STORAGE_KEYS.USER_ID, userId);
     },
-    
+
     getUserId: (): string | null => {
       return storage.getStorage().getItem(STORAGE_KEYS.USER_ID);
     },
-    
+
     setUserData: (userData: User) => {
       storage.getStorage().setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
     },
-    
+
     getUserData: (): User | null => {
       const data = storage.getStorage().getItem(STORAGE_KEYS.USER_DATA);
       return data ? JSON.parse(data) : null;
     },
-    
+
     setCurrentTenant: (tenant: Tenant | null) => {
       if (!tenant) {
         storage.getStorage().removeItem(STORAGE_KEYS.CURRENT_TENANT);
         storage.getStorage().removeItem(STORAGE_KEYS.TENANT_ID);
         storage.getStorage().removeItem(STORAGE_KEYS.IS_ADMIN);
-        
+
         delete api.defaults.headers.common['x-tenant-id'];
         return;
       }
-      
+
       storage.getStorage().setItem(STORAGE_KEYS.CURRENT_TENANT, JSON.stringify(tenant));
       storage.setTenantId(tenant.id);
       storage.getStorage().setItem(STORAGE_KEYS.IS_ADMIN, String(tenant.is_admin || false));
     },
-    
+
     getCurrentTenant: (): Tenant | null => {
       const data = storage.getStorage().getItem(STORAGE_KEYS.CURRENT_TENANT);
       return data ? JSON.parse(data) : null;
     },
-    
+
     setRememberMe: (remember: boolean) => {
       localStorage.setItem(STORAGE_KEYS.REMEMBER_ME, String(remember));
       setRememberMe(remember);
-      
+
       if (!remember) {
         // Move data from localStorage to sessionStorage
         const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
@@ -265,43 +265,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const currentTenant = localStorage.getItem(STORAGE_KEYS.CURRENT_TENANT);
         const userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
         const userData = localStorage.getItem(STORAGE_KEYS.USER_DATA);
-        
+
         if (token) {
           sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
           localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
         }
-        
+
         if (refreshToken) {
           sessionStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
           localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
         }
-        
+
         if (tenantId) {
           sessionStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
           localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
         }
-        
+
         if (currentTenant) {
           sessionStorage.setItem(STORAGE_KEYS.CURRENT_TENANT, currentTenant);
           localStorage.removeItem(STORAGE_KEYS.CURRENT_TENANT);
         }
-        
+
         if (userId) {
           sessionStorage.setItem(STORAGE_KEYS.USER_ID, userId);
           localStorage.removeItem(STORAGE_KEYS.USER_ID);
         }
-        
+
         if (userData) {
           sessionStorage.setItem(STORAGE_KEYS.USER_DATA, userData);
           localStorage.removeItem(STORAGE_KEYS.USER_DATA);
         }
       }
     },
-    
+
     setEnvironmentMode: (isLive: boolean) => {
       localStorage.setItem(STORAGE_KEYS.IS_LIVE, String(isLive));
     },
-    
+
     clearAuth: () => {
       [localStorage, sessionStorage].forEach(store => {
         store.removeItem(STORAGE_KEYS.AUTH_TOKEN);
@@ -317,7 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         store.removeItem(STORAGE_KEYS.UNLOCK_BLOCKED_UNTIL);
         store.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETE);
       });
-      
+
       delete api.defaults.headers.common['Authorization'];
       delete api.defaults.headers.common['x-tenant-id'];
     }
@@ -342,26 +342,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Lock screen function
   const lockScreen = () => {
     if (isLocked) return;
-    
+
     console.log('Locking screen after 5 minutes of inactivity');
-    
+
     setIsLocked(true);
     const lockTimeDate = new Date();
     setLockTime(lockTimeDate);
-    
+
     sessionStorage.setItem(STORAGE_KEYS.LOCK_STATE, 'true');
     sessionStorage.setItem(STORAGE_KEYS.LOCK_TIME, lockTimeDate.toISOString());
-    
+
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current);
       idleTimeoutRef.current = null;
     }
-    
+
     lockLogoutTimeoutRef.current = setTimeout(() => {
       console.log('Session expired - 10 minutes passed since lock without unlock');
       logout();
     }, SESSION_TIMEOUT_AFTER_LOCK);
-    
+
     if (window.BroadcastChannel) {
       const channel = new BroadcastChannel('lock_screen');
       channel.postMessage({ action: 'lock' });
@@ -372,25 +372,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Unlock screen function
   const unlockScreen = () => {
     console.log('Unlocking screen');
-    
+
     setIsLocked(false);
     setLockTime(null);
     setFailedUnlockAttempts(0);
     setUnlockBlockedUntil(null);
-    
+
     sessionStorage.removeItem(STORAGE_KEYS.LOCK_STATE);
     sessionStorage.removeItem(STORAGE_KEYS.LOCK_TIME);
     sessionStorage.removeItem(STORAGE_KEYS.FAILED_UNLOCK_ATTEMPTS);
     sessionStorage.removeItem(STORAGE_KEYS.UNLOCK_BLOCKED_UNTIL);
-    
+
     if (lockLogoutTimeoutRef.current) {
       clearTimeout(lockLogoutTimeoutRef.current);
       lockLogoutTimeoutRef.current = null;
     }
-    
+
     resetIdleTimer();
     resetSessionTimeout();
-    
+
     if (window.BroadcastChannel) {
       const channel = new BroadcastChannel('lock_screen');
       channel.postMessage({ action: 'unlock' });
@@ -403,7 +403,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (idleTimeoutRef.current) {
       clearTimeout(idleTimeoutRef.current);
     }
-    
+
     if (isAuthenticated && !isLocked) {
       idleTimeoutRef.current = setTimeout(() => {
         lockScreen();
@@ -416,7 +416,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (sessionTimeoutRef.current) {
       clearTimeout(sessionTimeoutRef.current);
     }
-    
+
     if (isAuthenticated) {
       sessionTimeoutRef.current = setTimeout(() => {
         console.log('Session timeout - 15 minutes total');
@@ -441,19 +441,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const response = await api.get(API_ENDPOINTS.ONBOARDING.STATUS);
-      
+
       if (response.data && response.data.data) {
         const isComplete = response.data.data.is_complete || false;
         setHasCompletedOnboarding(isComplete);
-        
+
         // Store in session to avoid repeated checks
         if (isComplete) {
           sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
         }
-        
+
         return isComplete;
       }
-      
+
       // If we can't determine status, assume complete to not block
       return true;
     } catch (error) {
@@ -489,7 +489,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (user && storage.getAuthToken()) {
         try {
           setHasGoogleAuth(
-            user.user_metadata?.provider === 'google' || 
+            user.user_metadata?.provider === 'google' ||
             user.app_metadata?.provider === 'google' ||
             user.user_metadata?.google_linked === true ||
             false
@@ -499,7 +499,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     };
-    
+
     checkAuthMethods();
   }, [user]);
 
@@ -508,24 +508,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (isAuthenticated) {
       resetSessionTimeout();
       resetIdleTimer();
-      
+
       const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click', 'focus'];
-      
+
       const handleUserActivity = () => {
         resetIdleTimer();
-        
+
         if (!isLocked) {
           resetSessionTimeout();
         }
       };
-      
+
       activityEvents.forEach(event => {
         window.addEventListener(event, handleUserActivity);
       });
-      
+
       return () => {
         clearAllTimeouts();
-        
+
         activityEvents.forEach(event => {
           window.removeEventListener(event, handleUserActivity);
         });
@@ -538,14 +538,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Listen for lock/unlock events from other tabs
   useEffect(() => {
     if (!window.BroadcastChannel) return;
-    
+
     const channel = new BroadcastChannel('lock_screen');
-    
+
     channel.onmessage = (event) => {
       if (event.data.action === 'lock' && !isLocked) {
         setIsLocked(true);
         setLockTime(new Date());
-        
+
         if (lockLogoutTimeoutRef.current) {
           clearTimeout(lockLogoutTimeoutRef.current);
         }
@@ -553,30 +553,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('Session expired - 10 minutes passed since lock without unlock');
           logout();
         }, SESSION_TIMEOUT_AFTER_LOCK);
-        
+
       } else if (event.data.action === 'unlock' && isLocked) {
         // Clear all lock-related state
         setIsLocked(false);
         setLockTime(null);
         setFailedUnlockAttempts(0);
         setUnlockBlockedUntil(null);
-        
+
         // Clear storage
         sessionStorage.removeItem(STORAGE_KEYS.LOCK_STATE);
         sessionStorage.removeItem(STORAGE_KEYS.LOCK_TIME);
         sessionStorage.removeItem(STORAGE_KEYS.FAILED_UNLOCK_ATTEMPTS);
         sessionStorage.removeItem(STORAGE_KEYS.UNLOCK_BLOCKED_UNTIL);
-        
+
         // Clear any remaining timeouts
         if (lockLogoutTimeoutRef.current) {
           clearTimeout(lockLogoutTimeoutRef.current);
           lockLogoutTimeoutRef.current = null;
         }
-        
+
         // Reset timers for the active session
         resetIdleTimer();
         resetSessionTimeout();
-        
+
       } else if (event.data.action === 'logout') {
         clearAllTimeouts();
         storage.clearAuth();
@@ -593,7 +593,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         navigate('/login');
       }
     };
-    
+
     return () => {
       channel.close();
     };
@@ -605,30 +605,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const lockTimeStr = sessionStorage.getItem(STORAGE_KEYS.LOCK_TIME);
     const failedAttemptsStr = sessionStorage.getItem(STORAGE_KEYS.FAILED_UNLOCK_ATTEMPTS);
     const blockedUntilStr = sessionStorage.getItem(STORAGE_KEYS.UNLOCK_BLOCKED_UNTIL);
-    
+
     if (lockState === 'true' && lockTimeStr && isAuthenticated) {
       const lockTimeDate = new Date(lockTimeStr);
       const timeSinceLock = Date.now() - lockTimeDate.getTime();
-      
+
       if (timeSinceLock > SESSION_TIMEOUT_AFTER_LOCK) {
         console.log('Session expired - app reopened after lock timeout');
         logout();
         return;
       }
-      
+
       setIsLocked(true);
       setLockTime(lockTimeDate);
-      
+
       const remainingTime = SESSION_TIMEOUT_AFTER_LOCK - timeSinceLock;
       lockLogoutTimeoutRef.current = setTimeout(() => {
         console.log('Session expired - 10 minutes passed since lock without unlock');
         logout();
       }, remainingTime);
-      
+
       if (failedAttemptsStr) {
         setFailedUnlockAttempts(parseInt(failedAttemptsStr, 10));
       }
-      
+
       if (blockedUntilStr) {
         const blockedUntil = new Date(blockedUntilStr);
         if (blockedUntil > new Date()) {
@@ -643,15 +643,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to refresh data
   const refreshData = async () => {
     console.log('Refreshing data for environment:', isLive ? 'Live' : 'Test');
-    
-    window.dispatchEvent(new CustomEvent('environment-changed', { 
-      detail: { isLive, tenantId: currentTenant?.id } 
+
+    window.dispatchEvent(new CustomEvent('environment-changed', {
+      detail: { isLive, tenantId: currentTenant?.id }
     }));
-    
-    window.dispatchEvent(new CustomEvent('tenant-changed', { 
-      detail: { tenant: currentTenant, isLive } 
+
+    window.dispatchEvent(new CustomEvent('tenant-changed', {
+      detail: { tenant: currentTenant, isLive }
     }));
-    
+
     if (isAuthenticated && currentTenant) {
       try {
         const { data: tenantsData } = await api.get(API_ENDPOINTS.TENANTS.LIST);
@@ -670,22 +670,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           api.defaults.headers.common['x-environment'] = isLive ? 'live' : 'test';
-          
+
           const tenantId = storage.getTenantId();
           if (tenantId) {
             api.defaults.headers.common['x-tenant-id'] = tenantId;
           }
-          
+
           const userId = storage.getUserId();
           if (userId) {
             sessionService.initializeSession();
           }
-          
+
           const { data: userData } = await api.get(API_ENDPOINTS.AUTH.USER);
           setUser(userData);
           storage.setUserData(userData);
           setRegistrationStatus(userData.registration_status || 'complete');
-          
+
           if (userData.registration_status === 'pending_workspace') {
             console.log('User has pending workspace registration');
             setIsAuthenticated(true);
@@ -693,17 +693,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             navigate('/create-tenant');
             return;
           }
-          
+
           const { data: tenantsData } = await api.get(API_ENDPOINTS.TENANTS.LIST);
           setTenants(tenantsData);
-          
+
           if (tenantsData.length === 0) {
             setIsAuthenticated(true);
             setIsLoading(false);
             navigate('/create-tenant');
             return;
           }
-          
+
           const storedTenant = storage.getCurrentTenant();
           if (storedTenant) {
             setCurrentTenantState(storedTenant);
@@ -714,36 +714,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...defaultTenant,
                 is_admin: defaultTenant.is_admin || false
               };
-              
+
               setCurrentTenantState(normalizedTenant);
               storage.setCurrentTenant(normalizedTenant);
             }
           }
-          
+
           setIsAuthenticated(true);
           resetSessionTimeout();
           resetIdleTimer();
-          
+
           // Check onboarding status after successful auth
           await checkOnboardingStatus();
         } catch (err: any) {
           console.error('Error initializing auth:', err.message);
-          
-          const isNetworkRelatedError = 
-            err.message === 'Network Error' || 
-            err.code === 'ERR_NETWORK' || 
+
+          const isNetworkRelatedError =
+            err.message === 'Network Error' ||
+            err.code === 'ERR_NETWORK' ||
             err.code === 'ECONNABORTED' ||
             !navigator.onLine ||
             (err.response?.status >= 500 && !navigator.onLine) ||
             err.message?.includes('Network') ||
             err.message?.includes('fetch');
-          
+
           if (isNetworkRelatedError) {
             console.log('Network/Connection error during auth init - keeping user logged in');
-            
+
             const storedUserData = storage.getUserData();
             const storedTenant = storage.getCurrentTenant();
-            
+
             if (storedUserData) {
               setUser(storedUserData);
               setRegistrationStatus(storedUserData.registration_status || 'complete');
@@ -753,11 +753,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
               setIsAuthenticated(true);
             }
-            
+
             setIsLoading(false);
             return;
           }
-          
+
           if (err.response?.status === 401 || err.response?.status === 403) {
             storage.clearAuth();
             sessionService.clearSession();
@@ -787,9 +787,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setShowEnvironmentSwitchModal(false);
 
-    toast.loading(`Switching to ${newIsLive ? 'Live' : 'Test'} environment...`, {
-      id: 'environment-switch'
-    });
+    vaniToast.info(`Switching to ${newIsLive ? 'Live' : 'Test'} environment...`, { duration: 2000 });
 
     // Update state and storage
     setIsLive(newIsLive);
@@ -800,18 +798,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setPendingEnvironment(null);
 
-    toast.success(`Switched to ${newIsLive ? 'Live' : 'Test'} environment`, {
-      id: 'environment-switch',
-      duration: 2000,
-      style: {
-        padding: '16px',
-        borderRadius: '8px',
-        background: '#10B981',
-        color: '#FFF',
-        fontSize: '16px',
-        minWidth: '300px'
-      },
-    });
+    // Show success after a brief delay
+    setTimeout(() => {
+      vaniToast.success(`Switched to ${newIsLive ? 'Live' : 'Test'} environment`, { duration: 2000 });
+    }, 500);
 
     // PRODUCTION FIX: Full page reload clears React Query cache automatically
     window.location.href = '/dashboard';
@@ -827,15 +817,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateUserPreferences = async (preferences: Partial<UserPreferences>) => {
     try {
       console.log('Updating user preferences:', preferences);
-      
+
       // Make sure we have a user
       if (!user) {
         throw new Error('No user logged in');
       }
-      
+
       // Call the API endpoint
       const response = await api.patch(API_ENDPOINTS.AUTH.UPDATE_PREFERENCES, preferences);
-      
+
       if (response.data) {
         // Update the local user state with new preferences
         const updatedUser = {
@@ -844,43 +834,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           is_dark_mode: preferences.is_dark_mode !== undefined ? preferences.is_dark_mode : user.is_dark_mode,
           preferred_language: preferences.preferred_language !== undefined ? preferences.preferred_language : user.preferred_language
         };
-        
+
         setUser(updatedUser);
         storage.setUserData(updatedUser);
-        
+
         // Show success message
-        toast.success('Preferences updated successfully', {
-          duration: 2000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#10B981',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
-        
+        vaniToast.success('Preferences updated successfully', { duration: 2000 });
+
         // Return the updated data
         return response.data;
       }
     } catch (error: any) {
       console.error('Error updating preferences:', error);
-      
+
       const errorMessage = error.response?.data?.error || 'Failed to update preferences';
-      
-      toast.error(errorMessage, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.error(errorMessage, { duration: 3000 });
+
       throw error;
     }
   };
@@ -889,14 +859,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string, remember: boolean = false) => {
     setIsLoading(true);
     setError(null);
-    
+
     storage.setRememberMe(remember);
-    
+
     try {
       const { data } = await api.post(API_ENDPOINTS.AUTH.LOGIN, { email, password });
-      
+
       storage.setAuthToken(data.access_token, data.refresh_token);
-      
+
       const userData = {
         id: data.user.id,
         email: data.user.email,
@@ -908,48 +878,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         app_metadata: data.user.app_metadata,
         registration_status: data.user.registration_status || 'complete'
       };
-      
+
       setUser(userData);
       storage.setUserData(userData);
       storage.setUserId(data.user.id);
       setRegistrationStatus(userData.registration_status);
-      
+
       const multiTenantEnabled = data.user?.user_metadata?.multi_tenant_enabled !== false;
       setIsMultiTenantEnabled(multiTenantEnabled);
-      
+
       console.log('Login response - registration status:', userData.registration_status);
       console.log('Login response - multi-tenant enabled:', multiTenantEnabled);
       console.log('Login response - user is admin:', userData.is_admin);
       console.log('Login response - tenant count:', data.tenants?.length);
-      
+
       const activeSessionKey = `active_session_${data.user.id}`;
       localStorage.removeItem(activeSessionKey);
       sessionStorage.removeItem('session_conflict');
-      
+
       const sessionId = sessionService.initializeSession();
-      
+
       setTimeout(() => {
         localStorage.setItem(activeSessionKey, sessionId);
-        
+
         if (window.BroadcastChannel) {
           const channel = new BroadcastChannel('session_conflict');
-          channel.postMessage({ 
-            userId: data.user.id, 
+          channel.postMessage({
+            userId: data.user.id,
             sessionId,
             action: 'login'
           });
           channel.close();
         }
-        
+
         window.dispatchEvent(new StorageEvent('storage', {
           key: activeSessionKey,
           newValue: sessionId,
           url: window.location.href
         }));
       }, 500);
-      
+
       setTenants(data.tenants || []);
-      
+
       if (data.needs_workspace_setup || userData.registration_status === 'pending_workspace') {
         console.log('User needs to complete workspace setup');
         setIsAuthenticated(true);
@@ -957,7 +927,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         navigate('/create-tenant');
         return;
       }
-      
+
       if (!data.tenants || data.tenants.length === 0) {
         setIsAuthenticated(true);
         setIsLoading(false);
@@ -977,14 +947,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...data.tenants[0],
           is_admin: data.tenants[0].is_admin || false
         };
-        
+
         setCurrentTenantState(tenant);
         storage.setCurrentTenant(tenant);
         setIsAuthenticated(true);
-        
+
         // Check onboarding status before navigating
         const isOnboardingComplete = await checkOnboardingStatus();
-        
+
         if (!isOnboardingComplete) {
           console.log('User needs to complete onboarding');
           navigate('/onboarding');
@@ -992,51 +962,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           navigate('/dashboard');
         }
       }
-      
+
       resetSessionTimeout();
       resetIdleTimer();
-      
-      toast.success('Login successful!', {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+
+      vaniToast.success('Login successful!', { duration: 2000 });
     } catch (err: any) {
       if (err.message === 'Network Error' || err.code === 'ERR_NETWORK' || !navigator.onLine) {
         setError('No internet connection. Please check your network.');
-        toast.error('No internet connection', {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error('No internet connection', { duration: 3000 });
         return;
       }
-      
+
       const errorMessage = err.response?.data?.error || 'An error occurred during login';
       setError(errorMessage);
-      toast.error(errorMessage, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error(errorMessage, { duration: 2000 });
     } finally {
       setIsLoading(false);
     }
@@ -1046,7 +986,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (userData: RegisterFormData) => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const { data } = await api.post(API_ENDPOINTS.AUTH.REGISTER, {
         email: userData.email,
@@ -1057,58 +997,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         countryCode: userData.countryCode,
         mobileNumber: userData.mobileNumber
       });
-      
+
       storage.setRememberMe(true);
       storage.setAuthToken(data.access_token, data.refresh_token);
-      
+
       setUser(data.user);
       storage.setUserData(data.user);
       storage.setUserId(data.user.id);
       setRegistrationStatus('complete');
-      
+
       const activeSessionKey = `active_session_${data.user.id}`;
       localStorage.removeItem(activeSessionKey);
       sessionStorage.removeItem('session_conflict');
-      
+
       const sessionId = sessionService.initializeSession();
-      
+
       setTimeout(() => {
         localStorage.setItem(activeSessionKey, sessionId);
-        
+
         if (window.BroadcastChannel) {
           const channel = new BroadcastChannel('session_conflict');
-          channel.postMessage({ 
-            userId: data.user.id, 
+          channel.postMessage({
+            userId: data.user.id,
             sessionId,
             action: 'login'
           });
           channel.close();
         }
       }, 500);
-      
+
       if (data.tenant) {
         setTenants([data.tenant]);
         setCurrentTenantState(data.tenant);
         storage.setCurrentTenant(data.tenant);
       }
-      
+
       setIsAuthenticated(true);
-      
+
       resetSessionTimeout();
       resetIdleTimer();
-      
-      toast.success('Registration successful!', {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.success('Registration successful!', { duration: 2000 });
+
       if (!data.tenant) {
         navigate('/create-tenant');
       } else {
@@ -1133,56 +1063,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setGoogleAuthData = async (data: GoogleAuthData) => {
     try {
       const { user, tenants, access_token, refresh_token, isNewUser } = data;
-      
+
       if (access_token) {
         storage.setAuthToken(access_token, refresh_token);
       }
-      
+
       setUser(user);
       storage.setUserData(user);
       storage.setUserId(user.id);
       setRegistrationStatus(user.registration_status || 'complete');
-      
+
       const sessionId = sessionService.initializeSession();
-      
+
       const activeSessionKey = `active_session_${user.id}`;
       localStorage.setItem(activeSessionKey, sessionId);
-      
+
       setTenants(tenants || []);
       setHasGoogleAuth(true);
       setIsAuthenticated(true);
-      
+
       // For Google users, automatically set the current tenant
       if (tenants && tenants.length > 0) {
         let userTenant = tenants.find(t => t.is_owner);
-        
+
         if (!userTenant) {
           userTenant = tenants.find(t => t.is_default);
         }
-        
+
         if (!userTenant) {
           userTenant = tenants[0];
         }
-        
+
         if (!user.is_admin && userTenant.is_admin) {
           userTenant = tenants.find(t => !t.is_admin) || tenants[0];
         }
-        
+
         if (userTenant) {
           setCurrentTenantState(userTenant);
           storage.setCurrentTenant(userTenant);
         }
-        
+
         // Check onboarding status for Google users with tenants
         const isOnboardingComplete = await checkOnboardingStatus();
         if (!isOnboardingComplete && isNewUser) {
           navigate('/onboarding');
         }
       }
-      
+
       resetSessionTimeout();
       resetIdleTimer();
-      
+
     } catch (error: any) {
       console.error('Error setting Google auth data:', error);
       setError(error.message || 'Failed to process Google authentication');
@@ -1198,34 +1128,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const linkGoogleAccount = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      toast.error('Google account linking not implemented yet', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error('Google account linking not implemented yet', { duration: 3000 });
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to link Google account';
       setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+
+      vaniToast.error(errorMessage, { duration: 3000 });
     } finally {
       setIsLoading(false);
     }
@@ -1235,12 +1145,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const unlinkGoogleAccount = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       await api.post(API_ENDPOINTS.AUTH.GOOGLE_UNLINK);
-      
+
       setHasGoogleAuth(false);
-      
+
       if (user) {
         const updatedUser = {
           ...user,
@@ -1254,33 +1164,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(updatedUser);
         storage.setUserData(updatedUser);
       }
-      
-      toast.success('Google account unlinked successfully', {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+
+      vaniToast.success('Google account unlinked successfully', { duration: 2000 });
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to unlink Google account';
       setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+
+      vaniToast.error(errorMessage, { duration: 3000 });
     } finally {
       setIsLoading(false);
     }
@@ -1289,53 +1179,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout function
   const logout = async () => {
     setIsLoading(true);
-    
+
     clearAllTimeouts();
-    
+
     const userId = user?.id;
-    
+
     if (userId) {
       localStorage.removeItem(`active_session_${userId}`);
       sessionStorage.removeItem('session_conflict');
-      
+
       if (window.BroadcastChannel) {
         const channel = new BroadcastChannel('session_conflict');
-        channel.postMessage({ 
+        channel.postMessage({
           userId,
           action: 'logout',
-          clearAll: true 
+          clearAll: true
         });
         channel.close();
-        
+
         const lockChannel = new BroadcastChannel('lock_screen');
         lockChannel.postMessage({ action: 'logout' });
         lockChannel.close();
       }
     }
-    
+
     sessionService.clearSession();
-    
+
     const authToken = storage.getAuthToken();
     if (authToken && navigator.onLine) {
       try {
         await api.post(API_ENDPOINTS.AUTH.SIGNOUT);
-        
-        toast.success('Logged out successfully', {
-          duration: 2000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#10B981',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+
+        vaniToast.success('Logged out successfully', { duration: 2000 });
       } catch (err) {
         console.error('Error during logout:', err);
       }
     }
-    
+
     storage.clearAuth();
     setUser(null);
     setTenants([]);
@@ -1351,9 +1231,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsMultiTenantEnabled(true);
     setRegistrationStatus(null);
     setHasCompletedOnboarding(true);
-    
+
     setUserContext(null, null, isLive);
-    
+
     navigate('/login');
   };
 
@@ -1363,20 +1243,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...tenant,
       is_admin: tenant.is_admin || false
     };
-    
+
     setCurrentTenantState(normalizedTenant);
     storage.setCurrentTenant(normalizedTenant);
-    
-    setTenants(prevTenants => 
+
+    setTenants(prevTenants =>
       prevTenants.map(t => ({
         ...t,
         is_default: t.id === normalizedTenant.id
       }))
     );
-    
+
     // Check onboarding status when tenant changes
     checkOnboardingStatus();
-    
+
     setTimeout(() => {
       refreshData();
     }, 100);
@@ -1386,39 +1266,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetPassword = async (email: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       await api.post(API_ENDPOINTS.AUTH.RESET_PASSWORD, { email });
-      
-      toast.success('Password reset email sent!', {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.success('Password reset email sent!', { duration: 2000 });
+
       return true;
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || 'Failed to send reset email';
       setError(errorMessage);
-      
-      toast.error(errorMessage, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.error(errorMessage, { duration: 2000 });
+
       return false;
     } finally {
       setIsLoading(false);

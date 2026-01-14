@@ -4,15 +4,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { supabase } from '../../utils/supabase'; 
+import { vaniToast } from '../../components/common/toast';
+import { supabase } from '../../utils/supabase';
 // Import analytics
 import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analytics';
 
 const RegisterPage: React.FC = () => {
   // Check if Google OAuth is enabled - MOVED TO TOP
   const isGoogleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED!== 'false';
-  
+
   // Form state
   const [formData, setFormData] = useState({
     email: '',
@@ -22,20 +22,20 @@ const RegisterPage: React.FC = () => {
     lastName: '',
     workspaceName: ''
   });
-  
+
   // Password visibility states
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Validation state
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  
+
   // Auth context - Added hasCompletedOnboarding
   const { register, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
-  
+
   // Ref to prevent duplicate Google signup attempts
   const googleSignupInProgress = useRef(false);
 
@@ -70,29 +70,19 @@ const RegisterPage: React.FC = () => {
   // Show error toast when error is present
   useEffect(() => {
     if (error) {
-      toast.error(error, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error(error, { duration: 2000 });
     }
-  }, [error, colors.semantic.error]);
+  }, [error]);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
+
     // Convert workspace name to lowercase if that field is changed
     const newValue = name === 'workspaceName' ? value.toLowerCase() : value;
-    
+
     setFormData({ ...formData, [name]: newValue });
-    
+
     // Clear field-specific error when changed
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
@@ -110,23 +100,23 @@ const RegisterPage: React.FC = () => {
     if (googleSignupInProgress.current || isGoogleLoading) {
       return;
     }
-    
+
     googleSignupInProgress.current = true;
     setIsGoogleLoading(true);
-    
+
     // Track Google signup attempt
     analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_START, {
       method: 'google',
       source: 'register_form'
     });
-    
+
     try {
       // Store remember me preference as false for new users
       localStorage.setItem('remember_me', 'false');
-      
+
       // Store a flag to indicate this is a new signup (for onboarding)
       sessionStorage.setItem('is_new_signup', 'true');
-      
+
       // Use Supabase's built-in OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -138,12 +128,12 @@ const RegisterPage: React.FC = () => {
           }
         }
       });
-      
+
       if (error) throw error;
-      
+
       // Supabase will handle the redirect automatically
       // The callback page will determine if it's a new user and handle onboarding accordingly
-      
+
     } catch (error: any) {
       // Track Google signup failure
       analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_FAILURE, {
@@ -151,30 +141,20 @@ const RegisterPage: React.FC = () => {
         error_type: 'oauth_error',
         error_message: error.message
       });
-      
-      toast.error(error.message || 'Failed to initiate Google sign-up', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.error(error.message || 'Failed to initiate Google sign-up', { duration: 3000 });
+
       googleSignupInProgress.current = false;
       setIsGoogleLoading(false);
     }
-    // Note: We don't set isGoogleLoading to false in success case because 
+    // Note: We don't set isGoogleLoading to false in success case because
     // the page will redirect and we want to keep the loading state
   };
 
   // Toggle password visibility
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
-    
+
     // Track password visibility toggle
     analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, {
       menu_item: 'password_toggle',
@@ -185,7 +165,7 @@ const RegisterPage: React.FC = () => {
   // Toggle confirm password visibility
   const toggleConfirmPasswordVisibility = () => {
     setShowConfirmPassword(!showConfirmPassword);
-    
+
     // Track confirm password visibility toggle
     analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, {
       menu_item: 'confirm_password_toggle',
@@ -196,37 +176,37 @@ const RegisterPage: React.FC = () => {
   // Validate form
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    
+
     // Email validation
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     // Confirm password
     if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    
+
     // Name fields
     if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    
+
     // Workspace name
     if (!formData.workspaceName) {
       newErrors.workspaceName = 'Workspace name is required';
     } else if (!/^[a-z0-9\-_]+$/.test(formData.workspaceName)) {
       newErrors.workspaceName = 'Workspace name can only contain lowercase letters, numbers, hyphens, and underscores';
     }
-    
+
     setErrors(newErrors);
 
     // Track validation errors if there are any
@@ -237,25 +217,25 @@ const RegisterPage: React.FC = () => {
         error_fields: Object.keys(newErrors).join(',')
       });
     }
-    
+
     return Object.keys(newErrors).length === 0;
   };
 
   // Handle form submission - Updated to mark for onboarding
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     // Track registration attempt
     analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_STEP, {
       step_name: 'submission',
       success: true
     });
-    
+
     // Mark this as a new signup for onboarding
     sessionStorage.setItem('is_new_signup', 'true');
-    
+
     // Register the user
     try {
       await register({
@@ -265,12 +245,12 @@ const RegisterPage: React.FC = () => {
         lastName: formData.lastName,
         workspaceName: formData.workspaceName
       });
-      
+
       // Track successful registration
       analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_SUCCESS, {
         workspace_name: formData.workspaceName
       });
-      
+
       // The AuthContext will handle navigation to onboarding or dashboard
       // Success toast will be shown by AuthContext
     } catch (err) {
@@ -284,17 +264,17 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex transition-colors duration-200"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
       }}
     >
       {/* Background Pattern */}
-      <div 
-        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+      <div
+        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`}
         style={{
           backgroundImage: `
             linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
@@ -309,7 +289,7 @@ const RegisterPage: React.FC = () => {
         <div className="max-w-md">
           {/* Logo & Brand */}
           <div className="flex items-center space-x-3 mb-8">
-            <div 
+            <div
               className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
               style={{
                 background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -318,13 +298,13 @@ const RegisterPage: React.FC = () => {
               <Shield className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 
+              <h1
                 className="text-3xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 ContractNest
               </h1>
-              <p 
+              <p
                 className="text-sm transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -334,14 +314,14 @@ const RegisterPage: React.FC = () => {
           </div>
 
           {/* Main Headline */}
-          <h2 
+          <h2
             className="text-4xl font-bold mb-6 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Start Managing Contracts Like a Pro
           </h2>
 
-          <p 
+          <p
             className="text-xl mb-8 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -349,7 +329,7 @@ const RegisterPage: React.FC = () => {
           </p>
 
           {/* Free Trial Banner */}
-          <div 
+          <div
             className="rounded-2xl p-6 mb-8 border-2 transition-colors"
             style={{
               background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
@@ -357,18 +337,18 @@ const RegisterPage: React.FC = () => {
             }}
           >
             <div className="flex items-center space-x-3 mb-4">
-              <Gift 
+              <Gift
                 className="w-8 h-8 transition-colors"
                 style={{ color: colors.semantic.success }}
               />
               <div>
-                <h3 
+                <h3
                   className="text-lg font-bold transition-colors"
                   style={{ color: colors.semantic.success }}
                 >
                   Start Free Today!
                 </h3>
-                <p 
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.semantic.success }}
                 >
@@ -378,7 +358,7 @@ const RegisterPage: React.FC = () => {
             </div>
             <div className="space-y-2">
               {['No credit card required', 'Full feature access', 'Setup in under 5 minutes'].map((feature, index) => (
-                <div 
+                <div
                   key={index}
                   className="flex items-center space-x-2 text-sm transition-colors"
                   style={{ color: colors.semantic.success }}
@@ -398,23 +378,23 @@ const RegisterPage: React.FC = () => {
               { icon: Clock, title: 'Smart Reminders', desc: 'Never miss a renewal or important deadline again', color: colors.semantic.success }
             ].map((feature, index) => (
               <div key={index} className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center mt-1"
                   style={{ backgroundColor: `${feature.color}20` }}
                 >
-                  <feature.icon 
+                  <feature.icon
                     className="w-5 h-5"
                     style={{ color: feature.color }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-semibold transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     {feature.title}
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -426,7 +406,7 @@ const RegisterPage: React.FC = () => {
           </div>
 
           {/* Social Proof */}
-          <div 
+          <div
             className="mt-8 p-4 rounded-lg border transition-colors"
             style={{
               backgroundColor: `${colors.utility.secondaryBackground}50`,
@@ -437,14 +417,14 @@ const RegisterPage: React.FC = () => {
               {[...Array(5)].map((_, i) => (
                 <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
               ))}
-              <span 
+              <span
                 className="text-sm font-medium transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 5.0 from 500+ users
               </span>
             </div>
-            <p 
+            <p
               className="text-sm transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
@@ -460,7 +440,7 @@ const RegisterPage: React.FC = () => {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="flex items-center justify-center space-x-3 mb-4">
-              <div 
+              <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
                 style={{
                   background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -468,23 +448,23 @@ const RegisterPage: React.FC = () => {
               >
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <h1 
+              <h1
                 className="text-2xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 ContractNest
               </h1>
             </div>
-            
+
             {/* Mobile Free Trial Banner */}
-            <div 
+            <div
               className="rounded-lg p-4 mb-6 border transition-colors"
               style={{
                 background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
                 borderColor: `${colors.semantic.success}40`
               }}
             >
-              <div 
+              <div
                 className="flex items-center justify-center space-x-2 transition-colors"
                 style={{ color: colors.semantic.success }}
               >
@@ -495,7 +475,7 @@ const RegisterPage: React.FC = () => {
           </div>
 
           {/* Registration Card */}
-          <div 
+          <div
             className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
             style={{
               backgroundColor: `${colors.utility.secondaryBackground}70`,
@@ -503,13 +483,13 @@ const RegisterPage: React.FC = () => {
             }}
           >
             <div className="text-center mb-8">
-              <h2 
+              <h2
                 className="text-2xl font-bold mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Create Your Account
               </h2>
-              <p 
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -534,7 +514,7 @@ const RegisterPage: React.FC = () => {
                 >
                   {isGoogleLoading ? (
                     <>
-                      <div 
+                      <div
                         className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mr-2"
                         style={{ borderColor: colors.utility.secondaryText }}
                       />
@@ -560,13 +540,13 @@ const RegisterPage: React.FC = () => {
               <div className="mb-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div 
+                    <div
                       className="w-full border-t transition-colors"
                       style={{ borderColor: `${colors.utility.secondaryText}40` }}
                     />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span 
+                    <span
                       className="px-2 transition-colors"
                       style={{
                         backgroundColor: colors.utility.secondaryBackground,
@@ -588,15 +568,15 @@ const RegisterPage: React.FC = () => {
                   { name: 'lastName', placeholder: 'Doe', label: 'Last Name' }
                 ].map((field) => (
                   <div key={field.name}>
-                    <label 
-                      htmlFor={field.name} 
+                    <label
+                      htmlFor={field.name}
                       className="block text-sm font-medium mb-2 transition-colors"
                       style={{ color: colors.utility.primaryText }}
                     >
                       {field.label}
                     </label>
                     <div className="relative">
-                      <User 
+                      <User
                         className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
                         style={{ color: colors.utility.secondaryText }}
                       />
@@ -626,18 +606,18 @@ const RegisterPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-              
+
               {/* Email */}
               <div>
-                <label 
-                  htmlFor="email" 
+                <label
+                  htmlFor="email"
                   className="block text-sm font-medium mb-2 transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail 
+                  <Mail
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   />
@@ -666,18 +646,18 @@ const RegisterPage: React.FC = () => {
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.email}</p>
                 )}
               </div>
-              
+
               {/* Workspace Name */}
               <div>
-                <label 
-                  htmlFor="workspaceName" 
+                <label
+                  htmlFor="workspaceName"
                   className="block text-sm font-medium mb-2 transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Workspace Name
                 </label>
                 <div className="relative">
-                  <Building 
+                  <Building
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   />
@@ -704,14 +684,14 @@ const RegisterPage: React.FC = () => {
                 {errors.workspaceName && (
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.workspaceName}</p>
                 )}
-                <p 
+                <p
                   className="mt-1 text-xs transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Use only letters, numbers, hyphens, and underscores (3-50 characters)
                 </p>
               </div>
-              
+
               {/* Password fields in two columns */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
@@ -719,8 +699,8 @@ const RegisterPage: React.FC = () => {
                   { name: 'confirmPassword', show: showConfirmPassword, toggle: toggleConfirmPasswordVisibility, placeholder: 'Confirm password', label: 'Confirm Password' }
                 ].map((field) => (
                   <div key={field.name}>
-                    <label 
-                      htmlFor={field.name} 
+                    <label
+                      htmlFor={field.name}
                       className="block text-sm font-medium mb-2 transition-colors"
                       style={{ color: colors.utility.primaryText }}
                     >
@@ -789,17 +769,17 @@ const RegisterPage: React.FC = () => {
                 </button>
               </div>
             </form>
-            
+
             {/* Terms and Sign In Link */}
             <div className="mt-6 space-y-4">
               <div className="text-center">
-                <p 
+                <p
                   className="text-xs transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   By signing up, you agree to our{' '}
-                  <Link 
-                    to="/terms" 
+                  <Link
+                    to="/terms"
                     className="transition-colors hover:opacity-80"
                     style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, { menu_item: 'terms_link' })}
@@ -807,8 +787,8 @@ const RegisterPage: React.FC = () => {
                     Terms of Service
                   </Link>{' '}
                   and{' '}
-                  <Link 
-                    to="/privacy" 
+                  <Link
+                    to="/privacy"
                     className="transition-colors hover:opacity-80"
                     style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, { menu_item: 'privacy_link' })}
@@ -817,15 +797,15 @@ const RegisterPage: React.FC = () => {
                   </Link>
                 </p>
               </div>
-              
+
               <div className="text-center">
-                <p 
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Already have an account?{' '}
-                  <Link 
-                    to="/login" 
+                  <Link
+                    to="/login"
                     className="font-medium transition-colors hover:opacity-80"
                     style={{ color: colors.brand.primary }}
                     onClick={() => analyticsService.trackEvent(AUTH_EVENTS.LOGIN, { source: 'register_page' })}
@@ -839,7 +819,7 @@ const RegisterPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p 
+            <p
               className="text-xs flex items-center justify-center space-x-1 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >

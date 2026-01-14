@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Mail, ArrowLeft, Shield, Check, AlertCircle, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { vaniToast } from '../../components/common/toast';
 import { supabase } from '../../utils/supabase';
 import { analyticsService, AUTH_EVENTS } from '../../services/analytics';
 
@@ -14,7 +14,7 @@ const ForgotPasswordPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [userAuthType, setUserAuthType] = useState<'email' | 'google' | 'both' | 'unknown'>('unknown');
   const [isCheckingAuth, setIsCheckingAuth] = useState(false);
-  
+
   const { resetPassword, isAuthenticated, error, clearError } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
@@ -103,34 +103,14 @@ const ForgotPasswordPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!email) {
-      toast.error('Email is required', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error('Email is required', { duration: 3000 });
       return;
     }
 
     if (!validateEmail(email)) {
-      toast.error('Please enter a valid email address', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error('Please enter a valid email address', { duration: 3000 });
       return;
     }
 
@@ -146,7 +126,7 @@ const ForgotPasswordPage: React.FC = () => {
       // Always call resetPassword (for security - Option A approach)
       // This will always show success message regardless of whether email exists
       await resetPassword(email.toLowerCase());
-      
+
       setIsSubmitted(true);
 
       // Track successful submission
@@ -180,7 +160,7 @@ const ForgotPasswordPage: React.FC = () => {
   const renderAuthTypeMessage = () => {
     if (isCheckingAuth) {
       return (
-        <div 
+        <div
           className="flex items-center space-x-2 text-sm transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
@@ -192,7 +172,7 @@ const ForgotPasswordPage: React.FC = () => {
 
     if (userAuthType === 'google') {
       return (
-        <div 
+        <div
           className="p-3 rounded-lg border transition-colors"
           style={{
             backgroundColor: `${colors.brand.primary}10`,
@@ -200,18 +180,18 @@ const ForgotPasswordPage: React.FC = () => {
           }}
         >
           <div className="flex items-start space-x-2">
-            <AlertCircle 
+            <AlertCircle
               className="w-4 h-4 mt-0.5 flex-shrink-0"
               style={{ color: colors.brand.primary }}
             />
             <div className="text-sm">
-              <p 
+              <p
                 className="font-medium transition-colors"
                 style={{ color: colors.brand.primary }}
               >
                 This account uses Google authentication
               </p>
-              <p 
+              <p
                 className="mt-1 transition-colors"
                 style={{ color: colors.brand.primary }}
               >
@@ -225,7 +205,7 @@ const ForgotPasswordPage: React.FC = () => {
 
     if (userAuthType === 'both') {
       return (
-        <div 
+        <div
           className="p-3 rounded-lg border transition-colors"
           style={{
             backgroundColor: `${colors.semantic.success}10`,
@@ -233,18 +213,18 @@ const ForgotPasswordPage: React.FC = () => {
           }}
         >
           <div className="flex items-start space-x-2">
-            <Check 
+            <Check
               className="w-4 h-4 mt-0.5 flex-shrink-0"
               style={{ color: colors.semantic.success }}
             />
             <div className="text-sm">
-              <p 
+              <p
                 className="font-medium transition-colors"
                 style={{ color: colors.semantic.success }}
               >
                 Password reset available
               </p>
-              <p 
+              <p
                 className="mt-1 transition-colors"
                 style={{ color: colors.semantic.success }}
               >
@@ -261,17 +241,17 @@ const ForgotPasswordPage: React.FC = () => {
 
   if (isSubmitted) {
     return (
-      <div 
+      <div
         className="min-h-screen flex items-center justify-center p-4 transition-colors duration-200"
         style={{
-          background: isDarkMode 
+          background: isDarkMode
             ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
             : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
         }}
       >
         {/* Background Pattern */}
-        <div 
-          className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+        <div
+          className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`}
           style={{
             backgroundImage: `
               linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
@@ -283,7 +263,7 @@ const ForgotPasswordPage: React.FC = () => {
 
         <div className="w-full max-w-md relative z-10">
           {/* Success Card */}
-          <div 
+          <div
             className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
             style={{
               backgroundColor: `${colors.utility.secondaryBackground}70`,
@@ -292,7 +272,7 @@ const ForgotPasswordPage: React.FC = () => {
           >
             {/* Logo */}
             <div className="flex items-center justify-center space-x-3 mb-8">
-              <div 
+              <div
                 className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
                 style={{
                   background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -300,7 +280,7 @@ const ForgotPasswordPage: React.FC = () => {
               >
                 <Shield className="w-7 h-7 text-white" />
               </div>
-              <h1 
+              <h1
                 className="text-2xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
@@ -310,11 +290,11 @@ const ForgotPasswordPage: React.FC = () => {
 
             {/* Success Icon */}
             <div className="flex justify-center mb-6">
-              <div 
+              <div
                 className="w-20 h-20 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: `${colors.semantic.success}20` }}
               >
-                <Check 
+                <Check
                   className="w-10 h-10"
                   style={{ color: colors.semantic.success }}
                 />
@@ -322,34 +302,34 @@ const ForgotPasswordPage: React.FC = () => {
             </div>
 
             <div className="text-center space-y-4">
-              <h2 
+              <h2
                 className="text-2xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Check Your Email
               </h2>
-              
-              <p 
+
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 If an account exists with <strong>{email}</strong>, you'll receive password reset instructions shortly.
               </p>
 
-              <div 
+              <div
                 className="p-4 rounded-lg border transition-colors"
                 style={{
                   backgroundColor: `${colors.brand.primary}10`,
                   borderColor: `${colors.brand.primary}40`
                 }}
               >
-                <p 
+                <p
                   className="text-sm font-medium"
                   style={{ color: colors.brand.primary }}
                 >
                   Didn't receive the email?
                 </p>
-                <ul 
+                <ul
                   className="text-sm mt-2 space-y-1"
                   style={{ color: colors.brand.primary }}
                 >
@@ -393,7 +373,7 @@ const ForgotPasswordPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p 
+            <p
               className="text-xs flex items-center justify-center space-x-1 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
@@ -407,17 +387,17 @@ const ForgotPasswordPage: React.FC = () => {
   }
 
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-center p-4 transition-colors duration-200"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
       }}
     >
       {/* Background Pattern */}
-      <div 
-        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+      <div
+        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`}
         style={{
           backgroundImage: `
             linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
@@ -428,14 +408,14 @@ const ForgotPasswordPage: React.FC = () => {
       />
 
       <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative z-10">
-        
+
         {/* Left Side - Branding & Support Info */}
         <div className="hidden lg:block space-y-8">
           {/* Logo & Brand */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <Link to="/" className="flex items-center space-x-3">
-                <div 
+                <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
                   style={{
                     background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -444,13 +424,13 @@ const ForgotPasswordPage: React.FC = () => {
                   <Shield className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h1 
+                  <h1
                     className="text-3xl font-bold transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     ContractNest
                   </h1>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -463,32 +443,32 @@ const ForgotPasswordPage: React.FC = () => {
 
           {/* Support Message */}
           <div className="space-y-6">
-            <h2 
+            <h2
               className="text-2xl font-semibold transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               Don't worry, we've got you covered
             </h2>
-            
+
             <div className="space-y-4">
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.brand.primary}20` }}
                 >
-                  <Mail 
+                  <Mail
                     className="w-3 h-3"
                     style={{ color: colors.brand.primary }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Quick & Secure
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -496,25 +476,25 @@ const ForgotPasswordPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.semantic.success}20` }}
                 >
-                  <Check 
+                  <Check
                     className="w-3 h-3"
                     style={{ color: colors.semantic.success }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Email Verification
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -522,25 +502,25 @@ const ForgotPasswordPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.brand.tertiary}20` }}
                 >
-                  <Shield 
+                  <Shield
                     className="w-3 h-3"
                     style={{ color: colors.brand.tertiary }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Secure Process
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -551,18 +531,18 @@ const ForgotPasswordPage: React.FC = () => {
             </div>
 
             {/* Help Note */}
-            <div 
+            <div
               className="rounded-lg p-4 border transition-colors"
               style={{
                 backgroundColor: `${colors.utility.secondaryBackground}50`,
                 borderColor: `${colors.utility.primaryText}20`
               }}
             >
-              <p 
+              <p
                 className="text-sm transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                <strong>Need help?</strong> If you're having trouble accessing your account, 
+                <strong>Need help?</strong> If you're having trouble accessing your account,
                 you can contact our support team for assistance.
               </p>
             </div>
@@ -574,7 +554,7 @@ const ForgotPasswordPage: React.FC = () => {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <Link to="/" className="flex items-center justify-center space-x-3 mb-2">
-              <div 
+              <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
                 style={{
                   background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -582,7 +562,7 @@ const ForgotPasswordPage: React.FC = () => {
               >
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <h1 
+              <h1
                 className="text-2xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
@@ -592,7 +572,7 @@ const ForgotPasswordPage: React.FC = () => {
           </div>
 
           {/* Reset Form Card */}
-          <div 
+          <div
             className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
             style={{
               backgroundColor: `${colors.utility.secondaryBackground}70`,
@@ -600,13 +580,13 @@ const ForgotPasswordPage: React.FC = () => {
             }}
           >
             <div className="text-center mb-8">
-              <h2 
+              <h2
                 className="text-2xl font-bold mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Reset Your Password
               </h2>
-              <p 
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -617,15 +597,15 @@ const ForgotPasswordPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div>
-                <label 
-                  htmlFor="email" 
+                <label
+                  htmlFor="email"
                   className="block text-sm font-medium mb-2 transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail 
+                  <Mail
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   />
@@ -648,7 +628,7 @@ const ForgotPasswordPage: React.FC = () => {
                     disabled={isLoading}
                   />
                 </div>
-                
+
                 {/* Auth type message */}
                 {email && validateEmail(email) && (
                   <div className="mt-3">
@@ -697,7 +677,7 @@ const ForgotPasswordPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p 
+            <p
               className="text-xs flex items-center justify-center space-x-1 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >

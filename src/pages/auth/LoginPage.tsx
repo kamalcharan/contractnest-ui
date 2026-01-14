@@ -4,8 +4,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { supabase } from '../../utils/supabase'; 
+import { vaniToast } from '../../components/common/toast';
+import { supabase } from '../../utils/supabase';
 // Import analytics
 import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analytics';
 
@@ -20,7 +20,7 @@ const LoginPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // Ref to prevent duplicate Google login attempts
   const googleLoginInProgress = useRef(false);
 
@@ -44,7 +44,7 @@ const LoginPage: React.FC = () => {
       if (isAuthenticated) {
         // Check if user has completed onboarding
         const isOnboardingComplete = await checkOnboardingStatus();
-        
+
         if (!isOnboardingComplete) {
           navigate('/onboarding', { replace: true });
         } else {
@@ -52,7 +52,7 @@ const LoginPage: React.FC = () => {
         }
       }
     };
-    
+
     handleAuthRedirect();
   }, [isAuthenticated, checkOnboardingStatus, navigate]);
 
@@ -60,38 +60,18 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     if (location.state?.message) {
       setMessage(location.state.message);
-      toast.success(location.state.message, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.success,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.success(location.state.message, { duration: 2000 });
       // Clear the state to prevent showing the message again on refresh
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.state, navigate, location.pathname, colors.semantic.success]);
+  }, [location.state, navigate, location.pathname]);
 
   // Show error toast when error is present
   useEffect(() => {
     if (error) {
-      toast.error(error, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
+      vaniToast.error(error, { duration: 2000 });
     }
-  }, [error, colors.semantic.error]);
+  }, [error]);
 
   // Clear any errors when form changes
   useEffect(() => {
@@ -100,13 +80,13 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Track login attempt
     analyticsService.trackEvent(AUTH_EVENTS.LOGIN, {
       method: 'email',
       source: 'login_form'
     });
-    
+
     try {
       await login(email, password, false); // Remember me removed - always false
       // Track successful login
@@ -131,20 +111,20 @@ const LoginPage: React.FC = () => {
     if (googleLoginInProgress.current || isGoogleLoading) {
       return;
     }
-    
+
     googleLoginInProgress.current = true;
     setIsGoogleLoading(true);
-    
+
     // Track Google login attempt
     analyticsService.trackEvent(AUTH_EVENTS.LOGIN, {
       method: 'google',
       source: 'login_form'
     });
-    
+
     try {
       // Store remember me preference before OAuth redirect (always false now)
       localStorage.setItem('remember_me', 'false');
-      
+
       // Use Supabase's built-in OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -156,12 +136,12 @@ const LoginPage: React.FC = () => {
           }
         }
       });
-      
+
       if (error) throw error;
-      
+
       // Supabase will handle the redirect automatically
       // The callback page will handle onboarding check for Google users
-      
+
     } catch (error: any) {
       // Track Google login failure
       analyticsService.trackEvent(AUTH_EVENTS.LOGIN_FAILURE, {
@@ -169,29 +149,19 @@ const LoginPage: React.FC = () => {
         error_type: 'oauth_error',
         error_message: error.message
       });
-      
-      toast.error(error.message || 'Failed to initiate Google login', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.error(error.message || 'Failed to initiate Google login', { duration: 3000 });
+
       googleLoginInProgress.current = false;
       setIsGoogleLoading(false);
     }
-    // Note: We don't set isGoogleLoading to false in success case because 
+    // Note: We don't set isGoogleLoading to false in success case because
     // the page will redirect and we want to keep the loading state
   };
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
-    
+
     // Track password visibility toggle
     analyticsService.trackEvent(UI_EVENTS.MENU_CLICK, {
       menu_item: 'password_toggle',
@@ -208,17 +178,17 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-center p-4 transition-colors duration-200"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}20)`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground}, ${colors.brand.primary}10)`
       }}
     >
       {/* Background Pattern */}
-      <div 
-        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`} 
+      <div
+        className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-10' : 'opacity-5'}`}
         style={{
           backgroundImage: `
             linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} 1px, transparent 1px),
@@ -227,16 +197,16 @@ const LoginPage: React.FC = () => {
           backgroundSize: '20px 20px'
         }}
       />
-      
+
       <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 lg:gap-12 items-center relative z-10">
-        
+
         {/* Left Side - Branding & Features */}
         <div className="hidden lg:block space-y-8">
           {/* Logo & Brand - UPDATED: Link to landing page */}
           <div className="space-y-4">
             <div className="flex items-center space-x-3">
               <Link to="/" className="flex items-center space-x-3">
-                <div 
+                <div
                   className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
                   style={{
                     background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -245,13 +215,13 @@ const LoginPage: React.FC = () => {
                   <Shield className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h1 
+                  <h1
                     className="text-3xl font-bold transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     ContractNest
                   </h1>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -264,32 +234,32 @@ const LoginPage: React.FC = () => {
 
           {/* Value Proposition */}
           <div className="space-y-6">
-            <h2 
+            <h2
               className="text-2xl font-semibold transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               Welcome back to your contract hub
             </h2>
-            
+
             <div className="space-y-4">
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.semantic.success}20` }}
                 >
-                  <div 
+                  <div
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: colors.semantic.success }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Track All Contracts
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -297,25 +267,25 @@ const LoginPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.brand.primary}20` }}
                 >
-                  <div 
+                  <div
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: colors.brand.primary }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Never Miss Renewals
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -323,25 +293,25 @@ const LoginPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
                   style={{ backgroundColor: `${colors.brand.tertiary}20` }}
                 >
-                  <div 
+                  <div
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: colors.brand.tertiary }}
                   />
                 </div>
                 <div>
-                  <h3 
+                  <h3
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Team Collaboration
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -352,14 +322,14 @@ const LoginPage: React.FC = () => {
             </div>
 
             {/* Free Contracts Banner */}
-            <div 
+            <div
               className="rounded-lg p-4 border transition-colors"
               style={{
                 background: `linear-gradient(to right, ${colors.semantic.success}10, ${colors.semantic.success}05)`,
                 borderColor: `${colors.semantic.success}40`
               }}
             >
-              <div 
+              <div
                 className="flex items-center space-x-2 transition-colors"
                 style={{ color: colors.semantic.success }}
               >
@@ -375,7 +345,7 @@ const LoginPage: React.FC = () => {
           {/* Mobile Logo - UPDATED: Link to landing page */}
           <div className="lg:hidden text-center mb-8">
             <Link to="/" className="flex items-center justify-center space-x-3 mb-2">
-              <div 
+              <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
                 style={{
                   background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -383,14 +353,14 @@ const LoginPage: React.FC = () => {
               >
                 <Shield className="w-6 h-6 text-white" />
               </div>
-              <h1 
+              <h1
                 className="text-2xl font-bold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 ContractNest
               </h1>
             </Link>
-            <p 
+            <p
               className="text-sm transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
@@ -399,7 +369,7 @@ const LoginPage: React.FC = () => {
           </div>
 
           {/* Login Card */}
-          <div 
+          <div
             className="backdrop-blur-xl border rounded-2xl shadow-xl p-8 transition-colors"
             style={{
               backgroundColor: `${colors.utility.secondaryBackground}70`,
@@ -407,13 +377,13 @@ const LoginPage: React.FC = () => {
             }}
           >
             <div className="text-center mb-8">
-              <h2 
+              <h2
                 className="text-2xl font-bold mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Welcome Back
               </h2>
-              <p 
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -423,14 +393,14 @@ const LoginPage: React.FC = () => {
 
             {/* Success Message */}
             {message && (
-              <div 
+              <div
                 className="mb-6 p-3 border rounded-lg"
                 style={{
                   backgroundColor: `${colors.semantic.success}10`,
                   borderColor: `${colors.semantic.success}40`
                 }}
               >
-                <p 
+                <p
                   className="text-sm"
                   style={{ color: colors.semantic.success }}
                 >
@@ -442,15 +412,15 @@ const LoginPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div>
-                <label 
-                  htmlFor="email" 
+                <label
+                  htmlFor="email"
                   className="block text-sm font-medium mb-2 transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail 
+                  <Mail
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   />
@@ -477,15 +447,15 @@ const LoginPage: React.FC = () => {
 
               {/* Password Field */}
               <div>
-                <label 
-                  htmlFor="password" 
+                <label
+                  htmlFor="password"
                   className="block text-sm font-medium mb-2 transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Password
                 </label>
                 <div className="relative">
-                  <Lock 
+                  <Lock
                     className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   />
@@ -560,13 +530,13 @@ const LoginPage: React.FC = () => {
               <div className="my-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <div 
+                    <div
                       className="w-full border-t transition-colors"
                       style={{ borderColor: colors.utility.secondaryText + '40' }}
                     />
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span 
+                    <span
                       className="px-2 transition-colors"
                       style={{
                         backgroundColor: colors.utility.secondaryBackground,
@@ -596,7 +566,7 @@ const LoginPage: React.FC = () => {
               >
                 {isGoogleLoading ? (
                   <>
-                    <div 
+                    <div
                       className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin mr-2"
                       style={{ borderColor: colors.utility.secondaryText }}
                     />
@@ -618,13 +588,13 @@ const LoginPage: React.FC = () => {
 
             {/* Sign Up Link */}
             <div className="mt-6 text-center">
-              <p 
+              <p
                 className="text-sm transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 Don't have an account?{' '}
-                <Link 
-                  to="/register" 
+                <Link
+                  to="/register"
                   className="font-medium transition-colors hover:opacity-80"
                   style={{ color: colors.brand.primary }}
                   onClick={() => analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_START, { source: 'login_page' })}
@@ -637,7 +607,7 @@ const LoginPage: React.FC = () => {
 
           {/* Security Note */}
           <div className="mt-6 text-center">
-            <p 
+            <p
               className="text-xs flex items-center justify-center space-x-1 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >

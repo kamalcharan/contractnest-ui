@@ -18,6 +18,7 @@ import { MiscPageWrapper } from './components/misc';
 import SessionConflictNotification from './components/SessionConflictNotification';
 import EnvironmentSwitchModal from './components/EnvironmentSwitchModal';
 import LockScreen from './components/auth/LockScreen';
+import BrowserWarningBanner from './components/common/BrowserWarningBanner';
 import LandingPage from './pages/public/LandingPage';
 import PlaygroundPage from './pages/public/PlaygroundPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
@@ -109,7 +110,8 @@ import {
   NoInternetPage,
   ComingSoonPage,
   ErrorPage,
-  ApiServerDownPage
+  ApiServerDownPage,
+  BrowserNotSupportedPage
 } from './pages/misc';
 import TaxSettingsPage from './pages/settings/TaxSettings';
 import SequencingSettingsPage from './pages/settings/sequencing';
@@ -135,11 +137,10 @@ import ContractsPage from './pages/service-contracts/contracts';
 // Contract Builder
 import ContractCreatePage from './pages/contracts/create';
 
-// Contract Preview, PDF View, Ops Cockpit, Invite Sellers, Reports
+// Contract Preview, PDF View, Ops Cockpit, Invite Sellers
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
-import ReportsPage from './pages/ops/reports';
 import InviteSellersPage from './pages/contracts/invite';
 
 // Team Management pages (using existing components)
@@ -278,6 +279,8 @@ const AppContent: React.FC = () => {
       <NetworkStatusHandler />
       <SessionConflictNotification />
       <EnvironmentSwitchModal />
+      {/* Browser warning banner - shows only for authenticated users on unsupported browsers */}
+      <BrowserWarningBanner />
       {/* Replaced react-hot-toast Toaster with VaNiToastProviderWithGlobal */}
       {/* <Toaster position="bottom-right" /> */}
       <MiscPageWrapper>
@@ -290,6 +293,7 @@ const AppContent: React.FC = () => {
           <Route path="/misc/error" element={<ErrorPage />} />
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
           <Route path="/misc/api-server-down" element={<ApiServerDownPage />} />
+          <Route path="/misc/browser-not-supported" element={<BrowserNotSupportedPage />} />
 
           {/* Root Route - Smart Landing/Dashboard */}
           <Route path="/" element={<SmartHomePage />} />
@@ -465,18 +469,6 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
-          </Route>
-
-          {/* NEW: Reports Route */}
-          <Route
-            path="/ops/reports"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<ReportsPage />} />
           </Route>
 
           {/* NEW: Invite Sellers Route */}
@@ -669,7 +661,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-// UPDATED: App component with VaNiToastProviderWithGlobal
+// UPDATED: App component with VaNiToastProviderWithGlobal - CHANGED position to top-right
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
@@ -680,8 +672,8 @@ const App: React.FC = () => {
 
                 <QueryProvider>
                   <MasterDataProvider>
-                    {/* VaNiToast Provider wrapping the entire app */}
-                    <VaNiToastProviderWithGlobal position="bottom-right" maxToasts={5}>
+                    {/* VaNiToast Provider wrapping the entire app - POSITION CHANGED TO TOP-RIGHT */}
+                    <VaNiToastProviderWithGlobal position="top-right" maxToasts={5}>
                       <AppContent />
                     </VaNiToastProviderWithGlobal>
                   </MasterDataProvider>

@@ -6,4 +6,5 @@ export { default as MaintenancePage } from './MaintenancePage';
 export { default as NotFoundPage } from './NotFoundPage';
 export { default as ComingSoonPage } from './ComingSoonPage';
 export { default as SessionConflictPage } from './SessionConflictPage';
-export { default as ApiServerDownPage } from './ApiServerDownPage';  // NEW
+export { default as ApiServerDownPage } from './ApiServerDownPage';
+export { default as BrowserNotSupportedPage } from './BrowserNotSupportedPage';
