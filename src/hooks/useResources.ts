@@ -1,9 +1,10 @@
 // src/hooks/useResources.ts
-// CLEAN VERSION - Fixed Response Parsing for New Edge Function Format
+// SCALE-OPTIMIZED VERSION - vaniToast + idempotency headers
+// Updated: January 2025
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS, buildResourcesListURL } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
@@ -90,36 +91,40 @@ export interface UseResourcesOptions {
   onError?: (error: Error) => void;
 }
 
-// Parse edge function response - FIXED VERSION
+// Generate idempotency key
+const generateIdempotencyKey = (): string => {
+  return `resources-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+};
+
+// Parse edge function response
 const parseResponse = (response: any) => {
-  console.log('🔍 PARSING RESPONSE:', response);
-  
+  console.log('PARSING RESPONSE:', response);
+
   // Handle new edge function format: { success: true, data: [...] }
   if (response?.data?.success === true && response?.data?.data) {
-    console.log('✅ NEW FORMAT - extracting data:', response.data.data);
+    console.log('NEW FORMAT - extracting data:', response.data.data);
     return response.data.data;
   }
-  
+
   // Handle direct array response
   if (response?.data && Array.isArray(response.data)) {
-    console.log('✅ DIRECT ARRAY - using data:', response.data);
+    console.log('DIRECT ARRAY - using data:', response.data);
     return response.data;
   }
-  
+
   // Handle direct format (fallback)
   if (response?.data) {
-    console.log('✅ DIRECT OBJECT - using data:', response.data);
+    console.log('DIRECT OBJECT - using data:', response.data);
     return response.data;
   }
-  
-  console.log('❌ UNKNOWN FORMAT - returning empty array');
+
+  console.log('UNKNOWN FORMAT - returning empty array');
   return [];
 };
 
 // Resource Types Hook
 export const useResourceTypes = (options: UseResourcesOptions = {}) => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [data, setData] = useState<ResourceType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -156,21 +161,21 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
       setLoading(true);
       setError(null);
 
-      console.log('🚀 Fetching resource types...');
+      console.log('Fetching resource types...');
       const response = await api.get(API_ENDPOINTS.RESOURCES.RESOURCE_TYPES);
-      
-      console.log('🔍 RESOURCE TYPES API RESPONSE:', response);
-      
+
+      console.log('RESOURCE TYPES API RESPONSE:', response);
+
       const resourceTypes = parseResponse(response);
-      
-      console.log('🔍 PARSED RESOURCE TYPES:', resourceTypes);
+
+      console.log('PARSED RESOURCE TYPES:', resourceTypes);
 
       // Ensure we have an array
       if (!Array.isArray(resourceTypes)) {
         throw new Error('Resource types response is not an array');
       }
 
-      console.log('✅ Resource types fetched:', resourceTypes.length);
+      console.log('Resource types fetched:', resourceTypes.length);
 
       // Update cache
       resourcesCache.set(cacheKey, {
@@ -184,22 +189,22 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
         setLoading(false);
         onSuccess?.(resourceTypes);
       }
-      
+
       return resourceTypes;
     } catch (err) {
       const error = err as Error;
-      
-      console.error('❌ Error fetching resource types:', error);
-      
+
+      console.error('Error fetching resource types:', error);
+
       if (isMountedRef.current) {
         setError(error);
         setLoading(false);
         onError?.(error);
-        
-        toast({
-          variant: "destructive",
-          title: "Error loading resource types",
-          description: error.message
+
+        // UPDATED: Using vaniToast
+        vaniToast.error('Error Loading Resource Types', {
+          message: error.message,
+          duration: 4000
         });
       }
 
@@ -207,10 +212,10 @@ export const useResourceTypes = (options: UseResourcesOptions = {}) => {
         tags: { component: 'useResourceTypes', action: 'fetchResourceTypes' },
         extra: { tenantId: currentTenant?.id }
       });
-      
+
       return [];
     }
-  }, [currentTenant?.id, cacheKey, cacheTime, enabled, toast, onSuccess, onError]);
+  }, [currentTenant?.id, cacheKey, cacheTime, enabled, onSuccess, onError]);
 
   // Track mounted state
   useEffect(() => {
@@ -246,7 +251,6 @@ export const useResources = (
   options: UseResourcesOptions = {}
 ) => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [data, setData] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -283,19 +287,19 @@ export const useResources = (
       setLoading(true);
       setError(null);
 
-      console.log('🚀 Fetching resources for type:', resourceTypeId);
+      console.log('Fetching resources for type:', resourceTypeId);
 
-      // PRODUCTION FIX: Use proper URL builder with filters
+      // Use proper URL builder with filters
       const url = buildResourcesListURL({
         resourceTypeId: resourceTypeId || undefined
       });
 
-      console.log('📍 Fetching from URL:', url);
+      console.log('Fetching from URL:', url);
 
       const response = await api.get(url);
-      
-      console.log('🔍 RESOURCES API RESPONSE:', response);
-      
+
+      console.log('RESOURCES API RESPONSE:', response);
+
       const resources = parseResponse(response);
 
       // Ensure we have an array
@@ -303,7 +307,7 @@ export const useResources = (
         throw new Error('Resources response is not an array');
       }
 
-      console.log('✅ Resources fetched:', resources.length);
+      console.log('Resources fetched:', resources.length);
 
       // Update cache
       resourcesCache.set(cacheKey, {
@@ -317,14 +321,14 @@ export const useResources = (
         setLoading(false);
         onSuccess?.(resources);
       }
-      
+
       return resources;
     } catch (err) {
       const error = err as any;
 
-      console.error('❌ Error fetching resources:', error);
-      console.error('❌ Error response:', error.response?.data);
-      console.error('❌ Error status:', error.response?.status);
+      console.error('Error fetching resources:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
 
       const errorMessage = error.response?.data?.error
         || error.response?.data?.message
@@ -336,10 +340,10 @@ export const useResources = (
         setLoading(false);
         onError?.(error);
 
-        toast({
-          variant: "destructive",
-          title: "Error loading resources",
-          description: `${errorMessage}${error.response?.status ? ` (${error.response.status})` : ''}`
+        // UPDATED: Using vaniToast
+        vaniToast.error('Error Loading Resources', {
+          message: `${errorMessage}${error.response?.status ? ` (${error.response.status})` : ''}`,
+          duration: 4000
         });
       }
 
@@ -355,7 +359,7 @@ export const useResources = (
 
       return [];
     }
-  }, [currentTenant?.id, resourceTypeId, cacheKey, cacheTime, enabled, toast, onSuccess, onError]);
+  }, [currentTenant?.id, resourceTypeId, cacheKey, cacheTime, enabled, onSuccess, onError]);
 
   // Track mounted state
   useEffect(() => {
@@ -385,10 +389,9 @@ export const useResources = (
   };
 };
 
-// Create Resource
+// Create Resource - UPDATED: With idempotency header
 export const useCreateResource = () => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const createResource = useCallback(async (data: CreateResourceFormData) => {
@@ -398,53 +401,60 @@ export const useCreateResource = () => {
 
     setLoading(true);
     try {
-      console.log('🚀 Creating resource:', data);
-      
+      console.log('Creating resource:', data);
+
+      // Generate idempotency key for this operation
+      const idempotencyKey = generateIdempotencyKey();
+
       const response = await api.post(API_ENDPOINTS.RESOURCES.CREATE, {
         ...data,
         tenant_id: currentTenant.id,
         is_active: data.is_active !== false,
         is_deletable: data.is_deletable !== false
+      }, {
+        headers: {
+          'x-idempotency-key': idempotencyKey
+        }
       });
 
       const result = parseResponse(response);
-      
-      console.log('✅ Resource created:', result);
+
+      console.log('Resource created:', result);
 
       // Clear relevant cache
-      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key => 
+      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key =>
         key.includes(`resources-${currentTenant.id}`)
       );
       cacheKeysToDelete.forEach(key => resourcesCache.delete(key));
 
-      toast({
-        title: "Success",
-        description: "Resource created successfully"
+      // UPDATED: Using vaniToast
+      vaniToast.success('Resource Created', {
+        message: 'Resource created successfully',
+        duration: 3000
       });
 
       return result;
     } catch (error: any) {
-      console.error('❌ Error creating resource:', error);
-      
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.response?.data?.error || error.message || "Failed to create resource"
+      console.error('Error creating resource:', error);
+
+      // UPDATED: Using vaniToast
+      vaniToast.error('Error Creating Resource', {
+        message: error.response?.data?.error || error.message || 'Failed to create resource',
+        duration: 4000
       });
-      
+
       throw error;
     } finally {
       setLoading(false);
     }
-  }, [currentTenant?.id, toast]);
+  }, [currentTenant?.id]);
 
   return { createResource, loading };
 };
 
-// Update Resource
+// Update Resource - UPDATED: With idempotency header
 export const useUpdateResource = () => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const updateResource = useCallback(async (id: string, data: UpdateResourceFormData) => {
@@ -454,47 +464,54 @@ export const useUpdateResource = () => {
 
     setLoading(true);
     try {
-      console.log('🚀 Updating resource:', id, data);
-      
-      const response = await api.patch(`${API_ENDPOINTS.RESOURCES.UPDATE(id)}`, data);
+      console.log('Updating resource:', id, data);
+
+      // Generate idempotency key for this operation
+      const idempotencyKey = generateIdempotencyKey();
+
+      const response = await api.patch(`${API_ENDPOINTS.RESOURCES.UPDATE(id)}`, data, {
+        headers: {
+          'x-idempotency-key': idempotencyKey
+        }
+      });
       const result = parseResponse(response);
-      
-      console.log('✅ Resource updated:', result);
+
+      console.log('Resource updated:', result);
 
       // Clear relevant cache
-      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key => 
+      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key =>
         key.includes(`resources-${currentTenant.id}`)
       );
       cacheKeysToDelete.forEach(key => resourcesCache.delete(key));
 
-      toast({
-        title: "Success",
-        description: "Resource updated successfully"
+      // UPDATED: Using vaniToast
+      vaniToast.success('Resource Updated', {
+        message: 'Resource updated successfully',
+        duration: 3000
       });
 
       return result;
     } catch (error: any) {
-      console.error('❌ Error updating resource:', error);
-      
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.response?.data?.error || error.message || "Failed to update resource"
+      console.error('Error updating resource:', error);
+
+      // UPDATED: Using vaniToast
+      vaniToast.error('Error Updating Resource', {
+        message: error.response?.data?.error || error.message || 'Failed to update resource',
+        duration: 4000
       });
-      
+
       throw error;
     } finally {
       setLoading(false);
     }
-  }, [currentTenant?.id, toast]);
+  }, [currentTenant?.id]);
 
   return { updateResource, loading };
 };
 
-// Delete Resource
+// Delete Resource - UPDATED: With idempotency header
 export const useDeleteResource = () => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
   const deleteResource = useCallback(async (id: string) => {
@@ -504,37 +521,45 @@ export const useDeleteResource = () => {
 
     setLoading(true);
     try {
-      console.log('🚀 Deleting resource:', id);
-      
-      await api.delete(API_ENDPOINTS.RESOURCES.DELETE(id));
-      
-      console.log('✅ Resource deleted:', id);
+      console.log('Deleting resource:', id);
+
+      // Generate idempotency key for this operation
+      const idempotencyKey = generateIdempotencyKey();
+
+      await api.delete(API_ENDPOINTS.RESOURCES.DELETE(id), {
+        headers: {
+          'x-idempotency-key': idempotencyKey
+        }
+      });
+
+      console.log('Resource deleted:', id);
 
       // Clear relevant cache
-      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key => 
+      const cacheKeysToDelete = Array.from(resourcesCache.keys()).filter(key =>
         key.includes(`resources-${currentTenant.id}`)
       );
       cacheKeysToDelete.forEach(key => resourcesCache.delete(key));
 
-      toast({
-        title: "Success",
-        description: "Resource deleted successfully"
+      // UPDATED: Using vaniToast
+      vaniToast.success('Resource Deleted', {
+        message: 'Resource deleted successfully',
+        duration: 3000
       });
 
     } catch (error: any) {
-      console.error('❌ Error deleting resource:', error);
-      
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.response?.data?.error || error.message || "Failed to delete resource"
+      console.error('Error deleting resource:', error);
+
+      // UPDATED: Using vaniToast
+      vaniToast.error('Error Deleting Resource', {
+        message: error.response?.data?.error || error.message || 'Failed to delete resource',
+        duration: 4000
       });
-      
+
       throw error;
     } finally {
       setLoading(false);
     }
-  }, [currentTenant?.id, toast]);
+  }, [currentTenant?.id]);
 
   return { deleteResource, loading };
 };
@@ -556,7 +581,7 @@ export const useResourcesManager = (selectedResourceTypeId?: string) => {
     // Data
     resourceTypes: resourceTypesResult.data,
     resources: resourcesResult.data,
-    
+
     // Loading states
     isLoading: resourceTypesResult.loading || resourcesResult.loading,
     isError: !!resourceTypesResult.error || !!resourcesResult.error,
@@ -565,12 +590,12 @@ export const useResourcesManager = (selectedResourceTypeId?: string) => {
     isUpdating,
     isDeleting,
     isMutating: isCreating || isUpdating || isDeleting,
-    
+
     // Operations
     createResourceAsync: createResource,
     updateResourceAsync: updateResource,
     deleteResourceAsync: deleteResource,
-    
+
     // Refetch
     refetchResources: resourcesResult.refetch,
     refetchResourceTypes: resourceTypesResult.refetch,

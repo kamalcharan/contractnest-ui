@@ -1,19 +1,20 @@
 // src/components/TaxSettings/TaxDisplayPanel.tsx
-// Panel component for tax display settings (display_mode configuration)
+// UPDATED: Using VaNiLoader and vaniToast for consistent UI
 
 import { useState, useEffect } from 'react';
-import { Loader2, Info, Check } from 'lucide-react';
+import { Info, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/label';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
+import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 
 // Import types
-import type { 
-  UseTaxDisplayReturn, 
+import type {
+  UseTaxDisplayReturn,
   TaxDisplayFormData,
-  DISPLAY_MODE_OPTIONS 
+  DISPLAY_MODE_OPTIONS
 } from '@/types/taxSettings';
 
 interface TaxDisplayPanelProps {
@@ -24,7 +25,7 @@ interface TaxDisplayPanelProps {
 const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
   const { state, updateDisplayMode, resetChanges } = hook;
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -41,7 +42,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
     },
     {
       value: 'including_tax' as const,
-      label: 'Including tax', 
+      label: 'Including tax',
       description: 'Show prices with tax included'
     }
   ];
@@ -63,52 +64,26 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
   // Handle save
   const handleSave = async () => {
     if (!hasLocalChanges) {
-      toast('No changes to save', {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.utility.secondaryText,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.info('No Changes', {
+        message: 'No changes to save',
+        duration: 2000
       });
       return;
     }
 
     try {
       await updateDisplayMode(selectedMode);
-      
-      // SUCCESS TOAST
-      toast.success(`Tax display mode changed to "${selectedMode === 'including_tax' ? 'Including tax' : 'Excluding tax'}"`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.success,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
-      });
-      
+
+      // Success toast handled in hook
       setHasLocalChanges(false);
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to save tax display settings';
       onError?.(errorMessage);
-      
-      // ERROR TOAST
-      toast.error(`Save Failed: ${errorMessage}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+
+      // Error toast
+      vaniToast.error('Save Failed', {
+        message: errorMessage,
+        duration: 4000
       });
     }
   };
@@ -133,35 +108,27 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
     }
   };
 
-  // LOADING STATE
+  // LOADING STATE - Using VaNiLoader
   if (state.loading) {
     return (
-      <div 
+      <div
         className="rounded-lg shadow-sm border p-6 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderColor: `${colors.utility.primaryText}20`
         }}
       >
-        <div className="flex items-center justify-center py-8">
-          <Loader2 
-            className="h-6 w-6 animate-spin"
-            style={{ color: colors.brand.primary }}
-          />
-          <span 
-            className="ml-2 text-sm transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Loading tax display settings...
-          </span>
-        </div>
+        <VaNiLoader
+          size="sm"
+          message="LOADING TAX DISPLAY SETTINGS"
+        />
       </div>
     );
   }
 
   if (state.error) {
     return (
-      <div 
+      <div
         className="rounded-lg shadow-sm border p-6 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -169,19 +136,19 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
         }}
       >
         <div className="text-center py-8">
-          <div 
+          <div
             className="font-medium mb-2 transition-colors"
             style={{ color: colors.semantic.error }}
           >
             Failed to load tax display settings
           </div>
-          <div 
+          <div
             className="text-sm mb-4 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             {state.error}
           </div>
-          <Button 
+          <Button
             onClick={handleRefresh}
             variant="outline"
             disabled={state.loading}
@@ -193,10 +160,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
             }}
           >
             {state.loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
+              <InlineLoader size="sm" text="Loading..." />
             ) : (
               'Try Again'
             )}
@@ -211,34 +175,33 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
       {/* Panel Title - LOADING INDICATOR ADDED */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 
+          <h2
             className="text-xl font-semibold transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Tax Display
           </h2>
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             How prices are displayed on the proposal pricing page
           </p>
         </div>
-        
-        {/* LOADING INDICATOR */}
+
+        {/* LOADING INDICATOR - Using InlineLoader */}
         {state.saving && (
-          <div 
+          <div
             className="flex items-center space-x-2 text-sm transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Saving...</span>
+            <InlineLoader size="sm" text="Saving..." />
           </div>
         )}
       </div>
 
       {/* Main Settings Card */}
-      <div 
+      <div
         className="rounded-lg shadow-sm border p-6 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -248,13 +211,13 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
         <div className="space-y-6">
           {/* Sales Tax Display Section */}
           <div>
-            <Label 
+            <Label
               className="text-base font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               Sales tax display
             </Label>
-            <p 
+            <p
               className="text-sm mt-1 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
@@ -272,11 +235,11 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
                   state.saving && "opacity-60 cursor-not-allowed"
                 )}
                 style={{
-                  borderColor: selectedMode === option.value 
-                    ? colors.brand.primary 
+                  borderColor: selectedMode === option.value
+                    ? colors.brand.primary
                     : `${colors.utility.primaryText}20`,
-                  backgroundColor: selectedMode === option.value 
-                    ? `${colors.brand.primary}05` 
+                  backgroundColor: selectedMode === option.value
+                    ? `${colors.brand.primary}05`
                     : 'transparent'
                 }}
                 onMouseEnter={(e) => {
@@ -293,34 +256,34 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
                 }}
                 onClick={() => !state.saving && handleModeChange(option.value)}
               >
-                <div 
+                <div
                   className="flex items-center justify-center w-5 h-5 rounded-full border-2 mt-0.5 transition-colors"
                   style={{
-                    borderColor: selectedMode === option.value 
-                      ? colors.brand.primary 
+                    borderColor: selectedMode === option.value
+                      ? colors.brand.primary
                       : colors.utility.secondaryText,
-                    backgroundColor: selectedMode === option.value 
-                      ? colors.brand.primary 
+                    backgroundColor: selectedMode === option.value
+                      ? colors.brand.primary
                       : 'transparent',
                     color: selectedMode === option.value ? 'white' : 'transparent'
                   }}
                 >
                   {selectedMode === option.value && (
                     state.saving ? (
-                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <InlineLoader size="sm" />
                     ) : (
                       <Check className="w-3 h-3" />
                     )
                   )}
                 </div>
                 <div className="flex-1">
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     {option.label}
                   </div>
-                  <div 
+                  <div
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -332,46 +295,46 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
           </div>
 
           {/* Info Box */}
-          <div 
+          <div
             className="flex items-start space-x-3 p-4 rounded-lg border transition-colors"
             style={{
               backgroundColor: `${colors.brand.primary}10`,
               borderColor: `${colors.brand.primary}40`
             }}
           >
-            <Info 
+            <Info
               className="w-5 h-5 mt-0.5 shrink-0"
               style={{ color: colors.brand.primary }}
             />
             <div className="text-sm">
-              <div 
+              <div
                 className="font-medium mb-1 transition-colors"
                 style={{ color: colors.brand.primary }}
               >
                 Display Mode Information
               </div>
-              <div 
+              <div
                 className="transition-colors"
                 style={{ color: colors.brand.primary }}
               >
-                This setting affects how prices appear throughout your proposals and invoices. 
+                This setting affects how prices appear throughout your proposals and invoices.
                 You can change this setting at any time.
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div 
+          <div
             className="flex items-center justify-between pt-4 border-t transition-colors"
             style={{ borderColor: `${colors.utility.primaryText}20` }}
           >
             <div className="flex items-center space-x-2">
               {hasLocalChanges && (
-                <div 
+                <div
                   className="flex items-center text-sm transition-colors"
                   style={{ color: colors.semantic.warning }}
                 >
-                  <div 
+                  <div
                     className="w-2 h-2 rounded-full mr-2"
                     style={{ backgroundColor: colors.semantic.warning }}
                   />
@@ -379,7 +342,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
                 </div>
               )}
             </div>
-            
+
             <div className="flex items-center space-x-3">
               {hasLocalChanges && (
                 <Button
@@ -396,7 +359,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
                   Reset
                 </Button>
               )}
-              
+
               <Button
                 onClick={handleSave}
                 disabled={!hasLocalChanges || state.saving}
@@ -406,10 +369,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
                 }}
               >
                 {state.saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
+                  <InlineLoader size="sm" text="Saving..." />
                 ) : (
                   'Save Changes'
                 )}
@@ -421,35 +381,35 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
 
       {/* Current Configuration Summary */}
       {state.data && (
-        <div 
+        <div
           className="rounded-lg p-4 transition-colors"
           style={{ backgroundColor: `${colors.utility.primaryText}10` }}
         >
-          <div 
+          <div
             className="text-sm font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Current Configuration
           </div>
-          <div 
+          <div
             className="text-sm transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
-            <div>Display Mode: <span 
+            <div>Display Mode: <span
               className="font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               {state.data.display_mode === 'including_tax' ? 'Including tax' : 'Excluding tax'}
             </span></div>
             {state.data.default_tax_rate_id && (
-              <div>Default Tax Rate: <span 
+              <div>Default Tax Rate: <span
                 className="font-medium transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 {state.data.default_tax_rate_id}
               </span></div>
             )}
-            <div>Last Updated: <span 
+            <div>Last Updated: <span
               className="font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >

@@ -1,7 +1,9 @@
 // src/hooks/useMasterData.ts
+// UPDATED: Using vaniToast instead of useToast for consistent UI
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
@@ -75,7 +77,6 @@ export const useMasterData = (
   options: UseMasterDataOptions = {}
 ) => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
   const [data, setData] = useState<CategoryDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -117,10 +118,10 @@ export const useMasterData = (
       const categoriesResponse = await api.get(
         `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
       );
-      
+
       const category = categoriesResponse.data.find(
-        (cat: CategoryMaster) => 
-          cat.CategoryName === categoryName || 
+        (cat: CategoryMaster) =>
+          cat.CategoryName === categoryName ||
           cat.DisplayName === categoryName
       );
 
@@ -146,21 +147,20 @@ export const useMasterData = (
         setData(categoryData);
         onSuccess?.(categoryData);
       }
-      
+
       return categoryData;
     } catch (err) {
       const error = err as Error;
-      
+
       if (isMountedRef.current) {
         setError(error);
         onError?.(error);
-        
+
         // Only show toast for non-404 errors
         if (!error.message.includes('not found')) {
-          toast({
-            variant: "destructive",
-            title: "Error loading master data",
-            description: error.message
+          vaniToast.error('Error Loading Data', {
+            message: error.message,
+            duration: 4000
           });
         }
       }
@@ -169,14 +169,14 @@ export const useMasterData = (
         tags: { component: 'useMasterData', action: 'fetchCategoryData' },
         extra: { categoryName, tenantId: currentTenant?.id }
       });
-      
+
       return [];
     } finally {
       if (isMountedRef.current) {
         setLoading(false);
       }
     }
-  }, [currentTenant?.id, categoryName, cacheKey, cacheTime, enabled, toast, onSuccess, onError]);
+  }, [currentTenant?.id, categoryName, cacheKey, cacheTime, enabled, onSuccess, onError]);
 
   // Track mounted state
   useEffect(() => {
@@ -237,8 +237,8 @@ export const useMasterDataOptions = (
     sortOrder?: 'asc' | 'desc';
   }
 ) => {
-  const { 
-    valueField = 'id', 
+  const {
+    valueField = 'id',
     labelField = 'DisplayName',
     includeInactive = false,
     sortBy = 'Sequence_no',
@@ -247,21 +247,21 @@ export const useMasterDataOptions = (
   } = options || {};
 
   const { data, loading, error, refetch, clearCache, invalidate } = useMasterData(
-    categoryName, 
+    categoryName,
     masterDataOptions
   );
-  
+
   const dropdownOptions: MasterDataOption[] = data
     .filter(item => includeInactive || item.is_active)
     .sort((a, b) => {
       const aVal = a[sortBy];
       const bVal = b[sortBy];
-      
+
       // Handle null/undefined values
       if (aVal == null && bVal == null) return 0;
       if (aVal == null) return 1;
       if (bVal == null) return -1;
-      
+
       // Sort
       if (sortOrder === 'asc') {
         return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
@@ -278,10 +278,10 @@ export const useMasterDataOptions = (
       // Include all original fields
       ...item
     }));
-  
-  return { 
-    options: dropdownOptions, 
-    loading, 
+
+  return {
+    options: dropdownOptions,
+    loading,
     error,
     refetch,
     clearCache,
@@ -296,15 +296,15 @@ export const useMasterDataValue = (
   options?: UseMasterDataOptions
 ) => {
   const { data, loading, error, refetch } = useMasterData(categoryName, options);
-  
-  const value = valueName 
-    ? data.find(item => 
-        item.SubCatName === valueName || 
+
+  const value = valueName
+    ? data.find(item =>
+        item.SubCatName === valueName ||
         item.DisplayName === valueName ||
         item.id === valueName
       )
     : null;
-  
+
   return { value, loading, error, refetch };
 };
 
@@ -334,7 +334,7 @@ export const useMultipleMasterData = (
           // Use the same logic as single category fetch
           const cacheKey = `${currentTenant.id}-${categoryName}`;
           const cached = masterDataCache.get(cacheKey);
-          
+
           if (cached && Date.now() - cached.timestamp < cached.expiresIn) {
             results[categoryName] = cached.data;
           } else {
@@ -342,10 +342,10 @@ export const useMultipleMasterData = (
             const categoriesResponse = await api.get(
               `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
             );
-            
+
             const category = categoriesResponse.data.find(
-              (cat: CategoryMaster) => 
-                cat.CategoryName === categoryName || 
+              (cat: CategoryMaster) =>
+                cat.CategoryName === categoryName ||
                 cat.DisplayName === categoryName
             );
 
@@ -353,9 +353,9 @@ export const useMultipleMasterData = (
               const detailsResponse = await api.get(
                 `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}?categoryId=${category.id}&tenantId=${currentTenant.id}`
               );
-              
+
               results[categoryName] = detailsResponse.data;
-              
+
               // Update cache
               masterDataCache.set(cacheKey, {
                 data: detailsResponse.data,
@@ -424,17 +424,17 @@ export const useMasterDataCache = () => {
       categoryNames.map(async (categoryName) => {
         const cacheKey = `${currentTenant.id}-${categoryName}`;
         const cached = masterDataCache.get(cacheKey);
-        
+
         // Only fetch if not already cached
         if (!cached || Date.now() - cached.timestamp >= cached.expiresIn) {
           try {
             const categoriesResponse = await api.get(
               `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
             );
-            
+
             const category = categoriesResponse.data.find(
-              (cat: CategoryMaster) => 
-                cat.CategoryName === categoryName || 
+              (cat: CategoryMaster) =>
+                cat.CategoryName === categoryName ||
                 cat.DisplayName === categoryName
             );
 
@@ -442,7 +442,7 @@ export const useMasterDataCache = () => {
               const detailsResponse = await api.get(
                 `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}?categoryId=${category.id}&tenantId=${currentTenant.id}`
               );
-              
+
               masterDataCache.set(cacheKey, {
                 data: detailsResponse.data,
                 timestamp: Date.now(),

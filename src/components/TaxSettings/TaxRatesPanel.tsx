@@ -1,10 +1,11 @@
 // src/components/TaxSettings/TaxRatesPanel.tsx
-// Panel component for tax rates management following LOV methodology
+// UPDATED: Using VaNiLoader and vaniToast for consistent UI
 
 import { useState } from 'react';
-import { Plus, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
+import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -14,10 +15,10 @@ import AddTaxRateModal from './AddTaxRateModal';
 import DeleteTaxRateDialog from './DeleteTaxRateDialog';
 
 // Import types
-import type { 
+import type {
   UseTaxRatesReturn,
   TaxRateFormData,
-  TaxRateWithUI 
+  TaxRateWithUI
 } from '@/types/taxSettings';
 
 interface TaxRatesPanelProps {
@@ -26,22 +27,23 @@ interface TaxRatesPanelProps {
 }
 
 const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
-  const { 
-    state, 
-    createRate, 
-    updateRate, 
-    deleteRate, 
-    setDefaultRate,
-    startEditing, 
-    cancelEditing,
-    startAdding,
-    cancelAdding,
-    getNextSequence,
-    checkNameExists
+  const {
+    state,
+    actions: {
+      createTaxRate: createRate,
+      updateTaxRate: updateRate,
+      deleteTaxRate: deleteRate,
+      setDefaultTaxRate: setDefaultRate,
+      startEditing,
+      cancelEditing,
+      startAdding,
+      cancelAdding,
+      loadTaxRates: refresh
+    }
   } = hook;
 
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -67,53 +69,24 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
     try {
       await createRate(data);
       setShowAddModal(false);
-      
-      // SUCCESS TOAST
-      toast.success(`Tax Rate Created: "${data.name}" (${data.rate}%) has been created successfully`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.success,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
-      });
-      
+
+      // Success toast handled in hook
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to create tax rate';
-      
+
       // Check if it's a duplicate error and show appropriate message
       if (errorMessage.includes('already exists')) {
-        // DUPLICATE ERROR TOAST
-        toast.error(`Duplicate Tax Rate: ${errorMessage}`, {
-          duration: 4000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: colors.semantic.warning,
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-          icon: '⚠️'
+        vaniToast.warning('Duplicate Tax Rate', {
+          message: errorMessage,
+          duration: 4000
         });
       } else {
-        // GENERAL ERROR TOAST
-        toast.error(`Creation Failed: ${errorMessage}`, {
-          duration: 4000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: colors.semantic.error,
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          }
+        vaniToast.error('Creation Failed', {
+          message: errorMessage,
+          duration: 4000
         });
       }
-      
+
       onError?.(errorMessage);
       // Keep modal open on error
     }
@@ -128,11 +101,11 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   const handleSaveRateEdit = async (id: string, data: Partial<TaxRateFormData>) => {
     try {
       await updateRate(id, data);
-      // Success toast is handled in TaxRateCard component
+      // Success toast is handled in hook
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to update tax rate';
       onError?.(errorMessage);
-      // Error toast is handled in TaxRateCard component
+      // Error toast is handled in hook
     }
   };
 
@@ -145,16 +118,9 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   const handleDeleteRateClick = (rate: TaxRateWithUI) => {
     // Check if it's the default rate
     if (rate.is_default) {
-      toast.error('Cannot delete the default tax rate. Please set another rate as default first.', {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.error('Cannot Delete Default Rate', {
+        message: 'Please set another rate as default first before deleting this rate.',
+        duration: 4000
       });
       return;
     }
@@ -170,38 +136,18 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
     try {
       await deleteRate(rateToDelete.id);
       setShowDeleteDialog(false);
-      
-      // SUCCESS TOAST
-      toast.success(`Tax Rate Deleted: "${rateToDelete.name}" has been deleted successfully`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.success,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
-      });
-      
+
+      // Success toast handled in hook
       setRateToDelete(null);
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to delete tax rate';
       onError?.(errorMessage);
-      
-      // ERROR TOAST
-      toast.error(`Deletion Failed: ${errorMessage}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+
+      vaniToast.error('Deletion Failed', {
+        message: errorMessage,
+        duration: 4000
       });
-      
+
       // Keep dialog open on error
     }
   };
@@ -215,38 +161,17 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   // Handle set default rate
   const handleSetDefaultRate = async (id: string) => {
     const rate = state.data.find(r => r?.id === id);
-    
+
     try {
       await setDefaultRate(id);
-      
-      // SUCCESS TOAST
-      toast.success(`Default Tax Rate Updated: "${rate?.name || 'Unknown'}" is now the default tax rate`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.success,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
-      });
-      
+      // Success toast handled in hook
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to set default tax rate';
       onError?.(errorMessage);
-      
-      // ERROR TOAST
-      toast.error(`Failed to Set Default: ${errorMessage}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: colors.semantic.error,
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+
+      vaniToast.error('Operation Failed', {
+        message: errorMessage,
+        duration: 4000
       });
     }
   };
@@ -254,7 +179,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   // Handle refresh
   const handleRefresh = async () => {
     try {
-      await hook.refresh();
+      await refresh();
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to refresh tax rates';
       onError?.(errorMessage);
@@ -262,7 +187,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   };
 
   // Sort rates by sequence number with safety checks
-  const sortedRates = Array.isArray(state.data) 
+  const sortedRates = Array.isArray(state.data)
     ? state.data
         .filter(rate => rate && typeof rate === 'object' && rate.id && rate.name)
         .sort((a, b) => {
@@ -276,28 +201,20 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   // Get default rate
   const defaultRate = sortedRates.find(rate => rate?.is_default);
 
-  // Loading state
+  // Loading state - Using VaNiLoader
   if (state.loading) {
     return (
-      <div 
+      <div
         className="rounded-lg shadow-sm border p-6 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderColor: `${colors.utility.primaryText}20`
         }}
       >
-        <div className="flex items-center justify-center py-8">
-          <Loader2 
-            className="h-6 w-6 animate-spin"
-            style={{ color: colors.brand.primary }}
-          />
-          <span 
-            className="ml-2 text-sm transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Loading tax rates...
-          </span>
-        </div>
+        <VaNiLoader
+          size="sm"
+          message="LOADING TAX RATES"
+        />
       </div>
     );
   }
@@ -305,7 +222,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
   // Error state
   if (state.error) {
     return (
-      <div 
+      <div
         className="rounded-lg shadow-sm border p-6 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -313,19 +230,19 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
         }}
       >
         <div className="text-center py-8">
-          <div 
+          <div
             className="font-medium mb-2 transition-colors"
             style={{ color: colors.semantic.error }}
           >
             Failed to load tax rates
           </div>
-          <div 
+          <div
             className="text-sm mb-4 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             {state.error}
           </div>
-          <Button 
+          <Button
             onClick={handleRefresh}
             variant="outline"
             disabled={state.loading}
@@ -337,10 +254,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
             }}
           >
             {state.loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading...
-              </>
+              <InlineLoader size="sm" text="Loading..." />
             ) : (
               'Try Again'
             )}
@@ -355,34 +269,33 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
       {/* Panel Title and Add Button */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 
+          <h2
             className="text-xl font-semibold transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Tax Rates
           </h2>
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             Calculate tax on services
           </p>
         </div>
-        
+
         <div className="flex items-center space-x-3">
-          {/* Loading indicator */}
+          {/* Loading indicator - Using InlineLoader */}
           {state.saving && (
-            <div 
+            <div
               className="flex items-center space-x-2 text-sm transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving...</span>
+              <InlineLoader size="sm" text="Saving..." />
             </div>
           )}
-          
+
           {!state.isAdding && (
-            <Button 
+            <Button
               onClick={handleAddClick}
               className="text-white transition-all duration-200 hover:opacity-90"
               style={{
@@ -399,21 +312,21 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
 
       {/* Default Tax Rate Info */}
       {defaultRate && (
-        <div 
+        <div
           className="rounded-lg p-4 transition-colors"
           style={{ backgroundColor: `${colors.utility.primaryText}10` }}
         >
-          <div 
+          <div
             className="text-sm font-medium mb-1 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Default tax rate
           </div>
-          <div 
+          <div
             className="text-sm transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
-            Services will use <span 
+            Services will use <span
               className="font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >{defaultRate.name} ({defaultRate.rate}%)</span> unless a specific rate is assigned to the service
@@ -422,7 +335,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
       )}
 
       {/* Column Headers */}
-      <div 
+      <div
         className="rounded-lg shadow-sm border mb-4 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -430,25 +343,25 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
         }}
       >
         <div className="grid grid-cols-4 gap-4 px-4 py-3">
-          <div 
+          <div
             className="font-medium transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             NAME
           </div>
-          <div 
+          <div
             className="font-medium transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             RATE
           </div>
-          <div 
+          <div
             className="font-medium transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             DEFAULT
           </div>
-          <div 
+          <div
             className="font-medium transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
@@ -464,7 +377,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
             if (!rate || !rate.id) {
               return null;
             }
-            
+
             return (
               <TaxRateCard
                 key={rate.id}
@@ -481,7 +394,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
           })
         ) : (
           // Empty State
-          <div 
+          <div
             className="rounded-lg shadow-sm border p-8 text-center transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -489,24 +402,24 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
             }}
           >
             <div className="mb-4">
-              <AlertTriangle 
+              <AlertTriangle
                 className="h-12 w-12 mx-auto mb-4"
                 style={{ color: colors.utility.secondaryText }}
               />
-              <div 
+              <div
                 className="text-lg font-medium mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 No tax rates configured
               </div>
-              <div 
+              <div
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 You need at least one tax rate to calculate taxes on your services.
               </div>
             </div>
-            <Button 
+            <Button
               onClick={handleAddClick}
               className="text-white transition-all duration-200 hover:opacity-90"
               style={{
@@ -522,7 +435,7 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
 
       {/* Warning about no default rate */}
       {sortedRates.length > 0 && !defaultRate && (
-        <div 
+        <div
           className="border rounded-lg p-4 transition-colors"
           style={{
             backgroundColor: `${colors.semantic.warning}10`,
@@ -530,18 +443,18 @@ const TaxRatesPanel = ({ hook, onError }: TaxRatesPanelProps) => {
           }}
         >
           <div className="flex items-start space-x-3">
-            <AlertTriangle 
+            <AlertTriangle
               className="w-5 h-5 mt-0.5 shrink-0"
               style={{ color: colors.semantic.warning }}
             />
             <div className="text-sm">
-              <div 
+              <div
                 className="font-medium mb-1 transition-colors"
                 style={{ color: colors.semantic.warning }}
               >
                 No Default Tax Rate Set
               </div>
-              <div 
+              <div
                 className="transition-colors"
                 style={{ color: colors.semantic.warning }}
               >

@@ -1,94 +1,75 @@
 // src/hooks/useTaxRates.ts
-// Updated with graceful error handling - preserving all existing code structure
+// UPDATED: Using VaNiToast instead of react-hot-toast for consistent UI
 
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
-import type { 
+import type {
   TaxRateWithUI,
   TaxRatesState,
   TaxRateFormData,
-  DuplicateErrorResponse // NEW: Import the duplicate error type
+  DuplicateErrorResponse
 } from '@/types/taxSettings';
 
-// NEW: Error handling function - add this before the main hook
+// Error handling function using VaNiToast
 const handleTaxRateError = (error: any, operation: string): void => {
   console.error(`Tax rate ${operation} error:`, error);
 
   // Check if it's a duplicate error (409 status)
   if (error?.response?.status === 409 && error?.response?.data?.code === 'DUPLICATE_TAX_RATE') {
     const duplicateError = error.response.data as DuplicateErrorResponse;
-    
-    // Show user-friendly duplicate message
-    toast.error(
-      `Tax rate "${duplicateError.existing_rate.name}" with ${duplicateError.existing_rate.rate}% already exists and cannot be duplicated`,
+
+    // Show user-friendly duplicate message using warning toast
+    vaniToast.warning(
+      `Tax rate "${duplicateError.existing_rate.name}" with ${duplicateError.existing_rate.rate}% already exists`,
       {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#F59E0B', // Warning color instead of error
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '350px'
-        }
+        message: 'Please use a different name or rate combination',
+        duration: 4000
       }
     );
-    return; // Don't throw error - just show toast
+    return;
   }
 
   // Check for other specific error types
   if (error?.response?.status === 400) {
     const message = error.response.data?.error || 'Invalid data provided';
-    toast.error(`Validation Error: ${message}`, {
-      duration: 3000,
-      style: {
-        padding: '16px',
-        borderRadius: '8px',
-        background: '#EF4444',
-        color: '#FFF',
-        fontSize: '16px',
-        minWidth: '300px'
-      }
+    vaniToast.error('Validation Error', {
+      message: message,
+      duration: 3000
     });
     return;
   }
 
   if (error?.response?.status === 401) {
-    toast.error('Authentication required. Please log in again.', {
-      duration: 4000,
+    vaniToast.error('Authentication Required', {
+      message: 'Please log in again to continue',
+      duration: 4000
     });
     return;
   }
 
   if (error?.response?.status === 403) {
-    toast.error('You do not have permission to perform this action.', {
-      duration: 4000,
+    vaniToast.error('Permission Denied', {
+      message: 'You do not have permission to perform this action',
+      duration: 4000
     });
     return;
   }
 
   // Generic error for other cases
   const genericMessage = error?.response?.data?.error || error?.message || `Failed to ${operation} tax rate`;
-  toast.error(`Error: ${genericMessage}`, {
-    duration: 4000,
-    style: {
-      padding: '16px',
-      borderRadius: '8px',
-      background: '#EF4444',
-      color: '#FFF',
-      fontSize: '16px',
-      minWidth: '300px'
-    }
+  vaniToast.error('Operation Failed', {
+    message: genericMessage,
+    duration: 4000
   });
 };
 
 export const useTaxRates = () => {
   const { currentTenant } = useAuth();
-  
+
   // State management
   const [state, setState] = useState<TaxRatesState>({
     loading: false,
@@ -103,9 +84,9 @@ export const useTaxRates = () => {
   // Load tax rates
   const loadTaxRates = useCallback(async () => {
     if (!currentTenant?.id) return;
-    
+
     setState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const response = await api.get('/api/tax-settings');
       const transformedRates = response.data.rates.map((rate: any) => ({
@@ -114,7 +95,7 @@ export const useTaxRates = () => {
         isLoading: false,
         hasUnsavedChanges: false,
       }));
-      
+
       setState(prev => ({
         ...prev,
         data: transformedRates,
@@ -131,15 +112,17 @@ export const useTaxRates = () => {
     }
   }, [currentTenant?.id]);
 
-  // Create tax rate - UPDATED with error handling
+  // Create tax rate
   const createTaxRate = async (data: TaxRateFormData): Promise<void> => {
     if (!currentTenant?.id) {
-      toast.error('No tenant selected');
+      vaniToast.error('No Tenant Selected', {
+        message: 'Please select a tenant to continue'
+      });
       return;
     }
 
     const idempotencyKey = `tax-rates-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const requestData = {
       name: data.name.trim(),
       rate: data.rate,
@@ -165,7 +148,7 @@ export const useTaxRates = () => {
         ...prev,
         data: prev.data.map(rate => ({
           ...rate,
-          isEditing: false // Exit edit mode for all rates
+          isEditing: false
         })).concat([{
           ...newRate,
           isEditing: false,
@@ -176,16 +159,9 @@ export const useTaxRates = () => {
       }));
 
       // Show success message
-      toast.success(`Tax rate "${newRate.name}" (${newRate.rate}%) created successfully`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.success('Tax Rate Created', {
+        message: `"${newRate.name}" (${newRate.rate}%) has been created successfully`,
+        duration: 3000
       });
 
       // Track analytics
@@ -196,27 +172,25 @@ export const useTaxRates = () => {
       }
 
     } catch (error: any) {
-      // UPDATED: Handle error gracefully - don't throw, just show appropriate toast
       handleTaxRateError(error, 'create');
-      
-      // Don't change loading states or throw error
-      // Just stay on the current screen
     }
   };
 
-  // Update tax rate - UPDATED with error handling
+  // Update tax rate
   const updateTaxRate = async (id: string, data: Partial<TaxRateFormData>): Promise<void> => {
     if (!currentTenant?.id) {
-      toast.error('No tenant selected');
+      vaniToast.error('No Tenant Selected', {
+        message: 'Please select a tenant to continue'
+      });
       return;
     }
 
     const idempotencyKey = `tax-rates-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Set loading state for specific rate
     setState(prev => ({
       ...prev,
-      data: prev.data.map(rate => 
+      data: prev.data.map(rate =>
         rate.id === id ? { ...rate, isLoading: true } : rate
       )
     }));
@@ -243,8 +217,8 @@ export const useTaxRates = () => {
       // Update state with the updated rate
       setState(prev => ({
         ...prev,
-        data: prev.data.map(rate => 
-          rate.id === id 
+        data: prev.data.map(rate =>
+          rate.id === id
             ? {
                 ...updatedRate,
                 isEditing: false,
@@ -252,22 +226,15 @@ export const useTaxRates = () => {
                 hasUnsavedChanges: false
               }
             : rate.is_default && updatedRate.is_default && rate.id !== id
-            ? { ...rate, is_default: false } // Unset other defaults
+            ? { ...rate, is_default: false }
             : rate
         )
       }));
 
       // Show success message
-      toast.success(`Tax rate "${updatedRate.name}" updated successfully`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.success('Tax Rate Updated', {
+        message: `"${updatedRate.name}" has been updated successfully`,
+        duration: 3000
       });
 
       // Track analytics
@@ -278,23 +245,24 @@ export const useTaxRates = () => {
       }
 
     } catch (error: any) {
-      // UPDATED: Handle error gracefully
       handleTaxRateError(error, 'update');
-      
-      // Reset loading state but stay in edit mode so user can fix issues
+
+      // Reset loading state but stay in edit mode
       setState(prev => ({
         ...prev,
-        data: prev.data.map(rate => 
+        data: prev.data.map(rate =>
           rate.id === id ? { ...rate, isLoading: false } : rate
         )
       }));
     }
   };
 
-  // Delete tax rate - keep existing implementation
+  // Delete tax rate
   const deleteTaxRate = async (id: string): Promise<void> => {
     if (!currentTenant?.id) {
-      toast.error('No tenant selected');
+      vaniToast.error('No Tenant Selected', {
+        message: 'Please select a tenant to continue'
+      });
       return;
     }
 
@@ -309,16 +277,9 @@ export const useTaxRates = () => {
         deletingId: null,
       }));
 
-      toast.success('Tax rate deleted successfully', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.success('Tax Rate Deleted', {
+        message: 'The tax rate has been deleted successfully',
+        duration: 3000
       });
 
       try {
@@ -331,37 +292,32 @@ export const useTaxRates = () => {
       setState(prev => ({ ...prev, deletingId: null }));
 
       const errorMessage = error.response?.data?.error || error.message || 'Failed to delete tax rate';
-      
+
       captureException(error, {
-        tags: { 
-          component: 'useTaxRates', 
-          action: 'deleteRate' 
+        tags: {
+          component: 'useTaxRates',
+          action: 'deleteRate'
         },
-        extra: { 
+        extra: {
           tenantId: currentTenant?.id,
           rateId: id,
           errorMessage
         }
       });
 
-      toast.error(`Delete Error: ${errorMessage}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.error('Delete Failed', {
+        message: errorMessage,
+        duration: 4000
       });
     }
   };
 
-  // Set default tax rate - keep existing implementation
+  // Set default tax rate
   const setDefaultTaxRate = async (id: string): Promise<void> => {
     if (!currentTenant?.id) {
-      toast.error('No tenant selected');
+      vaniToast.error('No Tenant Selected', {
+        message: 'Please select a tenant to continue'
+      });
       return;
     }
 
@@ -395,16 +351,9 @@ export const useTaxRates = () => {
         })),
       }));
 
-      toast.success(`"${updatedRate.name}" is now the default tax rate`, {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.success('Default Rate Updated', {
+        message: `"${updatedRate.name}" is now the default tax rate`,
+        duration: 3000
       });
     } catch (error: any) {
       console.error('Error setting default tax rate:', error);
@@ -414,21 +363,14 @@ export const useTaxRates = () => {
       }));
 
       const errorMessage = error.response?.data?.error || error.message || 'Failed to set default tax rate';
-      toast.error(`Error: ${errorMessage}`, {
-        duration: 4000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#EF4444',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        }
+      vaniToast.error('Operation Failed', {
+        message: errorMessage,
+        duration: 4000
       });
     }
   };
 
-  // UI state management functions - keep existing
+  // UI state management functions
   const startEditing = (id: string) => {
     setState(prev => ({
       ...prev,

@@ -1,13 +1,15 @@
 // src/pages/settings/Resources/index.tsx
-// Main Resources management page - FIXED VERSION
+// Main Resources management page - SCALE-OPTIMIZED VERSION
+// Updated: VaNiLoader + vaniToast
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/use-toast';
+import { vaniToast } from '@/components/common/toast';
+import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
@@ -31,7 +33,6 @@ const ResourcesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
-  const { toast } = useToast();
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -40,23 +41,23 @@ const ResourcesPage: React.FC = () => {
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
 
   // Load resource types
-  const { 
-    data: rawResourceTypes = [], 
-    isLoading: typesLoading, 
+  const {
+    data: rawResourceTypes = [],
+    isLoading: typesLoading,
     error: typesError,
     refetch: refetchTypes
   } = useResourceTypes();
 
-  // 🔧 FIX: Ensure resourceTypes is always an array
+  // Ensure resourceTypes is always an array
   const resourceTypes = React.useMemo(() => {
-    console.log('🔍 RAW RESOURCE TYPES:', rawResourceTypes, typeof rawResourceTypes);
-    
+    console.log('RAW RESOURCE TYPES:', rawResourceTypes, typeof rawResourceTypes);
+
     if (Array.isArray(rawResourceTypes)) {
-      console.log('✅ resourceTypes is array with length:', rawResourceTypes.length);
+      console.log('resourceTypes is array with length:', rawResourceTypes.length);
       return rawResourceTypes;
     }
-    
-    console.log('❌ resourceTypes is not array, returning empty array');
+
+    console.log('resourceTypes is not array, returning empty array');
     return [];
   }, [rawResourceTypes]);
 
@@ -72,7 +73,7 @@ const ResourcesPage: React.FC = () => {
   // Initialize selected type from URL params or first available type
   useEffect(() => {
     const typeFromUrl = searchParams.get('type');
-    
+
     if (typeFromUrl && resourceTypes.some(type => type.id === typeFromUrl)) {
       // Valid type from URL
       setSelectedTypeId(typeFromUrl);
@@ -80,7 +81,7 @@ const ResourcesPage: React.FC = () => {
       // Auto-select first type if none selected
       const firstType = resourceTypes[0];
       setSelectedTypeId(firstType.id);
-      
+
       // Update URL without triggering navigation
       setSearchParams(prev => {
         const newParams = new URLSearchParams(prev);
@@ -93,9 +94,9 @@ const ResourcesPage: React.FC = () => {
   // Handle type selection
   const handleTypeSelection = (typeId: string) => {
     const selectedType = resourceTypes.find(type => type.id === typeId);
-    
+
     setSelectedTypeId(typeId);
-    
+
     // Update URL
     setSearchParams(prev => {
       const newParams = new URLSearchParams(prev);
@@ -106,7 +107,7 @@ const ResourcesPage: React.FC = () => {
     // Track analytics
     try {
       analyticsService.trackPageView(
-        `settings/resources/${typeId}`, 
+        `settings/resources/${typeId}`,
         `Resources - ${selectedType?.name || 'Unknown'}`
       );
     } catch (error) {
@@ -132,40 +133,29 @@ const ResourcesPage: React.FC = () => {
   // Get selected resource type info
   const selectedResourceType = resourceTypes.find(type => type.id === selectedTypeId);
 
-  // Show loading state for initial load
+  // Show loading state for initial load - UPDATED: Using VaNiLoader
   if (typesLoading && resourceTypes.length === 0) {
     return (
-      <div 
+      <div
         className="flex items-center justify-center min-h-[400px] transition-colors"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
-        <div className="text-center">
-          <Loader2 
-            className="h-8 w-8 animate-spin mx-auto mb-4 transition-colors" 
-            style={{ color: colors.brand.primary }}
-          />
-          <p 
-            className="transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Loading resource types...
-          </p>
-        </div>
+        <VaNiLoader size="md" message="LOADING RESOURCE TYPES" />
       </div>
     );
   }
 
   return (
-    <div 
+    <div
       className="p-6 transition-colors duration-200 min-h-screen"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
       }}
     >
       {/* Header */}
-      <ResourcesPageHeader 
+      <ResourcesPageHeader
         onGoBack={handleGoBack}
         selectedResourceType={selectedResourceType}
         colors={colors}
@@ -182,13 +172,13 @@ const ResourcesPage: React.FC = () => {
         {/* Right Panel - Resources */}
         <div className="flex-1">
           {typesError ? (
-            <ResourcesErrorState 
+            <ResourcesErrorState
               error={typesError}
               onRetry={handleRetryLoadTypes}
               colors={colors}
             />
           ) : resourceTypes.length === 0 ? (
-            <NoResourceTypesEmptyState 
+            <NoResourceTypesEmptyState
               onRetry={handleRetryLoadTypes}
             />
           ) : (
@@ -227,24 +217,24 @@ const ResourcesPageHeader: React.FC<ResourcesPageHeaderProps> = ({
           color: colors.utility.primaryText
         }}
       >
-        <ArrowLeft 
-          className="h-5 w-5 transition-colors" 
+        <ArrowLeft
+          className="h-5 w-5 transition-colors"
           style={{ color: colors.utility.secondaryText }}
         />
       </Button>
-      
+
       <div>
-        <h1 
+        <h1
           className="text-2xl font-bold transition-colors"
           style={{ color: colors.utility.primaryText }}
         >
           Resources Management
         </h1>
-        <p 
+        <p
           className="transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
-          {selectedResourceType 
+          {selectedResourceType
             ? `Manage your ${selectedResourceType.name.replace('_', ' ')} resources`
             : 'Manage your organization resources and assignments'
           }
@@ -274,23 +264,29 @@ const ResourcesErrorState: React.FC<ResourcesErrorStateProps> = ({
       tags: { component: 'ResourcesPage', action: 'loadResourceTypes' },
       extra: { errorMessage: error.message }
     });
+
+    // Show error toast - UPDATED: Using vaniToast
+    vaniToast.error('Failed to Load Resources', {
+      message: error.message || 'An error occurred while loading resource types.',
+      duration: 5000
+    });
   }, [error]);
 
   return (
-    <div 
+    <div
       className="rounded-lg shadow-sm border p-8 text-center transition-colors"
       style={{
         backgroundColor: colors.utility.secondaryBackground,
         borderColor: colors.semantic.error + '40'
       }}
     >
-      <div 
+      <div
         className="text-lg font-semibold mb-2 transition-colors"
         style={{ color: colors.semantic.error }}
       >
         Failed to Load Resource Types
       </div>
-      <p 
+      <p
         className="mb-4 transition-colors"
         style={{ color: colors.utility.secondaryText }}
       >

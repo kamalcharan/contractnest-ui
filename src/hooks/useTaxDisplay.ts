@@ -1,9 +1,9 @@
 // src/hooks/useTaxDisplay.ts
-// Hook for managing tax display settings (display_mode configuration)
+// UPDATED: Using VaNiToast instead of useToast for consistent UI
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useToast } from '@/components/ui/use-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
@@ -15,8 +15,6 @@ import type {
   ValidationResult
 } from '@/types/taxSettings';
 
-
-
 import type { TaxSettings } from '@/types/taxTypes';
 
 /**
@@ -25,8 +23,7 @@ import type { TaxSettings } from '@/types/taxTypes';
  */
 export const useTaxDisplay = (): UseTaxDisplayReturn => {
   const { currentTenant } = useAuth();
-  const { toast } = useToast();
-  
+
   // State management
   const [state, setState] = useState<TaxDisplayState>({
     loading: false,
@@ -52,14 +49,14 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
     try {
       console.log('Fetching tax display settings for tenant:', currentTenant.id);
-      
+
       const response = await api.get(API_ENDPOINTS.TAX_SETTINGS.BASE);
-      
+
       console.log('Tax settings response:', response.data);
-      
+
       // Extract settings from the response
       const settings = response.data.settings;
-      
+
       setState(prev => ({
         ...prev,
         loading: false,
@@ -77,9 +74,9 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
     } catch (error: any) {
       console.error('Error fetching tax display settings:', error);
-      
+
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load tax display settings';
-      
+
       setState(prev => ({
         ...prev,
         loading: false,
@@ -88,32 +85,29 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
       // Capture exception
       captureException(error, {
-        tags: { 
-          component: 'useTaxDisplay', 
-          action: 'fetchTaxSettings' 
+        tags: {
+          component: 'useTaxDisplay',
+          action: 'fetchTaxSettings'
         },
-        extra: { 
+        extra: {
           tenantId: currentTenant?.id,
           errorMessage
         }
       });
 
-      // Show error toast
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load tax display settings. Please try again."
+      // Show error toast using VaNiToast
+      vaniToast.error('Failed to Load Settings', {
+        message: 'Unable to load tax display settings. Please try again.',
+        duration: 4000
       });
     }
-  }, [currentTenant?.id, toast]);
+  }, [currentTenant?.id]);
 
   // Update display mode
   const updateDisplayMode = useCallback(async (mode: 'including_tax' | 'excluding_tax') => {
     if (!currentTenant?.id) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No tenant selected"
+      vaniToast.error('No Tenant Selected', {
+        message: 'Please select a tenant to continue'
       });
       return;
     }
@@ -121,13 +115,12 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
     // Validate the form data
     const formData: TaxDisplayFormData = { display_mode: mode };
     const validation = validateForm(formData);
-    
+
     if (!validation.isValid) {
       const errorMessage = Object.values(validation.errors)[0];
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: errorMessage
+      vaniToast.error('Validation Error', {
+        message: errorMessage,
+        duration: 3000
       });
       return;
     }
@@ -136,9 +129,9 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
     try {
       console.log('Updating tax display mode to:', mode);
-      
+
       const idempotencyKey = generateIdempotencyKey();
-      
+
       const requestData = {
         display_mode: mode,
         default_tax_rate_id: state.data?.default_tax_rate_id || null
@@ -165,10 +158,11 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
         error: null
       }));
 
-      // Show success toast
-      toast({
-        title: "Success",
-        description: `Tax display mode updated to "${mode === 'including_tax' ? 'Including tax' : 'Excluding tax'}"`,
+      // Show success toast using VaNiToast
+      const displayLabel = mode === 'including_tax' ? 'Including tax' : 'Excluding tax';
+      vaniToast.success('Settings Updated', {
+        message: `Tax display mode changed to "${displayLabel}"`,
+        duration: 3000
       });
 
       // Track analytics
@@ -180,9 +174,9 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
     } catch (error: any) {
       console.error('Error updating tax display mode:', error);
-      
+
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update tax display mode';
-      
+
       setState(prev => ({
         ...prev,
         saving: false,
@@ -191,25 +185,24 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
       // Capture exception
       captureException(error, {
-        tags: { 
-          component: 'useTaxDisplay', 
-          action: 'updateDisplayMode' 
+        tags: {
+          component: 'useTaxDisplay',
+          action: 'updateDisplayMode'
         },
-        extra: { 
+        extra: {
           tenantId: currentTenant?.id,
           requestedMode: mode,
           errorMessage
         }
       });
 
-      // Show error toast
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage
+      // Show error toast using VaNiToast
+      vaniToast.error('Update Failed', {
+        message: errorMessage,
+        duration: 4000
       });
     }
-  }, [currentTenant?.id, state.data?.default_tax_rate_id, toast, generateIdempotencyKey]);
+  }, [currentTenant?.id, state.data?.default_tax_rate_id, generateIdempotencyKey]);
 
   // Refresh data
   const refresh = useCallback(async () => {
@@ -228,14 +221,14 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
   // Validate form data
   const validateForm = useCallback((data: TaxDisplayFormData): ValidationResult => {
     const errors: Record<string, string> = {};
-    
+
     // Validate display mode
     if (!data.display_mode) {
       errors.display_mode = 'Display mode is required';
     } else if (!['including_tax', 'excluding_tax'].includes(data.display_mode)) {
       errors.display_mode = 'Invalid display mode';
     }
-    
+
     return {
       isValid: Object.keys(errors).length === 0,
       errors
@@ -260,7 +253,7 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
   // Log component mount/unmount
   useEffect(() => {
     console.log('useTaxDisplay hook mounted');
-    
+
     return () => {
       console.log('useTaxDisplay hook unmounted');
     };
@@ -269,11 +262,11 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
   return {
     // State
     state,
-    
+
     // Actions
     updateDisplayMode,
     refresh,
-    
+
     // Utils
     resetChanges,
     validateForm

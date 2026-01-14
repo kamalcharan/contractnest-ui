@@ -1,18 +1,21 @@
 // src/pages/settings/LOV/index.tsx
+// UPDATED: Using VaNiLoader and vaniToast for consistent UI
+
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useToast } from '@/components/ui/use-toast';
+import { vaniToast } from '@/components/common/toast';
+import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
-import { useMasterDataContext } from '@/contexts/MasterDataContext';  
+import { useMasterDataContext } from '@/contexts/MasterDataContext';
 
 // Define interfaces for the component
 interface CategoryMaster {
@@ -53,11 +56,15 @@ interface DetailFormData {
   Description: string;
 }
 
+// Generate idempotency key for operations
+const generateIdempotencyKey = () => {
+  return `lov-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
+
 const ListOfValuesPage = () => {
   const navigate = useNavigate();
   const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
-  const { toast } = useToast();
   const { invalidateCategory } = useMasterDataContext();
 
   // Get theme colors
@@ -96,15 +103,15 @@ const ListOfValuesPage = () => {
       try {
         setLoading(true);
         console.log("Fetching categories for tenant:", currentTenant.id);
-        
+
         const response = await api.get(
           `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
         );
-        
+
         const data = response.data;
         console.log("Categories data received:", data);
         setCategories(data);
-        
+
         // Select first category by default
         if (data.length > 0 && !selectedCategory) {
           console.log("Auto-selecting first category:", data[0].id);
@@ -117,10 +124,9 @@ const ListOfValuesPage = () => {
           tags: { component: 'ListOfValuesPage', action: 'fetchCategories' },
           extra: { tenantId: currentTenant?.id }
         });
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load categories"
+        vaniToast.error('Error', {
+          message: 'Failed to load categories',
+          duration: 4000
         });
       } finally {
         setLoading(false);
@@ -128,7 +134,7 @@ const ListOfValuesPage = () => {
     };
 
     fetchCategories();
-  }, [currentTenant?.id, toast]);
+  }, [currentTenant?.id]);
 
   // Fetch category details when category changes
   useEffect(() => {
@@ -137,11 +143,11 @@ const ListOfValuesPage = () => {
 
       try {
         console.log("Fetching details for category:", selectedCategory);
-        
+
         const response = await api.get(
           `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}?categoryId=${selectedCategory}&tenantId=${currentTenant.id}`
         );
-        
+
         const data = response.data;
         console.log("Category details received:", data);
         setCategoryDetails(data);
@@ -150,7 +156,7 @@ const ListOfValuesPage = () => {
         const seqResponse = await api.get(
           `${API_ENDPOINTS.MASTERDATA.NEXT_SEQUENCE}?categoryId=${selectedCategory}&tenantId=${currentTenant.id}`
         );
-        
+
         // Update form with next sequence number
         setNewDetail(prev => ({
           ...prev,
@@ -162,10 +168,9 @@ const ListOfValuesPage = () => {
           tags: { component: 'ListOfValuesPage', action: 'fetchCategoryDetails' },
           extra: { categoryId: selectedCategory, tenantId: currentTenant?.id }
         });
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Failed to load category details"
+        vaniToast.error('Error', {
+          message: 'Failed to load category details',
+          duration: 4000
         });
       }
     };
@@ -175,16 +180,16 @@ const ListOfValuesPage = () => {
       // Reset add form when category changes
       setIsAdding(false);
     }
-  }, [currentTenant?.id, selectedCategory, toast]);
+  }, [currentTenant?.id, selectedCategory]);
 
   const handleCategoryChange = (categoryId: string) => {
     console.log("Changing category to:", categoryId);
     const category = categories.find(c => c.id === categoryId);
     setSelectedCategory(categoryId);
     setSelectedCategoryName(category?.DisplayName || category?.CategoryName || '');
-    setIsAdding(false);  
+    setIsAdding(false);
     setEditingId(null);
-    
+
     try {
       analyticsService.trackPageView(`settings/configure/lovs/${categoryId}`, 'List of Values - Category Change');
     } catch (error) {
@@ -194,7 +199,7 @@ const ListOfValuesPage = () => {
 
   const handleAddClick = () => {
     setIsAdding(true);
-    
+
     try {
       analyticsService.trackPageView('settings/configure/lovs/add', 'List of Values - Add New');
     } catch (error) {
@@ -204,7 +209,7 @@ const ListOfValuesPage = () => {
 
   const handleSaveNew = async () => {
     if (!validateForm() || !currentTenant?.id || !selectedCategory) return;
-    
+
     setIsProcessing(true);
     try {
       const newValue = {
@@ -218,26 +223,31 @@ const ListOfValuesPage = () => {
         tool_tip: null,
         icon_name: null
       };
-      
+
+      const idempotencyKey = generateIdempotencyKey();
+
       const response = await api.post(
         API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS,
         newValue,
         {
-          headers: { 'x-tenant-id': currentTenant.id }
+          headers: {
+            'x-tenant-id': currentTenant.id,
+            'idempotency-key': idempotencyKey
+          }
         }
       );
-      
+
       // Add to state
       setCategoryDetails(prev => [...prev, response.data]);
-      
+
       // Invalidate cache for this category
       invalidateCategory(selectedCategoryName);
-      
-      toast({
-        title: "Success",
-        description: "New value added successfully",
+
+      vaniToast.success('Value Added', {
+        message: `"${newDetail.DisplayName}" has been added successfully`,
+        duration: 3000
       });
-      
+
       // Reset form and hide it
       setIsAdding(false);
       setNewDetail({
@@ -247,7 +257,7 @@ const ListOfValuesPage = () => {
         Sequence_no: null,
         Description: ''
       });
-      
+
       analyticsService.trackPageView('settings/configure/lovs/added', 'List of Values - Added Successfully');
     } catch (error) {
       console.error('Error adding new value:', error);
@@ -255,10 +265,9 @@ const ListOfValuesPage = () => {
         tags: { component: 'ListOfValuesPage', action: 'handleSaveNew' },
         extra: { categoryId: selectedCategory, tenantId: currentTenant?.id }
       });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to add new value"
+      vaniToast.error('Error', {
+        message: 'Failed to add new value',
+        duration: 4000
       });
     } finally {
       setIsProcessing(false);
@@ -268,26 +277,24 @@ const ListOfValuesPage = () => {
   const validateForm = () => {
     // This is a simple validation
     if (!newDetail.SubCatName || !newDetail.DisplayName) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Name and Display Name are required fields"
+      vaniToast.warning('Validation Error', {
+        message: 'Name and Display Name are required fields',
+        duration: 3000
       });
       return false;
     }
-    
+
     // Check for duplicates
-    if (categoryDetails.some(d => 
-      d.SubCatName.toLowerCase() === newDetail.SubCatName.toLowerCase() || 
+    if (categoryDetails.some(d =>
+      d.SubCatName.toLowerCase() === newDetail.SubCatName.toLowerCase() ||
       d.DisplayName.toLowerCase() === newDetail.DisplayName.toLowerCase())) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "A value with this Name or Display Name already exists"
+      vaniToast.warning('Validation Error', {
+        message: 'A value with this Name or Display Name already exists',
+        duration: 3000
       });
       return false;
     }
-    
+
     return true;
   };
 
@@ -314,23 +321,24 @@ const ListOfValuesPage = () => {
 
   const handleSaveEdit = async (id: string) => {
     if (!currentTenant?.id) return;
-    
+
     const updates = editedValues[id];
     if (!updates) return;
-    
+
     // Validate
     if ((updates.SubCatName !== undefined && !updates.SubCatName) ||
         (updates.DisplayName !== undefined && !updates.DisplayName)) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Name and Display Name are required fields"
+      vaniToast.warning('Validation Error', {
+        message: 'Name and Display Name are required fields',
+        duration: 3000
       });
       return;
     }
-    
+
     setIsProcessing(true);
     try {
+      const idempotencyKey = generateIdempotencyKey();
+
       const response = await api.patch(
         `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}/${id}`,
         {
@@ -338,25 +346,28 @@ const ListOfValuesPage = () => {
           tenantid: currentTenant.id
         },
         {
-          headers: { 'x-tenant-id': currentTenant.id }
+          headers: {
+            'x-tenant-id': currentTenant.id,
+            'idempotency-key': idempotencyKey
+          }
         }
       );
-      
+
       setCategoryDetails(prev => prev.map(d => d.id === id ? response.data : d));
       setEditingId(null);
       setEditedValues(prev => {
         const { [id]: _, ...rest } = prev;
         return rest;
       });
-      
+
       // Invalidate cache for this category
       invalidateCategory(selectedCategoryName);
-      
-      toast({
-        title: "Success",
-        description: "Value updated successfully"
+
+      vaniToast.success('Value Updated', {
+        message: 'Value has been updated successfully',
+        duration: 3000
       });
-      
+
       analyticsService.trackPageView('settings/configure/lovs/edited', 'List of Values - Edited Successfully');
     } catch (error) {
       console.error('Error updating detail:', error);
@@ -364,10 +375,9 @@ const ListOfValuesPage = () => {
         tags: { component: 'ListOfValuesPage', action: 'handleSaveEdit' },
         extra: { id, categoryId: selectedCategory, tenantId: currentTenant?.id }
       });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to update value"
+      vaniToast.error('Error', {
+        message: 'Failed to update value',
+        duration: 4000
       });
     } finally {
       setIsProcessing(false);
@@ -376,26 +386,31 @@ const ListOfValuesPage = () => {
 
   const handleDelete = async (id: string) => {
     if (!currentTenant?.id) return;
-    
+
     setIsProcessing(true);
     try {
+      const idempotencyKey = generateIdempotencyKey();
+
       await api.delete(
         `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}/${id}?tenantId=${currentTenant.id}`,
         {
-          headers: { 'x-tenant-id': currentTenant.id }
+          headers: {
+            'x-tenant-id': currentTenant.id,
+            'idempotency-key': idempotencyKey
+          }
         }
       );
-      
+
       setCategoryDetails(prev => prev.filter(d => d.id !== id));
-      
+
       // Invalidate cache for this category
       invalidateCategory(selectedCategoryName);
-      
-      toast({
-        title: "Success",
-        description: "Value deleted successfully"
+
+      vaniToast.success('Value Deleted', {
+        message: 'Value has been deleted successfully',
+        duration: 3000
       });
-      
+
       analyticsService.trackPageView('settings/configure/lovs/deleted', 'List of Values - Deleted Successfully');
     } catch (error) {
       console.error('Error deleting detail:', error);
@@ -403,35 +418,35 @@ const ListOfValuesPage = () => {
         tags: { component: 'ListOfValuesPage', action: 'handleDelete' },
         extra: { id, categoryId: selectedCategory, tenantId: currentTenant?.id }
       });
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to delete value"
+      vaniToast.error('Error', {
+        message: 'Failed to delete value',
+        duration: 4000
       });
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // Loading state - Using VaNiLoader
   if (loading) {
     return (
-      <div 
+      <div
         className="flex items-center justify-center min-h-[400px] transition-colors"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
-        <Loader2 
-          className="h-8 w-8 animate-spin transition-colors" 
-          style={{ color: colors.brand.primary }}
+        <VaNiLoader
+          size="md"
+          message="LOADING LIST OF VALUES"
         />
       </div>
     );
   }
 
   return (
-    <div 
+    <div
       className="p-6 transition-colors duration-200 min-h-screen"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
       }}
@@ -449,19 +464,19 @@ const ListOfValuesPage = () => {
             color: colors.utility.primaryText
           }}
         >
-          <ArrowLeft 
-            className="h-5 w-5 transition-colors" 
+          <ArrowLeft
+            className="h-5 w-5 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           />
         </Button>
         <div>
-          <h1 
+          <h1
             className="text-2xl font-bold transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             List of Values
           </h1>
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -473,7 +488,7 @@ const ListOfValuesPage = () => {
       <div className="flex gap-6">
         {/* Category list */}
         <div className="w-64 shrink-0">
-          <div 
+          <div
             className="rounded-lg shadow-sm border overflow-hidden transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -484,25 +499,25 @@ const ListOfValuesPage = () => {
               categories.map((category, index) => {
                 const isSelected = selectedCategory === category.id;
                 const isFirst = index === 0;
-                
+
                 return (
                   <button
                     key={category.id}
                     onClick={() => handleCategoryChange(category.id)}
                     className={cn(
                       "w-full px-4 py-3 text-left border-b last:border-0 transition-colors",
-                      isSelected 
-                        ? "font-medium" 
+                      isSelected
+                        ? "font-medium"
                         : "hover:opacity-80"
                     )}
                     style={{
                       borderColor: colors.utility.primaryText + '20',
-                      backgroundColor: isSelected 
+                      backgroundColor: isSelected
                         ? colors.brand.primary
-                        : isFirst && !isSelected 
+                        : isFirst && !isSelected
                         ? colors.utility.primaryBackground + '50'
                         : 'transparent',
-                      color: isSelected 
+                      color: isSelected
                         ? '#FFFFFF'
                         : colors.utility.primaryText
                     }}
@@ -512,7 +527,7 @@ const ListOfValuesPage = () => {
                 );
               })
             ) : (
-              <div 
+              <div
                 className="p-4 text-center transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -528,14 +543,20 @@ const ListOfValuesPage = () => {
             <div>
               {/* Category Title and Add Button */}
               <div className="flex justify-between items-center mb-6">
-                <h2 
-                  className="text-xl font-semibold transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  {selectedCategoryName}
-                </h2>
+                <div className="flex items-center gap-3">
+                  <h2
+                    className="text-xl font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {selectedCategoryName}
+                  </h2>
+                  {/* Processing indicator - Using InlineLoader */}
+                  {isProcessing && (
+                    <InlineLoader size="sm" text="Processing..." />
+                  )}
+                </div>
                 {!isAdding && (
-                  <Button 
+                  <Button
                     onClick={handleAddClick}
                     className="transition-colors hover:opacity-90"
                     style={{
@@ -551,7 +572,7 @@ const ListOfValuesPage = () => {
               </div>
 
               {/* Column Headers */}
-              <div 
+              <div
                 className="rounded-lg shadow-sm border mb-4 transition-colors"
                 style={{
                   backgroundColor: colors.utility.secondaryBackground,
@@ -559,31 +580,31 @@ const ListOfValuesPage = () => {
                 }}
               >
                 <div className="grid grid-cols-5 gap-4 px-4 py-3">
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Name
                   </div>
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Display Name
                   </div>
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Color
                   </div>
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Sequence
                   </div>
-                  <div 
+                  <div
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
@@ -629,8 +650,8 @@ const ListOfValuesPage = () => {
                             }}
                           />
                           <div className="flex items-center gap-2">
-                            <div 
-                              className="w-6 h-6 rounded-full" 
+                            <div
+                              className="w-6 h-6 rounded-full"
                               style={{ backgroundColor: editedValues[detail.id]?.hexcolor ?? detail.hexcolor ?? '#FFFFFF' }}
                             />
                             <Input
@@ -644,7 +665,7 @@ const ListOfValuesPage = () => {
                           <Input
                             type="number"
                             value={editedValues[detail.id]?.Sequence_no ?? detail.Sequence_no ?? ''}
-                            onChange={(e) => handleInputChange(detail.id, 'Sequence_no', 
+                            onChange={(e) => handleInputChange(detail.id, 'Sequence_no',
                               e.target.value ? parseInt(e.target.value) : null
                             )}
                             disabled={isProcessing}
@@ -687,7 +708,11 @@ const ListOfValuesPage = () => {
                                   color: '#FFFFFF'
                                 }}
                               >
-                                Save
+                                {isProcessing ? (
+                                  <InlineLoader size="sm" text="Saving" />
+                                ) : (
+                                  'Save'
+                                )}
                               </Button>
                             </div>
                           </div>
@@ -695,13 +720,13 @@ const ListOfValuesPage = () => {
                       ) : (
                         // View Mode
                         <>
-                          <div 
+                          <div
                             className="transition-colors"
                             style={{ color: colors.utility.primaryText }}
                           >
                             {detail.SubCatName}
                           </div>
-                          <div 
+                          <div
                             className="transition-colors"
                             style={{ color: colors.utility.primaryText }}
                           >
@@ -715,14 +740,14 @@ const ListOfValuesPage = () => {
                               />
                             )}
                           </div>
-                          <div 
+                          <div
                             className="transition-colors"
                             style={{ color: colors.utility.primaryText }}
                           >
                             {detail.Sequence_no}
                           </div>
                           <div className="flex items-center justify-between">
-                            <span 
+                            <span
                               className="truncate transition-colors"
                               style={{ color: colors.utility.primaryText }}
                             >
@@ -769,7 +794,7 @@ const ListOfValuesPage = () => {
 
                 {/* Add Form */}
                 {isAdding && (
-                  <div 
+                  <div
                     className="rounded-lg shadow-sm border-2 transition-colors"
                     style={{
                       backgroundColor: colors.utility.secondaryBackground,
@@ -800,8 +825,8 @@ const ListOfValuesPage = () => {
                         }}
                       />
                       <div className="flex items-center gap-2">
-                        <div 
-                          className="w-6 h-6 rounded-full" 
+                        <div
+                          className="w-6 h-6 rounded-full"
                           style={{ backgroundColor: newDetail.hexcolor || '#FFFFFF' }}
                         />
                         <Input
@@ -816,9 +841,9 @@ const ListOfValuesPage = () => {
                         type="number"
                         placeholder="Sequence"
                         value={newDetail.Sequence_no || ''}
-                        onChange={(e) => setNewDetail(prev => ({ 
-                          ...prev, 
-                          Sequence_no: e.target.value ? parseInt(e.target.value) : null 
+                        onChange={(e) => setNewDetail(prev => ({
+                          ...prev,
+                          Sequence_no: e.target.value ? parseInt(e.target.value) : null
                         }))}
                         disabled={isProcessing}
                         style={{
@@ -861,7 +886,11 @@ const ListOfValuesPage = () => {
                               color: '#FFFFFF'
                             }}
                           >
-                            Save
+                            {isProcessing ? (
+                              <InlineLoader size="sm" text="Saving" />
+                            ) : (
+                              'Save'
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -871,14 +900,14 @@ const ListOfValuesPage = () => {
 
                 {/* Empty State */}
                 {categoryDetails.length === 0 && !isAdding && (
-                  <div 
+                  <div
                     className="rounded-lg shadow-sm border p-8 text-center transition-colors"
                     style={{
                       backgroundColor: colors.utility.secondaryBackground,
                       borderColor: colors.utility.primaryText + '20'
                     }}
                   >
-                    <p 
+                    <p
                       className="transition-colors"
                       style={{ color: colors.utility.secondaryText }}
                     >
@@ -889,14 +918,14 @@ const ListOfValuesPage = () => {
               </div>
             </div>
           ) : (
-            <div 
+            <div
               className="rounded-lg shadow-sm border p-8 text-center transition-colors"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
                 borderColor: colors.utility.primaryText + '20'
               }}
             >
-              <p 
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
