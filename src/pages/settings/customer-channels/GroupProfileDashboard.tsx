@@ -46,7 +46,8 @@ import groupsService from '../../../services/groupsService';
 import ProfileEntryForm from '../../../components/VaNi/bbb/ProfileEntryForm';
 import AIEnhancementSection from '../../../components/VaNi/bbb/AIEnhancementSection';
 import SemanticClustersForm, { SemanticCluster } from '../../../components/VaNi/bbb/SemanticClustersForm';
-import toast from 'react-hot-toast';
+import { vaniToast } from '../../../components/common/toast';
+import { VaNiLoader } from '../../../components/common/loaders';
 
 // Profile Details Card Component (Left 65%)
 interface ProfileDetailsCardProps {
@@ -380,9 +381,7 @@ const GroupProfileDashboard: React.FC = () => {
   // Handle "Let me in" click - create membership
   const handleJoinGroup = async () => {
     if (!groupId || !currentTenant?.id) {
-      toast.error('Group not found. Please try again.', {
-        style: { background: colors.semantic.error, color: '#FFF' }
-      });
+      vaniToast.error('Group not found. Please try again.');
       return;
     }
 
@@ -402,9 +401,7 @@ const GroupProfileDashboard: React.FC = () => {
       setShowJoinDialog(false);
       setShowCreateFlow(true);
 
-      toast.success('Welcome! Let\'s create your profile.', {
-        style: { background: colors.semantic.success, color: '#FFF' }
-      });
+      vaniToast.success('Welcome! Let\'s create your profile.');
     } catch (error: any) {
       console.error('❌ Failed to create membership:', error);
 
@@ -414,14 +411,10 @@ const GroupProfileDashboard: React.FC = () => {
         if (existingId) {
           setMembershipId(existingId);
           setShowJoinDialog(false);
-          toast.success('Welcome back! Let\'s update your profile.', {
-            style: { background: colors.semantic.success, color: '#FFF' }
-          });
+          vaniToast.success('Welcome back! Let\'s update your profile.');
         }
       } else {
-        toast.error(error.message || 'Failed to join group. Please try again.', {
-          style: { background: colors.semantic.error, color: '#FFF' }
-        });
+        vaniToast.error(error.message || 'Failed to join group. Please try again.');
       }
     }
   };
@@ -445,13 +438,9 @@ const GroupProfileDashboard: React.FC = () => {
       setKeywords(result.suggested_keywords || []);
       setCreateStep('enhanced');
 
-      toast.success('AI enhancement complete!', {
-        style: { background: colors.semantic.success, color: '#FFF' }
-      });
+      vaniToast.success('AI enhancement complete!');
     } catch (error: any) {
-      toast.error(error.message || 'Enhancement failed', {
-        style: { background: colors.semantic.error, color: '#FFF' }
-      });
+      vaniToast.error(error.message || 'Enhancement failed');
     }
   };
 
@@ -470,13 +459,9 @@ const GroupProfileDashboard: React.FC = () => {
         setKeywords(result.suggested_keywords || []);
         setCreateStep('enhanced');
 
-        toast.success('Website analyzed successfully!', {
-          style: { background: colors.semantic.success, color: '#FFF' }
-        });
+        vaniToast.success('Website analyzed successfully!');
       } catch (error: any) {
-        toast.error(error.message || 'Website scraping failed', {
-          style: { background: colors.semantic.error, color: '#FFF' }
-        });
+        vaniToast.error(error.message || 'Website scraping failed');
       }
     }
   };
@@ -498,13 +483,9 @@ const GroupProfileDashboard: React.FC = () => {
 
       setCreateStep('clusters');
 
-      toast.success('Profile saved! Now let\'s generate search clusters.', {
-        style: { background: colors.semantic.success, color: '#FFF' }
-      });
+      vaniToast.success('Profile saved! Now let\'s generate search clusters.');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to save profile', {
-        style: { background: colors.semantic.error, color: '#FFF' }
-      });
+      vaniToast.error(error.message || 'Failed to save profile');
     }
   };
 
@@ -537,9 +518,7 @@ const GroupProfileDashboard: React.FC = () => {
 
     setCreateStep('success');
 
-    toast.success('Clusters saved! Your profile is now searchable.', {
-      style: { background: colors.semantic.success, color: '#FFF' }
-    });
+    vaniToast.success('Clusters saved! Your profile is now searchable.');
 
     // Mark profile as just created to show dashboard immediately
     setProfileJustCreated(true);
@@ -571,13 +550,9 @@ const GroupProfileDashboard: React.FC = () => {
       setIsEditing(false);
       refetchMembership();
 
-      toast.success('Profile updated!', {
-        style: { background: colors.semantic.success, color: '#FFF' }
-      });
+      vaniToast.success('Profile updated!');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update profile', {
-        style: { background: colors.semantic.error, color: '#FFF' }
-      });
+      vaniToast.error(error.message || 'Failed to update profile');
     }
   };
 
@@ -585,13 +560,7 @@ const GroupProfileDashboard: React.FC = () => {
   if (isLoadingGroup || isCheckingMembership || isLoadingTenantProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-            style={{ borderColor: colors.brand.primary, borderTopColor: 'transparent' }}
-          />
-          <p style={{ color: colors.utility.secondaryText }}>Loading...</p>
-        </div>
+        <VaNiLoader size="md" message="Loading..." />
       </div>
     );
   }

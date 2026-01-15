@@ -1,7 +1,7 @@
 // src/hooks/useStorageManagement.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { 
@@ -209,7 +209,7 @@ export const useStorageManagement = () => {
   // Setup storage
   const setupStorage = async (): Promise<boolean> => {
     if (!currentTenant?.id) {
-      toast.error('No tenant selected');
+      vaniToast.error('No tenant selected');
       return false;
     }
     
@@ -236,26 +236,26 @@ export const useStorageManagement = () => {
         });
       }
       
-      toast.success('Storage setup completed successfully');
+      vaniToast.success('Storage setup completed successfully');
       return true;
     } catch (err: any) {
       if (!isMountedRef.current) return false;
-      
+
       console.error('Error setting up storage:', err);
-      
+
       if (err.response?.status === 400) {
         const errorMessage = err.response?.data?.error || '';
-        
+
         if (errorMessage.toLowerCase().includes('already set up')) {
           setStorageSetupComplete(true);
           await fetchStorageStats();
-          toast('Storage is already set up');
+          vaniToast.info('Storage is already set up');
           return true;
         }
       }
-      
+
       setError(err.response?.data?.error || 'Failed to setup storage');
-      toast.error(err.response?.data?.error || 'Failed to setup storage');
+      vaniToast.error(err.response?.data?.error || 'Failed to setup storage');
       return false;
     } finally {
       if (isMountedRef.current) {
@@ -321,26 +321,26 @@ export const useStorageManagement = () => {
   // Upload single file
   const uploadFile = async (file: File, category: string, metadata?: any): Promise<StorageFile | null> => {
     if (!currentTenant?.id || !storageSetupComplete) {
-      toast.error('Storage is not set up yet');
+      vaniToast.error('Storage is not set up yet');
       return null;
     }
-    
+
     if (!isFileSizeAllowed(file.size, category)) {
-      toast.error(`File size exceeds the maximum limit of ${formatFileSize(5 * 1024 * 1024)}`);
+      vaniToast.error(`File size exceeds the maximum limit of ${formatFileSize(5 * 1024 * 1024)}`);
       return null;
     }
-    
+
     if (!isFileTypeAllowed(file.type, category)) {
-      toast.error('File type is not allowed for this category');
+      vaniToast.error('File type is not allowed for this category');
       return null;
     }
-    
+
     setIsSubmitting(true);
     setError(null);
-    
+
     try {
       if (storageStats && file.size > storageStats.available) {
-        toast.error('Not enough storage space available');
+        vaniToast.error('Not enough storage space available');
         return null;
       }
 
@@ -384,16 +384,16 @@ export const useStorageManagement = () => {
       
       // Refresh storage stats
       fetchStorageStats();
-      
-      toast.success('File uploaded successfully');
+
+      vaniToast.success('File uploaded successfully');
       return uploadedFile;
     } catch (err: any) {
       console.error('Upload Error:', err);
-      
+
       const errorMessage = err.message || 'Failed to upload file';
       setError(errorMessage);
-      toast.error(errorMessage);
-      
+      vaniToast.error(errorMessage);
+
       return null;
     } finally {
       setIsSubmitting(false);
@@ -403,13 +403,13 @@ export const useStorageManagement = () => {
   // Upload multiple files
   const uploadMultipleFiles = async (files: File[], category: string): Promise<boolean> => {
     if (!currentTenant?.id || !storageSetupComplete) {
-      toast.error('Storage is not set up yet');
+      vaniToast.error('Storage is not set up yet');
       return false;
     }
-    
+
     const totalSize = files.reduce((sum, file) => sum + file.size, 0);
     if (storageStats && totalSize > storageStats.available) {
-      toast.error('Not enough storage space available for all files');
+      vaniToast.error('Not enough storage space available for all files');
       return false;
     }
     
@@ -464,20 +464,20 @@ export const useStorageManagement = () => {
       }
       
       fetchStorageStats();
-      
+
       if (result.summary.failed > 0) {
-        toast(result.message, { icon: '⚠️' });
+        vaniToast.warning(result.message);
       } else {
-        toast.success(result.message);
+        vaniToast.success(result.message);
       }
-      
+
       return result.summary.failed === 0;
     } catch (err: any) {
       if (!isMountedRef.current) return false;
-      
+
       console.error('Error uploading multiple files:', err);
       setError(err.message || 'Failed to upload files');
-      toast.error(err.message || 'Failed to upload files');
+      vaniToast.error(err.message || 'Failed to upload files');
       return false;
     } finally {
       if (isMountedRef.current) {
@@ -514,15 +514,15 @@ export const useStorageManagement = () => {
       }
       
       fetchStorageStats();
-      
-      toast.success('File deleted successfully');
+
+      vaniToast.success('File deleted successfully');
       return true;
     } catch (err: any) {
       if (!isMountedRef.current) return false;
-      
+
       console.error('Error deleting file:', err);
       setError(err.response?.data?.error || 'Failed to delete file');
-      toast.error(err.response?.data?.error || 'Failed to delete file');
+      vaniToast.error(err.response?.data?.error || 'Failed to delete file');
       return false;
     } finally {
       if (isMountedRef.current) {
@@ -567,20 +567,20 @@ export const useStorageManagement = () => {
       }
       
       fetchStorageStats();
-      
+
       if (result.summary.failed > 0) {
-        toast(result.message, { icon: '⚠️' });
+        vaniToast.warning(result.message);
       } else {
-        toast.success(result.message);
+        vaniToast.success(result.message);
       }
-      
+
       return result.summary.failed === 0;
     } catch (err: any) {
       if (!isMountedRef.current) return false;
-      
+
       console.error('Error deleting multiple files:', err);
       setError(err.response?.data?.error || 'Failed to delete files');
-      toast.error(err.response?.data?.error || 'Failed to delete files');
+      vaniToast.error(err.response?.data?.error || 'Failed to delete files');
       return false;
     } finally {
       if (isMountedRef.current) {

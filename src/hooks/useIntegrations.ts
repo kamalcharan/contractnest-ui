@@ -1,7 +1,7 @@
 // src/hooks/useIntegrations.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 
@@ -157,17 +157,7 @@ export const useIntegrations = () => {
       
       // Only show error toast if it's not an auth error (to prevent logout)
       if (err.response?.status !== 401) {
-        toast.error(err.response?.data?.error || 'Failed to load integration types', {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(err.response?.data?.error || 'Failed to load integration types');
       }
       
       setError(err.response?.data?.error || 'Failed to load integration types');
@@ -212,19 +202,9 @@ export const useIntegrations = () => {
       
       // Only show error toast if it's not an auth error
       if (err.response?.status !== 401) {
-        toast.error(err.response?.data?.error || `Failed to load ${type} integrations`, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(err.response?.data?.error || `Failed to load ${type} integrations`);
       }
-      
+
       setError(err.response?.data?.error || 'Failed to load integrations');
     }
   }, [currentTenant?.id, isLive]);
@@ -241,21 +221,11 @@ export const useIntegrations = () => {
       setCurrentIntegration(response.data);
     } catch (err: any) {
       console.error('Error fetching integration:', err);
-      
+
       if (err.response?.status !== 401) {
-        toast.error(err.response?.data?.error || 'Failed to load integration', {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(err.response?.data?.error || 'Failed to load integration');
       }
-      
+
       setError(err.response?.data?.error || 'Failed to load integration');
     } finally {
       setIsLoading(false);
@@ -285,34 +255,14 @@ export const useIntegrations = () => {
       const response = await api.post(`${API_ENDPOINTS.INTEGRATIONS.TEST}`, testPayload);
       
       setTestResult(response.data);
-      
+
       // Show toast based on result
       if (response.data.success) {
-        toast.success(response.data.message, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#10B981',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.success(response.data.message);
       } else {
-        toast.error(response.data.message, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(response.data.message);
       }
-      
+
       return response.data;
     } catch (err: any) {
       console.error('Error testing integration:', err);
@@ -323,21 +273,11 @@ export const useIntegrations = () => {
         success: false,
         message: errorMessage
       });
-      
+
       if (err.response?.status !== 401) {
-        toast.error(errorMessage, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(errorMessage);
       }
-      
+
       return { success: false, message: errorMessage };
     } finally {
       setIsTesting(false);
@@ -348,24 +288,15 @@ export const useIntegrations = () => {
   const saveIntegration = async (integration: Integration) => {
     setSubmitting(true);
     setError(null);
-    
-    const loadingToastId = toast.loading('Saving integration...', {
-      style: {
-        padding: '16px',
-        borderRadius: '8px',
-        background: '#FFFFFF',
-        color: '#333333',
-        fontSize: '16px',
-        minWidth: '300px'
-      },
-    });
-    
+
+    const loadingToastId = vaniToast.info('Saving integration...', { duration: 60000 });
+
     try {
       // Test the connection first
       const testResponse = await testConnection(integration);
-      
+
       if (!testResponse.success) {
-        toast.dismiss(loadingToastId);
+        vaniToast.dismiss(loadingToastId);
         return false;
       }
       
@@ -381,43 +312,23 @@ export const useIntegrations = () => {
       
       // Clear the fetched types to force refresh
       fetchedTypesRef.current.clear();
-      
-      toast.dismiss(loadingToastId);
-      toast.success('Integration saved successfully', {
-        duration: 3000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.dismiss(loadingToastId);
+      vaniToast.success('Integration saved successfully');
+
       return true;
     } catch (err: any) {
       console.error('Error saving integration:', err);
-      
+
       const errorMessage = err.response?.data?.error || 'Failed to save integration';
       setError(errorMessage);
-      
-      toast.dismiss(loadingToastId);
-      
+
+      vaniToast.dismiss(loadingToastId);
+
       if (err.response?.status !== 401) {
-        toast.error(errorMessage, {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(errorMessage);
       }
-      
+
       return false;
     } finally {
       setSubmitting(false);
@@ -445,37 +356,17 @@ export const useIntegrations = () => {
       
       // Refresh integration types to update counts
       fetchIntegrationTypes();
-      
-      toast.success(`Integration ${active ? 'activated' : 'deactivated'} successfully`, {
-        duration: 2000,
-        style: {
-          padding: '16px',
-          borderRadius: '8px',
-          background: '#10B981',
-          color: '#FFF',
-          fontSize: '16px',
-          minWidth: '300px'
-        },
-      });
-      
+
+      vaniToast.success(`Integration ${active ? 'activated' : 'deactivated'} successfully`);
+
       return true;
     } catch (err: any) {
       console.error('Error toggling integration status:', err);
-      
+
       if (err.response?.status !== 401) {
-        toast.error(err.response?.data?.error || 'Failed to update integration status', {
-          duration: 3000,
-          style: {
-            padding: '16px',
-            borderRadius: '8px',
-            background: '#EF4444',
-            color: '#FFF',
-            fontSize: '16px',
-            minWidth: '300px'
-          },
-        });
+        vaniToast.error(err.response?.data?.error || 'Failed to update integration status');
       }
-      
+
       return false;
     }
   };

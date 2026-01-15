@@ -19,6 +19,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '../../contexts/ThemeContext';
+import { VaNiLoader } from '@/components/common/loaders';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
 
 export interface User {
@@ -331,34 +332,8 @@ const UsersList: React.FC<UsersListProps> = ({
 
   if (isLoading) {
     return (
-      <div className={cn('space-y-4', className)}>
-        {[1, 2, 3, 4].map(i => (
-          <div 
-            key={i} 
-            className="border rounded-lg p-4 animate-pulse transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.secondaryText + '20'
-            }}
-          >
-            <div className="flex items-center space-x-4">
-              <div 
-                className="h-12 w-12 rounded-full"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div className="flex-1 space-y-2">
-                <div 
-                  className="h-4 rounded w-1/3"
-                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-                ></div>
-                <div 
-                  className="h-3 rounded w-1/4"
-                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className={cn('flex justify-center py-12', className)}>
+        <VaNiLoader size="md" message="Loading Team Members..." />
       </div>
     );
   }

@@ -24,7 +24,8 @@ import {
 import { useQueries } from '@tanstack/react-query';
 import { useGroups, useVerifyGroupAccess, groupQueryKeys } from '../../../hooks/queries/useGroupQueries';
 import groupsService from '../../../services/groupsService';
-import toast from 'react-hot-toast';
+import { vaniToast } from '../../../components/common/toast';
+import { VaNiLoader } from '../../../components/common/loaders';
 
 // Authentication Modal Component - Verifies user or admin password
 interface AuthModalProps {
@@ -65,20 +66,14 @@ const AuthenticationModal: React.FC<AuthModalProps> = ({
         const message = accessType === 'admin'
           ? `Admin access granted to ${group.name}!`
           : `Access granted to ${group.name}!`;
-        toast.success(message, {
-          style: { background: colors.semantic.success, color: '#FFF' }
-        });
+        vaniToast.success(message);
         onSuccess();
         onClose();
       } else {
-        toast.error('Invalid password. Please try again.', {
-          style: { background: colors.semantic.error, color: '#FFF' }
-        });
+        vaniToast.error('Invalid password. Please try again.');
       }
     } catch (error: any) {
-      toast.error(error.message || 'Authentication failed', {
-        style: { background: colors.semantic.error, color: '#FFF' }
-      });
+      vaniToast.error(error.message || 'Authentication failed');
     } finally {
       setIsVerifying(false);
       setPassword('');
@@ -392,13 +387,7 @@ const GroupsListPage: React.FC = () => {
   if (isLoadingGroups) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div
-            className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-            style={{ borderColor: colors.brand.primary, borderTopColor: 'transparent' }}
-          />
-          <p style={{ color: colors.utility.secondaryText }}>Loading Groups...</p>
-        </div>
+        <VaNiLoader size="md" message="Loading Groups..." />
       </div>
     );
   }

@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 
@@ -115,7 +115,7 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
       setError(errorMsg);
       // Only show toast for actual errors, not for empty data
       if (err.response?.status !== 404) {
-        toast.error(errorMsg);
+        vaniToast.error(errorMsg);
       }
     } finally {
       setLoading(false);
@@ -129,21 +129,18 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
     
     try {
       const response = await api.post<Invitation>('/api/users/invitations', data);
-      
-      toast.success('Invitation sent successfully', {
-        duration: 3000,
-        icon: '📧'
-      });
-      
+
+      vaniToast.success('Invitation sent successfully');
+
       // Refresh the list
       await fetchInvitations(currentPage, statusFilter);
-      
+
       return response.data;
     } catch (err: any) {
       console.error('Error creating invitation:', err);
       const errorMsg = err.response?.data?.error || 'Failed to send invitation';
       setError(errorMsg);
-      toast.error(errorMsg);
+      vaniToast.error(errorMsg);
       return null;
     } finally {
       setSubmitting(false);
@@ -153,23 +150,20 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
   // Resend invitation
   const resendInvitation = async (invitationId: string): Promise<boolean> => {
     setSubmitting(true);
-    
+
     try {
       await api.post(`/api/users/invitations/${invitationId}/resend`);
-      
-      toast.success('Invitation resent successfully', {
-        duration: 3000,
-        icon: '🔄'
-      });
-      
+
+      vaniToast.success('Invitation resent successfully');
+
       // Refresh the list
       await fetchInvitations(currentPage, statusFilter);
-      
+
       return true;
     } catch (err: any) {
       console.error('Error resending invitation:', err);
       const errorMsg = err.response?.data?.error || 'Failed to resend invitation';
-      toast.error(errorMsg);
+      vaniToast.error(errorMsg);
       return false;
     } finally {
       setSubmitting(false);
@@ -179,23 +173,20 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
   // Cancel invitation
   const cancelInvitation = async (invitationId: string): Promise<boolean> => {
     setSubmitting(true);
-    
+
     try {
       await api.post(`/api/users/invitations/${invitationId}/cancel`);
-      
-      toast.success('Invitation cancelled', {
-        duration: 3000,
-        icon: '❌'
-      });
-      
+
+      vaniToast.success('Invitation cancelled');
+
       // Refresh the list
       await fetchInvitations(currentPage, statusFilter);
-      
+
       return true;
     } catch (err: any) {
       console.error('Error cancelling invitation:', err);
       const errorMsg = err.response?.data?.error || 'Failed to cancel invitation';
-      toast.error(errorMsg);
+      vaniToast.error(errorMsg);
       return false;
     } finally {
       setSubmitting(false);
@@ -211,7 +202,7 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
       console.error('Error fetching invitation:', err);
       const errorMsg = err.response?.data?.error || 'Failed to load invitation details';
       if (err.response?.status !== 404) {
-        toast.error(errorMsg);
+        vaniToast.error(errorMsg);
       }
       return null;
     }
@@ -246,12 +237,9 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
         secret_code: secretCode,
         user_id: userId
       });
-      
-      toast.success('Invitation accepted successfully!', {
-        duration: 3000,
-        icon: '✅'
-      });
-      
+
+      vaniToast.success('Invitation accepted successfully!');
+
       return {
         success: true,
         data: response.data
@@ -259,8 +247,8 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
     } catch (err: any) {
       console.error('Error accepting invitation:', err);
       const errorMsg = err.response?.data?.error || 'Failed to accept invitation';
-      toast.error(errorMsg);
-      
+      vaniToast.error(errorMsg);
+
       return {
         success: false,
         error: errorMsg

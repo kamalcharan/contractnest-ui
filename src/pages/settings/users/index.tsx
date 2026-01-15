@@ -20,7 +20,7 @@ import InvitationsList from '@/components/users/InvitationsList';
 import InviteUserModal from '@/components/users/InviteUserModal';
 import InvitationDetailsModal from '@/components/users/InvitationDetailsModal';
 import { cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { Invitation } from '@/hooks/useInvitations';
@@ -162,7 +162,7 @@ const UsersPage: React.FC = () => {
         }
       } catch (error) {
         console.error('Error fetching roles:', error);
-        toast.error('Failed to load roles');
+        vaniToast.error('Failed to load roles');
       } finally {
         setRolesLoading(false);
       }
@@ -200,9 +200,9 @@ const UsersPage: React.FC = () => {
       }
       
       setDataLoaded(prev => ({ ...prev, [activeTab]: true }));
-      toast.success('Data refreshed');
+      vaniToast.success('Data refreshed');
     } catch (error) {
-      toast.error('Failed to refresh data');
+      vaniToast.error('Failed to refresh data');
     } finally {
       setIsRefreshing(false);
     }

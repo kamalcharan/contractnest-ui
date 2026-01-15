@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, FileText, Plus, Search, Filter, File, Files } from 'lucide-react';
 import { useStorageManagement } from '@/hooks/useStorageManagement';
+import { VaNiLoader } from '@/components/common/loaders';
 import StorageStats from '@/components/storage/StorageStats';
 import CategoryCard from '@/components/storage/CategoryCard';
 import FileList from '@/components/storage/FileList';
@@ -118,19 +119,16 @@ const StorageManagementPage: React.FC = () => {
   // Show loading
   if (isLoading) {
     return (
-      <div 
+      <div
         className="p-6 transition-colors duration-200 min-h-screen"
         style={{
-          background: isDarkMode 
+          background: isDarkMode
             ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
             : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
         }}
       >
         <div className="flex justify-center py-12">
-          <div 
-            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full transition-colors"
-            style={{ borderColor: colors.brand.primary }}
-          ></div>
+          <VaNiLoader size="md" message="Loading Storage..." />
         </div>
       </div>
     );

@@ -37,10 +37,10 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: true,
     submenuItems: [
       { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
-      { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
-      // HIDDEN: Activity Feed - commented out
+      { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' }
+      // HIDDEN: Activity Feed, Reports - commented out
       // { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' },
-      { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
+      // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
     ]
   },
   // REMOVED: Contacts menu - now available under Operations > Entities
@@ -79,18 +79,21 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   */
-  // Contracts menu - simplified (hidden: PDF View, Drafts, Pending Acceptance, Active Contracts)
+  // Contracts menu - simplified (hidden: All Contracts, Contract Preview, Invite Sellers, PDF View, Drafts, Pending Acceptance, Active Contracts)
   {
     id: 'contracts',
     label: 'Contracts',
     icon: 'FileText',
-    path: '/contracts',
+    path: '/contracts/create',
     hasSubmenu: true,
     submenuItems: [
-      { id: 'contracts-create', label: 'My Contracts', icon: 'FilePlus', path: '/contracts/create' },
+      { id: 'contracts-create', label: 'My Contracts', icon: 'FilePlus', path: '/contracts/create' }
+      // HIDDEN: All Contracts, Contract Preview, Invite Sellers
+      /*
       { id: 'contracts-all', label: 'All Contracts', icon: 'FileText', path: '/service-contracts/contracts' },
       { id: 'contracts-preview', label: 'Contract Preview', icon: 'Eye', path: '/contracts/preview' },
-      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' }
+      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' },
+      */
       // HIDDEN: PDF View, Drafts, Pending Acceptance, Active Contracts
       /*
       { id: 'contracts-pdf', label: 'PDF View', icon: 'FileSearch', path: '/contracts/pdf' },

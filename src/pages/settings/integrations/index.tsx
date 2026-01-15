@@ -9,7 +9,7 @@ import { analyticsService } from '@/services/analytics.service';
 import IntegrationTypeSection from '@/components/integrations/IntegrationTypeSection';
 import StatusBadge from '@/components/integrations/StatusBadge';
 // import ProviderLogo from '@/components/integrations/ProviderLogo';
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { VaNiLoader } from '@/components/common/loaders';
 import { 
   Integration, 
   IntegrationTypeStatus,
@@ -283,15 +283,7 @@ const IntegrationsPage = () => {
         {loading && integrationTypes.length === 0 ? (
           // Show centered loading spinner on initial load
           <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <LoadingSpinner size="lg" color="primary" />
-              <p 
-                className="mt-4 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Loading integrations...
-              </p>
-            </div>
+            <VaNiLoader size="md" message="Loading integrations..." />
           </div>
         ) : (
           // Render each type with its integrations using the IntegrationTypeSection component
@@ -315,14 +307,14 @@ const IntegrationsPage = () => {
                       {typeData.description}
                     </p>
                   </div>
-                  <div 
+                  <div
                     className="flex items-center justify-center py-8 rounded-lg border transition-colors"
                     style={{
                       backgroundColor: colors.utility.secondaryBackground,
                       borderColor: colors.utility.primaryText + '20'
                     }}
                   >
-                    <LoadingSpinner size="md" color="primary" />
+                    <VaNiLoader size="sm" message="Loading..." />
                   </div>
                 </div>
               );
