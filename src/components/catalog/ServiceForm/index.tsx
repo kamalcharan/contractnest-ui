@@ -111,7 +111,9 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
   const {
     uploadFile,
     deleteFile,
-    isSubmitting: isUploadingImage
+    isSubmitting: isUploadingImage,
+    storageSetupComplete,
+    isLoading: isStorageLoading
   } = useStorageManagement();
 
   // Get existing service data
@@ -248,6 +250,11 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
       return null;
     }
 
+    // Check if storage is set up before attempting upload
+    if (!storageSetupComplete) {
+      throw new Error('Storage is not set up. Please configure storage in Settings → Storage Management before uploading images.');
+    }
+
     console.log('📤 Uploading buffered image...');
 
     try {
@@ -286,7 +293,7 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
       console.error('❌ Image upload failed:', error);
       throw new Error('Failed to upload image. Please try again.');
     }
-  }, [formData.basic_info, formData.metadata, uploadFile, deleteFile]);
+  }, [formData.basic_info, formData.metadata, uploadFile, deleteFile, storageSetupComplete]);
 
   // ✅ UPDATED: Handle form submission with image upload
   const handleSubmit = useCallback(async () => {
@@ -298,6 +305,16 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
     if (hasValidationErrors(allErrors)) {
       setValidationErrors(allErrors);
       console.log('❌ Validation errors:', allErrors);
+      return;
+    }
+
+    // Check if storage is set up when trying to upload a new image
+    if (formData.basic_info.image && !storageSetupComplete) {
+      setValidationErrors({
+        ...allErrors,
+        image: 'Storage is not set up. Please configure storage in Settings → Storage Management before uploading images.'
+      });
+      console.log('❌ Storage not set up for image upload');
       return;
     }
 
@@ -403,14 +420,15 @@ const ServiceForm: React.FC<ServiceFormProps> = ({
       throw error;
     }
   }, [
-    formData, 
-    mode, 
-    serviceId, 
-    createService, 
-    updateService, 
+    formData,
+    mode,
+    serviceId,
+    createService,
+    updateService,
     handleImageUpload,
     deleteFile,
-    onSuccess, 
+    storageSetupComplete,
+    onSuccess,
     navigate
   ]);
 

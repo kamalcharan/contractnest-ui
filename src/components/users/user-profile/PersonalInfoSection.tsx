@@ -32,7 +32,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const { currentTenant } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  const { uploadFile, isSubmitting } = useStorageManagement();
+  const { uploadFile, isSubmitting, storageSetupComplete, isLoading: isStorageLoading } = useStorageManagement();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(initialEditMode);
@@ -107,6 +107,12 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   };
 
   const handleAvatarUpload = async (file: File) => {
+    // Check if storage is set up
+    if (!storageSetupComplete) {
+      toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+      return;
+    }
+
     const allowedFormats = ['image/jpeg', 'image/png', 'image/gif'];
     const maxFileSize = 2 * 1024 * 1024;
 
@@ -126,17 +132,28 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
         user_id: profile.user_id || profile.id,
         type: 'profile_picture'
       });
-      
+
+      // Check if upload succeeded (returns null if storage not set up or other error)
+      if (!uploadedFile) {
+        // Error toast was already shown by useStorageManagement hook
+        setUploadProgress(0);
+        return;
+      }
+
       setUploadProgress(60);
-      if (uploadedFile && uploadedFile.download_url) {
+      if (uploadedFile.download_url) {
         setUploadProgress(80);
         const success = await onUpdateAvatar(uploadedFile.download_url);
         if (success) {
           setUploadProgress(100);
           setTimeout(() => setUploadProgress(0), 1000);
         } else {
+          toast.error('Failed to update profile with new avatar');
           setUploadProgress(0);
         }
+      } else {
+        toast.error('Upload succeeded but no download URL returned');
+        setUploadProgress(0);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -266,9 +283,19 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
             
             <div className="mt-3 flex gap-2">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadProgress > 0}
-                className="px-3 py-1.5 text-sm rounded-md font-medium transition-colors hover:opacity-80"
+                onClick={() => {
+                  if (!storageSetupComplete) {
+                    toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                disabled={uploadProgress > 0 || isStorageLoading}
+                title={!storageSetupComplete ? 'Storage not configured' : 'Upload profile picture'}
+                className={cn(
+                  "px-3 py-1.5 text-sm rounded-md font-medium transition-colors",
+                  !storageSetupComplete ? "opacity-70 cursor-not-allowed" : "hover:opacity-80"
+                )}
                 style={{
                   backgroundColor: colors.brand.primary,
                   color: '#ffffff'

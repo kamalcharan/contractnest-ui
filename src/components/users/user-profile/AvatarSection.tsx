@@ -21,8 +21,8 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
-  const { uploadFile, isSubmitting } = useStorageManagement();
+
+  const { uploadFile, isSubmitting, storageSetupComplete, isLoading: isStorageLoading } = useStorageManagement();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -33,6 +33,12 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
   const maxFileSize = 2 * 1024 * 1024; // 2MB - Fixed from 5MB
 
   const handleFileSelect = async (file: File) => {
+    // Check if storage is set up
+    if (!storageSetupComplete) {
+      toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+      return;
+    }
+
     console.log('Selected file:', {
       name: file.name,
       size: file.size,
@@ -128,7 +134,13 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
+
+    // Check if storage is set up
+    if (!storageSetupComplete) {
+      toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+      return;
+    }
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       handleFileSelect(files[0]);
@@ -201,11 +213,19 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
             
             <div className="flex gap-2">
               <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || updating}
+                onClick={() => {
+                  if (!storageSetupComplete) {
+                    toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                disabled={isUploading || updating || isStorageLoading}
+                title={!storageSetupComplete ? 'Storage not configured' : 'Upload new profile picture'}
                 className={cn(
                   "px-4 py-2 rounded-md font-medium flex items-center transition-colors",
-                  (isUploading || updating) && "opacity-50 cursor-not-allowed"
+                  (isUploading || updating) && "opacity-50 cursor-not-allowed",
+                  !storageSetupComplete && "opacity-70 cursor-not-allowed"
                 )}
                 style={{
                   backgroundColor: colors.brand.primary,
@@ -264,9 +284,19 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
             or click to browse
           </p>
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="px-4 py-2 rounded-md border transition-colors hover:opacity-80"
+            onClick={() => {
+              if (!storageSetupComplete) {
+                toast.error('Storage is not set up. Please configure storage in Settings → Storage Management.');
+                return;
+              }
+              fileInputRef.current?.click();
+            }}
+            disabled={isUploading || isStorageLoading}
+            title={!storageSetupComplete ? 'Storage not configured' : 'Choose a file to upload'}
+            className={cn(
+              "px-4 py-2 rounded-md border transition-colors",
+              !storageSetupComplete ? "opacity-70 cursor-not-allowed" : "hover:opacity-80"
+            )}
             style={{
               borderColor: colors.utility.primaryText + '30',
               color: colors.utility.primaryText,
