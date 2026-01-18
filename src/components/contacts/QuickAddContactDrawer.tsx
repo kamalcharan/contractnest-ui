@@ -1,4 +1,4 @@
-// src/components/contacts/QuickAddContactDrawer.tsx
+// src/components/contacts/QuickAddContactDrawer.tsx - REFACTORED to use Lucide icons
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -13,15 +13,33 @@ import {
   Mail,
   Phone,
   MessageSquare,
-  Globe
+  Globe,
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users,
+  LucideIcon
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCreateContact } from '../../hooks/useContacts';
 import {
   SALUTATIONS,
-  CONTACT_CLASSIFICATION_CONFIG
+  CONTACT_CLASSIFICATION_CONFIG,
+  getClassificationColors
 } from '../../utils/constants/contacts';
+import { CHANNELS, getChannelByCode, formatChannelValue } from '../../utils/constants/channels';
+import { countries } from '../../utils/constants/countries';
+
+// Lucide icon mapping from string names in constants
+const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users
+};
 
 // ============================================================================
 // TYPES
@@ -37,6 +55,7 @@ interface ChannelInput {
   id: string;
   channel_type: string;
   value: string;
+  country_code?: string;
 }
 
 interface QuickFormData {
@@ -52,13 +71,17 @@ interface QuickFormData {
 // CONSTANTS
 // ============================================================================
 
-const CHANNEL_TYPES = [
-  { value: 'email', label: 'Email', icon: Mail, placeholder: 'email@example.com' },
-  { value: 'mobile', label: 'Mobile', icon: Phone, placeholder: '+91 98765 43210' },
-  { value: 'phone', label: 'Phone', icon: Phone, placeholder: '+91 11 2345 6789' },
-  { value: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: '+91 98765 43210' },
-  { value: 'website', label: 'Website', icon: Globe, placeholder: 'https://example.com' },
+// Common countries for quick selection
+const COMMON_COUNTRY_CODES = ['IN', 'US', 'GB', 'AE', 'SG', 'MY', 'AU'];
+const sortedCountries = [
+  ...countries.filter(c => COMMON_COUNTRY_CODES.includes(c.code)),
+  ...countries.filter(c => !COMMON_COUNTRY_CODES.includes(c.code))
 ];
+
+// Quick Add uses subset of channels - sorted by order
+const QUICK_ADD_CHANNELS = CHANNELS.filter(ch =>
+  ['mobile', 'email', 'whatsapp'].includes(ch.code)
+).sort((a, b) => a.order - b.order);
 
 // Classifications loaded from CONTACT_CLASSIFICATION_CONFIG constant
 
@@ -90,7 +113,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
     salutation: '',
     name: '',
     company_name: '',
-    contact_channels: [{ id: 'channel_1', channel_type: 'email', value: '' }]
+    contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }]
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -105,7 +128,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         salutation: '',
         name: '',
         company_name: '',
-        contact_channels: [{ id: 'channel_1', channel_type: 'email', value: '' }]
+        contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }]
       });
       setErrors({});
       setIsSaving(false);
@@ -185,7 +208,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
       ...prev,
       contact_channels: [
         ...prev.contact_channels,
-        { id: newId, channel_type: 'email', value: '' }
+        { id: newId, channel_type: 'mobile', value: '', country_code: 'IN' }
       ]
     }));
   };
@@ -200,12 +223,24 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
   };
 
   // Update channel
-  const updateChannel = (id: string, field: 'channel_type' | 'value', value: string) => {
+  const updateChannel = (id: string, field: 'channel_type' | 'value' | 'country_code', value: string) => {
     setFormData(prev => ({
       ...prev,
-      contact_channels: prev.contact_channels.map(c =>
-        c.id === id ? { ...c, [field]: value } : c
-      )
+      contact_channels: prev.contact_channels.map(c => {
+        if (c.id !== id) return c;
+
+        // When changing channel type, set/clear country_code based on new type
+        if (field === 'channel_type') {
+          const channelConfig = getChannelByCode(value);
+          return {
+            ...c,
+            channel_type: value,
+            country_code: channelConfig?.validation.requiresCountryCode ? (c.country_code || 'IN') : undefined
+          };
+        }
+
+        return { ...c, [field]: value };
+      })
     }));
     if (errors.contact_channels) {
       setErrors(prev => {
@@ -281,11 +316,19 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         company_name: formData.type === 'corporate' ? formData.company_name.trim() : undefined,
         contact_channels: formData.contact_channels
           .filter(c => c.value.trim())
-          .map(c => ({
-            channel_type: c.channel_type,
-            value: c.value.trim(),
-            is_primary: c.id === formData.contact_channels[0]?.id
-          })),
+          .map(c => {
+            const channelConfig = getChannelByCode(c.channel_type);
+            // Format value with country code for phone-type channels
+            const formattedValue = channelConfig
+              ? formatChannelValue(channelConfig, c.value.trim(), c.country_code)
+              : c.value.trim();
+            return {
+              channel_type: c.channel_type,
+              value: formattedValue,
+              country_code: c.country_code,
+              is_primary: c.id === formData.contact_channels[0]?.id
+            };
+          }),
         addresses: [],
         compliance_numbers: [],
         contact_persons: [],
@@ -321,7 +364,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
       }
 
       // console.error('Failed to create contact:', error);
-      setErrors({ submit: error.message || 'Failed to create entity. Please try again.' });
+      setErrors({ submit: error.message || 'Failed to create contact. Please try again.' });
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -347,16 +390,9 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
     onClose();
   };
 
-  // Get classification color
-  const getClassificationColor = (colorName: string) => {
-    switch (colorName) {
-      case 'blue': return { bg: colors.brand.primary + '20', border: colors.brand.primary + '40', text: colors.brand.primary };
-      case 'green': return { bg: colors.semantic.success + '20', border: colors.semantic.success + '40', text: colors.semantic.success };
-      case 'purple': return { bg: colors.brand.tertiary + '20', border: colors.brand.tertiary + '40', text: colors.brand.tertiary };
-      case 'orange': return { bg: colors.semantic.warning + '20', border: colors.semantic.warning + '40', text: colors.semantic.warning };
-      case 'indigo': return { bg: colors.semantic.info + '20', border: colors.semantic.info + '40', text: colors.semantic.info };
-      default: return { bg: colors.utility.secondaryText + '20', border: colors.utility.secondaryText + '40', text: colors.utility.secondaryText };
-    }
+  // Get Lucide icon for classification - uses constants lucideIcon property
+  const getClassificationIcon = (lucideIconName: string): LucideIcon => {
+    return LUCIDE_ICON_MAP[lucideIconName] || Users;
   };
 
   if (!isOpen) return null;
@@ -379,7 +415,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
 
       {/* Drawer */}
       <div
-        className="fixed top-0 right-0 h-full w-[500px] z-50 flex flex-col shadow-2xl transform transition-transform duration-400 ease-out"
+        className="fixed top-0 right-0 h-full w-[580px] z-50 flex flex-col shadow-2xl transform transition-transform duration-400 ease-out"
         style={{
           ...glassStyle,
           transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
@@ -395,13 +431,13 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
               className="text-xl font-bold"
               style={{ color: colors.utility.primaryText }}
             >
-              Quick Add Entity
+              Quick Add Contact
             </h2>
             <p
               className="text-xs mt-1"
               style={{ color: colors.utility.secondaryText }}
             >
-              Add a new entity quickly
+              Add a new contact quickly
             </p>
           </div>
           <button
@@ -427,20 +463,22 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
             <div className="flex flex-wrap gap-2">
               {CONTACT_CLASSIFICATION_CONFIG.map(cls => {
                 const isSelected = formData.classifications.includes(cls.id);
-                const colorSet = getClassificationColor(cls.color);
+                const colorSet = getClassificationColors(cls.colorKey, colors, 'selector', isSelected);
+                const IconComponent = getClassificationIcon(cls.lucideIcon);
                 return (
                   <button
                     key={cls.id}
                     onClick={() => toggleClassification(cls.id)}
                     disabled={isSaving}
-                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl text-sm font-semibold border-2 transition-all disabled:opacity-50 flex items-center gap-2"
                     style={{
-                      backgroundColor: isSelected ? colorSet.bg : 'transparent',
-                      borderColor: isSelected ? colorSet.border : colors.utility.primaryText + '20',
-                      color: isSelected ? colorSet.text : colors.utility.secondaryText,
+                      backgroundColor: colorSet.bg,
+                      borderColor: colorSet.border,
+                      color: colorSet.text,
                     }}
                   >
-                    {cls.icon} {cls.label}
+                    <IconComponent className="h-4 w-4" />
+                    {cls.label}
                   </button>
                 );
               })}
@@ -674,51 +712,89 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
             </h3>
 
             <div className="space-y-3">
-              {formData.contact_channels.map((channel, index) => (
-                <div key={channel.id} className="flex gap-2">
-                  <select
-                    value={channel.channel_type}
-                    onChange={(e) => updateChannel(channel.id, 'channel_type', e.target.value)}
-                    disabled={isSaving}
-                    className="w-28 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
-                    style={{
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderColor: colors.utility.primaryText + '20',
-                      color: colors.utility.primaryText,
-                    }}
-                  >
-                    {CHANNEL_TYPES.map(ct => (
-                      <option key={ct.value} value={ct.value}>{ct.label}</option>
-                    ))}
-                  </select>
-                  <input
-                    type={channel.channel_type === 'email' ? 'email' : 'text'}
-                    value={channel.value}
-                    onChange={(e) => updateChannel(channel.id, 'value', e.target.value)}
-                    disabled={isSaving}
-                    placeholder={CHANNEL_TYPES.find(ct => ct.value === channel.channel_type)?.placeholder || ''}
-                    className="flex-1 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
-                    style={{
-                      backgroundColor: colors.utility.primaryBackground,
-                      borderColor: errors.contact_channels && index === 0 ? colors.semantic.error : colors.utility.primaryText + '20',
-                      color: colors.utility.primaryText,
-                    }}
-                  />
-                  {formData.contact_channels.length > 1 && (
-                    <button
-                      onClick={() => removeChannel(channel.id)}
+              {formData.contact_channels.map((channel, index) => {
+                const channelConfig = getChannelByCode(channel.channel_type);
+                const requiresCountryCode = channelConfig?.validation.requiresCountryCode;
+
+                return (
+                  <div key={channel.id} className="flex gap-2">
+                    {/* Channel Type */}
+                    <select
+                      value={channel.channel_type}
+                      onChange={(e) => updateChannel(channel.id, 'channel_type', e.target.value)}
                       disabled={isSaving}
-                      className="p-3 rounded-xl border-2 hover:opacity-80 transition-all disabled:opacity-50"
+                      className="w-28 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
                       style={{
-                        borderColor: colors.semantic.error + '40',
-                        color: colors.semantic.error,
+                        backgroundColor: colors.utility.primaryBackground,
+                        borderColor: colors.utility.primaryText + '20',
+                        color: colors.utility.primaryText,
                       }}
                     >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+                      {QUICK_ADD_CHANNELS.map(ch => (
+                        <option key={ch.code} value={ch.code}>{ch.displayName}</option>
+                      ))}
+                    </select>
+
+                    {/* Country Code (for phone-type channels) */}
+                    {requiresCountryCode && (
+                      <select
+                        value={channel.country_code || 'IN'}
+                        onChange={(e) => updateChannel(channel.id, 'country_code', e.target.value)}
+                        disabled={isSaving}
+                        className="w-24 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: colors.utility.primaryText + '20',
+                          color: colors.utility.primaryText,
+                        }}
+                      >
+                        {sortedCountries.map(country => (
+                          <option key={country.code} value={country.code}>
+                            +{country.phoneCode}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* Value Input */}
+                    <input
+                      type={channel.channel_type === 'email' ? 'email' : 'tel'}
+                      value={channel.value}
+                      onChange={(e) => {
+                        let inputValue = e.target.value;
+                        // For phone types, only allow digits
+                        if (requiresCountryCode) {
+                          inputValue = inputValue.replace(/\D/g, '');
+                        }
+                        updateChannel(channel.id, 'value', inputValue);
+                      }}
+                      disabled={isSaving}
+                      placeholder={channelConfig?.placeholder || 'Enter value'}
+                      className="flex-1 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
+                      style={{
+                        backgroundColor: colors.utility.primaryBackground,
+                        borderColor: errors.contact_channels && index === 0 ? colors.semantic.error : colors.utility.primaryText + '20',
+                        color: colors.utility.primaryText,
+                      }}
+                    />
+
+                    {/* Remove Button */}
+                    {formData.contact_channels.length > 1 && (
+                      <button
+                        onClick={() => removeChannel(channel.id)}
+                        disabled={isSaving}
+                        className="p-3 rounded-xl border-2 hover:opacity-80 transition-all disabled:opacity-50"
+                        style={{
+                          borderColor: colors.semantic.error + '40',
+                          color: colors.semantic.error,
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {errors.contact_channels && (
@@ -799,7 +875,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
                   Saving...
                 </>
               ) : (
-                'Save Entity'
+                'Save Contact'
               )}
             </button>
           </div>

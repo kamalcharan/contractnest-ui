@@ -385,7 +385,7 @@ const ContactStatusSection: React.FC<{
 // VaNi Full Page Loader Component - Branded loader with orb and pulse
 const VANI_ORB_BG = '#1e293b'; // Dark slate for brand consistency
 
-const FullPageSaveLoader: React.FC<{ message?: string }> = ({ message = "Saving entity..." }) => {
+const FullPageSaveLoader: React.FC<{ message?: string }> = ({ message = "Saving contact..." }) => {
  const { isDarkMode, currentTheme } = useTheme();
  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -953,7 +953,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
            className="text-lg font-semibold tracking-wide uppercase animate-pulse"
            style={{ color: colors.utility.primaryText }}
          >
-           Loading Entity...
+           Loading Contact...
          </p>
          <p
            className="text-sm mt-2"
@@ -972,7 +972,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
      style={{ backgroundColor: colors.utility.primaryBackground }}
    >
      {/* Full Page Save Loader */}
-     {showFullPageLoader && <FullPageSaveLoader message={isEditMode ? "Updating Entity..." : "Creating Entity..."} />}
+     {showFullPageLoader && <FullPageSaveLoader message={isEditMode ? "Updating Contact..." : "Creating Contact..."} />}
      
      {/* Header */}
      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6 gap-4">
@@ -993,8 +993,8 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              style={{ color: colors.utility.primaryText }}
            >
              {isEditMode
-               ? `Edit - ${formData.type === 'corporate' ? formData.company_name : formData.name || 'Entity'}`
-               : 'Create Entity'}
+               ? `Edit - ${formData.type === 'corporate' ? formData.company_name : formData.name || 'Contact'}`
+               : 'Create Contact'}
              <button
                onClick={() => setShowVideoHelp(true)}
                className="p-1 rounded-full hover:opacity-80 transition-colors"
@@ -1011,8 +1011,8 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
              style={{ color: colors.utility.secondaryText }}
            >
              {isEditMode
-               ? 'Update entity information and details'
-               : 'Add a new entity to your directory'
+               ? 'Update contact information and details'
+               : 'Add a new contact to your directory'
              }
            </p>
          </div>
@@ -1066,7 +1066,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
            ) : (
              <>
                <Save className="mr-2 h-4 w-4" />
-               {isEditMode ? 'Update Entity' : 'Save Entity'}
+               {isEditMode ? 'Update Contact' : 'Save Contact'}
              </>
            )}
          </button>
@@ -1293,7 +1293,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
             value={formData.notes || ''}
             onChange={(value) => updateFormData({ notes: value })}
             label="Notes"
-            placeholder={PLACEHOLDER_TEXTS.NOTES || "Add notes about this entity..."}
+            placeholder={PLACEHOLDER_TEXTS.NOTES || "Add notes about this contact..."}
             disabled={isSaving}
             minHeight={120}
             maxHeight={300}

@@ -392,10 +392,17 @@ export const useContactList = (initialFilters: ContactFilters) => {
     }
   }, [currentTenant?.id, isLive, filters, toast]);
 
-  // Fetch contacts when dependencies change
+  // Fetch contacts when filters change (primary trigger)
+  // Note: fetchContacts already has filters in its deps, so including it here
+  // ensures we always call the latest version
   useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+    if (currentTenant?.id) {
+      console.log('📋 Filters updated, fetching contacts...');
+      console.log('Current sort:', filters.sort_by, filters.sort_order);
+      fetchContacts();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filters), currentTenant?.id]);
 
   // Re-fetch when tenant or environment changes
   useEffect(() => {
@@ -409,7 +416,17 @@ export const useContactList = (initialFilters: ContactFilters) => {
   }, [currentTenant?.id, isLive]);
 
   const updateFilters = useCallback((newFilters: ContactFilters) => {
-    setFilters(newFilters);
+    setFilters(prevFilters => {
+      // Only update and refetch if filters actually changed
+      const prevKey = JSON.stringify(prevFilters);
+      const newKey = JSON.stringify(newFilters);
+      if (prevKey !== newKey) {
+        console.log('🔄 Filters changed, will trigger refetch');
+        console.log('Sort:', newFilters.sort_by, newFilters.sort_order);
+        return newFilters;
+      }
+      return prevFilters;
+    });
   }, []);
 
   const refetch = useCallback((forceRefresh: boolean = false) => {

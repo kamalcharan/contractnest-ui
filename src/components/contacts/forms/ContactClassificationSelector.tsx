@@ -1,4 +1,4 @@
-// src/components/contacts/forms/ContactClassificationSelector.tsx - THEME FIXED VERSION
+// src/components/contacts/forms/ContactClassificationSelector.tsx - REFACTORED to use constants
 import React from 'react';
 import {
   Tag,
@@ -9,10 +9,23 @@ import {
   DollarSign,
   Package,
   Handshake,
-  Users
+  Users,
+  LucideIcon
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
+import {
+  CONTACT_CLASSIFICATION_CONFIG,
+  getClassificationTailwindClasses
+} from '@/utils/constants/contacts';
+
+// Lucide icon mapping from string names in constants
+const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users
+};
 
 interface ContactClassification {
   id?: string;
@@ -39,45 +52,19 @@ const ContactClassificationSelector: React.FC<ContactClassificationsSectionProps
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Map classification IDs to icons
-  const getClassificationIcon = (classificationId: string) => {
-    const iconMap = {
-      'buyer': ShoppingCart,
-      'seller': DollarSign,
-      'vendor': Package,
-      'partner': Handshake,
-      'team_member': Users
-    };
-    return iconMap[classificationId as keyof typeof iconMap] || Tag;
+  // Get Lucide icon for classification - uses constants lucideIcon property
+  const getClassificationIcon = (classificationId: string): LucideIcon => {
+    const config = CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === classificationId);
+    if (config?.lucideIcon && LUCIDE_ICON_MAP[config.lucideIcon]) {
+      return LUCIDE_ICON_MAP[config.lucideIcon];
+    }
+    return Tag;
   };
 
-  // Get color classes for each classification (keep semantic colors for different types)
+  // Get Tailwind color classes - uses centralized function from constants
   const getColorClasses = (classificationId: string, isSelected: boolean) => {
-    const colorMap = {
-      'buyer': {
-        selected: 'bg-blue-500 text-white',
-        unselected: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
-      },
-      'seller': {
-        selected: 'bg-green-500 text-white',
-        unselected: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-      },
-      'vendor': {
-        selected: 'bg-purple-500 text-white',
-        unselected: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400'
-      },
-      'partner': {
-        selected: 'bg-orange-500 text-white',
-        unselected: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
-      },
-      'team_member': {
-        selected: 'bg-indigo-500 text-white',
-        unselected: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'
-      }
-    };
-
-    const colorConfig = colorMap[classificationId as keyof typeof colorMap];
-    return colorConfig ? (isSelected ? colorConfig.selected : colorConfig.unselected) : 'bg-gray-100 text-gray-700';
+    const config = CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === classificationId);
+    return getClassificationTailwindClasses(config?.colorKey || 'default', isSelected);
   };
 
   const classifications = CONTACT_CLASSIFICATION_CONFIG;

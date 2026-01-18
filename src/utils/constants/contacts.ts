@@ -46,44 +46,159 @@ export const CONTACT_CLASSIFICATIONS = {
   TEAM_MEMBER: 'team_member' // ADDED: New classification
 } as const;
 
-// UPDATED: Classification Configuration with team_member
+// UPDATED: Classification Configuration with Lucide icons and theme-aware colors
 export const CONTACT_CLASSIFICATION_CONFIG = [
-  { 
-    id: 'buyer', 
-    label: 'Buyer', 
-    description: 'Purchases services/products from us', 
-    color: 'blue',
-    icon: '🛒'
+  {
+    id: 'buyer',
+    label: 'Buyer',
+    labelPlural: 'Buyers',
+    description: 'Purchases services/products from us',
+    colorKey: 'blue',
+    lucideIcon: 'ShoppingCart',
+    emoji: '🛒'
   },
-  { 
-    id: 'seller', 
-    label: 'Seller', 
-    description: 'Sells services/products to us', 
-    color: 'green',
-    icon: '💰'
+  {
+    id: 'seller',
+    label: 'Seller',
+    labelPlural: 'Sellers',
+    description: 'Sells services/products to us',
+    colorKey: 'green',
+    lucideIcon: 'DollarSign',
+    emoji: '💰'
   },
-  { 
-    id: 'vendor', 
-    label: 'Vendor', 
-    description: 'Supplies products/services to us', 
-    color: 'purple',
-    icon: '📦'
+  {
+    id: 'vendor',
+    label: 'Vendor',
+    labelPlural: 'Vendors',
+    description: 'Supplies products/services to us',
+    colorKey: 'purple',
+    lucideIcon: 'Package',
+    emoji: '📦'
   },
-  { 
-    id: 'partner', 
-    label: 'Partner', 
-    description: 'Business collaboration partner', 
-    color: 'orange',
-    icon: '🤝'
+  {
+    id: 'partner',
+    label: 'Partner',
+    labelPlural: 'Partners',
+    description: 'Business collaboration partner',
+    colorKey: 'orange',
+    lucideIcon: 'Handshake',
+    emoji: '🤝'
   },
-  { 
-    id: 'team_member', 
-    label: 'Team Member', 
-    description: 'Internal team member or employee', 
-    color: 'indigo',
-    icon: '👥'
-  } // ADDED: New classification config
+  {
+    id: 'team_member',
+    label: 'Team Member',
+    labelPlural: 'Team Members',
+    description: 'Internal team member or employee',
+    colorKey: 'indigo',
+    lucideIcon: 'Users',
+    emoji: '👥'
+  }
 ] as const;
+
+// Classification color mapping - FIXED hex colors for consistency across all views
+// These colors are consistent regardless of theme to ensure filters and badges match
+export const CLASSIFICATION_HEX_COLORS: Record<string, string> = {
+  blue: '#3B82F6',    // Buyer
+  green: '#10B981',   // Seller
+  purple: '#8B5CF6',  // Vendor
+  orange: '#F59E0B',  // Partner
+  indigo: '#6366F1',  // Team Member
+  red: '#EF4444',     // Error/Overdue
+  default: '#6B7280'  // Default gray
+};
+
+// Get classification hex color - always returns consistent color
+export const getClassificationThemeColor = (colorKey: string, _themeColors?: any) => {
+  // Always use fixed hex colors for consistency
+  const themeColor = CLASSIFICATION_HEX_COLORS[colorKey] || CLASSIFICATION_HEX_COLORS.default;
+  return { themeColor };
+};
+
+// Get classification colors for various UI contexts
+// Uses FIXED hex colors for consistency - themeColors only used for selected state brand color
+export const getClassificationColors = (
+  colorKey: string,
+  themeColors: any,
+  variant: 'badge' | 'filter' | 'selector' = 'badge',
+  isSelected: boolean = false
+) => {
+  const { themeColor } = getClassificationThemeColor(colorKey);
+
+  switch (variant) {
+    case 'badge':
+      // For classification badges on cards - always use fixed colors
+      return {
+        bg: themeColor + '20',
+        text: themeColor,
+        border: themeColor + '40'
+      };
+    case 'filter':
+      // For filter tabs/buttons
+      if (isSelected) {
+        // When selected, use theme's brand primary for consistency with UI
+        return {
+          bg: themeColors?.brand?.primary || themeColor,
+          text: '#ffffff',
+          border: themeColors?.brand?.primary || themeColor
+        };
+      }
+      // When not selected, use fixed classification color
+      return {
+        bg: themeColor + '15',
+        text: themeColor,
+        border: themeColor + '30'
+      };
+    case 'selector':
+      // For classification selector buttons (Quick Add, Advanced Form)
+      if (isSelected) {
+        return {
+          bg: themeColor + '20',
+          text: themeColor,
+          border: themeColor + '40'
+        };
+      }
+      return {
+        bg: 'transparent',
+        text: themeColors?.utility?.secondaryText || '#6B7280',
+        border: (themeColors?.utility?.primaryText || '#111827') + '20'
+      };
+    default:
+      return {
+        bg: themeColor + '20',
+        text: themeColor,
+        border: themeColor + '40'
+      };
+  }
+};
+
+// Tailwind classes for classification selectors (Advanced Form)
+export const getClassificationTailwindClasses = (colorKey: string, isSelected: boolean) => {
+  const colorClasses: Record<string, { selected: string; unselected: string }> = {
+    blue: {
+      selected: 'bg-blue-500 text-white',
+      unselected: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
+    },
+    green: {
+      selected: 'bg-green-500 text-white',
+      unselected: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+    },
+    purple: {
+      selected: 'bg-purple-500 text-white',
+      unselected: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400'
+    },
+    orange: {
+      selected: 'bg-orange-500 text-white',
+      unselected: 'bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400'
+    },
+    indigo: {
+      selected: 'bg-indigo-500 text-white',
+      unselected: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400'
+    }
+  };
+
+  const classes = colorClasses[colorKey] || { selected: 'bg-gray-500 text-white', unselected: 'bg-gray-100 text-gray-700' };
+  return isSelected ? classes.selected : classes.unselected;
+};
 
 // Contact Channel Types
 export const CONTACT_CHANNEL_TYPES = {
@@ -169,13 +284,10 @@ export const BULK_ACTIONS = {
   ARCHIVE: 'archive'
 } as const;
 
-// Contact Sort Options
+// Contact Sort Options - Date fields only
 export const CONTACT_SORT_OPTIONS = [
-  { value: 'name', label: 'Name' },
-  { value: 'created', label: 'Date Created' },
-  { value: 'updated', label: 'Last Updated' },
-  { value: 'type', label: 'Contact Type' },
-  { value: 'status', label: 'Status' }
+  { value: 'created_at', label: 'Date Created', ascLabel: 'Oldest', descLabel: 'Newest' },
+  { value: 'updated_at', label: 'Last Updated', ascLabel: 'Oldest', descLabel: 'Newest' }
 ] as const;
 
 // Contact View Modes
@@ -398,7 +510,7 @@ export const getClassificationLabel = (id: string): string => {
 
 export const getClassificationColor = (id: string): string => {
   const config = getClassificationConfig(id);
-  return config?.color || 'gray';
+  return config?.colorKey || 'gray';
 };
 
 export const getStatusColor = (status: string): string => {

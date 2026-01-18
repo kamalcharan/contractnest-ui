@@ -44,7 +44,7 @@ import { useUpdateContact, useUpdateContactStatus } from '../../../hooks/useCont
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 // Import constants
-import { canPerformOperation, CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
+import { canPerformOperation, CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG, getClassificationColors } from '@/utils/constants/contacts';
 
 // Types
 interface Contact {
@@ -830,16 +830,10 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
     }
   };
 
-  // Get classification color
-  const getClassificationColor = (classificationValue: string): string => {
-    const colorMap: Record<string, string> = {
-      'buyer': '#3b82f6',
-      'seller': '#22c55e',
-      'vendor': '#8b5cf6',
-      'partner': '#f59e0b',
-      'team_member': '#6366f1'
-    };
-    return colorMap[classificationValue] || '#8b5cf6';
+  // Get classification badge colors using centralized function
+  const getClassificationBadgeColors = (classificationValue: string) => {
+    const config = CONTACT_CLASSIFICATION_CONFIG?.find(c => c.id === classificationValue);
+    return getClassificationColors(config?.colorKey || 'purple', colors, 'badge');
   };
 
   // Get classification label from value (must be defined before normalizeClassifications)
@@ -983,14 +977,15 @@ const ContactSummaryTab: React.FC<ContactSummaryTabProps> = ({ contact, onRefres
             {normalizedClassifications.length > 0 ? (
               <div className="flex flex-wrap gap-1">
                 {normalizedClassifications.map((cls) => {
-                  const color = getClassificationColor(cls.classification_value);
+                  const badgeColors = getClassificationBadgeColors(cls.classification_value);
                   return (
                     <span
                       key={cls.id}
-                      className="px-2 py-0.5 rounded-full text-xs"
+                      className="px-2 py-0.5 rounded-full text-xs border"
                       style={{
-                        backgroundColor: color + '20',
-                        color: color
+                        backgroundColor: badgeColors.bg,
+                        color: badgeColors.text,
+                        borderColor: badgeColors.border
                       }}
                     >
                       {cls.classification_label}

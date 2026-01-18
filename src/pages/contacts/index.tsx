@@ -33,8 +33,13 @@ import {
   Tag,
   UserPlus,
   Network,
-  Briefcase
+  Briefcase,
+  ShoppingCart,
+  Package,
+  Handshake,
+  LucideIcon
 } from 'lucide-react';
+
 // import { useToast } from '@/components/ui/use-toast'; // Replaced with vaniToast
 import { captureException } from '@/utils/sentry';
 import { useAuth } from '../../context/AuthContext';
@@ -45,12 +50,12 @@ import QuickAddContactDrawer from '@/components/contacts/QuickAddContactDrawer';
 import { VaNiLoader } from '@/components/common/loaders';
 import { vaniToast } from '@/components/common/toast';
 
-// Coming Soon features for Entities
+// Coming Soon features for Contacts
 const contactsFeatures = [
-  { icon: Users, title: 'Entity Management', description: 'Centralized hub for all your business entities - customers, vendors, partners, and team members.', highlight: true },
-  { icon: Network, title: 'Relationship Mapping', description: 'Visualize connections between entities and track interaction history.', highlight: false },
-  { icon: Briefcase, title: 'Business Classification', description: 'Categorize entities by type, industry, and custom tags for easy filtering.', highlight: false },
-  { icon: UserPlus, title: 'Smart Import', description: 'Bulk import entities from CSV, vCard, or sync with external systems.', highlight: false }
+  { icon: Users, title: 'Contact Management', description: 'Centralized hub for all your business contacts - customers, vendors, partners, and team members.', highlight: true },
+  { icon: Network, title: 'Relationship Mapping', description: 'Visualize connections between contacts and track interaction history.', highlight: false },
+  { icon: Briefcase, title: 'Business Classification', description: 'Categorize contacts by type, industry, and custom tags for easy filtering.', highlight: false },
+  { icon: UserPlus, title: 'Smart Import', description: 'Bulk import contacts from CSV, vCard, or sync with external systems.', highlight: false }
 ];
 
 const contactsFloatingIcons = [
@@ -65,7 +70,7 @@ import { useContactList, useContactStats, useUpdateContactStatus, invalidateCont
 import { ContactFilters } from '../../types/contact';
 
 // Import constants
-import { 
+import {
   CONTACT_STATUS,
   CONTACT_STATUS_LABELS,
   getStatusColor,
@@ -76,8 +81,28 @@ import {
   UI_CONFIG,
   canPerformOperation,
   BULK_ACTIONS,
-  CONTACT_CLASSIFICATIONS
+  CONTACT_CLASSIFICATIONS,
+  CONTACT_CLASSIFICATION_CONFIG,
+  getClassificationColors
 } from '@/utils/constants/contacts';
+
+// Lucide icon mapping for classification icons (matches constants)
+const CLASSIFICATION_ICON_MAP: Record<string, LucideIcon> = {
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users
+};
+
+// Get Lucide icon component for a classification
+const getClassificationIcon = (classificationId: string): LucideIcon => {
+  const config = CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === classificationId);
+  if (config?.lucideIcon && CLASSIFICATION_ICON_MAP[config.lucideIcon]) {
+    return CLASSIFICATION_ICON_MAP[config.lucideIcon];
+  }
+  return Tag;
+};
 
 type ActiveTab = 'status' | 'billing' | 'services';
 type ViewType = 'grid' | 'list';
@@ -350,7 +375,7 @@ const ContactsPage: React.FC = () => {
   // Soft delete (archive) hook
   const { mutate: updateContactStatus, loading: archiving } = useUpdateContactStatus();
 
-  // Handle soft delete (archive) - single entity
+  // Handle soft delete (archive) - single contact
   const handleSoftDelete = async (contactId: string, contactName: string) => {
     try {
       vaniToast.loading(`Archiving ${contactName}...`);
@@ -442,22 +467,22 @@ const ContactsPage: React.FC = () => {
   // Handle bulk delete
   const handleBulkDelete = async () => {
     try {
-      vaniToast.loading('Deleting entities...');
+      vaniToast.loading('Deleting contacts...');
 
-      vaniToast.success(`${selectedContacts.size} entities deleted successfully`);
+      vaniToast.success(`${selectedContacts.size} contacts deleted successfully`);
       setSelectedContacts(new Set());
       refetch();
     } catch (error) {
       captureException(error, {
         tags: { component: 'ContactsPage', action: 'bulkDelete' }
       });
-      vaniToast.error('Failed to delete entities');
+      vaniToast.error('Failed to delete contacts');
     }
   };
 
   // Handle quick add success - refresh list and show toast
   const handleQuickAddSuccess = useCallback((contactId: string) => {
-    vaniToast.success('Entity created successfully');
+    vaniToast.success('Contact created successfully');
     refetch();
     // Navigate to view the new contact (optional)
     // navigate(`/contacts/${contactId}`);
@@ -489,55 +514,48 @@ const ContactsPage: React.FC = () => {
     };
   };
 
-  // Tab configurations - renamed for better UX
+  // Tab configurations - dynamically built from CONTACT_CLASSIFICATION_CONFIG
+  // This ensures consistency with constants and reduces duplication
+  const classificationFilters = [
+    { id: 'all', label: 'All', count: stats?.total || 0, colorKey: 'default' },
+    ...CONTACT_CLASSIFICATION_CONFIG.map(cls => ({
+      id: cls.id,
+      label: cls.labelPlural,
+      count: stats?.[cls.id === 'team_member' ? 'team_members' : `${cls.id}s`] || 0,
+      colorKey: cls.colorKey
+    }))
+  ];
+
   const tabConfigs = {
     status: {
       label: 'Status & Identity',
-      filters: [
-        { id: 'all', label: 'All', count: stats?.total || 0, color: 'default' },
-        { id: 'buyer', label: 'Buyers', count: stats?.buyers || 0, color: 'blue' },
-        { id: 'seller', label: 'Sellers', count: stats?.sellers || 0, color: 'green' },
-        { id: 'vendor', label: 'Vendors', count: stats?.vendors || 0, color: 'purple' },
-        { id: 'partner', label: 'Partners', count: stats?.partners || 0, color: 'orange' },
-        { id: 'team_member', label: 'Team Members', count: stats?.team_members || 0, color: 'indigo' }
-      ]
+      filters: classificationFilters
     },
     billing: {
       label: 'Billing Queue',
       filters: [
-        { id: 'all', label: 'All', count: stats?.total || 0, color: 'default' },
-        { id: 'overdue', label: 'Overdue', count: 0, color: 'red' },
-        { id: 'due_next_week', label: 'Due next week', count: 0, color: 'orange' },
-        { id: 'due_next_month', label: 'Due next month', count: 0, color: 'blue' },
-        { id: 'due_anytime', label: 'Due anytime', count: 0, color: 'default' }
+        { id: 'all', label: 'All', count: stats?.total || 0, colorKey: 'default' },
+        { id: 'overdue', label: 'Overdue', count: 0, colorKey: 'red' },
+        { id: 'due_next_week', label: 'Due next week', count: 0, colorKey: 'orange' },
+        { id: 'due_next_month', label: 'Due next month', count: 0, colorKey: 'blue' },
+        { id: 'due_anytime', label: 'Due anytime', count: 0, colorKey: 'default' }
       ]
     },
     services: {
       label: 'Services Management',
       filters: [
-        { id: 'all', label: 'All', count: stats?.total || 0, color: 'default' },
-        { id: 'active_services', label: 'Active services', count: 0, color: 'green' },
-        { id: 'service_renewal_due', label: 'Renewal due', count: 0, color: 'orange' },
-        { id: 'completed_projects', label: 'Completed', count: 0, color: 'blue' },
-        { id: 'pending_proposals', label: 'Pending proposals', count: 0, color: 'purple' }
+        { id: 'all', label: 'All', count: stats?.total || 0, colorKey: 'default' },
+        { id: 'active_services', label: 'Active services', count: 0, colorKey: 'green' },
+        { id: 'service_renewal_due', label: 'Renewal due', count: 0, colorKey: 'orange' },
+        { id: 'completed_projects', label: 'Completed', count: 0, colorKey: 'blue' },
+        { id: 'pending_proposals', label: 'Pending proposals', count: 0, colorKey: 'purple' }
       ]
     }
   };
 
-  // Get filter color based on type
-  const getFilterColor = (colorName: string, isActive: boolean) => {
-    if (isActive) {
-      return { bg: colors.brand.primary, text: '#ffffff', border: colors.brand.primary };
-    }
-    switch (colorName) {
-      case 'blue': return { bg: colors.brand.primary + '15', text: colors.brand.primary, border: colors.brand.primary + '30' };
-      case 'green': return { bg: colors.semantic.success + '15', text: colors.semantic.success, border: colors.semantic.success + '30' };
-      case 'purple': return { bg: colors.brand.tertiary + '15', text: colors.brand.tertiary, border: colors.brand.tertiary + '30' };
-      case 'orange': return { bg: colors.semantic.warning + '15', text: colors.semantic.warning, border: colors.semantic.warning + '30' };
-      case 'red': return { bg: colors.semantic.error + '15', text: colors.semantic.error, border: colors.semantic.error + '30' };
-      case 'indigo': return { bg: colors.semantic.info + '15', text: colors.semantic.info, border: colors.semantic.info + '30' };
-      default: return { bg: colors.utility.secondaryText + '15', text: colors.utility.secondaryText, border: colors.utility.secondaryText + '30' };
-    }
+  // Get filter color based on type - now uses central getClassificationColors
+  const getFilterColor = (colorKey: string, isActive: boolean) => {
+    return getClassificationColors(colorKey, colors, 'filter', isActive);
   };
 
   const currentFilters = tabConfigs[activeTab].filters;
@@ -547,12 +565,12 @@ const ContactsPage: React.FC = () => {
   const getLoadingMessage = () => {
     const filterConfig = currentFilters.find((f: any) => f.id === activeFilter);
     if (activeFilter === 'all') {
-      return 'VaNi is Loading Entities...';
+      return 'VaNi is Loading Contacts...';
     }
-    return `VaNi is Loading ${filterConfig?.label || 'Entities'}...`;
+    return `VaNi is Loading ${filterConfig?.label || 'Contacts'}...`;
   };
 
-  const EntityLoader = () => (
+  const ContactLoader = () => (
     <VaNiLoader
       size="md"
       message={getLoadingMessage()}
@@ -578,7 +596,7 @@ const ContactsPage: React.FC = () => {
             className="text-2xl font-bold flex items-center gap-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
-            Entities
+            Contacts
             <button
               onClick={() => setShowVideoHelp(true)}
               className="p-1 rounded-full hover:opacity-80 transition-colors"
@@ -630,7 +648,7 @@ const ContactsPage: React.FC = () => {
             }}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add Entity
+            Add Contact
           </button>
         </div>
       </div>
@@ -687,7 +705,7 @@ const ContactsPage: React.FC = () => {
             </span>
             {currentFilters.map((filter: any) => {
               const isActive = activeFilter === filter.id;
-              const filterColor = getFilterColor(filter.color || 'default', isActive);
+              const filterColor = getFilterColor(filter.colorKey || 'default', isActive);
               return (
                 <button
                   key={filter.id}
@@ -714,7 +732,7 @@ const ContactsPage: React.FC = () => {
               />
               <input
                 type="text"
-                placeholder={`Search entities... (min ${MINIMUM_SEARCH_LENGTH} characters)`}
+                placeholder={`Search contacts... (min ${MINIMUM_SEARCH_LENGTH} characters)`}
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
@@ -740,7 +758,10 @@ const ContactsPage: React.FC = () => {
               <select
                 value={`${sortBy}_${sortOrder}`}
                 onChange={(e) => {
-                  const [field, order] = e.target.value.split('_');
+                  const value = e.target.value;
+                  const lastUnderscoreIndex = value.lastIndexOf('_');
+                  const field = value.substring(0, lastUnderscoreIndex);
+                  const order = value.substring(lastUnderscoreIndex + 1);
                   setSortBy(field);
                   setSortOrder(order as 'asc' | 'desc');
                 }}
@@ -753,8 +774,8 @@ const ContactsPage: React.FC = () => {
               >
                 {CONTACT_SORT_OPTIONS.map(option => (
                   <React.Fragment key={option.value}>
-                    <option value={`${option.value}_desc`}>{option.label} (Newest)</option>
-                    <option value={`${option.value}_asc`}>{option.label} (Oldest)</option>
+                    <option value={`${option.value}_desc`}>{option.label} ({option.descLabel})</option>
+                    <option value={`${option.value}_asc`}>{option.label} ({option.ascLabel})</option>
                   </React.Fragment>
                 ))}
               </select>
@@ -839,7 +860,7 @@ const ContactsPage: React.FC = () => {
                 backgroundColor: colors.utility.secondaryText + '10'
               }}
             >
-              Type at least {MINIMUM_SEARCH_LENGTH} characters to search entities
+              Type at least {MINIMUM_SEARCH_LENGTH} characters to search contacts
             </div>
           )}
 
@@ -868,17 +889,20 @@ const ContactsPage: React.FC = () => {
               </span>
               {advancedFilters.classifications.map((cls: string) => {
                 const config = getClassificationConfig(cls);
+                const badgeColors = getClassificationColors(config?.colorKey || 'default', colors, 'badge');
+                const IconComponent = getClassificationIcon(cls);
                 return (
-                  <span 
-                    key={cls} 
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border"
+                  <span
+                    key={cls}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border"
                     style={{
-                      backgroundColor: colors.brand.primary + '20',
-                      color: colors.brand.primary,
-                      borderColor: colors.brand.primary + '40'
+                      backgroundColor: badgeColors.bg,
+                      color: badgeColors.text,
+                      borderColor: badgeColors.border
                     }}
                   >
-                    {config?.icon} {config?.label}
+                    <IconComponent className="h-3 w-3" />
+                    {config?.label}
                     <button
                       onClick={() => {
                         handleAdvancedFiltersChange({
@@ -886,7 +910,7 @@ const ContactsPage: React.FC = () => {
                           classifications: advancedFilters.classifications.filter(c => c !== cls)
                         });
                       }}
-                      className="ml-1"
+                      className="ml-1 hover:opacity-70"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -944,7 +968,7 @@ const ContactsPage: React.FC = () => {
                 className="text-sm font-medium"
                 style={{ color: colors.brand.primary }}
               >
-                {selectedContacts.size} {selectedContacts.size !== 1 ? 'entities' : 'entity'} selected
+                {selectedContacts.size} {selectedContacts.size !== 1 ? 'contacts' : 'contact'} selected
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -994,7 +1018,7 @@ const ContactsPage: React.FC = () => {
                 className="font-medium"
                 style={{ color: colors.semantic.error }}
               >
-                Error loading entities
+                Error loading contacts
               </h3>
               <p 
                 className="text-sm mt-1"
@@ -1015,7 +1039,7 @@ const ContactsPage: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {loading && <EntityLoader />}
+      {loading && <ContactLoader />}
 
       {/* Contact List */}
       {!loading && !error && (
@@ -1036,7 +1060,7 @@ const ContactsPage: React.FC = () => {
                 className="text-lg font-medium mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
-                No entities found
+                No contacts found
               </h3>
               <p 
                 className="mb-6 transition-colors"
@@ -1046,9 +1070,9 @@ const ContactsPage: React.FC = () => {
                   Array.isArray(v) ? v.length > 0 : v !== 'all'
                 )
                   ? shouldShowSearchHint()
-                    ? `Type at least ${MINIMUM_SEARCH_LENGTH} characters to search entities.`
-                    : "No entities match your search criteria. Try adjusting your search or filters."
-                  : "You haven't added any entities yet. Create your first entity to get started."
+                    ? `Type at least ${MINIMUM_SEARCH_LENGTH} characters to search contacts.`
+                    : "No contacts match your search criteria. Try adjusting your search or filters."
+                  : "You haven't added any contacts yet. Create your first contact to get started."
                 }
               </p>
               <button
@@ -1061,7 +1085,7 @@ const ContactsPage: React.FC = () => {
                 }}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Add Entity
+                Add Contact
               </button>
             </div>
           ) : (
@@ -1151,13 +1175,13 @@ const ContactsPage: React.FC = () => {
                                 <Building2 
                                   className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
-                                  title="Corporate Entity"
+                                  title="Corporate"
                                 />
                               ) : (
                                 <User 
                                   className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
-                                  title="Individual Entity"
+                                  title="Individual"
                                 />
                               )}
                             </div>
@@ -1182,51 +1206,30 @@ const ContactsPage: React.FC = () => {
                           </div>
                         </div>
                         
-                        {/* Classification Tags */}
+                        {/* Classification Tags - Using Lucide icons and centralized colors */}
                         <div className="flex flex-wrap gap-1 mb-3">
                           {contact.classifications?.slice(0, 2).map((cls) => {
                             const config = getClassificationConfig(cls);
+                            const badgeColors = getClassificationColors(config?.colorKey || 'default', colors, 'badge');
+                            const IconComponent = getClassificationIcon(cls);
                             return (
                               <span
                                 key={cls}
-                                className="px-2 py-1 rounded-full text-xs font-medium border"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
                                 style={{
-                                  backgroundColor: config?.color === 'blue' 
-                                    ? colors.brand.primary + '20'
-                                    : config?.color === 'green' 
-                                    ? colors.semantic.success + '20'
-                                    : config?.color === 'purple' 
-                                    ? colors.brand.tertiary + '20'
-                                    : config?.color === 'orange' 
-                                    ? colors.semantic.warning + '20'
-                                    : colors.utility.secondaryText + '20',
-                                  borderColor: config?.color === 'blue' 
-                                    ? colors.brand.primary + '40'
-                                    : config?.color === 'green' 
-                                    ? colors.semantic.success + '40'
-                                    : config?.color === 'purple' 
-                                    ? colors.brand.tertiary + '40'
-                                    : config?.color === 'orange' 
-                                    ? colors.semantic.warning + '40'
-                                    : colors.utility.secondaryText + '40',
-                                  color: config?.color === 'blue' 
-                                    ? colors.brand.primary
-                                    : config?.color === 'green' 
-                                    ? colors.semantic.success
-                                    : config?.color === 'purple' 
-                                    ? colors.brand.tertiary
-                                    : config?.color === 'orange' 
-                                    ? colors.semantic.warning
-                                    : colors.utility.secondaryText
+                                  backgroundColor: badgeColors.bg,
+                                  borderColor: badgeColors.border,
+                                  color: badgeColors.text
                                 }}
                                 title={config?.label}
                               >
-                                {config?.icon} {config?.label}
+                                <IconComponent className="h-3 w-3" />
+                                {config?.label}
                               </span>
                             );
                           })}
                           {contact.classifications && contact.classifications.length > 2 && (
-                            <span 
+                            <span
                               className="text-xs px-2 py-1"
                               style={{ color: colors.utility.secondaryText }}
                             >
@@ -1250,7 +1253,7 @@ const ContactsPage: React.FC = () => {
                                 backgroundColor: colors.utility.secondaryText + '20',
                                 color: colors.utility.primaryText
                               }}
-                              title="View entity details"
+                              title="View contact details"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
@@ -1264,22 +1267,6 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
-                            {contact.status !== 'archived' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSoftDelete(contact.id, contact.displayName);
-                                }}
-                                className="p-1.5 rounded-md hover:opacity-80 transition-colors"
-                                style={{
-                                  backgroundColor: colors.semantic.error + '20',
-                                  color: colors.semantic.error
-                                }}
-                                title="Archive entity"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1320,13 +1307,13 @@ const ContactsPage: React.FC = () => {
                                 <Building2 
                                   className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
-                                  title="Corporate Entity"
+                                  title="Corporate"
                                 />
                               ) : (
                                 <User 
                                   className="h-4 w-4 flex-shrink-0"
                                   style={{ color: colors.utility.secondaryText }}
-                                  title="Individual Entity"
+                                  title="Individual"
                                 />
                               )}
                             </div>
@@ -1370,51 +1357,30 @@ const ContactsPage: React.FC = () => {
 
                         {/* FIXED: Right Section - Classifications + Actions */}
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          {/* Classification Tags */}
+                          {/* Classification Tags - Using Lucide icons and centralized colors */}
                           <div className="flex flex-wrap gap-1">
                             {contact.classifications?.slice(0, 2).map((cls) => {
                               const config = getClassificationConfig(cls);
+                              const badgeColors = getClassificationColors(config?.colorKey || 'default', colors, 'badge');
+                              const IconComponent = getClassificationIcon(cls);
                               return (
                                 <span
                                   key={cls}
-                                  className="px-2 py-1 rounded-full text-xs font-medium border"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
                                   style={{
-                                    backgroundColor: config?.color === 'blue' 
-                                      ? colors.brand.primary + '20'
-                                      : config?.color === 'green' 
-                                      ? colors.semantic.success + '20'
-                                      : config?.color === 'purple' 
-                                      ? colors.brand.tertiary + '20'
-                                      : config?.color === 'orange' 
-                                      ? colors.semantic.warning + '20'
-                                      : colors.utility.secondaryText + '20',
-                                    borderColor: config?.color === 'blue' 
-                                      ? colors.brand.primary + '40'
-                                      : config?.color === 'green' 
-                                      ? colors.semantic.success + '40'
-                                      : config?.color === 'purple' 
-                                      ? colors.brand.tertiary + '40'
-                                      : config?.color === 'orange' 
-                                      ? colors.semantic.warning + '40'
-                                      : colors.utility.secondaryText + '40',
-                                    color: config?.color === 'blue' 
-                                      ? colors.brand.primary
-                                      : config?.color === 'green' 
-                                      ? colors.semantic.success
-                                      : config?.color === 'purple' 
-                                      ? colors.brand.tertiary
-                                      : config?.color === 'orange' 
-                                      ? colors.semantic.warning
-                                      : colors.utility.secondaryText
+                                    backgroundColor: badgeColors.bg,
+                                    borderColor: badgeColors.border,
+                                    color: badgeColors.text
                                   }}
                                   title={config?.label}
                                 >
-                                  {config?.icon} {config?.label}
+                                  <IconComponent className="h-3 w-3" />
+                                  {config?.label}
                                 </span>
                               );
                             })}
                             {contact.classifications && contact.classifications.length > 2 && (
-                              <span 
+                              <span
                                 className="text-xs"
                                 style={{ color: colors.utility.secondaryText }}
                               >
@@ -1432,7 +1398,7 @@ const ContactsPage: React.FC = () => {
                                 backgroundColor: colors.utility.secondaryText + '20',
                                 color: colors.utility.primaryText
                               }}
-                              title="View entity details"
+                              title="View contact details"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
@@ -1446,22 +1412,6 @@ const ContactsPage: React.FC = () => {
                             >
                               <FileText className="h-4 w-4" />
                             </button>
-                            {contact.status !== 'archived' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSoftDelete(contact.id, contact.displayName);
-                                }}
-                                className="p-1.5 rounded-md hover:opacity-80 transition-colors"
-                                style={{
-                                  backgroundColor: colors.semantic.error + '20',
-                                  color: colors.semantic.error
-                                }}
-                                title="Archive entity"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1486,7 +1436,7 @@ const ContactsPage: React.FC = () => {
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} entities
+                  Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} contacts
                 </div>
                 
                 <div className="flex items-center gap-2">
@@ -1561,7 +1511,7 @@ const ContactsPage: React.FC = () => {
                   className="text-xl font-semibold transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
-                  Entity Management Help
+                  Contacts Help
                 </h2>
                 <button
                   onClick={() => setShowVideoHelp(false)}
@@ -1582,13 +1532,13 @@ const ContactsPage: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    Getting Started with Entities
+                    Getting Started with Contacts
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Learn how to add, organize, and manage your business entities effectively.
+                    Learn how to add, organize, and manage your business contacts effectively.
                   </p>
                 </div>
                 <div 
@@ -1599,13 +1549,13 @@ const ContactsPage: React.FC = () => {
                     className="font-medium mb-2 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    Entity Classifications & Filtering
+                    Contact Classifications & Filtering
                   </h3>
-                  <p 
+                  <p
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Understanding how to categorize entities and use advanced filtering options.
+                    Understanding how to categorize contacts and use advanced filtering options.
                   </p>
                 </div>
                 <div 
@@ -1622,7 +1572,7 @@ const ContactsPage: React.FC = () => {
                     className="text-sm transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
-                    Master the search functionality to quickly find the entities you need.
+                    Master the search functionality to quickly find the contacts you need.
                   </p>
                 </div>
               </div>
@@ -1636,8 +1586,8 @@ const ContactsPage: React.FC = () => {
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={handleBulkDelete}
-        title="Delete Entities"
-        description={`Are you sure you want to delete ${selectedContacts.size} ${selectedContacts.size !== 1 ? 'entities' : 'entity'}? This action cannot be undone.`}
+        title="Delete Contacts"
+        description={`Are you sure you want to delete ${selectedContacts.size} ${selectedContacts.size !== 1 ? 'contacts' : 'contact'}? This action cannot be undone.`}
         confirmText="Delete"
         type="danger"
         icon={<Trash2 className="h-6 w-6" />}
@@ -1651,7 +1601,7 @@ const ContactsPage: React.FC = () => {
         />
       )}
 
-      {/* Quick Add Entity Drawer */}
+      {/* Quick Add Contact Drawer */}
       <QuickAddContactDrawer
         isOpen={isQuickAddOpen}
         onClose={() => setIsQuickAddOpen(false)}
