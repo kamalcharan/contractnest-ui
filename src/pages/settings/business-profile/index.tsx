@@ -1,7 +1,7 @@
-// src/pages/settings/business-profile/index.tsx - Updated with VaNiLoader & VaNiToast
+// src/pages/settings/business-profile/index.tsx - Updated with VaNiLoader & VaNiToast & Close Account
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText } from 'lucide-react';
+import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText, AlertTriangle, Trash2 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
@@ -15,15 +15,15 @@ import { vaniToast } from '@/components/common/toast/VaNiToast';
 const BusinessProfilePage = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Track page view
   React.useEffect(() => {
     analyticsService.trackPageView('settings/business-profile', 'Business Profile');
   }, []);
-  
+
   // Use the tenant profile hook
   const {
     loading,
@@ -38,20 +38,25 @@ const BusinessProfilePage = () => {
   const handleEditClick = () => {
     navigate('/settings/business-profile/edit');
   };
-  
+
   // Handle Back
   const handleBack = () => {
     navigate('/settings');
   };
-  
+
+  // Handle Close Account click
+  const handleCloseAccountClick = () => {
+    navigate('/settings/business-profile/close-account');
+  };
+
   // Find matching business type and industry
-  const businessType = profile?.business_type_id ? 
+  const businessType = profile?.business_type_id ?
     businessTypes.find(type => type.id === profile.business_type_id) : null;
-    
-  const industry = profile?.industry_id ? 
+
+  const industry = profile?.industry_id ?
     industries.find(ind => ind.id === profile.industry_id) : null;
-    
-  const country = profile?.country_code ? 
+
+  const country = profile?.country_code ?
     countries.find(c => c.code === profile.country_code) : null;
 
   // Get appropriate icon
@@ -65,32 +70,32 @@ const BusinessProfilePage = () => {
         return Building;
     }
   };
-  
+
   return (
-    <div 
+    <div
       className="p-6 transition-colors"
       style={{ backgroundColor: colors.utility.secondaryText + '10' }}
     >
       {/* Page Header */}
       <div className="flex items-center mb-8">
-        <button 
-          onClick={handleBack} 
+        <button
+          onClick={handleBack}
           className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
           style={{ backgroundColor: colors.utility.secondaryText + '20' }}
         >
-          <ArrowLeft 
+          <ArrowLeft
             className="h-5 w-5"
             style={{ color: colors.utility.secondaryText }}
           />
         </button>
         <div>
-          <h1 
+          <h1
             className="text-2xl font-bold transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Business Profile
           </h1>
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -98,32 +103,32 @@ const BusinessProfilePage = () => {
           </p>
         </div>
       </div>
-      
+
       {/* Profile Content */}
       <div className="mt-6">
         {loading ? (
           <VaNiLoader size="md" message="Loading business profile..." />
         ) : !profile ? (
-          <div 
+          <div
             className="rounded-lg shadow-sm border p-10 text-center transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
               borderColor: colors.utility.primaryText + '20'
             }}
           >
-            <h3 
+            <h3
               className="text-lg font-medium mb-2 transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               No Business Profile Found
             </h3>
-            <p 
+            <p
               className="mb-6 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
               Set up your business profile to define your role in service contract management and customize your experience.
             </p>
-            <button 
+            <button
               onClick={handleEditClick}
               className="px-4 py-2 rounded-md hover:opacity-90 transition-colors"
               style={{
@@ -138,13 +143,13 @@ const BusinessProfilePage = () => {
           <div className="space-y-8">
             {/* Header with Edit Button */}
             <div className="flex justify-between items-center">
-              <h2 
+              <h2
                 className="text-xl font-semibold transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Business Profile
               </h2>
-              <button 
+              <button
                 onClick={handleEditClick}
                 className="flex items-center px-4 py-2 rounded-md border hover:opacity-80 transition-colors"
                 style={{
@@ -160,7 +165,7 @@ const BusinessProfilePage = () => {
 
             {/* Business Type Persona Card - Featured prominently */}
             {businessType && (
-              <div 
+              <div
                 className="rounded-lg border shadow-sm transition-colors"
                 style={{
                   backgroundColor: colors.utility.secondaryBackground,
@@ -172,7 +177,7 @@ const BusinessProfilePage = () => {
                 <div className="p-6 pb-4">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-4">
-                      <div 
+                      <div
                         className="w-14 h-14 rounded-full flex items-center justify-center"
                         style={{
                           backgroundColor: businessType.color + '20',
@@ -182,13 +187,13 @@ const BusinessProfilePage = () => {
                         {React.createElement(getBusinessTypeIcon(businessType.id), { size: 28 })}
                       </div>
                       <div>
-                        <h3 
+                        <h3
                           className="font-bold text-2xl transition-colors"
                           style={{ color: colors.utility.primaryText }}
                         >
                           {businessType.name}
                         </h3>
-                        <p 
+                        <p
                           className="text-sm mt-1 font-medium transition-colors"
                           style={{ color: businessType.color }}
                         >
@@ -197,9 +202,9 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Role Description */}
-                  <div 
+                  <div
                     className="mb-4 p-4 rounded-lg border"
                     style={{
                       backgroundColor: businessType.color + '08',
@@ -207,11 +212,11 @@ const BusinessProfilePage = () => {
                     }}
                   >
                     <div className="flex items-start">
-                      <Info 
+                      <Info
                         className="h-5 w-5 mr-3 mt-0.5 flex-shrink-0"
                         style={{ color: businessType.color }}
                       />
-                      <p 
+                      <p
                         className="text-sm leading-relaxed transition-colors"
                         style={{ color: colors.utility.primaryText }}
                       >
@@ -222,11 +227,11 @@ const BusinessProfilePage = () => {
                 </div>
 
                 {/* Examples Section */}
-                <div 
+                <div
                   className="px-6 py-4 border-t"
                   style={{ borderColor: businessType.color + '15' }}
                 >
-                  <h4 
+                  <h4
                     className="font-semibold mb-3 text-base transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
@@ -234,20 +239,20 @@ const BusinessProfilePage = () => {
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {businessType.examples.map((example, index) => (
-                      <div 
+                      <div
                         key={index}
                         className="p-3 rounded-lg border transition-colors"
-                        style={{ 
+                        style={{
                           backgroundColor: businessType.color + '05',
                           borderColor: businessType.color + '15'
                         }}
                       >
                         <div className="flex items-start">
-                          <span 
+                          <span
                             className="w-2 h-2 rounded-full mr-3 mt-2 flex-shrink-0"
                             style={{ backgroundColor: businessType.color }}
                           />
-                          <span 
+                          <span
                             className="text-sm leading-relaxed"
                             style={{ color: colors.utility.primaryText }}
                           >
@@ -260,14 +265,14 @@ const BusinessProfilePage = () => {
                 </div>
 
                 {/* Platform Impact Section */}
-                <div 
+                <div
                   className="px-6 py-4 border-t"
-                  style={{ 
+                  style={{
                     borderColor: businessType.color + '15',
                     backgroundColor: businessType.color + '05'
                   }}
                 >
-                  <h4 
+                  <h4
                     className="font-semibold mb-3 text-base transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
@@ -277,7 +282,7 @@ const BusinessProfilePage = () => {
                     {businessType.id === 'buyer' ? (
                       <>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -288,7 +293,7 @@ const BusinessProfilePage = () => {
                           </div>
                         </div>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -299,7 +304,7 @@ const BusinessProfilePage = () => {
                           </div>
                         </div>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -313,7 +318,7 @@ const BusinessProfilePage = () => {
                     ) : (
                       <>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -324,7 +329,7 @@ const BusinessProfilePage = () => {
                           </div>
                         </div>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -335,7 +340,7 @@ const BusinessProfilePage = () => {
                           </div>
                         </div>
                         <div className="text-sm">
-                          <div 
+                          <div
                             className="font-medium mb-1"
                             style={{ color: businessType.color }}
                           >
@@ -351,11 +356,11 @@ const BusinessProfilePage = () => {
                 </div>
               </div>
             )}
-            
+
             {/* Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Organization Card */}
-              <div 
+              <div
                 className="rounded-lg border shadow-sm p-6 transition-colors"
                 style={{
                   backgroundColor: colors.utility.secondaryBackground,
@@ -364,7 +369,7 @@ const BusinessProfilePage = () => {
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div 
+                    <div
                       className="w-10 h-10 rounded-full flex items-center justify-center"
                       style={{
                         backgroundColor: colors.brand.primary + '20',
@@ -373,7 +378,7 @@ const BusinessProfilePage = () => {
                     >
                       <Building size={20} />
                     </div>
-                    <h3 
+                    <h3
                       className="font-semibold text-lg transition-colors"
                       style={{ color: colors.utility.primaryText }}
                     >
@@ -381,33 +386,33 @@ const BusinessProfilePage = () => {
                     </h3>
                   </div>
                 </div>
-                
+
                 <div className="space-y-4">
                   {/* Logo and Name */}
                   <div className="flex items-center space-x-4">
                     {profile.logo_url ? (
-                      <div 
+                      <div
                         className="w-16 h-16 rounded overflow-hidden border"
                         style={{ borderColor: colors.utility.primaryText + '20' }}
                       >
-                        <img 
-                          src={profile.logo_url} 
-                          alt={profile.business_name} 
+                        <img
+                          src={profile.logo_url}
+                          alt={profile.business_name}
                           className="w-full h-full object-contain"
                         />
                       </div>
                     ) : (
-                      <div 
+                      <div
                         className="w-16 h-16 rounded flex items-center justify-center"
                         style={{ backgroundColor: colors.utility.secondaryText + '20' }}
                       >
-                        <Building 
-                          size={24} 
+                        <Building
+                          size={24}
                           style={{ color: colors.utility.secondaryText }}
                         />
                       </div>
                     )}
-                    
+
                     <div>
                       <div
                         className="font-semibold text-lg transition-colors"
@@ -443,7 +448,7 @@ const BusinessProfilePage = () => {
                   {/* Address */}
                   {(profile.address_line1 || profile.city || profile.country_code) && (
                     <div className="flex space-x-3">
-                      <MapPin 
+                      <MapPin
                         className="h-5 w-5 shrink-0 mt-0.5"
                         style={{ color: colors.utility.secondaryText }}
                       />
@@ -463,9 +468,9 @@ const BusinessProfilePage = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* Contact Information Card */}
-              <div 
+              <div
                 className="rounded-lg border shadow-sm p-6 transition-colors"
                 style={{
                   backgroundColor: colors.utility.secondaryBackground,
@@ -473,7 +478,7 @@ const BusinessProfilePage = () => {
                 }}
               >
                 <div className="flex items-center space-x-3 mb-4">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-full flex items-center justify-center"
                     style={{
                       backgroundColor: colors.brand.primary + '20',
@@ -482,19 +487,19 @@ const BusinessProfilePage = () => {
                   >
                     <Phone size={20} />
                   </div>
-                  <h3 
+                  <h3
                     className="font-semibold text-lg transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     Contact Information
                   </h3>
                 </div>
-                
+
                 <div className="space-y-4">
                   {/* Phone */}
                   {profile.business_phone && (
                     <div className="flex space-x-3">
-                      <Phone 
+                      <Phone
                         className="h-5 w-5 shrink-0"
                         style={{ color: colors.utility.secondaryText }}
                       />
@@ -503,11 +508,11 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* WhatsApp - NEW */}
                   {profile.business_whatsapp && (
                     <div className="flex space-x-3">
-                      <MessageCircle 
+                      <MessageCircle
                         className="h-5 w-5 shrink-0"
                         style={{ color: '#25D366' }} // WhatsApp green
                       />
@@ -515,7 +520,7 @@ const BusinessProfilePage = () => {
                         <div style={{ color: colors.utility.primaryText }}>
                           {profile.business_whatsapp_country_code || ''} {profile.business_whatsapp}
                         </div>
-                        <div 
+                        <div
                           className="text-xs mt-0.5"
                           style={{ color: colors.utility.secondaryText }}
                         >
@@ -524,11 +529,11 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Email */}
                   {profile.business_email && (
                     <div className="flex space-x-3">
-                      <Mail 
+                      <Mail
                         className="h-5 w-5 shrink-0"
                         style={{ color: colors.utility.secondaryText }}
                       />
@@ -537,18 +542,18 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Website */}
                   {profile.website_url && (
                     <div className="flex space-x-3">
-                      <Globe 
+                      <Globe
                         className="h-5 w-5 shrink-0"
                         style={{ color: colors.utility.secondaryText }}
                       />
                       <div>
-                        <a 
-                          href={profile.website_url.startsWith('http') ? profile.website_url : `https://${profile.website_url}`} 
-                          target="_blank" 
+                        <a
+                          href={profile.website_url.startsWith('http') ? profile.website_url : `https://${profile.website_url}`}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="hover:underline transition-colors"
                           style={{ color: colors.brand.primary }}
@@ -558,9 +563,9 @@ const BusinessProfilePage = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {!profile.business_phone && !profile.business_whatsapp && !profile.business_email && !profile.website_url && (
-                    <div 
+                    <div
                       className="text-sm transition-colors"
                       style={{ color: colors.utility.secondaryText }}
                     >
@@ -628,7 +633,7 @@ const BusinessProfilePage = () => {
             )}
 
             {/* Brand Colors Card */}
-            <div 
+            <div
               className="rounded-lg border shadow-sm p-6 transition-colors"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
@@ -636,7 +641,7 @@ const BusinessProfilePage = () => {
               }}
             >
               <div className="flex items-center space-x-3 mb-4">
-                <div 
+                <div
                   className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{
                     backgroundColor: colors.brand.primary + '20',
@@ -645,32 +650,32 @@ const BusinessProfilePage = () => {
                 >
                   <Palette size={20} />
                 </div>
-                <h3 
+                <h3
                   className="font-semibold text-lg transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   Brand Colors
                 </h3>
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Primary Color */}
                 <div className="flex items-center space-x-4">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-full border"
-                    style={{ 
+                    style={{
                       backgroundColor: profile.primary_color || '#4F46E5',
                       borderColor: colors.utility.primaryText + '20'
                     }}
                   />
                   <div>
-                    <div 
+                    <div
                       className="font-medium transition-colors"
                       style={{ color: colors.utility.primaryText }}
                     >
                       Primary Color
                     </div>
-                    <div 
+                    <div
                       className="text-sm transition-colors"
                       style={{ color: colors.utility.secondaryText }}
                     >
@@ -678,24 +683,24 @@ const BusinessProfilePage = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Secondary Color */}
                 <div className="flex items-center space-x-4">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-full border"
-                    style={{ 
+                    style={{
                       backgroundColor: profile.secondary_color || '#10B981',
                       borderColor: colors.utility.primaryText + '20'
                     }}
                   />
                   <div>
-                    <div 
+                    <div
                       className="font-medium transition-colors"
                       style={{ color: colors.utility.primaryText }}
                     >
                       Secondary Color
                     </div>
-                    <div 
+                    <div
                       className="text-sm transition-colors"
                       style={{ color: colors.utility.secondaryText }}
                     >
@@ -703,6 +708,62 @@ const BusinessProfilePage = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Danger Zone - Close Account */}
+            <div
+              className="rounded-lg border shadow-sm p-6 transition-colors"
+              style={{
+                backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.05)' : 'rgba(239, 68, 68, 0.03)',
+                borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.15)'
+              }}
+            >
+              <div className="flex items-center space-x-3 mb-4">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    color: '#EF4444'
+                  }}
+                >
+                  <AlertTriangle size={20} />
+                </div>
+                <h3
+                  className="font-semibold text-lg"
+                  style={{ color: '#EF4444' }}
+                >
+                  Danger Zone
+                </h3>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <p
+                    className="font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Close Account & Delete All Data
+                  </p>
+                  <p
+                    className="text-sm mt-1 transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Permanently delete your organization's data and close this account. This action cannot be undone.
+                  </p>
+                </div>
+                <button
+                  onClick={handleCloseAccountClick}
+                  className="flex items-center px-4 py-2 rounded-md border hover:opacity-80 transition-colors whitespace-nowrap"
+                  style={{
+                    borderColor: '#EF4444',
+                    color: '#EF4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)'
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Close Account
+                </button>
               </div>
             </div>
           </div>
