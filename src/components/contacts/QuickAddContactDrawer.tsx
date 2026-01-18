@@ -29,8 +29,16 @@ import {
   CONTACT_CLASSIFICATION_CONFIG,
   getClassificationColors
 } from '../../utils/constants/contacts';
-import { CHANNELS, getChannelByCode, formatChannelValue } from '../../utils/constants/channels';
-import { countries } from '../../utils/constants/countries';
+import { CHANNELS, getChannelByCode, formatChannelValue, validateChannelValueWithError } from '../../utils/constants/channels';
+import { countries, getPhoneLengthForCountry } from '../../utils/constants/countries';
+import {
+  validateIndividualName,
+  validateCompanyName,
+  validateChannelValue,
+  getPhoneLengthDescription,
+  prepareDuplicateCheckData
+} from '../../utils/validation/contactValidation';
+import { useCheckDuplicates } from '../../hooks/useContacts';
 
 // Lucide icon mapping from string names in constants
 const LUCIDE_ICON_MAP: Record<string, LucideIcon> = {
@@ -99,12 +107,18 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
   const { currentTenant, user, isLive } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // API Hook
+  // API Hooks
   const createContactHook = useCreateContact();
+  const checkDuplicatesHook = useCheckDuplicates();
 
   // Race condition prevention
   const isSavingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Duplicate confirmation state
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateContacts, setDuplicateContacts] = useState<any[]>([]);
+  const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<QuickFormData>({
@@ -251,46 +265,61 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
     }
   };
 
-  // Validate form
+  // Validate form with country-aware phone validation and name character validation
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
+    // Classification validation
     if (formData.classifications.length === 0) {
       newErrors.classifications = 'Select at least one classification';
     }
 
-    if (formData.type === 'individual' && !formData.name.trim()) {
-      newErrors.name = 'Name is required';
+    // Name validation with character restrictions
+    if (formData.type === 'individual') {
+      const nameValidation = validateIndividualName(formData.name);
+      if (!nameValidation.isValid) {
+        newErrors.name = nameValidation.error || 'Invalid name';
+      }
     }
 
-    if (formData.type === 'corporate' && !formData.company_name.trim()) {
-      newErrors.company_name = 'Company name is required';
+    // Company name validation
+    if (formData.type === 'corporate') {
+      const companyValidation = validateCompanyName(formData.company_name);
+      if (!companyValidation.isValid) {
+        newErrors.company_name = companyValidation.error || 'Invalid company name';
+      }
     }
 
+    // Channel validation - at least one required
     const validChannels = formData.contact_channels.filter(c => c.value.trim());
     if (validChannels.length === 0) {
       newErrors.contact_channels = 'At least one contact channel is required';
-    }
+    } else {
+      // Validate each channel with appropriate validation (country-aware for phones)
+      for (const channel of formData.contact_channels) {
+        if (!channel.value.trim()) continue;
 
-    // Validate email format
-    formData.contact_channels.forEach(channel => {
-      if (channel.channel_type === 'email' && channel.value.trim()) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(channel.value.trim())) {
-          newErrors.contact_channels = 'Please enter a valid email address';
+        const channelValidation = validateChannelValue(
+          channel.channel_type as any,
+          channel.value,
+          channel.country_code
+        );
+
+        if (!channelValidation.isValid) {
+          newErrors.contact_channels = channelValidation.error || 'Invalid contact channel';
+          break;
         }
       }
-    });
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle save with race condition prevention
-  const handleSave = async () => {
+  // Handle save with race condition prevention and duplicate check
+  const handleSave = async (forceCreate: boolean = false) => {
     // Prevent double submission
     if (isSavingRef.current || isSaving) {
-      // console.log('Save already in progress, ignoring duplicate call');
       return;
     }
 
@@ -340,17 +369,41 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         auth_user_id: null
       };
 
-      // console.log('Creating contact with data:', contactData);
+      // Check for duplicates before creating (unless force create)
+      if (!forceCreate && !skipDuplicateCheck) {
+        try {
+          const duplicateCheckData = prepareDuplicateCheckData({
+            name: contactData.name,
+            company_name: contactData.company_name,
+            contact_channels: contactData.contact_channels
+          });
+
+          const duplicateResult = await checkDuplicatesHook.mutate(duplicateCheckData);
+
+          if (duplicateResult?.has_duplicates && duplicateResult.duplicates?.length > 0) {
+            // Show duplicate warning
+            setDuplicateContacts(duplicateResult.duplicates);
+            setShowDuplicateWarning(true);
+            isSavingRef.current = false;
+            setIsSaving(false);
+            return;
+          }
+        } catch (dupError) {
+          // If duplicate check fails, continue with creation
+          console.warn('Duplicate check failed, proceeding with creation:', dupError);
+        }
+      }
 
       const result = await createContactHook.mutate(contactData);
 
       // Check if request was aborted
       if (abortControllerRef.current?.signal.aborted) {
-        // console.log('Request was aborted');
         return;
       }
 
       // Success
+      setShowDuplicateWarning(false);
+      setDuplicateContacts([]);
       if (onSuccess) {
         onSuccess(result.id);
       }
@@ -359,17 +412,28 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
     } catch (error: any) {
       // Check if this is an abort error
       if (error.name === 'AbortError') {
-        // console.log('Request aborted');
         return;
       }
 
-      // console.error('Failed to create contact:', error);
       setErrors({ submit: error.message || 'Failed to create contact. Please try again.' });
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
       abortControllerRef.current = null;
     }
+  };
+
+  // Handle confirm create after duplicate warning
+  const handleConfirmCreate = () => {
+    setShowDuplicateWarning(false);
+    setSkipDuplicateCheck(true);
+    handleSave(true);
+  };
+
+  // Handle cancel duplicate warning
+  const handleCancelDuplicateWarning = () => {
+    setShowDuplicateWarning(false);
+    setDuplicateContacts([]);
   };
 
   // Navigate to advanced create
@@ -757,26 +821,52 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
                     )}
 
                     {/* Value Input */}
-                    <input
-                      type={channel.channel_type === 'email' ? 'email' : 'tel'}
-                      value={channel.value}
-                      onChange={(e) => {
-                        let inputValue = e.target.value;
-                        // For phone types, only allow digits
-                        if (requiresCountryCode) {
-                          inputValue = inputValue.replace(/\D/g, '');
+                    <div className="flex-1 relative">
+                      <input
+                        type={channel.channel_type === 'email' ? 'email' : 'tel'}
+                        value={channel.value}
+                        onChange={(e) => {
+                          let inputValue = e.target.value;
+                          // For phone types, only allow digits
+                          if (requiresCountryCode) {
+                            inputValue = inputValue.replace(/\D/g, '');
+                          }
+                          updateChannel(channel.id, 'value', inputValue);
+                        }}
+                        disabled={isSaving}
+                        placeholder={
+                          requiresCountryCode && channel.country_code
+                            ? `Enter ${getPhoneLengthDescription(channel.country_code)}`
+                            : (channelConfig?.placeholder || 'Enter value')
                         }
-                        updateChannel(channel.id, 'value', inputValue);
-                      }}
-                      disabled={isSaving}
-                      placeholder={channelConfig?.placeholder || 'Enter value'}
-                      className="flex-1 p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
-                      style={{
-                        backgroundColor: colors.utility.primaryBackground,
-                        borderColor: errors.contact_channels && index === 0 ? colors.semantic.error : colors.utility.primaryText + '20',
-                        color: colors.utility.primaryText,
-                      }}
-                    />
+                        className="w-full p-3 rounded-xl border-2 text-sm transition-all focus:outline-none disabled:opacity-50"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: errors.contact_channels && index === 0 ? colors.semantic.error : colors.utility.primaryText + '20',
+                          color: colors.utility.primaryText,
+                        }}
+                      />
+                      {/* Show digit count hint for phone fields */}
+                      {requiresCountryCode && channel.value && channel.country_code && (
+                        <span
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+                          style={{
+                            color: (() => {
+                              const { min, max } = getPhoneLengthForCountry(channel.country_code);
+                              const digitCount = channel.value.replace(/\D/g, '').length;
+                              if (digitCount < min) return colors.semantic.warning;
+                              if (digitCount > max) return colors.semantic.error;
+                              return colors.semantic.success;
+                            })()
+                          }}
+                        >
+                          {channel.value.replace(/\D/g, '').length}/{(() => {
+                            const { min, max } = getPhoneLengthForCountry(channel.country_code);
+                            return min === max ? min : `${min}-${max}`;
+                          })()}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Remove Button */}
                     {formData.contact_channels.length > 1 && (
@@ -824,6 +914,84 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
               }}
             >
               {errors.submit}
+            </div>
+          )}
+
+          {/* Duplicate Warning Modal */}
+          {showDuplicateWarning && (
+            <div
+              className="p-4 rounded-xl border-2"
+              style={{
+                backgroundColor: colors.semantic.warning + '10',
+                borderColor: colors.semantic.warning,
+              }}
+            >
+              <div className="flex items-start gap-3 mb-3">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: colors.semantic.warning + '20' }}
+                >
+                  <span style={{ color: colors.semantic.warning }}>!</span>
+                </div>
+                <div>
+                  <h4
+                    className="font-bold text-sm mb-1"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Potential Duplicate Found
+                  </h4>
+                  <p
+                    className="text-xs"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    A contact with similar information already exists:
+                  </p>
+                </div>
+              </div>
+
+              {/* Duplicate contacts list */}
+              <div className="space-y-2 mb-4">
+                {duplicateContacts.slice(0, 3).map((dup, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg text-xs"
+                    style={{
+                      backgroundColor: colors.utility.primaryBackground,
+                      color: colors.utility.primaryText,
+                    }}
+                  >
+                    <span className="font-semibold">{dup.name || dup.company_name}</span>
+                    {dup.contact_channels?.[0]?.value && (
+                      <span className="ml-2" style={{ color: colors.utility.secondaryText }}>
+                        ({dup.contact_channels[0].value})
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancelDuplicateWarning}
+                  className="flex-1 py-2 text-xs font-bold rounded-lg border transition-all"
+                  style={{
+                    borderColor: colors.utility.primaryText + '20',
+                    color: colors.utility.secondaryText,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmCreate}
+                  className="flex-1 py-2 text-xs font-bold rounded-lg transition-all"
+                  style={{
+                    backgroundColor: colors.semantic.warning,
+                    color: '#ffffff',
+                  }}
+                >
+                  Create Anyway
+                </button>
+              </div>
             </div>
           )}
         </div>

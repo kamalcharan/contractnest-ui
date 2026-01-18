@@ -4,6 +4,7 @@ import { File, FileText, Image, Video, Download, Trash2, Eye, Calendar, HardDriv
 import { formatFileSize } from '@/utils/constants/storageConstants';
 import FileActions from './FileActions';
 import { useTheme } from '@/contexts/ThemeContext';
+import { VaNiLoader } from '@/components/common/loaders';
 
 export interface FileItem {
   id: string;
@@ -24,6 +25,8 @@ interface FileListProps {
   isLoading?: boolean;
   className?: string;
   enableBatchOperations?: boolean;
+  hideSearch?: boolean; // Hide internal search when parent provides filtered files
+  style?: React.CSSProperties;
 }
 
 type SortField = 'file_name' | 'file_size' | 'file_type' | 'created_at';
@@ -36,7 +39,9 @@ const FileList: React.FC<FileListProps> = ({
   emptyMessage = 'No files found',
   isLoading = false,
   className = '',
-  enableBatchOperations = false
+  enableBatchOperations = false,
+  hideSearch = false,
+  style
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -150,81 +155,82 @@ const FileList: React.FC<FileListProps> = ({
   
   if (isLoading) {
     return (
-      <div 
+      <div
         className={`border rounded-lg transition-colors ${className}`}
         style={{
           backgroundColor: colors.utility.secondaryBackground,
-          borderColor: `${colors.utility.primaryText}20`
+          borderColor: `${colors.utility.primaryText}20`,
+          ...style
         }}
       >
         <div className="flex justify-center py-12">
-          <div 
-            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full"
-            style={{ borderColor: `${colors.brand.primary}40`, borderTopColor: 'transparent' }}
-          />
+          <VaNiLoader size="md" text="Loading files..." />
         </div>
       </div>
     );
   }
   
   return (
-    <div 
+    <div
       className={`border rounded-lg transition-colors ${className}`}
       style={{
         backgroundColor: colors.utility.secondaryBackground,
-        borderColor: `${colors.utility.primaryText}20`
+        borderColor: `${colors.utility.primaryText}20`,
+        ...style
       }}
     >
-      {/* Search Bar */}
-      <div 
-        className="p-4 border-b transition-colors"
-        style={{ borderColor: `${colors.utility.primaryText}20` }}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search 
-                className="h-4 w-4 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
+      {/* Search Bar - hidden when parent provides filtered files */}
+      {!hideSearch && (
+        <div
+          className="p-4 border-b transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search
+                  className="h-4 w-4 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Search files..."
+                className="pl-10 w-full p-2 rounded-md border focus:outline-none focus:ring-2 transition-colors"
+                style={{
+                  borderColor: `${colors.utility.primaryText}40`,
+                  backgroundColor: colors.utility.primaryBackground,
+                  color: colors.utility.primaryText,
+                  '--tw-ring-color': colors.brand.primary
+                } as React.CSSProperties}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <input
-              type="text"
-              placeholder="Search files..."
-              className="pl-10 w-full p-2 rounded-md border focus:outline-none focus:ring-2 transition-colors"
-              style={{
-                borderColor: `${colors.utility.primaryText}40`,
-                backgroundColor: colors.utility.primaryBackground,
-                color: colors.utility.primaryText,
-                '--tw-ring-color': colors.brand.primary
-              } as React.CSSProperties}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+
+            {enableBatchOperations && selectedFiles.size > 0 && (
+              <button
+                onClick={handleBatchDelete}
+                disabled={isBatchDeleting}
+                className="px-4 py-2 text-white rounded-md transition-all duration-200 flex items-center disabled:opacity-50 hover:opacity-80"
+                style={{ backgroundColor: colors.semantic.error }}
+              >
+                {isBatchDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete {selectedFiles.size} Files
+                  </>
+                )}
+              </button>
+            )}
           </div>
-          
-          {enableBatchOperations && selectedFiles.size > 0 && (
-            <button
-              onClick={handleBatchDelete}
-              disabled={isBatchDeleting}
-              className="px-4 py-2 text-white rounded-md transition-all duration-200 flex items-center disabled:opacity-50 hover:opacity-80"
-              style={{ backgroundColor: colors.semantic.error }}
-            >
-              {isBatchDeleting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete {selectedFiles.size} Files
-                </>
-              )}
-            </button>
-          )}
         </div>
-      </div>
+      )}
       
       {sortedFiles.length === 0 ? (
         <div className="text-center py-12">

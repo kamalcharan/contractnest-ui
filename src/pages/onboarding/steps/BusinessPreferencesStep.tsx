@@ -1,5 +1,6 @@
 // src/pages/onboarding/steps/BusinessPreferencesStep.tsx
 // FIX: WhatsApp field names corrected to match TenantProfile interface
+// FIX: business_name now syncs directly on change (race condition fix)
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -67,14 +68,8 @@ const BusinessPreferencesStep: React.FC = () => {
     }
   }, [currentTenant?.name]);
 
-  /**
-   * Update tenant field when business name changes
-   */
-  useEffect(() => {
-    if (businessName) {
-      updateTenantField('business_name', businessName);
-    }
-  }, [businessName]);
+  // NOTE: Removed useEffect for business_name sync - now handled directly in handleBusinessNameChange
+  // to prevent race conditions when submitting the form
 
   /**
    * Update tenant field when colors change
@@ -89,11 +84,14 @@ const BusinessPreferencesStep: React.FC = () => {
 
   /**
    * Handle business name change
+   * FIX: Sync directly to formData instead of relying on useEffect (race condition fix)
    */
   const handleBusinessNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setBusinessName(value);
     setValidationError(null);
+    // FIX: Sync to formData immediately to prevent race condition
+    updateTenantField('business_name', value);
   };
 
   /**

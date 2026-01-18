@@ -182,19 +182,6 @@ const ResourcesPanel: React.FC<ResourcesPanelProps> = ({
     );
   }, [displayData, searchQuery]);
 
-  // Log contact loading for debugging (after all data is computed)
-  console.log('Contact loading debug:', {
-    selectedResourceType: selectedResourceType?.name,
-    contactClassification,
-    contactsCount: contacts.length,
-    transformedCount: transformedContactsAsResources.length,
-    displayDataCount: displayData.length,
-    filteredCount: filteredResources.length,
-    contactsLoading,
-    contactsError: contactsError?.message,
-    isContactBased: behavior?.isContactBased
-  });
-
   // Determine loading state
   const isLoading = resourcesLoading || (behavior?.isContactBased && contactsLoading);
 
@@ -279,7 +266,7 @@ const ResourcesPanel: React.FC<ResourcesPanelProps> = ({
 
       <div className="mt-6">
         {/* Column Headers */}
-        <ResourcesColumnHeaders colors={colors} />
+        <ResourcesColumnHeaders colors={colors} behavior={behavior} />
 
         {/* Resources List */}
         <div className="space-y-4 mt-4">
@@ -395,45 +382,66 @@ const ResourcesPanelHeader: React.FC<ResourcesPanelHeaderProps> = ({
 
 /**
  * Column headers for resources grid
+ * For contact-based resources (Team Member, Partners): show only Name, Display Name, Actions (3 cols)
+ * For manual entry resources: show all 4 columns (Name, Display Name, Color, Sequence/Actions)
  */
 interface ResourcesColumnHeadersProps {
   colors: any;
+  behavior: ReturnType<typeof getResourceTypeBehavior> | null;
 }
 
-const ResourcesColumnHeaders: React.FC<ResourcesColumnHeadersProps> = ({ colors }) => {
+const ResourcesColumnHeaders: React.FC<ResourcesColumnHeadersProps> = ({ colors, behavior }) => {
+  const isContactBased = behavior?.isContactBased ?? false;
+
   return (
-    <div 
+    <div
       className="rounded-lg shadow-sm border transition-colors"
       style={{
         backgroundColor: colors.utility.secondaryBackground,
         borderColor: colors.utility.primaryText + '20'
       }}
     >
-      <div className="grid grid-cols-4 gap-4 px-4 py-3">
-        <div 
+      <div className={cn(
+        "grid gap-4 px-4 py-3",
+        isContactBased ? "grid-cols-3" : "grid-cols-4"
+      )}>
+        <div
           className="font-medium transition-colors"
           style={{ color: colors.utility.primaryText }}
         >
           Name
         </div>
-        <div 
+        <div
           className="font-medium transition-colors"
           style={{ color: colors.utility.primaryText }}
         >
           Display Name
         </div>
-        <div 
-          className="font-medium transition-colors"
-          style={{ color: colors.utility.primaryText }}
-        >
-          Color
-        </div>
-        <div 
-          className="font-medium transition-colors"
-          style={{ color: colors.utility.primaryText }}
-        >
-          Sequence
-        </div>
+        {/* Color - ONLY show for non-contact-based resources */}
+        {!isContactBased && (
+          <div
+            className="font-medium transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Color
+          </div>
+        )}
+        {/* Sequence/Actions header - ONLY show for non-contact-based resources */}
+        {!isContactBased ? (
+          <div
+            className="font-medium transition-colors"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Sequence
+          </div>
+        ) : (
+          <div
+            className="font-medium transition-colors text-right"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Actions
+          </div>
+        )}
       </div>
     </div>
   );

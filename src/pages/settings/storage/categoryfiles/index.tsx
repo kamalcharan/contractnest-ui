@@ -1,7 +1,7 @@
 // src/pages/settings/storage/categoryfiles/index.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Upload, Search, ChevronDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, Search, Loader2 } from 'lucide-react';
 import { useStorageManagement } from '@/hooks/useStorageManagement';
 import { formatFileSize } from '@/utils/constants/storageConstants';
 import { analyticsService } from '@/services/analytics.service';
@@ -9,12 +9,7 @@ import FileUploader from '@/components/storage/FileUploader';
 import FileList from '@/components/storage/FileList';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { VaNiLoader } from '@/components/common/loaders';
 
 const CategoryFilesPage: React.FC = () => {
   const { categoryId } = useParams<{ categoryId: string }>();
@@ -184,19 +179,16 @@ const CategoryFilesPage: React.FC = () => {
   
   if (!category) {
     return (
-      <div 
+      <div
         className="p-6 transition-colors duration-200 min-h-screen"
         style={{
-          background: isDarkMode 
+          background: isDarkMode
             ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
             : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
         }}
       >
         <div className="flex justify-center py-12">
-          <div 
-            className="animate-spin h-8 w-8 border-4 border-t-transparent rounded-full transition-colors"
-            style={{ borderColor: colors.brand.primary }}
-          ></div>
+          <VaNiLoader size="md" text="Loading category..." />
         </div>
       </div>
     );
@@ -240,72 +232,20 @@ const CategoryFilesPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Upload Button with Dropdown - Using same pattern as storagemanagement page */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              disabled={isSubmitting}
-              className="transition-colors hover:opacity-90"
-              style={{
-                background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                color: '#FFFFFF',
-                borderColor: 'transparent'
-              }}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Upload File
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent 
-            align="end" 
-            className="w-56 transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20'
-            }}
-          >
-            <DropdownMenuItem 
-              onClick={() => handleUploadClick(false)}
-              className="transition-colors hover:opacity-80"
-              style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
-            >
-              <div>
-                <div 
-                  className="font-medium transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Single File
-                </div>
-                <div 
-                  className="text-xs transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Upload one file at a time
-                </div>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => handleUploadClick(true)}
-              className="transition-colors hover:opacity-80"
-              style={{ backgroundColor: colors.utility.primaryBackground + '50' }}
-            >
-              <div>
-                <div 
-                  className="font-medium transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Multiple Files
-                </div>
-                <div 
-                  className="text-xs transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Upload up to 10 files at once
-                </div>
-              </div>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* Simple Upload Button - single file only */}
+        <Button
+          onClick={() => handleUploadClick(false)}
+          disabled={isSubmitting}
+          className="transition-colors hover:opacity-90"
+          style={{
+            background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+            color: '#FFFFFF',
+            borderColor: 'transparent'
+          }}
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          Upload File
+        </Button>
       </div>
       
       {/* File Uploader Modal */}
@@ -432,6 +372,7 @@ const CategoryFilesPage: React.FC = () => {
         emptyMessage={`You haven't uploaded any files to ${category.name} yet.`}
         isLoading={isLoading}
         enableBatchOperations={true}
+        hideSearch={true}
         className="border rounded-lg transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,

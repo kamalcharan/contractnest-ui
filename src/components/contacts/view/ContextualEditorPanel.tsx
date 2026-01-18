@@ -21,10 +21,11 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useUpdateContact } from '../../../hooks/useContacts';
 import { useToast } from '@/components/ui/use-toast';
-import { CHANNELS, getChannelByCode, validateChannelValue, formatChannelValue } from '@/utils/constants/channels';
-import { countries } from '@/utils/constants/countries';
+import { CHANNELS, getChannelByCode, validateChannelValueWithError, formatChannelValue } from '@/utils/constants/channels';
+import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import { ADDRESS_TYPES, ADDRESS_TYPE_LABELS } from '@/utils/constants/contacts';
 import { useMasterDataOptions } from '@/hooks/useMasterData';
+import { validateIndividualName, getPhonePlaceholder } from '@/utils/validation/contactValidation';
 
 // Types
 export type EditorMode =
@@ -300,8 +301,15 @@ const ContextualEditorPanel: React.FC<ContextualEditorPanelProps> = ({
         return;
       }
 
-      if (channelConfig && !validateChannelValue(channelConfig, formData.value, formData.country_code)) {
-        setError(`Invalid ${channelConfig.displayName}`);
+      // Use new validation utility with error messages
+      const validation = validateChannelValueWithError(
+        formData.channel_type,
+        formData.value,
+        formData.country_code
+      );
+
+      if (!validation.isValid) {
+        setError(validation.error || `Invalid ${channelConfig?.displayName || 'value'}`);
         return;
       }
 
@@ -406,25 +414,48 @@ const ContextualEditorPanel: React.FC<ContextualEditorPanelProps> = ({
             <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>
               {channelConfig?.displayName || 'Value'} *
             </label>
-            <input
-              type="text"
-              value={formData.value}
-              onChange={(e) => {
-                let val = e.target.value;
-                if (channelConfig?.validation.type === 'phone') {
-                  val = val.replace(/[^\d+]/g, '');
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.value}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  if (channelConfig?.validation.type === 'phone') {
+                    val = val.replace(/[^\d+]/g, '');
+                  }
+                  setFormData({ ...formData, value: val });
+                  setError(null);
+                }}
+                placeholder={
+                  channelConfig?.validation.type === 'phone' && formData.country_code
+                    ? getPhonePlaceholder(formData.country_code)
+                    : channelConfig?.placeholder || 'Enter value'
                 }
-                setFormData({ ...formData, value: val });
-                setError(null);
-              }}
-              placeholder={channelConfig?.placeholder || 'Enter value'}
-              className="w-full p-3 border rounded-xl transition-colors focus:outline-none focus:ring-2"
-              style={{
-                ...inputStyle,
-                borderRadius: '12px',
-                borderColor: error ? colors.semantic.error : inputStyle.borderColor
-              }}
-            />
+                className="w-full p-3 border rounded-xl transition-colors focus:outline-none focus:ring-2"
+                style={{
+                  ...inputStyle,
+                  borderRadius: '12px',
+                  borderColor: error ? colors.semantic.error : inputStyle.borderColor,
+                  paddingRight: channelConfig?.validation.type === 'phone' ? '60px' : undefined
+                }}
+              />
+              {/* Phone digit count indicator */}
+              {channelConfig?.validation.type === 'phone' && formData.country_code && (
+                <div
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded"
+                  style={{
+                    backgroundColor: colors.utility.secondaryBackground,
+                    color: colors.utility.secondaryText
+                  }}
+                >
+                  {(() => {
+                    const digits = formData.value.replace(/\D/g, '').length;
+                    const { min, max } = getPhoneLengthForCountry(formData.country_code);
+                    return `${digits}/${min === max ? min : `${min}-${max}`}`;
+                  })()}
+                </div>
+              )}
+            </div>
             {error && (
               <p className="text-xs mt-1 flex items-center gap-1" style={{ color: colors.semantic.error }}>
                 <AlertCircle className="h-3 w-3" />
@@ -927,6 +958,13 @@ const ContextualEditorPanel: React.FC<ContextualEditorPanelProps> = ({
     const handleSubmit = () => {
       if (!formData.name.trim()) {
         setError('Name is required');
+        return;
+      }
+
+      // Validate name with character restrictions
+      const nameValidation = validateIndividualName(formData.name);
+      if (!nameValidation.isValid) {
+        setError(nameValidation.error || 'Invalid name format');
         return;
       }
 

@@ -1,4 +1,11 @@
 // src/pages/public/admin/resources-management.tsx
+//
+// TODO [PUBLIC DEPLOYMENT]: This page imports from '@/services/public-resources.service'
+// which needs to be created before making this page publicly accessible.
+// Required exports: ResourceCardData, getPublicResources(), createResource(token, data),
+// updateResource(token, id, data), deleteResource(token, id), getResourceStats(token)
+// Follow the pattern in '@/services/public-leads.service.ts' for implementation.
+//
 import React, { useState, useEffect } from 'react';
 import { 
   Table, 

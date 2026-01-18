@@ -28,10 +28,15 @@ import { analyticsService } from '@/services/analytics.service';
 import {
   CHANNELS,
   getChannelByCode,
-  validateChannelValue as validateChannel,
-  formatChannelValue
+  formatChannelValue,
+  channelRequiresCountryCode
 } from '@/utils/constants/channels';
-import { countries } from '@/utils/constants/countries';
+import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
+import {
+  validateChannelValue as validateChannelUtil,
+  getPhoneLengthDescription,
+  type ChannelType
+} from '@/utils/validation/contactValidation';
 
 // Types matching API structure
 interface ContactChannel {
@@ -111,18 +116,25 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     ...countries.filter(c => !commonCountries.includes(c.code))
   ];
 
-  // Validate a channel value
+  // Validate a channel value with country-aware phone validation
   const validateChannelValue = (channel: ContactChannel): string | null => {
     const channelConfig = getChannelByCode(channel.channel_type);
     if (!channelConfig) return 'Invalid channel type';
 
     if (!channel.value) return 'This field is required';
 
-    const isValid = validateChannel(channelConfig, channel.value, channel.country_code);
-    if (!isValid) {
-      return `Invalid ${channelConfig.displayName}`;
+    // Use centralized validation utility with country-aware phone validation
+    const validationResult = validateChannelUtil(
+      channel.channel_type as ChannelType,
+      channel.value,
+      channel.country_code
+    );
+
+    if (!validationResult.isValid) {
+      return validationResult.error || `Invalid ${channelConfig.displayName}`;
     }
 
+    // Check for duplicates
     const duplicate = value.find((ch, idx) =>
       ch.channel_type === channel.channel_type &&
       ch.value === channel.value &&

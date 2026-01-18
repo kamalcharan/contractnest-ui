@@ -608,7 +608,7 @@ const ListOfValuesPage = () => {
                     className="font-medium transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    Description
+                    Actions
                   </div>
                 </div>
               </div>
@@ -675,18 +675,8 @@ const ListOfValuesPage = () => {
                               color: colors.utility.primaryText
                             }}
                           />
-                          <div className="flex items-center justify-between">
-                            <Input
-                              value={editedValues[detail.id]?.Description ?? detail.Description ?? ''}
-                              onChange={(e) => handleInputChange(detail.id, 'Description', e.target.value)}
-                              disabled={isProcessing}
-                              style={{
-                                borderColor: colors.utility.secondaryText + '40',
-                                backgroundColor: colors.utility.primaryBackground,
-                                color: colors.utility.primaryText
-                              }}
-                            />
-                            <div className="flex items-center ml-2">
+                          <div className="flex items-center justify-end">
+                            <div className="flex items-center">
                               <Button
                                 variant="outline"
                                 onClick={() => setEditingId(null)}
@@ -746,13 +736,7 @@ const ListOfValuesPage = () => {
                           >
                             {detail.Sequence_no}
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span
-                              className="truncate transition-colors"
-                              style={{ color: colors.utility.primaryText }}
-                            >
-                              {detail.Description}
-                            </span>
+                          <div className="flex items-center justify-end">
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="outline"
@@ -852,19 +836,8 @@ const ListOfValuesPage = () => {
                           color: colors.utility.primaryText
                         }}
                       />
-                      <div className="flex items-center justify-between">
-                        <Input
-                          placeholder="Description"
-                          value={newDetail.Description}
-                          onChange={(e) => setNewDetail(prev => ({ ...prev, Description: e.target.value }))}
-                          disabled={isProcessing}
-                          style={{
-                            borderColor: colors.utility.secondaryText + '40',
-                            backgroundColor: colors.utility.primaryBackground,
-                            color: colors.utility.primaryText
-                          }}
-                        />
-                        <div className="flex items-center ml-2">
+                      <div className="flex items-center justify-end">
+                        <div className="flex items-center">
                           <Button
                             variant="outline"
                             onClick={handleCancelAdd}

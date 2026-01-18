@@ -54,7 +54,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
   const { isOnboarding = false, redirectOnComplete } = options;
   const { currentTenant, isLive } = useAuth();
   const navigate = useNavigate();
-  
+
   // State
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -71,20 +71,20 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
     business_phone_country_code: '+91', // Default to India's country code
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  
+
   // Fetch tenant profile data
   const fetchProfile = async () => {
     if (!currentTenant?.id) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       console.log(`Fetching tenant profile for environment: ${isLive ? 'Live' : 'Test'}`);
-      
+
       const response = await api.get(API_ENDPOINTS.TENANTS.PROFILE);
       const profileData = response.data;
-      
+
       if (profileData) {
         setProfile(profileData);
         setFormData({
@@ -106,13 +106,13 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       }
     } catch (err: any) {
       console.error('Error fetching tenant profile:', err);
-      
+
       // Show error toast (only for non-404 errors)
       if (err.response?.status !== 404) {
         vaniToast.error(err.response?.data?.error || 'Failed to load tenant profile');
         setError(err.response?.data?.error || 'Failed to load tenant profile');
       }
-      
+
       // Handle 404 silently
       if (err.response?.status === 404) {
         setProfile(null);
@@ -130,7 +130,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       setIsLoading(false);
     }
   };
-  
+
   // Initial data fetch
   useEffect(() => {
     if (!isOnboarding) {
@@ -139,7 +139,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       setIsLoading(false);
     }
   }, [currentTenant?.id, isOnboarding]);
-  
+
   // Listen for environment changes
   useEffect(() => {
     const handleEnvironmentChange = (event: CustomEvent) => {
@@ -164,7 +164,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       window.removeEventListener('environment-changed', handleEnvironmentChange as EventListener);
     };
   }, [currentTenant?.id, isOnboarding]);
-  
+
   // Also refresh when isLive changes (for cases where the event might not fire)
   useEffect(() => {
     if (!isOnboarding && currentTenant?.id) {
@@ -175,7 +175,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       }
     }
   }, [isLive]);
-  
+
   // Update form fields
   const updateField = (field: keyof TenantProfile, value: any) => {
     setFormData(prev => ({
@@ -183,7 +183,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       [field]: value
     }));
   };
-  
+
   // Navigate between wizard steps
   const goToNextStep = () => {
     if (currentStep === 'business-type') {
@@ -206,7 +206,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       setCurrentStep('organization-details');
     }
   };
-  
+
   const goToPreviousStep = () => {
     if (currentStep === 'industry') {
       setCurrentStep('business-type');
@@ -214,12 +214,12 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       setCurrentStep('industry');
     }
   };
-  
+
   // Handle logo file selection
   const handleLogoChange = (file: File | null) => {
     setLogoFile(file);
   };
-  
+
   // Upload logo file and get URL
   const uploadLogo = async (): Promise<string | null> => {
     if (!logoFile) return formData.logo_url || null;
@@ -246,7 +246,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       return null;
     }
   };
-  
+
   // Validate the final form
   const validateForm = (): boolean => {
     if (!formData.business_type_id) {
@@ -259,14 +259,21 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       return false;
     }
 
-    if (!formData.business_name) {
+    // FIX: Check for empty or whitespace-only business_name
+    if (!formData.business_name || !formData.business_name.trim()) {
       vaniToast.error('Business name is required');
+      return false;
+    }
+
+    // FIX: Also validate minimum length after trimming
+    if (formData.business_name.trim().length < 2) {
+      vaniToast.error('Business name must be at least 2 characters');
       return false;
     }
 
     return true;
   };
-  
+
   // Submit the form to create/update profile
   const submitProfile = async () => {
     if (!validateForm()) return false;
@@ -283,19 +290,25 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
         }
       }
 
+      // FIX: Ensure business_name is trimmed before sending to API
+      const dataToSubmit = {
+        ...formData,
+        business_name: formData.business_name?.trim() || ''
+      };
+
       let response;
 
       if (profile?.id) {
         // Update existing profile
         response = await api.put(
           API_ENDPOINTS.TENANTS.PROFILE,
-          formData
+          dataToSubmit
         );
       } else {
         // Create new profile
         response = await api.post(
           API_ENDPOINTS.TENANTS.PROFILE,
-          formData
+          dataToSubmit
         );
       }
 
@@ -323,7 +336,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
       setSubmitting(false);
     }
   };
-  
+
   return {
     // State
     loading: isLoading, // Make sure to return the loading state with the correct name
@@ -333,7 +346,7 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
     currentStep,
     formData,
     logoFile,
-    
+
     // Methods
     fetchProfile,
     updateField,

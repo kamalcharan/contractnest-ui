@@ -68,6 +68,12 @@ import {
  getClassificationsForIndustry
 } from '../../utils/constants/contacts';
 
+// Import validation utilities
+import {
+ validateIndividualName,
+ validateCompanyName
+} from '../../utils/validation/contactValidation';
+
 // Contact form data interface
 interface ContactFormData {
  type: 'individual' | 'corporate';
@@ -513,6 +519,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
  const [validationErrors, setValidationErrors] = useState<string[]>([]);
  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
  const [userAccountStatus, setUserAccountStatus] = useState<string>(USER_ACCOUNT_STATUS.NO_ACCOUNT);
+ const [fieldErrors, setFieldErrors] = useState<{ name?: string; company_name?: string }>({});
 
  // Initialize form data ref - MOVED BEFORE CONDITIONAL RETURN (React hooks rule)
  useEffect(() => {
@@ -620,6 +627,18 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
          description: "Please enter the name for individual contact",
          duration: 5000
        });
+     } else {
+       // Validate name with character restrictions
+       const nameValidation = validateIndividualName(formData.name);
+       if (!nameValidation.isValid) {
+         errors.push(nameValidation.error || 'Invalid name format');
+         toast({
+           variant: "destructive",
+           title: "Invalid Name",
+           description: nameValidation.error || 'Please enter a valid name',
+           duration: 5000
+         });
+       }
      }
    } else {
      if (!formData.company_name?.trim()) {
@@ -630,6 +649,18 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
          description: "Please enter the company name for corporate contact",
          duration: 5000
        });
+     } else {
+       // Validate company name with character restrictions
+       const companyValidation = validateCompanyName(formData.company_name);
+       if (!companyValidation.isValid) {
+         errors.push(companyValidation.error || 'Invalid company name format');
+         toast({
+           variant: "destructive",
+           title: "Invalid Company Name",
+           description: companyValidation.error || 'Please enter a valid company name',
+           duration: 5000
+         });
+       }
      }
    }
 
@@ -641,6 +672,13 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        description: "Please add at least one contact channel (email, phone, etc.)",
        duration: 5000
      });
+   }
+
+   // Also check for any existing field errors
+   if (fieldErrors.name || fieldErrors.company_name) {
+     if (!errors.length) {
+       errors.push('Please fix the validation errors before saving.');
+     }
    }
 
    setValidationErrors(errors);
@@ -1167,7 +1205,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                      </select>
                    </div>
                    <div>
-                     <label 
+                     <label
                        className="block text-sm font-medium mb-2 transition-colors"
                        style={{ color: colors.utility.primaryText }}
                      >
@@ -1176,22 +1214,43 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                      <input
                        type="text"
                        value={formData.name || ''}
-                       onChange={(e) => updateFormData({ name: e.target.value })}
+                       onChange={(e) => {
+                         const value = e.target.value;
+                         updateFormData({ name: value });
+                         // Real-time validation
+                         if (value.trim()) {
+                           const validation = validateIndividualName(value);
+                           setFieldErrors(prev => ({
+                             ...prev,
+                             name: validation.isValid ? undefined : validation.error
+                           }));
+                         } else {
+                           setFieldErrors(prev => ({ ...prev, name: undefined }));
+                         }
+                       }}
                        disabled={isSaving}
                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
                        style={{
                          backgroundColor: colors.utility.primaryBackground,
-                         borderColor: colors.utility.primaryText + '40',
+                         borderColor: fieldErrors.name ? colors.semantic.error : colors.utility.primaryText + '40',
                          color: colors.utility.primaryText
                        }}
                        placeholder={PLACEHOLDER_TEXTS.FULL_NAME}
                      />
+                     {fieldErrors.name && (
+                       <p
+                         className="mt-1 text-sm"
+                         style={{ color: colors.semantic.error }}
+                       >
+                         {fieldErrors.name}
+                       </p>
+                     )}
                    </div>
                  </div>
                ) : (
                  <div className="space-y-4">
                    <div>
-                     <label 
+                     <label
                        className="block text-sm font-medium mb-2 transition-colors"
                        style={{ color: colors.utility.primaryText }}
                      >
@@ -1200,16 +1259,37 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                      <input
                        type="text"
                        value={formData.company_name || ''}
-                       onChange={(e) => updateFormData({ company_name: e.target.value })}
+                       onChange={(e) => {
+                         const value = e.target.value;
+                         updateFormData({ company_name: value });
+                         // Real-time validation
+                         if (value.trim()) {
+                           const validation = validateCompanyName(value);
+                           setFieldErrors(prev => ({
+                             ...prev,
+                             company_name: validation.isValid ? undefined : validation.error
+                           }));
+                         } else {
+                           setFieldErrors(prev => ({ ...prev, company_name: undefined }));
+                         }
+                       }}
                        disabled={isSaving}
                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
                        style={{
                          backgroundColor: colors.utility.primaryBackground,
-                         borderColor: colors.utility.primaryText + '40',
+                         borderColor: fieldErrors.company_name ? colors.semantic.error : colors.utility.primaryText + '40',
                          color: colors.utility.primaryText
                        }}
                        placeholder={PLACEHOLDER_TEXTS.COMPANY_NAME}
                      />
+                     {fieldErrors.company_name && (
+                       <p
+                         className="mt-1 text-sm"
+                         style={{ color: colors.semantic.error }}
+                       >
+                         {fieldErrors.company_name}
+                       </p>
+                     )}
                    </div>
                    <div>
                      <label 

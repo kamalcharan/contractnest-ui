@@ -1,4 +1,10 @@
 // src/pages/public/resources.tsx
+//
+// TODO [PUBLIC DEPLOYMENT]: This page imports from '@/services/public-resources.service'
+// which needs to be created before making this page publicly accessible.
+// The service should provide: getPublicResources(), trackResourceView(), ResourceCardData type
+// Follow the pattern in '@/services/public-leads.service.ts' for unauthenticated Supabase access.
+//
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
