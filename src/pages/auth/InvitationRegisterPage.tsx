@@ -204,25 +204,10 @@ const InvitationRegisterPage: React.FC = () => {
       const { data: authData } = await api.post(API_ENDPOINTS.AUTH.REGISTER_WITH_INVITATION, registerData);
       
       if (authData.access_token) {
-        // Store auth data
-        localStorage.setItem('auth_token', authData.access_token);
-        if (authData.refresh_token) {
-          localStorage.setItem('refresh_token', authData.refresh_token);
-        }
-        
-        // Store user data
-        if (authData.user) {
-          localStorage.setItem('user_id', authData.user_id || authData.user.id);
-          localStorage.setItem('user_data', JSON.stringify(authData.user));
-        }
-        
-        // Store tenant info
-        if (authData.tenant) {
-          localStorage.setItem('tenant_id', authData.tenant.id);
-          localStorage.setItem('current_tenant', JSON.stringify(authData.tenant));
-        }
-        
-        toast.success(`Welcome to ${authData.tenant?.name || invitation.tenant.name}!`, {
+        // Registration successful - redirect to login page
+        // The user will login normally which properly initializes the session
+        toast.success(`Account created! Please login to access ${authData.tenant?.name || invitation.tenant.name}.`, {
+          duration: 3000,
           style: {
             padding: '16px',
             borderRadius: '8px',
@@ -232,9 +217,16 @@ const InvitationRegisterPage: React.FC = () => {
             minWidth: '300px'
           },
         });
-        
-        // Navigate to dashboard
-        navigate('/dashboard');
+
+        // Redirect to login page after successful registration
+        setTimeout(() => {
+          navigate('/login', {
+            state: {
+              message: `Account created successfully! Please login to access ${authData.tenant?.name || invitation.tenant.name}.`,
+              email: invitation.email || formData.email
+            }
+          });
+        }, 1500);
       } else {
         throw new Error('No authentication token received');
       }

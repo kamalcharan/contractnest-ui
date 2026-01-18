@@ -88,14 +88,48 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
+
+  // Stats state - separate from filtered list
+  const [stats, setStats] = useState<{
+    totalPending: number;
+    totalAccepted: number;
+    totalCancelled: number;
+    totalExpired: number;
+  }>({ totalPending: 0, totalAccepted: 0, totalCancelled: 0, totalExpired: 0 });
   
+  // Fetch stats for all invitation statuses
+  const fetchStats = useCallback(async () => {
+    if (!currentTenant?.id) return;
+
+    try {
+      // Fetch counts for each status in parallel
+      const [pendingRes, acceptedRes] = await Promise.all([
+        api.get<InvitationListResponse>('/api/users/invitations', {
+          params: { status: 'pending', page: 1, limit: 1 }
+        }),
+        api.get<InvitationListResponse>('/api/users/invitations', {
+          params: { status: 'accepted', page: 1, limit: 1 }
+        })
+      ]);
+
+      setStats({
+        totalPending: pendingRes.data.pagination.total || 0,
+        totalAccepted: acceptedRes.data.pagination.total || 0,
+        totalCancelled: 0, // Can add if needed
+        totalExpired: 0    // Can add if needed
+      });
+    } catch (err: any) {
+      console.error('Error fetching invitation stats:', err);
+    }
+  }, [currentTenant?.id]);
+
   // Fetch invitations list
   const fetchInvitations = useCallback(async (page: number = 1, status: string = statusFilter) => {
     if (!currentTenant?.id) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await api.get<InvitationListResponse>('/api/users/invitations', {
         params: {
@@ -104,11 +138,14 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
           limit: pageSize
         }
       });
-      
+
       setInvitations(response.data.data);
       setCurrentPage(response.data.pagination.page);
       setTotalPages(response.data.pagination.totalPages);
       setTotalCount(response.data.pagination.total);
+
+      // Also refresh stats when fetching invitations
+      fetchStats();
     } catch (err: any) {
       console.error('Error fetching invitations:', err);
       const errorMsg = err.response?.data?.error || 'Failed to load invitations';
@@ -120,7 +157,7 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
     } finally {
       setLoading(false);
     }
-  }, [currentTenant?.id, statusFilter, pageSize]);
+  }, [currentTenant?.id, statusFilter, pageSize, fetchStats]);
   
   // Create new invitation
   const createInvitation = async (data: CreateInvitationData): Promise<Invitation | null> => {
@@ -293,9 +330,11 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
     currentPage,
     totalPages,
     totalCount,
-    
+    stats,
+
     // Actions
     fetchInvitations,
+    fetchStats,
     createInvitation,
     resendInvitation,
     cancelInvitation,
@@ -304,11 +343,11 @@ export const useInvitations = (options: UseInvitationsOptions = {}) => {
     acceptInvitation,
     handlePageChange,
     handleStatusChange,
-    
-    // Computed
+
+    // Computed - now using stats for accurate counts
     hasInvitations: invitations.length > 0,
-    pendingCount: invitations.filter(inv => ['pending', 'sent', 'resent'].includes(inv.status)).length,
-    acceptedCount: invitations.filter(inv => inv.status === 'accepted').length
+    pendingCount: stats.totalPending,
+    acceptedCount: stats.totalAccepted
   };
 };
 

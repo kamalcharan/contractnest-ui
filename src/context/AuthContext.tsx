@@ -956,8 +956,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isOnboardingComplete = await checkOnboardingStatus();
 
         if (!isOnboardingComplete) {
-          console.log('User needs to complete onboarding');
-          navigate('/onboarding');
+          // FIX: Check if user is owner before redirecting to onboarding
+          // Only owners can complete onboarding, invited users should see pending page
+          if (tenant.is_owner) {
+            console.log('Owner needs to complete onboarding');
+            navigate('/onboarding');
+          } else {
+            console.log('Non-owner waiting for onboarding completion');
+            navigate('/onboarding-pending');
+          }
         } else {
           navigate('/dashboard');
         }
@@ -1106,7 +1113,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check onboarding status for Google users with tenants
         const isOnboardingComplete = await checkOnboardingStatus();
         if (!isOnboardingComplete && isNewUser) {
-          navigate('/onboarding');
+          // Check if user is owner before redirecting
+          if (userTenant?.is_owner) {
+            navigate('/onboarding');
+          } else {
+            navigate('/onboarding-pending');
+          }
         }
       }
 
