@@ -1,29 +1,178 @@
 // src/pages/settings/index.tsx
+// Glassmorphic Settings Configuration Page
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { MessageSquare, HelpCircle } from 'lucide-react';
+import { MessageSquare, HelpCircle, Settings, Loader2 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { getGroupedSettingsMetadata, GroupedSettingsMetadata } from '../../utils/constants/settingsMenus';
 
+// ============================================================================
+// Glassmorphic Group Card Component
+// ============================================================================
+interface GlassGroupCardProps {
+    title: string;
+    description: string;
+    children: React.ReactNode;
+    isDarkMode: boolean;
+    colors: any;
+}
+
+const GlassGroupCard: React.FC<GlassGroupCardProps> = ({
+    title,
+    description,
+    children,
+    isDarkMode,
+    colors
+}) => {
+    return (
+        <div
+            className="rounded-2xl border overflow-hidden"
+            style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+            }}
+        >
+            {/* Group Header */}
+            <div
+                className="px-6 py-4 border-b"
+                style={{
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                    borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                }}
+            >
+                <h2
+                    className="text-lg font-semibold"
+                    style={{ color: colors.utility.primaryText }}
+                >
+                    {title}
+                </h2>
+                <p
+                    className="text-sm mt-0.5"
+                    style={{ color: colors.utility.secondaryText }}
+                >
+                    {description}
+                </p>
+            </div>
+            {/* Group Content */}
+            <div className="p-4">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+// ============================================================================
+// Glassmorphic Settings Item Card Component
+// ============================================================================
+interface GlassSettingsItemProps {
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+    onClick: () => void;
+    isDarkMode: boolean;
+    colors: any;
+}
+
+const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
+    icon,
+    title,
+    description,
+    onClick,
+    isDarkMode,
+    colors
+}) => {
+    return (
+        <div
+            onClick={onClick}
+            className="rounded-xl p-4 cursor-pointer transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] group"
+            style={{
+                background: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.background = isDarkMode
+                    ? `rgba(255,255,255,0.06)`
+                    : `rgba(0,0,0,0.04)`;
+                e.currentTarget.style.boxShadow = `0 4px 16px -4px ${colors.brand.primary}20`;
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.background = isDarkMode
+                    ? 'rgba(255,255,255,0.03)'
+                    : 'rgba(0,0,0,0.02)';
+                e.currentTarget.style.boxShadow = 'none';
+            }}
+        >
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    {/* Icon Container */}
+                    <div
+                        className="p-2.5 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
+                        style={{
+                            background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`,
+                        }}
+                    >
+                        <div style={{ color: colors.brand.primary }}>
+                            {icon}
+                        </div>
+                    </div>
+
+                    {/* Text Content */}
+                    <div className="flex flex-col">
+                        <h3
+                            className="font-medium text-sm transition-colors"
+                            style={{ color: colors.utility.primaryText }}
+                        >
+                            {title}
+                        </h3>
+                        <p
+                            className="text-xs mt-0.5 transition-colors"
+                            style={{ color: colors.utility.secondaryText }}
+                        >
+                            {description}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Arrow Icon */}
+                <div
+                    className="p-1.5 rounded-lg transition-all duration-300 group-hover:translate-x-1"
+                    style={{
+                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                    }}
+                >
+                    <Icons.ChevronRight
+                        className="h-4 w-4"
+                        style={{ color: colors.utility.secondaryText }}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ============================================================================
+// Main Settings Page Component
+// ============================================================================
 const SettingsPage = () => {
     const navigate = useNavigate();
     const { currentTenant } = useAuth();
     const { isDarkMode, currentTheme } = useTheme();
-    
+
     // Get theme colors
     const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-    
+
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<GroupedSettingsMetadata>({});
 
     // Load settings from constants file
     useEffect(() => {
         setLoading(true);
-        // Small timeout to simulate loading
         const timer = setTimeout(() => {
-            // Get settings from constants file (false = for Configure page)
             const groupedSettings = getGroupedSettingsMetadata(false);
             setSettings(groupedSettings);
             setLoading(false);
@@ -34,53 +183,53 @@ const SettingsPage = () => {
 
     const handleCardClick = (route: string | null, cardName: string) => {
         if (route) {
-            console.log('Card clicked with route:', route);
-            console.log('Card name:', cardName);
-            
-            // Navigate to the route
             navigate(route);
         }
     };
 
     const getIcon = (iconName: string | null) => {
-        if (!iconName) return null;
+        if (!iconName) return <Settings className="h-5 w-5" />;
         const Icon = (Icons as any)[iconName?.trim()];
-        return Icon ? <Icon className="h-4 w-4" /> : null;
+        return Icon ? <Icon className="h-5 w-5" /> : <Settings className="h-5 w-5" />;
     };
 
     // Admin status check
     const isAdmin = Boolean(currentTenant?.is_admin);
 
+    // Loading State with Glassmorphic Skeleton
     if (loading) {
         return (
-            <div 
-                className="p-6 transition-colors duration-200 min-h-screen"
+            <div
+                className="min-h-screen p-6 transition-colors"
                 style={{
-                    background: isDarkMode 
-                        ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-                        : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+                    background: isDarkMode
+                        ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+                        : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
                 }}
             >
-                <div className="space-y-8">
-                    {[1, 2].map((group) => (
-                        <div key={group} className="flex gap-8">
-                            <div className="w-1/4">
-                                <div 
-                                    className="h-4 w-48 rounded animate-pulse"
-                                    style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
-                                />
-                            </div>
-                            <div className="w-3/4 space-y-4">
-                                {[1, 2].map((card) => (
-                                    <div 
-                                        key={card} 
-                                        className="h-24 rounded-lg animate-pulse"
-                                        style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    ))}
+                <div className="max-w-[1200px] mx-auto">
+                    {/* Header Skeleton */}
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2
+                            className="h-8 w-8 animate-spin"
+                            style={{ color: colors.brand.primary }}
+                        />
+                    </div>
+
+                    {/* Content Skeleton */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div
+                                key={i}
+                                className="rounded-2xl h-48 animate-pulse"
+                                style={{
+                                    background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                                    backdropFilter: 'blur(12px)',
+                                    border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+                                }}
+                            />
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -96,134 +245,117 @@ const SettingsPage = () => {
     });
 
     return (
-        <div 
-            className="p-6 max-w-[1200px] mx-auto transition-colors duration-200 min-h-screen"
+        <div
+            className="min-h-screen p-6 transition-colors"
             style={{
-                background: isDarkMode 
-                    ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-                    : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+                background: isDarkMode
+                    ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+                    : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
             }}
         >
-            {/* Header */}
-            <div className="flex justify-between items-center mb-12">
-                <div>
-                    <h1 
-                        className="text-2xl font-semibold transition-colors"
-                        style={{ color: colors.utility.primaryText }}
-                    >
-                        Configure System
-                    </h1>
-                    <p 
-                        className="mt-1 transition-colors"
-                        style={{ color: colors.utility.secondaryText }}
-                    >
-                        Set up how you manage subscriptions, customers, billing, and more
-                    </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <button 
-                        className="p-2 rounded-full transition-colors hover:opacity-80"
-                        style={{
-                            backgroundColor: colors.utility.secondaryBackground + '80',
-                            color: colors.brand.primary
-                        }}
-                    >
-                        <HelpCircle className="h-5 w-5" />
-                    </button>
-                    <button 
-                        className="p-2 rounded-full transition-colors hover:opacity-80"
-                        style={{
-                            backgroundColor: colors.utility.secondaryBackground + '80',
-                            color: colors.brand.primary
-                        }}
-                    >
-                        <MessageSquare className="h-5 w-5" />
-                    </button>
-                </div>
-            </div>
-
-            {/* Settings Groups */}
-            <div className="flex flex-col">
-                {Object.entries(filteredSettings).map(([groupKey, { items }]) => {
-                    const groupParent = items.find(item => item.parent_type === null);
-                    const childItems = items.filter(item => item.parent_type === groupKey);
-                    
-                    if (!groupParent || childItems.length === 0) return null;
-                    
-                    return (
-                        <div key={groupKey} className="mt-16 first:mt-0">
-                            <div className="flex gap-8">
-                                {/* Left: Group Header with Description */}
-                                <div className="w-1/4">
-                                    <h2 
-                                        className="text-xl font-medium transition-colors"
-                                        style={{ color: colors.utility.primaryText }}
-                                    >
-                                        {groupKey}
-                                    </h2>
-                                    <p 
-                                        className="mt-2 text-sm transition-colors"
-                                        style={{ color: colors.utility.secondaryText }}
-                                    >
-                                        {groupParent?.description_long || ''}
-                                    </p>
-                                </div>
-
-                                {/* Right: Cards Stack */}
-                                <div className="w-3/4 flex flex-col space-y-2">
-                                    {childItems.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            onClick={() => handleCardClick(item.route_path, item.settings_type)}
-                                            className="hover:shadow-md transition-all duration-200 cursor-pointer rounded-lg border p-4"
-                                            style={{
-                                                borderColor: colors.utility.primaryText + '20',
-                                                backgroundColor: colors.utility.secondaryBackground
-                                            }}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    {/* Icon Circle */}
-                                                    <div 
-                                                        className="p-1.5 rounded-lg flex items-center justify-center w-7 h-7"
-                                                        style={{
-                                                            background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                                                            color: '#FFFFFF'
-                                                        }}
-                                                    >
-                                                        {getIcon(item.card_icon_name)}
-                                                    </div>
-                                            
-                                                    {/* Text Content */}
-                                                    <div className="flex flex-col">
-                                                        <h3 
-                                                            className="font-medium text-base leading-tight transition-colors"
-                                                            style={{ color: colors.utility.primaryText }}
-                                                        >
-                                                            {item.settings_type}
-                                                        </h3>
-                                                        <p 
-                                                            className="text-xs leading-tight mt-1 transition-colors"
-                                                            style={{ color: colors.utility.secondaryText }}
-                                                        >
-                                                            {item.description_long}
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                {/* Arrow Icon */}
-                                                <Icons.ChevronRight 
-                                                    className="h-4 w-4 transition-colors" 
-                                                    style={{ color: colors.utility.secondaryText }}
-                                                />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+            <div className="max-w-[1200px] mx-auto">
+                {/* Glassmorphic Header */}
+                <div
+                    className="rounded-2xl border mb-8 overflow-hidden"
+                    style={{
+                        background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                        boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+                    }}
+                >
+                    <div className="p-6 flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div
+                                className="p-3 rounded-xl"
+                                style={{
+                                    background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                                }}
+                            >
+                                <Settings className="h-6 w-6" style={{ color: colors.brand.primary }} />
+                            </div>
+                            <div>
+                                <h1
+                                    className="text-2xl font-bold"
+                                    style={{ color: colors.utility.primaryText }}
+                                >
+                                    Configure System
+                                </h1>
+                                <p
+                                    className="text-sm mt-0.5"
+                                    style={{ color: colors.utility.secondaryText }}
+                                >
+                                    Set up how you manage subscriptions, customers, billing, and more
+                                </p>
                             </div>
                         </div>
-                    );
-                })}
+                        <div className="flex items-center gap-3">
+                            <button
+                                className="p-2.5 rounded-xl transition-all hover:scale-105"
+                                style={{
+                                    background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = `${colors.brand.primary}20`;
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                                }}
+                            >
+                                <HelpCircle className="h-5 w-5" style={{ color: colors.brand.primary }} />
+                            </button>
+                            <button
+                                className="p-2.5 rounded-xl transition-all hover:scale-105"
+                                style={{
+                                    background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = `${colors.brand.primary}20`;
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                                }}
+                            >
+                                <MessageSquare className="h-5 w-5" style={{ color: colors.brand.primary }} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Settings Groups Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {Object.entries(filteredSettings).map(([groupKey, { items }]) => {
+                        const groupParent = items.find(item => item.parent_type === null);
+                        const childItems = items.filter(item => item.parent_type === groupKey);
+
+                        if (!groupParent || childItems.length === 0) return null;
+
+                        return (
+                            <GlassGroupCard
+                                key={groupKey}
+                                title={groupKey}
+                                description={groupParent?.description_long || ''}
+                                isDarkMode={isDarkMode}
+                                colors={colors}
+                            >
+                                <div className="space-y-2">
+                                    {childItems.map((item) => (
+                                        <GlassSettingsItem
+                                            key={item.id}
+                                            icon={getIcon(item.card_icon_name)}
+                                            title={item.settings_type}
+                                            description={item.description_long || ''}
+                                            onClick={() => handleCardClick(item.route_path, item.settings_type)}
+                                            isDarkMode={isDarkMode}
+                                            colors={colors}
+                                        />
+                                    ))}
+                                </div>
+                            </GlassGroupCard>
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );

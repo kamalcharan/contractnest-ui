@@ -1,11 +1,11 @@
 // src/pages/settings/customer-channels/GroupsListPage.tsx
 // Groups List Page - View and manage group memberships
+// Glassmorphic Design
 
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
-import { Card, CardContent } from '../../../components/ui/card';
 import {
   Users,
   Shield,
@@ -19,7 +19,9 @@ import {
   Search,
   Info,
   MessageCircle,
-  Compass
+  Compass,
+  Loader2,
+  ArrowLeft
 } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useGroups, useVerifyGroupAccess, groupQueryKeys } from '../../../hooks/queries/useGroupQueries';
@@ -383,163 +385,246 @@ const GroupsListPage: React.FC = () => {
     }
   };
 
-  // Loading state
+  // Loading state with Glassmorphic design
   if (isLoadingGroups) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <VaNiLoader size="md" message="Loading Groups..." />
+      <div
+        className="min-h-screen p-6 transition-colors"
+        style={{
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+            : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+        }}
+      >
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center py-16">
+            <Loader2
+              className="h-8 w-8 animate-spin"
+              style={{ color: colors.brand.primary }}
+            />
+          </div>
+          {/* Skeleton Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="rounded-2xl h-64 animate-pulse"
+                style={{
+                  background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+                }}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>
-            Business Groups
-          </h1>
-          <p className="text-sm mt-1" style={{ color: colors.utility.secondaryText }}>
-            Join groups to create your profile and connect with other members
-          </p>
-        </div>
-        <button
-          onClick={() => { refetchGroups(); refetchMemberships(); }}
-          className="p-2 rounded-lg transition-all hover:opacity-80"
-          style={{ backgroundColor: `${colors.brand.primary}15` }}
-          title="Refresh"
-        >
-          <RefreshCw className="w-5 h-5" style={{ color: colors.brand.primary }} />
-        </button>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5"
-          style={{ color: colors.utility.secondaryText }}
-        />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search groups..."
-          className="w-full pl-10 pr-4 py-3 rounded-lg border focus:outline-none focus:ring-2 transition-all"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: `${colors.utility.primaryText}20`,
-            color: colors.utility.primaryText,
-            '--tw-ring-color': colors.brand.primary
-          } as React.CSSProperties}
-        />
-      </div>
-
-      {/* Groups Grid */}
-      {filteredGroups.length === 0 ? (
+    <div
+      className="min-h-screen p-6 transition-colors"
+      style={{
+        background: isDarkMode
+          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+      }}
+    >
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Glassmorphic Header */}
         <div
-          className="text-center py-16 rounded-xl"
+          className="rounded-2xl border overflow-hidden"
           style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            border: `1px dashed ${colors.utility.primaryText}20`
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
           }}
         >
-          <Users className="w-16 h-16 mx-auto mb-4 opacity-30" style={{ color: colors.utility.secondaryText }} />
-          <p className="text-lg font-medium mb-2" style={{ color: colors.utility.primaryText }}>
-            No Groups Found
-          </p>
-          <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-            {searchQuery ? 'Try a different search term' : 'No business groups are available yet'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredGroups.map((group: any) => {
-            const groupStatus = getGroupStatus(group);
-
-            return (
-              <Card
-                key={group.id}
-                className="overflow-hidden transition-all hover:shadow-lg"
+          <div className="p-6 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/settings/configure')}
+                className="p-2 rounded-xl transition-all hover:scale-105"
                 style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderColor: groupStatus.status === 'active'
-                    ? `${colors.semantic.success}40`
-                    : `${colors.utility.primaryText}15`
+                  background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
                 }}
               >
-                {/* Card Header with Status */}
+                <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+              </button>
+              <div
+                className="p-3 rounded-xl"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                }}
+              >
+                <Users className="h-6 w-6" style={{ color: colors.brand.primary }} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>
+                  Business Groups
+                </h1>
+                <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                  Join groups to create your profile and connect with other members
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => { refetchGroups(); refetchMemberships(); }}
+              className="p-2.5 rounded-xl transition-all hover:scale-105"
+              style={{
+                background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+              }}
+              title="Refresh"
+            >
+              <RefreshCw className="w-5 h-5" style={{ color: colors.brand.primary }} />
+            </button>
+          </div>
+        </div>
+
+        {/* Glassmorphic Search */}
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+          }}
+        >
+          <div className="p-4 relative">
+            <Search
+              className="absolute left-7 top-1/2 transform -translate-y-1/2 w-5 h-5"
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search groups..."
+              className="w-full pl-10 pr-4 py-3 rounded-xl border-0 focus:outline-none focus:ring-2 transition-all"
+              style={{
+                backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                color: colors.utility.primaryText,
+                '--tw-ring-color': colors.brand.primary
+              } as React.CSSProperties}
+            />
+          </div>
+        </div>
+
+        {/* Groups Grid */}
+        {filteredGroups.length === 0 ? (
+          <div
+            className="text-center py-16 rounded-2xl"
+            style={{
+              background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: `1px dashed ${isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`
+            }}
+          >
+            <Users className="w-16 h-16 mx-auto mb-4 opacity-30" style={{ color: colors.utility.secondaryText }} />
+            <p className="text-lg font-medium mb-2" style={{ color: colors.utility.primaryText }}>
+              No Groups Found
+            </p>
+            <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+              {searchQuery ? 'Try a different search term' : 'No business groups are available yet'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredGroups.map((group: any) => {
+              const groupStatus = getGroupStatus(group);
+
+              return (
                 <div
-                  className="px-5 py-4"
+                  key={group.id}
+                  className="rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                   style={{
-                    background: groupStatus.status === 'active'
-                      ? `linear-gradient(135deg, ${colors.semantic.success}10 0%, ${colors.semantic.success}05 100%)`
-                      : groupStatus.status === 'authenticated'
-                      ? `linear-gradient(135deg, ${colors.semantic.info}10 0%, ${colors.semantic.info}05 100%)`
-                      : `linear-gradient(135deg, ${colors.utility.primaryText}05 0%, transparent 100%)`,
-                    borderBottom: `1px solid ${colors.utility.primaryText}10`
+                    background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: `1px solid ${groupStatus.status === 'active'
+                      ? `${colors.semantic.success}40`
+                      : isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                    boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
                   }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className="p-2.5 rounded-xl"
-                        style={{
-                          backgroundColor: groupStatus.status === 'active'
-                            ? `${colors.semantic.success}15`
-                            : groupStatus.status === 'authenticated'
-                            ? `${colors.semantic.info}15`
-                            : `${colors.utility.primaryText}10`
-                        }}
-                      >
-                        <Building2
-                          className="w-5 h-5"
-                          style={{
-                            color: groupStatus.status === 'active'
-                              ? colors.semantic.success
-                              : groupStatus.status === 'authenticated'
-                              ? colors.semantic.info
-                              : colors.utility.secondaryText
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold" style={{ color: colors.utility.primaryText }}>
-                          {group.name}
-                        </h3>
-                        <span
-                          className="text-xs font-medium px-2 py-0.5 rounded-full"
+                  {/* Card Header with Status */}
+                  <div
+                    className="px-5 py-4"
+                    style={{
+                      background: groupStatus.status === 'active'
+                        ? `linear-gradient(135deg, ${colors.semantic.success}15 0%, ${colors.semantic.success}05 100%)`
+                        : groupStatus.status === 'authenticated'
+                        ? `linear-gradient(135deg, ${colors.semantic.info}15 0%, ${colors.semantic.info}05 100%)`
+                        : isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                      borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className="p-2.5 rounded-xl"
                           style={{
                             backgroundColor: groupStatus.status === 'active'
                               ? `${colors.semantic.success}15`
                               : groupStatus.status === 'authenticated'
                               ? `${colors.semantic.info}15`
-                              : `${colors.utility.primaryText}10`,
-                            color: groupStatus.status === 'active'
-                              ? colors.semantic.success
-                              : groupStatus.status === 'authenticated'
-                              ? colors.semantic.info
-                              : colors.utility.secondaryText
+                              : isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
                           }}
                         >
-                          {groupStatus.label}
-                        </span>
+                          <Building2
+                            className="w-5 h-5"
+                            style={{
+                              color: groupStatus.status === 'active'
+                                ? colors.semantic.success
+                                : groupStatus.status === 'authenticated'
+                                ? colors.semantic.info
+                                : colors.utility.secondaryText
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold" style={{ color: colors.utility.primaryText }}>
+                            {group.name}
+                          </h3>
+                          <span
+                            className="text-xs font-medium px-2 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: groupStatus.status === 'active'
+                                ? `${colors.semantic.success}15`
+                                : groupStatus.status === 'authenticated'
+                                ? `${colors.semantic.info}15`
+                                : isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                              color: groupStatus.status === 'active'
+                                ? colors.semantic.success
+                                : groupStatus.status === 'authenticated'
+                                ? colors.semantic.info
+                                : colors.utility.secondaryText
+                            }}
+                          >
+                            {groupStatus.label}
+                          </span>
+                        </div>
                       </div>
+
+                      {/* Status Icon */}
+                      {groupStatus.status === 'active' ? (
+                        <CheckCircle className="w-5 h-5" style={{ color: colors.semantic.success }} />
+                      ) : groupStatus.status === 'authenticated' ? (
+                        <Unlock className="w-5 h-5" style={{ color: colors.semantic.info }} />
+                      ) : (
+                        <Lock className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
+                      )}
                     </div>
-
-                    {/* Status Icon */}
-                    {groupStatus.status === 'active' ? (
-                      <CheckCircle className="w-5 h-5" style={{ color: colors.semantic.success }} />
-                    ) : groupStatus.status === 'authenticated' ? (
-                      <Unlock className="w-5 h-5" style={{ color: colors.semantic.info }} />
-                    ) : (
-                      <Lock className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
-                    )}
                   </div>
-                </div>
 
-                {/* Card Content */}
-                <CardContent className="p-5">
+                  {/* Card Content */}
+                  <div className="p-5">
                   <p
                     className="text-sm line-clamp-2 mb-4"
                     style={{ color: colors.utility.secondaryText }}
@@ -656,38 +741,42 @@ const GroupsListPage: React.FC = () => {
                       </button>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Info Banner */}
-      <div
-        className="p-5 rounded-xl"
-        style={{
-          backgroundColor: `${colors.semantic.info}08`,
-          border: `1px solid ${colors.semantic.info}25`
-        }}
-      >
-        <div className="flex items-start space-x-4">
-          <div
-            className="p-2 rounded-lg flex-shrink-0"
-            style={{ backgroundColor: `${colors.semantic.info}15` }}
-          >
-            <Info className="w-5 h-5" style={{ color: colors.semantic.info }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div>
-            <h4 className="font-medium mb-1" style={{ color: colors.utility.primaryText }}>
-              How Group Profiles Work
-            </h4>
-            <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-              1. <strong>Authenticate</strong> - Enter the group password provided by your admin<br />
-              2. <strong>Create Profile</strong> - Add your business description and let AI enhance it<br />
-              3. <strong>Add Semantic Clusters</strong> - Improve searchability with related keywords<br />
-              4. <strong>Get Discovered</strong> - Members can find you via WhatsApp bot and web search
-            </p>
+        )}
+
+        {/* Info Banner - Glassmorphic */}
+        <div
+          className="p-5 rounded-2xl"
+          style={{
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${colors.semantic.info}25`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+          }}
+        >
+          <div className="flex items-start space-x-4">
+            <div
+              className="p-2.5 rounded-xl flex-shrink-0"
+              style={{ backgroundColor: `${colors.semantic.info}15` }}
+            >
+              <Info className="w-5 h-5" style={{ color: colors.semantic.info }} />
+            </div>
+            <div>
+              <h4 className="font-medium mb-1" style={{ color: colors.utility.primaryText }}>
+                How Group Profiles Work
+              </h4>
+              <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                1. <strong>Authenticate</strong> - Enter the group password provided by your admin<br />
+                2. <strong>Create Profile</strong> - Add your business description and let AI enhance it<br />
+                3. <strong>Add Semantic Clusters</strong> - Improve searchability with related keywords<br />
+                4. <strong>Get Discovered</strong> - Members can find you via WhatsApp bot and web search
+              </p>
+            </div>
           </div>
         </div>
       </div>

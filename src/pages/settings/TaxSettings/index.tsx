@@ -1,13 +1,12 @@
 // src/pages/settings/TaxSettings/index.tsx
 // Main Tax Settings page following LOV methodology with two-panel layout
+// Glassmorphic Design
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Receipt } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { analyticsService } from '@/services/analytics.service';
 import { captureException } from '@/utils/sentry';
@@ -28,7 +27,6 @@ const TaxSettingsPage = () => {
   const navigate = useNavigate();
   const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
-  const { toast } = useToast();
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -92,155 +90,203 @@ const TaxSettingsPage = () => {
   // Check if anything is saving
   const isSaving = taxDisplayHook.state.saving || taxRatesHook.state.saving;
 
-  // Show initial loading spinner
+  // Show initial loading spinner - Glassmorphic
   if (initialLoading) {
     return (
-      <div 
-        className="flex items-center justify-center min-h-[400px] transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
+      <div
+        className="min-h-screen p-6 transition-colors"
+        style={{
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+            : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+        }}
       >
-        <Loader2 
-          className="h-8 w-8 animate-spin transition-colors" 
-          style={{ color: colors.brand.primary }}
-        />
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center py-16">
+            <Loader2
+              className="h-8 w-8 animate-spin"
+              style={{ color: colors.brand.primary }}
+            />
+          </div>
+          {/* Skeleton */}
+          <div className="flex gap-6">
+            <div
+              className="w-64 h-48 rounded-2xl animate-pulse"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+              }}
+            />
+            <div
+              className="flex-1 h-96 rounded-2xl animate-pulse"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+              }}
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div 
-      className="p-6 transition-colors duration-200 min-h-screen"
+    <div
+      className="min-h-screen p-6 transition-colors"
       style={{
-        background: isDarkMode 
-          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+        background: isDarkMode
+          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
       }}
     >
-      {/* Header - Following LOV pattern */}
-      <div className="flex items-center mb-8">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleGoBack}
-          className="mr-4 transition-colors"
+      <div className="max-w-6xl mx-auto">
+        {/* Glassmorphic Header */}
+        <div
+          className="rounded-2xl border mb-6 overflow-hidden"
           style={{
-            borderColor: colors.utility.secondaryText + '40',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
           }}
         >
-          <ArrowLeft 
-            className="h-5 w-5 transition-colors" 
-            style={{ color: colors.utility.secondaryText }}
-          />
-        </Button>
-        <div>
-          <h1 
-            className="text-2xl font-bold transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Tax Settings
-          </h1>
-          <p 
-            className="transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Configure tax display and manage tax rates
-          </p>
-        </div>
-        
-        {/* Save indicator */}
-        {isSaving && (
-          <div 
-            className="ml-auto flex items-center gap-2 text-sm transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            <Loader2 
-              className="h-4 w-4 animate-spin transition-colors"
-              style={{ color: colors.brand.primary }}
-            />
-            Saving...
-          </div>
-        )}
-      </div>
-
-      {/* Two-panel layout - Following LOV methodology */}
-      <div className="flex gap-6">
-        {/* Left Panel - Section Navigation */}
-        <div className="w-64 shrink-0">
-          <div 
-            className="rounded-lg shadow-sm border overflow-hidden transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20'
-            }}
-          >
-            {TAX_SECTIONS.map((section, index) => {
-              const isSelected = activeSection === section.id;
-              const isFirst = index === 0;
-              
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => handleSectionChange(section.id)}
-                  className={cn(
-                    "w-full px-4 py-3 text-left border-b last:border-0 transition-colors",
-                    isSelected 
-                      ? "font-medium" 
-                      : "hover:opacity-80"
-                  )}
-                  style={{
-                    borderColor: colors.utility.primaryText + '20',
-                    backgroundColor: isSelected 
-                      ? colors.brand.primary
-                      : isFirst && !isSelected 
-                      ? colors.utility.primaryBackground + '50'
-                      : 'transparent',
-                    color: isSelected 
-                      ? '#FFFFFF'
-                      : colors.utility.primaryText
-                  }}
-                >
-                  <div className="font-medium">{section.label}</div>
-                  <div 
-                    className="text-sm mt-1 transition-colors"
-                    style={{
-                      color: isSelected 
-                        ? '#FFFFFF80'
-                        : colors.utility.secondaryText
-                    }}
-                  >
-                    {section.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Error indicator in left panel */}
-          {hasErrors && (
-            <div 
-              className="mt-4 p-3 border rounded-lg transition-colors"
-              style={{
-                backgroundColor: colors.semantic.error + '10',
-                borderColor: colors.semantic.error + '20'
-              }}
-            >
-              <div 
-                className="text-sm font-medium transition-colors"
-                style={{ color: colors.semantic.error }}
+          <div className="p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleGoBack}
+                className="p-2 rounded-xl transition-all hover:scale-105"
+                style={{
+                  background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                }}
               >
-                Configuration Error
+                <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+              </button>
+              <div
+                className="p-3 rounded-xl"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                }}
+              >
+                <Receipt className="h-6 w-6" style={{ color: colors.brand.primary }} />
               </div>
-              <div 
-                className="text-xs mt-1 transition-colors"
-                style={{ color: colors.semantic.error + '80' }}
-              >
-                Please check the settings and try again
+              <div>
+                <h1
+                  className="text-2xl font-bold"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Tax Settings
+                </h1>
+                <p
+                  className="text-sm mt-0.5"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Configure tax display and manage tax rates
+                </p>
               </div>
             </div>
-          )}
+
+            {/* Save indicator */}
+            {isSaving && (
+              <div
+                className="flex items-center gap-2 text-sm px-4 py-2 rounded-xl"
+                style={{
+                  color: colors.brand.primary,
+                  background: `${colors.brand.primary}15`
+                }}
+              >
+                <Loader2
+                  className="h-4 w-4 animate-spin"
+                  style={{ color: colors.brand.primary }}
+                />
+                Saving...
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Two-panel layout - Glassmorphic */}
+        <div className="flex gap-6">
+          {/* Left Panel - Section Navigation */}
+          <div className="w-64 shrink-0">
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+              }}
+            >
+              {TAX_SECTIONS.map((section, index) => {
+                const isSelected = activeSection === section.id;
+
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => handleSectionChange(section.id)}
+                    className={cn(
+                      "w-full px-4 py-4 text-left transition-all duration-300",
+                      isSelected
+                        ? "font-medium"
+                        : "hover:bg-opacity-50"
+                    )}
+                    style={{
+                      borderBottom: index < TAX_SECTIONS.length - 1
+                        ? `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
+                        : 'none',
+                      backgroundColor: isSelected
+                        ? colors.brand.primary
+                        : 'transparent',
+                      color: isSelected
+                        ? '#FFFFFF'
+                        : colors.utility.primaryText
+                    }}
+                  >
+                    <div className="font-medium">{section.label}</div>
+                    <div
+                      className="text-sm mt-1"
+                      style={{
+                        color: isSelected
+                          ? 'rgba(255,255,255,0.7)'
+                          : colors.utility.secondaryText
+                      }}
+                    >
+                      {section.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Error indicator - Glassmorphic */}
+            {hasErrors && (
+              <div
+                className="mt-4 p-4 rounded-2xl"
+                style={{
+                  background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                  backdropFilter: 'blur(12px)',
+                  border: `1px solid ${colors.semantic.error}30`
+                }}
+              >
+                <div
+                  className="text-sm font-medium"
+                  style={{ color: colors.semantic.error }}
+                >
+                  Configuration Error
+                </div>
+                <div
+                  className="text-xs mt-1"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Please check the settings and try again
+                </div>
+              </div>
+            )}
+          </div>
 
         {/* Right Panel - Content Area */}
         <div className="flex-1">
@@ -268,18 +314,8 @@ const TaxSettingsPage = () => {
             />
           )}
         </div>
-      </div>
-
-      {/* Debug information (only in development) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div 
-          className="mt-8 p-4 rounded-lg transition-colors"
-          style={{ backgroundColor: colors.utility.primaryBackground + '80' }}
-        >
-        
-         
         </div>
-      )}
+      </div>
     </div>
   );
 };

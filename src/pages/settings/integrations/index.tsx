@@ -1,7 +1,7 @@
-// src/pages/settings/integrations/index.tsx - Theme Integrated Version
+// src/pages/settings/integrations/index.tsx - Glassmorphic Design
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plug, Loader2 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useIntegrations } from '@/hooks/useIntegrations';
 import { useAuth } from '@/context/AuthContext';
@@ -246,75 +246,128 @@ const IntegrationsPage = () => {
   };
   
   return (
-    <div 
-      className="p-6 transition-colors"
-      style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+    <div
+      className="min-h-screen p-6 transition-colors"
+      style={{
+        background: isDarkMode
+          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+      }}
     >
-      {/* Page Header */}
-      <div className="flex items-center mb-8">
-        <button 
-          onClick={handleBack} 
-          className="mr-4 p-2 rounded-full hover:opacity-80 transition-colors"
-          style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+      <div className="max-w-6xl mx-auto">
+        {/* Glassmorphic Header */}
+        <div
+          className="rounded-2xl border mb-8 overflow-hidden"
+          style={{
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+          }}
         >
-          <ArrowLeft 
-            className="h-5 w-5"
-            style={{ color: colors.utility.secondaryText }}
-          />
-        </button>
-        <div>
-          <h1 
-            className="text-2xl font-bold transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Integrations
-          </h1>
-          <p 
-            className="transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Configure and manage your third-party integrations
-          </p>
-        </div>
-      </div>
-      
-      {/* Integration Types */}
-      <div className="space-y-8">
-        {loading && integrationTypes.length === 0 ? (
-          // Show centered loading spinner on initial load
-          <div className="flex items-center justify-center py-20">
-            <VaNiLoader size="md" message="Loading integrations..." />
+          <div className="p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleBack}
+                className="p-2 rounded-xl transition-all hover:scale-105"
+                style={{
+                  background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                }}
+              >
+                <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+              </button>
+              <div
+                className="p-3 rounded-xl"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                }}
+              >
+                <Plug className="h-6 w-6" style={{ color: colors.brand.primary }} />
+              </div>
+              <div>
+                <h1
+                  className="text-2xl font-bold"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Integrations
+                </h1>
+                <p
+                  className="text-sm mt-0.5"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Configure and manage your third-party integrations
+                </p>
+              </div>
+            </div>
           </div>
-        ) : (
+        </div>
+
+        {/* Integration Types */}
+        <div className="space-y-6">
+          {loading && integrationTypes.length === 0 ? (
+            // Glassmorphic loading state
+            <div
+              className="rounded-2xl py-20"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+              }}
+            >
+              <div className="flex flex-col items-center justify-center">
+                <Loader2
+                  className="h-8 w-8 animate-spin mb-4"
+                  style={{ color: colors.brand.primary }}
+                />
+                <p style={{ color: colors.utility.secondaryText }}>Loading integrations...</p>
+              </div>
+            </div>
+          ) : (
           // Render each type with its integrations using the IntegrationTypeSection component
           Object.values(groupedData).map((typeData: any) => {
             const isTypeLoading = loadingTypes.has(typeData.integration_type);
             
             if (isTypeLoading) {
               return (
-                <div key={typeData.integration_type} className="space-y-4">
-                  <div>
-                    <h2 
-                      className="text-xl font-bold transition-colors"
+                <div
+                  key={typeData.integration_type}
+                  className="rounded-2xl overflow-hidden"
+                  style={{
+                    background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                    boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  <div
+                    className="px-6 py-4 border-b"
+                    style={{
+                      backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                      borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <h2
+                      className="text-lg font-semibold"
                       style={{ color: colors.utility.primaryText }}
                     >
                       {typeData.display_name}
                     </h2>
-                    <p 
-                      className="text-sm transition-colors"
+                    <p
+                      className="text-sm mt-0.5"
                       style={{ color: colors.utility.secondaryText }}
                     >
                       {typeData.description}
                     </p>
                   </div>
-                  <div
-                    className="flex items-center justify-center py-8 rounded-lg border transition-colors"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '20'
-                    }}
-                  >
-                    <VaNiLoader size="sm" message="Loading..." />
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2
+                      className="h-6 w-6 animate-spin"
+                      style={{ color: colors.brand.primary }}
+                    />
                   </div>
                 </div>
               );
@@ -343,28 +396,39 @@ const IntegrationsPage = () => {
           })
         )}
         
-        {!loading && integrationTypes.length === 0 && (
-          <div 
-            className="rounded-lg shadow-sm border p-10 text-center transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20'
-            }}
-          >
-            <h3 
-              className="text-lg font-medium mb-2 transition-colors"
-              style={{ color: colors.utility.primaryText }}
+          {!loading && integrationTypes.length === 0 && (
+            <div
+              className="rounded-2xl p-12 text-center"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+              }}
             >
-              No Integrations Available
-            </h3>
-            <p 
-              className="mb-6 transition-colors"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              There are currently no integrations available. Please check back later.
-            </p>
-          </div>
-        )}
+              <div
+                className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                }}
+              >
+                <Plug className="h-8 w-8" style={{ color: colors.brand.primary }} />
+              </div>
+              <h3
+                className="text-lg font-semibold mb-2"
+                style={{ color: colors.utility.primaryText }}
+              >
+                No Integrations Available
+              </h3>
+              <p
+                style={{ color: colors.utility.secondaryText }}
+              >
+                There are currently no integrations available. Please check back later.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

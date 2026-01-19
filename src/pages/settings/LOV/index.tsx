@@ -1,9 +1,9 @@
 // src/pages/settings/LOV/index.tsx
-// UPDATED: Using VaNiLoader and vaniToast for consistent UI
+// Glassmorphic Design
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, List, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
@@ -427,204 +427,235 @@ const ListOfValuesPage = () => {
     }
   };
 
-  // Loading state - Using VaNiLoader
+  // Loading state - Glassmorphic
   if (loading) {
     return (
       <div
-        className="flex items-center justify-center min-h-[400px] transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
+        className="min-h-screen p-6 transition-colors"
+        style={{
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+            : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
+        }}
       >
-        <VaNiLoader
-          size="md"
-          message="LOADING LIST OF VALUES"
-        />
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin" style={{ color: colors.brand.primary }} />
+          </div>
+          <div className="flex gap-6">
+            <div
+              className="w-64 h-64 rounded-2xl animate-pulse"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+              }}
+            />
+            <div
+              className="flex-1 h-96 rounded-2xl animate-pulse"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`
+              }}
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div
-      className="p-6 transition-colors duration-200 min-h-screen"
+      className="min-h-screen p-6 transition-colors"
       style={{
         background: isDarkMode
-          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
+          ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
+          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%)'
       }}
     >
-      {/* Header */}
-      <div className="flex items-center mb-8">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate('/settings/configure')}
-          className="mr-4 transition-colors"
+      <div className="max-w-6xl mx-auto">
+        {/* Glassmorphic Header */}
+        <div
+          className="rounded-2xl border mb-6 overflow-hidden"
           style={{
-            borderColor: colors.utility.secondaryText + '40',
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.primaryText
+            background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+            boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
           }}
         >
-          <ArrowLeft
-            className="h-5 w-5 transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          />
-        </Button>
-        <div>
-          <h1
-            className="text-2xl font-bold transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            List of Values
-          </h1>
-          <p
-            className="transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Manage your custom values and categories
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-6">
-        {/* Category list */}
-        <div className="w-64 shrink-0">
-          <div
-            className="rounded-lg shadow-sm border overflow-hidden transition-colors"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20'
-            }}
-          >
-            {categories.length > 0 ? (
-              categories.map((category, index) => {
-                const isSelected = selectedCategory === category.id;
-                const isFirst = index === 0;
-
-                return (
-                  <button
-                    key={category.id}
-                    onClick={() => handleCategoryChange(category.id)}
-                    className={cn(
-                      "w-full px-4 py-3 text-left border-b last:border-0 transition-colors",
-                      isSelected
-                        ? "font-medium"
-                        : "hover:opacity-80"
-                    )}
-                    style={{
-                      borderColor: colors.utility.primaryText + '20',
-                      backgroundColor: isSelected
-                        ? colors.brand.primary
-                        : isFirst && !isSelected
-                        ? colors.utility.primaryBackground + '50'
-                        : 'transparent',
-                      color: isSelected
-                        ? '#FFFFFF'
-                        : colors.utility.primaryText
-                    }}
-                  >
-                    {category.DisplayName}
-                  </button>
-                );
-              })
-            ) : (
-              <div
-                className="p-4 text-center transition-colors"
-                style={{ color: colors.utility.secondaryText }}
+          <div className="p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/settings/configure')}
+                className="p-2 rounded-xl transition-all hover:scale-105"
+                style={{
+                  background: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                }}
               >
-                No categories found.
+                <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+              </button>
+              <div
+                className="p-3 rounded-xl"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.secondary || colors.brand.primary}15 100%)`
+                }}
+              >
+                <List className="h-6 w-6" style={{ color: colors.brand.primary }} />
               </div>
-            )}
+              <div>
+                <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>
+                  List of Values
+                </h1>
+                <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                  Manage your custom values and categories
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Details Area */}
-        <div className="flex-1">
-          {selectedCategory ? (
-            <div>
-              {/* Category Title and Add Button */}
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                  <h2
-                    className="text-xl font-semibold transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    {selectedCategoryName}
-                  </h2>
-                  {/* Processing indicator - Using InlineLoader */}
-                  {isProcessing && (
-                    <InlineLoader size="sm" text="Processing..." />
-                  )}
-                </div>
-                {!isAdding && (
-                  <Button
-                    onClick={handleAddClick}
-                    className="transition-colors hover:opacity-90"
-                    style={{
-                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                      color: '#FFFFFF'
-                    }}
-                    disabled={isProcessing}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add New Value
-                  </Button>
-                )}
-              </div>
+        <div className="flex gap-6">
+          {/* Category list - Glassmorphic */}
+          <div className="w-64 shrink-0">
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+              }}
+            >
+              {categories.length > 0 ? (
+                categories.map((category, index) => {
+                  const isSelected = selectedCategory === category.id;
 
-              {/* Column Headers */}
+                  return (
+                    <button
+                      key={category.id}
+                      onClick={() => handleCategoryChange(category.id)}
+                      className={cn(
+                        "w-full px-4 py-4 text-left transition-all duration-300",
+                        isSelected
+                          ? "font-medium"
+                          : "hover:bg-opacity-50"
+                      )}
+                      style={{
+                        borderBottom: index < categories.length - 1
+                          ? `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
+                          : 'none',
+                        backgroundColor: isSelected
+                          ? colors.brand.primary
+                          : 'transparent',
+                        color: isSelected
+                          ? '#FFFFFF'
+                          : colors.utility.primaryText
+                      }}
+                    >
+                      {category.DisplayName}
+                    </button>
+                  );
+                })
+              ) : (
+                <div
+                  className="p-4 text-center"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  No categories found.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Details Area - Glassmorphic */}
+          <div className="flex-1">
+            {selectedCategory ? (
               <div
-                className="rounded-lg shadow-sm border mb-4 transition-colors"
+                className="rounded-2xl overflow-hidden"
                 style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderColor: colors.utility.primaryText + '20'
+                  background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                  boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
                 }}
               >
-                <div className="grid grid-cols-5 gap-4 px-4 py-3">
-                  <div
-                    className="font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Name
+                {/* Category Title and Add Button */}
+                <div
+                  className="px-6 py-4 border-b flex justify-between items-center"
+                  style={{
+                    backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                    borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+                      {selectedCategoryName}
+                    </h2>
+                    {isProcessing && (
+                      <Loader2 className="h-4 w-4 animate-spin" style={{ color: colors.brand.primary }} />
+                    )}
                   </div>
-                  <div
-                    className="font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Display Name
-                  </div>
-                  <div
-                    className="font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Color
-                  </div>
-                  <div
-                    className="font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Sequence
-                  </div>
-                  <div
-                    className="font-medium transition-colors"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    Actions
-                  </div>
+                  {!isAdding && (
+                    <Button
+                      onClick={handleAddClick}
+                      className="transition-colors hover:opacity-90"
+                      style={{
+                        background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                        color: '#FFFFFF'
+                      }}
+                      disabled={isProcessing}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add New Value
+                    </Button>
+                  )}
                 </div>
-              </div>
 
-              {/* Items List */}
-              <div className="space-y-4">
-                {/* Existing Items */}
-                {categoryDetails.map((detail) => (
+                {/* Content Area */}
+                <div className="p-6">
+                  {/* Column Headers */}
                   <div
-                    key={detail.id}
-                    className="rounded-lg shadow-sm border transition-colors"
+                    className="rounded-xl mb-4"
                     style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '20'
+                      backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)'
                     }}
                   >
+                    <div className="grid grid-cols-5 gap-4 px-4 py-3">
+                      <div className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
+                        Name
+                      </div>
+                      <div className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
+                        Display Name
+                      </div>
+                      <div className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
+                        Color
+                      </div>
+                      <div className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
+                        Sequence
+                      </div>
+                      <div className="font-medium text-sm" style={{ color: colors.utility.primaryText }}>
+                        Actions
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="space-y-3">
+                    {/* Existing Items */}
+                    {categoryDetails.map((detail) => (
+                      <div
+                        key={detail.id}
+                        className="rounded-xl transition-all hover:scale-[1.01]"
+                        style={{
+                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                          border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`
+                        }}
+                      >
                     <div className="grid grid-cols-5 gap-4 px-4 py-3 items-center">
                       {editingId === detail.id ? (
                         // Edit Mode
@@ -776,15 +807,15 @@ const ListOfValuesPage = () => {
                   </div>
                 ))}
 
-                {/* Add Form */}
-                {isAdding && (
-                  <div
-                    className="rounded-lg shadow-sm border-2 transition-colors"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.brand.primary
-                    }}
-                  >
+                    {/* Add Form */}
+                    {isAdding && (
+                      <div
+                        className="rounded-xl border-2"
+                        style={{
+                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                          borderColor: colors.brand.primary
+                        }}
+                      >
                     <div className="grid grid-cols-5 gap-4 px-4 py-3 items-center">
                       <Input
                         placeholder="Name"
@@ -871,41 +902,40 @@ const ListOfValuesPage = () => {
                   </div>
                 )}
 
-                {/* Empty State */}
-                {categoryDetails.length === 0 && !isAdding && (
-                  <div
-                    className="rounded-lg shadow-sm border p-8 text-center transition-colors"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '20'
-                    }}
-                  >
-                    <p
-                      className="transition-colors"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      No values found for this category. Click "Add New Value" to create one.
-                    </p>
+                    {/* Empty State */}
+                    {categoryDetails.length === 0 && !isAdding && (
+                      <div
+                        className="rounded-xl p-8 text-center"
+                        style={{
+                          backgroundColor: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                          border: `1px dashed ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+                        }}
+                      >
+                        <p style={{ color: colors.utility.secondaryText }}>
+                          No values found for this category. Click "Add New Value" to create one.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div
-              className="rounded-lg shadow-sm border p-8 text-center transition-colors"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: colors.utility.primaryText + '20'
-              }}
-            >
-              <p
-                className="transition-colors"
-                style={{ color: colors.utility.secondaryText }}
+            ) : (
+              <div
+                className="rounded-2xl p-8 text-center"
+                style={{
+                  background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                  boxShadow: '0 4px 24px -4px rgba(0,0,0,0.1)'
+                }}
               >
-                Select a category from the left to view its values.
-              </p>
-            </div>
-          )}
+                <p style={{ color: colors.utility.secondaryText }}>
+                  Select a category from the left to view its values.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
