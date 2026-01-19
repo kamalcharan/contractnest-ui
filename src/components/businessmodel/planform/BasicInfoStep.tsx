@@ -10,7 +10,7 @@ import {
   CONFIRMATION_MESSAGES
 } from '@/utils/constants/businessModelConstants';
 import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '@/utils/constants/currencies';
-import { useProducts } from '@/hooks/queries/useProductsQuery';
+import { useXProductDropdown } from '@/hooks/queries/useProductMasterdata';
 
 interface BasicInfoStepProps {
   isEditMode?: boolean;
@@ -29,7 +29,8 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Fetch products for dropdown (only needed in create mode)
-  const { data: products, isLoading: productsLoading } = useProducts();
+  // Uses X-Product category from m_category_master - values match x-product header
+  const { options: products, isLoading: productsLoading } = useXProductDropdown('global');
 
   // Watch values for conditional rendering
   const watchProductCode = watch('productCode');
@@ -44,10 +45,12 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
   const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
   
   // Initialize form with default product (only if not in edit mode)
+  // Products are from X-Product category - first item (ContractNest) is default
   useEffect(() => {
     if (!isEditMode && products && products.length > 0 && !watchProductCode) {
-      const defaultProduct = products.find(p => p.is_default) || products[0];
-      setValue('productCode', defaultProduct.code);
+      // First product in sequence order is the default (ContractNest)
+      const defaultProduct = products[0];
+      setValue('productCode', defaultProduct.value);
     }
   }, [products, isEditMode, setValue, watchProductCode]);
 
@@ -283,9 +286,9 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ isEditMode = false }) => 
               ) : (
                 <>
                   <option value="">Select a product</option>
-                  {products?.map((product) => (
-                    <option key={product.code} value={product.code}>
-                      {product.name} {product.is_default && '(Default)'}
+                  {products?.map((product, index) => (
+                    <option key={product.value} value={product.value}>
+                      {product.label} {index === 0 && '(Default)'}
                     </option>
                   ))}
                 </>

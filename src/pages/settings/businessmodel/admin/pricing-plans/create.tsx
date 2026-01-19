@@ -22,6 +22,7 @@ import BasicInfoStep from '@/components/businessmodel/planform/BasicInfoStep';
 import PricingTiersStep from '@/components/businessmodel/planform/PricingTiersStep';
 import FeaturesStep from '@/components/businessmodel/planform/FeaturesStep';
 import NotificationsStep from '@/components/businessmodel/planform/NotificationsStep';
+import ReviewStep from '@/components/businessmodel/planform/ReviewStep';
 
 // ✅ FIXED: Define PlanType locally
 type PlanType = typeof PLAN_TYPES[number];
@@ -141,12 +142,12 @@ const CreatePricingPlanPage: React.FC = () => {
   const wizardSteps = [
     {
       id: 'basic-info',
-      title: 'Basic Information',
+      title: 'Basic Info',
       component: <BasicInfoStep />
     },
     {
       id: 'pricing-tiers',
-      title: 'Pricing Tiers',
+      title: 'Pricing',
       component: <PricingTiersStep />
     },
     {
@@ -156,8 +157,13 @@ const CreatePricingPlanPage: React.FC = () => {
     },
     {
       id: 'notifications',
-      title: 'Notifications',
+      title: 'Credits',
       component: <NotificationsStep />
+    },
+    {
+      id: 'review',
+      title: 'Review',
+      component: <ReviewStep />
     }
   ];
   

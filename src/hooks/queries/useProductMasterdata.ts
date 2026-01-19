@@ -206,7 +206,9 @@ export const CATEGORY_NAMES = {
   CUSTOM_FIELDS: 'custom_fields',
   // NEW: Tax-related categories
   TAX_RATES: 'tax_rates',
-  TAX_SETTINGS: 'tax_settings'
+  TAX_SETTINGS: 'tax_settings',
+  // NEW: Platform products (Business Model Step 1)
+  X_PRODUCT: 'X-Product'
 } as const;
 
 export type CategoryName = typeof CATEGORY_NAMES[keyof typeof CATEGORY_NAMES];
@@ -1050,4 +1052,13 @@ export const usePriorityTypesDropdown = (scope: 'global' | 'tenant' = 'global') 
 
 export const useContactTypesDropdown = (scope: 'global' | 'tenant' = 'global') => {
   return useMasterDataDropdown(CATEGORY_NAMES.CONTACT_TYPE, scope);
+};
+
+/**
+ * Hook for X-Product dropdown - Platform products (ContractNest, FamilyKnows, Kaladristi)
+ * Used in admin plan creation to select which product the plan belongs to
+ * detail_value matches x-product header values exactly
+ */
+export const useXProductDropdown = (scope: 'global' | 'tenant' = 'global') => {
+  return useMasterDataDropdown(CATEGORY_NAMES.X_PRODUCT, scope);
 };

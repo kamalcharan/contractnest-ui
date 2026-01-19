@@ -185,6 +185,7 @@ import InvoiceDetailPage from './pages/settings/businessmodel/admin/billing/invo
 // Business Model - Tenant Pages
 import PricingPlansPage from './pages/settings/businessmodel/tenants/pricing-plans';
 import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscription';
+// REMOVED: CreditsPage import - Credits functionality now merged into SubscriptionPage
 
 // Contacts pages
 import ContactsPage from './pages/contacts/index';
@@ -656,6 +657,7 @@ const AppContent: React.FC = () => {
             <Route index element={<PricingPlansPage />} />
           </Route>
 
+          {/* Unified Subscription Page - Credits merged into single dashboard */}
           <Route
             path="/businessmodel/tenants/subscription"
             element={
@@ -665,6 +667,7 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<SubscriptionPage />} />
+            {/* REMOVED: Credits route - now integrated into unified SubscriptionPage */}
           </Route>
 
           {/* Legacy routes - redirect to new structure */}

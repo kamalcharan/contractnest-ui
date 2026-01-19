@@ -63,7 +63,7 @@ export const settingsMenuItems: SettingsItem[] = [
   adminOnly: false
 },
 
-  
+
   // List of Value (LOVs)
   {
     id: 'list-of-value',
@@ -85,7 +85,7 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'List',
     adminOnly: false
   },
-  
+
   // Integrations
   {
      id: 'integrations-main',
@@ -107,7 +107,7 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Link',
     adminOnly: false
   },
-  
+
   // Storage Space
   {
     id: 'storage-space',
@@ -131,8 +131,8 @@ export const settingsMenuItems: SettingsItem[] = [
   },
 
 
-  
-  
+
+
   // Customer Channels
   {
     id: 'customer-channels',
@@ -187,7 +187,7 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Users',
     adminOnly: false
   },
-  
+
   // Business Profile
   {
     id: 'business-profile',
@@ -243,40 +243,39 @@ export const settingsMenuItems: SettingsItem[] = [
   },
   */
 
-  
-  // HIDDEN: Whole Subscription section - commented out for now
-  /*
+
+  // Subscription section - Unified Dashboard (Credits merged into My Subscription)
   {
     id: 'subscription',
     settings_type: GROUP_SUBSCRIPTION,
     parent_type: null,
     description_short: 'Subscription management',
-    description_long: 'Manage your subscriptions here',
-    route_path: '/settings/configure/subscription',
+    description_long: 'Manage your subscription, view usage, and buy credits',
+    route_path: '/businessmodel/tenants/subscription',
     card_icon_name: 'Repeat',
     adminOnly: false
   },
   {
-    id: 'my-plan',
-    settings_type: 'My Plan',
+    id: 'my-subscription',
+    settings_type: 'My Subscription',
     parent_type: GROUP_SUBSCRIPTION,
-    description_short: 'Current plan',
-    description_long: 'Know about your plans here',
-    route_path: '/settings/configure/subscription/my-plan',
-    card_icon_name: 'CheckSquare',
+    description_short: 'Current subscription',
+    description_long: 'View your current plan, usage metrics, credits balance, and billing details',
+    route_path: '/businessmodel/tenants/subscription',
+    card_icon_name: 'CreditCard',
     adminOnly: false
   },
   {
-    id: 'plan-comparison',
-    settings_type: 'Plan Comparision',
+    id: 'pricing-plans',
+    settings_type: 'Pricing Plans',
     parent_type: GROUP_SUBSCRIPTION,
-    description_short: 'Compare plans',
-    description_long: 'Explore and check the plans suitable for you',
-    route_path: '/settings/configure/subscription/comparison',
+    description_short: 'Available plans',
+    description_long: 'Explore and compare available pricing plans',
+    route_path: '/businessmodel/tenants/pricing-plans',
     card_icon_name: 'BarChart',
     adminOnly: false
   }
-  */
+  // REMOVED: Credits menu item - now integrated into My Subscription unified dashboard
 ];
 
 // Function to get grouped settings metadata
@@ -284,22 +283,22 @@ export const getGroupedSettingsMetadata = (isProfile: boolean = false): GroupedS
   const grouped: GroupedSettingsMetadata = {};
 
   // Define the groups we want to include
-  // HIDDEN: GROUP_SUBSCRIPTION removed from both lists
+  // GROUP_SUBSCRIPTION enabled for Business Model Phase 4
   const groupNames = isProfile
-    ? [] // For profile page - Subscription hidden
-    : [GROUP_TEAM, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE]; // For settings page - Team (Subscription removed)
-  
+    ? [] // For profile page - Subscription not shown
+    : [GROUP_TEAM, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - includes Subscription
+
   // Create group entries for each category
   groupNames.forEach(groupName => {
-    const groupItems = settingsMenuItems.filter(item => 
-      item.settings_type === groupName || 
+    const groupItems = settingsMenuItems.filter(item =>
+      item.settings_type === groupName ||
       item.parent_type === groupName
     );
-    
+
     if (groupItems.length > 0) {
       grouped[groupName] = { items: groupItems };
     }
   });
-  
+
   return grouped;
 };

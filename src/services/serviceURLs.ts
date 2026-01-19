@@ -372,7 +372,13 @@ export const API_ENDPOINTS = {
     
     // Billing integration
     BILLING_OVERVIEW: '/api/business-model/billing',
-    BILLING_PLAN: (id: string) => `/api/business-model/billing/plans/${id}`
+    BILLING_PLAN: (id: string) => `/api/business-model/billing/plans/${id}`,
+
+    // Usage & Credits (Business Model Phase 4 Step 2)
+    USAGE_SUMMARY: '/api/functions/billing/usage-summary',
+    INVOICE_ESTIMATE: '/api/functions/billing/invoice-estimate',
+    TOPUP_PACKS: '/api/functions/billing/topup-packs',
+    CREDIT_BALANCE: '/api/functions/billing/credit-balance'
   },
   
   // =================================================================
