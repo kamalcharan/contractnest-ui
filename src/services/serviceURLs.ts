@@ -350,6 +350,33 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
   
+  // =================================================================
+  // PRODUCT CONFIG ENDPOINTS - Business Model v2
+  // =================================================================
+  PRODUCT_CONFIG: {
+    // List all product configs
+    LIST: '/api/v1/product-config',
+
+    // Get specific product config
+    GET: (productCode: string) => `/api/v1/product-config/${productCode}`,
+
+    // Get product config version history
+    HISTORY: (productCode: string) => `/api/v1/product-config/${productCode}/history`,
+
+    // Update product config
+    UPDATE: (productCode: string) => `/api/v1/product-config/${productCode}`,
+
+    // Helper function for listing with filters
+    LIST_WITH_FILTERS: (filters: ProductConfigFilters = {}) => {
+      const params = new URLSearchParams();
+
+      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+
+      const queryString = params.toString();
+      return queryString ? `/api/v1/product-config?${queryString}` : '/api/v1/product-config';
+    }
+  },
+
   // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management
@@ -1009,6 +1036,11 @@ export type CategoryMapResponse = {
   timestamp?: string;
 };
 
+// Product Config filter interface
+export type ProductConfigFilters = {
+  is_active?: boolean;
+};
+
 // Sequence Numbers filter interface
 export type SequenceFilters = {
   is_active?: boolean;
@@ -1071,6 +1103,7 @@ export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
 export type OnboardingEndpoints = typeof API_ENDPOINTS.ONBOARDING;
 export type SequencesEndpoints = typeof API_ENDPOINTS.SEQUENCES;
+export type ProductConfigEndpoints = typeof API_ENDPOINTS.PRODUCT_CONFIG;
 
 // Contact filters interface
 export type ContactFilters = {
@@ -1482,6 +1515,22 @@ export const isValidPaginationParams = (page?: number, limit?: number): boolean 
 export const isValidOnboardingStepId = (stepId: string): boolean => {
   const validSteps = ['user-profile', 'business-profile', 'data-setup', 'storage', 'team', 'tour'];
   return validSteps.includes(stepId);
+};
+
+/**
+ * Validate product code format
+ */
+export const isValidProductCode = (productCode: string): boolean => {
+  // Product codes should be lowercase with underscores/hyphens (e.g., 'contractnest', 'family-knows')
+  const productCodeRegex = /^[a-z][a-z0-9_-]*$/;
+  return typeof productCode === 'string' && productCode.length >= 2 && productCode.length <= 50 && productCodeRegex.test(productCode);
+};
+
+/**
+ * Build product config list URL with filters
+ */
+export const buildProductConfigListURL = (filters: ProductConfigFilters = {}): string => {
+  return API_ENDPOINTS.PRODUCT_CONFIG.LIST_WITH_FILTERS(filters);
 };
 
 // Export everything for comprehensive access

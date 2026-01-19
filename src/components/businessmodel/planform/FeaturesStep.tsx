@@ -1,16 +1,18 @@
 // src/components/businessmodel/planform/FeaturesStep.tsx
 // FIXED: Added proper typing for currency and currency array operations
+// UPDATED: Now uses product-based features from useProductConfig hook
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useFormContext } from 'react-hook-form';
-import { Plus, Trash2, Info, ChevronDown, Edit, Settings } from 'lucide-react';
+import { Plus, Trash2, Info, ChevronDown, Edit, Settings, AlertCircle, Loader2 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { featureItems, FeatureItem } from '@/utils/constants/pricing';
-import { 
-  PRICING_PERIODS, 
-  DEFAULT_VALUES 
+import { FeatureItem } from '@/utils/constants/pricing';
+import {
+  PRICING_PERIODS,
+  DEFAULT_VALUES
 } from '@/utils/constants/businessModelConstants';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { useProductConfig } from '@/hooks/useProductConfig';
 
 // Define the structure for a feature row in the form
 interface FeatureRow {
@@ -31,20 +33,31 @@ interface FeaturesStepProps {
 }
 
 const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
-  const { 
-    watch, 
+  const {
+    watch,
     setValue,
     getValues,
     formState: { errors }
   } = useFormContext();
-  
+
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Watch form values - FIXED: Added proper typing
   const watchPlanType = watch('planType') as string;
   const watchSupportedCurrencies = (watch('supportedCurrencies') || []) as string[];
   const watchDefaultCurrency = watch('defaultCurrencyCode') as string;
+  const watchProductCode = watch('productCode') as string;
+
+  // Fetch product-specific features from API (falls back to pricing.ts defaults)
+  const {
+    featureItems,
+    isLoading: featuresLoading,
+    isUsingFallback
+  } = useProductConfig({
+    productCode: watchProductCode || 'contractnest',
+    enabled: !!watchProductCode || true
+  });
   
   // State for features
   const [features, setFeatures] = useState<FeatureRow[]>([]);
@@ -348,7 +361,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
       )}
 
       <div className="mb-4">
-        <p 
+        <p
           className="text-sm transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
@@ -356,6 +369,49 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
           {isEditMode && ' Changes will create a new version of this plan.'}
         </p>
       </div>
+
+      {/* Loading State */}
+      {featuresLoading && (
+        <div
+          className="p-4 rounded-lg border flex items-center justify-center transition-colors"
+          style={{
+            backgroundColor: `${colors.utility.secondaryText}10`,
+            borderColor: `${colors.utility.primaryText}20`
+          }}
+        >
+          <Loader2
+            className="h-5 w-5 mr-2 animate-spin"
+            style={{ color: colors.brand.primary }}
+          />
+          <span style={{ color: colors.utility.secondaryText }}>
+            Loading product features...
+          </span>
+        </div>
+      )}
+
+      {/* Fallback Notice */}
+      {!featuresLoading && isUsingFallback && (
+        <div
+          className="p-3 rounded-lg border mb-4 transition-colors"
+          style={{
+            backgroundColor: `${colors.semantic.warning || '#F59E0B'}10`,
+            borderColor: `${colors.semantic.warning || '#F59E0B'}20`
+          }}
+        >
+          <div className="flex items-start">
+            <AlertCircle
+              className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0"
+              style={{ color: colors.semantic.warning || '#F59E0B' }}
+            />
+            <p
+              className="text-sm transition-colors"
+              style={{ color: colors.semantic.warning || '#F59E0B' }}
+            >
+              Using default feature configuration. Product-specific features could not be loaded.
+            </p>
+          </div>
+        </div>
+      )}
       
       {/* Currency Tabs */}
       {watchSupportedCurrencies?.length > 0 && (
