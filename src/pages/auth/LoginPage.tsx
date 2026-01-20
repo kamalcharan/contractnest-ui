@@ -15,8 +15,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  // Updated to include hasCompletedOnboarding and checkOnboardingStatus
-  const { login, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding, checkOnboardingStatus } = useAuth();
+  // Onboarding redirects are handled by AuthContext during login flow
+  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -38,23 +38,15 @@ const LoginPage: React.FC = () => {
     });
   }, []);
 
-  // Redirect if already authenticated - UPDATED to check onboarding
+  // Redirect if already authenticated
+  // NOTE: Onboarding redirects are handled by AuthContext during login
+  // This just handles the case where user navigates to /login while already authenticated
   useEffect(() => {
-    const handleAuthRedirect = async () => {
-      if (isAuthenticated) {
-        // Check if user has completed onboarding
-        const isOnboardingComplete = await checkOnboardingStatus();
-
-        if (!isOnboardingComplete) {
-          navigate('/onboarding', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
-      }
-    };
-
-    handleAuthRedirect();
-  }, [isAuthenticated, checkOnboardingStatus, navigate]);
+    if (isAuthenticated && !isLoading) {
+      // Just go to dashboard - AuthContext handles onboarding redirects during login flow
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   // Check for message from navigate state (e.g., after registration)
   useEffect(() => {

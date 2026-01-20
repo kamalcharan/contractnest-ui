@@ -96,6 +96,7 @@ import VaNiChatPage from './pages/VaNi/channels/VaNiChatPage';
 
 // Implementation Toolkit
 import TenantProfilesPage from './pages/VaNi/TenantProfilesPage';
+import ProductMastersPage from './pages/VaNi/ProductMastersPage';
 
 // Groups Pages (Customer Channels)
 import GroupsListPage from './pages/settings/customer-channels/GroupsListPage';
@@ -617,6 +618,7 @@ const AppContent: React.FC = () => {
 
             {/* Implementation Toolkit Routes */}
             <Route path="tenant-profiles" element={<TenantProfilesPage />} />
+            <Route path="toolkit/product-masters" element={<ProductMastersPage />} />
 
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="analytics/cross-module" element={<AnalyticsPage />} />

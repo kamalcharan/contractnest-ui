@@ -278,6 +278,12 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'BBB Admin',
         icon: 'Shield',
         path: '/vani/channels/bbb/admin'
+      },
+      {
+        id: 'product-masters',
+        label: 'Product Masters',
+        icon: 'Package',
+        path: '/vani/toolkit/product-masters'
       }
     ]
   },

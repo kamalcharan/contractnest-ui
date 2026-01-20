@@ -65,6 +65,7 @@
     "firebase": "^11.6.0",
     "framer-motion": "^12.7.3",
     "lodash": "^4.17.21",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.488.0",
     "react": "^19.0.0",
     "react-confetti": "^6.4.0",

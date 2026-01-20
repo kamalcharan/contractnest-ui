@@ -91,20 +91,23 @@ const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
             onClick={onClick}
             className="rounded-xl p-4 cursor-pointer transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] group"
             style={{
-                background: isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                background: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+                boxShadow: isDarkMode ? 'none' : '0 2px 8px -2px rgba(0,0,0,0.08)',
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.background = isDarkMode
-                    ? `rgba(255,255,255,0.06)`
-                    : `rgba(0,0,0,0.04)`;
-                e.currentTarget.style.boxShadow = `0 4px 16px -4px ${colors.brand.primary}20`;
+                    ? 'rgba(30, 41, 59, 0.8)'
+                    : 'rgba(255, 255, 255, 1)';
+                e.currentTarget.style.boxShadow = `0 4px 16px -4px ${colors.brand.primary}30`;
             }}
             onMouseLeave={(e) => {
                 e.currentTarget.style.background = isDarkMode
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)';
-                e.currentTarget.style.boxShadow = 'none';
+                    ? 'rgba(30, 41, 59, 0.6)'
+                    : 'rgba(255, 255, 255, 0.95)';
+                e.currentTarget.style.boxShadow = isDarkMode ? 'none' : '0 2px 8px -2px rgba(0,0,0,0.08)';
             }}
         >
             <div className="flex items-center justify-between">
@@ -323,8 +326,8 @@ const SettingsPage = () => {
                     </div>
                 </div>
 
-                {/* Settings Groups Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Settings Groups - Single Column Layout */}
+                <div className="flex flex-col">
                     {Object.entries(filteredSettings).map(([groupKey, { items }]) => {
                         const groupParent = items.find(item => item.parent_type === null);
                         const childItems = items.filter(item => item.parent_type === groupKey);
@@ -332,27 +335,50 @@ const SettingsPage = () => {
                         if (!groupParent || childItems.length === 0) return null;
 
                         return (
-                            <GlassGroupCard
-                                key={groupKey}
-                                title={groupKey}
-                                description={groupParent?.description_long || ''}
-                                isDarkMode={isDarkMode}
-                                colors={colors}
-                            >
-                                <div className="space-y-2">
-                                    {childItems.map((item) => (
-                                        <GlassSettingsItem
-                                            key={item.id}
-                                            icon={getIcon(item.card_icon_name)}
-                                            title={item.settings_type}
-                                            description={item.description_long || ''}
-                                            onClick={() => handleCardClick(item.route_path, item.settings_type)}
-                                            isDarkMode={isDarkMode}
-                                            colors={colors}
-                                        />
-                                    ))}
+                            <div key={groupKey} className="mt-12 first:mt-0">
+                                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+                                    {/* Left: Group Header with Description (Grey) */}
+                                    <div className="lg:w-1/4 flex-shrink-0">
+                                        <div
+                                            className="rounded-xl p-4 h-fit lg:sticky lg:top-6"
+                                            style={{
+                                                background: isDarkMode ? 'rgba(30, 41, 59, 0.4)' : 'rgba(148, 163, 184, 0.15)',
+                                                backdropFilter: 'blur(8px)',
+                                                WebkitBackdropFilter: 'blur(8px)',
+                                                border: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(100, 116, 139, 0.2)'}`,
+                                            }}
+                                        >
+                                            <h2
+                                                className="text-lg font-semibold"
+                                                style={{ color: colors.utility.primaryText }}
+                                            >
+                                                {groupKey}
+                                            </h2>
+                                            <p
+                                                className="mt-2 text-sm leading-relaxed"
+                                                style={{ color: colors.utility.secondaryText }}
+                                            >
+                                                {groupParent?.description_long || ''}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Cards Stack (White) */}
+                                    <div className="lg:w-3/4 flex flex-col space-y-3">
+                                        {childItems.map((item) => (
+                                            <GlassSettingsItem
+                                                key={item.id}
+                                                icon={getIcon(item.card_icon_name)}
+                                                title={item.settings_type}
+                                                description={item.description_long || ''}
+                                                onClick={() => handleCardClick(item.route_path, item.settings_type)}
+                                                isDarkMode={isDarkMode}
+                                                colors={colors}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
-                            </GlassGroupCard>
+                            </div>
                         );
                     })}
                 </div>
