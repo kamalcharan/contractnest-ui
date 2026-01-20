@@ -1,20 +1,97 @@
 // src/pages/catalog-studio/configure.tsx
-import React, { useState, useMemo } from 'react';
-import { Plus } from 'lucide-react';
+// v2.0: Added version conflict handling UI
+
+import React, { useState, useMemo, useCallback } from 'react';
+import { Plus, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
+import { useCatBlocksTest, getBlockVersion } from '@/hooks/queries/useCatBlocksTest';
 import { useCatBlockMutationOperations } from '@/hooks/mutations/useCatBlocksMutations';
 import { Block, WizardMode } from '@/types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
 import { CategoryPanel, BlockGrid, BlockWizard, BlockEditorPanel } from '@/components/catalog-studio';
+import toast from 'react-hot-toast';
 
-// ✅ FIX: Import ALL adapter functions for proper field mapping
 import {
   catBlocksToBlocks,
   blockToCreateData,
   blockToUpdateData
 } from '@/utils/catalog-studio/catBlockAdapter';
+
+// =================================================================
+// VERSION CONFLICT MODAL COMPONENT
+// =================================================================
+
+interface VersionConflictModalProps {
+  isOpen: boolean;
+  blockName: string;
+  onRefresh: () => void;
+  onClose: () => void;
+}
+
+const VersionConflictModal: React.FC<VersionConflictModalProps> = ({
+  isOpen,
+  blockName,
+  onRefresh,
+  onClose
+}) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div
+        className="rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+        style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF' }}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-full bg-yellow-100">
+            <AlertTriangle className="w-6 h-6 text-yellow-600" />
+          </div>
+          <h3 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+            Version Conflict Detected
+          </h3>
+        </div>
+
+        <p className="mb-4" style={{ color: colors.utility.secondaryText }}>
+          The block "{blockName}" was modified by another user while you were editing.
+          Your changes cannot be saved.
+        </p>
+
+        <p className="mb-6 text-sm" style={{ color: colors.utility.secondaryText }}>
+          Please refresh to get the latest version before making changes.
+        </p>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium rounded-lg border"
+            style={{
+              borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+              color: colors.utility.primaryText
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onRefresh}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh Data
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// =================================================================
+// MAIN COMPONENT
+// =================================================================
 
 const CatalogStudioConfigurePage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
@@ -24,20 +101,42 @@ const CatalogStudioConfigurePage: React.FC = () => {
   // API Hooks
   const { data: blocksResponse, isLoading, error, refetch } = useCatBlocksTest();
 
-  // ✅ FIX: Use adapter to convert API blocks (CatBlock) to UI blocks (Block)
-  const allBlocks: Block[] = useMemo(() => {
+  // Version conflict state
+  const [conflictState, setConflictState] = useState<{
+    isOpen: boolean;
+    blockId: string | null;
+    blockName: string;
+  }>({
+    isOpen: false,
+    blockId: null,
+    blockName: ''
+  });
+
+  // Handle version conflict callback
+  const handleVersionConflict = useCallback((blockId: string, message: string) => {
     const rawBlocks = blocksResponse?.data?.blocks;
-    if (!rawBlocks || !Array.isArray(rawBlocks)) return [];
-    return catBlocksToBlocks(rawBlocks);
+    const block = rawBlocks?.find((b: any) => b.id === blockId);
+    setConflictState({
+      isOpen: true,
+      blockId,
+      blockName: block?.name || 'Unknown Block'
+    });
   }, [blocksResponse]);
 
-  // Mutations
+  // Mutations with version conflict handling
   const {
     createBlock,
     updateBlock,
     deleteBlock,
     isLoading: isMutating,
-  } = useCatBlockMutationOperations();
+  } = useCatBlockMutationOperations(handleVersionConflict);
+
+  // Convert API blocks to UI blocks
+  const allBlocks: Block[] = useMemo(() => {
+    const rawBlocks = blocksResponse?.data?.blocks;
+    if (!rawBlocks || !Array.isArray(rawBlocks)) return [];
+    return catBlocksToBlocks(rawBlocks);
+  }, [blocksResponse]);
 
   // State
   const [selectedCategory, setSelectedCategory] = useState<string>('service');
@@ -75,33 +174,48 @@ const CatalogStudioConfigurePage: React.FC = () => {
 
   // Calculate next sequence number for new blocks
   const getNextSequenceNo = () => {
-    const categoryBlocks = allBlocks.filter(b => b.categoryId === wizardBlockType);
-    return categoryBlocks.length;
+    const blocks = allBlocks.filter(b => b.categoryId === wizardBlockType);
+    return blocks.length;
   };
 
-  // ✅ FIX: Use adapter for proper field mapping with user tracking and environment
+  // Helper to get block version from raw response
+  const getExpectedVersion = (blockId: string): number | undefined => {
+    const rawBlocks = blocksResponse?.data?.blocks;
+    return getBlockVersion(rawBlocks || [], blockId);
+  };
+
+  // Handle save with version tracking for optimistic locking
   const handleSaveBlock = async (blockData: Partial<Block>) => {
     try {
       if (wizardMode === 'edit' && editingBlock) {
-        // ✅ Use blockToUpdateData adapter for updates with userId
-        await updateBlock(editingBlock.id, blockToUpdateData(blockData, { userId }));
+        // Get expected version for optimistic locking
+        const expectedVersion = getExpectedVersion(editingBlock.id);
+
+        console.log('📝 Updating block with expected version:', expectedVersion);
+
+        await updateBlock(
+          editingBlock.id,
+          blockToUpdateData(blockData, { userId }),
+          expectedVersion
+        );
       } else {
-        // ✅ Use blockToCreateData adapter for creates with userId, sequenceNo, and isLive
         const fullBlockData = {
           ...blockData,
           categoryId: wizardBlockType,
           name: blockData.name || 'Untitled Block',
         } as Block;
+
         await createBlock(blockToCreateData(fullBlockData, {
           userId,
           sequenceNo: getNextSequenceNo(),
-          isLive, // ✅ Pass environment flag
+          isLive,
         }));
       }
       closeWizard();
       refetch();
     } catch (error) {
       console.error('Save failed:', error);
+      // Error handling (including version conflicts) is done in the mutation hook
     }
   };
 
@@ -120,7 +234,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
     }
   };
 
-  // ✅ FIX: Use adapter for duplicate with userId and isLive
+  // Handle duplicate
   const handleDuplicateBlock = async (block: Block) => {
     try {
       const duplicateData = {
@@ -134,14 +248,36 @@ const CatalogStudioConfigurePage: React.FC = () => {
     }
   };
 
-  // ✅ FIX: Use adapter for editor save with userId
+  // Handle editor save with version tracking
   const handleEditorSave = async (updatedBlock: Block) => {
     try {
-      await updateBlock(updatedBlock.id, blockToUpdateData(updatedBlock, { userId }));
+      // Get expected version for optimistic locking
+      const expectedVersion = getExpectedVersion(updatedBlock.id);
+
+      console.log('📝 Editor save with expected version:', expectedVersion);
+
+      await updateBlock(
+        updatedBlock.id,
+        blockToUpdateData(updatedBlock, { userId }),
+        expectedVersion
+      );
+
       refetch();
     } catch (error) {
       console.error('Editor save failed:', error);
+      // Error handling (including version conflicts) is done in the mutation hook
     }
+  };
+
+  // Handle version conflict modal actions
+  const handleConflictRefresh = async () => {
+    setConflictState({ isOpen: false, blockId: null, blockName: '' });
+    await refetch();
+    toast.success('Data refreshed. Please try your changes again.');
+  };
+
+  const handleConflictClose = () => {
+    setConflictState({ isOpen: false, blockId: null, blockName: '' });
   };
 
   // Loading state
@@ -183,15 +319,32 @@ const CatalogStudioConfigurePage: React.FC = () => {
             {allBlocks.length} blocks • {isMutating ? 'Saving...' : 'Ready'}
           </p>
         </div>
-        <button
-          onClick={() => openWizard('create')}
-          disabled={isMutating}
-          className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
-          style={{ backgroundColor: colors.brand.primary }}
-        >
-          <Plus className="w-4 h-4" />
-          New Block
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Refresh button */}
+          <button
+            onClick={() => refetch()}
+            disabled={isLoading}
+            className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50"
+            style={{
+              borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+              color: colors.utility.secondaryText
+            }}
+            title="Refresh blocks"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+
+          {/* New Block button */}
+          <button
+            onClick={() => openWizard('create')}
+            disabled={isMutating}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            <Plus className="w-4 h-4" />
+            New Block
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -234,6 +387,14 @@ const CatalogStudioConfigurePage: React.FC = () => {
         onSave={handleSaveBlock}
         onBlockTypeChange={setWizardBlockType}
         fullPage={true}
+      />
+
+      {/* Version Conflict Modal */}
+      <VersionConflictModal
+        isOpen={conflictState.isOpen}
+        blockName={conflictState.blockName}
+        onRefresh={handleConflictRefresh}
+        onClose={handleConflictClose}
       />
     </div>
   );

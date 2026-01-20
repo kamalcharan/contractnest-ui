@@ -1,5 +1,5 @@
 //src/services/api.ts - UPDATED with Dynamic Headers Support
-// Adds: x-product dynamic header, x-idempotency-key support
+// Adds: x-product dynamic header, x-idempotency-key support, patchWithIdempotency, version conflict handling
 
 import axios, { AxiosRequestConfig } from 'axios';
 
@@ -335,7 +335,18 @@ api.interceptors.response.use(
   }
 );
 
-// ===== NEW: API Request Helpers with Idempotency Support =====
+// ===== API Request Helpers with Idempotency Support =====
+
+/**
+ * Generate a UUID v4 idempotency key
+ */
+export const generateIdempotencyKey = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 /**
  * Make a POST request with idempotency key
@@ -348,9 +359,9 @@ export const postWithIdempotency = async <T = any>(
 ): Promise<T> => {
   const headers: Record<string, string> = {};
 
-  if (idempotencyKey) {
-    headers['x-idempotency-key'] = idempotencyKey;
-  }
+  // Generate idempotency key if not provided
+  const key = idempotencyKey || generateIdempotencyKey();
+  headers['x-idempotency-key'] = key;
 
   const response = await api.post(url, data, {
     ...config,
@@ -374,9 +385,9 @@ export const putWithIdempotency = async <T = any>(
 ): Promise<T> => {
   const headers: Record<string, string> = {};
 
-  if (idempotencyKey) {
-    headers['x-idempotency-key'] = idempotencyKey;
-  }
+  // Generate idempotency key if not provided
+  const key = idempotencyKey || generateIdempotencyKey();
+  headers['x-idempotency-key'] = key;
 
   const response = await api.put(url, data, {
     ...config,
@@ -387,6 +398,57 @@ export const putWithIdempotency = async <T = any>(
   });
 
   return response.data;
+};
+
+/**
+ * Make a PATCH request with idempotency key
+ * Required for CatalogStudio update operations
+ */
+export const patchWithIdempotency = async <T = any>(
+  url: string,
+  data?: any,
+  idempotencyKey?: string,
+  config?: AxiosRequestConfig
+): Promise<T> => {
+  const headers: Record<string, string> = {};
+
+  // Generate idempotency key if not provided
+  const key = idempotencyKey || generateIdempotencyKey();
+  headers['x-idempotency-key'] = key;
+
+  const response = await api.patch(url, data, {
+    ...config,
+    headers: {
+      ...config?.headers,
+      ...headers
+    }
+  });
+
+  return response.data;
+};
+
+// ===== Version Conflict Helpers (for Optimistic Locking) =====
+
+/**
+ * Check if error is a version conflict (409)
+ */
+export const isVersionConflictError = (error: any): boolean => {
+  return error?.response?.status === 409 &&
+    error?.response?.data?.error?.code === 'VERSION_CONFLICT';
+};
+
+/**
+ * Get version conflict details from error
+ */
+export const getVersionConflictDetails = (error: any): { message: string; currentVersion?: number } | null => {
+  if (!isVersionConflictError(error)) return null;
+
+  const errorData = error?.response?.data?.error;
+  return {
+    message: errorData?.message ||
+      'This item was modified by another user. Please refresh and try again.',
+    currentVersion: errorData?.details?.current_version
+  };
 };
 
 /**

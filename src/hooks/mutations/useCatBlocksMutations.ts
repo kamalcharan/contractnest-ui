@@ -1,10 +1,16 @@
 // src/hooks/mutations/useCatBlocksMutations.ts
 // TanStack Query mutations for Catalog Studio Blocks
-// FIXED: Removed isAdmin checks - permission enforced by Edge Function
+// v2.0: Added idempotency key support and version conflict handling
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import api from '@/services/api';
+import api, {
+  postWithIdempotency,
+  patchWithIdempotency,
+  generateIdempotencyKey,
+  isVersionConflictError,
+  getVersionConflictDetails
+} from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import toast from 'react-hot-toast';
 import { catBlockKeys, CatBlock, BlockConfig, ResourcePricingConfig, VariantPricingConfig } from '../queries/useCatBlocks';
@@ -24,9 +30,8 @@ export interface CreateBlockData {
   resource_pricing?: ResourcePricingConfig;
   variant_pricing?: VariantPricingConfig;
   tags?: string[];
-  // NEW FIELDS for Phase 1
-  tenant_id?: string | null;  // null for global blocks (admin only)
-  is_seed?: boolean;          // seed blocks (admin only)
+  tenant_id?: string | null;
+  is_seed?: boolean;
 }
 
 export interface UpdateBlockData {
@@ -41,9 +46,10 @@ export interface UpdateBlockData {
   resource_pricing?: ResourcePricingConfig;
   variant_pricing?: VariantPricingConfig;
   tags?: string[];
-  // NEW FIELDS for Phase 1
   tenant_id?: string | null;
   is_seed?: boolean;
+  // NEW: For optimistic locking
+  expected_version?: number;
 }
 
 export interface MutationResponse<T = any> {
@@ -56,25 +62,52 @@ export interface MutationResponse<T = any> {
   };
 }
 
+// NEW: Version conflict callback type
+export type VersionConflictCallback = (blockId: string, message: string) => void;
+
 // =================================================================
 // HELPER FUNCTIONS
 // =================================================================
 
 /**
  * Handle mutation errors and show appropriate messages
+ * v2.0: Added VERSION_CONFLICT handling
  */
-const handleMutationError = (error: any, operation: string) => {
+const handleMutationError = (
+  error: any,
+  operation: string,
+  onVersionConflict?: VersionConflictCallback,
+  blockId?: string
+) => {
   console.error(`Failed to ${operation}:`, error);
+
+  // Check for version conflict first
+  if (isVersionConflictError(error)) {
+    const details = getVersionConflictDetails(error);
+    const message = details?.message || 'This block was modified by another user.';
+
+    toast.error(message, {
+      duration: 5000,
+      icon: '🔄'
+    });
+
+    // Call the version conflict callback if provided
+    if (onVersionConflict && blockId) {
+      onVersionConflict(blockId, message);
+    }
+    return;
+  }
 
   const errorMessage = error.response?.data?.error?.message || error.message;
 
   if (errorMessage?.includes('authentication') || errorMessage?.includes('unauthorized')) {
     toast.error('Authentication required. Please log in again.');
   } else if (errorMessage?.includes('permission') || errorMessage?.includes('forbidden')) {
-    // UPDATED: More specific message about tenant permissions
     toast.error('You do not have permission for this action.');
   } else if (errorMessage?.includes('validation')) {
     toast.error('Please check your input and try again.');
+  } else if (errorMessage?.includes('idempotency')) {
+    toast.error('Request already processed. Please refresh the page.');
   } else {
     toast.error(errorMessage || `Failed to ${operation}. Please try again.`);
   }
@@ -86,8 +119,7 @@ const handleMutationError = (error: any, operation: string) => {
 
 /**
  * Create new block
- * FIXED: Removed isAdmin check - anyone can create blocks for their tenant
- * Edge function enforces: only admin can create global/seed blocks
+ * v2.0: Uses postWithIdempotency for safe retries
  */
 export const useCreateCatBlock = () => {
   const { currentTenant } = useAuth();
@@ -99,22 +131,24 @@ export const useCreateCatBlock = () => {
         throw new Error('No tenant selected');
       }
 
-      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
-      // Users can create blocks for their tenant
-      // Only admin can create global (tenant_id = null) or seed blocks
-
       console.log('🔄 Creating block:', blockData.name);
 
-      const response = await api.post(
+      // Generate idempotency key for safe retries
+      const idempotencyKey = generateIdempotencyKey();
+      console.log('📌 Idempotency key:', idempotencyKey);
+
+      // Use postWithIdempotency for automatic retry safety
+      const response = await postWithIdempotency(
         API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.CREATE,
-        blockData
+        blockData,
+        idempotencyKey
       );
 
-      if (!response.data?.success) {
-        throw new Error(response.data?.error?.message || 'Failed to create block');
+      if (!response?.success) {
+        throw new Error(response?.error?.message || 'Failed to create block');
       }
 
-      return response.data;
+      return response;
     },
     onSuccess: (data, variables) => {
       toast.success(`Block "${variables.name}" created successfully!`);
@@ -137,20 +171,25 @@ export const useCreateCatBlock = () => {
 
 /**
  * Update existing block
- * FIXED: Removed isAdmin check - anyone can update their tenant's blocks
- * Edge function enforces: can only update own tenant's blocks unless admin
+ * v2.0: Uses patchWithIdempotency + supports expected_version for optimistic locking
  */
-export const useUpdateCatBlock = () => {
+export const useUpdateCatBlock = (onVersionConflict?: VersionConflictCallback) => {
   const { currentTenant } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: UpdateBlockData }): Promise<MutationResponse<CatBlock>> => {
+    mutationFn: async ({
+      id,
+      data,
+      expectedVersion
+    }: {
+      id: string;
+      data: UpdateBlockData;
+      expectedVersion?: number;
+    }): Promise<MutationResponse<CatBlock>> => {
       if (!currentTenant?.id) {
         throw new Error('No tenant selected');
       }
-
-      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
 
       if (!id) {
         throw new Error('Block ID is required');
@@ -158,16 +197,27 @@ export const useUpdateCatBlock = () => {
 
       console.log('🔄 Updating block:', id);
 
-      const response = await api.patch(
+      // Generate idempotency key for safe retries
+      const idempotencyKey = generateIdempotencyKey();
+      console.log('📌 Idempotency key:', idempotencyKey);
+
+      // Include expected_version for optimistic locking if provided
+      const requestData = expectedVersion !== undefined
+        ? { ...data, expected_version: expectedVersion }
+        : data;
+
+      // Use patchWithIdempotency for automatic retry safety
+      const response = await patchWithIdempotency(
         API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.UPDATE(id),
-        data
+        requestData,
+        idempotencyKey
       );
 
-      if (!response.data?.success) {
-        throw new Error(response.data?.error?.message || 'Failed to update block');
+      if (!response?.success) {
+        throw new Error(response?.error?.message || 'Failed to update block');
       }
 
-      return response.data;
+      return response;
     },
     onSuccess: (data, variables) => {
       toast.success('Block updated successfully!');
@@ -180,8 +230,8 @@ export const useUpdateCatBlock = () => {
 
       console.log('✅ Block updated successfully:', variables.id);
     },
-    onError: (error: Error) => {
-      handleMutationError(error, 'update block');
+    onError: (error: any, variables) => {
+      handleMutationError(error, 'update block', onVersionConflict, variables.id);
     },
   });
 };
@@ -192,8 +242,6 @@ export const useUpdateCatBlock = () => {
 
 /**
  * Delete block - soft delete
- * FIXED: Removed isAdmin check - anyone can delete their tenant's blocks
- * Edge function enforces: can only delete own tenant's blocks unless admin
  */
 export const useDeleteCatBlock = () => {
   const { currentTenant } = useAuth();
@@ -204,8 +252,6 @@ export const useDeleteCatBlock = () => {
       if (!currentTenant?.id) {
         throw new Error('No tenant selected');
       }
-
-      // ✅ REMOVED: isAdmin check - permission enforced by Edge Function
 
       if (!blockId) {
         throw new Error('Block ID is required');
@@ -246,15 +292,25 @@ export const useDeleteCatBlock = () => {
 
 /**
  * Toggle block active status
+ * v2.0: Supports expected_version for optimistic locking
  */
-export const useToggleCatBlockStatus = () => {
-  const updateBlockMutation = useUpdateCatBlock();
+export const useToggleCatBlockStatus = (onVersionConflict?: VersionConflictCallback) => {
+  const updateBlockMutation = useUpdateCatBlock(onVersionConflict);
 
   return useMutation({
-    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+    mutationFn: async ({
+      id,
+      isActive,
+      expectedVersion
+    }: {
+      id: string;
+      isActive: boolean;
+      expectedVersion?: number;
+    }) => {
       return updateBlockMutation.mutateAsync({
         id,
         data: { is_active: isActive },
+        expectedVersion,
       });
     },
     onSuccess: (data, variables) => {
@@ -273,27 +329,28 @@ export const useToggleCatBlockStatus = () => {
 
 /**
  * Block mutation operations helper
+ * v2.0: Added version conflict callback support
  */
-export const useCatBlockMutationOperations = () => {
+export const useCatBlockMutationOperations = (onVersionConflict?: VersionConflictCallback) => {
   const createMutation = useCreateCatBlock();
-  const updateMutation = useUpdateCatBlock();
+  const updateMutation = useUpdateCatBlock(onVersionConflict);
   const deleteMutation = useDeleteCatBlock();
-  const toggleStatusMutation = useToggleCatBlockStatus();
+  const toggleStatusMutation = useToggleCatBlockStatus(onVersionConflict);
 
   const createBlock = async (data: CreateBlockData) => {
     return createMutation.mutateAsync(data);
   };
 
-  const updateBlock = async (id: string, data: UpdateBlockData) => {
-    return updateMutation.mutateAsync({ id, data });
+  const updateBlock = async (id: string, data: UpdateBlockData, expectedVersion?: number) => {
+    return updateMutation.mutateAsync({ id, data, expectedVersion });
   };
 
   const deleteBlock = async (id: string) => {
     return deleteMutation.mutateAsync(id);
   };
 
-  const toggleBlockStatus = async (id: string, isActive: boolean) => {
-    return toggleStatusMutation.mutateAsync({ id, isActive });
+  const toggleBlockStatus = async (id: string, isActive: boolean, expectedVersion?: number) => {
+    return toggleStatusMutation.mutateAsync({ id, isActive, expectedVersion });
   };
 
   const isLoading =

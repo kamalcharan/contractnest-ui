@@ -72,8 +72,10 @@ const getDefaultIcon = (blockType: string | null): string => {
 export const catBlockToBlock = (catBlock: CatBlock): Block => {
   const config = catBlock.config || {};
 
-  // Determine block type - use enriched block_type_name, or type, or block_type_id
-  const blockType = catBlock.block_type_name || catBlock.type || catBlock.block_type_id || 'service';
+  // Determine block type - check multiple fields for backward compatibility
+  // Priority: block_type_name > type > category > default to 'service'
+  // Note: block_type_id is a UUID, so we skip it and default to 'service' if others are missing
+  const blockType = catBlock.block_type_name || catBlock.type || (catBlock as any).category || 'service';
 
   // Extract pricing info from the correct locations
   const pricingRecords = config.pricingRecords as PricingRecord[] | undefined;
