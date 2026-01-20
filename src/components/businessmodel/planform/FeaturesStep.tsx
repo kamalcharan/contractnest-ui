@@ -153,7 +153,7 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
   const getUnusedFeatures = useCallback(() => {
     const usedFeatureIds = features.map(f => f.feature_id).filter(id => id !== '');
     return featureItems.filter(item => !usedFeatureIds.includes(item.id));
-  }, [features]);
+  }, [features, featureItems]);
   
   // Handle currency tab click
   const handleCurrencyTabClick = useCallback((e: React.MouseEvent, currencyCode: string) => {
@@ -223,9 +223,9 @@ const FeaturesStep: React.FC<FeaturesStepProps> = ({ isEditMode = false }) => {
         return updated;
       });
     }
-    
+
     setFeatureDropdownOpen(null);
-  }, [watchSupportedCurrencies]);
+  }, [watchSupportedCurrencies, featureItems]);
   
   // Select pricing period
   const selectPricingPeriod = useCallback((e: React.MouseEvent, index: number, period: string) => {

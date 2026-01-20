@@ -1,7 +1,8 @@
 //src/components/businessmodel/dashboard/PlanList.tsx
+// UPDATED: Removed search bar, added pagination
 
 import React, { useState, useMemo } from 'react';
-import { Eye, Archive, Tag, Calendar, Users, FileText, Package } from 'lucide-react';
+import { Eye, Archive, Tag, Calendar, Users, FileText, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 
 export interface PricingPlanSummary {
@@ -22,46 +23,87 @@ interface PlanListProps {
   onViewPlan: (planId: string) => void;
   onArchivePlan: (planId: string) => void;
   isLoading?: boolean;
+  pageSize?: number;
 }
 
 const PlanList: React.FC<PlanListProps> = ({
   plans,
   onViewPlan,
   onArchivePlan,
-  isLoading = false
+  isLoading = false,
+  pageSize = 10
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState(true);
-  const [filterProduct, setFilterProduct] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Get unique products for filter dropdown
-  const availableProducts = useMemo(() => {
-    const products = new Map<string, string>();
-    plans.forEach(plan => {
-      if (plan.productCode && plan.productName) {
-        products.set(plan.productCode, plan.productName);
-      }
+  // Filter plans based on active filter only (product filter handled by parent)
+  const filteredPlans = useMemo(() => {
+    return plans.filter(plan => {
+      const matchesActiveFilter = filterActive ? plan.isActive : true;
+      return matchesActiveFilter;
     });
-    return Array.from(products.entries());
-  }, [plans]);
+  }, [plans, filterActive]);
 
-  // Filter plans based on search, active filter, and product filter
-  const filteredPlans = plans.filter(plan => {
-    const matchesSearch = plan.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesActiveFilter = filterActive ? plan.isActive : true;
-    const matchesProductFilter = filterProduct === 'all' || plan.productCode === filterProduct;
-    return matchesSearch && matchesActiveFilter && matchesProductFilter;
-  });
-  
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPlans.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedPlans = filteredPlans.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filterActive, plans]);
+
+  // Page navigation handlers
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const goToPrevPage = () => goToPage(currentPage - 1);
+  const goToNextPage = () => goToPage(currentPage + 1);
+
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
   // Render loading skeleton
   if (isLoading) {
     return (
       <div className="space-y-4">
         {Array(3).fill(0).map((_, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className="rounded-lg p-6 animate-pulse"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -70,30 +112,30 @@ const PlanList: React.FC<PlanListProps> = ({
           >
             <div className="flex justify-between">
               <div className="space-y-2">
-                <div 
+                <div
                   className="h-6 rounded w-48"
                   style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                 ></div>
-                <div 
+                <div
                   className="h-4 rounded w-24"
                   style={{ backgroundColor: `${colors.utility.primaryText}20` }}
                 ></div>
               </div>
-              <div 
+              <div
                 className="h-8 rounded w-20"
                 style={{ backgroundColor: `${colors.utility.primaryText}20` }}
               ></div>
             </div>
             <div className="mt-4 flex space-x-6">
-              <div 
+              <div
                 className="h-4 rounded w-24"
                 style={{ backgroundColor: `${colors.utility.primaryText}20` }}
               ></div>
-              <div 
+              <div
                 className="h-4 rounded w-24"
                 style={{ backgroundColor: `${colors.utility.primaryText}20` }}
               ></div>
-              <div 
+              <div
                 className="h-4 rounded w-40"
                 style={{ backgroundColor: `${colors.utility.primaryText}20` }}
               ></div>
@@ -103,34 +145,32 @@ const PlanList: React.FC<PlanListProps> = ({
       </div>
     );
   }
-  
+
   // Render no plans found
   if (filteredPlans.length === 0) {
     return (
-      <div 
+      <div
         className="rounded-lg p-8 text-center"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           border: `1px solid ${colors.utility.primaryText}20`
         }}
       >
-        <FileText 
+        <FileText
           className="h-12 w-12 mx-auto opacity-50 mb-4"
           style={{ color: colors.utility.secondaryText }}
         />
-        <h3 
+        <h3
           className="text-lg font-medium"
           style={{ color: colors.utility.primaryText }}
         >
           No Plans Found
         </h3>
-        <p 
+        <p
           className="mt-2 mb-4"
           style={{ color: colors.utility.secondaryText }}
         >
-          {searchTerm 
-            ? 'No plans match your search criteria.' 
-            : 'You haven\'t created any pricing plans yet.'}
+          No plans match your filter criteria.
         </p>
       </div>
     );
@@ -138,36 +178,8 @@ const PlanList: React.FC<PlanListProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Search and filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <input
-            type="text"
-            placeholder="Search plans..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 pl-10 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
-            style={{
-              borderColor: `${colors.utility.secondaryText}40`,
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText,
-              '--tw-ring-color': colors.brand.primary
-            } as React.CSSProperties}
-          />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-4 w-4"
-              style={{ color: colors.utility.secondaryText }}
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-        </div>
-        
+      {/* Active filter only */}
+      <div className="flex flex-wrap gap-4 items-center justify-between">
         <div className="flex items-center">
           <input
             type="checkbox"
@@ -190,38 +202,20 @@ const PlanList: React.FC<PlanListProps> = ({
           </label>
         </div>
 
-        {/* Product Filter */}
-        {availableProducts.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Package
-              className="h-4 w-4"
-              style={{ color: colors.utility.secondaryText }}
-            />
-            <select
-              value={filterProduct}
-              onChange={(e) => setFilterProduct(e.target.value)}
-              className="px-3 py-1.5 rounded-md border text-sm focus:outline-none focus:ring-2 transition-colors"
-              style={{
-                borderColor: `${colors.utility.secondaryText}40`,
-                backgroundColor: colors.utility.primaryBackground,
-                color: colors.utility.primaryText,
-                '--tw-ring-color': colors.brand.primary
-              } as React.CSSProperties}
-            >
-              <option value="all">All Products</option>
-              {availableProducts.map(([code, name]) => (
-                <option key={code} value={code}>{name}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        {/* Results count */}
+        <div
+          className="text-sm"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          Showing {startIndex + 1}-{Math.min(endIndex, filteredPlans.length)} of {filteredPlans.length} plans
+        </div>
       </div>
-      
+
       {/* Plans list */}
       <div className="space-y-4">
-        {filteredPlans.map(plan => (
-          <div 
-            key={plan.id} 
+        {paginatedPlans.map(plan => (
+          <div
+            key={plan.id}
             className="rounded-lg p-6"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -231,13 +225,13 @@ const PlanList: React.FC<PlanListProps> = ({
             <div className="flex flex-wrap justify-between items-start gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 
+                  <h3
                     className="text-lg font-semibold transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
                     {plan.name}
                   </h3>
-                  <div 
+                  <div
                     className="text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{
                       backgroundColor: `${colors.utility.primaryText}20`,
@@ -275,7 +269,7 @@ const PlanList: React.FC<PlanListProps> = ({
                 </div>
 
                 <div className="text-sm mt-1">
-                  <span 
+                  <span
                     className="inline-flex items-center transition-colors"
                     style={{ color: colors.utility.secondaryText }}
                   >
@@ -284,9 +278,9 @@ const PlanList: React.FC<PlanListProps> = ({
                   </span>
                 </div>
               </div>
-              
+
               <div className="flex space-x-2">
-                <button 
+                <button
                   onClick={() => onViewPlan(plan.id)}
                   className="px-3 py-1.5 rounded-md border text-sm flex items-center transition-colors hover:opacity-80"
                   style={{
@@ -304,8 +298,8 @@ const PlanList: React.FC<PlanListProps> = ({
                   <Eye className="h-4 w-4 mr-1" />
                   View
                 </button>
-                
-                <button 
+
+                <button
                   onClick={() => onArchivePlan(plan.id)}
                   className="px-3 py-1.5 rounded-md border text-sm flex items-center transition-colors hover:opacity-80"
                   style={{
@@ -325,25 +319,25 @@ const PlanList: React.FC<PlanListProps> = ({
                 </button>
               </div>
             </div>
-            
+
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-              <div 
+              <div
                 className="flex items-center transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 <Users className="h-4 w-4 mr-2" />
                 {plan.userCount} active users
               </div>
-              
-              <div 
+
+              <div
                 className="flex items-center transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
                 <FileText className="h-4 w-4 mr-2" />
                 {plan.featuresCount} features
               </div>
-              
-              <div 
+
+              <div
                 className="flex items-center transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -354,6 +348,71 @@ const PlanList: React.FC<PlanListProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div
+          className="flex items-center justify-center gap-2 pt-4 border-t"
+          style={{ borderColor: `${colors.utility.primaryText}10` }}
+        >
+          {/* Previous Button */}
+          <button
+            onClick={goToPrevPage}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: currentPage === 1 ? 'transparent' : `${colors.brand.primary}10`,
+              color: colors.brand.primary
+            }}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          {/* Page Numbers */}
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((page, index) => (
+              <React.Fragment key={index}>
+                {page === '...' ? (
+                  <span
+                    className="px-2 py-1 text-sm"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => goToPage(page as number)}
+                    className="min-w-[36px] h-9 px-3 rounded-lg text-sm font-medium transition-colors"
+                    style={{
+                      backgroundColor: currentPage === page
+                        ? colors.brand.primary
+                        : 'transparent',
+                      color: currentPage === page
+                        ? '#ffffff'
+                        : colors.utility.primaryText
+                    }}
+                  >
+                    {page}
+                  </button>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Next Button */}
+          <button
+            onClick={goToNextPage}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: currentPage === totalPages ? 'transparent' : `${colors.brand.primary}10`,
+              color: colors.brand.primary
+            }}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
