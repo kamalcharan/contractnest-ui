@@ -3,6 +3,7 @@
 // Phase 4: Full Page Wizard
 // Updated: Use BusinessRulesStep for step 6 instead of RulesStep
 // Updated: Added mandatory field validation before proceeding to next step
+// Updated: Consolidated Text Block (4→3 steps), Video Block (4→3 steps)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -25,11 +26,11 @@ import {
   StructureStep,
   ScheduleStep,
   AutomationStep,
-  // Content steps
+  // Content steps (Text Block - consolidated)
   ContentStep,
-  ContentSettingsStep,
-  // Media steps
+  // Media steps (Video Block - consolidated)
   MediaStep,
+  // Image steps
   ImageUploadStep,
   DisplaySettingsStep,
   // Checklist steps
@@ -104,14 +105,13 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
       return errors;
     }
 
-    // Step 2 - Basic Info: Name required, Description required (except for text blocks)
+    // Step 2 - Basic Info: Name and Description required
     const basicInfoStep = showTypeSelection ? 2 : 1;
     if (step === basicInfoStep) {
       if (!data.name?.trim()) {
         errors.push('Block name is required');
       }
-      // Text blocks only require name (no description)
-      if (type !== 'text' && !data.description?.trim()) {
+      if (!data.description?.trim()) {
         errors.push('Description is required');
       }
       // Block-specific validations for Basic Info
@@ -121,7 +121,11 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           errors.push('SKU is required');
         }
       }
-      // Billing block: Payment type is now set in Structure step (step 3), not Basic Info
+      if (type === 'billing') {
+        if (!data.meta?.paymentType) {
+          errors.push('Payment type is required');
+        }
+      }
       return errors;
     }
 
@@ -175,24 +179,19 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
     }
 
     if (type === 'billing') {
-      // Step 3 - Structure: Payment type required (saved at top level by StructureStep)
+      // Step 3 - Structure: Billing structure required
       if (step === 3) {
-        const paymentType = (data as any).paymentType || data.meta?.paymentType;
-        if (!paymentType) {
-          errors.push('Payment type is required');
+        if (!data.meta?.billingStructure) {
+          errors.push('Billing structure is required');
         }
       }
-      // Step 4 - Schedule: No mandatory fields (all have defaults)
+      // Step 4 - Schedule: Billing frequency required
+      if (step === 4) {
+        if (!data.meta?.billingFrequency) {
+          errors.push('Billing frequency is required');
+        }
+      }
       // Step 5 - Automation: No mandatory fields
-    }
-
-    if (type === 'text') {
-      // Step 3 - Content: Content text is required
-      if (step === 3) {
-        if (!data.content?.trim()) {
-          errors.push('Content text is required');
-        }
-      }
     }
 
     return errors;
@@ -298,8 +297,17 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
       );
     }
 
-    // Step 2 - Basic Info (common for all)
+    // Step 2 - Basic Info (common for most blocks)
+    // EXCEPT: Text Block (ContentStep) and Video Block (MediaStep) have single-page wizards
     if (currentStep === 2 || (currentStep === 1 && !showTypeSelection)) {
+      // Text block skips BasicInfo - ContentStep has Name/Icon/RichText all in one
+      if (blockType === 'text') {
+        return <ContentStep formData={formData} onChange={handleFormChange} />;
+      }
+      // Video block skips BasicInfo - MediaStep has Name/Icon/Video/Settings all in one
+      if (blockType === 'video') {
+        return <MediaStep formData={formData} onChange={handleFormChange} />;
+      }
       return (
         <BasicInfoStep
           blockType={blockType}
@@ -337,18 +345,11 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
         }
         break;
 
-      case 'text':
-        switch (currentStep) {
-          case 3: return <ContentStep formData={formData} onChange={handleFormChange} />;
-        }
-        break;
+      // TEXT BLOCK: Handled at step 2 (single page with Name/Icon/RichText)
+      // No additional steps needed - ContentStep is rendered in step 2 check above
 
-      case 'video':
-        switch (currentStep) {
-          case 3: return <MediaStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <DisplaySettingsStep formData={formData} onChange={handleFormChange} />;
-        }
-        break;
+      // VIDEO BLOCK: Handled at step 2 (single page with Name/Icon/Video/Settings)
+      // No additional steps needed - MediaStep is rendered in step 2 check above
 
       case 'image':
         switch (currentStep) {
