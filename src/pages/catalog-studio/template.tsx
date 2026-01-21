@@ -67,7 +67,7 @@ const catalogStudioFloatingIcons = [
   { Icon: Sparkles, top: '38%', left: '6%', delay: '2.5s', duration: '21s' },
 ];
 import { Block } from '../../types/catalogStudio';
-import { BLOCK_CATEGORIES } from '../../utils/catalog-studio';
+import { BLOCK_CATEGORIES, stripHtml } from '../../utils/catalog-studio';
 import { ServiceCatalogTree } from '../../components/catalog-studio';
 import { RichTextEditor, MediaUpload, ChecklistBuilder } from '../../components/catalog-studio/ContentEnhancements';
 
@@ -1298,7 +1298,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
                             className="text-xs"
                             style={{ color: colors.utility.secondaryText }}
                           >
-                            {category?.name || 'Block'} • {tb.block.description}
+                            {category?.name || 'Block'} • {stripHtml(tb.block.description)}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1407,7 +1407,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
                           Description
                         </div>
                         <p className="text-sm" style={{ color: colors.utility.primaryText }}>
-                          {previewBlock.description}
+                          {stripHtml(previewBlock.description)}
                         </p>
                       </div>
 
@@ -2134,7 +2134,7 @@ const CatalogStudioTemplatePage: React.FC = () => {
                               {tb.block.name}
                             </h4>
                             <p className="text-sm mt-1" style={{ color: colors.utility.secondaryText }}>
-                              {tb.block.description}
+                              {stripHtml(tb.block.description)}
                             </p>
 
                             {/* Show relevant config info */}

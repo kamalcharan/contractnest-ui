@@ -748,7 +748,7 @@ export const blockToCreateData = (
     // Required fields
     name: block.name,
     type: blockType,  // Correct field name for DB
-    block_type_id: blockType, // For edge function resolution
+    // Note: block_type_id expects UUID - let API/edge resolve it from 'type'
     category: blockType, // Category field (same as block type)
 
     // Optional top-level fields
@@ -758,7 +758,7 @@ export const blockToCreateData = (
     tags: block.tags || [],
 
     // Pricing at top level (for independent mode)
-    pricing_mode_id: pricingMode, // Edge expects pricing_mode_id - resolved by API
+    // Note: pricing_mode_id expects UUID - store pricingMode in config instead
     base_price: price,
     currency: currency || 'INR',
     // NOTE: price_type_id expects UUID - store in config instead
@@ -766,7 +766,7 @@ export const blockToCreateData = (
 
     // Tax
     tax_rate: taxRate,
-    hsn_sac_code: hsnSacCode || null,
+    hsn_sac_code: hsnSacCode || '', // Must be string, not null
 
     // Resource pricing (for resource_based mode)
     resource_pricing: buildResourcePricing(block),

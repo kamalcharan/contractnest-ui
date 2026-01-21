@@ -29,7 +29,6 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
     { id: 3, label: 'Content' },
-    { id: 4, label: 'Settings' },
   ],
   video: [
     { id: 1, label: 'Type' },

@@ -1,20 +1,17 @@
 // src/components/layout/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Menu, 
-  Bell, 
-  Search, 
-  ChevronDown, 
-  User, 
-  Settings, 
-  HelpCircle, 
+import {
+  Menu,
+  Bell,
+  ChevronDown,
+  User,
+  Settings,
+  HelpCircle,
   LogOut,
   Sun,
   Moon,
   Palette,
-  Globe,
-  Key,
   ToggleLeft,
   ToggleRight,
   Shield
@@ -224,7 +221,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   return (
     <div className="relative h-full">
       <header 
-        className="shadow-sm py-3 px-4 flex items-center justify-between header h-full transition-colors"
+        className="shadow-sm py-2 px-4 flex items-center justify-between header h-full transition-colors"
         style={{ backgroundColor: colors.utility.secondaryBackground }}
       >
         {/* Left section */}
@@ -245,24 +242,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           {showTenantSwitcher && currentTenant && (
             <TenantSwitcher showFullName={true} className="mr-4" />
           )}
-          
-          <div className="relative hidden md:block">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="pl-10 pr-4 py-2 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 transition-colors"
-              style={{
-                backgroundColor: `${colors.utility.primaryText}10`,
-                color: colors.utility.primaryText,
-                '--tw-ring-color': colors.brand.primary
-              } as React.CSSProperties}
-            />
-            <Search 
-              size={18} 
-              className="absolute left-3 top-2.5 transition-colors"
-              style={{ color: colors.utility.secondaryText }}
-            />
-          </div>
         </div>
         
         {/* Right section */}

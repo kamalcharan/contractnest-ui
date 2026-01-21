@@ -55,6 +55,7 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
   const isSpareBlock = blockType === 'spare';
   const isBillingBlock = blockType === 'billing';
   const isServiceBlock = blockType === 'service';
+  const isTextBlock = blockType === 'text';
 
   // Get block type label
   const blockTypeLabel = BLOCK_TYPE_LABELS[blockType] || 'Block';
@@ -153,6 +154,54 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
     const tags = value.split(',').map(t => t.trim()).filter(t => t);
     onChange('tags', tags);
   }, [onChange]);
+
+  // Simplified view for Text Blocks - only Name and Icon
+  if (isTextBlock) {
+    return (
+      <div className="animate-in fade-in slide-in-from-right-4 duration-200">
+        {/* Header */}
+        <h2 className="text-lg font-bold mb-1" style={{ color: colors.utility.primaryText }}>
+          Text Block Details
+        </h2>
+        <p className="text-sm mb-6" style={{ color: colors.utility.secondaryText }}>
+          Give your text block a name and choose an icon.
+        </p>
+
+        {/* Single Card - Name and Icon only */}
+        <div className="max-w-2xl">
+          <div className="p-6 rounded-xl border" style={cardStyle}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Block Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                  Text Block Name <span style={{ color: colors.semantic.error }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Terms & Conditions"
+                  value={formData.name || ''}
+                  onChange={(e) => onChange('name', e.target.value)}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                  style={inputStyle}
+                  required
+                />
+                <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+                  This name will appear in templates and contracts
+                </p>
+              </div>
+
+              {/* Icon Picker */}
+              <IconPicker
+                value={formData.icon || 'FileText'}
+                onChange={(icon) => onChange('icon', icon)}
+                label="Block Icon"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-200">
@@ -347,47 +396,6 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
             </div>
           )}
 
-          {/* Block-specific fields - Billing */}
-          {isBillingBlock && (
-            <div className="p-5 rounded-xl border" style={cardStyle}>
-              <h4 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
-                <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                Billing Settings
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={labelStyle}>
-                    Payment Type <span style={{ color: colors.semantic.error }}>*</span>
-                  </label>
-                  <select
-                    value={(formData.meta?.paymentType as string) || 'upfront'}
-                    onChange={(e) => onChange('meta', { ...formData.meta, paymentType: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
-                    style={inputStyle}
-                  >
-                    <option value="upfront">100% Upfront</option>
-                    <option value="emi">EMI/Installments</option>
-                    <option value="milestone">Milestone-based</option>
-                    <option value="subscription">Recurring</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={labelStyle}>Invoice Trigger</label>
-                  <select
-                    value={(formData.meta?.invoiceTrigger as string) || 'auto'}
-                    onChange={(e) => onChange('meta', { ...formData.meta, invoiceTrigger: e.target.value })}
-                    className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2"
-                    style={inputStyle}
-                  >
-                    <option value="auto">Auto-generate</option>
-                    <option value="manual">Manual</option>
-                    <option value="completion">On Completion</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Tags Card */}
           <div className="p-5 rounded-xl border" style={cardStyle}>
             <label className="block text-sm font-medium mb-2 flex items-center gap-2" style={labelStyle}>
@@ -465,7 +473,6 @@ const BasicInfoStep: React.FC<BasicInfoStepProps> = ({ blockType, formData, onCh
                 <li>• Block Name</li>
                 <li>• Description</li>
                 {isSpareBlock && <li>• SKU</li>}
-                {isBillingBlock && <li>• Payment Type</li>}
               </ul>
             </div>
           </div>

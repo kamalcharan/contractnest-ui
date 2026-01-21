@@ -1,15 +1,17 @@
 // src/pages/catalog-studio/configure.tsx
 // v2.0: Added version conflict handling UI
+// v2.1: Use URL navigation instead of inline wizard for better space utilization
 
 import React, { useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useCatBlocksTest, getBlockVersion } from '@/hooks/queries/useCatBlocksTest';
 import { useCatBlockMutationOperations } from '@/hooks/mutations/useCatBlocksMutations';
-import { Block, WizardMode } from '@/types/catalogStudio';
+import { Block } from '@/types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
-import { CategoryPanel, BlockGrid, BlockWizard, BlockEditorPanel } from '@/components/catalog-studio';
+import { CategoryPanel, BlockGrid, BlockEditorPanel } from '@/components/catalog-studio';
 import toast from 'react-hot-toast';
 
 import {
@@ -94,6 +96,7 @@ const VersionConflictModal: React.FC<VersionConflictModalProps> = ({
 // =================================================================
 
 const CatalogStudioConfigurePage: React.FC = () => {
+  const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { user, isLive } = useAuth();
@@ -138,13 +141,9 @@ const CatalogStudioConfigurePage: React.FC = () => {
     return catBlocksToBlocks(rawBlocks);
   }, [blocksResponse]);
 
-  // State
+  // State (wizard uses URL navigation now)
   const [selectedCategory, setSelectedCategory] = useState<string>('service');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isWizardOpen, setIsWizardOpen] = useState<boolean>(false);
-  const [wizardMode, setWizardMode] = useState<WizardMode>('create');
-  const [wizardBlockType, setWizardBlockType] = useState<string>('service');
-  const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [isEditorPanelOpen, setIsEditorPanelOpen] = useState<boolean>(false);
 
@@ -156,25 +155,22 @@ const CatalogStudioConfigurePage: React.FC = () => {
     count: allBlocks.filter(block => block.categoryId === cat.id).length
   }));
 
-  // Handlers
-  const openWizard = (mode: WizardMode, blockType?: string, block?: Block) => {
-    setWizardMode(mode);
-    setWizardBlockType(blockType || selectedCategory);
-    setEditingBlock(block || null);
-    setIsWizardOpen(true);
+  // Navigation handlers (replaced inline wizard with URL-based navigation)
+  const navigateToCreateBlock = (blockType?: string) => {
+    const typeParam = blockType ? `?type=${blockType}` : `?type=${selectedCategory}`;
+    navigate(`/catalog-studio/blocks/new${typeParam}`);
   };
 
-  const closeWizard = () => {
-    setIsWizardOpen(false);
-    setEditingBlock(null);
+  const navigateToEditBlock = (block: Block) => {
+    navigate(`/catalog-studio/blocks/${block.id}/edit`);
   };
 
   // Get current user ID for audit fields
   const userId = user?.id || null;
 
-  // Calculate next sequence number for new blocks
-  const getNextSequenceNo = () => {
-    const blocks = allBlocks.filter(b => b.categoryId === wizardBlockType);
+  // Calculate next sequence number for new blocks (used for duplicate)
+  const getNextSequenceNo = (categoryId: string) => {
+    const blocks = allBlocks.filter(b => b.categoryId === categoryId);
     return blocks.length;
   };
 
@@ -182,41 +178,6 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const getExpectedVersion = (blockId: string): number | undefined => {
     const rawBlocks = blocksResponse?.data?.blocks;
     return getBlockVersion(rawBlocks || [], blockId);
-  };
-
-  // Handle save with version tracking for optimistic locking
-  const handleSaveBlock = async (blockData: Partial<Block>) => {
-    try {
-      if (wizardMode === 'edit' && editingBlock) {
-        // Get expected version for optimistic locking
-        const expectedVersion = getExpectedVersion(editingBlock.id);
-
-        console.log('📝 Updating block with expected version:', expectedVersion);
-
-        await updateBlock(
-          editingBlock.id,
-          blockToUpdateData(blockData, { userId }),
-          expectedVersion
-        );
-      } else {
-        const fullBlockData = {
-          ...blockData,
-          categoryId: wizardBlockType,
-          name: blockData.name || 'Untitled Block',
-        } as Block;
-
-        await createBlock(blockToCreateData(fullBlockData, {
-          userId,
-          sequenceNo: getNextSequenceNo(),
-          isLive,
-        }));
-      }
-      closeWizard();
-      refetch();
-    } catch (error) {
-      console.error('Save failed:', error);
-      // Error handling (including version conflicts) is done in the mutation hook
-    }
   };
 
   const handleDeleteBlock = async (block: Block) => {
@@ -238,7 +199,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const handleDuplicateBlock = async (block: Block) => {
     try {
       const duplicateData = {
-        ...blockToCreateData(block, { userId, sequenceNo: getNextSequenceNo(), isLive }),
+        ...blockToCreateData(block, { userId, sequenceNo: getNextSequenceNo(block.categoryId), isLive }),
         name: `${block.name} (Copy)`,
       };
       await createBlock(duplicateData);
@@ -336,9 +297,8 @@ const CatalogStudioConfigurePage: React.FC = () => {
 
           {/* New Block button */}
           <button
-            onClick={() => openWizard('create')}
-            disabled={isMutating}
-            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2 disabled:opacity-50"
+            onClick={() => navigateToCreateBlock()}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg flex items-center gap-2"
             style={{ backgroundColor: colors.brand.primary }}
           >
             <Plus className="w-4 h-4" />
@@ -360,8 +320,8 @@ const CatalogStudioConfigurePage: React.FC = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onBlockClick={(block) => { setSelectedBlock(block); setIsEditorPanelOpen(true); }}
-          onBlockDoubleClick={(block) => openWizard('edit', block.categoryId, block)}
-          onAddBlock={() => openWizard('create', selectedCategory)}
+          onBlockDoubleClick={(block) => navigateToEditBlock(block)}
+          onAddBlock={() => navigateToCreateBlock(selectedCategory)}
           selectedBlockId={selectedBlock?.id}
         />
         <BlockEditorPanel
@@ -371,23 +331,12 @@ const CatalogStudioConfigurePage: React.FC = () => {
           onSave={handleEditorSave}
           onEdit={(block) => {
             setIsEditorPanelOpen(false);
-            openWizard('edit', block.categoryId, block);
+            navigateToEditBlock(block);
           }}
           onDelete={() => selectedBlock && handleDeleteBlock(selectedBlock)}
           onDuplicate={() => selectedBlock && handleDuplicateBlock(selectedBlock)}
         />
       </div>
-
-      <BlockWizard
-        isOpen={isWizardOpen}
-        mode={wizardMode}
-        blockType={wizardBlockType}
-        editingBlock={editingBlock}
-        onClose={closeWizard}
-        onSave={handleSaveBlock}
-        onBlockTypeChange={setWizardBlockType}
-        fullPage={true}
-      />
 
       {/* Version Conflict Modal */}
       <VersionConflictModal

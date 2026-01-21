@@ -1,5 +1,5 @@
 // src/components/catalog-studio/BlockWizard/steps/billing/StructureStep.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Banknote, Target, RefreshCw, Lightbulb } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
 
@@ -18,6 +18,13 @@ const StructureStep: React.FC<StructureStepProps> = ({ formData, onChange }) => 
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [paymentType, setPaymentType] = useState(formData.paymentType || 'upfront');
+
+  // Set default value on mount if not already set
+  useEffect(() => {
+    if (!formData.paymentType) {
+      onChange('paymentType', 'upfront');
+    }
+  }, []); // Only run on mount
 
   const handleTypeChange = (type: string) => {
     setPaymentType(type);

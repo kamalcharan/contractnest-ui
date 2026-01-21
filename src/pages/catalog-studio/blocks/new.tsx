@@ -4,14 +4,16 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Save, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { Block, WizardMode } from '../../../types/catalogStudio';
-import { useBlockCategories } from '../../../hooks/queries/useBlockTypes';
+import { Block } from '../../../types/catalogStudio';
+import { useBlockCategories, usePricingModes } from '../../../hooks/queries/useBlockTypes';
 import { BLOCK_CATEGORIES } from '../../../utils/catalog-studio';
 import BlockWizardContent from '../../../components/catalog-studio/BlockWizard/BlockWizardContent';
 import { useCreateCatBlock } from '../../../hooks/mutations/useCatBlocksMutations';
 import { blockToCreateData } from '../../../utils/catalog-studio/catBlockAdapter';
+import { VaNiLoader } from '../../../components/common/loaders/UnifiedLoader';
+import { vaniToast } from '../../../components/common/toast/VaNiToast';
 
 // =================================================================
 // COMPONENT
@@ -33,7 +35,8 @@ const NewBlockPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Hooks
-  const { categories, isLoading: categoriesLoading } = useBlockCategories();
+  const { categories, isLoading: categoriesLoading, getDbIdByType } = useBlockCategories();
+  const { getDbIdByMode } = usePricingModes();
   const createBlockMutation = useCreateCatBlock();
 
   // Use DB categories if available, fallback to hardcoded
@@ -62,42 +65,57 @@ const NewBlockPage: React.FC = () => {
   const handleSave = useCallback(async (blockData: Partial<Block>) => {
     setIsSaving(true);
     try {
+      // Get UUIDs from lookup hooks
+      const blockTypeUuid = getDbIdByType(blockType);
+      const pricingModeUuid = getDbIdByMode('independent');
+
       // Add category ID to block data
       const fullBlockData = {
         ...blockData,
         categoryId: blockType,
       } as Block;
 
-      await createBlockMutation.mutateAsync(blockToCreateData(fullBlockData));
+      // Build create payload with UUIDs
+      const createPayload = {
+        ...blockToCreateData(fullBlockData),
+        block_type_id: blockTypeUuid, // Add the UUID
+        pricing_mode_id: pricingModeUuid, // Add the UUID
+      };
 
-      // Navigate back to blocks list on success
-      navigate('/catalog-studio/blocks', {
-        state: {
-          toast: {
-            type: 'success',
-            title: 'Block created',
-            description: blockData.name
-          }
-        }
-      });
+      await createBlockMutation.mutateAsync(createPayload);
+
+      // Show success toast and navigate back
+      vaniToast.success(`Block "${blockData.name}" created successfully`);
+      navigate('/catalog-studio/configure');
     } catch (error: any) {
       console.error('Failed to create block:', error);
-      // Stay on page and show error (could add toast here)
+      vaniToast.error(error?.response?.data?.message || 'Failed to create block. Please try again.');
     } finally {
       setIsSaving(false);
     }
-  }, [blockType, createBlockMutation, navigate]);
+  }, [blockType, createBlockMutation, navigate, getDbIdByType, getDbIdByMode]);
 
   const handleCancel = useCallback(() => {
-    // Navigate back to blocks list
-    navigate('/catalog-studio/blocks');
+    // Navigate back to configure page
+    navigate('/catalog-studio/configure');
   }, [navigate]);
 
   return (
     <div
-      className="h-full flex flex-col"
+      className="h-full flex flex-col relative"
       style={{ backgroundColor: colors.utility.secondaryBackground }}
     >
+      {/* Full-page loader overlay when saving */}
+      {isSaving && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <div
+            className="p-8 rounded-2xl shadow-2xl"
+            style={{ backgroundColor: colors.utility.primaryBackground }}
+          >
+            <VaNiLoader size="md" message="CREATING BLOCK" />
+          </div>
+        </div>
+      )}
       {/* Page Header */}
       <div
         className="border-b px-6 py-4 flex items-center justify-between"
@@ -111,7 +129,7 @@ const NewBlockPage: React.FC = () => {
             onClick={handleCancel}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             style={{ color: colors.utility.secondaryText }}
-            title="Back to Blocks"
+            title="Back to Configure"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -150,7 +168,7 @@ const NewBlockPage: React.FC = () => {
       {/* Main Content - Full Page Wizard */}
       <div className="flex-1 overflow-hidden">
         <div
-          className="h-full max-w-4xl mx-auto"
+          className="h-full"
           style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF' }}
         >
           <BlockWizardContent

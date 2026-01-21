@@ -31,10 +31,10 @@ export const STORAGE_CATEGORIES: StorageCategory[] = [
     description: 'Media files related to contracts',
     icon: 'FileContract',
     allowedTypes: [
-      'image/jpeg', 
-      'image/png', 
-      'application/pdf', 
-      'application/msword', 
+      'image/jpeg',
+      'image/png',
+      'application/pdf',
+      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ],
     maxFileSize: MAX_FILE_SIZE
@@ -53,11 +53,35 @@ export const STORAGE_CATEGORIES: StorageCategory[] = [
     description: 'General document storage',
     icon: 'File',
     allowedTypes: [
-      'application/pdf', 
-      'application/msword', 
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/plain'
     ],
+    maxFileSize: MAX_FILE_SIZE
+  },
+  {
+    id: 'block_icons',
+    name: 'Block Icons',
+    description: 'Custom icons for catalog blocks',
+    icon: 'Palette',
+    allowedTypes: ['image/png', 'image/svg+xml', 'image/jpeg'],
+    maxFileSize: 512 * 1024  // 512KB limit for icons
+  },
+  {
+    id: 'block_videos',
+    name: 'Block Videos',
+    description: 'Video content for video blocks',
+    icon: 'Video',
+    allowedTypes: ['video/mp4', 'video/webm', 'video/quicktime'],
+    maxFileSize: 100 * 1024 * 1024  // 100MB limit for videos
+  },
+  {
+    id: 'block_images',
+    name: 'Block Images',
+    description: 'Images for image blocks',
+    icon: 'Image',
+    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
     maxFileSize: MAX_FILE_SIZE
   }
 ];

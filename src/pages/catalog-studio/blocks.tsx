@@ -18,7 +18,7 @@ const catalogStudioFloatingIcons = [
   { Icon: Sparkles, top: '38%', left: '6%', delay: '2.5s', duration: '21s' },
 ];
 import { Block, WizardMode } from '../../types/catalogStudio';
-import { BLOCK_CATEGORIES, getCategoryById } from '../../utils/catalog-studio';
+import { BLOCK_CATEGORIES, getCategoryById, stripHtml } from '../../utils/catalog-studio';
 import { BlockWizard, BlockEditorPanel } from '../../components/catalog-studio';
 
 // API Hooks
@@ -751,7 +751,7 @@ const CatalogStudioBlocksPage: React.FC = () => {
                       className="text-xs line-clamp-2 mb-3"
                       style={{ color: colors.utility.secondaryText }}
                     >
-                      {block.description}
+                      {stripHtml(block.description)}
                     </p>
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -849,7 +849,7 @@ const CatalogStudioBlocksPage: React.FC = () => {
                         className="text-xs truncate"
                         style={{ color: colors.utility.secondaryText }}
                       >
-                        {block.description}
+                        {stripHtml(block.description)}
                       </p>
                     </div>
 
@@ -976,7 +976,7 @@ const CatalogStudioBlocksPage: React.FC = () => {
                     </div>
 
                     <p className="text-sm mb-4" style={{ color: colors.utility.secondaryText }}>
-                      {previewBlock.description}
+                      {stripHtml(previewBlock.description)}
                     </p>
 
                     <div className="grid grid-cols-2 gap-4 mb-4">
