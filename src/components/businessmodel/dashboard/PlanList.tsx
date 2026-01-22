@@ -33,7 +33,8 @@ const PlanList: React.FC<PlanListProps> = ({
   isLoading = false,
   pageSize = 10
 }) => {
-  const [filterActive, setFilterActive] = useState(true);
+  // Default to showing ALL plans (not just active) - admin needs to see all plans
+  const [filterActive, setFilterActive] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;

@@ -13,7 +13,8 @@ interface NavItemProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
-  const [isSubmenuOpen, setIsSubmenuOpen] = useState(false);
+  // Use defaultOpen from item config, fallback to false
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState(item.defaultOpen || false);
   const { isDarkMode, currentTheme } = useTheme();
 
   // Get theme colors
@@ -167,7 +168,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   // Get user data and industry from auth context
-  const { user, currentTenant, isAuthenticated } = useAuth();
+  const { user, currentTenant, isAuthenticated, hasCompletedOnboarding } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const [logoError, setLogoError] = useState(false);
   const [iconError, setIconError] = useState(false);
@@ -178,8 +179,22 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   // Get industry-specific menu items
   const menuItems = getMenuItemsForIndustry(user?.industry || currentTenant?.id);
 
+  // Check if user is owner and onboarding is not complete
+  const isOwner = currentTenant?.is_owner || false;
+  const showGettingStarted = !hasCompletedOnboarding && isOwner;
+
   // Filter items into regular and admin groups
-  const regularMenuItems = menuItems.filter(item => !item.adminOnly);
+  // Also filter out 'getting-started' if onboarding is complete or user is not owner
+  const regularMenuItems = menuItems.filter(item => {
+    if (!item.adminOnly) {
+      // Hide 'getting-started' if onboarding complete or not owner
+      if (item.id === 'getting-started' && !showGettingStarted) {
+        return false;
+      }
+      return true;
+    }
+    return false;
+  });
   const adminMenuItems = menuItems.filter(item => item.adminOnly);
 
   // Mock badge counts - in a real app, these would come from API/state
@@ -273,15 +288,55 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
 
       <div className="p-2 flex-1 overflow-y-auto">
         <nav className="py-4 space-y-1">
-          {/* Regular menu items */}
-          {regularMenuItems.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              collapsed={collapsed}
-              badge={notificationCounts[item.id]}
-            />
-          ))}
+          {/* Regular menu items with VaNi inserted between Contracts and Catalog Studio */}
+          {regularMenuItems.map((item, index) => {
+            const nextItem = regularMenuItems[index + 1];
+            const showVaNiAfter = item.id === 'contracts' && nextItem?.id === 'catalog-studio';
+
+            return (
+              <React.Fragment key={item.id}>
+                <NavItem
+                  item={item}
+                  collapsed={collapsed}
+                  badge={notificationCounts[item.id]}
+                />
+                {/* VaNi AI Card - between Contracts and Catalog Studio */}
+                {showVaNiAfter && !collapsed && (
+                  <div className="my-3 mx-2">
+                    <div
+                      className="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-4 shadow-xl border border-white/10 relative overflow-hidden group cursor-pointer hover:shadow-2xl transition-all"
+                      onClick={() => window.location.href = '/vani/chat'}
+                    >
+                      <div
+                        className="absolute -right-4 -top-4 w-16 h-16 blur-2xl rounded-full group-hover:opacity-60 transition-all"
+                        style={{ backgroundColor: `${colors.brand.primary}30` }}
+                      />
+
+                      <div className="flex items-center gap-3 relative z-10">
+                        <div className="relative">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-inner">
+                            <LucideIcons.Sparkles
+                              size={20}
+                              style={{ color: colors.brand.primary }}
+                            />
+                          </div>
+                          <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full animate-pulse" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-white tracking-widest uppercase">VaNi AI</h4>
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Autonomous Mode: ON</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-white/5">
+                        <p className="text-[10px] text-gray-400 leading-tight italic">"Ready to assist with your contracts."</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
 
           {/* Admin menu separator - only show if user is admin and there are admin items */}
           {isAdmin && adminMenuItems.length > 0 && (
@@ -314,39 +369,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
         </nav>
       </div>
 
-      <div className="mt-auto">
-        {!collapsed && (
-          <div
-            className="p-4 border-t transition-colors"
-            style={{ borderColor: `${colors.utility.primaryText}20` }}
-          >
-            <div
-              className="rounded-lg p-4 shadow-sm transition-colors"
-              style={{ backgroundColor: `${colors.utility.primaryText}10` }}
-            >
-              <p
-                className="text-sm font-medium transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Need help?
-              </p>
-              <p
-                className="text-xs mt-1 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Check our documentation or contact support
-              </p>
-              <button
-                className="mt-3 text-xs font-medium flex items-center transition-colors hover:opacity-80"
-                style={{ color: colors.brand.primary }}
-              >
-                View Documentation
-                <LucideIcons.ChevronRight size={14} className="ml-1" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Removed "Need help" section - replaced with VaNi AI card in main menu */}
     </aside>
   );
 };
