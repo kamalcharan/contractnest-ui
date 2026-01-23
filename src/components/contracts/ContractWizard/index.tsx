@@ -5,6 +5,14 @@ import { X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath } from './steps/PathSelectionStep';
+import TemplateSelectionStep from './steps/TemplateSelectionStep';
+import BuyerSelectionStep from './steps/BuyerSelectionStep';
+import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
+import ContractDetailsStep, { ContractDetailsData } from './steps/ContractDetailsStep';
+import BlockSelectionStep, { SelectedBlock } from './steps/BlockSelectionStep';
+
+// Re-export SelectedBlock from BlockSelectionStep
+export type { SelectedBlock } from './steps/BlockSelectionStep';
 
 // Wizard State Types
 export interface ContractWizardState {
@@ -13,22 +21,18 @@ export interface ContractWizardState {
   buyerId: string | null;
   buyerName: string;
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
+  // Contract Details (Step 3)
   contractName: string;
-  duration: number;
+  status: string;
   currency: string;
   description: string;
+  durationValue: number;
+  durationUnit: string;
+  gracePeriodValue: number;
+  gracePeriodUnit: string;
+  // Blocks & Total (Step 4)
   selectedBlocks: SelectedBlock[];
   totalValue: number;
-}
-
-export interface SelectedBlock {
-  id: string;
-  name: string;
-  quantity: number;
-  cycle: number;
-  unlimited: boolean;
-  price: number;
-  totalPrice: number;
 }
 
 interface ContractWizardProps {
@@ -60,6 +64,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Current step state
   const [currentStep, setCurrentStep] = useState(0);
 
+  // Sub-step for template selection (shown after choosing "From Template")
+  const [showTemplateSelection, setShowTemplateSelection] = useState(false);
+
   // Wizard data state
   const [wizardState, setWizardState] = useState<ContractWizardState>({
     path: null,
@@ -67,10 +74,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     buyerId: null,
     buyerName: '',
     acceptanceMethod: null,
+    // Contract Details (Step 3)
     contractName: '',
-    duration: 12,
-    currency: 'USD',
+    status: 'draft',
+    currency: 'INR', // Default to INR
     description: '',
+    durationValue: 1,
+    durationUnit: 'months',
+    gracePeriodValue: 0,
+    gracePeriodUnit: 'days',
+    // Blocks & Total
     selectedBlocks: [],
     totalValue: 0,
   });
@@ -96,6 +109,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Navigation validation
   const canGoNext = useCallback((): boolean => {
+    // If showing template selection sub-step
+    if (showTemplateSelection) {
+      // Can only proceed if a template is selected OR they click "switch to scratch"
+      return wizardState.templateId !== null;
+    }
+
     switch (currentStep) {
       case 0: // Path Selection
         return wizardState.path !== null;
@@ -104,7 +123,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       case 2: // Acceptance Method
         return wizardState.acceptanceMethod !== null;
       case 3: // Base Details
-        return wizardState.contractName.trim() !== '' && wizardState.duration > 0;
+        return wizardState.contractName.trim() !== '' && wizardState.durationValue > 0;
       case 4: // Block Assembly
         return wizardState.selectedBlocks.length > 0;
       case 5: // Review
@@ -112,9 +131,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       default:
         return false;
     }
-  }, [currentStep, wizardState]);
+  }, [currentStep, wizardState, showTemplateSelection]);
 
-  const canGoBack = currentStep > 0;
+  const canGoBack = currentStep > 0 || showTemplateSelection;
   const isLastStep = currentStep === TOTAL_STEPS - 1;
 
   // Navigation handlers
@@ -123,14 +142,29 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       // Complete the wizard
       onComplete?.(wizardState);
       onClose();
+    } else if (showTemplateSelection) {
+      // From template selection, go to buyer step
+      setShowTemplateSelection(false);
+      setCurrentStep(1);
     } else if (canGoNext()) {
-      setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
+      // Special handling for step 0 -> check if "From Template" was selected
+      if (currentStep === 0 && wizardState.path === 'template') {
+        setShowTemplateSelection(true);
+      } else {
+        setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
+      }
     }
-  }, [isLastStep, canGoNext, wizardState, onComplete, onClose]);
+  }, [isLastStep, canGoNext, wizardState, onComplete, onClose, showTemplateSelection, currentStep]);
 
   const handleBack = useCallback(() => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
-  }, []);
+    if (showTemplateSelection) {
+      // Go back to path selection
+      setShowTemplateSelection(false);
+      updateWizardState('templateId', null);
+    } else {
+      setCurrentStep((prev) => Math.max(prev - 1, 0));
+    }
+  }, [showTemplateSelection, updateWizardState]);
 
   // Path selection handler
   const handlePathSelect = useCallback(
@@ -140,8 +174,75 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     [updateWizardState]
   );
 
+  // Template selection handler
+  const handleTemplateSelect = useCallback(
+    (templateId: string) => {
+      updateWizardState('templateId', templateId);
+    },
+    [updateWizardState]
+  );
+
+  // Switch to scratch from template selection
+  const handleSwitchToScratch = useCallback(() => {
+    updateWizardState('path', 'scratch');
+    updateWizardState('templateId', null);
+    setShowTemplateSelection(false);
+    setCurrentStep(1); // Go to buyer selection
+  }, [updateWizardState]);
+
+  // Buyer selection handler
+  const handleBuyerSelect = useCallback(
+    (buyerId: string, buyerName: string) => {
+      updateWizardState('buyerId', buyerId || null);
+      updateWizardState('buyerName', buyerName);
+    },
+    [updateWizardState]
+  );
+
+  // Acceptance method selection handler
+  const handleAcceptanceMethodSelect = useCallback(
+    (method: AcceptanceMethod) => {
+      updateWizardState('acceptanceMethod', method);
+    },
+    [updateWizardState]
+  );
+
+  // Contract details change handler
+  const handleDetailsChange = useCallback(
+    (data: Partial<ContractDetailsData>) => {
+      setWizardState((prev) => ({ ...prev, ...data }));
+    },
+    []
+  );
+
+  // Blocks change handler
+  const handleBlocksChange = useCallback(
+    (blocks: SelectedBlock[]) => {
+      const totalValue = blocks.reduce((sum, block) => sum + block.totalPrice, 0);
+      setWizardState((prev) => ({
+        ...prev,
+        selectedBlocks: blocks,
+        totalValue,
+      }));
+    },
+    []
+  );
+
   // Render current step content
   const renderStepContent = () => {
+    // Show template selection sub-step if applicable
+    if (showTemplateSelection) {
+      return (
+        <TemplateSelectionStep
+          templates={[]} // Empty for now - will be populated from API
+          selectedTemplateId={wizardState.templateId}
+          onSelectTemplate={handleTemplateSelect}
+          onSwitchToScratch={handleSwitchToScratch}
+          isLoading={false}
+        />
+      );
+    }
+
     switch (currentStep) {
       case 0:
         return (
@@ -152,67 +253,42 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         );
       case 1:
         return (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h2
-                className="text-xl font-semibold mb-2"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Select Buyer
-              </h2>
-              <p style={{ color: colors.utility.secondaryText }}>
-                Step 2 - Buyer selection will be implemented here
-              </p>
-            </div>
-          </div>
+          <BuyerSelectionStep
+            selectedBuyerId={wizardState.buyerId}
+            selectedBuyerName={wizardState.buyerName}
+            onSelectBuyer={handleBuyerSelect}
+          />
         );
       case 2:
         return (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h2
-                className="text-xl font-semibold mb-2"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Acceptance Method
-              </h2>
-              <p style={{ color: colors.utility.secondaryText }}>
-                Step 3 - Acceptance options will be implemented here
-              </p>
-            </div>
-          </div>
+          <AcceptanceMethodStep
+            selectedMethod={wizardState.acceptanceMethod}
+            onSelectMethod={handleAcceptanceMethodSelect}
+          />
         );
       case 3:
         return (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h2
-                className="text-xl font-semibold mb-2"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Contract Details
-              </h2>
-              <p style={{ color: colors.utility.secondaryText }}>
-                Step 4 - Base details will be implemented here
-              </p>
-            </div>
-          </div>
+          <ContractDetailsStep
+            data={{
+              contractName: wizardState.contractName,
+              status: wizardState.status,
+              currency: wizardState.currency,
+              description: wizardState.description,
+              durationValue: wizardState.durationValue,
+              durationUnit: wizardState.durationUnit,
+              gracePeriodValue: wizardState.gracePeriodValue,
+              gracePeriodUnit: wizardState.gracePeriodUnit,
+            }}
+            onChange={handleDetailsChange}
+          />
         );
       case 4:
         return (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h2
-                className="text-xl font-semibold mb-2"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Add Service Blocks
-              </h2>
-              <p style={{ color: colors.utility.secondaryText }}>
-                Step 5 - Block assembly will be implemented here
-              </p>
-            </div>
-          </div>
+          <BlockSelectionStep
+            selectedBlocks={wizardState.selectedBlocks}
+            currency={wizardState.currency}
+            onBlocksChange={handleBlocksChange}
+          />
         );
       case 5:
         return (
@@ -279,11 +355,13 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               className="text-sm font-medium"
               style={{ color: colors.utility.secondaryText }}
             >
-              {wizardState.path === 'template'
-                ? 'From Template'
-                : wizardState.path === 'scratch'
-                  ? 'Custom Contract'
-                  : 'New Contract'}
+              {showTemplateSelection
+                ? 'Select Template'
+                : wizardState.path === 'template'
+                  ? 'From Template'
+                  : wizardState.path === 'scratch'
+                    ? 'Custom Contract'
+                    : 'New Contract'}
             </span>
           </div>
 
@@ -335,9 +413,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
         {/* Floating Action Island */}
         <FloatingActionIsland
-          currentStep={currentStep}
+          currentStep={showTemplateSelection ? 0 : currentStep}
           totalSteps={TOTAL_STEPS}
-          stepLabels={STEP_LABELS}
+          stepLabels={showTemplateSelection ? ['Select Template', ...STEP_LABELS.slice(1)] : STEP_LABELS}
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
