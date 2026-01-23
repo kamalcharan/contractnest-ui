@@ -9,10 +9,11 @@ import TemplateSelectionStep from './steps/TemplateSelectionStep';
 import BuyerSelectionStep from './steps/BuyerSelectionStep';
 import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
 import ContractDetailsStep, { ContractDetailsData } from './steps/ContractDetailsStep';
-import BlockSelectionStep, { SelectedBlock } from './steps/BlockSelectionStep';
+import ServiceBlocksStep from './steps/ServiceBlocksStep';
+import { ConfigurableBlock } from '@/components/catalog-studio';
 
-// Re-export SelectedBlock from BlockSelectionStep
-export type { SelectedBlock } from './steps/BlockSelectionStep';
+// Re-export ConfigurableBlock as SelectedBlock for backwards compatibility
+export type SelectedBlock = ConfigurableBlock;
 
 // Wizard State Types
 export interface ContractWizardState {
@@ -283,11 +284,28 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           />
         );
       case 4:
+        // Calculate contract duration in months
+        const durationInMonths = wizardState.durationUnit === 'months'
+          ? wizardState.durationValue
+          : wizardState.durationUnit === 'years'
+            ? wizardState.durationValue * 12
+            : Math.ceil(wizardState.durationValue / 30); // days to months
+
         return (
-          <BlockSelectionStep
+          <ServiceBlocksStep
             selectedBlocks={wizardState.selectedBlocks}
             currency={wizardState.currency}
             onBlocksChange={handleBlocksChange}
+            contractName={wizardState.contractName || 'New Contract'}
+            contractStatus={wizardState.status}
+            contractDuration={durationInMonths}
+            contractStartDate={new Date()}
+            // Buyer info - create a minimal buyer object from wizard state
+            selectedBuyer={wizardState.buyerId ? {
+              id: wizardState.buyerId,
+              contact_type: 'individual',
+              name: wizardState.buyerName,
+            } : undefined}
           />
         );
       case 5:

@@ -1,24 +1,32 @@
 // src/components/contracts/ContractWizard/steps/ContractDetailsStep.tsx
-// Step 3: Contract Details - Title, Status, Currency, Description, Duration, Grace Period
-import React, { useState, useEffect } from 'react';
+// Step 3: Contract Details - 2-Column Layout with Beautiful Cards
+// V2.0: Enhanced UX with status flow hint, duration presets, 3-node timeline
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   Clock,
   Calendar,
   ChevronDown,
   AlertCircle,
-  Info,
+  ArrowRight,
+  Coins,
+  Timer,
+  CircleDot,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
-import { currencyOptions, getDefaultCurrency } from '@/utils/constants/currencies';
+import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '@/utils/constants/currencies';
 import {
   CONTRACT_STATUS_CONFIG,
+  CONTRACT_STATUS_HEX_COLORS,
   DURATION_UNIT_CONFIG,
+  CONTRACT_DURATION_PRESETS,
   GRACE_PERIOD_PRESETS,
   CONTRACT_TITLE_MAX_LENGTH,
   CONTRACT_DESCRIPTION_MAX_LENGTH,
   getDurationLabel,
+  getContractStatusConfig,
 } from '@/utils/constants/contracts';
 
 export interface ContractDetailsData {
@@ -38,6 +46,27 @@ interface ContractDetailsStepProps {
   errors?: Partial<Record<keyof ContractDetailsData, string>>;
 }
 
+// Helper to get Lucide icon component by name
+const getIconComponent = (iconName: string) => {
+  const iconsMap = LucideIcons as unknown as Record<
+    string,
+    React.ComponentType<{ className?: string; size?: number; style?: React.CSSProperties }>
+  >;
+  return iconsMap[iconName] || LucideIcons.Circle;
+};
+
+// Status flow mapping - what comes after each status
+const STATUS_FLOW: Record<string, string | null> = {
+  draft: 'submitted',
+  submitted: 'accepted',
+  accepted: 'active',
+  active: 'completed',
+  completed: null,
+  cancelled: null,
+  expired: null,
+  on_hold: 'active',
+};
+
 const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
   data,
   onChange,
@@ -46,8 +75,9 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Local validation state
+  // Local state
   const [titleTouched, setTitleTouched] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   // Get default currency
   const defaultCurrency = getDefaultCurrency();
@@ -59,6 +89,47 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
     }
   }, []);
 
+  // Calculate dates for timeline
+  const timelineDates = useMemo(() => {
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    const graceEndDate = new Date(startDate);
+
+    // Calculate end date based on duration
+    if (data.durationUnit === 'days') {
+      endDate.setDate(endDate.getDate() + (data.durationValue || 0));
+    } else if (data.durationUnit === 'months') {
+      endDate.setMonth(endDate.getMonth() + (data.durationValue || 0));
+    } else if (data.durationUnit === 'years') {
+      endDate.setFullYear(endDate.getFullYear() + (data.durationValue || 0));
+    }
+
+    // Calculate grace period end
+    graceEndDate.setTime(endDate.getTime());
+    if (data.gracePeriodUnit === 'days') {
+      graceEndDate.setDate(graceEndDate.getDate() + (data.gracePeriodValue || 0));
+    } else if (data.gracePeriodUnit === 'months') {
+      graceEndDate.setMonth(graceEndDate.getMonth() + (data.gracePeriodValue || 0));
+    } else if (data.gracePeriodUnit === 'years') {
+      graceEndDate.setFullYear(graceEndDate.getFullYear() + (data.gracePeriodValue || 0));
+    }
+
+    const formatDate = (date: Date) => {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    return {
+      start: formatDate(startDate),
+      end: formatDate(endDate),
+      graceEnd: data.gracePeriodValue > 0 ? formatDate(graceEndDate) : null,
+    };
+  }, [data.durationValue, data.durationUnit, data.gracePeriodValue, data.gracePeriodUnit]);
+
+  // Get current status config
+  const currentStatusConfig = getContractStatusConfig(data.status);
+  const nextStatus = STATUS_FLOW[data.status];
+  const nextStatusConfig = nextStatus ? getContractStatusConfig(nextStatus) : null;
+
   // Handle input changes
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -67,8 +138,9 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
     }
   };
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange({ status: e.target.value });
+  const handleStatusChange = (statusId: string) => {
+    onChange({ status: statusId });
+    setShowStatusDropdown(false);
   };
 
   const handleCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -90,6 +162,10 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
     onChange({ durationUnit: e.target.value });
   };
 
+  const handleDurationPreset = (preset: { value: number; unit: string }) => {
+    onChange({ durationValue: preset.value, durationUnit: preset.unit });
+  };
+
   const handleGracePeriodValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value) || 0;
     if (value >= 0) {
@@ -101,7 +177,6 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
     onChange({ gracePeriodUnit: e.target.value });
   };
 
-  // Preset click handlers
   const handleGracePeriodPreset = (days: number) => {
     onChange({ gracePeriodValue: days, gracePeriodUnit: 'days' });
   };
@@ -117,30 +192,16 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
     color: colors.utility.primaryText,
   };
 
-  const inputFocusStyle = {
-    borderColor: colors.brand.primary,
-    outline: 'none',
-    boxShadow: `0 0 0 3px ${colors.brand.primary}20`,
-  };
-
-  const labelStyle = {
-    color: colors.utility.primaryText,
-  };
-
-  const secondaryTextStyle = {
-    color: colors.utility.secondaryText,
-  };
-
   return (
     <div
-      className="min-h-[60vh] px-4 py-8"
+      className="min-h-[60vh] px-4 py-6"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h2
-            className="text-2xl font-bold mb-3"
+            className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
             Contract Details
@@ -149,46 +210,53 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
             className="text-sm max-w-lg mx-auto"
             style={{ color: colors.utility.secondaryText }}
           >
-            Define the basic information for your contract including title,
-            duration, and terms.
+            Define the basic information for your contract
           </p>
         </div>
 
-        {/* Form Container */}
-        <div
-          className="rounded-2xl border p-6 space-y-6"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: `${colors.utility.primaryText}10`,
-          }}
-        >
-          {/* Contract Title */}
-          <div>
-            <label
-              className="flex items-center gap-2 text-sm font-medium mb-2"
-              style={labelStyle}
+        {/* 2-Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT COLUMN - Main Content (58%) */}
+          <div className="lg:col-span-7 space-y-5">
+            {/* Contract Title Card */}
+            <div
+              className="rounded-2xl border p-5"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}10`,
+              }}
             >
-              <FileText className="w-4 h-4" />
-              Contract Title
-              <span style={{ color: colors.semantic.error }}>*</span>
-            </label>
-            <div className="relative">
+              <label
+                className="flex items-center gap-2 text-sm font-semibold mb-3"
+                style={{ color: colors.utility.primaryText }}
+              >
+                <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                Contract Title
+                <span style={{ color: colors.semantic.error }}>*</span>
+              </label>
               <input
                 type="text"
                 value={data.contractName}
                 onChange={handleTitleChange}
                 onBlur={() => setTitleTouched(true)}
                 placeholder="Enter a descriptive title for this contract"
-                className="w-full px-4 py-3 rounded-xl border-2 transition-all focus:border-brand-primary"
+                className="w-full px-4 py-3 rounded-xl border-2 transition-all text-base"
                 style={{
                   ...inputBaseStyle,
                   borderColor: showTitleError
                     ? colors.semantic.error
-                    : `${colors.utility.primaryText}20`,
+                    : `${colors.utility.primaryText}15`,
                 }}
                 onFocus={(e) => {
                   e.target.style.borderColor = colors.brand.primary;
-                  e.target.style.boxShadow = `0 0 0 3px ${colors.brand.primary}20`;
+                  e.target.style.boxShadow = `0 0 0 3px ${colors.brand.primary}15`;
+                }}
+                onBlur={(e) => {
+                  setTitleTouched(true);
+                  e.target.style.boxShadow = 'none';
+                  if (!showTitleError) {
+                    e.target.style.borderColor = `${colors.utility.primaryText}15`;
+                  }
                 }}
               />
               <div className="flex items-center justify-between mt-2">
@@ -201,12 +269,12 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                     Contract title is required
                   </span>
                 ) : (
-                  <span className="text-xs" style={secondaryTextStyle}>
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
                     A clear, descriptive title helps identify this contract
                   </span>
                 )}
                 <span
-                  className="text-xs"
+                  className="text-xs font-medium"
                   style={{
                     color:
                       data.contractName.length > CONTRACT_TITLE_MAX_LENGTH - 10
@@ -218,64 +286,181 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Description Card */}
+            <div
+              className="rounded-2xl border p-5"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}10`,
+              }}
+            >
+              <RichTextEditor
+                label="Description"
+                value={data.description}
+                onChange={handleDescriptionChange}
+                placeholder="Describe the scope, terms, and deliverables of this contract..."
+                minHeight={120}
+                maxHeight={200}
+                maxLength={CONTRACT_DESCRIPTION_MAX_LENGTH}
+                showCharCount={true}
+                toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+              />
+            </div>
           </div>
 
-          {/* Status & Currency Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Status */}
-            <div>
+          {/* RIGHT COLUMN - Settings Cards (42%) */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* Status Card with Flow Hint */}
+            <div
+              className="rounded-2xl border p-4 relative"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}10`,
+              }}
+            >
               <label
-                className="flex items-center gap-2 text-sm font-medium mb-2"
-                style={labelStyle}
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider mb-3"
+                style={{ color: colors.utility.secondaryText }}
               >
-                <Clock className="w-4 h-4" />
+                <Clock className="w-3.5 h-3.5" />
                 Status
               </label>
+
+              {/* Custom Status Dropdown */}
               <div className="relative">
-                <select
-                  value={data.status}
-                  onChange={handleStatusChange}
-                  className="w-full px-4 py-3 rounded-xl border-2 appearance-none cursor-pointer transition-all"
-                  style={inputBaseStyle}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = colors.brand.primary;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = `${colors.utility.primaryText}20`;
+                <button
+                  type="button"
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  className="w-full px-4 py-3 rounded-xl border-2 flex items-center justify-between transition-all"
+                  style={{
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderColor: showStatusDropdown ? colors.brand.primary : `${colors.utility.primaryText}15`,
                   }}
                 >
-                  {CONTRACT_STATUS_CONFIG.map((status) => (
-                    <option key={status.id} value={status.id}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-                  style={{ color: colors.utility.secondaryText }}
-                />
+                  <div className="flex items-center gap-3">
+                    {currentStatusConfig && (
+                      <>
+                        {React.createElement(getIconComponent(currentStatusConfig.lucideIcon), {
+                          className: "w-5 h-5",
+                          style: { color: CONTRACT_STATUS_HEX_COLORS[currentStatusConfig.colorKey] }
+                        })}
+                        <span
+                          className="font-semibold"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {currentStatusConfig.label}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown
+                    className={`w-5 h-5 transition-transform ${showStatusDropdown ? 'rotate-180' : ''}`}
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showStatusDropdown && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-2 rounded-xl border shadow-lg z-20 py-2 max-h-64 overflow-auto"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: `${colors.utility.primaryText}15`,
+                    }}
+                  >
+                    {CONTRACT_STATUS_CONFIG.map((status) => {
+                      const isSelected = data.status === status.id;
+                      const statusColor = CONTRACT_STATUS_HEX_COLORS[status.colorKey];
+                      return (
+                        <button
+                          key={status.id}
+                          onClick={() => handleStatusChange(status.id)}
+                          className="w-full px-4 py-2.5 text-left flex items-center gap-3 hover:opacity-80 transition-opacity"
+                          style={{
+                            backgroundColor: isSelected ? `${statusColor}15` : 'transparent',
+                          }}
+                        >
+                          {React.createElement(getIconComponent(status.lucideIcon), {
+                            className: "w-4 h-4",
+                            style: { color: statusColor }
+                          })}
+                          <div className="flex-1">
+                            <span
+                              className="font-medium text-sm"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              {status.label}
+                            </span>
+                            <p
+                              className="text-xs"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              {status.description}
+                            </p>
+                          </div>
+                          {isSelected && (
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: statusColor }}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+
+              {/* Next Status Hint */}
+              {nextStatusConfig && (
+                <div
+                  className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg"
+                  style={{ backgroundColor: `${colors.brand.primary}08` }}
+                >
+                  <ArrowRight className="w-3.5 h-3.5" style={{ color: colors.brand.primary }} />
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Next:
+                  </span>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    {nextStatusConfig.label}
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Currency */}
-            <div>
+            {/* Currency Card */}
+            <div
+              className="rounded-2xl border p-4"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}10`,
+              }}
+            >
               <label
-                className="flex items-center gap-2 text-sm font-medium mb-2"
-                style={labelStyle}
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider mb-3"
+                style={{ color: colors.utility.secondaryText }}
               >
+                <Coins className="w-3.5 h-3.5" />
                 Currency
               </label>
               <div className="relative">
                 <select
                   value={data.currency || defaultCurrency.code}
                   onChange={handleCurrencyChange}
-                  className="w-full px-4 py-3 rounded-xl border-2 appearance-none cursor-pointer transition-all"
-                  style={inputBaseStyle}
+                  className="w-full px-4 py-3 rounded-xl border-2 appearance-none cursor-pointer transition-all text-base font-medium"
+                  style={{
+                    ...inputBaseStyle,
+                    borderColor: `${colors.utility.primaryText}15`,
+                  }}
                   onFocus={(e) => {
                     e.target.style.borderColor = colors.brand.primary;
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = `${colors.utility.primaryText}20`;
+                    e.target.style.borderColor = `${colors.utility.primaryText}15`;
                   }}
                 >
                   {currencyOptions.map((currency) => (
@@ -285,203 +470,297 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                   ))}
                 </select>
                 <ChevronDown
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
                   style={{ color: colors.utility.secondaryText }}
                 />
               </div>
             </div>
-          </div>
 
-          {/* Description */}
-          <div>
-            <RichTextEditor
-              label="Description"
-              value={data.description}
-              onChange={handleDescriptionChange}
-              placeholder="Describe the scope, terms, and deliverables of this contract..."
-              minHeight={150}
-              maxHeight={300}
-              maxLength={CONTRACT_DESCRIPTION_MAX_LENGTH}
-              showCharCount={true}
-              toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
-            />
-          </div>
-
-          {/* Duration Section */}
-          <div
-            className="p-4 rounded-xl border"
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderColor: `${colors.utility.primaryText}10`,
-            }}
-          >
-            <label
-              className="flex items-center gap-2 text-sm font-medium mb-4"
-              style={labelStyle}
+            {/* Duration & Timeline Card */}
+            <div
+              className="rounded-2xl border p-4"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: `${colors.utility.primaryText}10`,
+              }}
             >
-              <Calendar className="w-4 h-4" />
-              Contract Duration
-            </label>
+              <label
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider mb-3"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                Duration & Timeline
+              </label>
 
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="1"
-                value={data.durationValue || ''}
-                onChange={handleDurationValueChange}
-                placeholder="0"
-                className="w-24 px-4 py-3 rounded-xl border-2 text-center transition-all"
-                style={inputBaseStyle}
-                onFocus={(e) => {
-                  e.target.style.borderColor = colors.brand.primary;
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = `${colors.utility.primaryText}20`;
-                }}
-              />
-              <div className="relative flex-1 max-w-[180px]">
-                <select
-                  value={data.durationUnit}
-                  onChange={handleDurationUnitChange}
-                  className="w-full px-4 py-3 rounded-xl border-2 appearance-none cursor-pointer transition-all"
-                  style={inputBaseStyle}
+              {/* Duration Presets */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {CONTRACT_DURATION_PRESETS.map((preset) => {
+                  const isSelected =
+                    data.durationValue === preset.value && data.durationUnit === preset.unit;
+                  return (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => handleDurationPreset(preset)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        backgroundColor: isSelected
+                          ? colors.brand.primary
+                          : `${colors.utility.primaryText}08`,
+                        color: isSelected ? '#fff' : colors.utility.primaryText,
+                        border: `1px solid ${
+                          isSelected ? colors.brand.primary : `${colors.utility.primaryText}12`
+                        }`,
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Duration Input */}
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="number"
+                  min="1"
+                  value={data.durationValue || ''}
+                  onChange={handleDurationValueChange}
+                  placeholder="0"
+                  className="w-20 px-3 py-2.5 rounded-xl border-2 text-center transition-all font-semibold"
+                  style={{
+                    ...inputBaseStyle,
+                    borderColor: `${colors.utility.primaryText}15`,
+                  }}
                   onFocus={(e) => {
                     e.target.style.borderColor = colors.brand.primary;
                   }}
                   onBlur={(e) => {
-                    e.target.style.borderColor = `${colors.utility.primaryText}20`;
+                    e.target.style.borderColor = `${colors.utility.primaryText}15`;
                   }}
-                >
-                  {DURATION_UNIT_CONFIG.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-                  style={{ color: colors.utility.secondaryText }}
                 />
-              </div>
-              {data.durationValue > 0 && (
-                <span
-                  className="text-sm px-3 py-2 rounded-lg"
-                  style={{
-                    backgroundColor: `${colors.brand.primary}10`,
-                    color: colors.brand.primary,
-                  }}
-                >
-                  {getDurationLabel(data.durationValue, data.durationUnit)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Grace Period Section */}
-          <div
-            className="p-4 rounded-xl border"
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderColor: `${colors.utility.primaryText}10`,
-            }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <label
-                className="flex items-center gap-2 text-sm font-medium"
-                style={labelStyle}
-              >
-                <Clock className="w-4 h-4" />
-                Grace Period / Prolongation
-              </label>
-              <div
-                className="flex items-center gap-1 text-xs"
-                style={secondaryTextStyle}
-              >
-                <Info className="w-3 h-3" />
-                Optional extension period
-              </div>
-            </div>
-
-            {/* Quick Presets */}
-            <div className="flex flex-wrap gap-2 mb-4">
-              {GRACE_PERIOD_PRESETS.map((preset) => {
-                const isSelected =
-                  data.gracePeriodValue === preset.value &&
-                  (preset.value === 0 || data.gracePeriodUnit === 'days');
-                return (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => handleGracePeriodPreset(preset.value)}
-                    className="px-3 py-1.5 rounded-lg text-sm transition-all"
+                <div className="relative flex-1">
+                  <select
+                    value={data.durationUnit}
+                    onChange={handleDurationUnitChange}
+                    className="w-full px-3 py-2.5 rounded-xl border-2 appearance-none cursor-pointer transition-all font-medium"
                     style={{
-                      backgroundColor: isSelected
-                        ? colors.brand.primary
-                        : `${colors.utility.primaryText}08`,
-                      color: isSelected ? '#fff' : colors.utility.primaryText,
-                      border: `1px solid ${
-                        isSelected ? colors.brand.primary : `${colors.utility.primaryText}15`
-                      }`,
+                      ...inputBaseStyle,
+                      borderColor: `${colors.utility.primaryText}15`,
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = colors.brand.primary;
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = `${colors.utility.primaryText}15`;
                     }}
                   >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Custom Input */}
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="0"
-                value={data.gracePeriodValue || ''}
-                onChange={handleGracePeriodValueChange}
-                placeholder="0"
-                className="w-24 px-4 py-3 rounded-xl border-2 text-center transition-all"
-                style={inputBaseStyle}
-                onFocus={(e) => {
-                  e.target.style.borderColor = colors.brand.primary;
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = `${colors.utility.primaryText}20`;
-                }}
-              />
-              <div className="relative flex-1 max-w-[180px]">
-                <select
-                  value={data.gracePeriodUnit}
-                  onChange={handleGracePeriodUnitChange}
-                  className="w-full px-4 py-3 rounded-xl border-2 appearance-none cursor-pointer transition-all"
-                  style={inputBaseStyle}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = colors.brand.primary;
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = `${colors.utility.primaryText}20`;
-                  }}
-                >
-                  {DURATION_UNIT_CONFIG.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-                  style={{ color: colors.utility.secondaryText }}
-                />
+                    {DURATION_UNIT_CONFIG.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                </div>
               </div>
-              {data.gracePeriodValue > 0 && (
-                <span
-                  className="text-sm px-3 py-2 rounded-lg"
-                  style={{
-                    backgroundColor: `${colors.semantic.warning}15`,
-                    color: colors.semantic.warning,
-                  }}
+
+              {/* 3-Node Timeline */}
+              {data.durationValue > 0 && (
+                <div
+                  className="p-3 rounded-xl"
+                  style={{ backgroundColor: `${colors.brand.primary}06` }}
                 >
-                  +{getDurationLabel(data.gracePeriodValue, data.gracePeriodUnit)}
-                </span>
+                  <div className="flex items-center justify-between mb-2">
+                    {/* Start Node */}
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: colors.semantic.success }}
+                      />
+                      <span
+                        className="text-[10px] font-semibold mt-1"
+                        style={{ color: colors.semantic.success }}
+                      >
+                        START
+                      </span>
+                      <span
+                        className="text-[10px]"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        {timelineDates.start}
+                      </span>
+                    </div>
+
+                    {/* Line to End */}
+                    <div
+                      className="flex-1 h-0.5 mx-2"
+                      style={{ backgroundColor: colors.brand.primary }}
+                    />
+
+                    {/* End Node */}
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: colors.brand.primary }}
+                      />
+                      <span
+                        className="text-[10px] font-semibold mt-1"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        END
+                      </span>
+                      <span
+                        className="text-[10px]"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        {timelineDates.end}
+                      </span>
+                    </div>
+
+                    {/* Line to Grace (if grace period exists) */}
+                    {timelineDates.graceEnd && (
+                      <>
+                        <div
+                          className="flex-1 h-0.5 mx-2"
+                          style={{
+                            backgroundColor: colors.semantic.warning,
+                            backgroundImage: `repeating-linear-gradient(90deg, ${colors.semantic.warning}, ${colors.semantic.warning} 4px, transparent 4px, transparent 8px)`,
+                          }}
+                        />
+
+                        {/* Grace Node */}
+                        <div className="flex flex-col items-center">
+                          <div
+                            className="w-3 h-3 rounded-full border-2"
+                            style={{
+                              borderColor: colors.semantic.warning,
+                              backgroundColor: 'transparent',
+                            }}
+                          />
+                          <span
+                            className="text-[10px] font-semibold mt-1"
+                            style={{ color: colors.semantic.warning }}
+                          >
+                            GRACE
+                          </span>
+                          <span
+                            className="text-[10px]"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
+                            {timelineDates.graceEnd}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               )}
+
+              {/* Grace Period Section */}
+              <div
+                className="mt-4 pt-4 border-t"
+                style={{ borderColor: `${colors.utility.primaryText}10` }}
+              >
+                <label
+                  className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider mb-3"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <Timer className="w-3.5 h-3.5" />
+                  Grace Period / Prolongation
+                </label>
+
+                {/* Grace Period Presets */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {GRACE_PERIOD_PRESETS.map((preset) => {
+                    const isSelected =
+                      data.gracePeriodValue === preset.value &&
+                      (preset.value === 0 || data.gracePeriodUnit === 'days');
+                    return (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        onClick={() => handleGracePeriodPreset(preset.value)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        style={{
+                          backgroundColor: isSelected
+                            ? colors.semantic.warning
+                            : `${colors.utility.primaryText}08`,
+                          color: isSelected ? '#fff' : colors.utility.primaryText,
+                          border: `1px solid ${
+                            isSelected ? colors.semantic.warning : `${colors.utility.primaryText}12`
+                          }`,
+                        }}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Grace Input */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    value={data.gracePeriodValue || ''}
+                    onChange={handleGracePeriodValueChange}
+                    placeholder="0"
+                    className="w-20 px-3 py-2.5 rounded-xl border-2 text-center transition-all font-semibold"
+                    style={{
+                      ...inputBaseStyle,
+                      borderColor: `${colors.utility.primaryText}15`,
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = colors.semantic.warning;
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = `${colors.utility.primaryText}15`;
+                    }}
+                  />
+                  <div className="relative flex-1">
+                    <select
+                      value={data.gracePeriodUnit}
+                      onChange={handleGracePeriodUnitChange}
+                      className="w-full px-3 py-2.5 rounded-xl border-2 appearance-none cursor-pointer transition-all font-medium"
+                      style={{
+                        ...inputBaseStyle,
+                        borderColor: `${colors.utility.primaryText}15`,
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = colors.semantic.warning;
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = `${colors.utility.primaryText}15`;
+                      }}
+                    >
+                      {DURATION_UNIT_CONFIG.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                  </div>
+                </div>
+
+                {/* Grace Period Info */}
+                {data.gracePeriodValue > 0 && (
+                  <p
+                    className="text-xs mt-2 flex items-center gap-1"
+                    style={{ color: colors.semantic.warning }}
+                  >
+                    <CircleDot className="w-3 h-3" />
+                    +{getDurationLabel(data.gracePeriodValue, data.gracePeriodUnit)} extra after contract ends
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -494,6 +773,14 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
           These details can be modified before sending the contract to the buyer
         </p>
       </div>
+
+      {/* Click outside to close dropdown */}
+      {showStatusDropdown && (
+        <div
+          className="fixed inset-0 z-10"
+          onClick={() => setShowStatusDropdown(false)}
+        />
+      )}
     </div>
   );
 };
