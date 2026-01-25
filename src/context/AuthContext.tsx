@@ -41,6 +41,7 @@ interface User {
   first_name: string;
   last_name: string;
   user_code?: string;
+  avatar_url?: string; // Profile picture URL
   preferred_language?: string;
   preferred_theme?: string;
   is_dark_mode?: boolean;

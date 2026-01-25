@@ -15,8 +15,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  // Onboarding redirects are handled by AuthContext during login flow
-  const { login, isAuthenticated, isLoading, error, clearError } = useAuth();
+  // FIXED: Added hasCompletedOnboarding and currentTenant to properly handle redirects
+  const { login, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding, currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -38,15 +38,25 @@ const LoginPage: React.FC = () => {
     });
   }, []);
 
-  // Redirect if already authenticated
-  // NOTE: Onboarding redirects are handled by AuthContext during login
-  // This just handles the case where user navigates to /login while already authenticated
+  // FIXED: Redirect if already authenticated - but RESPECT onboarding status
+  // This handles the case where user navigates to /login while already authenticated
+  // The login() function in AuthContext handles onboarding redirects during login flow
+  // This useEffect only handles direct navigation to /login when already logged in
   useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      // Just go to dashboard - AuthContext handles onboarding redirects during login flow
-      navigate('/dashboard', { replace: true });
+    if (isAuthenticated && !isLoading && currentTenant) {
+      // Check onboarding status before redirecting
+      if (hasCompletedOnboarding) {
+        console.log('[LoginPage] Already authenticated with completed onboarding - redirecting to dashboard');
+        navigate('/dashboard', { replace: true });
+      } else if (currentTenant.is_owner) {
+        console.log('[LoginPage] Already authenticated but onboarding not complete (owner) - redirecting to onboarding');
+        navigate('/onboarding', { replace: true });
+      } else {
+        console.log('[LoginPage] Already authenticated but onboarding not complete (non-owner) - redirecting to pending');
+        navigate('/onboarding-pending', { replace: true });
+      }
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate, hasCompletedOnboarding, currentTenant]);
 
   // Check for message from navigate state (e.g., after registration)
   useEffect(() => {
@@ -85,8 +95,9 @@ const LoginPage: React.FC = () => {
       analyticsService.trackEvent(AUTH_EVENTS.LOGIN_SUCCESS, {
         method: 'email'
       });
-      // The redirect will happen automatically from the isAuthenticated useEffect
-      // which will now check onboarding status
+      // FIXED: Redirect is now handled by AuthContext during login flow
+      // The login() function will navigate to the correct page based on onboarding status
+      // DO NOT navigate here - let AuthContext handle it
     } catch (err) {
       // Track login failure
       analyticsService.trackEvent(AUTH_EVENTS.LOGIN_FAILURE, {

@@ -3,6 +3,7 @@ import React from 'react';
 import { Building2, Users, Shield, Calendar, ExternalLink } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 
 interface WorkspacesSectionProps {
@@ -12,7 +13,34 @@ interface WorkspacesSectionProps {
 const WorkspacesSection: React.FC<WorkspacesSectionProps> = ({ profile }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
+  const { tenants, currentTenant } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // Use tenants from AuthContext, fallback to profile.workspaces if available
+  // Map tenants to workspace format for display
+  const workspaces = React.useMemo(() => {
+    // If profile has workspaces with full data, use those
+    if (profile?.workspaces && profile.workspaces.length > 0) {
+      return profile.workspaces;
+    }
+
+    // Otherwise, map tenants from AuthContext to workspace format
+    if (tenants && tenants.length > 0) {
+      return tenants.map((tenant: any) => ({
+        id: tenant.id,
+        name: tenant.name,
+        workspace_code: tenant.workspace_code,
+        is_default: tenant.is_default || (currentTenant?.id === tenant.id),
+        is_owner: tenant.is_owner || false,
+        joined_at: tenant.created_at || null,
+        member_count: tenant.member_count || null,
+        role: tenant.is_owner ? 'owner' : (tenant.is_admin ? 'admin' : 'member'),
+        permissions: tenant.permissions || []
+      }));
+    }
+
+    return [];
+  }, [profile?.workspaces, tenants, currentTenant]);
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -63,21 +91,21 @@ const WorkspacesSection: React.FC<WorkspacesSectionProps> = ({ profile }) => {
             Workspace Access
           </h2>
         </div>
-        <span 
+        <span
           className="text-sm px-3 py-1 rounded-full"
           style={{
             backgroundColor: colors.brand.primary + '10',
             color: colors.brand.primary
           }}
         >
-          {profile?.workspaces?.length || 0} Workspace{(profile?.workspaces?.length || 0) !== 1 ? 's' : ''}
+          {workspaces.length || 0} Workspace{workspaces.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Workspaces List */}
-      {profile?.workspaces && profile.workspaces.length > 0 ? (
+      {workspaces && workspaces.length > 0 ? (
         <div className="space-y-3">
-          {profile.workspaces.map((workspace: any) => (
+          {workspaces.map((workspace: any) => (
             <div 
               key={workspace.id}
               className="p-4 rounded-lg border transition-colors hover:shadow-md"
@@ -188,7 +216,7 @@ const WorkspacesSection: React.FC<WorkspacesSectionProps> = ({ profile }) => {
 
                 {/* View Workspace Button */}
                 <button
-                  onClick={() => navigate(`/workspaces/${workspace.id}`)}
+                  onClick={() => navigate('/settings/users')}
                   className="ml-4 p-2 rounded-md transition-colors hover:opacity-80"
                   style={{
                     backgroundColor: colors.utility.primaryBackground,

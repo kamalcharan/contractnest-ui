@@ -25,7 +25,7 @@ const CompleteStep: React.FC = () => {
   const navigate = useNavigate();
   const { onComplete, isSubmitting } = useOutletContext<OnboardingStepContext>();
   const { isDarkMode, currentTheme } = useTheme();
-  const { user, currentTenant } = useAuth();
+  const { user, currentTenant, markOnboardingComplete } = useAuth();
   const [isCompleting, setIsCompleting] = useState(false);
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -34,6 +34,8 @@ const CompleteStep: React.FC = () => {
     setIsCompleting(true);
     try {
       await onComplete({ acknowledged: true });
+      // Mark onboarding as complete in AuthContext (updates state + sessionStorage)
+      markOnboardingComplete();
       // Navigate to dashboard after completion
       navigate('/dashboard');
     } catch (error) {

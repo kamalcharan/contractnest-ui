@@ -414,18 +414,32 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           
           {/* User menu */}
           <div className="relative" ref={userMenuRef}>
-            <button 
+            <button
               onClick={toggleUserMenu}
               className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:opacity-80"
               style={{ backgroundColor: `${colors.utility.primaryText}10` }}
               aria-label="User menu"
             >
-              <div 
-                className="h-8 w-8 rounded-full flex items-center justify-center text-white"
+              {/* Avatar - Show profile picture if available, otherwise show initial or icon */}
+              {user?.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt={`${user.first_name || 'User'}'s avatar`}
+                  className="h-8 w-8 rounded-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initial if image fails to load
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div
+                className={`h-8 w-8 rounded-full flex items-center justify-center text-white ${user?.avatar_url ? 'hidden' : ''}`}
                 style={{ backgroundColor: colors.brand.primary }}
               >
                 {user?.first_name ? (
-                  <span>{user.first_name.charAt(0)}</span>
+                  <span>{user.first_name.charAt(0).toUpperCase()}</span>
                 ) : (
                   <User size={20} />
                 )}

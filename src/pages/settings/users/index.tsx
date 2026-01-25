@@ -1,15 +1,16 @@
 // src/pages/settings/users/index.tsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Users, 
-  UserPlus, 
+import {
+  ArrowLeft,
+  Users,
+  UserPlus,
   Download,
   RefreshCw,
   Settings,
   Shield,
-  AlertCircle
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { useInvitations } from '@/hooks/useInvitations';
 import { useUsers } from '@/hooks/useUsers';
@@ -25,16 +26,16 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { Invitation } from '@/hooks/useInvitations';
 
-type TabType = 'all' | 'active' | 'pending';
+type TabType = 'all' | 'active' | 'pending' | 'cancelled';
 
 const UsersPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentTenant, user: currentUser } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // Use the hooks for real data with autoLoad false for lazy loading
   const {
     users,
@@ -47,7 +48,7 @@ const UsersPage: React.FC = () => {
     invitedCount,
     suspendedCount
   } = useUsers({ autoLoad: false });
-  
+
   const {
     invitations,
     loading: invitationsLoading,
@@ -67,8 +68,38 @@ const UsersPage: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
-  const [dataLoaded, setDataLoaded] = useState<Record<TabType, boolean>>({ all: false, active: false, pending: false });
+  const [dataLoaded, setDataLoaded] = useState<Record<TabType, boolean>>({ all: false, active: false, pending: false, cancelled: false });
   const [countsLoaded, setCountsLoaded] = useState(false);
+
+  // Separate state for cancelled invitations
+  const [cancelledInvitations, setCancelledInvitations] = useState<Invitation[]>([]);
+  const [cancelledLoading, setCancelledLoading] = useState(false);
+  const [cancelledCount, setCancelledCount] = useState(0);
+
+  // Fetch cancelled invitations
+  const fetchCancelledInvitations = async () => {
+    if (!currentTenant?.id) return;
+
+    setCancelledLoading(true);
+    try {
+      const response = await api.get('/api/users/invitations', {
+        params: {
+          status: 'cancelled',
+          page: 1,
+          limit: 50 // Get all cancelled invitations
+        }
+      });
+
+      setCancelledInvitations(response.data.data || []);
+      setCancelledCount(response.data.pagination?.total || response.data.data?.length || 0);
+    } catch (error) {
+      console.error('Error fetching cancelled invitations:', error);
+      setCancelledInvitations([]);
+      setCancelledCount(0);
+    } finally {
+      setCancelledLoading(false);
+    }
+  };
 
   // Load counts for all tabs on initial mount (for tab badges)
   useEffect(() => {
@@ -81,7 +112,8 @@ const UsersPage: React.FC = () => {
           fetchUsers(1, 'all'),
           fetchUsers(1, 'active'),
           fetchUsers(1, 'invited'),
-          fetchInvitations(1, 'pending')
+          fetchInvitations(1, 'pending'),
+          fetchCancelledInvitations()
         ]);
         setCountsLoaded(true);
       } catch (error) {
@@ -111,6 +143,9 @@ const UsersPage: React.FC = () => {
             fetchInvitations(1, 'pending')
           ]);
           break;
+        case 'cancelled':
+          await fetchCancelledInvitations();
+          break;
       }
 
       setDataLoaded(prev => ({ ...prev, [activeTab]: true }));
@@ -130,25 +165,25 @@ const UsersPage: React.FC = () => {
   useEffect(() => {
     const fetchRoles = async () => {
       if (!currentTenant?.id) return;
-      
+
       setRolesLoading(true);
       try {
         // Get categories from masterdata API
         const categoriesResponse = await api.get(
           `${API_ENDPOINTS.MASTERDATA.CATEGORIES}?tenantId=${currentTenant.id}`
         );
-        
+
         const categories = categoriesResponse.data;
         const rolesCategory = categories.find((c: any) => c.CategoryName === 'Roles' || c.DisplayName === 'Roles');
-        
+
         if (rolesCategory) {
           // Get role details from masterdata API
           const rolesResponse = await api.get(
             `${API_ENDPOINTS.MASTERDATA.CATEGORY_DETAILS}?categoryId=${rolesCategory.id}&tenantId=${currentTenant.id}`
           );
-          
+
           const roleDetails = rolesResponse.data;
-          
+
           // Transform to match expected format
           const transformedRoles = roleDetails
             .filter((r: any) => r.is_active)
@@ -157,7 +192,7 @@ const UsersPage: React.FC = () => {
               name: role.DisplayName,
               description: role.Description || undefined
             }));
-          
+
           setAvailableRoles(transformedRoles);
         }
       } catch (error) {
@@ -181,8 +216,8 @@ const UsersPage: React.FC = () => {
     setIsRefreshing(true);
     try {
       // Reset loaded state to force reload
-      setDataLoaded({ all: false, active: false, pending: false });
-      
+      setDataLoaded({ all: false, active: false, pending: false, cancelled: false });
+
       // Reload current tab data
       switch (activeTab) {
         case 'all':
@@ -197,8 +232,11 @@ const UsersPage: React.FC = () => {
             fetchInvitations(1, 'pending')
           ]);
           break;
+        case 'cancelled':
+          await fetchCancelledInvitations();
+          break;
       }
-      
+
       setDataLoaded(prev => ({ ...prev, [activeTab]: true }));
       vaniToast.success('Data refreshed');
     } catch (error) {
@@ -224,7 +262,7 @@ const UsersPage: React.FC = () => {
       ]);
 
       // Reset loaded state to force refresh of all tabs
-      setDataLoaded({ all: false, active: false, pending: false });
+      setDataLoaded({ all: false, active: false, pending: false, cancelled: false });
 
       // Refresh current tab display if needed
       if (activeTab !== 'all') {
@@ -255,13 +293,25 @@ const UsersPage: React.FC = () => {
     const user = users.find(u => u.user_id === userId);
 if (user?.status === 'invited') {
       // Find corresponding invitation
-      const invitation = invitations.find(inv => 
+      const invitation = invitations.find(inv =>
         inv.email === user.email || inv.mobile_number === user.mobile_number
       );
       if (invitation) {
         await resendInvitation(invitation.id);
       }
     }
+  };
+
+  // Handle cancel invitation and refresh cancelled list
+  const handleCancelInvitation = async (invitationId: string) => {
+    const success = await cancelInvitation(invitationId);
+    if (success) {
+      // Refresh cancelled invitations count
+      await fetchCancelledInvitations();
+      // Reset cancelled tab loaded state
+      setDataLoaded(prev => ({ ...prev, cancelled: false }));
+    }
+    return success;
   };
 
   // Get filtered users based on tab
@@ -279,14 +329,15 @@ if (user?.status === 'invited') {
   };
 
   // Get tab counts
-  const pendingCount = invitedCount + invitations.filter(inv => 
+  const pendingCount = invitedCount + invitations.filter(inv =>
     ['pending', 'sent', 'resent'].includes(inv.status)
   ).length;
-  
+
   const tabCounts = {
     all: users.length,
     active: activeCount,
-    pending: pendingCount
+    pending: pendingCount,
+    cancelled: cancelledCount
   };
 
   // Calculate team member limit (you may want to get this from tenant settings)
@@ -294,13 +345,14 @@ if (user?.status === 'invited') {
 
   // Check if we should show invitations list
   const showInvitationsList = activeTab === 'pending' && invitations.length > 0;
-  const showUsersList = activeTab !== 'pending' || (activeTab === 'pending' && !showInvitationsList);
+  const showCancelledList = activeTab === 'cancelled';
+  const showUsersList = activeTab !== 'pending' && activeTab !== 'cancelled' || (activeTab === 'pending' && !showInvitationsList);
 
   return (
-    <div 
+    <div
       className="p-6 min-h-screen transition-colors duration-200"
       style={{
-        background: isDarkMode 
+        background: isDarkMode
           ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
           : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
       }}
@@ -308,24 +360,24 @@ if (user?.status === 'invited') {
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center mb-6">
-          <button 
-            onClick={handleBack} 
+          <button
+            onClick={handleBack}
             className="mr-4 p-2 rounded-full transition-colors hover:opacity-80"
             style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
           >
-            <ArrowLeft 
-              className="h-5 w-5 transition-colors" 
+            <ArrowLeft
+              className="h-5 w-5 transition-colors"
               style={{ color: colors.utility.secondaryText }}
             />
           </button>
           <div className="flex-1">
-            <h1 
+            <h1
               className="text-2xl font-bold transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
               Team Management
             </h1>
-            <p 
+            <p
               className="transition-colors"
               style={{ color: colors.utility.secondaryText }}
             >
@@ -341,16 +393,16 @@ if (user?.status === 'invited') {
             )}
             style={{ backgroundColor: colors.utility.secondaryBackground + '80' }}
           >
-            <RefreshCw 
-              size={20} 
+            <RefreshCw
+              size={20}
               style={{ color: colors.utility.secondaryText }}
             />
           </button>
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div 
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div
             className="border rounded-lg p-4 transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -359,27 +411,27 @@ if (user?.status === 'invited') {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p 
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Total Team
                 </p>
-                <p 
+                <p
                   className="text-2xl font-semibold transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   {tabCounts.all}
                 </p>
               </div>
-              <Users 
-                className="h-8 w-8 transition-colors" 
+              <Users
+                className="h-8 w-8 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               />
             </div>
           </div>
-          
-          <div 
+
+          <div
             className="border rounded-lg p-4 transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -388,27 +440,27 @@ if (user?.status === 'invited') {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p 
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Active Team
                 </p>
-                <p 
+                <p
                   className="text-2xl font-semibold transition-colors"
                   style={{ color: colors.semantic.success }}
                 >
                   {tabCounts.active}
                 </p>
               </div>
-              <Shield 
-                className="h-8 w-8 transition-colors" 
+              <Shield
+                className="h-8 w-8 transition-colors"
                 style={{ color: colors.semantic.success }}
               />
             </div>
           </div>
-          
-          <div 
+
+          <div
             className="border rounded-lg p-4 transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -417,27 +469,27 @@ if (user?.status === 'invited') {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p 
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Pending Invites
                 </p>
-                <p 
+                <p
                   className="text-2xl font-semibold transition-colors"
                   style={{ color: colors.semantic.warning || '#f59e0b' }}
                 >
                   {tabCounts.pending}
                 </p>
               </div>
-              <UserPlus 
-                className="h-8 w-8 transition-colors" 
+              <UserPlus
+                className="h-8 w-8 transition-colors"
                 style={{ color: colors.semantic.warning || '#f59e0b' }}
               />
             </div>
           </div>
-          
-          <div 
+
+          <div
             className="border rounded-lg p-4 transition-colors"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
@@ -446,21 +498,50 @@ if (user?.status === 'invited') {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p 
+                <p
+                  className="text-sm transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Cancelled
+                </p>
+                <p
+                  className="text-2xl font-semibold transition-colors"
+                  style={{ color: colors.semantic.error }}
+                >
+                  {tabCounts.cancelled}
+                </p>
+              </div>
+              <XCircle
+                className="h-8 w-8 transition-colors"
+                style={{ color: colors.semantic.error }}
+              />
+            </div>
+          </div>
+
+          <div
+            className="border rounded-lg p-4 transition-colors"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              borderColor: colors.utility.primaryText + '20'
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p
                   className="text-sm transition-colors"
                   style={{ color: colors.utility.secondaryText }}
                 >
                   Team Limit
                 </p>
-                <p 
+                <p
                   className="text-2xl font-semibold transition-colors"
                   style={{ color: colors.utility.primaryText }}
                 >
                   {tabCounts.all}/{teamLimit}
                 </p>
               </div>
-              <AlertCircle 
-                className="h-8 w-8 transition-colors" 
+              <AlertCircle
+                className="h-8 w-8 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               />
             </div>
@@ -468,7 +549,7 @@ if (user?.status === 'invited') {
         </div>
 
         {/* Tabs */}
-        <div 
+        <div
           className="border-b transition-colors"
           style={{ borderColor: colors.utility.primaryText + '20' }}
         >
@@ -476,7 +557,8 @@ if (user?.status === 'invited') {
             {[
               { id: 'all', label: 'All Team', count: tabCounts.all },
               { id: 'active', label: 'Active', count: tabCounts.active },
-              { id: 'pending', label: 'Pending', count: tabCounts.pending }
+              { id: 'pending', label: 'Pending', count: tabCounts.pending },
+              { id: 'cancelled', label: 'Cancelled', count: tabCounts.cancelled }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -488,17 +570,17 @@ if (user?.status === 'invited') {
                     : "border-transparent hover:opacity-80"
                 )}
                 style={{
-                  color: activeTab === tab.id 
-                    ? colors.brand.primary 
+                  color: activeTab === tab.id
+                    ? colors.brand.primary
                     : colors.utility.secondaryText,
-                  borderColor: activeTab === tab.id 
-                    ? colors.brand.primary 
+                  borderColor: activeTab === tab.id
+                    ? colors.brand.primary
                     : 'transparent'
                 }}
               >
                 {tab.label}
                 {tab.count > 0 && (
-                  <span 
+                  <span
                     className={cn(
                       "ml-2 px-2 py-0.5 text-xs rounded-full transition-colors"
                     )}
@@ -521,7 +603,7 @@ if (user?.status === 'invited') {
       </div>
 
       {/* Content */}
-      <div 
+      <div
         className="border rounded-lg transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -531,18 +613,18 @@ if (user?.status === 'invited') {
         <div className="p-6">
           {!canManageTeam ? (
             <div className="text-center py-12">
-              <Shield 
-                size={48} 
-                className="mx-auto mb-4 transition-colors" 
+              <Shield
+                size={48}
+                className="mx-auto mb-4 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               />
-              <h3 
+              <h3
                 className="text-lg font-medium mb-2 transition-colors"
                 style={{ color: colors.utility.primaryText }}
               >
                 Access Restricted
               </h3>
-              <p 
+              <p
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -554,7 +636,7 @@ if (user?.status === 'invited') {
               {/* Show invitations list for pending tab */}
               {showInvitationsList && (
                 <div className="mb-6">
-                  <h2 
+                  <h2
                     className="text-lg font-semibold mb-4 transition-colors"
                     style={{ color: colors.utility.primaryText }}
                   >
@@ -565,7 +647,7 @@ if (user?.status === 'invited') {
                       ['pending', 'sent', 'resent'].includes(inv.status)
                     )}
                     onResend={resendInvitation}
-                    onCancel={cancelInvitation}
+                    onCancel={handleCancelInvitation}
                     onViewDetails={(invitation) => {
                       setSelectedInvitation(invitation);
                       setShowInvitationDetails(true);
@@ -574,7 +656,88 @@ if (user?.status === 'invited') {
                   />
                 </div>
               )}
-              
+
+              {/* Show cancelled invitations list */}
+              {showCancelledList && (
+                <div>
+                  <h2
+                    className="text-lg font-semibold mb-4 transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Cancelled Invitations
+                  </h2>
+                  {cancelledLoading ? (
+                    <div className="space-y-3">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className="animate-pulse">
+                          <div
+                            className="border rounded-lg p-4 transition-colors"
+                            style={{
+                              backgroundColor: colors.utility.secondaryBackground,
+                              borderColor: `${colors.utility.primaryText}20`
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-2">
+                                <div
+                                  className="h-4 rounded w-48"
+                                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                                />
+                                <div
+                                  className="h-3 rounded w-32"
+                                  style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                                />
+                              </div>
+                              <div
+                                className="h-8 rounded w-20"
+                                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : cancelledInvitations.length === 0 ? (
+                    <div
+                      className="text-center py-12 border rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: `${colors.utility.primaryText}20`
+                      }}
+                    >
+                      <XCircle
+                        size={48}
+                        className="mx-auto mb-4"
+                        style={{ color: colors.utility.secondaryText }}
+                      />
+                      <h3
+                        className="text-lg font-medium mb-2 transition-colors"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        No Cancelled Invitations
+                      </h3>
+                      <p
+                        className="transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        There are no cancelled invitations to display
+                      </p>
+                    </div>
+                  ) : (
+                    <InvitationsList
+                      invitations={cancelledInvitations}
+                      onResend={resendInvitation}
+                      onCancel={cancelInvitation}
+                      onViewDetails={(invitation) => {
+                        setSelectedInvitation(invitation);
+                        setShowInvitationDetails(true);
+                      }}
+                      isLoading={cancelledLoading}
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Show users list when appropriate */}
               {showUsersList && (
                 <UsersList

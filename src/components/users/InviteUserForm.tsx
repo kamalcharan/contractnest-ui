@@ -1,12 +1,12 @@
 // src/components/users/InviteUserForm.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { 
-  Mail, 
-  Phone, 
-  User, 
+import {
+  Mail,
+  Phone,
+  User,
   Send,
   AlertCircle,
   Loader2
@@ -14,54 +14,19 @@ import {
 import { CreateInvitationData } from '@/hooks/useInvitations';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
+// Use centralized countries and validation
+import { countries } from '@/utils/constants/countries';
+import { validatePhoneByCountry, getPhonePlaceholder, getPhoneLengthDescription } from '@/utils/validation/contactValidation';
 
-// Country codes data
-const COUNTRY_CODES = [
-  { code: 'IN', name: 'India', phoneCode: '91', flag: '🇮🇳', popular: true },
-  { code: 'US', name: 'United States', phoneCode: '1', flag: '🇺🇸', popular: true },
-  { code: 'GB', name: 'United Kingdom', phoneCode: '44', flag: '🇬🇧', popular: true },
-  { code: 'AE', name: 'UAE', phoneCode: '971', flag: '🇦🇪', popular: true },
-  { code: 'SG', name: 'Singapore', phoneCode: '65', flag: '🇸🇬', popular: true },
-  { code: 'AU', name: 'Australia', phoneCode: '61', flag: '🇦🇺', popular: false },
-  { code: 'CA', name: 'Canada', phoneCode: '1', flag: '🇨🇦', popular: false },
-  { code: 'DE', name: 'Germany', phoneCode: '49', flag: '🇩🇪', popular: false },
-  { code: 'FR', name: 'France', phoneCode: '33', flag: '🇫🇷', popular: false },
-  { code: 'JP', name: 'Japan', phoneCode: '81', flag: '🇯🇵', popular: false },
-  { code: 'CN', name: 'China', phoneCode: '86', flag: '🇨🇳', popular: false },
-  { code: 'BR', name: 'Brazil', phoneCode: '55', flag: '🇧🇷', popular: false },
-  { code: 'MX', name: 'Mexico', phoneCode: '52', flag: '🇲🇽', popular: false },
-  { code: 'IT', name: 'Italy', phoneCode: '39', flag: '🇮🇹', popular: false },
-  { code: 'ES', name: 'Spain', phoneCode: '34', flag: '🇪🇸', popular: false },
-  { code: 'KR', name: 'South Korea', phoneCode: '82', flag: '🇰🇷', popular: false },
-  { code: 'NL', name: 'Netherlands', phoneCode: '31', flag: '🇳🇱', popular: false },
-  { code: 'SE', name: 'Sweden', phoneCode: '46', flag: '🇸🇪', popular: false },
-  { code: 'CH', name: 'Switzerland', phoneCode: '41', flag: '🇨🇭', popular: false },
-  { code: 'PL', name: 'Poland', phoneCode: '48', flag: '🇵🇱', popular: false },
-  { code: 'BE', name: 'Belgium', phoneCode: '32', flag: '🇧🇪', popular: false },
-  { code: 'AT', name: 'Austria', phoneCode: '43', flag: '🇦🇹', popular: false },
-  { code: 'NO', name: 'Norway', phoneCode: '47', flag: '🇳🇴', popular: false },
-  { code: 'DK', name: 'Denmark', phoneCode: '45', flag: '🇩🇰', popular: false },
-  { code: 'FI', name: 'Finland', phoneCode: '358', flag: '🇫🇮', popular: false },
-  { code: 'IE', name: 'Ireland', phoneCode: '353', flag: '🇮🇪', popular: false },
-  { code: 'NZ', name: 'New Zealand', phoneCode: '64', flag: '🇳🇿', popular: false },
-  { code: 'ZA', name: 'South Africa', phoneCode: '27', flag: '🇿🇦', popular: false },
-  { code: 'MY', name: 'Malaysia', phoneCode: '60', flag: '🇲🇾', popular: false },
-  { code: 'TH', name: 'Thailand', phoneCode: '66', flag: '🇹🇭', popular: false },
-  { code: 'ID', name: 'Indonesia', phoneCode: '62', flag: '🇮🇩', popular: false },
-  { code: 'PH', name: 'Philippines', phoneCode: '63', flag: '🇵🇭', popular: false },
-  { code: 'VN', name: 'Vietnam', phoneCode: '84', flag: '🇻🇳', popular: false },
-  { code: 'PK', name: 'Pakistan', phoneCode: '92', flag: '🇵🇰', popular: false },
-  { code: 'BD', name: 'Bangladesh', phoneCode: '880', flag: '🇧🇩', popular: false },
-  { code: 'LK', name: 'Sri Lanka', phoneCode: '94', flag: '🇱🇰', popular: false },
-  { code: 'NP', name: 'Nepal', phoneCode: '977', flag: '🇳🇵', popular: false },
-];
+// Popular countries to show first
+const POPULAR_COUNTRY_CODES = ['IN', 'US', 'GB', 'AE', 'SG', 'AU', 'CA'];
 
-// Form validation schema - simplified
+// Form validation schema - will be enhanced with country-specific validation
 const inviteSchema = z.object({
-  email: z.string().email('Invalid email address').optional(),
-  mobile_number: z.string().regex(/^[\d\s-()]+$/, 'Invalid mobile number').optional(),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  mobile_number: z.string().optional(),
   country_code: z.string().optional(),
-  role_id: z.string().uuid().optional(),
+  role_id: z.string().uuid().optional().or(z.literal('')),
   custom_message: z.string().max(500, 'Message too long').optional()
 }).refine(
   (data) => data.email || data.mobile_number,
@@ -87,7 +52,8 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
   availableRoles = []
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
-  
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -104,30 +70,77 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
       custom_message: 'Welcome to our team! We\'re excited to have you join us. Please click the link below to accept your invitation and set up your account.'
     }
   });
-  
+
   // Watch email and mobile to show/hide fields
   const email = watch('email');
   const mobile = watch('mobile_number');
-  const countryCode = watch('country_code');
-  
-  // Get country flag emoji
-  const getCountryFlag = (code: string) => {
-    const country = COUNTRY_CODES.find(c => c.code === code);
-    return country?.flag || '';
+  const countryCode = watch('country_code') || 'IN';
+
+  // Sort countries: popular first, then alphabetical
+  const sortedCountries = useMemo(() => {
+    const popular = countries.filter(c => POPULAR_COUNTRY_CODES.includes(c.code));
+    const others = countries.filter(c => !POPULAR_COUNTRY_CODES.includes(c.code))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { popular, others };
+  }, []);
+
+  // Get current country info
+  const currentCountry = useMemo(() => {
+    return countries.find(c => c.code === countryCode);
+  }, [countryCode]);
+
+  // Get placeholder for current country
+  const phonePlaceholder = useMemo(() => {
+    return getPhonePlaceholder(countryCode);
+  }, [countryCode]);
+
+  // Get phone length description for current country
+  const phoneLengthHint = useMemo(() => {
+    return getPhoneLengthDescription(countryCode);
+  }, [countryCode]);
+
+  // Validate phone number on change
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^\d]/g, ''); // Only allow digits
+    setValue('mobile_number', value);
+
+    if (value) {
+      const result = validatePhoneByCountry(value, countryCode);
+      setPhoneError(result.isValid ? null : result.error || null);
+    } else {
+      setPhoneError(null);
+    }
   };
 
-  // Split countries into popular and others
-  const popularCountries = COUNTRY_CODES.filter(c => c.popular);
-  const otherCountries = COUNTRY_CODES.filter(c => !c.popular).sort((a, b) => a.name.localeCompare(b.name));
-  
+  // Re-validate phone when country changes
+  const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCountryCode = e.target.value;
+    setValue('country_code', newCountryCode);
+
+    // Re-validate existing phone number with new country
+    if (mobile) {
+      const result = validatePhoneByCountry(mobile, newCountryCode);
+      setPhoneError(result.isValid ? null : result.error || null);
+    }
+  };
+
   // Handle form submission
   const onFormSubmit = async (data: InviteFormData) => {
+    // Final phone validation before submit
+    if (data.mobile_number && data.country_code) {
+      const result = validatePhoneByCountry(data.mobile_number, data.country_code);
+      if (!result.isValid) {
+        setPhoneError(result.error || 'Invalid phone number');
+        return;
+      }
+    }
+
     try {
       // Only include the fields that have values
       const invitationData: CreateInvitationData = {
         invitation_method: data.email ? 'email' : 'sms'
       };
-      
+
       if (data.email) {
         invitationData.email = data.email;
       }
@@ -135,7 +148,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
         invitationData.mobile_number = data.mobile_number;
         // Add phone_code for SMS invitations
         if (data.country_code) {
-          const country = COUNTRY_CODES.find(c => c.code === data.country_code);
+          const country = countries.find(c => c.code === data.country_code);
           if (country) {
             invitationData.phone_code = country.phoneCode;
           }
@@ -147,36 +160,36 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
       if (data.custom_message) {
         invitationData.custom_message = data.custom_message;
       }
-      
+
       await onSubmit(invitationData);
     } catch (error) {
       // Error handling is done in the parent component
     }
   };
-  
+
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
       {/* Contact Information */}
       <div>
-        <p 
+        <p
           className="text-sm mb-3 transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
           Enter email or mobile number. Invitation will be sent automatically.
         </p>
-        
+
         {/* Email Input */}
         <div className="mb-4">
-          <label 
-            htmlFor="email" 
+          <label
+            htmlFor="email"
             className="block text-sm font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Email address
           </label>
           <div className="relative">
-            <Mail 
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors" 
+            <Mail
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors"
               size={18}
               style={{ color: colors.utility.secondaryText }}
             />
@@ -199,7 +212,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             />
           </div>
           {errors.email && (
-            <div 
+            <div
               className="mt-1 flex items-center text-sm transition-colors"
               style={{ color: colors.semantic.error }}
             >
@@ -208,19 +221,19 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             </div>
           )}
         </div>
-        
+
         {/* OR Divider */}
         <div className="relative mb-4">
           <div className="absolute inset-0 flex items-center">
-            <span 
+            <span
               className="w-full border-t transition-colors"
               style={{ borderColor: `${colors.utility.primaryText}20` }}
             />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span 
+            <span
               className="px-2 transition-colors"
-              style={{ 
+              style={{
                 backgroundColor: colors.utility.primaryBackground,
                 color: colors.utility.secondaryText
               }}
@@ -229,7 +242,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             </span>
           </div>
         </div>
-        
+
         {/* Mobile Number Input with Country Code */}
         <div>
           <label
@@ -251,6 +264,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
               <select
                 {...register('country_code')}
                 id="country_code"
+                onChange={handleCountryChange}
                 className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
                 style={{
                   borderColor: `${colors.utility.primaryText}40`,
@@ -261,21 +275,21 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
                 disabled={isSubmitting}
               >
                 {/* Popular countries first */}
-                {popularCountries.map(country => (
+                {sortedCountries.popular.map(country => (
                   <option key={country.code} value={country.code}>
-                    {getCountryFlag(country.code)} +{country.phoneCode} {country.name}
+                    +{country.phoneCode} {country.name}
                   </option>
                 ))}
 
                 {/* Separator */}
-                {popularCountries.length > 0 && otherCountries.length > 0 && (
+                {sortedCountries.popular.length > 0 && sortedCountries.others.length > 0 && (
                   <option disabled>──────────</option>
                 )}
 
                 {/* All other countries alphabetically */}
-                {otherCountries.map(country => (
+                {sortedCountries.others.map(country => (
                   <option key={country.code} value={country.code}>
-                    {getCountryFlag(country.code)} +{country.phoneCode} {country.name}
+                    +{country.phoneCode} {country.name}
                   </option>
                 ))}
               </select>
@@ -288,7 +302,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
                 className="block text-xs font-medium mb-1 transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                Phone Number
+                Phone Number ({phoneLengthHint})
               </label>
               <div className="relative">
                 <Phone
@@ -297,16 +311,17 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
                   style={{ color: colors.utility.secondaryText }}
                 />
                 <input
-                  {...register('mobile_number')}
                   type="tel"
                   id="mobile_number"
-                  placeholder="98765 43210"
+                  value={mobile || ''}
+                  onChange={handlePhoneChange}
+                  placeholder={phonePlaceholder}
                   className={cn(
                     "w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors",
-                    errors.mobile_number ? "border-destructive" : ""
+                    (errors.mobile_number || phoneError) ? "border-destructive" : ""
                   )}
                   style={{
-                    borderColor: errors.mobile_number ? colors.semantic.error : `${colors.utility.primaryText}40`,
+                    borderColor: (errors.mobile_number || phoneError) ? colors.semantic.error : `${colors.utility.primaryText}40`,
                     backgroundColor: colors.utility.primaryBackground,
                     color: colors.utility.primaryText,
                     '--tw-ring-color': colors.brand.primary
@@ -316,31 +331,31 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
               </div>
             </div>
           </div>
-          {errors.mobile_number && (
-            <div 
+          {(errors.mobile_number || phoneError) && (
+            <div
               className="mt-1 flex items-center text-sm transition-colors"
               style={{ color: colors.semantic.error }}
             >
               <AlertCircle size={14} className="mr-1" />
-              {errors.mobile_number.message}
+              {phoneError || errors.mobile_number?.message}
             </div>
           )}
         </div>
       </div>
-      
+
       {/* Role Selection */}
       {availableRoles.length > 0 && (
         <div>
-          <label 
-            htmlFor="role_id" 
+          <label
+            htmlFor="role_id"
             className="block text-sm font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Assign role (optional)
           </label>
           <div className="relative">
-            <User 
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors" 
+            <User
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors"
               size={18}
               style={{ color: colors.utility.secondaryText }}
             />
@@ -367,11 +382,11 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* Custom Message */}
       <div>
-        <label 
-          htmlFor="custom_message" 
+        <label
+          htmlFor="custom_message"
           className="block text-sm font-medium mb-2 transition-colors"
           style={{ color: colors.utility.primaryText }}
         >
@@ -392,7 +407,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
           disabled={isSubmitting}
         />
         {errors.custom_message && (
-          <div 
+          <div
             className="mt-1 flex items-center text-sm transition-colors"
             style={{ color: colors.semantic.error }}
           >
@@ -401,7 +416,7 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
           </div>
         )}
       </div>
-      
+
       {/* Form Actions */}
       <div className="flex justify-end space-x-3 pt-3">
         {onCancel && (
@@ -419,10 +434,10 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
             Cancel
           </button>
         )}
-        
+
         <button
           type="submit"
-          disabled={isSubmitting || (!email && !mobile)}
+          disabled={isSubmitting || (!email && !mobile) || !!phoneError}
           className={cn(
             "px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 flex items-center text-white hover:opacity-90",
             "disabled:opacity-50 disabled:cursor-not-allowed"
@@ -444,17 +459,17 @@ const InviteUserForm: React.FC<InviteUserFormProps> = ({
           )}
         </button>
       </div>
-      
+
       {/* Info Message */}
-      <div 
+      <div
         className="mt-3 p-2.5 rounded-md transition-colors"
         style={{ backgroundColor: `${colors.utility.primaryText}10` }}
       >
-        <p 
+        <p
           className="text-xs transition-colors"
           style={{ color: colors.utility.secondaryText }}
         >
-          Invitation will be sent via all configured channels. Expires in <strong 
+          Invitation will be sent via all configured channels. Expires in <strong
             style={{ color: colors.utility.primaryText }}
           >48 hours</strong>.
         </p>

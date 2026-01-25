@@ -1,14 +1,18 @@
 // src/components/users/user-profile/PersonalInfoSection.tsx
 // This combines Personal Info + Avatar into one cohesive section
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Copy, Check, Mail, Phone, Hash, Edit2, Save, X, Camera, Upload, Trash2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useStorageManagement } from '@/hooks/useStorageManagement';
-import { countries } from '@/utils/constants/countries';
+import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
+import { validatePhoneByCountry, getPhonePlaceholder, getPhoneLengthDescription } from '@/utils/validation/contactValidation';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+
+// Popular countries to show first in dropdown
+const POPULAR_COUNTRY_CODES = ['IN', 'US', 'GB', 'AE', 'SG', 'AU', 'CA'];
 
 interface ProfileInfoSectionProps {
   profile: any;
@@ -40,18 +44,60 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
-    country_code: '+91',
+    country_code: 'IN', // Store country code (e.g., 'IN'), not phone code (e.g., '+91')
     mobile_number: ''
   });
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<any>({});
 
+  // Sort countries: popular first, then alphabetical
+  const sortedCountries = useMemo(() => {
+    const popular = countries.filter(c => POPULAR_COUNTRY_CODES.includes(c.code));
+    const others = countries.filter(c => !POPULAR_COUNTRY_CODES.includes(c.code))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return [...popular, ...others];
+  }, []);
+
+  // Get current country info for validation
+  const currentCountry = useMemo(() => {
+    return countries.find(c => c.code === formData.country_code);
+  }, [formData.country_code]);
+
+  // Get max phone length for current country
+  const maxPhoneLength = useMemo(() => {
+    const { max } = getPhoneLengthForCountry(formData.country_code);
+    return max;
+  }, [formData.country_code]);
+
+  // Get placeholder and hint for phone field
+  const phonePlaceholder = useMemo(() => {
+    return getPhonePlaceholder(formData.country_code);
+  }, [formData.country_code]);
+
+  const phoneLengthHint = useMemo(() => {
+    return getPhoneLengthDescription(formData.country_code);
+  }, [formData.country_code]);
+
   useEffect(() => {
     if (profile) {
+      // Parse country code from profile - it might be stored as '+91' or 'IN'
+      let countryCode = 'IN';
+      if (profile.country_code) {
+        if (profile.country_code.startsWith('+')) {
+          // It's a phone code like '+91', find the country
+          const phoneCode = profile.country_code.replace('+', '');
+          const country = countries.find(c => c.phoneCode === phoneCode);
+          countryCode = country?.code || 'IN';
+        } else {
+          // It's already a country code like 'IN'
+          countryCode = profile.country_code;
+        }
+      }
+
       setFormData({
         first_name: profile.first_name || '',
         last_name: profile.last_name || '',
-        country_code: profile.country_code || '+91',
+        country_code: countryCode,
         mobile_number: profile.mobile_number || ''
       });
     }
@@ -59,19 +105,32 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
 
   const handleInputChange = (field: string, value: string) => {
     if (field === 'mobile_number') {
-      value = value.replace(/\D/g, '').slice(0, 10);
+      // Only allow digits, limit to max phone length for country
+      value = value.replace(/\D/g, '').slice(0, maxPhoneLength);
     }
     setFormData(prev => ({ ...prev, [field]: value }));
     setErrors((prev: any) => ({ ...prev, [field]: '' }));
+  };
+
+  const handleCountryChange = (countryCode: string) => {
+    setFormData(prev => ({ ...prev, country_code: countryCode }));
+    // Clear phone error when country changes
+    setErrors((prev: any) => ({ ...prev, mobile_number: '' }));
   };
 
   const validateForm = () => {
     const newErrors: any = {};
     if (!formData.first_name.trim()) newErrors.first_name = 'First name is required';
     if (!formData.last_name.trim()) newErrors.last_name = 'Last name is required';
-    if (formData.mobile_number && formData.mobile_number.length !== 10) {
-      newErrors.mobile_number = 'Mobile number must be 10 digits';
+
+    // Country-specific phone validation
+    if (formData.mobile_number) {
+      const phoneValidation = validatePhoneByCountry(formData.mobile_number, formData.country_code);
+      if (!phoneValidation.isValid) {
+        newErrors.mobile_number = phoneValidation.error;
+      }
     }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -79,18 +138,36 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   const handleSave = async () => {
     if (!validateForm()) return;
 
-    // Skip separate mobile validation - profile update API handles duplicate checks
-    const success = await onUpdate(formData);
+    // Prepare data for API - convert country code to phone code format if needed
+    const country = countries.find(c => c.code === formData.country_code);
+    const dataToSave = {
+      ...formData,
+      country_code: country ? `+${country.phoneCode}` : '+91' // Store as '+91' format
+    };
+
+    const success = await onUpdate(dataToSave);
     if (success) {
       setIsEditing(false);
     }
   };
 
   const handleCancel = () => {
+    // Parse country code from profile
+    let countryCode = 'IN';
+    if (profile?.country_code) {
+      if (profile.country_code.startsWith('+')) {
+        const phoneCode = profile.country_code.replace('+', '');
+        const country = countries.find(c => c.phoneCode === phoneCode);
+        countryCode = country?.code || 'IN';
+      } else {
+        countryCode = profile.country_code;
+      }
+    }
+
     setFormData({
       first_name: profile?.first_name || '',
       last_name: profile?.last_name || '',
-      country_code: profile?.country_code || '+91',
+      country_code: countryCode,
       mobile_number: profile?.mobile_number || ''
     });
     setErrors({});
@@ -162,15 +239,20 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
     }
   };
 
+  // Format phone for display based on country
   const formatMobile = (mobile: string) => {
-    if (!mobile || mobile.length !== 10) return mobile;
-    return `${mobile.slice(0, 5)} ${mobile.slice(5)}`;
+    if (!mobile) return mobile;
+    // Basic formatting: split into groups of 5 for 10-digit numbers
+    if (mobile.length <= 5) return mobile;
+    if (mobile.length <= 10) return `${mobile.slice(0, 5)} ${mobile.slice(5)}`;
+    // For longer numbers, split into groups
+    return `${mobile.slice(0, 5)} ${mobile.slice(5, 10)} ${mobile.slice(10)}`;
   };
 
   return (
     <div className="space-y-4">
       {/* User Code Card */}
-      <div 
+      <div
         className="border rounded-lg p-4"
         style={{
           backgroundColor: colors.brand.primary + '10',
@@ -190,7 +272,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <code 
+            <code
               className="px-3 py-1.5 rounded font-mono text-lg font-semibold"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
@@ -215,7 +297,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
       </div>
 
       {/* Combined Profile & Avatar Card */}
-      <div 
+      <div
         className="border rounded-lg p-6"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
@@ -257,9 +339,9 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                   style={{ borderColor: colors.brand.primary + '30' }}
                 />
               ) : (
-                <div 
+                <div
                   className="w-32 h-32 rounded-full flex items-center justify-center border-4"
-                  style={{ 
+                  style={{
                     backgroundColor: colors.utility.primaryBackground,
                     borderColor: colors.utility.primaryText + '20'
                   }}
@@ -267,12 +349,12 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                   <User size={48} style={{ color: colors.utility.secondaryText }} />
                 </div>
               )}
-              
+
               {uploadProgress > 0 && (
                 <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex flex-col items-center justify-center">
                   <div className="text-white text-sm font-medium">{uploadProgress}%</div>
                   <div className="w-20 h-2 bg-gray-300 rounded-full mt-2">
-                    <div 
+                    <div
                       className="h-full bg-white rounded-full transition-all"
                       style={{ width: `${uploadProgress}%` }}
                     />
@@ -280,7 +362,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                 </div>
               )}
             </div>
-            
+
             <div className="mt-3 flex gap-2">
               <button
                 onClick={() => {
@@ -342,8 +424,8 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                 Email Address
               </label>
               <div className="relative">
-                <Mail 
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4" 
+                <Mail
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
                   style={{ color: colors.utility.secondaryText }}
                 />
                 <input
@@ -420,15 +502,15 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
             {/* Mobile */}
             <div>
               <label className="block text-sm font-medium mb-1" style={{ color: colors.utility.secondaryText }}>
-                Mobile Number
+                Mobile Number {isEditing && <span className="text-xs font-normal">({phoneLengthHint})</span>}
               </label>
               <div className="flex gap-2">
                 <select
                   value={formData.country_code}
-                  onChange={(e) => handleInputChange('country_code', e.target.value)}
+                  onChange={(e) => handleCountryChange(e.target.value)}
                   disabled={!isEditing}
                   className={cn(
-                    "w-32 px-3 py-2 border rounded-md",
+                    "w-36 px-3 py-2 border rounded-md",
                     !isEditing && "cursor-not-allowed opacity-60"
                   )}
                   style={{
@@ -437,15 +519,15 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                     color: colors.utility.primaryText
                   }}
                 >
-                  {countries.map(country => (
-                    <option key={country.code} value={`+${country.phoneCode}`}>
-                      {country.code} +{country.phoneCode}
+                  {sortedCountries.map(country => (
+                    <option key={country.code} value={country.code}>
+                      +{country.phoneCode} {country.name}
                     </option>
                   ))}
                 </select>
                 <div className="flex-1 relative">
-                  <Phone 
-                    className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4" 
+                  <Phone
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
                     style={{ color: colors.utility.secondaryText }}
                   />
                   <input
@@ -453,7 +535,7 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
                     value={isEditing ? formData.mobile_number : formatMobile(formData.mobile_number)}
                     onChange={(e) => handleInputChange('mobile_number', e.target.value)}
                     disabled={!isEditing}
-                    placeholder="XXXXX XXXXX"
+                    placeholder={isEditing ? phonePlaceholder : ''}
                     className={cn(
                       "w-full pl-10 pr-3 py-2 border rounded-md transition-colors",
                       errors.mobile_number && "border-red-500",
