@@ -58,6 +58,8 @@ export interface ServiceBlocksStepProps {
   selectedBuyer?: Contact | null;
   selectedPerson?: ContactPerson | null;
   useCompanyContact?: boolean;
+  // RFQ mode - FlyBy only, no library, no pricing
+  rfqMode?: boolean;
 }
 
 // Format currency
@@ -77,6 +79,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   selectedBuyer,
   selectedPerson,
   useCompanyContact,
+  rfqMode = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -334,16 +337,16 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
           className="text-2xl font-bold mb-2"
           style={{ color: colors.utility.primaryText }}
         >
-          Add Service Blocks
+          {rfqMode ? 'Define Required Services' : 'Add Service Blocks'}
         </h2>
         <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-          Select services and configure them for your contract
+          {rfqMode ? 'Add the services you need quotes for' : 'Select services and configure them for your contract'}
         </p>
       </div>
 
       {/* 3-Column Layout - fills remaining height */}
       <div className="flex-1 flex gap-4 px-4 pb-6 min-h-0 overflow-hidden">
-        {/* Column 1: Block Library - viewport-based height */}
+        {/* Column 1: Block Library (full in contract mode, FlyBy-only in RFQ mode) */}
         <div className="w-[280px] flex-shrink-0" style={{ height: 'calc(100vh - 200px)' }}>
           <BlockLibraryMini
             selectedBlockIds={selectedBlockIds}
@@ -351,6 +354,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             maxHeight="calc(100vh - 200px)"
             flyByTypes={['service', 'spare', 'text', 'document']}
             onAddFlyByBlock={handleAddFlyByBlock}
+            flyByOnly={rfqMode}
           />
         </div>
 
@@ -460,7 +464,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                   No blocks added yet
                 </p>
                 <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                  Add blocks from the library to build your contract
+                  {rfqMode ? 'Use the FlyBy button to add services you need quotes for' : 'Add blocks from the library to build your contract'}
                 </p>
               </div>
             ) : (
@@ -494,6 +498,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                           onToggleExpand={handleToggleExpand}
                           onRemove={handleRemoveBlock}
                           onUpdate={handleUpdateBlock}
+                          hidePricing={rfqMode}
                         />
                       ) : (
                         <BlockCardConfigurable
@@ -549,6 +554,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             contractStartDate={contractStartDate}
             selectedBlocks={selectedBlocks}
             currency={currency}
+            hidePricing={rfqMode}
           />
         </div>
       </div>

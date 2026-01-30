@@ -23,6 +23,8 @@ export interface BlockLibraryMiniProps {
   // FlyBy support
   flyByTypes?: FlyByCategoryId[];
   onAddFlyByBlock?: (type: FlyByCategoryId) => void;
+  // When true, only show FlyBy quick-add buttons (no DB-driven catalog blocks)
+  flyByOnly?: boolean;
 }
 
 // Helper to get Lucide icon component by name
@@ -41,6 +43,7 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
   maxHeight = '100%',
   flyByTypes = [],
   onAddFlyByBlock,
+  flyByOnly = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -166,40 +169,48 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
         style={{ borderColor: `${colors.utility.primaryText}10` }}
       >
         <div className="flex items-center gap-2 mb-3">
-          <Package className="w-4 h-4" style={{ color: colors.brand.primary }} />
+          {flyByOnly ? (
+            <Zap className="w-4 h-4" style={{ color: colors.brand.primary }} />
+          ) : (
+            <Package className="w-4 h-4" style={{ color: colors.brand.primary }} />
+          )}
           <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-            Block Library
+            {flyByOnly ? 'Quick Add Blocks' : 'Block Library'}
           </span>
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded-full ml-auto"
-            style={{
-              backgroundColor: `${colors.brand.primary}15`,
-              color: colors.brand.primary,
-            }}
-          >
-            {allBlocks.length}
-          </span>
+          {!flyByOnly && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full ml-auto"
+              style={{
+                backgroundColor: `${colors.brand.primary}15`,
+                color: colors.brand.primary,
+              }}
+            >
+              {allBlocks.length}
+            </span>
+          )}
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
-            style={{ color: colors.utility.secondaryText }}
-          />
-          <input
-            type="text"
-            placeholder="Search blocks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border"
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderColor: `${colors.utility.primaryText}15`,
-              color: colors.utility.primaryText,
-            }}
-          />
-        </div>
+        {/* Search - hidden in flyByOnly mode */}
+        {!flyByOnly && (
+          <div className="relative">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5"
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <input
+              type="text"
+              placeholder="Search blocks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderColor: `${colors.utility.primaryText}15`,
+                color: colors.utility.primaryText,
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Categories & Blocks */}
@@ -263,7 +274,8 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
                   {/* Blocks Grid */}
                   {isExpanded && (
                     <div className="p-2 space-y-2">
-                      {category.blocks.map((block) => (
+                      {/* DB-driven block cards - hidden in flyByOnly mode */}
+                      {!flyByOnly && category.blocks.map((block) => (
                         <BlockCardSelectable
                           key={block.id}
                           block={block}
@@ -274,7 +286,7 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
                         />
                       ))}
 
-                      {/* FlyBy Card - last item in group */}
+                      {/* FlyBy Card - last item in group (or only item in flyByOnly mode) */}
                       {category.hasFlyBy && onAddFlyByBlock && (
                         <button
                           onClick={() => onAddFlyByBlock(category.id as FlyByCategoryId)}
@@ -327,23 +339,25 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
         )}
       </div>
 
-      {/* Footer Stats */}
-      <div
-        className="p-2 border-t flex-shrink-0"
-        style={{
-          borderColor: `${colors.utility.primaryText}10`,
-          backgroundColor: colors.utility.secondaryBackground,
-        }}
-      >
-        <div className="flex items-center justify-between text-[10px]">
-          <span style={{ color: colors.utility.secondaryText }}>
-            {selectedBlockIds.length} selected
-          </span>
-          <span style={{ color: colors.utility.secondaryText }}>
-            {filteredCategories.reduce((sum, cat) => sum + cat.count, 0)} available
-          </span>
+      {/* Footer Stats - hidden in flyByOnly mode */}
+      {!flyByOnly && (
+        <div
+          className="p-2 border-t flex-shrink-0"
+          style={{
+            borderColor: `${colors.utility.primaryText}10`,
+            backgroundColor: colors.utility.secondaryBackground,
+          }}
+        >
+          <div className="flex items-center justify-between text-[10px]">
+            <span style={{ color: colors.utility.secondaryText }}>
+              {selectedBlockIds.length} selected
+            </span>
+            <span style={{ color: colors.utility.secondaryText }}>
+              {filteredCategories.reduce((sum, cat) => sum + cat.count, 0)} available
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

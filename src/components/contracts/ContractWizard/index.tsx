@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { X, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import FloatingActionIsland from './FloatingActionIsland';
-import PathSelectionStep, { ContractPath } from './steps/PathSelectionStep';
+import PathSelectionStep, { ContractPath, WizardMode } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
 import BuyerSelectionStep from './steps/BuyerSelectionStep';
 import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
@@ -30,9 +30,14 @@ export interface ContractWizardState {
   templateId: string | null;
   // Role (kept for API compatibility, auto-set based on contractType)
   role: ContractRole;
-  // Step 1: Counterparty
+  // Wizard mode: contract or rfq (vendor contracts only)
+  wizardMode: WizardMode;
+  // Step 1: Counterparty (single-select for contracts)
   buyerId: string | null;
   buyerName: string;
+  // RFQ multi-vendor selection
+  vendorIds: string[];
+  vendorNames: string[];
   // Step 2: Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
   // Step 3: Contract Details
@@ -63,28 +68,34 @@ interface ContractWizardProps {
   onComplete?: (contractData: ContractWizardState) => void;
 }
 
-// Step configuration (YourRole removed - 8 steps)
-const STEP_LABELS = [
-  'Choose Path',
-  'Counterparty',
-  'Acceptance',
-  'Details',
-  'Billing Cycle',
-  'Add Blocks',
-  'Billing View',
-  'Review & Send',
+// Step ID type for step-based routing
+type StepId = 'path' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'review';
+
+interface StepConfig {
+  id: StepId;
+  label: string;
+  heading: { title: string; subtitle: string };
+}
+
+// Contract flow: 8 steps (full flow)
+const CONTRACT_STEPS: StepConfig[] = [
+  { id: 'path', label: 'Choose Path', heading: { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' } },
+  { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
+  { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
+  { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
+  { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
+  { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
+  { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
+  { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
 ];
 
-// Step headings shown in the wizard header
-const STEP_HEADINGS: Array<{ title: string; subtitle: string }> = [
-  { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' },
-  { title: '', subtitle: '' }, // Dynamic - set based on contractType
-  { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' },
-  { title: 'Contract Details', subtitle: 'Define the basic information for your contract' },
-  { title: 'Billing Cycle', subtitle: 'How should services be billed?' },
-  { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' },
-  { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' },
-  { title: 'Review & Send', subtitle: 'Review your contract before sending' },
+// RFQ flow: 5 steps (no acceptance, no billing cycle, no billing view)
+const RFQ_STEPS: StepConfig[] = [
+  { id: 'path', label: 'Choose Path', heading: { title: 'What would you like to create?', subtitle: 'Choose your starting point' } },
+  { id: 'counterparty', label: 'Select Vendors', heading: { title: 'Select Vendors for RFQ', subtitle: 'Choose one or more vendors to send this RFQ to' } },
+  { id: 'details', label: 'Request Details', heading: { title: 'Request Details', subtitle: 'Define the basic information for your RFQ' } },
+  { id: 'blocks', label: 'Define Services', heading: { title: 'Define Required Services', subtitle: 'Add the service blocks you need quotations for' } },
+  { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send RFQ', subtitle: 'Review your RFQ before sending to vendors' } },
 ];
 
 // Dynamic headings for counterparty step based on contract type
@@ -100,8 +111,6 @@ const COUNTERPARTY_LABEL: Record<string, string> = {
   vendor: 'vendor',
   partner: 'partner',
 };
-
-const TOTAL_STEPS = 8;
 
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
@@ -126,9 +135,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     path: null,
     templateId: null,
     role: null,
+    wizardMode: 'contract',
     // Step 1: Counterparty
     buyerId: null,
     buyerName: '',
+    vendorIds: [],
+    vendorNames: [],
     // Step 2: Acceptance
     acceptanceMethod: null,
     // Step 3: Contract Details
@@ -163,6 +175,17 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     []
   );
 
+  // Determine if RFQ mode is active
+  const isRfqMode = wizardState.wizardMode === 'rfq';
+
+  // Dynamic step array based on wizard mode
+  const activeSteps = isRfqMode ? RFQ_STEPS : CONTRACT_STEPS;
+  const totalSteps = activeSteps.length;
+  const stepLabels = activeSteps.map(s => s.label);
+
+  // Get current step ID
+  const currentStepId = activeSteps[currentStep]?.id || 'path';
+
   // Calculate total value from selected blocks
   const calculateTotalValue = useCallback(() => {
     return wizardState.selectedBlocks.reduce(
@@ -171,37 +194,39 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     );
   }, [wizardState.selectedBlocks]);
 
-  // Navigation validation
+  // Navigation validation (step ID-based)
   const canGoNext = useCallback((): boolean => {
     // If showing template selection sub-step
     if (showTemplateSelection) {
       return wizardState.templateId !== null;
     }
 
-    switch (currentStep) {
-      case 0: // Path Selection
+    switch (currentStepId) {
+      case 'path':
         return wizardState.path !== null;
-      case 1: // Counterparty Selection
-        return wizardState.buyerId !== null;
-      case 2: // Acceptance Method
+      case 'counterparty':
+        return isRfqMode
+          ? wizardState.vendorIds.length > 0
+          : wizardState.buyerId !== null;
+      case 'acceptance':
         return wizardState.acceptanceMethod !== null;
-      case 3: // Contract Details
+      case 'details':
         return wizardState.contractName.trim() !== '' && wizardState.durationValue > 0;
-      case 4: // Billing Cycle
+      case 'billingCycle':
         return wizardState.billingCycleType !== null;
-      case 5: // Block Assembly
+      case 'blocks':
         return wizardState.selectedBlocks.length > 0;
-      case 6: // Billing View
+      case 'billingView':
         return true;
-      case 7: // Review & Send
+      case 'review':
         return true;
       default:
         return false;
     }
-  }, [currentStep, wizardState, showTemplateSelection]);
+  }, [currentStepId, wizardState, showTemplateSelection, isRfqMode]);
 
   const canGoBack = currentStep > 0 || showTemplateSelection;
-  const isLastStep = currentStep === TOTAL_STEPS - 1;
+  const isLastStep = currentStep === totalSteps - 1;
 
   // Navigation handlers
   const handleNext = useCallback(() => {
@@ -209,18 +234,18 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       // Show success screen instead of immediately closing
       setIsContractSent(true);
     } else if (showTemplateSelection) {
-      // From template selection, go to counterparty step
+      // From template selection, go to counterparty step (index 1 in both flows)
       setShowTemplateSelection(false);
       setCurrentStep(1);
     } else if (canGoNext()) {
-      // Special handling for step 0 -> check if "From Template" was selected
-      if (currentStep === 0 && wizardState.path === 'template') {
+      // Special handling for path step -> check if "From Template" was selected
+      if (currentStepId === 'path' && wizardState.path === 'template') {
         setShowTemplateSelection(true);
       } else {
-        setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
+        setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
       }
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStep]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -271,11 +296,30 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     [updateWizardState]
   );
 
+  // Wizard mode change handler (RFQ/Contract)
+  const handleWizardModeChange = useCallback(
+    (mode: WizardMode) => {
+      updateWizardState('wizardMode', mode);
+      // Reset step to 0 when mode changes (path is always step 0)
+      setCurrentStep(0);
+    },
+    [updateWizardState]
+  );
+
   // Buyer selection handler
   const handleBuyerSelect = useCallback(
     (buyerId: string, buyerName: string) => {
       updateWizardState('buyerId', buyerId || null);
       updateWizardState('buyerName', buyerName);
+    },
+    [updateWizardState]
+  );
+
+  // Vendor multi-select handler (for RFQ)
+  const handleVendorsChange = useCallback(
+    (ids: string[], names: string[]) => {
+      updateWizardState('vendorIds', ids);
+      updateWizardState('vendorNames', names);
     },
     [updateWizardState]
   );
@@ -341,7 +385,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     [updateWizardState]
   );
 
-  // Render current step content
+  // Render current step content (step ID-based routing)
   const renderStepContent = () => {
     // Show template selection sub-step if applicable
     if (showTemplateSelection) {
@@ -356,16 +400,30 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       );
     }
 
-    switch (currentStep) {
-      case 0:
+    switch (currentStepId) {
+      case 'path':
         return (
           <PathSelectionStep
             selectedPath={wizardState.path}
             onSelectPath={handlePathSelect}
+            showModeSelection={contractType === 'vendor'}
+            wizardMode={wizardState.wizardMode}
+            onModeChange={handleWizardModeChange}
           />
         );
-      case 1:
-        return (
+      case 'counterparty':
+        return isRfqMode ? (
+          <BuyerSelectionStep
+            selectedBuyerId={null}
+            selectedBuyerName=""
+            onSelectBuyer={() => {}} // Not used in multi-select
+            contractType="vendor"
+            multiSelect={true}
+            selectedVendorIds={wizardState.vendorIds}
+            selectedVendorNames={wizardState.vendorNames}
+            onVendorsChange={handleVendorsChange}
+          />
+        ) : (
           <BuyerSelectionStep
             selectedBuyerId={wizardState.buyerId}
             selectedBuyerName={wizardState.buyerName}
@@ -373,14 +431,14 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             contractType={contractType}
           />
         );
-      case 2:
+      case 'acceptance':
         return (
           <AcceptanceMethodStep
             selectedMethod={wizardState.acceptanceMethod}
             onSelectMethod={handleAcceptanceMethodSelect}
           />
         );
-      case 3:
+      case 'details':
         return (
           <ContractDetailsStep
             data={{
@@ -394,16 +452,18 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               gracePeriodUnit: wizardState.gracePeriodUnit,
             }}
             onChange={handleDetailsChange}
+            title={isRfqMode ? 'Request Details' : undefined}
+            subtitle={isRfqMode ? 'Define the basic information for your RFQ' : undefined}
           />
         );
-      case 4:
+      case 'billingCycle':
         return (
           <BillingCycleStep
             selectedCycleType={wizardState.billingCycleType}
             onSelectCycleType={handleBillingCycleTypeSelect}
           />
         );
-      case 5: {
+      case 'blocks': {
         // Calculate contract duration in months
         const durationInMonths = wizardState.durationUnit === 'months'
           ? wizardState.durationValue
@@ -416,7 +476,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             selectedBlocks={wizardState.selectedBlocks}
             currency={wizardState.currency}
             onBlocksChange={handleBlocksChange}
-            contractName={wizardState.contractName || 'New Contract'}
+            contractName={wizardState.contractName || (isRfqMode ? 'New RFQ' : 'New Contract')}
             contractStatus={wizardState.status}
             contractDuration={durationInMonths}
             contractStartDate={new Date()}
@@ -425,10 +485,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               contact_type: 'individual',
               name: wizardState.buyerName,
             } : undefined}
+            rfqMode={isRfqMode}
           />
         );
       }
-      case 6: {
+      case 'billingView': {
         // Billing View - calculate duration in months
         const billingDuration = wizardState.durationUnit === 'months'
           ? wizardState.durationValue
@@ -454,7 +515,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           />
         );
       }
-      case 7:
+      case 'review':
         return (
           <ReviewSendStep
             contractName={wizardState.contractName}
@@ -472,6 +533,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             emiMonths={wizardState.emiMonths}
             perBlockPaymentType={wizardState.perBlockPaymentType}
             selectedTaxRateIds={wizardState.selectedTaxRateIds}
+            rfqMode={isRfqMode}
+            vendorNames={wizardState.vendorNames}
           />
         );
       default:
@@ -537,7 +600,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 animation: 'fadeInUp 0.5s ease-out 0.4s both',
               }}
             >
-              Contract Sent!
+              {isRfqMode ? 'RFQ Sent!' : 'Contract Sent!'}
             </h2>
 
             {/* Description */}
@@ -549,16 +612,30 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               }}
             >
               <strong style={{ color: colors.utility.primaryText }}>
-                {wizardState.contractName || 'Your contract'}
+                {wizardState.contractName || (isRfqMode ? 'Your RFQ' : 'Your contract')}
               </strong>
-              {' '}has been sent to{' '}
-              <strong style={{ color: colors.brand.primary }}>
-                {wizardState.buyerName || `your ${COUNTERPARTY_LABEL[contractType] || 'counterparty'}`}
-              </strong>
-              {' '}for review.
+              {isRfqMode ? (
+                <>
+                  {' '}has been sent to{' '}
+                  <strong style={{ color: colors.brand.primary }}>
+                    {wizardState.vendorNames.length > 0
+                      ? `${wizardState.vendorNames.length} vendor${wizardState.vendorNames.length > 1 ? 's' : ''}`
+                      : 'your vendors'}
+                  </strong>
+                  {' '}for quotation.
+                </>
+              ) : (
+                <>
+                  {' '}has been sent to{' '}
+                  <strong style={{ color: colors.brand.primary }}>
+                    {wizardState.buyerName || `your ${COUNTERPARTY_LABEL[contractType] || 'counterparty'}`}
+                  </strong>
+                  {' '}for review.
+                </>
+              )}
             </p>
 
-            {/* Acceptance method note */}
+            {/* Acceptance method note (contracts only) / RFQ note */}
             <p
               className="text-xs mb-8"
               style={{
@@ -566,11 +643,13 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 animation: 'fadeInUp 0.5s ease-out 0.6s both',
               }}
             >
-              {wizardState.acceptanceMethod === 'signoff'
-                ? 'They will need to sign off to accept the contract.'
-                : wizardState.acceptanceMethod === 'payment'
-                  ? 'The contract will be accepted once payment is completed.'
-                  : 'The contract will be auto-accepted.'}
+              {isRfqMode
+                ? 'Vendors will be notified and can submit their quotations.'
+                : wizardState.acceptanceMethod === 'signoff'
+                  ? 'They will need to sign off to accept the contract.'
+                  : wizardState.acceptanceMethod === 'payment'
+                    ? 'The contract will be accepted once payment is completed.'
+                    : 'The contract will be auto-accepted.'}
             </p>
 
             {/* Done Button */}
@@ -657,10 +736,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 >
                   {(() => {
                     if (showTemplateSelection) return 'Select Template';
-                    const heading = currentStep === 1
-                      ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
-                      : STEP_HEADINGS[currentStep];
-                    return heading?.title || STEP_LABELS[currentStep];
+                    if (currentStepId === 'counterparty' && !isRfqMode) {
+                      const heading = COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client;
+                      return heading.title;
+                    }
+                    const step = activeSteps[currentStep];
+                    return step?.heading.title || step?.label || '';
                   })()}
                 </h2>
                 <p
@@ -669,10 +750,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 >
                   {(() => {
                     if (showTemplateSelection) return 'Choose a template to start from';
-                    const heading = currentStep === 1
-                      ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
-                      : STEP_HEADINGS[currentStep];
-                    return heading?.subtitle || '';
+                    if (currentStepId === 'counterparty' && !isRfqMode) {
+                      const heading = COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client;
+                      return heading.subtitle;
+                    }
+                    const step = activeSteps[currentStep];
+                    return step?.heading.subtitle || '';
                   })()}
                 </p>
               </div>
@@ -680,7 +763,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
             {/* Center: Progress Dots */}
             <div className="flex items-center gap-2">
-              {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
+              {Array.from({ length: totalSteps }).map((_, index) => (
                 <button
                   key={index}
                   onClick={() => {
@@ -727,8 +810,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         {/* Floating Action Island */}
         <FloatingActionIsland
           currentStep={showTemplateSelection ? 0 : currentStep}
-          totalSteps={TOTAL_STEPS}
-          stepLabels={showTemplateSelection ? ['Select Template', ...STEP_LABELS.slice(1)] : STEP_LABELS}
+          totalSteps={totalSteps}
+          stepLabels={showTemplateSelection ? ['Select Template', ...stepLabels.slice(1)] : stepLabels}
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
@@ -737,6 +820,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           onBack={handleBack}
           onNext={handleNext}
           onClose={onClose}
+          sendButtonText={isRfqMode ? 'Send RFQ' : undefined}
+          showTotal={!isRfqMode}
         />
       </div>
     </div>

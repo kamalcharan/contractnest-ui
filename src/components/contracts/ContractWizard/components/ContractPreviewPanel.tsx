@@ -64,6 +64,8 @@ export interface ContractPreviewPanelProps {
   currency: string;
   // Styling
   className?: string;
+  // RFQ mode - hide pricing info
+  hidePricing?: boolean;
 }
 
 // Format currency
@@ -111,6 +113,7 @@ const ContractPreviewPanel: React.FC<ContractPreviewPanelProps> = ({
   selectedBlocks,
   currency,
   className = '',
+  hidePricing = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -436,21 +439,25 @@ const ContractPreviewPanel: React.FC<ContractPreviewPanelProps> = ({
                     >
                       {block.name}
                     </span>
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{
-                        backgroundColor: `${colors.utility.primaryText}08`,
-                        color: colors.utility.secondaryText,
-                      }}
-                    >
-                      ×{block.unlimited ? '∞' : block.quantity}
-                    </span>
-                    <span
-                      className="text-[10px] font-medium"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {formatCurrency(block.totalPrice, block.currency)}
-                    </span>
+                    {!hidePricing && (
+                      <>
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{
+                            backgroundColor: `${colors.utility.primaryText}08`,
+                            color: colors.utility.secondaryText,
+                          }}
+                        >
+                          ×{block.unlimited ? '∞' : block.quantity}
+                        </span>
+                        <span
+                          className="text-[10px] font-medium"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          {formatCurrency(block.totalPrice, block.currency)}
+                        </span>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -459,44 +466,46 @@ const ContractPreviewPanel: React.FC<ContractPreviewPanelProps> = ({
         </div>
       </div>
 
-      {/* Footer - Totals */}
-      <div
-        className="p-4 border-t flex-shrink-0"
-        style={{
-          borderColor: `${colors.utility.primaryText}10`,
-          backgroundColor: colors.utility.secondaryBackground,
-        }}
-      >
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-              Subtotal ({totals.blockCount} items)
-            </span>
-            <span className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
-              {formatCurrency(totals.subtotal, currency)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-              Tax ({Math.round(totals.taxRate * 100)}%)
-            </span>
-            <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
-              {formatCurrency(totals.tax, currency)}
-            </span>
-          </div>
-          <div
-            className="flex items-center justify-between pt-2 border-t"
-            style={{ borderColor: `${colors.utility.primaryText}15` }}
-          >
-            <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-              Total
-            </span>
-            <span className="text-lg font-bold" style={{ color: colors.brand.primary }}>
-              {formatCurrency(totals.total, currency)}
-            </span>
+      {/* Footer - Totals (hidden in RFQ mode) */}
+      {!hidePricing && (
+        <div
+          className="p-4 border-t flex-shrink-0"
+          style={{
+            borderColor: `${colors.utility.primaryText}10`,
+            backgroundColor: colors.utility.secondaryBackground,
+          }}
+        >
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                Subtotal ({totals.blockCount} items)
+              </span>
+              <span className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+                {formatCurrency(totals.subtotal, currency)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                Tax ({Math.round(totals.taxRate * 100)}%)
+              </span>
+              <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                {formatCurrency(totals.tax, currency)}
+              </span>
+            </div>
+            <div
+              className="flex items-center justify-between pt-2 border-t"
+              style={{ borderColor: `${colors.utility.primaryText}15` }}
+            >
+              <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                Total
+              </span>
+              <span className="text-lg font-bold" style={{ color: colors.brand.primary }}>
+                {formatCurrency(totals.total, currency)}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

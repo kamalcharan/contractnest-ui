@@ -44,6 +44,8 @@ interface ContractDetailsStepProps {
   data: ContractDetailsData;
   onChange: (data: Partial<ContractDetailsData>) => void;
   errors?: Partial<Record<keyof ContractDetailsData, string>>;
+  title?: string;
+  subtitle?: string;
 }
 
 // Helper to get Lucide icon component by name
@@ -71,6 +73,8 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
   data,
   onChange,
   errors = {},
+  title,
+  subtitle,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -204,13 +208,13 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
             className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
-            Contract Details
+            {title || 'Contract Details'}
           </h2>
           <p
             className="text-sm max-w-lg mx-auto"
             style={{ color: colors.utility.secondaryText }}
           >
-            Define the basic information for your contract
+            {subtitle || 'Define the basic information for your contract'}
           </p>
         </div>
 

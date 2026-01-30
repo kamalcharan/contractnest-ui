@@ -50,6 +50,9 @@ export interface ReviewSendStepProps {
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
   selectedTaxRateIds: string[];
+  // RFQ mode
+  rfqMode?: boolean;
+  vendorNames?: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -105,6 +108,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   emiMonths,
   perBlockPaymentType,
   selectedTaxRateIds,
+  rfqMode = false,
+  vendorNames = [],
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -185,36 +190,45 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       <div className="flex-1 overflow-y-auto">
         {/* Controls above paper */}
         <div className="max-w-[850px] mx-auto flex items-center justify-between px-2 pt-6 pb-3">
-          {/* Self / Client pill toggle */}
-          <div
-            className="flex items-center rounded-full p-1 shadow-sm"
-            style={{ backgroundColor: paperBg }}
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode('self')}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-              style={{
-                backgroundColor: isSelfView ? brandPrimary : 'transparent',
-                color: isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
-              }}
+          {/* Self / Client pill toggle - hidden in RFQ mode */}
+          {!rfqMode ? (
+            <div
+              className="flex items-center rounded-full p-1 shadow-sm"
+              style={{ backgroundColor: paperBg }}
             >
-              <Eye className="w-3.5 h-3.5" />
-              Self View
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('client')}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-              style={{
-                backgroundColor: !isSelfView ? brandPrimary : 'transparent',
-                color: !isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
-              }}
+              <button
+                type="button"
+                onClick={() => setViewMode('self')}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: isSelfView ? brandPrimary : 'transparent',
+                  color: isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
+                }}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Self View
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('client')}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: !isSelfView ? brandPrimary : 'transparent',
+                  color: !isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
+                }}
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                Client View
+              </button>
+            </div>
+          ) : (
+            <span
+              className="text-[10px] px-3 py-1.5 rounded-full font-medium uppercase tracking-wide shadow-sm"
+              style={{ backgroundColor: paperBg, color: brandPrimary }}
             >
-              <EyeOff className="w-3.5 h-3.5" />
-              Client View
-            </button>
-          </div>
+              RFQ Preview
+            </span>
+          )}
 
           {/* Right controls: PDF download + Acceptance badge */}
           <div className="flex items-center gap-2">
@@ -229,21 +243,23 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               <Download className="w-3.5 h-3.5" />
               PDF
             </button>
-            <span
-              className="text-[10px] px-3 py-1.5 rounded-full font-medium uppercase tracking-wide shadow-sm"
-              style={{
-                backgroundColor: paperBg,
-                color: brandPrimary,
-              }}
-            >
-              {acceptanceMethod === 'payment'
-                ? 'Payment Acceptance'
-                : acceptanceMethod === 'signoff'
-                  ? 'Signoff Acceptance'
-                  : acceptanceMethod === 'auto'
-                    ? 'Auto Accept'
-                    : 'Not Set'}
-            </span>
+            {!rfqMode && (
+              <span
+                className="text-[10px] px-3 py-1.5 rounded-full font-medium uppercase tracking-wide shadow-sm"
+                style={{
+                  backgroundColor: paperBg,
+                  color: brandPrimary,
+                }}
+              >
+                {acceptanceMethod === 'payment'
+                  ? 'Payment Acceptance'
+                  : acceptanceMethod === 'signoff'
+                    ? 'Signoff Acceptance'
+                    : acceptanceMethod === 'auto'
+                      ? 'Auto Accept'
+                      : 'Not Set'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -279,7 +295,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                 <p className="text-white/70 text-xs font-medium uppercase tracking-widest">
                   {tenantProfile?.business_name || 'Your Company'}
                 </p>
-                <p className="text-white text-sm font-medium mt-0.5">Service Agreement</p>
+                <p className="text-white text-sm font-medium mt-0.5">
+                  {rfqMode ? 'Request for Quotation' : 'Service Agreement'}
+                </p>
               </div>
             </div>
           </div>
@@ -291,7 +309,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               className="font-serif text-3xl font-medium mb-3"
               style={{ color: colors.utility.primaryText }}
             >
-              {contractName || 'Untitled Contract'}
+              {contractName || (rfqMode ? 'Untitled RFQ' : 'Untitled Contract')}
             </h1>
 
             {/* Status + ref + date */}
@@ -346,17 +364,27 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                 )}
               </div>
 
-              {/* Customer */}
+              {/* Customer / Vendors */}
               <div>
                 <span
                   className="text-[10px] font-bold uppercase tracking-wider block mb-2"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  Customer
+                  {rfqMode ? 'Vendors' : 'Customer'}
                 </span>
-                <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-                  {buyerName || 'Not selected'}
-                </p>
+                {rfqMode && vendorNames.length > 0 ? (
+                  <div className="space-y-1">
+                    {vendorNames.map((name, idx) => (
+                      <p key={idx} className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                        {name}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                    {buyerName || 'Not selected'}
+                  </p>
+                )}
               </div>
 
               {/* Duration */}
@@ -375,31 +403,33 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                 </p>
               </div>
 
-              {/* Payment */}
-              <div>
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider block mb-2"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Payment
-                </span>
-                <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-                  {isMixed
-                    ? 'Mixed Billing'
-                    : paymentMode === 'emi'
-                      ? `EMI · ${emiMonths} months`
-                      : '100% Prepaid'}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>
-                  {acceptanceMethod === 'payment'
-                    ? 'Payment Acceptance'
-                    : acceptanceMethod === 'signoff'
-                      ? 'Signoff Required'
-                      : acceptanceMethod === 'auto'
-                        ? 'Auto Accept'
-                        : '—'}
-                </p>
-              </div>
+              {/* Payment - hidden in RFQ mode */}
+              {!rfqMode && (
+                <div>
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wider block mb-2"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Payment
+                  </span>
+                  <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                    {isMixed
+                      ? 'Mixed Billing'
+                      : paymentMode === 'emi'
+                        ? `EMI · ${emiMonths} months`
+                        : '100% Prepaid'}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                    {acceptanceMethod === 'payment'
+                      ? 'Payment Acceptance'
+                      : acceptanceMethod === 'signoff'
+                        ? 'Signoff Required'
+                        : acceptanceMethod === 'auto'
+                          ? 'Auto Accept'
+                          : '—'}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* ── Description ── */}
@@ -492,8 +522,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               )}
                             </div>
 
-                            {/* Pricing tags */}
-                            {hasPricing && (
+                            {/* Pricing tags - hidden in RFQ mode */}
+                            {hasPricing && !rfqMode && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <span
                                   className="text-[10px] px-2 py-0.5 rounded-md font-medium"
@@ -565,8 +595,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                             )}
                           </div>
 
-                          {/* Price - right side, Self View only, pricing blocks only */}
-                          {isSelfView && hasPricing && (
+                          {/* Price - right side, Self View only, pricing blocks only, hidden in RFQ */}
+                          {isSelfView && hasPricing && !rfqMode && (
                             <div className="text-right flex-shrink-0 self-center">
                               <p className="text-sm font-bold" style={{ color: catColor }}>
                                 {formatCurrency(lineTotal, currency)}
@@ -597,8 +627,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               </div>
             )}
 
-            {/* ── Financial Summary (inline in paper) ── */}
-            {totals.billableCount > 0 && (
+            {/* ── Financial Summary (inline in paper) - hidden in RFQ ── */}
+            {totals.billableCount > 0 && !rfqMode && (
               <div className="mt-10 pt-8 border-t" style={{ borderColor }}>
                 <h3 className="text-sm font-bold mb-4" style={{ color: colors.utility.primaryText }}>
                   Financial Summary

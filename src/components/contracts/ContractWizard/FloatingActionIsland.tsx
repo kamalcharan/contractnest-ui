@@ -16,6 +16,8 @@ export interface FloatingActionIslandProps {
   onBack: () => void;
   onNext: () => void;
   onClose: () => void;
+  sendButtonText?: string;
+  showTotal?: boolean;
 }
 
 const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
@@ -30,6 +32,8 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
   onBack,
   onNext,
   onClose,
+  sendButtonText,
+  showTotal = true,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -123,31 +127,35 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
           }}
         />
 
-        {/* Total Value */}
-        <div className="flex items-center gap-2">
-          <span
-            className="text-xs font-medium uppercase tracking-wider"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Total
-          </span>
-          <span
-            className="text-lg font-bold"
-            style={{ color: colors.brand.primary }}
-          >
-            {formatCurrency(totalValue)}
-          </span>
-        </div>
+        {/* Total Value - hidden in RFQ mode */}
+        {showTotal && (
+          <>
+            <div className="flex items-center gap-2">
+              <span
+                className="text-xs font-medium uppercase tracking-wider"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Total
+              </span>
+              <span
+                className="text-lg font-bold"
+                style={{ color: colors.brand.primary }}
+              >
+                {formatCurrency(totalValue)}
+              </span>
+            </div>
 
-        {/* Divider */}
-        <div
-          className="w-px h-6"
-          style={{
-            backgroundColor: isDarkMode
-              ? 'rgba(255, 255, 255, 0.1)'
-              : 'rgba(0, 0, 0, 0.1)',
-          }}
-        />
+            {/* Divider */}
+            <div
+              className="w-px h-6"
+              style={{
+                backgroundColor: isDarkMode
+                  ? 'rgba(255, 255, 255, 0.1)'
+                  : 'rgba(0, 0, 0, 0.1)',
+              }}
+            />
+          </>
+        )}
 
         {/* Navigation Buttons */}
         <div className="flex items-center gap-2">
@@ -178,7 +186,7 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
                 : colors.brand.primary,
             }}
           >
-            {isLastStep ? 'Send Contract' : 'Continue'}
+            {isLastStep ? (sendButtonText || 'Send Contract') : 'Continue'}
             {!isLastStep && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>

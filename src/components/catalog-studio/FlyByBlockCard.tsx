@@ -60,6 +60,7 @@ export interface FlyByBlockCardProps {
   onToggleExpand?: (blockId: string) => void;
   onRemove: (blockId: string) => void;
   onUpdate: (blockId: string, updates: Partial<ConfigurableBlock>) => void;
+  hidePricing?: boolean;
 }
 
 // Format currency
@@ -76,6 +77,7 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   onToggleExpand,
   onRemove,
   onUpdate,
+  hidePricing = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -158,12 +160,12 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   // Get current cycle option
   const currentCycle = CYCLE_OPTIONS.find((c) => c.id === block.cycle) || CYCLE_OPTIONS[0];
 
-  // Check if type has pricing (service, spare)
-  const hasPricing = flyByType === 'service' || flyByType === 'spare';
+  // Check if type has pricing (service, spare) — overridden by hidePricing
+  const hasPricing = !hidePricing && (flyByType === 'service' || flyByType === 'spare');
   // Check if type has quantity
-  const hasQuantity = flyByType === 'service' || flyByType === 'spare';
+  const hasQuantity = !hidePricing && (flyByType === 'service' || flyByType === 'spare');
   // Check if type has billing cycle
-  const hasBillingCycle = flyByType === 'service';
+  const hasBillingCycle = !hidePricing && flyByType === 'service';
 
   return (
     <div
@@ -297,8 +299,8 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
               />
             </div>
 
-            {/* Description - For Service, Spare, Document */}
-            {(flyByType === 'service' || flyByType === 'spare' || flyByType === 'document') && (
+            {/* Description - For Service, Spare, Document (always shown in hidePricing mode) */}
+            {(hidePricing || flyByType === 'service' || flyByType === 'spare' || flyByType === 'document') && (
               <div>
                 <label
                   className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"

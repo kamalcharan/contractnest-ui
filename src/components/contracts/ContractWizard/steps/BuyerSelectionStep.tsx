@@ -22,7 +22,10 @@ import {
   Linkedin,
   LucideIcon,
   SkipForward,
-  Loader2
+  Loader2,
+  X,
+  Square,
+  CheckSquare
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContactList, useContact } from '@/hooks/useContacts';
@@ -144,6 +147,11 @@ interface BuyerSelectionStepProps {
     contactPersonName?: string,
     useCompanyContact?: boolean
   ) => void;
+  // Multi-select mode (for RFQ vendor selection)
+  multiSelect?: boolean;
+  selectedVendorIds?: string[];
+  selectedVendorNames?: string[];
+  onVendorsChange?: (ids: string[], names: string[]) => void;
 }
 
 const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
@@ -154,6 +162,10 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   useCompanyContact: initialUseCompanyContact,
   contractType = 'client',
   onSelectBuyer,
+  multiSelect = false,
+  selectedVendorIds = [],
+  selectedVendorNames = [],
+  onVendorsChange,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -227,6 +239,32 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
       message: `${displayName || 'Contact'} selected as buyer`,
     });
   }, [onSelectBuyer, addToast]);
+
+  // Multi-select toggle handler (for RFQ vendor selection)
+  const handleToggleVendor = useCallback((contact: any) => {
+    if (!onVendorsChange) return;
+    const displayName = contact.type === 'corporate'
+      ? contact.company_name
+      : contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
+    const contactId = contact.id as string;
+    const name = displayName || 'Unknown';
+
+    const idx = selectedVendorIds.indexOf(contactId);
+    if (idx >= 0) {
+      // Remove
+      const newIds = selectedVendorIds.filter((_, i) => i !== idx);
+      const newNames = selectedVendorNames.filter((_, i) => i !== idx);
+      onVendorsChange(newIds, newNames);
+    } else {
+      // Add
+      onVendorsChange([...selectedVendorIds, contactId], [...selectedVendorNames, name]);
+      addToast({
+        type: 'success',
+        title: 'Vendor added',
+        message: `${name} added to RFQ recipients`,
+      });
+    }
+  }, [onVendorsChange, selectedVendorIds, selectedVendorNames, addToast]);
 
   // Auto-select primary person when full contact data loads
   useEffect(() => {
@@ -832,21 +870,82 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
             className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
-            {labels.heading}
+            {multiSelect ? 'Select Vendors for RFQ' : labels.heading}
           </h2>
           <p
             className="text-sm"
             style={{ color: colors.utility.secondaryText }}
           >
-            {labels.subtitle}
+            {multiSelect ? 'Choose one or more vendors to send this RFQ to' : labels.subtitle}
           </p>
+          {/* Selected count badge for multi-select */}
+          {multiSelect && selectedVendorIds.length > 0 && (
+            <div
+              className="inline-flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full text-sm font-semibold"
+              style={{
+                backgroundColor: `${colors.semantic.success}15`,
+                color: colors.semantic.success,
+              }}
+            >
+              <Check className="w-4 h-4" />
+              {selectedVendorIds.length} vendor{selectedVendorIds.length > 1 ? 's' : ''} selected
+            </div>
+          )}
         </div>
 
-        {/* Selected Contact Card (if selected) */}
-        {selectedContact && renderSelectedContactCard()}
+        {/* Selected Contact Card (single-select only) */}
+        {!multiSelect && selectedContact && renderSelectedContactCard()}
 
-        {/* Only show search/filters if no contact selected */}
-        {!selectedContact && (
+        {/* Selected vendors chips (multi-select mode) */}
+        {multiSelect && selectedVendorIds.length > 0 && (
+          <div
+            className="rounded-xl border p-4 mb-6"
+            style={{
+              backgroundColor: `${colors.semantic.success}05`,
+              borderColor: `${colors.semantic.success}30`,
+            }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4" style={{ color: colors.semantic.success }} />
+              <span
+                className="text-xs font-bold uppercase tracking-wider"
+                style={{ color: colors.semantic.success }}
+              >
+                Selected Vendors
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedVendorNames.map((name, idx) => (
+                <span
+                  key={selectedVendorIds[idx]}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium"
+                  style={{
+                    backgroundColor: `${colors.brand.primary}12`,
+                    color: colors.utility.primaryText,
+                  }}
+                >
+                  {name}
+                  <button
+                    onClick={() => {
+                      if (onVendorsChange) {
+                        const newIds = selectedVendorIds.filter((_, i) => i !== idx);
+                        const newNames = selectedVendorNames.filter((_, i) => i !== idx);
+                        onVendorsChange(newIds, newNames);
+                      }
+                    }}
+                    className="ml-1 hover:opacity-70 transition-opacity"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Only show search/filters if no contact selected (single-select) or always (multi-select) */}
+        {(multiSelect || !selectedContact) && (
           <>
             {/* Search + Add New */}
             <div
@@ -972,20 +1071,29 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                     const primaryChannel = getPrimaryChannel(contact);
                     const ChannelIcon = primaryChannel ? CHANNEL_ICONS[primaryChannel.channel_type] || Globe : null;
                     const hasPersons = contact.type === 'corporate' && contact.contact_persons?.length > 0;
+                    const isMultiSelected = multiSelect && selectedVendorIds.includes(contact.id);
 
                     return (
                       <button
                         key={contact.id}
-                        onClick={() => handleSelectContact(contact)}
+                        onClick={() => multiSelect ? handleToggleVendor(contact) : handleSelectContact(contact)}
                         className="w-full flex items-center gap-4 p-4 text-left transition-all hover:bg-opacity-50"
-                        style={{ backgroundColor: 'transparent' }}
+                        style={{
+                          backgroundColor: isMultiSelected
+                            ? `${colors.semantic.success}06`
+                            : 'transparent',
+                        }}
                       >
                         {/* Avatar */}
                         <div
                           className="w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
                           style={{
-                            backgroundColor: `${colors.brand.primary}15`,
-                            color: colors.brand.primary
+                            backgroundColor: isMultiSelected
+                              ? `${colors.semantic.success}15`
+                              : `${colors.brand.primary}15`,
+                            color: isMultiSelected
+                              ? colors.semantic.success
+                              : colors.brand.primary
                           }}
                         >
                           {getAvatarInitials(contact)}
@@ -1039,14 +1147,28 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                           )}
                         </div>
 
-                        {/* Selection Indicator */}
-                        <div
-                          className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                          style={{
-                            borderColor: `${colors.utility.primaryText}30`,
-                            backgroundColor: 'transparent'
-                          }}
-                        />
+                        {/* Selection Indicator: checkbox for multi-select, radio for single */}
+                        {multiSelect ? (
+                          isMultiSelected ? (
+                            <CheckSquare
+                              className="w-5 h-5 flex-shrink-0"
+                              style={{ color: colors.semantic.success }}
+                            />
+                          ) : (
+                            <Square
+                              className="w-5 h-5 flex-shrink-0"
+                              style={{ color: `${colors.utility.primaryText}30` }}
+                            />
+                          )
+                        ) : (
+                          <div
+                            className="w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                            style={{
+                              borderColor: `${colors.utility.primaryText}30`,
+                              backgroundColor: 'transparent'
+                            }}
+                          />
+                        )}
                       </button>
                     );
                   })}
