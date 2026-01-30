@@ -3,8 +3,8 @@
 // Column 1: Block Library | Column 2: Added Blocks | Column 3: Live Preview
 // Uses same drag-drop pattern as catalog-studio/template.tsx
 
-import React, { useState, useCallback, useMemo } from 'react';
-import { ShoppingCart, Layers } from 'lucide-react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { ShoppingCart, Layers, Zap, ChevronDown, Wrench, Package, FileText, File } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
@@ -13,7 +13,10 @@ import { getCategoryById } from '@/utils/catalog-studio';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 // Import shared catalog-studio components
-import { BlockLibraryMini, BlockCardConfigurable, ConfigurableBlock } from '@/components/catalog-studio';
+import { BlockLibraryMini, BlockCardConfigurable, FlyByBlockCard, ConfigurableBlock } from '@/components/catalog-studio';
+import type { FlyByCategoryId } from '@/components/catalog-studio/BlockLibraryMini';
+import { FLYBY_TYPE_CONFIG } from '@/components/catalog-studio/FlyByBlockCard';
+import { getCategoryById as getCatById } from '@/utils/catalog-studio/categories';
 
 // Import contract preview panel
 import ContractPreviewPanel from '../components/ContractPreviewPanel';
@@ -85,6 +88,29 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   // Local state
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
 
+  // FlyBy dropdown state
+  const [showFlyByMenu, setShowFlyByMenu] = useState(false);
+  const flyByMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close FlyBy menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (flyByMenuRef.current && !flyByMenuRef.current.contains(e.target as Node)) {
+        setShowFlyByMenu(false);
+      }
+    };
+    if (showFlyByMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFlyByMenu]);
+
+  // FlyBy menu options
+  const flyByMenuOptions = [
+    { type: 'service' as FlyByCategoryId, icon: Wrench, label: 'Service', color: '#3B82F6' },
+    { type: 'spare' as FlyByCategoryId, icon: Package, label: 'Spare Part', color: '#F59E0B' },
+    { type: 'text' as FlyByCategoryId, icon: FileText, label: 'Text Block', color: '#8B5CF6' },
+    { type: 'document' as FlyByCategoryId, icon: File, label: 'Document', color: '#10B981' },
+  ];
+
   // Drag-drop state (same pattern as template.tsx)
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [dragOverBlockId, setDragOverBlockId] = useState<string | null>(null);
@@ -140,6 +166,8 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         categoryName: category?.name || block.categoryId,
         categoryColor: category?.color || '#6B7280',
         categoryBgColor: category?.bgColor,
+        categoryId: block.categoryId,
+        isFlyBy: false,
         config: {
           showDescription: false,
         },
@@ -156,6 +184,48 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       setExpandedBlockId(block.id);
     },
     [selectedBlocks, selectedBlockIds, onBlocksChange, addToast, currency]
+  );
+
+  // Add FlyBy block (inline empty block)
+  const handleAddFlyByBlock = useCallback(
+    (type: FlyByCategoryId) => {
+      const typeConfig = FLYBY_TYPE_CONFIG[type as keyof typeof FLYBY_TYPE_CONFIG];
+      const category = getCatById(type);
+      const flyById = `flyby-${type}-${Date.now()}`;
+
+      const newBlock: ConfigurableBlock = {
+        id: flyById,
+        name: '',
+        description: '',
+        icon: category?.icon || 'Package',
+        quantity: 1,
+        cycle: type === 'service' ? 'prepaid' : 'prepaid',
+        unlimited: false,
+        price: 0,
+        currency: currency,
+        totalPrice: 0,
+        categoryName: typeConfig?.label || type,
+        categoryColor: typeConfig?.color || '#6B7280',
+        categoryBgColor: typeConfig?.bgColor,
+        categoryId: type,
+        isFlyBy: true,
+        flyByType: type,
+        config: {
+          showDescription: false,
+        },
+      };
+
+      onBlocksChange([...selectedBlocks, newBlock]);
+      addToast({
+        type: 'success',
+        title: 'FlyBy block added',
+        message: `New ${typeConfig?.label || type} FlyBy block added`,
+      });
+
+      // Auto-expand
+      setExpandedBlockId(flyById);
+    },
+    [selectedBlocks, onBlocksChange, addToast, currency]
   );
 
   // Remove block
@@ -255,11 +325,11 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
   return (
     <div
-      className="min-h-[70vh] flex flex-col"
+      className="h-full flex flex-col"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
       {/* Header */}
-      <div className="text-center pt-6 pb-4 px-4">
+      <div className="text-center pt-6 pb-4 px-4 flex-shrink-0">
         <h2
           className="text-2xl font-bold mb-2"
           style={{ color: colors.utility.primaryText }}
@@ -271,14 +341,16 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         </p>
       </div>
 
-      {/* 3-Column Layout */}
-      <div className="flex-1 flex gap-4 px-4 pb-6 min-h-0">
-        {/* Column 1: Block Library */}
-        <div className="w-[280px] flex-shrink-0">
+      {/* 3-Column Layout - fills remaining height */}
+      <div className="flex-1 flex gap-4 px-4 pb-6 min-h-0 overflow-hidden">
+        {/* Column 1: Block Library - viewport-based height */}
+        <div className="w-[280px] flex-shrink-0" style={{ height: 'calc(100vh - 200px)' }}>
           <BlockLibraryMini
             selectedBlockIds={selectedBlockIds}
             onAddBlock={handleAddBlock}
-            maxHeight="calc(70vh - 120px)"
+            maxHeight="calc(100vh - 200px)"
+            flyByTypes={['service', 'spare', 'text', 'document']}
+            onAddFlyByBlock={handleAddFlyByBlock}
           />
         </div>
 
@@ -290,7 +362,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             borderColor: `${colors.utility.primaryText}10`,
           }}
         >
-          {/* Added Blocks Header */}
+          {/* Added Blocks Header with FlyBy Dropdown */}
           <div
             className="p-3 border-b flex items-center justify-between flex-shrink-0"
             style={{ borderColor: `${colors.utility.primaryText}10` }}
@@ -315,9 +387,57 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                 </span>
               )}
             </div>
-            <span className="text-sm font-bold" style={{ color: colors.brand.primary }}>
-              {formatCurrency(totals.subtotal, currency)}
-            </span>
+            <div className="flex items-center gap-3">
+              {/* FlyBy Dropdown */}
+              <div className="relative" ref={flyByMenuRef}>
+                <button
+                  onClick={() => setShowFlyByMenu(!showFlyByMenu)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border"
+                  style={{
+                    backgroundColor: colors.utility.primaryBackground,
+                    borderColor: `${colors.utility.primaryText}25`,
+                    color: colors.utility.primaryText,
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  FlyBy
+                  <ChevronDown className={`w-3 h-3 transition-transform ${showFlyByMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showFlyByMenu && (
+                  <div
+                    className="absolute right-0 top-full mt-1 w-48 rounded-xl border shadow-lg z-20 py-1 overflow-hidden"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: `${colors.utility.primaryText}15`,
+                    }}
+                  >
+                    {flyByMenuOptions.map((opt) => {
+                      const OptIcon = opt.icon;
+                      return (
+                        <button
+                          key={opt.type}
+                          onClick={() => {
+                            handleAddFlyByBlock(opt.type);
+                            setShowFlyByMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-colors hover:opacity-80"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: `${opt.color}15` }}
+                          >
+                            <OptIcon className="w-3.5 h-3.5" style={{ color: opt.color }} />
+                          </div>
+                          <span className="font-medium">{opt.label}</span>
+                          <Zap className="w-3 h-3 ml-auto" style={{ color: opt.color }} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Blocks List */}
@@ -363,17 +483,31 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                         borderTop: isDragOver ? `2px solid ${colors.brand.primary}` : '2px solid transparent',
                       }}
                     >
-                      <BlockCardConfigurable
-                        block={block}
-                        isExpanded={expandedBlockId === block.id}
-                        isDragging={isDragging}
-                        dragHandleProps={{
-                          style: { cursor: 'grab' },
-                        }}
-                        onToggleExpand={handleToggleExpand}
-                        onRemove={handleRemoveBlock}
-                        onUpdate={handleUpdateBlock}
-                      />
+                      {block.isFlyBy ? (
+                        <FlyByBlockCard
+                          block={block}
+                          isExpanded={expandedBlockId === block.id}
+                          isDragging={isDragging}
+                          dragHandleProps={{
+                            style: { cursor: 'grab' },
+                          }}
+                          onToggleExpand={handleToggleExpand}
+                          onRemove={handleRemoveBlock}
+                          onUpdate={handleUpdateBlock}
+                        />
+                      ) : (
+                        <BlockCardConfigurable
+                          block={block}
+                          isExpanded={expandedBlockId === block.id}
+                          isDragging={isDragging}
+                          dragHandleProps={{
+                            style: { cursor: 'grab' },
+                          }}
+                          onToggleExpand={handleToggleExpand}
+                          onRemove={handleRemoveBlock}
+                          onUpdate={handleUpdateBlock}
+                        />
+                      )}
                     </div>
                   );
                 })}

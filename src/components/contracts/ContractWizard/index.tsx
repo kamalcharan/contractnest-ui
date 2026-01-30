@@ -1,12 +1,11 @@
 // src/components/contracts/ContractWizard/index.tsx
 // Contract Wizard - Main component with Floating Action Island
 import React, { useState, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
-import YourRoleStep, { ContractRole } from './steps/YourRoleStep';
 import BuyerSelectionStep from './steps/BuyerSelectionStep';
 import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
 import ContractDetailsStep, { ContractDetailsData } from './steps/ContractDetailsStep';
@@ -15,6 +14,9 @@ import BillingCycleStep, { BillingCycleType } from './steps/BillingCycleStep';
 import BillingViewStep from './steps/BillingViewStep';
 import ReviewSendStep from './steps/ReviewSendStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
+
+// Keep ContractRole type export for backwards compatibility
+export type ContractRole = 'client' | 'vendor' | null;
 
 // Re-export ConfigurableBlock as SelectedBlock for backwards compatibility
 export type SelectedBlock = ConfigurableBlock;
@@ -26,14 +28,14 @@ export type ContractType = 'client' | 'vendor' | 'partner';
 export interface ContractWizardState {
   path: ContractPath;
   templateId: string | null;
-  // Step 1: Your Role
+  // Role (kept for API compatibility, auto-set based on contractType)
   role: ContractRole;
-  // Step 2: Counterparty
+  // Step 1: Counterparty
   buyerId: string | null;
   buyerName: string;
-  // Step 3: Acceptance
+  // Step 2: Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
-  // Step 4: Contract Details
+  // Step 3: Contract Details
   contractName: string;
   status: string;
   currency: string;
@@ -42,12 +44,12 @@ export interface ContractWizardState {
   durationUnit: string;
   gracePeriodValue: number;
   gracePeriodUnit: string;
-  // Step 5: Billing Cycle
+  // Step 4: Billing Cycle
   billingCycleType: BillingCycleType;
-  // Step 6: Blocks & Total
+  // Step 5: Blocks & Total
   selectedBlocks: SelectedBlock[];
   totalValue: number;
-  // Step 7: Billing View - Tax & Payment
+  // Step 6: Billing View - Tax & Payment
   selectedTaxRateIds: string[];
   paymentMode: 'prepaid' | 'emi';
   emiMonths: number;
@@ -61,10 +63,9 @@ interface ContractWizardProps {
   onComplete?: (contractData: ContractWizardState) => void;
 }
 
-// Step configuration
+// Step configuration (YourRole removed - 8 steps)
 const STEP_LABELS = [
   'Choose Path',
-  'Your Role',
   'Counterparty',
   'Acceptance',
   'Details',
@@ -77,7 +78,6 @@ const STEP_LABELS = [
 // Step headings shown in the wizard header
 const STEP_HEADINGS: Array<{ title: string; subtitle: string }> = [
   { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' },
-  { title: 'Your Role', subtitle: 'Who are you in this contract?' },
   { title: '', subtitle: '' }, // Dynamic - set based on contractType
   { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' },
   { title: 'Contract Details', subtitle: 'Define the basic information for your contract' },
@@ -94,7 +94,14 @@ const COUNTERPARTY_HEADINGS: Record<string, { title: string; subtitle: string }>
   partner: { title: 'Select your Partner', subtitle: 'Choose which partner this contract is with' },
 };
 
-const TOTAL_STEPS = 9;
+// Counterparty labels for success screen
+const COUNTERPARTY_LABEL: Record<string, string> = {
+  client: 'client',
+  vendor: 'vendor',
+  partner: 'partner',
+};
+
+const TOTAL_STEPS = 8;
 
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
@@ -111,32 +118,34 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Sub-step for template selection (shown after choosing "From Template")
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
 
+  // Success screen state
+  const [isContractSent, setIsContractSent] = useState(false);
+
   // Wizard data state
   const [wizardState, setWizardState] = useState<ContractWizardState>({
     path: null,
     templateId: null,
-    // Step 1: Your Role
     role: null,
-    // Step 2: Counterparty
+    // Step 1: Counterparty
     buyerId: null,
     buyerName: '',
-    // Step 3: Acceptance
+    // Step 2: Acceptance
     acceptanceMethod: null,
-    // Step 4: Contract Details
+    // Step 3: Contract Details
     contractName: '',
     status: 'draft',
-    currency: 'INR', // Default to INR
+    currency: 'INR',
     description: '',
     durationValue: 1,
     durationUnit: 'months',
     gracePeriodValue: 0,
     gracePeriodUnit: 'days',
-    // Step 5: Billing Cycle
+    // Step 4: Billing Cycle
     billingCycleType: null,
-    // Step 6: Blocks & Total
+    // Step 5: Blocks & Total
     selectedBlocks: [],
     totalValue: 0,
-    // Step 7: Billing View - Tax & Payment
+    // Step 6: Billing View - Tax & Payment
     selectedTaxRateIds: [],
     paymentMode: 'prepaid',
     emiMonths: 6,
@@ -166,28 +175,25 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const canGoNext = useCallback((): boolean => {
     // If showing template selection sub-step
     if (showTemplateSelection) {
-      // Can only proceed if a template is selected OR they click "switch to scratch"
       return wizardState.templateId !== null;
     }
 
     switch (currentStep) {
       case 0: // Path Selection
         return wizardState.path !== null;
-      case 1: // Your Role
-        return wizardState.role !== null;
-      case 2: // Counterparty Selection
+      case 1: // Counterparty Selection
         return wizardState.buyerId !== null;
-      case 3: // Acceptance Method
+      case 2: // Acceptance Method
         return wizardState.acceptanceMethod !== null;
-      case 4: // Contract Details
+      case 3: // Contract Details
         return wizardState.contractName.trim() !== '' && wizardState.durationValue > 0;
-      case 5: // Billing Cycle
+      case 4: // Billing Cycle
         return wizardState.billingCycleType !== null;
-      case 6: // Block Assembly
+      case 5: // Block Assembly
         return wizardState.selectedBlocks.length > 0;
-      case 7: // Billing View
-        return true; // Can always proceed (tax is optional)
-      case 8: // Review & Send
+      case 6: // Billing View
+        return true;
+      case 7: // Review & Send
         return true;
       default:
         return false;
@@ -200,11 +206,10 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Navigation handlers
   const handleNext = useCallback(() => {
     if (isLastStep) {
-      // Complete the wizard
-      onComplete?.(wizardState);
-      onClose();
+      // Show success screen instead of immediately closing
+      setIsContractSent(true);
     } else if (showTemplateSelection) {
-      // From template selection, go to buyer step
+      // From template selection, go to counterparty step
       setShowTemplateSelection(false);
       setCurrentStep(1);
     } else if (canGoNext()) {
@@ -215,7 +220,14 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         setCurrentStep((prev) => Math.min(prev + 1, TOTAL_STEPS - 1));
       }
     }
-  }, [isLastStep, canGoNext, wizardState, onComplete, onClose, showTemplateSelection, currentStep]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStep]);
+
+  // Done button handler on success screen
+  const handleDone = useCallback(() => {
+    onComplete?.(wizardState);
+    setIsContractSent(false);
+    onClose();
+  }, [wizardState, onComplete, onClose]);
 
   const handleBack = useCallback(() => {
     if (showTemplateSelection) {
@@ -248,16 +260,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     updateWizardState('path', 'scratch');
     updateWizardState('templateId', null);
     setShowTemplateSelection(false);
-    setCurrentStep(1); // Go to Your Role step
+    setCurrentStep(1); // Go to Counterparty step
   }, [updateWizardState]);
-
-  // Role selection handler
-  const handleRoleSelect = useCallback(
-    (role: ContractRole) => {
-      updateWizardState('role', role);
-    },
-    [updateWizardState]
-  );
 
   // Billing cycle type selection handler
   const handleBillingCycleTypeSelect = useCallback(
@@ -362,13 +366,6 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         );
       case 1:
         return (
-          <YourRoleStep
-            selectedRole={wizardState.role}
-            onSelectRole={handleRoleSelect}
-          />
-        );
-      case 2:
-        return (
           <BuyerSelectionStep
             selectedBuyerId={wizardState.buyerId}
             selectedBuyerName={wizardState.buyerName}
@@ -376,14 +373,14 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             contractType={contractType}
           />
         );
-      case 3:
+      case 2:
         return (
           <AcceptanceMethodStep
             selectedMethod={wizardState.acceptanceMethod}
             onSelectMethod={handleAcceptanceMethodSelect}
           />
         );
-      case 4:
+      case 3:
         return (
           <ContractDetailsStep
             data={{
@@ -399,20 +396,20 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             onChange={handleDetailsChange}
           />
         );
-      case 5:
+      case 4:
         return (
           <BillingCycleStep
             selectedCycleType={wizardState.billingCycleType}
             onSelectCycleType={handleBillingCycleTypeSelect}
           />
         );
-      case 6: {
+      case 5: {
         // Calculate contract duration in months
         const durationInMonths = wizardState.durationUnit === 'months'
           ? wizardState.durationValue
           : wizardState.durationUnit === 'years'
             ? wizardState.durationValue * 12
-            : Math.ceil(wizardState.durationValue / 30); // days to months
+            : Math.ceil(wizardState.durationValue / 30);
 
         return (
           <ServiceBlocksStep
@@ -423,7 +420,6 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             contractStatus={wizardState.status}
             contractDuration={durationInMonths}
             contractStartDate={new Date()}
-            // Buyer info - create a minimal buyer object from wizard state
             selectedBuyer={wizardState.buyerId ? {
               id: wizardState.buyerId,
               contact_type: 'individual',
@@ -432,7 +428,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           />
         );
       }
-      case 7: {
+      case 6: {
         // Billing View - calculate duration in months
         const billingDuration = wizardState.durationUnit === 'months'
           ? wizardState.durationValue
@@ -458,7 +454,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           />
         );
       }
-      case 8:
+      case 7:
         return (
           <ReviewSendStep
             contractName={wizardState.contractName}
@@ -482,6 +478,134 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         return null;
     }
   };
+
+  // Success screen - rendered before the !isOpen guard so it stays visible
+  if (isContractSent) {
+    return (
+      <div className="fixed inset-0 z-50">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundColor: isDarkMode
+              ? 'rgba(0, 0, 0, 0.85)'
+              : 'rgba(0, 0, 0, 0.5)',
+          }}
+        />
+
+        {/* Success Content */}
+        <div
+          className="relative z-10 w-full h-full flex items-center justify-center"
+          style={{ backgroundColor: colors.utility.primaryBackground }}
+        >
+          <div className="text-center max-w-md px-6">
+            {/* Animated Checkmark */}
+            <div className="mb-8 flex justify-center">
+              <div
+                className="relative w-28 h-28 rounded-full flex items-center justify-center"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.semantic.success}20, ${colors.semantic.success}08)`,
+                  animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
+                }}
+              >
+                {/* Outer ring */}
+                <div
+                  className="absolute inset-0 rounded-full border-2"
+                  style={{
+                    borderColor: colors.semantic.success,
+                    animation: 'ringPulse 2s ease-in-out infinite',
+                  }}
+                />
+                {/* Inner checkmark circle */}
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  style={{
+                    backgroundColor: colors.semantic.success,
+                    animation: 'scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both',
+                  }}
+                >
+                  <CheckCircle2 className="w-10 h-10 text-white" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2
+              className="text-2xl font-bold mb-3"
+              style={{
+                color: colors.utility.primaryText,
+                animation: 'fadeInUp 0.5s ease-out 0.4s both',
+              }}
+            >
+              Contract Sent!
+            </h2>
+
+            {/* Description */}
+            <p
+              className="text-sm mb-2"
+              style={{
+                color: colors.utility.secondaryText,
+                animation: 'fadeInUp 0.5s ease-out 0.5s both',
+              }}
+            >
+              <strong style={{ color: colors.utility.primaryText }}>
+                {wizardState.contractName || 'Your contract'}
+              </strong>
+              {' '}has been sent to{' '}
+              <strong style={{ color: colors.brand.primary }}>
+                {wizardState.buyerName || `your ${COUNTERPARTY_LABEL[contractType] || 'counterparty'}`}
+              </strong>
+              {' '}for review.
+            </p>
+
+            {/* Acceptance method note */}
+            <p
+              className="text-xs mb-8"
+              style={{
+                color: colors.utility.secondaryText,
+                animation: 'fadeInUp 0.5s ease-out 0.6s both',
+              }}
+            >
+              {wizardState.acceptanceMethod === 'signoff'
+                ? 'They will need to sign off to accept the contract.'
+                : wizardState.acceptanceMethod === 'payment'
+                  ? 'The contract will be accepted once payment is completed.'
+                  : 'The contract will be auto-accepted.'}
+            </p>
+
+            {/* Done Button */}
+            <button
+              onClick={handleDone}
+              className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 hover:shadow-lg"
+              style={{
+                backgroundColor: colors.brand.primary,
+                animation: 'fadeInUp 0.5s ease-out 0.7s both',
+              }}
+            >
+              Done
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* CSS Animations */}
+        <style>{`
+          @keyframes scaleIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+          }
+          @keyframes fadeInUp {
+            from { transform: translateY(16px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+          @keyframes ringPulse {
+            0%, 100% { transform: scale(1); opacity: 0.6; }
+            50% { transform: scale(1.08); opacity: 0.3; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   if (!isOpen) return null;
 
@@ -533,7 +657,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 >
                   {(() => {
                     if (showTemplateSelection) return 'Select Template';
-                    const heading = currentStep === 2
+                    const heading = currentStep === 1
                       ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
                       : STEP_HEADINGS[currentStep];
                     return heading?.title || STEP_LABELS[currentStep];
@@ -545,7 +669,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 >
                   {(() => {
                     if (showTemplateSelection) return 'Choose a template to start from';
-                    const heading = currentStep === 2
+                    const heading = currentStep === 1
                       ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
                       : STEP_HEADINGS[currentStep];
                     return heading?.subtitle || '';

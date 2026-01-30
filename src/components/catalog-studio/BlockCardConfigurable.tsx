@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 
 // Billing cycle options
 export const CYCLE_OPTIONS = [
@@ -51,11 +52,17 @@ export interface ConfigurableBlock {
   categoryName: string;
   categoryColor: string;
   categoryBgColor?: string;
+  categoryId?: string;
+  isFlyBy?: boolean;
+  flyByType?: string; // 'service' | 'spare' | 'text' | 'document'
   // Additional config options
   config?: {
     showDescription?: boolean; // Show description in contract
     customPrice?: number; // Selling price (editable, defaults to defined price)
     notes?: string;
+    content?: string; // Text block content
+    sku?: string; // Spare part SKU
+    fileType?: string; // Document file type
   };
 }
 
@@ -96,6 +103,7 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const IconComponent = getIconComponent(block.icon);
+  const hasPricing = categoryHasPricing(block.categoryId || '');
 
   // Local state for inline editing
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
@@ -205,18 +213,22 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               >
                 {block.categoryName}
               </span>
-              <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                {block.unlimited ? '∞' : `×${block.quantity}`} • {currentCycle.shortLabel}
-              </span>
+              {hasPricing && (
+                <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                  {block.unlimited ? '∞' : `×${block.quantity}`} • {currentCycle.shortLabel}
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Price */}
-          <div className="text-right">
-            <span className="text-sm font-bold" style={{ color: colors.brand.primary }}>
-              {formatCurrency(block.totalPrice, block.currency)}
-            </span>
-          </div>
+          {/* Price - only for pricing categories */}
+          {hasPricing && (
+            <div className="text-right">
+              <span className="text-sm font-bold" style={{ color: colors.brand.primary }}>
+                {formatCurrency(block.totalPrice, block.currency)}
+              </span>
+            </div>
+          )}
 
           {/* Expand/Collapse */}
           <button
@@ -248,8 +260,15 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
           style={{ borderColor: `${colors.utility.primaryText}10` }}
         >
           <div className="pt-3 space-y-4">
-            {/* Quantity Section - Limited/Unlimited Switch */}
-            <div>
+            {/* Description for non-pricing blocks */}
+            {!hasPricing && block.description && (
+              <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                {block.description}
+              </p>
+            )}
+
+            {/* Quantity Section - Limited/Unlimited Switch (pricing blocks only) */}
+            {hasPricing && <div>
               <label
                 className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
                 style={{ color: colors.utility.secondaryText }}
@@ -309,10 +328,10 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                   </div>
                 )}
               </div>
-            </div>
+            </div>}
 
-            {/* Billing Cycle Section */}
-            <div>
+            {/* Billing Cycle Section (pricing blocks only) */}
+            {hasPricing && <div>
               <label
                 className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
                 style={{ color: colors.utility.secondaryText }}
@@ -362,9 +381,10 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                   </span>
                 </div>
               )}
-            </div>
+            </div>}
 
-            {/* Advanced Settings */}
+            {/* Advanced Settings (pricing blocks only) */}
+            {hasPricing && <>
             <div
               className="p-3 rounded-lg"
               style={{ backgroundColor: `${colors.utility.primaryText}05` }}
@@ -466,6 +486,27 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                 {formatCurrency(block.totalPrice, block.currency)}
               </span>
             </div>
+            </>}
+
+            {/* Show Description toggle - always available for all block types */}
+            {!hasPricing && (
+              <div>
+                <button
+                  onClick={() => handleConfigChange('showDescription', !block.config?.showDescription)}
+                  className="flex items-center gap-2 w-full"
+                >
+                  {block.config?.showDescription ? (
+                    <ToggleRight className="w-5 h-5" style={{ color: colors.brand.primary }} />
+                  ) : (
+                    <ToggleLeft className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
+                  )}
+                  <FileText className="w-3.5 h-3.5" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    Show description in contract
+                  </span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
