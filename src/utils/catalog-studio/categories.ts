@@ -246,3 +246,11 @@ export const supportsResources = (categoryId: string): boolean => {
 export const supportsVariants = (categoryId: string): boolean => {
   return CATEGORY_METADATA[categoryId]?.supportsVariants ?? false;
 };
+
+/**
+ * Check if category supports pricing
+ * Determined by whether 'pricing' is in the wizard steps for that category
+ */
+export const categoryHasPricing = (categoryId: string): boolean => {
+  return getWizardSteps(categoryId).includes('pricing');
+};

@@ -102,14 +102,16 @@ const handleApiServerDown = (error: any) => {
     url: error.config?.url
   }));
 
-  console.log('[API] API Server Down detected - redirecting to API down page');
+  console.log('[API] API Server Down detected - error logged but NOT redirecting (redirect disabled to prevent loops)');
 
   const currentPath = window.location.pathname + window.location.search;
   if (currentPath !== '/misc/api-server-down') {
     sessionStorage.setItem('api_down_return_path', currentPath);
   }
 
-  window.location.href = '/misc/api-server-down';
+  // DISABLED: window.location.href redirects cause infinite loops when CORS fails
+  // The actual error will be displayed in the component that made the request
+  // window.location.href = '/misc/api-server-down';
 };
 
 const shouldRedirectToApiDown = (): boolean => {
@@ -227,15 +229,18 @@ api.interceptors.response.use(
         message: response.headers['x-maintenance-message'] || import.meta.env.VITE_MAINTENANCE_MESSAGE || 'System maintenance in progress'
       };
       sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
-
-      window.location.href = '/misc/maintenance';
+      console.warn('[API] Maintenance mode detected - redirect disabled to prevent loops');
+      // DISABLED: Redirect causes potential loops
+      // window.location.href = '/misc/maintenance';
       return Promise.reject(new Error('System is in maintenance mode'));
     }
 
     // Check for session conflict header
     if (response.headers['x-session-conflict'] === 'true') {
       sessionStorage.setItem('session_conflict', 'true');
-      window.location.href = '/misc/session-conflict';
+      console.warn('[API] Session conflict detected - redirect disabled to prevent loops');
+      // DISABLED: Redirect causes potential loops
+      // window.location.href = '/misc/session-conflict';
       return Promise.reject(new Error('Session conflict detected'));
     }
 
@@ -276,8 +281,9 @@ api.interceptors.response.use(
           message: 'Server is currently unavailable. Please contact system administrator.',
           timestamp: new Date().toISOString()
         }));
-
-        window.location.href = '/misc/error';
+        console.warn('[API] Server unavailable - redirect disabled to prevent loops');
+        // DISABLED: Redirect causes potential loops
+        // window.location.href = '/misc/error';
       }
 
       return Promise.reject(error);
@@ -294,21 +300,26 @@ api.interceptors.response.use(
           'System maintenance in progress'
       };
       sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
-
-      window.location.href = '/misc/maintenance';
+      console.warn('[API] 503 Service Unavailable - redirect disabled to prevent loops');
+      // DISABLED: Redirect causes potential loops
+      // window.location.href = '/misc/maintenance';
       return Promise.reject(error);
     }
 
     // Handle 401 with session conflict
     if (error.response?.status === 401 && error.response?.data?.code === 'SESSION_CONFLICT') {
       sessionStorage.setItem('session_conflict', 'true');
-      window.location.href = '/misc/session-conflict';
+      console.warn('[API] Session conflict (401) - redirect disabled to prevent loops');
+      // DISABLED: Redirect causes potential loops
+      // window.location.href = '/misc/session-conflict';
       return Promise.reject(error);
     }
 
     // Handle 403 Forbidden
     if (error.response?.status === 403) {
-      window.location.href = '/misc/unauthorized';
+      console.warn('[API] 403 Forbidden - redirect disabled to prevent loops');
+      // DISABLED: Redirect causes potential loops
+      // window.location.href = '/misc/unauthorized';
       return Promise.reject(error);
     }
 

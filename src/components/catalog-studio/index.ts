@@ -10,4 +10,6 @@ export { default as ServiceCatalogTree } from './ServiceCatalogTree';
 export { default as BlockCardSelectable } from './BlockCardSelectable';
 export { default as BlockCardConfigurable, CYCLE_OPTIONS } from './BlockCardConfigurable';
 export type { ConfigurableBlock, BlockCardConfigurableProps } from './BlockCardConfigurable';
+export { default as FlyByBlockCard, FLYBY_TYPE_CONFIG } from './FlyByBlockCard';
+export type { FlyByBlockType, FlyByBlockCardProps } from './FlyByBlockCard';
 export { default as BlockLibraryMini } from './BlockLibraryMini';

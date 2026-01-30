@@ -37,34 +37,24 @@ export const CONTACT_STATUS_LABELS = {
   [CONTACT_STATUS.ARCHIVED]: 'Archived'
 } as const;
 
-// UPDATED: Contact Classifications - Now 5 Types (added team_member)
+// UPDATED: Contact Classifications - Now 4 Types (buyer→client, seller removed)
 export const CONTACT_CLASSIFICATIONS = {
-  BUYER: 'buyer',
-  SELLER: 'seller',
+  CLIENT: 'client',
   VENDOR: 'vendor',
   PARTNER: 'partner',
-  TEAM_MEMBER: 'team_member' // ADDED: New classification
+  TEAM_MEMBER: 'team_member'
 } as const;
 
-// UPDATED: Classification Configuration with Lucide icons and theme-aware colors
+// UPDATED: Classification Configuration - 4 Types (buyer→client, seller removed)
 export const CONTACT_CLASSIFICATION_CONFIG = [
   {
-    id: 'buyer',
-    label: 'Buyer',
-    labelPlural: 'Buyers',
+    id: 'client',
+    label: 'Client',
+    labelPlural: 'Clients',
     description: 'Purchases services/products from us',
     colorKey: 'blue',
     lucideIcon: 'ShoppingCart',
     emoji: '🛒'
-  },
-  {
-    id: 'seller',
-    label: 'Seller',
-    labelPlural: 'Sellers',
-    description: 'Sells services/products to us',
-    colorKey: 'green',
-    lucideIcon: 'DollarSign',
-    emoji: '💰'
   },
   {
     id: 'vendor',
@@ -98,8 +88,7 @@ export const CONTACT_CLASSIFICATION_CONFIG = [
 // Classification color mapping - FIXED hex colors for consistency across all views
 // These colors are consistent regardless of theme to ensure filters and badges match
 export const CLASSIFICATION_HEX_COLORS: Record<string, string> = {
-  blue: '#3B82F6',    // Buyer
-  green: '#10B981',   // Seller
+  blue: '#3B82F6',    // Client
   purple: '#8B5CF6',  // Vendor
   orange: '#F59E0B',  // Partner
   indigo: '#6366F1',  // Team Member
@@ -177,10 +166,6 @@ export const getClassificationTailwindClasses = (colorKey: string, isSelected: b
     blue: {
       selected: 'bg-blue-500 text-white',
       unselected: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
-    },
-    green: {
-      selected: 'bg-green-500 text-white',
-      unselected: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
     },
     purple: {
       selected: 'bg-purple-500 text-white',
@@ -433,11 +418,10 @@ export const FILTER_OPTIONS = {
     { value: 'corporate', label: 'Corporate', count: 0 }
   ],
   classification: [
-    { value: 'buyer', label: 'Buyer', count: 0 },
-    { value: 'seller', label: 'Seller', count: 0 },
+    { value: 'client', label: 'Client', count: 0 },
     { value: 'vendor', label: 'Vendor', count: 0 },
     { value: 'partner', label: 'Partner', count: 0 },
-    { value: 'team_member', label: 'Team Member', count: 0 } // ADDED: New filter option
+    { value: 'team_member', label: 'Team Member', count: 0 }
   ],
   duplicates: [
     { value: 'has_duplicates', label: 'Has Potential Duplicates', count: 0 },

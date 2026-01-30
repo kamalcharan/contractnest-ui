@@ -238,7 +238,6 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 type="text"
                 value={data.contractName}
                 onChange={handleTitleChange}
-                onBlur={() => setTitleTouched(true)}
                 placeholder="Enter a descriptive title for this contract"
                 className="w-full px-4 py-3 rounded-xl border-2 transition-all text-base"
                 style={{

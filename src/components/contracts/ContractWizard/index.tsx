@@ -6,23 +6,34 @@ import { useTheme } from '@/contexts/ThemeContext';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
+import YourRoleStep, { ContractRole } from './steps/YourRoleStep';
 import BuyerSelectionStep from './steps/BuyerSelectionStep';
 import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
 import ContractDetailsStep, { ContractDetailsData } from './steps/ContractDetailsStep';
 import ServiceBlocksStep from './steps/ServiceBlocksStep';
+import BillingCycleStep, { BillingCycleType } from './steps/BillingCycleStep';
+import BillingViewStep from './steps/BillingViewStep';
+import ReviewSendStep from './steps/ReviewSendStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 
 // Re-export ConfigurableBlock as SelectedBlock for backwards compatibility
 export type SelectedBlock = ConfigurableBlock;
 
+// Contract type definition
+export type ContractType = 'client' | 'vendor' | 'partner';
+
 // Wizard State Types
 export interface ContractWizardState {
   path: ContractPath;
   templateId: string | null;
+  // Step 1: Your Role
+  role: ContractRole;
+  // Step 2: Counterparty
   buyerId: string | null;
   buyerName: string;
+  // Step 3: Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
-  // Contract Details (Step 3)
+  // Step 4: Contract Details
   contractName: string;
   status: string;
   currency: string;
@@ -31,32 +42,64 @@ export interface ContractWizardState {
   durationUnit: string;
   gracePeriodValue: number;
   gracePeriodUnit: string;
-  // Blocks & Total (Step 4)
+  // Step 5: Billing Cycle
+  billingCycleType: BillingCycleType;
+  // Step 6: Blocks & Total
   selectedBlocks: SelectedBlock[];
   totalValue: number;
+  // Step 7: Billing View - Tax & Payment
+  selectedTaxRateIds: string[];
+  paymentMode: 'prepaid' | 'emi';
+  emiMonths: number;
+  perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
 }
 
 interface ContractWizardProps {
   isOpen: boolean;
   onClose: () => void;
+  contractType?: ContractType;
   onComplete?: (contractData: ContractWizardState) => void;
 }
 
 // Step configuration
 const STEP_LABELS = [
   'Choose Path',
-  'Select Buyer',
+  'Your Role',
+  'Counterparty',
   'Acceptance',
   'Details',
+  'Billing Cycle',
   'Add Blocks',
+  'Billing View',
   'Review & Send',
 ];
 
-const TOTAL_STEPS = 6;
+// Step headings shown in the wizard header
+const STEP_HEADINGS: Array<{ title: string; subtitle: string }> = [
+  { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' },
+  { title: 'Your Role', subtitle: 'Who are you in this contract?' },
+  { title: '', subtitle: '' }, // Dynamic - set based on contractType
+  { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' },
+  { title: 'Contract Details', subtitle: 'Define the basic information for your contract' },
+  { title: 'Billing Cycle', subtitle: 'How should services be billed?' },
+  { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' },
+  { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' },
+  { title: 'Review & Send', subtitle: 'Review your contract before sending' },
+];
+
+// Dynamic headings for counterparty step based on contract type
+const COUNTERPARTY_HEADINGS: Record<string, { title: string; subtitle: string }> = {
+  client: { title: 'Select your Client', subtitle: 'Choose which client this contract is for' },
+  vendor: { title: 'Select your Vendor', subtitle: 'Choose which vendor this contract is with' },
+  partner: { title: 'Select your Partner', subtitle: 'Choose which partner this contract is with' },
+};
+
+const TOTAL_STEPS = 9;
 
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
   onClose,
+  contractType = 'client',
   onComplete,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
@@ -72,10 +115,14 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const [wizardState, setWizardState] = useState<ContractWizardState>({
     path: null,
     templateId: null,
+    // Step 1: Your Role
+    role: null,
+    // Step 2: Counterparty
     buyerId: null,
     buyerName: '',
+    // Step 3: Acceptance
     acceptanceMethod: null,
-    // Contract Details (Step 3)
+    // Step 4: Contract Details
     contractName: '',
     status: 'draft',
     currency: 'INR', // Default to INR
@@ -84,9 +131,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     durationUnit: 'months',
     gracePeriodValue: 0,
     gracePeriodUnit: 'days',
-    // Blocks & Total
+    // Step 5: Billing Cycle
+    billingCycleType: null,
+    // Step 6: Blocks & Total
     selectedBlocks: [],
     totalValue: 0,
+    // Step 7: Billing View - Tax & Payment
+    selectedTaxRateIds: [],
+    paymentMode: 'prepaid',
+    emiMonths: 6,
+    perBlockPaymentType: {},
   });
 
   // Update wizard state helper
@@ -119,15 +173,21 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     switch (currentStep) {
       case 0: // Path Selection
         return wizardState.path !== null;
-      case 1: // Buyer Selection
+      case 1: // Your Role
+        return wizardState.role !== null;
+      case 2: // Counterparty Selection
         return wizardState.buyerId !== null;
-      case 2: // Acceptance Method
+      case 3: // Acceptance Method
         return wizardState.acceptanceMethod !== null;
-      case 3: // Base Details
+      case 4: // Contract Details
         return wizardState.contractName.trim() !== '' && wizardState.durationValue > 0;
-      case 4: // Block Assembly
+      case 5: // Billing Cycle
+        return wizardState.billingCycleType !== null;
+      case 6: // Block Assembly
         return wizardState.selectedBlocks.length > 0;
-      case 5: // Review
+      case 7: // Billing View
+        return true; // Can always proceed (tax is optional)
+      case 8: // Review & Send
         return true;
       default:
         return false;
@@ -188,8 +248,24 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     updateWizardState('path', 'scratch');
     updateWizardState('templateId', null);
     setShowTemplateSelection(false);
-    setCurrentStep(1); // Go to buyer selection
+    setCurrentStep(1); // Go to Your Role step
   }, [updateWizardState]);
+
+  // Role selection handler
+  const handleRoleSelect = useCallback(
+    (role: ContractRole) => {
+      updateWizardState('role', role);
+    },
+    [updateWizardState]
+  );
+
+  // Billing cycle type selection handler
+  const handleBillingCycleTypeSelect = useCallback(
+    (cycleType: BillingCycleType) => {
+      updateWizardState('billingCycleType', cycleType);
+    },
+    [updateWizardState]
+  );
 
   // Buyer selection handler
   const handleBuyerSelect = useCallback(
@@ -229,6 +305,38 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     []
   );
 
+  // Tax rate IDs change handler
+  const handleTaxRateIdsChange = useCallback(
+    (ids: string[]) => {
+      updateWizardState('selectedTaxRateIds', ids);
+    },
+    [updateWizardState]
+  );
+
+  // Payment mode change handler
+  const handlePaymentModeChange = useCallback(
+    (mode: 'prepaid' | 'emi') => {
+      updateWizardState('paymentMode', mode);
+    },
+    [updateWizardState]
+  );
+
+  // EMI months change handler
+  const handleEmiMonthsChange = useCallback(
+    (months: number) => {
+      updateWizardState('emiMonths', months);
+    },
+    [updateWizardState]
+  );
+
+  // Per-block payment type change handler
+  const handlePerBlockPaymentTypeChange = useCallback(
+    (blockPaymentTypes: Record<string, 'prepaid' | 'postpaid'>) => {
+      updateWizardState('perBlockPaymentType', blockPaymentTypes);
+    },
+    [updateWizardState]
+  );
+
   // Render current step content
   const renderStepContent = () => {
     // Show template selection sub-step if applicable
@@ -254,20 +362,28 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         );
       case 1:
         return (
+          <YourRoleStep
+            selectedRole={wizardState.role}
+            onSelectRole={handleRoleSelect}
+          />
+        );
+      case 2:
+        return (
           <BuyerSelectionStep
             selectedBuyerId={wizardState.buyerId}
             selectedBuyerName={wizardState.buyerName}
             onSelectBuyer={handleBuyerSelect}
+            contractType={contractType}
           />
         );
-      case 2:
+      case 3:
         return (
           <AcceptanceMethodStep
             selectedMethod={wizardState.acceptanceMethod}
             onSelectMethod={handleAcceptanceMethodSelect}
           />
         );
-      case 3:
+      case 4:
         return (
           <ContractDetailsStep
             data={{
@@ -283,7 +399,14 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             onChange={handleDetailsChange}
           />
         );
-      case 4:
+      case 5:
+        return (
+          <BillingCycleStep
+            selectedCycleType={wizardState.billingCycleType}
+            onSelectCycleType={handleBillingCycleTypeSelect}
+          />
+        );
+      case 6: {
         // Calculate contract duration in months
         const durationInMonths = wizardState.durationUnit === 'months'
           ? wizardState.durationValue
@@ -308,21 +431,52 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             } : undefined}
           />
         );
-      case 5:
+      }
+      case 7: {
+        // Billing View - calculate duration in months
+        const billingDuration = wizardState.durationUnit === 'months'
+          ? wizardState.durationValue
+          : wizardState.durationUnit === 'years'
+            ? wizardState.durationValue * 12
+            : Math.ceil(wizardState.durationValue / 30);
+
         return (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <h2
-                className="text-xl font-semibold mb-2"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Review & Send
-              </h2>
-              <p style={{ color: colors.utility.secondaryText }}>
-                Step 6 - Review and send will be implemented here
-              </p>
-            </div>
-          </div>
+          <BillingViewStep
+            selectedBlocks={wizardState.selectedBlocks}
+            currency={wizardState.currency}
+            billingCycleType={wizardState.billingCycleType}
+            onBlocksChange={handleBlocksChange}
+            selectedTaxRateIds={wizardState.selectedTaxRateIds}
+            onTaxRateIdsChange={handleTaxRateIdsChange}
+            paymentMode={wizardState.paymentMode}
+            onPaymentModeChange={handlePaymentModeChange}
+            emiMonths={wizardState.emiMonths}
+            onEmiMonthsChange={handleEmiMonthsChange}
+            perBlockPaymentType={wizardState.perBlockPaymentType}
+            onPerBlockPaymentTypeChange={handlePerBlockPaymentTypeChange}
+            contractDuration={billingDuration}
+          />
+        );
+      }
+      case 8:
+        return (
+          <ReviewSendStep
+            contractName={wizardState.contractName}
+            contractStatus={wizardState.status}
+            description={wizardState.description}
+            durationValue={wizardState.durationValue}
+            durationUnit={wizardState.durationUnit}
+            buyerId={wizardState.buyerId}
+            buyerName={wizardState.buyerName}
+            acceptanceMethod={wizardState.acceptanceMethod}
+            billingCycleType={wizardState.billingCycleType}
+            currency={wizardState.currency}
+            selectedBlocks={wizardState.selectedBlocks}
+            paymentMode={wizardState.paymentMode}
+            emiMonths={wizardState.emiMonths}
+            perBlockPaymentType={wizardState.perBlockPaymentType}
+            selectedTaxRateIds={wizardState.selectedTaxRateIds}
+          />
         );
       default:
         return null;
@@ -349,79 +503,96 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         className="relative z-10 w-full h-full overflow-hidden flex flex-col"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
-        {/* Header */}
+        {/* Header with Step Title */}
         <header
-          className="flex items-center justify-between px-6 py-4 border-b shrink-0"
+          className="px-6 py-3 border-b shrink-0"
           style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderColor: `${colors.utility.primaryText}10`,
           }}
         >
-          {/* Left: Logo & Contract Type */}
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-              style={{ backgroundColor: colors.brand.primary }}
-            >
-              CN
-            </div>
-            <div
-              className="h-5 w-px"
-              style={{ backgroundColor: `${colors.utility.primaryText}20` }}
-            />
-            <span
-              className="text-sm font-medium"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              {showTemplateSelection
-                ? 'Select Template'
-                : wizardState.path === 'template'
-                  ? 'From Template'
-                  : wizardState.path === 'scratch'
-                    ? 'Custom Contract'
-                    : 'New Contract'}
-            </span>
-          </div>
-
-          {/* Center: Progress Dots */}
-          <div className="flex items-center gap-2">
-            {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  // Only allow going back to completed steps
-                  if (index < currentStep) {
-                    setCurrentStep(index);
-                  }
-                }}
-                disabled={index > currentStep}
-                className="transition-all duration-300 rounded-full"
-                style={{
-                  width: index === currentStep ? '32px' : '8px',
-                  height: '8px',
-                  backgroundColor:
-                    index === currentStep
-                      ? colors.brand.primary
-                      : index < currentStep
-                        ? colors.semantic.success
-                        : `${colors.utility.primaryText}20`,
-                  cursor: index < currentStep ? 'pointer' : 'default',
-                }}
+          {/* Top Row: Logo, Progress Dots, Close */}
+          <div className="flex items-center justify-between">
+            {/* Left: Logo */}
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                style={{ backgroundColor: colors.brand.primary }}
+              >
+                CN
+              </div>
+              <div
+                className="h-5 w-px"
+                style={{ backgroundColor: `${colors.utility.primaryText}20` }}
               />
-            ))}
-          </div>
+              {/* Step Title */}
+              <div>
+                <h2
+                  className="text-sm font-bold"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {(() => {
+                    if (showTemplateSelection) return 'Select Template';
+                    const heading = currentStep === 2
+                      ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
+                      : STEP_HEADINGS[currentStep];
+                    return heading?.title || STEP_LABELS[currentStep];
+                  })()}
+                </h2>
+                <p
+                  className="text-[11px]"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  {(() => {
+                    if (showTemplateSelection) return 'Choose a template to start from';
+                    const heading = currentStep === 2
+                      ? COUNTERPARTY_HEADINGS[contractType] || COUNTERPARTY_HEADINGS.client
+                      : STEP_HEADINGS[currentStep];
+                    return heading?.subtitle || '';
+                  })()}
+                </p>
+              </div>
+            </div>
 
-          {/* Right: Close Button */}
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg transition-colors hover:opacity-80"
-            style={{
-              backgroundColor: `${colors.utility.primaryText}10`,
-              color: colors.utility.primaryText,
-            }}
-          >
-            <X className="w-5 h-5" />
-          </button>
+            {/* Center: Progress Dots */}
+            <div className="flex items-center gap-2">
+              {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (index < currentStep) {
+                      setCurrentStep(index);
+                    }
+                  }}
+                  disabled={index > currentStep}
+                  className="transition-all duration-300 rounded-full"
+                  style={{
+                    width: index === currentStep ? '32px' : '8px',
+                    height: '8px',
+                    backgroundColor:
+                      index === currentStep
+                        ? colors.brand.primary
+                        : index < currentStep
+                          ? colors.semantic.success
+                          : `${colors.utility.primaryText}20`,
+                    cursor: index < currentStep ? 'pointer' : 'default',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Right: Close Button */}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: `${colors.utility.primaryText}10`,
+                color: colors.utility.primaryText,
+              }}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         {/* Main Content Area */}

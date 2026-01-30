@@ -85,10 +85,12 @@ export const defaultMenuItems: MenuItem[] = [
     id: 'contracts',
     label: 'Contracts',
     icon: 'FileText',
-    path: '/contracts/create',
+    path: '/contracts/create/client',
     hasSubmenu: true,
     submenuItems: [
-      { id: 'contracts-create', label: 'My Contracts', icon: 'FilePlus', path: '/contracts/create' },
+      { id: 'contracts-client', label: 'Client Contracts', icon: 'ShoppingCart', path: '/contracts/create/client' },
+      { id: 'contracts-vendor', label: 'Vendor Contracts', icon: 'Package', path: '/contracts/create/vendor' },
+      { id: 'contracts-partner', label: 'Partner Contracts', icon: 'Handshake', path: '/contracts/create/partner' },
       { id: 'contracts-all', label: 'All Contracts', icon: 'FileText', path: '/service-contracts/contracts' },
       { id: 'contracts-preview', label: 'Contract Preview', icon: 'Eye', path: '/contracts/preview' },
       { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' }

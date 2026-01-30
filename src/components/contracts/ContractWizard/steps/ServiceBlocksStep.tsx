@@ -118,13 +118,21 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
       const category = getCategoryById(block.categoryId);
 
+      // Check if block has service cycles defined (from block creation)
+      // If so, use 'custom' cycle with those days; otherwise default to 'prepaid'
+      const blockServiceCycles = (block.meta as any)?.serviceCycles;
+      const hasCustomCycle = blockServiceCycles?.enabled && blockServiceCycles?.days;
+      const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
+      const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
+
       const newBlock: ConfigurableBlock = {
         id: block.id,
         name: block.name,
         description: block.description || '',
         icon: block.icon || 'Package',
         quantity: 1,
-        cycle: 'one_time',
+        cycle: defaultCycle,
+        customCycleDays: customCycleDays,
         unlimited: false,
         price: block.price || 0,
         currency: block.currency || currency,
@@ -133,8 +141,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         categoryColor: category?.color || '#6B7280',
         categoryBgColor: category?.bgColor,
         config: {
-          proRate: false,
-          autoRenew: false,
+          showDescription: false,
         },
       };
 

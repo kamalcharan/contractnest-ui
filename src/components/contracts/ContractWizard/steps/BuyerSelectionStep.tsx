@@ -34,6 +34,44 @@ import {
   getClassificationColors,
   formatContactDisplayName
 } from '@/utils/constants/contacts';
+
+// Contract type definition
+type ContractType = 'client' | 'vendor' | 'partner';
+
+// Configuration for each contract type
+const CONTRACT_TYPE_LABELS: Record<ContractType, {
+  heading: string;
+  subtitle: string;
+  searchPlaceholder: string;
+  addButtonText: string;
+  emptyMessage: string;
+  classification: string;
+}> = {
+  client: {
+    heading: 'Select your Client',
+    subtitle: 'Choose which client this contract is for',
+    searchPlaceholder: 'Search clients...',
+    addButtonText: 'Add New Client',
+    emptyMessage: 'No clients found',
+    classification: 'client',
+  },
+  vendor: {
+    heading: 'Select your Vendor',
+    subtitle: 'Choose which vendor this contract is with',
+    searchPlaceholder: 'Search vendors...',
+    addButtonText: 'Add New Vendor',
+    emptyMessage: 'No vendors found',
+    classification: 'vendor',
+  },
+  partner: {
+    heading: 'Select your Partner',
+    subtitle: 'Choose which partner this contract is with',
+    searchPlaceholder: 'Search partners...',
+    addButtonText: 'Add New Partner',
+    emptyMessage: 'No partners found',
+    classification: 'partner',
+  },
+};
 import { countries } from '@/utils/constants/countries';
 
 // Import shared components
@@ -98,6 +136,7 @@ interface BuyerSelectionStepProps {
   selectedContactPersonId?: string | null;
   selectedContactPersonName?: string;
   useCompanyContact?: boolean;
+  contractType?: ContractType;
   onSelectBuyer: (
     buyerId: string,
     buyerName: string,
@@ -113,14 +152,18 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   selectedContactPersonId,
   selectedContactPersonName,
   useCompanyContact: initialUseCompanyContact,
+  contractType = 'client',
   onSelectBuyer,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
 
-  // Local state
-  const [selectedClassification, setSelectedClassification] = useState<string>('all');
+  // Get labels config for current contract type
+  const labels = CONTRACT_TYPE_LABELS[contractType];
+
+  // Local state - classification is now fixed based on contract type
+  const selectedClassification = labels.classification;
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -139,12 +182,12 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Fetch contacts list
+  // Fetch contacts list - filtered by contract type classification
   const { data: contacts, loading: listLoading } = useContactList({
     page: 1,
     limit: 20,
     search: debouncedSearch || undefined,
-    classifications: selectedClassification !== 'all' ? [selectedClassification] : undefined,
+    classifications: [selectedClassification],
     status: 'active',
     sort_by: 'created_at',
     sort_order: 'desc'
@@ -789,13 +832,13 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
             className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
-            Who is this contract for?
+            {labels.heading}
           </h2>
           <p
             className="text-sm"
             style={{ color: colors.utility.secondaryText }}
           >
-            Select an existing contact or add a new one
+            {labels.subtitle}
           </p>
         </div>
 
@@ -805,91 +848,6 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
         {/* Only show search/filters if no contact selected */}
         {!selectedContact && (
           <>
-            {/* Classification Filter - Radio Style */}
-            <div
-              className="rounded-xl border p-4 mb-6"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}10`
-              }}
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-3"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Filter by Type
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {/* All option */}
-                <button
-                  onClick={() => setSelectedClassification('all')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all"
-                  style={{
-                    backgroundColor: selectedClassification === 'all'
-                      ? `${colors.brand.primary}15`
-                      : 'transparent',
-                    borderColor: selectedClassification === 'all'
-                      ? colors.brand.primary
-                      : `${colors.utility.primaryText}20`,
-                    color: selectedClassification === 'all'
-                      ? colors.brand.primary
-                      : colors.utility.primaryText
-                  }}
-                >
-                  <div
-                    className="w-4 h-4 rounded-full border-2 flex items-center justify-center"
-                    style={{
-                      borderColor: selectedClassification === 'all'
-                        ? colors.brand.primary
-                        : `${colors.utility.primaryText}40`
-                    }}
-                  >
-                    {selectedClassification === 'all' && (
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: colors.brand.primary }}
-                      />
-                    )}
-                  </div>
-                  All Contacts
-                </button>
-
-                {/* Dynamic classifications */}
-                {CONTACT_CLASSIFICATION_CONFIG.map((cls) => {
-                  const isSelected = selectedClassification === cls.id;
-                  const colorSet = getClassificationColors(cls.colorKey, colors, 'selector', isSelected);
-
-                  return (
-                    <button
-                      key={cls.id}
-                      onClick={() => setSelectedClassification(cls.id)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all"
-                      style={{
-                        backgroundColor: colorSet.bg,
-                        borderColor: colorSet.border,
-                        color: colorSet.text
-                      }}
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full border-2 flex items-center justify-center"
-                        style={{
-                          borderColor: isSelected ? colorSet.text : `${colors.utility.primaryText}40`
-                        }}
-                      >
-                        {isSelected && (
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: colorSet.text }}
-                          />
-                        )}
-                      </div>
-                      {cls.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Search + Add New */}
             <div
               className="rounded-xl border p-4 mb-6"
@@ -907,7 +865,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                   />
                   <input
                     type="text"
-                    placeholder="Search contacts... (min 3 characters)"
+                    placeholder={`${labels.searchPlaceholder} (min 3 characters)`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-11 pr-4 py-3 rounded-lg border text-sm outline-none transition-all focus:ring-2"
@@ -932,7 +890,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                   style={{ backgroundColor: colors.brand.primary }}
                 >
                   <Plus className="w-5 h-5" />
-                  Add New
+                  {labels.addButtonText}
                 </button>
               </div>
 
@@ -985,7 +943,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                     className="font-medium mb-1"
                     style={{ color: colors.utility.primaryText }}
                   >
-                    No contacts found
+                    {labels.emptyMessage}
                   </p>
                   <p
                     className="text-sm mb-4"
@@ -993,7 +951,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                   >
                     {debouncedSearch
                       ? `No results for "${debouncedSearch}"`
-                      : 'Start by adding a new contact'}
+                      : `Start by adding a new ${contractType}`}
                   </p>
                   <button
                     onClick={() => setIsDrawerOpen(true)}
@@ -1001,7 +959,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                     style={{ backgroundColor: colors.brand.primary }}
                   >
                     <Plus className="w-4 h-4" />
-                    Add Contact
+                    {labels.addButtonText}
                   </button>
                 </div>
               )}

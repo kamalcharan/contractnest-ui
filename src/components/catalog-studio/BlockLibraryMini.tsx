@@ -3,7 +3,7 @@
 // Features: collapsible categories, search, block cards with add button
 
 import React, { useState, useMemo } from 'react';
-import { Search, ChevronRight, Package, SearchX, RefreshCw } from 'lucide-react';
+import { Search, ChevronRight, Package, SearchX, RefreshCw, Plus, Zap } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
@@ -12,11 +12,17 @@ import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
 import { Block } from '@/types/catalogStudio';
 import BlockCardSelectable from './BlockCardSelectable';
 
+// FlyBy-enabled category IDs
+export type FlyByCategoryId = 'service' | 'spare' | 'text' | 'document';
+
 export interface BlockLibraryMiniProps {
   selectedBlockIds: string[];
   onAddBlock: (block: Block) => void;
   onBlockClick?: (block: Block) => void;
   maxHeight?: string;
+  // FlyBy support
+  flyByTypes?: FlyByCategoryId[];
+  onAddFlyByBlock?: (type: FlyByCategoryId) => void;
 }
 
 // Helper to get Lucide icon component by name
@@ -33,6 +39,8 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
   onAddBlock,
   onBlockClick,
   maxHeight = '100%',
+  flyByTypes = [],
+  onAddFlyByBlock,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -52,15 +60,18 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
   }, [blocksResponse]);
 
   // Get categories with counts
+  // Show categories that have blocks OR have FlyBy enabled
   const categoriesWithCounts = useMemo(() => {
     return BLOCK_CATEGORIES.map((cat) => ({
       ...cat,
       count: allBlocks.filter((block) => block.categoryId === cat.id).length,
       blocks: allBlocks.filter((block) => block.categoryId === cat.id),
-    })).filter((cat) => cat.count > 0); // Only show categories with blocks
-  }, [allBlocks]);
+      hasFlyBy: flyByTypes.includes(cat.id as FlyByCategoryId),
+    })).filter((cat) => cat.count > 0 || cat.hasFlyBy);
+  }, [allBlocks, flyByTypes]);
 
   // Filter blocks by search
+  // FlyBy categories remain visible even during search (user may want to add empty block)
   const filteredCategories = useMemo(() => {
     if (!searchQuery.trim()) return categoriesWithCounts;
 
@@ -79,7 +90,7 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
             (block.description || '').toLowerCase().includes(query)
         ).length,
       }))
-      .filter((cat) => cat.count > 0);
+      .filter((cat) => cat.count > 0 || cat.hasFlyBy);
   }, [categoriesWithCounts, searchQuery]);
 
   // Toggle category expansion
@@ -262,6 +273,51 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
                           onClick={onBlockClick}
                         />
                       ))}
+
+                      {/* FlyBy Card - last item in group */}
+                      {category.hasFlyBy && onAddFlyByBlock && (
+                        <button
+                          onClick={() => onAddFlyByBlock(category.id as FlyByCategoryId)}
+                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border-2 border-dashed transition-all hover:opacity-80"
+                          style={{
+                            borderColor: `${category.color}40`,
+                            backgroundColor: colors.utility.secondaryBackground,
+                          }}
+                        >
+                          <div
+                            className="relative w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: category.bgColor }}
+                          >
+                            <CategoryIcon className="w-4 h-4" style={{ color: category.color }} />
+                            <div
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: category.color }}
+                            >
+                              <Zap className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span
+                              className="text-xs font-semibold block"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              Add {category.name}
+                            </span>
+                            <span
+                              className="text-[10px]"
+                              style={{ color: colors.utility.secondaryText }}
+                            >
+                              FlyBy - enter details inline
+                            </span>
+                          </div>
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: category.color }}
+                          >
+                            <Plus className="w-4 h-4 text-white" />
+                          </div>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

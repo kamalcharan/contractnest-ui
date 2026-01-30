@@ -429,9 +429,9 @@ const AppContent: React.FC = () => {
             </Route>
           </Route>
 
-          {/* FIXED: Contract Builder Route - Now uses MainLayout for Coming Soon */}
+          {/* Contract Builder Routes - Client, Vendor, Partner */}
           <Route
-            path="/contracts/create"
+            path="/contracts/create/:contractType"
             element={
               <ProtectedRoute>
                 <MainLayout />

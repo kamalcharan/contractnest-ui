@@ -1,14 +1,44 @@
 // src/pages/contracts/create/index.tsx
-// My Contracts - Main contracts list page
+// Contract Type Pages - Client, Vendor, Partner Contracts
 import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { Plus, FileText, Search, Filter } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import ContractWizard from '@/components/contracts/ContractWizard';
 
+// Contract type definition
+export type ContractType = 'client' | 'vendor' | 'partner';
+
+// Configuration for each contract type
+const CONTRACT_TYPE_CONFIG: Record<ContractType, { title: string; subtitle: string; buttonText: string }> = {
+  client: {
+    title: 'Client Contracts',
+    subtitle: 'Create and manage contracts with your clients',
+    buttonText: 'Create Client Contract',
+  },
+  vendor: {
+    title: 'Vendor Contracts',
+    subtitle: 'Create and manage contracts with your vendors',
+    buttonText: 'Create Vendor Contract',
+  },
+  partner: {
+    title: 'Partner Contracts',
+    subtitle: 'Create and manage contracts with your partners',
+    buttonText: 'Create Partner Contract',
+  },
+};
+
 const ContractCreatePage: React.FC = () => {
+  const { contractType } = useParams<{ contractType: string }>();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [showWizard, setShowWizard] = useState(false);
+
+  // Get config for current contract type (default to 'client' if invalid)
+  const validContractType = (contractType && ['client', 'vendor', 'partner'].includes(contractType))
+    ? contractType as ContractType
+    : 'client';
+  const config = CONTRACT_TYPE_CONFIG[validContractType];
 
   // Placeholder contracts data - will be replaced with API data
   const contracts: any[] = [];
@@ -25,13 +55,13 @@ const ContractCreatePage: React.FC = () => {
             className="text-2xl font-bold"
             style={{ color: colors.utility.primaryText }}
           >
-            My Contracts
+            {config.title}
           </h1>
           <p
             className="text-sm"
             style={{ color: colors.utility.secondaryText }}
           >
-            Create and manage your contracts
+            {config.subtitle}
           </p>
         </div>
         <button
@@ -40,7 +70,7 @@ const ContractCreatePage: React.FC = () => {
           style={{ backgroundColor: colors.brand.primary }}
         >
           <Plus className="h-5 w-5" />
-          Create Contract
+          {config.buttonText}
         </button>
       </div>
 
@@ -116,7 +146,7 @@ const ContractCreatePage: React.FC = () => {
             style={{ backgroundColor: colors.brand.primary }}
           >
             <Plus className="h-5 w-5" />
-            Create Your First Contract
+            {config.buttonText}
           </button>
         </div>
       ) : (
@@ -160,6 +190,7 @@ const ContractCreatePage: React.FC = () => {
       <ContractWizard
         isOpen={showWizard}
         onClose={() => setShowWizard(false)}
+        contractType={validContractType}
         onComplete={(contractData) => {
           console.log('Contract created:', contractData);
           // TODO: Send to API
