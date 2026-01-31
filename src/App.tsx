@@ -146,8 +146,9 @@ import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
 import InviteSellersPage from './pages/contracts/invite';
 
-// Contracts Hub
+// Contracts Hub + Detail
 import ContractsHubPage from './pages/contracts/hub';
+import ContractDetailPage from './pages/contracts/detail';
 
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
@@ -515,6 +516,7 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ContractsHubPage />} />
+            <Route path=":id" element={<ContractDetailPage />} />
           </Route>
 
           {/* Legacy support for old routes - redirect to new structure */}

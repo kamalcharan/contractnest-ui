@@ -867,6 +867,62 @@ export const useSendInvitation = () => {
   };
 };
 
+// =================================================================
+// PREFETCH — warm the cache before user reaches BuyerSelectionStep
+// =================================================================
+
+/**
+ * Prefetch contacts for a given classification into the module-level cache.
+ * Call from ContractsHub on mount to ensure instant load in the wizard.
+ * Silently succeeds/fails — does not throw or show toasts.
+ */
+export const prefetchContacts = async (
+  tenantId: string,
+  isLive: boolean,
+  classification: string,
+): Promise<void> => {
+  const filters = {
+    page: 1,
+    limit: 20,
+    status: 'active',
+    classifications: [classification],
+    sort_by: 'created_at',
+    sort_order: 'desc',
+  };
+
+  const cacheKey = generateCacheKey(tenantId, isLive, filters);
+
+  // Skip if already cached
+  if (getCachedData(cacheKey)) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      page: '1',
+      limit: '20',
+      status: 'active',
+      classifications: classification,
+      sort_by: 'created_at',
+      sort_order: 'desc',
+    });
+
+    const response = await api.get(`/api/contacts?${params.toString()}`, {
+      headers: {
+        'x-tenant-id': tenantId,
+        'x-environment': isLive ? 'live' : 'test',
+      },
+    });
+
+    if (response.data.success) {
+      setCacheData(cacheKey, response.data.data || [], response.data.pagination);
+      console.log(`📦 Prefetched ${classification} contacts (${(response.data.data || []).length} records)`);
+    }
+  } catch {
+    // Silent — prefetch failures are not critical
+  }
+};
+
 // Export all hooks
 export {
   ContactFilters,

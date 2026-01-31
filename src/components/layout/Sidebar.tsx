@@ -5,6 +5,7 @@ import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMenuItemsForIndustry, MenuItem } from '../../utils/constants/industryMenus';
+import { useContractStats } from '../../hooks/queries/useContractQueries';
 
 interface NavItemProps {
   item: MenuItem;
@@ -197,12 +198,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   });
   const adminMenuItems = menuItems.filter(item => item.adminOnly);
 
-  // Mock badge counts - in a real app, these would come from API/state
+  // Badge counts — contracts from real stats, others placeholder
+  const { data: contractStats } = useContractStats();
   const notificationCounts: Record<string, number> = {
-    contracts: 3,
-    appointments: 2,
-    tasks: 5,
-    vani: 1
+    contracts: contractStats?.total || 0,
+    appointments: 0,
+    tasks: 0,
+    vani: 0
   };
 
   // Check if user is admin

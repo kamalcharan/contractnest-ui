@@ -93,6 +93,11 @@ export interface Contract {
   termination_clause?: string;
   notes?: string;
   metadata?: Record<string, any>;
+  // Counterparty / contact fields (populated by create RPC)
+  buyer_id?: string;
+  buyer_name?: string;
+  contact_id?: string;
+  contact_classification?: string;
   version: number;
   created_by: string;
   created_at: string;

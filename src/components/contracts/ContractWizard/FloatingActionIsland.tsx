@@ -66,6 +66,31 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
             : '0 20px 50px rgba(0, 0, 0, 0.15)',
         }}
       >
+        {/* Cancel Button */}
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:opacity-80"
+          style={{
+            backgroundColor: isDarkMode
+              ? 'rgba(239, 68, 68, 0.15)'
+              : 'rgba(239, 68, 68, 0.08)',
+            color: colors.semantic.error,
+          }}
+        >
+          <X className="w-3.5 h-3.5" />
+          Cancel
+        </button>
+
+        {/* Divider */}
+        <div
+          className="w-px h-6"
+          style={{
+            backgroundColor: isDarkMode
+              ? 'rgba(255, 255, 255, 0.1)'
+              : 'rgba(0, 0, 0, 0.1)',
+          }}
+        />
+
         {/* Status Pill */}
         <div
           className="flex items-center gap-2 px-3 py-1.5 rounded-full"
@@ -190,20 +215,6 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
             {!isLastStep && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
-
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-full transition-all hover:opacity-80"
-          style={{
-            backgroundColor: isDarkMode
-              ? 'rgba(255, 255, 255, 0.1)'
-              : 'rgba(0, 0, 0, 0.05)',
-            color: colors.utility.secondaryText,
-          }}
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
     </div>
   );
