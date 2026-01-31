@@ -25,6 +25,8 @@ import type {
   Contract,
 } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
+import ContractWizard from '@/components/contracts/ContractWizard';
+import type { ContractType } from '@/components/contracts/ContractWizard';
 
 // ═══════════════════════════════════════════════════
 // TYPE RAIL (Left vertical sidebar — glassmorphic)
@@ -33,13 +35,12 @@ import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 interface TypeRailProps {
   activeType: ContractTypeFilter;
   onTypeChange: (type: ContractTypeFilter) => void;
+  onCreateClick: (type: ContractType) => void;
   stats: { all: number; client: number; vendor: number; partner: number };
   colors: any;
 }
 
-const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, stats, colors }) => {
-  const navigate = useNavigate();
-
+const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, onCreateClick, stats, colors }) => {
   const typeItems: Array<{
     id: ContractTypeFilter;
     label: string;
@@ -53,10 +54,10 @@ const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, stats, co
     { id: 'partner', label: 'Partner', icon: Handshake, count: stats.partner, color: colors.semantic.warning },
   ];
 
-  const createItems = [
-    { label: 'Client Contract', path: '/contracts/create/client', color: colors.brand.primary },
-    { label: 'Vendor Contract', path: '/contracts/create/vendor', color: colors.semantic.success },
-    { label: 'Partner Contract', path: '/contracts/create/partner', color: colors.semantic.warning },
+  const createItems: Array<{ label: string; type: ContractType; color: string }> = [
+    { label: 'Client Contract', type: 'client', color: colors.brand.primary },
+    { label: 'Vendor Contract', type: 'vendor', color: colors.semantic.success },
+    { label: 'Partner Contract', type: 'partner', color: colors.semantic.warning },
   ];
 
   return (
@@ -177,8 +178,8 @@ const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, stats, co
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {createItems.map((item) => (
             <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
+              key={item.type}
+              onClick={() => onCreateClick(item.type)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -312,15 +313,38 @@ interface EmptyStateProps {
   typeFilter: ContractTypeFilter;
   colors: any;
   onCreateClick: () => void;
+  onCreateType: (type: ContractType) => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateClick }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateClick, onCreateType }) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
   const labels: Record<ContractTypeFilter, string> = {
     all: 'contracts',
     client: 'client contracts',
     vendor: 'vendor contracts',
     partner: 'partner contracts',
   };
+
+  const createOptions: Array<{ label: string; type: ContractType; icon: React.ElementType; color: string }> = [
+    { label: 'Client Contract', type: 'client', icon: Users, color: colors.brand.primary },
+    { label: 'Vendor Contract', type: 'vendor', icon: Building2, color: colors.semantic.success },
+    { label: 'Partner Contract', type: 'partner', icon: Handshake, color: colors.semantic.warning },
+  ];
+
+  const isAll = typeFilter === 'all';
 
   return (
     <div
@@ -368,30 +392,104 @@ const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateCli
           marginBottom: 24,
         }}
       >
-        Create your first {typeFilter === 'all' ? 'contract' : `${typeFilter} contract`} to start
+        Create your first {isAll ? 'contract' : `${typeFilter} contract`} to start
         managing agreements, tracking status, and keeping everything organized.
       </p>
 
-      <button
-        onClick={onCreateClick}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '10px 24px',
-          borderRadius: 10,
-          border: 'none',
-          background: colors.brand.primary,
-          color: '#fff',
-          fontSize: 14,
-          fontWeight: 600,
-          cursor: 'pointer',
-          transition: 'all 0.15s ease',
-        }}
-      >
-        <Plus size={16} />
-        Create {typeFilter === 'all' ? 'Contract' : `${typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)} Contract`}
-      </button>
+      <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          onClick={isAll ? () => setDropdownOpen((prev) => !prev) : onCreateClick}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '10px 24px',
+            borderRadius: 10,
+            border: 'none',
+            background: colors.brand.primary,
+            color: '#fff',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Plus size={16} />
+          {isAll ? 'New Contract' : `Create ${typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)} Contract`}
+          {isAll && (
+            <ChevronDown
+              size={14}
+              style={{
+                transition: 'transform 0.15s ease',
+                transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}
+            />
+          )}
+        </button>
+
+        {dropdownOpen && isAll && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              minWidth: 200,
+              borderRadius: 10,
+              border: `1px solid ${colors.utility.primaryText}20`,
+              background: colors.utility.secondaryBackground,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+              zIndex: 50,
+              overflow: 'hidden',
+            }}
+          >
+            {createOptions.map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.type}
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    onCreateType(opt.type);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    padding: '10px 14px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    transition: 'background 0.1s',
+                    textAlign: 'left',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: colors.utility.primaryText,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = `${colors.utility.primaryText}08`)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: `${opt.color}14`,
+                    }}
+                  >
+                    <Icon size={14} style={{ color: opt.color }} />
+                  </div>
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -593,6 +691,8 @@ const ContractsHubPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
   const createDropdownRef = useRef<HTMLDivElement>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
 
   // ── Close dropdown on outside click ──
   useEffect(() => {
@@ -659,17 +759,22 @@ const ContractsHubPage: React.FC = () => {
     { label: 'Partner Contract', type: 'partner', icon: Handshake, color: colors.semantic.warning },
   ], [colors]);
 
+  const openWizard = (type: ContractType) => {
+    setWizardContractType(type);
+    setShowWizard(true);
+  };
+
   const handleCreateClick = () => {
     if (activeType === 'all') {
       setCreateDropdownOpen((prev) => !prev);
     } else {
-      navigate(`/contracts/create/${activeType}`);
+      openWizard(activeType as ContractType);
     }
   };
 
   const handleCreateOption = (type: string) => {
     setCreateDropdownOpen(false);
-    navigate(`/contracts/create/${type}`);
+    openWizard(type as ContractType);
   };
 
   const handleRowClick = (id: string) => {
@@ -686,6 +791,7 @@ const ContractsHubPage: React.FC = () => {
       <TypeRail
         activeType={activeType}
         onTypeChange={handleTypeChange}
+        onCreateClick={openWizard}
         stats={typeCounts}
         colors={colors}
       />
@@ -895,11 +1001,22 @@ const ContractsHubPage: React.FC = () => {
             </p>
           </div>
         ) : showEmptyState ? (
-          <EmptyState typeFilter={activeType} colors={colors} onCreateClick={handleCreateClick} />
+          <EmptyState typeFilter={activeType} colors={colors} onCreateClick={handleCreateClick} onCreateType={openWizard} />
         ) : (
           <ContractsTable contracts={contracts} colors={colors} onRowClick={handleRowClick} />
         )}
       </div>
+
+      {/* Contract Creation Wizard Modal */}
+      <ContractWizard
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        contractType={wizardContractType}
+        onComplete={() => {
+          setShowWizard(false);
+          refetch();
+        }}
+      />
     </div>
   );
 };

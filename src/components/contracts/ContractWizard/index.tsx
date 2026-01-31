@@ -1,8 +1,10 @@
 // src/components/contracts/ContractWizard/index.tsx
 // Contract Wizard - Main component with Floating Action Island
 import React, { useState, useCallback } from 'react';
-import { X, CheckCircle2, ArrowRight } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useContractOperations } from '@/hooks/queries/useContractQueries';
+import type { CreateContractRequest } from '@/types/contracts';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath, WizardMode } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
@@ -38,13 +40,14 @@ export interface ContractWizardState {
   // RFQ multi-vendor selection
   vendorIds: string[];
   vendorNames: string[];
-  // Step 2: Acceptance
+  // Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
-  // Step 3: Contract Details
+  // Contract Details
   contractName: string;
   status: string;
   currency: string;
   description: string;
+  startDate: Date;
   durationValue: number;
   durationUnit: string;
   gracePeriodValue: number;
@@ -77,11 +80,11 @@ interface StepConfig {
   heading: { title: string; subtitle: string };
 }
 
-// Contract flow: 8 steps (full flow)
+// Contract flow: 8 steps (full flow) — acceptance before counterparty
 const CONTRACT_STEPS: StepConfig[] = [
   { id: 'path', label: 'Choose Path', heading: { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' } },
-  { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
   { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
+  { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
   { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
@@ -112,6 +115,103 @@ const COUNTERPARTY_LABEL: Record<string, string> = {
   partner: 'partner',
 };
 
+// Map wizard acceptance_method to API-accepted values
+// API accepts: 'manual' | 'auto' | 'digital_signature'
+const ACCEPTANCE_METHOD_API_MAP: Record<string, string> = {
+  payment: 'manual',
+  signoff: 'digital_signature',
+  auto: 'auto',
+};
+
+// UUID check for fly-by block detection
+const isValidUUID = (id: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+// Map wizard state to API request payload (matches deployed DB RPC schema)
+function mapWizardToRequest(
+  state: ContractWizardState,
+  contractType: ContractType
+): Record<string, any> {
+  // Map acceptance method to API-compatible value
+  const apiAcceptanceMethod = state.acceptanceMethod
+    ? ACCEPTANCE_METHOD_API_MAP[state.acceptanceMethod] || state.acceptanceMethod
+    : undefined;
+
+  // Build blocks array — flattened to match t_contract_blocks columns
+  const blocks = state.selectedBlocks.map((block, idx) => {
+    const isFlyBy = !isValidUUID(block.id);
+    return {
+      position: idx,
+      source_type: isFlyBy ? 'flyby' : 'catalog',
+      source_block_id: isFlyBy ? undefined : block.id,
+      block_name: block.name,
+      block_description: block.description || '',
+      category_id: block.categoryId || undefined,
+      category_name: block.categoryName,
+      unit_price: block.price,
+      quantity: block.quantity,
+      billing_cycle: block.cycle,
+      total_price: block.totalPrice,
+      flyby_type: isFlyBy ? (block.flyByType || 'text') : undefined,
+      custom_fields: {
+        currency: block.currency,
+        unlimited: block.unlimited,
+        config: block.config || {},
+        originalId: isFlyBy ? block.id : undefined,
+      },
+    };
+  });
+
+  // Build vendors array (RFQ only) — matches t_contract_vendors columns
+  const vendors = state.wizardMode === 'rfq'
+    ? state.vendorIds.map((id, idx) => ({
+        vendor_id: id,
+        contact_id: id,
+        contact_classification: 'vendor',
+        vendor_name: state.vendorNames[idx] || '',
+      }))
+    : [];
+
+  return {
+    // Core fields
+    record_type: state.wizardMode === 'rfq' ? 'rfq' : 'contract',
+    // Note: contract_type omitted — API validates against pricing types
+    // (fixed_price, etc.) which the wizard doesn't set. The relationship
+    // type (client/vendor/partner) is carried by contact_classification.
+    name: state.contractName,
+    title: state.contractName,
+    description: state.description || undefined,
+    acceptance_method: apiAcceptanceMethod,
+    path: state.path,
+    template_id: state.templateId || undefined,
+
+    // Buyer / counterparty (contact_id + classification)
+    buyer_id: state.buyerId || undefined,
+    contact_id: state.buyerId || undefined,
+    contact_classification: contractType,
+    buyer_name: state.buyerName || undefined,
+
+    // Duration & timeline
+    duration_value: state.durationValue,
+    duration_unit: state.durationUnit,
+    grace_period_value: state.gracePeriodValue,
+    grace_period_unit: state.gracePeriodUnit,
+
+    // Billing
+    currency: state.currency,
+    billing_cycle_type: state.billingCycleType || undefined,
+    payment_mode: state.paymentMode,
+    emi_months: state.paymentMode === 'emi' ? state.emiMonths : undefined,
+    per_block_payment_type: JSON.stringify(state.perBlockPaymentType),
+    total_value: state.totalValue,
+    selected_tax_rate_ids: state.selectedTaxRateIds,
+
+    // Related entities
+    blocks,
+    vendors,
+  };
+}
+
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
   onClose,
@@ -120,6 +220,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // API mutation
+  const { createContract, isCreating } = useContractOperations();
 
   // Current step state
   const [currentStep, setCurrentStep] = useState(0);
@@ -136,28 +239,29 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     templateId: null,
     role: null,
     wizardMode: 'contract',
-    // Step 1: Counterparty
+    // Counterparty
     buyerId: null,
     buyerName: '',
     vendorIds: [],
     vendorNames: [],
-    // Step 2: Acceptance
+    // Acceptance
     acceptanceMethod: null,
-    // Step 3: Contract Details
+    // Contract Details
     contractName: '',
     status: 'draft',
     currency: 'INR',
     description: '',
+    startDate: new Date(),
     durationValue: 1,
     durationUnit: 'months',
     gracePeriodValue: 0,
     gracePeriodUnit: 'days',
-    // Step 4: Billing Cycle
+    // Billing Cycle
     billingCycleType: null,
-    // Step 5: Blocks & Total
+    // Blocks & Total
     selectedBlocks: [],
     totalValue: 0,
-    // Step 6: Billing View - Tax & Payment
+    // Billing View - Tax & Payment
     selectedTaxRateIds: [],
     paymentMode: 'prepaid',
     emiMonths: 6,
@@ -229,12 +333,18 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const isLastStep = currentStep === totalSteps - 1;
 
   // Navigation handlers
-  const handleNext = useCallback(() => {
+  const handleNext = useCallback(async () => {
     if (isLastStep) {
-      // Show success screen instead of immediately closing
-      setIsContractSent(true);
+      // Final step — call API to create the contract
+      try {
+        const request = mapWizardToRequest(wizardState, contractType);
+        await createContract(request as CreateContractRequest);
+        setIsContractSent(true);
+      } catch {
+        // Error toast is handled by the mutation's onError
+      }
     } else if (showTemplateSelection) {
-      // From template selection, go to counterparty step (index 1 in both flows)
+      // From template selection, go to acceptance step (index 1 in contract flow)
       setShowTemplateSelection(false);
       setCurrentStep(1);
     } else if (canGoNext()) {
@@ -245,7 +355,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
       }
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -285,7 +395,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     updateWizardState('path', 'scratch');
     updateWizardState('templateId', null);
     setShowTemplateSelection(false);
-    setCurrentStep(1); // Go to Counterparty step
+    setCurrentStep(1); // Go to Acceptance step (first after path)
   }, [updateWizardState]);
 
   // Billing cycle type selection handler
@@ -446,6 +556,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               status: wizardState.status,
               currency: wizardState.currency,
               description: wizardState.description,
+              startDate: wizardState.startDate,
               durationValue: wizardState.durationValue,
               durationUnit: wizardState.durationUnit,
               gracePeriodValue: wizardState.gracePeriodValue,
@@ -479,7 +590,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             contractName={wizardState.contractName || (isRfqMode ? 'New RFQ' : 'New Contract')}
             contractStatus={wizardState.status}
             contractDuration={durationInMonths}
-            contractStartDate={new Date()}
+            contractStartDate={wizardState.startDate}
             selectedBuyer={wizardState.buyerId ? {
               id: wizardState.buyerId,
               contact_type: 'individual',
@@ -815,12 +926,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
-          canGoNext={canGoNext()}
+          canGoNext={canGoNext() && !isCreating}
           isLastStep={isLastStep}
           onBack={handleBack}
           onNext={handleNext}
           onClose={onClose}
-          sendButtonText={isRfqMode ? 'Send RFQ' : undefined}
+          sendButtonText={isCreating ? 'Creating...' : isRfqMode ? 'Send RFQ' : undefined}
           showTotal={!isRfqMode}
         />
       </div>

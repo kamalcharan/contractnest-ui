@@ -16,6 +16,7 @@ import {
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import DatePicker from '@/components/ui/DatePicker';
 import { currencyOptions, getDefaultCurrency, getCurrencySymbol } from '@/utils/constants/currencies';
 import {
   CONTRACT_STATUS_CONFIG,
@@ -34,6 +35,7 @@ export interface ContractDetailsData {
   status: string;
   currency: string;
   description: string;
+  startDate: Date;
   durationValue: number;
   durationUnit: string;
   gracePeriodValue: number;
@@ -95,7 +97,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
 
   // Calculate dates for timeline
   const timelineDates = useMemo(() => {
-    const startDate = new Date();
+    const startDate = data.startDate ? new Date(data.startDate) : new Date();
     const endDate = new Date(startDate);
     const graceEndDate = new Date(startDate);
 
@@ -127,7 +129,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
       end: formatDate(endDate),
       graceEnd: data.gracePeriodValue > 0 ? formatDate(graceEndDate) : null,
     };
-  }, [data.durationValue, data.durationUnit, data.gracePeriodValue, data.gracePeriodUnit]);
+  }, [data.startDate, data.durationValue, data.durationUnit, data.gracePeriodValue, data.gracePeriodUnit]);
 
   // Get current status config
   const currentStatusConfig = getContractStatusConfig(data.status);
@@ -494,6 +496,18 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 <Calendar className="w-3.5 h-3.5" />
                 Duration & Timeline
               </label>
+
+              {/* Start Date Picker */}
+              <div className="mb-4">
+                <DatePicker
+                  value={data.startDate}
+                  onChange={(date) => onChange({ startDate: date })}
+                  label="Start Date"
+                  required
+                  minDate={new Date()}
+                  placeholder="Select start date"
+                />
+              </div>
 
               {/* Duration Presets */}
               <div className="flex flex-wrap gap-2 mb-4">
