@@ -1,5 +1,4 @@
 // src/services/serviceURLs.ts - UI Layer Version COMPLETE
-// Updated with Catalog Studio endpoints
 // Updated with Service Catalog endpoints - ALL EXISTING ENDPOINTS PRESERVED
 // Updated with Groups & Directory endpoints
 
@@ -350,33 +349,6 @@ export const API_ENDPOINTS = {
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
   },
   
-  // =================================================================
-  // PRODUCT CONFIG ENDPOINTS - Business Model v2
-  // =================================================================
-  PRODUCT_CONFIG: {
-    // List all product configs
-    LIST: '/api/v1/product-config',
-
-    // Get specific product config
-    GET: (productCode: string) => `/api/v1/product-config/${productCode}`,
-
-    // Get product config version history
-    HISTORY: (productCode: string) => `/api/v1/product-config/${productCode}/history`,
-
-    // Update product config
-    UPDATE: (productCode: string) => `/api/v1/product-config/${productCode}`,
-
-    // Helper function for listing with filters
-    LIST_WITH_FILTERS: (filters: ProductConfigFilters = {}) => {
-      const params = new URLSearchParams();
-
-      if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-
-      const queryString = params.toString();
-      return queryString ? `/api/v1/product-config?${queryString}` : '/api/v1/product-config';
-    }
-  },
-
   // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management
@@ -399,13 +371,7 @@ export const API_ENDPOINTS = {
     
     // Billing integration
     BILLING_OVERVIEW: '/api/business-model/billing',
-    BILLING_PLAN: (id: string) => `/api/business-model/billing/plans/${id}`,
-
-    // Usage & Credits (Business Model Phase 4 Step 2)
-    USAGE_SUMMARY: '/api/functions/billing/usage-summary',
-    INVOICE_ESTIMATE: '/api/functions/billing/invoice-estimate',
-    TOPUP_PACKS: '/api/functions/billing/topup-packs',
-    CREDIT_BALANCE: '/api/functions/billing/credit-balance'
+    BILLING_PLAN: (id: string) => `/api/business-model/billing/plans/${id}`
   },
   
   // =================================================================
@@ -505,100 +471,9 @@ export const API_ENDPOINTS = {
       return queryString ? `/api/service-catalog/services?${queryString}` : '/api/service-catalog/services';
     }
   },
-
-  // =================================================================
-  // CATALOG STUDIO ENDPOINTS - NEW ADDITION
-  // =================================================================
-  CATALOG_STUDIO: {
-    // Health check
-    HEALTH: '/api/catalog-studio/health',
-
-    // Block operations (Global blocks - admin managed)
-    BLOCKS: {
-      LIST: '/api/catalog-studio/blocks',
-      GET: (id: string) => `/api/catalog-studio/blocks/${id}`,
-      CREATE: '/api/catalog-studio/blocks',
-      UPDATE: (id: string) => `/api/catalog-studio/blocks/${id}`,
-      DELETE: (id: string) => `/api/catalog-studio/blocks/${id}`,
-
-      // Helper function for listing blocks with filters
-      LIST_WITH_FILTERS: (filters: CatBlockFilters = {}) => {
-        const params = new URLSearchParams();
-
-        if (filters.block_type_id) params.append('block_type_id', filters.block_type_id);
-        if (filters.pricing_mode_id) params.append('pricing_mode_id', filters.pricing_mode_id);
-        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-        if (filters.tags && filters.tags.length > 0) params.append('tags', filters.tags.join(','));
-        if (filters.search) params.append('search', filters.search);
-        if (filters.page) params.append('page', filters.page.toString());
-        if (filters.limit) params.append('limit', filters.limit.toString());
-
-        const queryString = params.toString();
-        return queryString ? `/api/catalog-studio/blocks?${queryString}` : '/api/catalog-studio/blocks';
-      }
-    },
-
-    // Template operations (Tenant + System templates)
-    TEMPLATES: {
-      // Tenant templates
-      LIST: '/api/catalog-studio/templates',
-      GET: (id: string) => `/api/catalog-studio/templates/${id}`,
-      CREATE: '/api/catalog-studio/templates',
-      UPDATE: (id: string) => `/api/catalog-studio/templates/${id}`,
-      DELETE: (id: string) => `/api/catalog-studio/templates/${id}`,
-
-      // System templates (global)
-      SYSTEM: '/api/catalog-studio/templates/system',
-
-      // Public templates (from other tenants)
-      PUBLIC: '/api/catalog-studio/templates/public',
-
-      // Copy system template to tenant
-      COPY: (id: string) => `/api/catalog-studio/templates/${id}/copy`,
-
-      // Helper function for listing templates with filters
-      LIST_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
-        const params = new URLSearchParams();
-
-        if (filters.status_id) params.append('status_id', filters.status_id);
-        if (filters.is_public !== undefined) params.append('is_public', filters.is_public.toString());
-        if (filters.search) params.append('search', filters.search);
-        if (filters.page) params.append('page', filters.page.toString());
-        if (filters.limit) params.append('limit', filters.limit.toString());
-
-        const queryString = params.toString();
-        return queryString ? `/api/catalog-studio/templates?${queryString}` : '/api/catalog-studio/templates';
-      },
-
-      // Helper for system templates with filters
-      SYSTEM_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
-        const params = new URLSearchParams();
-
-        if (filters.status_id) params.append('status_id', filters.status_id);
-        if (filters.search) params.append('search', filters.search);
-        if (filters.page) params.append('page', filters.page.toString());
-        if (filters.limit) params.append('limit', filters.limit.toString());
-
-        const queryString = params.toString();
-        return queryString ? `/api/catalog-studio/templates/system?${queryString}` : '/api/catalog-studio/templates/system';
-      },
-
-      // Helper for public templates with filters
-      PUBLIC_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
-        const params = new URLSearchParams();
-
-        if (filters.search) params.append('search', filters.search);
-        if (filters.page) params.append('page', filters.page.toString());
-        if (filters.limit) params.append('limit', filters.limit.toString());
-
-        const queryString = params.toString();
-        return queryString ? `/api/catalog-studio/templates/public?${queryString}` : '/api/catalog-studio/templates/public';
-      }
-    }
-  },
   
   // =================================================================
-  // GROUPS & DIRECTORY MANAGEMENT ENDPOINTS - PRESERVED
+  // GROUPS & DIRECTORY MANAGEMENT ENDPOINTS - NEW ADDITION
   // =================================================================
   GROUPS: {
     // Main group operations
@@ -712,40 +587,7 @@ export const API_ENDPOINTS = {
       SAVE: '/api/smartprofiles',
       GENERATE: '/api/smartprofiles/generate',
       SEARCH: '/api/smartprofiles/search'
-    },
-
-    // Group Discovery (Deterministic Intent-based API)
-    GROUP_DISCOVERY: '/api/group-discovery'
-  },
-
-  // =================================================================
-  // CHAT / VaNi AI ENDPOINTS - PRESERVED
-  // =================================================================
-  CHAT: {
-    // Session management
-    INIT: '/api/chat/init',
-    SESSION: '/api/chat/session',
-    SESSION_BY_ID: (sessionId: string) => `/api/chat/session/${sessionId}`,
-
-    // Group activation
-    ACTIVATE: '/api/chat/activate',
-
-    // Intent management
-    INTENT: '/api/chat/intent',
-
-    // Search operations
-    SEARCH: '/api/chat/search',
-
-    // End session
-    END: '/api/chat/end'
-  },
-
-  // =================================================================
-  // AI AGENT ENDPOINTS - Conversational Group Discovery
-  // =================================================================
-  AI_AGENT: {
-    // Send message to AI Agent (via N8N webhook)
-    MESSAGE: '/api/ai-agent/message'
+    }
   },
 
   // =================================================================
@@ -815,6 +657,52 @@ export const API_ENDPOINTS = {
     }
   },
   
+  // =================================================================
+  // CONTRACTS CRUD ENDPOINTS - NEW
+  // =================================================================
+  CONTRACTS: {
+    // Main CRUD operations
+    LIST: '/api/contracts',
+    CREATE: '/api/contracts',
+    GET: (id: string) => `/api/contracts/${id}`,
+    UPDATE: (id: string) => `/api/contracts/${id}`,
+    DELETE: (id: string) => `/api/contracts/${id}`,
+
+    // Status management
+    UPDATE_STATUS: (id: string) => `/api/contracts/${id}/status`,
+
+    // Dashboard stats
+    STATS: '/api/contracts/stats',
+
+    // Health check
+    HEALTH: '/api/contracts/health',
+
+    // Helper: build list URL with filters
+    LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
+      const params = new URLSearchParams();
+
+      if (filters.record_type) params.append('record_type', filters.record_type);
+      if (filters.contract_type) params.append('contract_type', filters.contract_type);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.start_date_from) params.append('start_date_from', filters.start_date_from);
+      if (filters.start_date_to) params.append('start_date_to', filters.start_date_to);
+      if (filters.end_date_from) params.append('end_date_from', filters.end_date_from);
+      if (filters.end_date_to) params.append('end_date_to', filters.end_date_to);
+      if (filters.min_value !== undefined) params.append('min_value', filters.min_value.toString());
+      if (filters.max_value !== undefined) params.append('max_value', filters.max_value.toString());
+      if (filters.currency) params.append('currency', filters.currency);
+      if (filters.sort_by) params.append('sort_by', filters.sort_by);
+      if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
+      if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
+      if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
+      if (filters.page !== undefined) params.append('page', filters.page.toString());
+
+      const queryString = params.toString();
+      return queryString ? `/api/contracts?${queryString}` : '/api/contracts';
+    }
+  },
+
   // System and maintenance endpoints
   SYSTEM: {
     MAINTENANCE_STATUS: '/api/system/maintenance/status',
@@ -839,7 +727,7 @@ export const API_ENDPOINTS = {
   },
 
   // =================================================================
-  // SEQUENCE NUMBERS MANAGEMENT ENDPOINTS - PRESERVED
+  // SEQUENCE NUMBERS MANAGEMENT ENDPOINTS - NEW
   // =================================================================
   SEQUENCES: {
     // Health check
@@ -928,30 +816,6 @@ export type ServiceCatalogFilters = {
   offset?: number;
 };
 
-// =================================================================
-// CATALOG STUDIO TYPE DEFINITIONS - NEW ADDITION
-// =================================================================
-
-// Catalog Studio Block filter interface
-export type CatBlockFilters = {
-  block_type_id?: string;
-  pricing_mode_id?: string;
-  is_active?: boolean;
-  tags?: string[];
-  search?: string;
-  page?: number;
-  limit?: number;
-};
-
-// Catalog Studio Template filter interface
-export type CatTemplateFilters = {
-  status_id?: string;
-  is_public?: boolean;
-  search?: string;
-  page?: number;
-  limit?: number;
-};
-
 // Groups & Directory filter interfaces
 export type GroupFilters = {
   group_type?: 'bbb_chapter' | 'association' | 'network' | 'community';
@@ -1036,9 +900,24 @@ export type CategoryMapResponse = {
   timestamp?: string;
 };
 
-// Product Config filter interface
-export type ProductConfigFilters = {
-  is_active?: boolean;
+// Contract CRUD filter interface
+export type ContractCrudFilters = {
+  record_type?: string;
+  contract_type?: string;
+  status?: string;
+  search?: string;
+  start_date_from?: string;
+  start_date_to?: string;
+  end_date_from?: string;
+  end_date_to?: string;
+  min_value?: number;
+  max_value?: number;
+  currency?: string;
+  sort_by?: 'title' | 'contract_number' | 'status' | 'total_value' | 'start_date' | 'end_date' | 'created_at' | 'updated_at';
+  sort_direction?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+  page?: number;
 };
 
 // Sequence Numbers filter interface
@@ -1094,16 +973,13 @@ export type ResourceEndpoints = typeof API_ENDPOINTS.RESOURCES;
 export type ContactEndpoints = typeof API_ENDPOINTS.CONTACTS;
 export type CatalogEndpoints = typeof API_ENDPOINTS.CATALOG;
 export type ServiceCatalogEndpoints = typeof API_ENDPOINTS.SERVICE_CATALOG;
-export type CatalogStudioEndpoints = typeof API_ENDPOINTS.CATALOG_STUDIO;
-export type CatBlockEndpoints = typeof API_ENDPOINTS.CATALOG_STUDIO.BLOCKS;
-export type CatTemplateEndpoints = typeof API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES;
 export type GroupsEndpoints = typeof API_ENDPOINTS.GROUPS;
 export type ServiceContractsEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS;
 export type BlockEndpoints = typeof API_ENDPOINTS.SERVICE_CONTRACTS.BLOCKS;
 export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA;
 export type OnboardingEndpoints = typeof API_ENDPOINTS.ONBOARDING;
 export type SequencesEndpoints = typeof API_ENDPOINTS.SEQUENCES;
-export type ProductConfigEndpoints = typeof API_ENDPOINTS.PRODUCT_CONFIG;
+export type ContractsEndpoints = typeof API_ENDPOINTS.CONTRACTS;
 
 // Contact filters interface
 export type ContactFilters = {
@@ -1193,34 +1069,6 @@ export const buildCatalogListURL = (filters: CatalogFilters = {}): string => {
  */
 export const buildServiceCatalogListURL = (filters: ServiceCatalogFilters = {}): string => {
   return API_ENDPOINTS.SERVICE_CATALOG.LIST_WITH_FILTERS(filters);
-};
-
-/**
- * Build catalog studio blocks list URL with filters
- */
-export const buildCatBlocksListURL = (filters: CatBlockFilters = {}): string => {
-  return API_ENDPOINTS.CATALOG_STUDIO.BLOCKS.LIST_WITH_FILTERS(filters);
-};
-
-/**
- * Build catalog studio templates list URL with filters
- */
-export const buildCatTemplatesListURL = (filters: CatTemplateFilters = {}): string => {
-  return API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.LIST_WITH_FILTERS(filters);
-};
-
-/**
- * Build catalog studio system templates URL with filters
- */
-export const buildCatSystemTemplatesURL = (filters: CatTemplateFilters = {}): string => {
-  return API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.SYSTEM_WITH_FILTERS(filters);
-};
-
-/**
- * Build catalog studio public templates URL with filters
- */
-export const buildCatPublicTemplatesURL = (filters: CatTemplateFilters = {}): string => {
-  return API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.PUBLIC_WITH_FILTERS(filters);
 };
 
 /**
@@ -1339,6 +1187,13 @@ export const buildPrimaryIndustryCategoriesURL = (industryId: string, filters: O
 };
 
 /**
+ * Build contracts list URL with filters
+ */
+export const buildContractsListURL = (filters: ContractCrudFilters = {}): string => {
+  return API_ENDPOINTS.CONTRACTS.LIST_WITH_FILTERS(filters);
+};
+
+/**
  * Build onboarding status URL with optional parameters
  */
 export const buildOnboardingStatusURL = (includeSteps: boolean = true, includeMeta: boolean = false): string => {
@@ -1391,20 +1246,6 @@ export const isValidCatalogId = (id: string): boolean => {
 export const isValidServiceId = (id: string): boolean => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return typeof id === 'string' && uuidRegex.test(id);
-};
-
-/**
- * Validate block ID format
- */
-export const isValidBlockId = (id: string): boolean => {
-  return isValidUUID(id);
-};
-
-/**
- * Validate template ID format
- */
-export const isValidTemplateId = (id: string): boolean => {
-  return isValidUUID(id);
 };
 
 /**
@@ -1515,22 +1356,6 @@ export const isValidPaginationParams = (page?: number, limit?: number): boolean 
 export const isValidOnboardingStepId = (stepId: string): boolean => {
   const validSteps = ['user-profile', 'business-profile', 'data-setup', 'storage', 'team', 'tour'];
   return validSteps.includes(stepId);
-};
-
-/**
- * Validate product code format
- */
-export const isValidProductCode = (productCode: string): boolean => {
-  // Product codes should be lowercase with underscores/hyphens (e.g., 'contractnest', 'family-knows')
-  const productCodeRegex = /^[a-z][a-z0-9_-]*$/;
-  return typeof productCode === 'string' && productCode.length >= 2 && productCode.length <= 50 && productCodeRegex.test(productCode);
-};
-
-/**
- * Build product config list URL with filters
- */
-export const buildProductConfigListURL = (filters: ProductConfigFilters = {}): string => {
-  return API_ENDPOINTS.PRODUCT_CONFIG.LIST_WITH_FILTERS(filters);
 };
 
 // Export everything for comprehensive access

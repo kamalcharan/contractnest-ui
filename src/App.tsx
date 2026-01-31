@@ -146,6 +146,9 @@ import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
 import InviteSellersPage from './pages/contracts/invite';
 
+// Contracts Hub
+import ContractsHubPage from './pages/contracts/hub';
+
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
 import UserViewPage from './pages/settings/users/userView';
@@ -502,8 +505,19 @@ const AppContent: React.FC = () => {
   <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
 </Route>
 
+          {/* Contracts Hub — All Contracts page */}
+          <Route
+            path="/contracts"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ContractsHubPage />} />
+          </Route>
+
           {/* Legacy support for old routes - redirect to new structure */}
-          <Route path="/contracts" element={<Navigate to="/service-contracts/contracts" replace />} />
           <Route path="/templates" element={<Navigate to="/service-contracts/templates" replace />} />
 
           {/* Settings routes */}
