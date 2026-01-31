@@ -4,7 +4,7 @@
 // Self View: full pricing details per block
 // Client View: same layout, individual prices hidden (total only)
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   Building2,
   Mail,
@@ -20,10 +20,16 @@ import {
   Eye,
   EyeOff,
   Download,
+  MapPin,
+  Loader2,
+  Calendar,
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { useTaxRates } from '@/hooks/useTaxRates';
+import { useContact } from '@/hooks/useContacts';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
 import { BillingCycleType } from './BillingCycleStep';
@@ -46,7 +52,7 @@ export interface ReviewSendStepProps {
   billingCycleType: BillingCycleType;
   currency: string;
   selectedBlocks: ConfigurableBlock[];
-  paymentMode: 'prepaid' | 'emi';
+  paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
   selectedTaxRateIds: string[];
@@ -77,6 +83,14 @@ const getDurationInMonths = (value: number, unit: string): number => {
   if (unit === 'months') return value;
   if (unit === 'years') return value * 12;
   return Math.ceil(value / 30);
+};
+
+const SALUTATION_LABELS: Record<string, string> = {
+  mr: 'Mr.',
+  ms: 'Ms.',
+  mrs: 'Mrs.',
+  dr: 'Dr.',
+  prof: 'Prof.',
 };
 
 const CATEGORY_ICONS: Record<string, React.FC<{ className?: string; style?: React.CSSProperties }>> = {
@@ -119,6 +133,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   const brandPrimary = tenantProfile?.primary_color || '#F59E0B';
   const brandSecondary = tenantProfile?.secondary_color || '#10B981';
 
+  // Buyer contact details (cached from BuyerSelectionStep)
+  const { data: buyerContact } = useContact(buyerId || '');
+
   // Tax rates
   const { state: taxState } = useTaxRates();
   const availableTaxRates = useMemo(
@@ -135,6 +152,10 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   const [viewMode, setViewMode] = useState<'self' | 'client'>('self');
   const isSelfView = viewMode === 'self';
 
+  // PDF generation
+  const paperRef = useRef<HTMLDivElement>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
   const isMixed = billingCycleType === 'mixed';
   const durationMonths = getDurationInMonths(durationValue, durationUnit);
 
@@ -145,6 +166,32 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     ? '0 4px 20px rgba(0,0,0,0.3)'
     : '0 10px 30px rgba(0,0,0,0.05)';
   const borderColor = isDarkMode ? `${colors.utility.primaryText}15` : '#E2E8F0';
+
+  // ─── Buyer display helpers ────────────────────────────────────────
+  const buyerDisplayName = useMemo(() => {
+    if (!buyerContact) return buyerName || 'Not selected';
+    if (buyerContact.type === 'corporate') return buyerContact.company_name || buyerContact.name || buyerName;
+    const salutation = buyerContact.salutation ? SALUTATION_LABELS[buyerContact.salutation] || '' : '';
+    const name = buyerContact.name || buyerName;
+    return salutation ? `${salutation} ${name}` : name;
+  }, [buyerContact, buyerName]);
+
+  const buyerPrimaryAddress = useMemo(() => {
+    if (!buyerContact?.addresses?.length) return null;
+    return buyerContact.addresses.find((a) => a.is_primary) || buyerContact.addresses[0];
+  }, [buyerContact]);
+
+  const buyerPrimaryEmail = useMemo(() => {
+    if (!buyerContact?.contact_channels?.length) return null;
+    return buyerContact.contact_channels.find((c) => c.channel_type === 'email' && c.is_primary)
+      || buyerContact.contact_channels.find((c) => c.channel_type === 'email');
+  }, [buyerContact]);
+
+  const buyerPrimaryPhone = useMemo(() => {
+    if (!buyerContact?.contact_channels?.length) return null;
+    return buyerContact.contact_channels.find((c) => (c.channel_type === 'mobile' || c.channel_type === 'phone') && c.is_primary)
+      || buyerContact.contact_channels.find((c) => c.channel_type === 'mobile' || c.channel_type === 'phone');
+  }, [buyerContact]);
 
   // ─── Group blocks by category ────────────────────────────────────
   const blockGroups = useMemo(() => {
@@ -175,12 +222,96 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     return { subtotal, selectedRates, totalTaxRate, taxAmount, grandTotal, emiInstallment, billableCount: billableBlocks.length };
   }, [selectedBlocks, availableTaxRates, selectedTaxRateIds, emiMonths]);
 
+  // ─── Payment plan breakup (for "As Defined" / Mixed display) ─────
+  const definedBreakup = useMemo(() => {
+    const billableBlocks = selectedBlocks.filter((b) => categoryHasPricing(b.categoryId || ''));
+    const groups: Record<string, { total: number; count: number }> = {};
+    billableBlocks.forEach((block) => {
+      const cycle = block.cycle || 'prepaid';
+      if (!groups[cycle]) groups[cycle] = { total: 0, count: 0 };
+      groups[cycle].total += block.totalPrice;
+      groups[cycle].count += 1;
+    });
+    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'custom', 'postpaid'];
+    return order
+      .filter((cycle) => groups[cycle])
+      .map((cycle) => ({
+        cycle,
+        label:
+          cycle === 'prepaid' ? 'On Acceptance (Prepaid)'
+          : cycle === 'postpaid' ? 'On Completion (Postpaid)'
+          : getCycleLabel(cycle),
+        total: groups[cycle].total,
+        blockCount: groups[cycle].count,
+        isRecurring: !['prepaid', 'postpaid'].includes(cycle),
+      }));
+  }, [selectedBlocks]);
+
   // Timeline dates
   const startDate = new Date();
   const endDate = new Date();
   endDate.setMonth(endDate.getMonth() + durationMonths);
   const formatDate = (d: Date) =>
     new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+
+  // ─── PDF generation ───────────────────────────────────────────────
+  const handleDownloadPdf = useCallback(async () => {
+    if (!paperRef.current) return;
+    setGeneratingPdf(true);
+    try {
+      const canvas = await html2canvas(paperRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF',
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`${contractName || 'Contract'}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }, [contractName]);
+
+  // ─── Seller address helper ────────────────────────────────────────
+  const sellerAddress = useMemo(() => {
+    if (!tenantProfile) return null;
+    const parts = [
+      tenantProfile.address_line1,
+      tenantProfile.address_line2,
+      tenantProfile.city,
+      tenantProfile.state_code,
+      tenantProfile.postal_code,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : null;
+  }, [tenantProfile]);
+
+  // ─── Payment plan label ───────────────────────────────────────────
+  const paymentPlanLabel = useMemo(() => {
+    if (isMixed) return 'Mixed Billing';
+    if (paymentMode === 'emi') return `EMI \u00B7 ${emiMonths} months`;
+    if (paymentMode === 'defined') return 'As Defined';
+    return '100% Upfront';
+  }, [isMixed, paymentMode, emiMonths]);
 
   // ─── Render ──────────────────────────────────────────────────────
 
@@ -234,14 +365,21 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold transition-all hover:opacity-80 shadow-sm"
               style={{
                 backgroundColor: paperBg,
                 color: colors.utility.primaryText,
+                opacity: generatingPdf ? 0.6 : 1,
               }}
             >
-              <Download className="w-3.5 h-3.5" />
-              PDF
+              {generatingPdf ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              {generatingPdf ? 'Generating...' : 'PDF'}
             </button>
             {!rfqMode && (
               <span
@@ -265,6 +403,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
 
         {/* ═══ THE PAPER ═══ */}
         <div
+          ref={paperRef}
           className="max-w-[850px] mx-auto rounded-lg"
           style={{
             backgroundColor: paperBg,
@@ -362,6 +501,15 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                     {tenantProfile.business_phone_country_code} {tenantProfile.business_phone}
                   </p>
                 )}
+                {sellerAddress && (
+                  <p
+                    className="text-xs mt-0.5 flex items-start gap-1.5"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                    <span>{sellerAddress}</span>
+                  </p>
+                )}
               </div>
 
               {/* Customer / Vendors */}
@@ -381,9 +529,45 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-                    {buyerName || 'Not selected'}
-                  </p>
+                  <>
+                    <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                      {buyerDisplayName}
+                    </p>
+                    {buyerPrimaryEmail && (
+                      <p
+                        className="text-xs mt-1 flex items-center gap-1.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <Mail className="w-3 h-3" />
+                        {buyerPrimaryEmail.value}
+                      </p>
+                    )}
+                    {buyerPrimaryPhone && (
+                      <p
+                        className="text-xs mt-0.5 flex items-center gap-1.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <Phone className="w-3 h-3" />
+                        {buyerPrimaryPhone.country_code ? `${buyerPrimaryPhone.country_code} ` : ''}{buyerPrimaryPhone.value}
+                      </p>
+                    )}
+                    {buyerPrimaryAddress && (
+                      <p
+                        className="text-xs mt-0.5 flex items-start gap-1.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                        <span>
+                          {[
+                            buyerPrimaryAddress.address_line1,
+                            buyerPrimaryAddress.city,
+                            buyerPrimaryAddress.state,
+                            buyerPrimaryAddress.postal_code,
+                          ].filter(Boolean).join(', ')}
+                        </span>
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -413,11 +597,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                     Payment
                   </span>
                   <p className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
-                    {isMixed
-                      ? 'Mixed Billing'
-                      : paymentMode === 'emi'
-                        ? `EMI · ${emiMonths} months`
-                        : '100% Prepaid'}
+                    {paymentPlanLabel}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>
                     {acceptanceMethod === 'payment'
@@ -504,14 +684,6 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               >
                                 {block.name || 'Untitled'}
                               </h4>
-                              {block.isFlyBy && (
-                                <span
-                                  className="text-[9px] px-1.5 py-0.5 rounded font-bold flex-shrink-0"
-                                  style={{ backgroundColor: '#F59E0B20', color: '#F59E0B' }}
-                                >
-                                  FlyBy
-                                </span>
-                              )}
                               {categoryId === 'document' && block.config?.fileType && (
                                 <span
                                   className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase flex-shrink-0"
@@ -540,7 +712,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                                 >
                                   {getCycleLabel(block.cycle)}
                                 </span>
-                                {isMixed && (
+                                {isMixed && isSelfView && (
                                   <span
                                     className="text-[10px] px-2 py-0.5 rounded-md font-medium"
                                     style={{
@@ -627,6 +799,182 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               </div>
             )}
 
+            {/* ── Payment Plan Section (after services, before financial summary) ── */}
+            {totals.billableCount > 0 && !rfqMode && (
+              <div className="mt-8 pt-6 border-t" style={{ borderColor }}>
+                <div className="flex items-center gap-2 mb-4">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: `${brandPrimary}12` }}
+                  >
+                    <Calendar className="w-4 h-4" style={{ color: brandPrimary }} />
+                  </div>
+                  <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                    Payment Plan
+                  </span>
+                  <span
+                    className="text-[10px] px-2.5 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: `${brandPrimary}10`, color: brandPrimary }}
+                  >
+                    {paymentPlanLabel}
+                  </span>
+                </div>
+
+                <div
+                  className="p-5 rounded-xl border"
+                  style={{ borderColor, backgroundColor: `${brandPrimary}03` }}
+                >
+                  {/* Upfront */}
+                  {paymentMode === 'prepaid' && !isMixed && (
+                    <div>
+                      <p className="text-sm font-medium mb-1" style={{ color: colors.utility.primaryText }}>
+                        Full Upfront Payment
+                      </p>
+                      <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                        Entire contract value of{' '}
+                        <strong style={{ color: brandPrimary }}>{formatCurrency(totals.grandTotal, currency)}</strong>
+                        {' '}is due on acceptance.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* EMI */}
+                  {paymentMode === 'emi' && !isMixed && (
+                    <div>
+                      <p className="text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>
+                        Equal Monthly Installments
+                      </p>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                          {emiMonths} monthly installments of
+                        </span>
+                        <span className="text-sm font-bold" style={{ color: brandPrimary }}>
+                          {formatCurrency(totals.emiInstallment, currency)}/mo
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {Array.from({ length: Math.min(emiMonths, 3) }).map((_, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between text-[11px] py-1.5 px-3 rounded-lg"
+                            style={{ backgroundColor: `${colors.utility.primaryText}04` }}
+                          >
+                            <span style={{ color: colors.utility.secondaryText }}>
+                              Installment {i + 1}
+                            </span>
+                            <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                              {formatCurrency(totals.emiInstallment, currency)}
+                            </span>
+                          </div>
+                        ))}
+                        {emiMonths > 3 && (
+                          <p className="text-[10px] text-center pt-1" style={{ color: colors.utility.secondaryText }}>
+                            +{emiMonths - 3} more installment{emiMonths - 3 > 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* As Defined */}
+                  {paymentMode === 'defined' && !isMixed && (
+                    <div>
+                      <p className="text-sm font-medium mb-1" style={{ color: colors.utility.primaryText }}>
+                        Billed Per Block Cycle
+                      </p>
+                      <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+                        Each service is billed as per its defined billing cycle.
+                      </p>
+                      <div className="space-y-1.5">
+                        {definedBreakup.map((group, i) => (
+                          <div
+                            key={group.cycle}
+                            className="flex items-center justify-between text-[11px] py-2 px-3 rounded-lg"
+                            style={{ backgroundColor: `${colors.utility.primaryText}04` }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold"
+                                style={{ backgroundColor: `${brandPrimary}15`, color: brandPrimary }}
+                              >
+                                {i + 1}
+                              </div>
+                              <div>
+                                <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                                  {group.label}
+                                </span>
+                                <span className="text-[9px] ml-1" style={{ color: colors.utility.secondaryText }}>
+                                  ({group.blockCount} block{group.blockCount !== 1 ? 's' : ''})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                                {formatCurrency(group.total, currency)}
+                              </span>
+                              {group.isRecurring && (
+                                <span className="text-[9px] block" style={{ color: colors.utility.secondaryText }}>
+                                  /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mixed */}
+                  {isMixed && (
+                    <div>
+                      <p className="text-sm font-medium mb-1" style={{ color: colors.utility.primaryText }}>
+                        Mixed Billing Schedule
+                      </p>
+                      <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+                        Each service follows its own billing cycle and payment type.
+                      </p>
+                      <div className="space-y-1.5">
+                        {definedBreakup.map((group, i) => (
+                          <div
+                            key={group.cycle}
+                            className="flex items-center justify-between text-[11px] py-2 px-3 rounded-lg"
+                            style={{ backgroundColor: `${colors.utility.primaryText}04` }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-bold"
+                                style={{ backgroundColor: `${brandPrimary}15`, color: brandPrimary }}
+                              >
+                                {i + 1}
+                              </div>
+                              <div>
+                                <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                                  {group.label}
+                                </span>
+                                <span className="text-[9px] ml-1" style={{ color: colors.utility.secondaryText }}>
+                                  ({group.blockCount} block{group.blockCount !== 1 ? 's' : ''})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                                {formatCurrency(group.total, currency)}
+                              </span>
+                              {group.isRecurring && (
+                                <span className="text-[9px] block" style={{ color: colors.utility.secondaryText }}>
+                                  /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── Financial Summary (inline in paper) - hidden in RFQ ── */}
             {totals.billableCount > 0 && !rfqMode && (
               <div className="mt-10 pt-8 border-t" style={{ borderColor }}>
@@ -684,6 +1032,18 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                     </span>
                     <span className="text-xs font-bold" style={{ color: brandPrimary }}>
                       {formatCurrency(totals.emiInstallment, currency)} /mo
+                    </span>
+                  </div>
+                )}
+
+                {/* Defined note */}
+                {paymentMode === 'defined' && !isMixed && definedBreakup.length > 0 && (
+                  <div
+                    className="flex items-center justify-between mt-3 p-3 rounded-lg"
+                    style={{ backgroundColor: `${colors.utility.primaryText}04` }}
+                  >
+                    <span className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                      {definedBreakup.length} billing group{definedBreakup.length !== 1 ? 's' : ''} as per block cycles
                     </span>
                   </div>
                 )}

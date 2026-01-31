@@ -202,7 +202,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         description: '',
         icon: category?.icon || 'Package',
         quantity: 1,
-        cycle: type === 'service' ? 'prepaid' : 'prepaid',
+        cycle: 'prepaid',
         unlimited: false,
         price: 0,
         currency: currency,

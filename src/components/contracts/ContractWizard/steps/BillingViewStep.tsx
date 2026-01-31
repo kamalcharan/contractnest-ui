@@ -20,6 +20,8 @@ import {
   Plus,
   Info,
   ArrowRight,
+  ListChecks,
+  Lock,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTaxRates } from '@/hooks/useTaxRates';
@@ -37,8 +39,8 @@ export interface BillingViewStepProps {
   selectedTaxRateIds: string[];
   onTaxRateIdsChange: (ids: string[]) => void;
   // Payment
-  paymentMode: 'prepaid' | 'emi';
-  onPaymentModeChange: (mode: 'prepaid' | 'emi') => void;
+  paymentMode: 'prepaid' | 'emi' | 'defined';
+  onPaymentModeChange: (mode: 'prepaid' | 'emi' | 'defined') => void;
   emiMonths: number;
   onEmiMonthsChange: (months: number) => void;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
@@ -117,6 +119,41 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
   );
 
   const isMixed = billingCycleType === 'mixed';
+
+  // Conditional availability for payment schedule options
+  const allPrepaid = useMemo(
+    () => billableBlocks.length > 0 && billableBlocks.every((b) => b.cycle === 'prepaid'),
+    [billableBlocks]
+  );
+  const allPostpaid = useMemo(
+    () => billableBlocks.length > 0 && billableBlocks.every((b) => b.cycle === 'postpaid'),
+    [billableBlocks]
+  );
+
+  // "As Defined" breakup — group blocks by cycle type
+  const definedBreakup = useMemo(() => {
+    const groups: Record<string, { total: number; count: number }> = {};
+    billableBlocks.forEach((block) => {
+      const cycle = block.cycle || 'prepaid';
+      if (!groups[cycle]) groups[cycle] = { total: 0, count: 0 };
+      groups[cycle].total += block.totalPrice;
+      groups[cycle].count += 1;
+    });
+
+    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'custom', 'postpaid'];
+    return order
+      .filter((cycle) => groups[cycle])
+      .map((cycle) => ({
+        cycle,
+        label:
+          cycle === 'prepaid' ? 'On Acceptance (Prepaid)'
+          : cycle === 'postpaid' ? 'On Completion (Postpaid)'
+          : getCycleLabel(cycle),
+        total: groups[cycle].total,
+        blockCount: groups[cycle].count,
+        isRecurring: !['prepaid', 'postpaid'].includes(cycle),
+      }));
+  }, [billableBlocks]);
 
   // Editing state for selling price
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
@@ -235,8 +272,24 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       className="h-full flex flex-col"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
+      {/* In-page Header */}
+      <div className="text-center pt-6 pb-4 px-4 flex-shrink-0">
+        <h2
+          className="text-2xl font-bold mb-2"
+          style={{ color: colors.utility.primaryText }}
+        >
+          Billing View
+        </h2>
+        <p
+          className="text-sm"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          Review line items, configure payment schedule, and apply tax
+        </p>
+      </div>
+
       {/* 3-Column Layout */}
-      <div className="flex-1 flex gap-4 px-4 py-4 min-h-0">
+      <div className="flex-1 flex gap-4 px-4 pb-4 min-h-0">
         {/* Column 1: Billing Configuration Summary */}
         <div className="w-[250px] flex-shrink-0">
           <div
@@ -595,10 +648,10 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
           )}
         </div>
 
-        {/* Column 3: Payment + Tax + Summary */}
-        <div className="w-[380px] flex-shrink-0 min-h-0">
+        {/* Column 3: Payment Schedule + Tax + Summary */}
+        <div className="w-[420px] flex-shrink-0 min-h-0">
           <div className="h-full overflow-y-auto flex flex-col gap-3 pr-1">
-          {/* Payment Mode Section */}
+          {/* Payment Schedule Section */}
           <div
             className="rounded-xl border overflow-hidden flex-shrink-0"
             style={{
@@ -616,24 +669,29 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                 className="text-sm font-semibold"
                 style={{ color: colors.utility.primaryText }}
               >
-                Payment Mode
+                Payment Schedule
               </span>
             </div>
 
             <div className="p-4">
               {!isMixed ? (
                 <>
-                  {/* Unified: Prepaid vs EMI toggle cards */}
+                  {/* 3 Payment Schedule Options */}
                   <div className="flex gap-2 mb-4">
-                    {/* Prepaid Card */}
+                    {/* Upfront Card */}
                     <button
-                      onClick={() => onPaymentModeChange('prepaid')}
-                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left"
+                      onClick={() => allPrepaid && onPaymentModeChange('prepaid')}
+                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left relative"
                       style={{
                         borderColor: paymentMode === 'prepaid' ? colors.brand.primary : `${colors.utility.primaryText}15`,
                         backgroundColor: paymentMode === 'prepaid' ? `${colors.brand.primary}08` : 'transparent',
+                        opacity: allPrepaid ? 1 : 0.45,
+                        cursor: allPrepaid ? 'pointer' : 'not-allowed',
                       }}
                     >
+                      {!allPrepaid && (
+                        <Lock className="w-3 h-3 absolute top-2 right-2" style={{ color: colors.utility.secondaryText }} />
+                      )}
                       <CreditCard
                         className="w-5 h-5 mb-2"
                         style={{ color: paymentMode === 'prepaid' ? colors.brand.primary : colors.utility.secondaryText }}
@@ -642,25 +700,30 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                         className="text-xs font-bold"
                         style={{ color: paymentMode === 'prepaid' ? colors.brand.primary : colors.utility.primaryText }}
                       >
-                        100% Prepaid
+                        Upfront
                       </div>
                       <div
                         className="text-[10px] mt-0.5"
                         style={{ color: colors.utility.secondaryText }}
                       >
-                        Full payment upfront
+                        Full payment at once
                       </div>
                     </button>
 
                     {/* EMI Card */}
                     <button
-                      onClick={() => onPaymentModeChange('emi')}
-                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left"
+                      onClick={() => allPostpaid && onPaymentModeChange('emi')}
+                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left relative"
                       style={{
                         borderColor: paymentMode === 'emi' ? colors.brand.primary : `${colors.utility.primaryText}15`,
                         backgroundColor: paymentMode === 'emi' ? `${colors.brand.primary}08` : 'transparent',
+                        opacity: allPostpaid ? 1 : 0.45,
+                        cursor: allPostpaid ? 'pointer' : 'not-allowed',
                       }}
                     >
+                      {!allPostpaid && (
+                        <Lock className="w-3 h-3 absolute top-2 right-2" style={{ color: colors.utility.secondaryText }} />
+                      )}
                       <CalendarRange
                         className="w-5 h-5 mb-2"
                         style={{ color: paymentMode === 'emi' ? colors.brand.primary : colors.utility.secondaryText }}
@@ -675,12 +738,56 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                         className="text-[10px] mt-0.5"
                         style={{ color: colors.utility.secondaryText }}
                       >
-                        Split into installments
+                        Equal installments
+                      </div>
+                    </button>
+
+                    {/* As Defined Card */}
+                    <button
+                      onClick={() => onPaymentModeChange('defined')}
+                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left"
+                      style={{
+                        borderColor: paymentMode === 'defined' ? colors.brand.primary : `${colors.utility.primaryText}15`,
+                        backgroundColor: paymentMode === 'defined' ? `${colors.brand.primary}08` : 'transparent',
+                      }}
+                    >
+                      <ListChecks
+                        className="w-5 h-5 mb-2"
+                        style={{ color: paymentMode === 'defined' ? colors.brand.primary : colors.utility.secondaryText }}
+                      />
+                      <div
+                        className="text-xs font-bold"
+                        style={{ color: paymentMode === 'defined' ? colors.brand.primary : colors.utility.primaryText }}
+                      >
+                        As Defined
+                      </div>
+                      <div
+                        className="text-[10px] mt-0.5"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Per block cycle
                       </div>
                     </button>
                   </div>
 
-                  {/* Prepaid Details */}
+                  {/* Availability hints */}
+                  {(!allPrepaid || !allPostpaid) && (
+                    <div
+                      className="flex items-start gap-1.5 mb-3 px-2 py-1.5 rounded-lg"
+                      style={{ backgroundColor: `${colors.utility.primaryText}04` }}
+                    >
+                      <Info className="w-3 h-3 flex-shrink-0 mt-0.5" style={{ color: colors.utility.secondaryText }} />
+                      <span className="text-[10px] leading-relaxed" style={{ color: colors.utility.secondaryText }}>
+                        {!allPrepaid && !allPostpaid
+                          ? 'Upfront requires all blocks prepaid. EMI requires all blocks postpaid.'
+                          : !allPrepaid
+                            ? 'Upfront requires all blocks to have prepaid billing cycle.'
+                            : 'EMI requires all blocks to have postpaid billing cycle.'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Upfront Details */}
                   {paymentMode === 'prepaid' && (
                     <div
                       className="p-3 rounded-lg"
@@ -825,27 +932,152 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                       </div>
                     </div>
                   )}
+
+                  {/* As Defined Details */}
+                  {paymentMode === 'defined' && (
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{ backgroundColor: `${colors.utility.primaryText}05` }}
+                    >
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <Info className="w-3 h-3 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                        <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                          Billed exactly as each block's billing cycle defines
+                        </span>
+                      </div>
+
+                      {/* Breakup by cycle type */}
+                      <div className="space-y-1">
+                        {definedBreakup.map((group, i) => (
+                          <div
+                            key={group.cycle}
+                            className="flex items-center justify-between text-[11px] py-1.5"
+                            style={{ borderBottom: `1px solid ${colors.utility.primaryText}06` }}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <div
+                                className="w-4 h-4 rounded flex items-center justify-center text-[8px] font-bold"
+                                style={{ backgroundColor: `${colors.brand.primary}15`, color: colors.brand.primary }}
+                              >
+                                {i + 1}
+                              </div>
+                              <div>
+                                <span style={{ color: colors.utility.primaryText }} className="font-medium">
+                                  {group.label}
+                                </span>
+                                <span
+                                  className="text-[9px] ml-1"
+                                  style={{ color: colors.utility.secondaryText }}
+                                >
+                                  ({group.blockCount} block{group.blockCount !== 1 ? 's' : ''})
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                                {formatCurrency(group.total, currency)}
+                              </span>
+                              {group.isRecurring && (
+                                <span
+                                  className="text-[9px] block"
+                                  style={{ color: colors.utility.secondaryText }}
+                                >
+                                  /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Total */}
+                      <div
+                        className="flex items-center justify-between mt-2 pt-2"
+                        style={{ borderTop: `1px solid ${colors.utility.primaryText}10` }}
+                      >
+                        <span className="text-[11px] font-medium" style={{ color: colors.utility.secondaryText }}>
+                          Contract Total
+                        </span>
+                        <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
+                          {formatCurrency(totals.grandTotal, currency)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
-                /* Mixed: Instruction to configure per block */
-                <div
-                  className="p-3 rounded-lg"
-                  style={{ backgroundColor: `${colors.utility.primaryText}05` }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
+                /* Mixed: Show breakup by cycle type (same as "As Defined") */
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
                     <Shuffle className="w-4 h-4" style={{ color: colors.brand.primary }} />
                     <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
-                      Mixed Payment
+                      Mixed Payment Schedule
                     </span>
                   </div>
-                  <p className="text-[11px] mb-2" style={{ color: colors.utility.secondaryText }}>
-                    Each service has its own payment type. Use the Payment column in the table to set Prepaid or Postpaid per block.
+                  <p className="text-[11px] mb-3" style={{ color: colors.utility.secondaryText }}>
+                    Each service is billed per its own cycle. Use the Payment column in the table to set Prepaid or Postpaid per block.
                   </p>
-                  <div className="flex items-center gap-1.5">
-                    <ArrowRight className="w-3 h-3" style={{ color: colors.brand.primary }} />
-                    <span className="text-[10px] font-medium" style={{ color: colors.brand.primary }}>
-                      Configure in the table
-                    </span>
+
+                  {/* Breakup by cycle type */}
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{ backgroundColor: `${colors.utility.primaryText}05` }}
+                  >
+                    <div className="space-y-1">
+                      {definedBreakup.map((group, i) => (
+                        <div
+                          key={group.cycle}
+                          className="flex items-center justify-between text-[11px] py-1.5"
+                          style={{ borderBottom: `1px solid ${colors.utility.primaryText}06` }}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <div
+                              className="w-4 h-4 rounded flex items-center justify-center text-[8px] font-bold"
+                              style={{ backgroundColor: `${colors.brand.primary}15`, color: colors.brand.primary }}
+                            >
+                              {i + 1}
+                            </div>
+                            <div>
+                              <span style={{ color: colors.utility.primaryText }} className="font-medium">
+                                {group.label}
+                              </span>
+                              <span
+                                className="text-[9px] ml-1"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                ({group.blockCount} block{group.blockCount !== 1 ? 's' : ''})
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                              {formatCurrency(group.total, currency)}
+                            </span>
+                            {group.isRecurring && (
+                              <span
+                                className="text-[9px] block"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Total */}
+                    <div
+                      className="flex items-center justify-between mt-2 pt-2"
+                      style={{ borderTop: `1px solid ${colors.utility.primaryText}10` }}
+                    >
+                      <span className="text-[11px] font-medium" style={{ color: colors.utility.secondaryText }}>
+                        Contract Total
+                      </span>
+                      <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
+                        {formatCurrency(totals.grandTotal, currency)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -981,7 +1213,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                 </span>
               </div>
 
-              {/* EMI Note */}
+              {/* Schedule Note */}
               {!isMixed && paymentMode === 'emi' && (
                 <div
                   className="mt-2 p-2.5 rounded-lg flex items-center justify-between"
@@ -992,6 +1224,16 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                   </span>
                   <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
                     {formatCurrency(totals.emiInstallment, currency)} /mo
+                  </span>
+                </div>
+              )}
+              {!isMixed && paymentMode === 'defined' && definedBreakup.length > 0 && (
+                <div
+                  className="mt-2 p-2.5 rounded-lg"
+                  style={{ backgroundColor: `${colors.brand.primary}08` }}
+                >
+                  <span className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                    {definedBreakup.length} billing group{definedBreakup.length !== 1 ? 's' : ''} as per block cycles
                   </span>
                 </div>
               )}
