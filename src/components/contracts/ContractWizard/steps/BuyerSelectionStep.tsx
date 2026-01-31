@@ -152,6 +152,8 @@ interface BuyerSelectionStepProps {
   selectedVendorIds?: string[];
   selectedVendorNames?: string[];
   onVendorsChange?: (ids: string[], names: string[]) => void;
+  // Acceptance method from wizard (drives notification note)
+  acceptanceMethod?: 'payment' | 'signoff' | 'auto' | null;
 }
 
 const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
@@ -166,6 +168,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   selectedVendorIds = [],
   selectedVendorNames = [],
   onVendorsChange,
+  acceptanceMethod,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -858,6 +861,150 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     );
   };
 
+  // Render Notification Note — shows where acceptance notifications will be sent
+  const renderNotificationNote = () => {
+    if (!selectedContact || !acceptanceMethod) return null;
+
+    // Auto-accept: simple note, no channel check needed
+    if (acceptanceMethod === 'auto') {
+      return (
+        <div
+          className="rounded-xl border p-4 mb-6"
+          style={{
+            backgroundColor: `${colors.semantic.success}08`,
+            borderColor: `${colors.semantic.success}30`,
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: `${colors.semantic.success}15` }}
+            >
+              <Check className="w-4 h-4" style={{ color: colors.semantic.success }} />
+            </div>
+            <div>
+              <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+                Auto-Accept Enabled
+              </p>
+              <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
+                This contract will be automatically accepted upon creation. No acceptance notifications will be sent.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Determine which channels to use based on contact type / person selection
+    const isCorporate = selectedContact.type === 'corporate';
+    let activeChannels: ContactChannel[] = [];
+    let contactLabel = '';
+
+    if (isCorporate && selectedPerson && !useCompanyContact) {
+      // Corporate with selected person — use that person's channels
+      activeChannels = selectedPerson.contact_channels || [];
+      contactLabel = selectedPerson.name || 'selected contact person';
+    } else {
+      // Individual contact or corporate using company info
+      activeChannels = selectedContact.contact_channels || [];
+      contactLabel = formatContactDisplayName(selectedContact);
+    }
+
+    const emailChannel = activeChannels.find(
+      (ch: ContactChannel) => ch.channel_type === 'email'
+    );
+    const whatsappChannel = activeChannels.find(
+      (ch: ContactChannel) => ch.channel_type === 'whatsapp'
+    );
+
+    const isPayment = acceptanceMethod === 'payment';
+
+    return (
+      <div
+        className="rounded-xl border p-4 mb-6"
+        style={{
+          backgroundColor: `${colors.brand.primary}06`,
+          borderColor: `${colors.brand.primary}25`,
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: `${colors.brand.primary}15` }}
+          >
+            <Mail className="w-4 h-4" style={{ color: colors.brand.primary }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold mb-2" style={{ color: colors.utility.primaryText }}>
+              {isPayment ? 'Payment Notification' : 'Sign-off Notification'}
+            </p>
+
+            {/* Email notification line */}
+            {emailChannel ? (
+              <div className="flex items-center gap-2 mb-1.5">
+                <Mail className="w-3.5 h-3.5 flex-shrink-0" style={{ color: colors.semantic.success }} />
+                <span className="text-sm" style={{ color: colors.utility.primaryText }}>
+                  {isPayment
+                    ? 'An email for payment will be sent to '
+                    : 'Contract view + PDF will be emailed to '}
+                  <span
+                    className="font-semibold px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${colors.brand.primary}12`,
+                      color: colors.brand.primary,
+                    }}
+                  >
+                    {emailChannel.value}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mb-1.5">
+                <Mail className="w-3.5 h-3.5 flex-shrink-0" style={{ color: colors.semantic.warning }} />
+                <span className="text-sm" style={{ color: colors.semantic.warning }}>
+                  No email configured for {contactLabel}
+                </span>
+              </div>
+            )}
+
+            {/* WhatsApp notification line */}
+            {whatsappChannel ? (
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#25D366' }} />
+                <span className="text-sm" style={{ color: colors.utility.primaryText }}>
+                  {'WhatsApp notification will be sent to '}
+                  <span
+                    className="font-semibold px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: '#25D36612',
+                      color: '#25D366',
+                    }}
+                  >
+                    {whatsappChannel.value}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                  No WhatsApp configured for {contactLabel}
+                </span>
+              </div>
+            )}
+
+            {/* Corporate person context */}
+            {isCorporate && selectedPerson && !useCompanyContact && (
+              <p className="text-xs mt-2 italic" style={{ color: colors.utility.secondaryText }}>
+                Notifications will be sent to {selectedPerson.name} (selected contact person)
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       className="min-h-[60vh] p-6"
@@ -895,6 +1042,9 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
 
         {/* Selected Contact Card (single-select only) */}
         {!multiSelect && selectedContact && renderSelectedContactCard()}
+
+        {/* Notification Note - shows where acceptance notifications will be sent */}
+        {!multiSelect && selectedContact && renderNotificationNote()}
 
         {/* Selected vendors chips (multi-select mode) */}
         {multiSelect && selectedVendorIds.length > 0 && (

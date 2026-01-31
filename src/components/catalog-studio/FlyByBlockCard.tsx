@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import RichTextEditor from '@/components/ui/RichTextEditor';
 import { ConfigurableBlock, CYCLE_OPTIONS } from './BlockCardConfigurable';
 
 export type FlyByBlockType = 'service' | 'spare' | 'text' | 'document';
@@ -323,26 +324,20 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
               </div>
             )}
 
-            {/* Content - For Text type */}
+            {/* Content - For Text type (RichText) */}
             {flyByType === 'text' && (
               <div>
-                <label
-                  className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Content
-                </label>
-                <textarea
+                <RichTextEditor
                   value={block.config?.content || ''}
-                  onChange={(e) => handleConfigChange('content', e.target.value)}
+                  onChange={(value) => handleConfigChange('content', value)}
+                  label="Content"
                   placeholder="Enter text content for the contract"
-                  rows={4}
-                  className="w-full px-3 py-2 text-sm rounded-lg border resize-none"
-                  style={{
-                    backgroundColor: colors.utility.primaryBackground,
-                    borderColor: `${colors.utility.primaryText}20`,
-                    color: colors.utility.primaryText,
-                  }}
+                  toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+                  minHeight={150}
+                  maxHeight={300}
+                  showCharCount={true}
+                  maxLength={10000}
+                  allowFullscreen={true}
                 />
               </div>
             )}
