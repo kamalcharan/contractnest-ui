@@ -1,10 +1,12 @@
 // src/components/contracts/ContractWizard/index.tsx
 // Contract Wizard - Main component with Floating Action Island
 import React, { useState, useCallback } from 'react';
-import { X, CheckCircle2, ArrowRight, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Loader2, Copy, Check, Key, Mail, CreditCard, PenTool, Zap, Receipt } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContractOperations } from '@/hooks/queries/useContractQueries';
-import type { CreateContractRequest } from '@/types/contracts';
+import type { CreateContractRequest, RecordPaymentResponse, PaymentMethod } from '@/types/contracts';
+import api from '@/services/api';
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath, WizardMode } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
@@ -125,6 +127,16 @@ const ACCEPTANCE_METHOD_API_MAP: Record<string, string> = {
   auto: 'auto',
 };
 
+// Payment method options for pre-payment dialog
+const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'card', label: 'Card' },
+  { value: 'other', label: 'Other' },
+];
+
 // UUID check for fly-by block detection
 const isValidUUID = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -214,6 +226,41 @@ function mapWizardToRequest(
   };
 }
 
+// Initial wizard state factory (needs fresh Date each time)
+const createInitialWizardState = (): ContractWizardState => ({
+  path: null,
+  templateId: null,
+  role: null,
+  wizardMode: 'contract',
+  // Counterparty
+  buyerId: null,
+  buyerName: '',
+  vendorIds: [],
+  vendorNames: [],
+  // Acceptance
+  acceptanceMethod: null,
+  // Contract Details
+  contractName: '',
+  status: 'draft',
+  currency: 'INR',
+  description: '',
+  startDate: new Date(),
+  durationValue: 1,
+  durationUnit: 'months',
+  gracePeriodValue: 0,
+  gracePeriodUnit: 'days',
+  // Billing Cycle
+  billingCycleType: null,
+  // Blocks & Total
+  selectedBlocks: [],
+  totalValue: 0,
+  // Billing View - Tax & Payment
+  selectedTaxRateIds: [],
+  paymentMode: 'prepaid',
+  emiMonths: 6,
+  perBlockPaymentType: {},
+});
+
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
   onClose,
@@ -235,41 +282,55 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Success screen state
   const [isContractSent, setIsContractSent] = useState(false);
+  const [createdContractData, setCreatedContractData] = useState<Record<string, any> | null>(null);
+  const [cnakCopied, setCnakCopied] = useState(false);
+
+  // Pre-payment dialog state (auto-accept flow: collect payment BEFORE creation)
+  const [showPrePaymentDialog, setShowPrePaymentDialog] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [processingStep, setProcessingStep] = useState('');
+  const [recordedReceipt, setRecordedReceipt] = useState<RecordPaymentResponse | null>(null);
+
+  // Payment form state (pre-payment dialog fields)
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('bank_transfer');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentReference, setPaymentReference] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentEmiSequence, setPaymentEmiSequence] = useState(1);
 
   // Wizard data state
-  const [wizardState, setWizardState] = useState<ContractWizardState>({
-    path: null,
-    templateId: null,
-    role: null,
-    wizardMode: 'contract',
-    // Counterparty
-    buyerId: null,
-    buyerName: '',
-    vendorIds: [],
-    vendorNames: [],
-    // Acceptance
-    acceptanceMethod: null,
-    // Contract Details
-    contractName: '',
-    status: 'draft',
-    currency: 'INR',
-    description: '',
-    startDate: new Date(),
-    durationValue: 1,
-    durationUnit: 'months',
-    gracePeriodValue: 0,
-    gracePeriodUnit: 'days',
-    // Billing Cycle
-    billingCycleType: null,
-    // Blocks & Total
-    selectedBlocks: [],
-    totalValue: 0,
-    // Billing View - Tax & Payment
-    selectedTaxRateIds: [],
-    paymentMode: 'prepaid',
-    emiMonths: 6,
-    perBlockPaymentType: {},
-  });
+  const [wizardState, setWizardState] = useState<ContractWizardState>(createInitialWizardState);
+
+  // Derived: contract ID from creation response (for payment dialog)
+  const createdContractId = createdContractData?.id;
+
+  // Reset entire wizard to fresh state
+  const resetWizard = useCallback(() => {
+    setWizardState(createInitialWizardState());
+    setCurrentStep(0);
+    setShowTemplateSelection(false);
+    setIsContractSent(false);
+    setCreatedContractData(null);
+    setCnakCopied(false);
+    // Pre-payment dialog resets
+    setShowPrePaymentDialog(false);
+    setIsProcessingPayment(false);
+    setProcessingStep('');
+    setRecordedReceipt(null);
+    setPaymentAmount('');
+    setPaymentMethod('bank_transfer');
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentReference('');
+    setPaymentNotes('');
+    setPaymentEmiSequence(1);
+  }, []);
+
+  // Close handler — resets wizard state then calls parent onClose
+  const handleClose = useCallback(() => {
+    resetWizard();
+    onClose();
+  }, [resetWizard, onClose]);
 
   // Update wizard state helper
   const updateWizardState = useCallback(
@@ -338,10 +399,27 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Navigation handlers
   const handleNext = useCallback(async () => {
     if (isLastStep) {
-      // Final step — call API to create the contract
+      // Auto-accept: show pre-payment dialog instead of creating immediately
+      if (wizardState.acceptanceMethod === 'auto') {
+        const total = wizardState.totalValue;
+        const isEmi = wizardState.paymentMode === 'emi' && wizardState.emiMonths > 0;
+        const emiAmount = isEmi ? Math.round((total / wizardState.emiMonths) * 100) / 100 : total;
+        setPaymentAmount(emiAmount.toString());
+        setPaymentMethod('bank_transfer');
+        setPaymentDate(new Date().toISOString().split('T')[0]);
+        setPaymentReference('');
+        setPaymentNotes('');
+        setPaymentEmiSequence(1);
+        setShowPrePaymentDialog(true);
+        return;
+      }
+
+      // Non-auto acceptance methods: create contract directly
       try {
         const request = mapWizardToRequest(wizardState, contractType);
-        await createContract(request as CreateContractRequest);
+        const result = await createContract(request as CreateContractRequest);
+        setCreatedContractData(result as Record<string, any>);
+        setCnakCopied(false);
         setIsContractSent(true);
       } catch {
         // Error toast is handled by the mutation's onError
@@ -386,9 +464,103 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Done button handler on success screen
   const handleDone = useCallback(() => {
     onComplete?.(wizardState);
-    setIsContractSent(false);
+    resetWizard();
     onClose();
-  }, [wizardState, onComplete, onClose]);
+  }, [wizardState, onComplete, resetWizard, onClose]);
+
+  // Create contract WITH payment recording (auto-accept flow)
+  const handleCreateWithPayment = useCallback(async () => {
+    let contractResult: Record<string, any> | null = null;
+    try {
+      setIsProcessingPayment(true);
+
+      // Step 1: Create the contract
+      setProcessingStep('Creating contract...');
+      const request = mapWizardToRequest(wizardState, contractType);
+      contractResult = (await createContract(request as CreateContractRequest)) as Record<string, any>;
+      const contractId = contractResult?.id;
+      if (!contractId) throw new Error('Contract created but no ID returned');
+      setCreatedContractData(contractResult);
+
+      // Step 2: Fetch the auto-generated invoice
+      setProcessingStep('Fetching invoice...');
+      const invoiceResponse = await api.get(API_ENDPOINTS.CONTRACTS.INVOICES(contractId));
+      const invoices = invoiceResponse.data?.data?.invoices || invoiceResponse.data?.invoices || [];
+      const invoice = invoices[0];
+      if (!invoice?.id) throw new Error('Invoice not found');
+
+      // Step 3: Record the payment
+      setProcessingStep('Recording payment...');
+      const paymentPayload = {
+        invoice_id: invoice.id,
+        amount: parseFloat(paymentAmount),
+        payment_method: paymentMethod,
+        payment_date: paymentDate,
+        reference_number: paymentReference || undefined,
+        notes: paymentNotes || undefined,
+        emi_sequence: wizardState.paymentMode === 'emi' ? paymentEmiSequence : undefined,
+      };
+
+      const paymentResponse = await api.post(
+        API_ENDPOINTS.CONTRACTS.RECORD_PAYMENT(contractId),
+        paymentPayload
+      );
+      const receipt = paymentResponse.data?.data || paymentResponse.data;
+
+      setRecordedReceipt(receipt);
+      setShowPrePaymentDialog(false);
+      setCnakCopied(false);
+      setIsContractSent(true);
+
+      addToast({
+        type: 'success',
+        title: 'Contract created & payment recorded',
+        message: `Receipt: ${receipt.receipt_number}`,
+      });
+    } catch (err: any) {
+      if (contractResult) {
+        // Contract was created but payment failed — still show success
+        setCreatedContractData(contractResult);
+        setShowPrePaymentDialog(false);
+        setCnakCopied(false);
+        setIsContractSent(true);
+        addToast({
+          type: 'warning',
+          title: 'Contract created, payment recording failed',
+          message: err.message || 'Record payment later from contract details.',
+        });
+      } else {
+        addToast({
+          type: 'error',
+          title: 'Failed to create contract',
+          message: err.message || 'An error occurred',
+        });
+      }
+    } finally {
+      setIsProcessingPayment(false);
+      setProcessingStep('');
+    }
+  }, [wizardState, contractType, createContract, paymentAmount, paymentMethod, paymentDate, paymentReference, paymentNotes, paymentEmiSequence, addToast]);
+
+  // Create contract WITHOUT payment (skip payment, auto-accept flow)
+  const handleCreateSkipPayment = useCallback(async () => {
+    try {
+      setIsProcessingPayment(true);
+      setProcessingStep('Creating contract...');
+      setShowPrePaymentDialog(false);
+
+      const request = mapWizardToRequest(wizardState, contractType);
+      const result = await createContract(request as CreateContractRequest);
+      setCreatedContractData(result as Record<string, any>);
+      setCnakCopied(false);
+      setIsContractSent(true);
+    } catch {
+      // Error toast handled by mutation's onError
+    } finally {
+      setIsProcessingPayment(false);
+      setProcessingStep('');
+    }
+  }, [wizardState, contractType, createContract]);
 
   const handleBack = useCallback(() => {
     if (showTemplateSelection) {
@@ -565,6 +737,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             selectedBuyerName={wizardState.buyerName}
             onSelectBuyer={handleBuyerSelect}
             contractType={contractType}
+            acceptanceMethod={wizardState.acceptanceMethod}
           />
         );
       case 'acceptance':
@@ -679,8 +852,65 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     }
   };
 
+  // Copy CNAK to clipboard
+  const handleCopyCnak = useCallback(async () => {
+    const cnak = createdContractData?.global_access_id;
+    if (!cnak) return;
+    try {
+      await navigator.clipboard.writeText(cnak);
+      setCnakCopied(true);
+      setTimeout(() => setCnakCopied(false), 2000);
+    } catch {
+      // Fallback: ignore if clipboard API unavailable
+    }
+  }, [createdContractData]);
+
+  // Derived data from API response for success screen
+  const contractNumber = createdContractData?.contract_number || createdContractData?.rfq_number || '';
+  const cnak = createdContractData?.global_access_id || '';
+  const createdGrandTotal = createdContractData?.grand_total;
+  const createdCurrency = createdContractData?.currency || wizardState.currency || 'INR';
+
+  // Format currency amount
+  const formatAmount = (amount: number | undefined, currency: string) => {
+    if (amount === undefined || amount === null) return '';
+    try {
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(amount);
+    } catch {
+      return `${currency} ${amount.toLocaleString()}`;
+    }
+  };
+
+  // Acceptance method display config
+  const acceptanceConfig: Record<string, { icon: React.ReactNode; title: string; subtitle: string; statusLabel: string; statusColor: string }> = {
+    payment: {
+      icon: <CreditCard className="w-5 h-5" />,
+      title: 'Contract Created & Sent for Payment',
+      subtitle: 'An invoice will be sent to the client for payment.',
+      statusLabel: 'Pending Payment',
+      statusColor: colors.semantic.warning,
+    },
+    signoff: {
+      icon: <PenTool className="w-5 h-5" />,
+      title: 'Contract Created — Awaiting Sign-off',
+      subtitle: 'A secure link has been sent for review and sign-off.',
+      statusLabel: 'Pending Sign-off',
+      statusColor: colors.semantic.info,
+    },
+    auto: {
+      icon: <Zap className="w-5 h-5" />,
+      title: 'Contract Created & Active',
+      subtitle: 'This contract is now active. Record payments as they come in.',
+      statusLabel: 'Active',
+      statusColor: colors.semantic.success,
+    },
+  };
+
   // Success screen - rendered before the !isOpen guard so it stays visible
   if (isContractSent) {
+    const acceptMethod = wizardState.acceptanceMethod || 'auto';
+    const config = acceptanceConfig[acceptMethod] || acceptanceConfig.auto;
+
     return (
       <div className="fixed inset-0 z-50">
         {/* Backdrop */}
@@ -695,16 +925,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
         {/* Success Content */}
         <div
-          className="relative z-10 w-full h-full flex items-center justify-center"
+          className="relative z-10 w-full h-full flex items-center justify-center overflow-y-auto py-8"
           style={{ backgroundColor: colors.utility.primaryBackground }}
         >
-          <div className="text-center max-w-md px-6">
+          <div className="text-center max-w-lg px-6">
             {/* Animated Checkmark */}
-            <div className="mb-8 flex justify-center">
+            <div className="mb-6 flex justify-center">
               <div
-                className="relative w-28 h-28 rounded-full flex items-center justify-center"
+                className="relative w-24 h-24 rounded-full flex items-center justify-center"
                 style={{
-                  background: `linear-gradient(135deg, ${colors.semantic.success}20, ${colors.semantic.success}08)`,
+                  background: `linear-gradient(135deg, ${config.statusColor}20, ${config.statusColor}08)`,
                   animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
                 }}
               >
@@ -712,82 +942,257 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 <div
                   className="absolute inset-0 rounded-full border-2"
                   style={{
-                    borderColor: colors.semantic.success,
+                    borderColor: config.statusColor,
                     animation: 'ringPulse 2s ease-in-out infinite',
                   }}
                 />
                 {/* Inner checkmark circle */}
                 <div
-                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  className="w-16 h-16 rounded-full flex items-center justify-center"
                   style={{
-                    backgroundColor: colors.semantic.success,
+                    backgroundColor: config.statusColor,
                     animation: 'scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both',
                   }}
                 >
-                  <CheckCircle2 className="w-10 h-10 text-white" />
+                  <CheckCircle2 className="w-8 h-8 text-white" />
                 </div>
               </div>
             </div>
 
-            {/* Title */}
+            {/* Title — per acceptance method */}
             <h2
-              className="text-2xl font-bold mb-3"
+              className="text-xl font-bold mb-1"
               style={{
                 color: colors.utility.primaryText,
                 animation: 'fadeInUp 0.5s ease-out 0.4s both',
               }}
             >
-              {isRfqMode ? 'RFQ Sent!' : 'Contract Sent!'}
+              {isRfqMode ? 'RFQ Sent!' : config.title}
             </h2>
 
-            {/* Description */}
+            {/* Subtitle */}
             <p
-              className="text-sm mb-2"
+              className="text-xs mb-5"
               style={{
                 color: colors.utility.secondaryText,
                 animation: 'fadeInUp 0.5s ease-out 0.5s both',
               }}
             >
-              <strong style={{ color: colors.utility.primaryText }}>
-                {wizardState.contractName || (isRfqMode ? 'Your RFQ' : 'Your contract')}
-              </strong>
-              {isRfqMode ? (
-                <>
-                  {' '}has been sent to{' '}
-                  <strong style={{ color: colors.brand.primary }}>
+              {isRfqMode
+                ? 'Vendors will be notified and can submit their quotations.'
+                : config.subtitle}
+            </p>
+
+            {/* Contract Info Card */}
+            {!isRfqMode && (
+              <div
+                className="rounded-xl p-4 mb-4 text-left"
+                style={{
+                  backgroundColor: isDarkMode ? `${colors.utility.surface}` : `${colors.utility.surface}`,
+                  border: `1px solid ${colors.utility.border}`,
+                  animation: 'fadeInUp 0.5s ease-out 0.55s both',
+                }}
+              >
+                {/* Contract Number Row */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>Contract</span>
+                    <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                      {contractNumber || 'Processing...'}
+                    </span>
+                  </div>
+                  {/* Status Badge */}
+                  <span
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                    style={{
+                      backgroundColor: `${config.statusColor}18`,
+                      color: config.statusColor,
+                    }}
+                  >
+                    {config.statusLabel}
+                  </span>
+                </div>
+
+                {/* CNAK Row */}
+                {cnak && (
+                  <div className="flex items-center justify-between mb-3 pb-3" style={{ borderBottom: `1px solid ${colors.utility.border}` }}>
+                    <div className="flex items-center gap-2">
+                      <Key className="w-3.5 h-3.5" style={{ color: colors.brand.primary }} />
+                      <span className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>CNAK</span>
+                      <span
+                        className="text-sm font-mono font-bold tracking-wide"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        {cnak}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCopyCnak}
+                      className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-md transition-all hover:opacity-80"
+                      style={{
+                        backgroundColor: cnakCopied ? `${colors.semantic.success}15` : `${colors.brand.primary}10`,
+                        color: cnakCopied ? colors.semantic.success : colors.brand.primary,
+                      }}
+                    >
+                      {cnakCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      {cnakCopied ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Client & Amount */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[10px] mb-0.5" style={{ color: colors.utility.secondaryText }}>
+                      {COUNTERPARTY_LABEL[contractType] ? COUNTERPARTY_LABEL[contractType].charAt(0).toUpperCase() + COUNTERPARTY_LABEL[contractType].slice(1) : 'Counterparty'}
+                    </p>
+                    <p className="text-xs font-medium truncate" style={{ color: colors.utility.primaryText }}>
+                      {wizardState.buyerName || 'N/A'}
+                    </p>
+                  </div>
+                  {createdGrandTotal !== undefined && createdGrandTotal !== null && (
+                    <div className="text-right">
+                      <p className="text-[10px] mb-0.5" style={{ color: colors.utility.secondaryText }}>Amount</p>
+                      <p className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                        {formatAmount(createdGrandTotal, createdCurrency)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* RFQ Info Card */}
+            {isRfqMode && (
+              <div
+                className="rounded-xl p-4 mb-4 text-left"
+                style={{
+                  backgroundColor: colors.utility.surface,
+                  border: `1px solid ${colors.utility.border}`,
+                  animation: 'fadeInUp 0.5s ease-out 0.55s both',
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>RFQ</span>
+                    <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                      {createdContractData?.rfq_number || 'Processing...'}
+                    </span>
+                  </div>
+                  <span
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: `${colors.semantic.info}18`, color: colors.semantic.info }}
+                  >
+                    Sent
+                  </span>
+                </div>
+                <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                  Sent to{' '}
+                  <strong style={{ color: colors.utility.primaryText }}>
                     {wizardState.vendorNames.length > 0
                       ? `${wizardState.vendorNames.length} vendor${wizardState.vendorNames.length > 1 ? 's' : ''}`
                       : 'your vendors'}
                   </strong>
-                  {' '}for quotation.
-                </>
-              ) : (
-                <>
-                  {' '}has been sent to{' '}
-                  <strong style={{ color: colors.brand.primary }}>
-                    {wizardState.buyerName || `your ${COUNTERPARTY_LABEL[contractType] || 'counterparty'}`}
-                  </strong>
-                  {' '}for review.
-                </>
-              )}
-            </p>
+                </p>
+              </div>
+            )}
 
-            {/* Acceptance method note (contracts only) / RFQ note */}
-            <p
-              className="text-xs mb-8"
-              style={{
-                color: colors.utility.secondaryText,
-                animation: 'fadeInUp 0.5s ease-out 0.6s both',
-              }}
-            >
-              {isRfqMode
-                ? 'Vendors will be notified and can submit their quotations.'
-                : wizardState.acceptanceMethod === 'signoff'
-                  ? 'They will need to sign off to accept the contract.'
-                  : wizardState.acceptanceMethod === 'payment'
-                    ? 'The contract will be accepted once payment is completed.'
-                    : 'The contract will be auto-accepted.'}
-            </p>
+            {/* Acceptance-specific info panel (contracts only) */}
+            {!isRfqMode && (
+              <div
+                className="rounded-xl p-3 mb-5"
+                style={{
+                  backgroundColor: `${config.statusColor}08`,
+                  border: `1px solid ${config.statusColor}20`,
+                  animation: 'fadeInUp 0.5s ease-out 0.65s both',
+                }}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div
+                    className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
+                    style={{ backgroundColor: `${config.statusColor}15`, color: config.statusColor }}
+                  >
+                    {config.icon}
+                  </div>
+                  <div className="text-left">
+                    {acceptMethod === 'payment' && (
+                      <>
+                        <p className="text-xs font-medium mb-0.5" style={{ color: colors.utility.primaryText }}>
+                          Invoice will be dispatched
+                        </p>
+                        <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                          {createdContractData?.buyer_email
+                            ? <>An invoice will be sent to <strong>{createdContractData.buyer_email}</strong>. Contract activates upon payment.</>
+                            : 'An invoice will be sent to the client. Contract activates upon payment.'}
+                        </p>
+                      </>
+                    )}
+                    {acceptMethod === 'signoff' && (
+                      <>
+                        <p className="text-xs font-medium mb-0.5" style={{ color: colors.utility.primaryText }}>
+                          Awaiting client sign-off
+                        </p>
+                        <p className="text-[10px] mb-1.5" style={{ color: colors.utility.secondaryText }}>
+                          {createdContractData?.buyer_email
+                            ? <>A secure link will be sent to <strong>{createdContractData.buyer_email}</strong></>
+                            : 'A secure link will be sent to the client'}
+                        </p>
+                        <div className="flex items-center gap-3 text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors.semantic.success }} />
+                            Accept &rarr; Active
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colors.semantic.error }} />
+                            Reject &rarr; Edit & Resend
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {acceptMethod === 'auto' && (
+                      <>
+                        <p className="text-xs font-medium mb-0.5" style={{ color: colors.utility.primaryText }}>
+                          {recordedReceipt ? 'Payment Recorded' : 'Contract is now active'}
+                        </p>
+                        {recordedReceipt ? (
+                          <div className="text-[10px] space-y-1" style={{ color: colors.utility.secondaryText }}>
+                            <p>
+                              Receipt:{' '}
+                              <strong style={{ color: colors.semantic.success }}>{recordedReceipt.receipt_number}</strong>
+                            </p>
+                            <p>
+                              Amount: <strong>{formatAmount(recordedReceipt.amount, recordedReceipt.currency)}</strong>
+                              {recordedReceipt.emi_sequence
+                                ? ` (${recordedReceipt.emi_sequence} of ${wizardState.emiMonths})`
+                                : ''}
+                            </p>
+                            <p>Invoice balance: {formatAmount(recordedReceipt.balance, recordedReceipt.currency)}</p>
+                          </div>
+                        ) : (
+                          <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                            No initial payment was recorded. You can record payments from the contract details page.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* CNAK tracking note (contracts only) */}
+            {!isRfqMode && cnak && (
+              <p
+                className="text-[10px] mb-5 flex items-center justify-center gap-1.5"
+                style={{
+                  color: colors.utility.secondaryText,
+                  animation: 'fadeInUp 0.5s ease-out 0.7s both',
+                }}
+              >
+                <Key className="w-3 h-3" style={{ color: colors.brand.primary }} />
+                Track this contract using CNAK: <strong style={{ color: colors.brand.primary }}>{cnak}</strong>
+              </p>
+            )}
 
             {/* Done Button */}
             <button
@@ -795,7 +1200,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 hover:shadow-lg"
               style={{
                 backgroundColor: colors.brand.primary,
-                animation: 'fadeInUp 0.5s ease-out 0.7s both',
+                animation: 'fadeInUp 0.5s ease-out 0.75s both',
               }}
             >
               Done
@@ -823,6 +1228,215 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     );
   }
 
+  // Pre-payment dialog: collect payment details before creating contract
+  if (showPrePaymentDialog && !isContractSent) {
+    const isEmi = wizardState.paymentMode === 'emi' && wizardState.emiMonths > 0;
+    const total = wizardState.totalValue;
+    const emiInstallmentAmount = isEmi ? Math.round((total / wizardState.emiMonths) * 100) / 100 : total;
+    const pmtCurrency = wizardState.currency || 'INR';
+
+    const fmtPmt = (val: number) => {
+      try { return new Intl.NumberFormat('en-IN', { style: 'currency', currency: pmtCurrency }).format(val); }
+      catch { return `${pmtCurrency} ${val.toLocaleString()}`; }
+    };
+
+    const pmtInputStyle: React.CSSProperties = {
+      backgroundColor: colors.utility.secondaryBackground,
+      border: `1px solid ${colors.utility.border}`,
+      color: colors.utility.primaryText,
+      borderRadius: '0.5rem',
+      padding: '0.5rem 0.75rem',
+      fontSize: '0.75rem',
+      width: '100%',
+      outline: 'none',
+    };
+    const pmtLabelStyle: React.CSSProperties = {
+      color: colors.utility.secondaryText,
+      fontSize: '0.625rem',
+      fontWeight: 500,
+      marginBottom: '0.25rem',
+      display: 'block',
+    };
+
+    return (
+      <div className="fixed inset-0 z-50">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.5)' }}
+        />
+
+        {/* Processing overlay */}
+        {isProcessingPayment && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}>
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3" style={{ color: colors.brand.primary }} />
+              <p className="text-sm font-medium" style={{ color: '#fff' }}>{processingStep}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Dialog Card */}
+        <div className="relative z-10 w-full h-full flex items-center justify-center overflow-y-auto py-8">
+          <div
+            className="w-full max-w-md rounded-xl shadow-xl mx-4"
+            style={{
+              backgroundColor: colors.utility.primaryBackground,
+              border: `1px solid ${colors.utility.border}`,
+            }}
+          >
+            {/* Header */}
+            <div className="p-4 pb-2" style={{ borderBottom: `1px solid ${colors.utility.border}` }}>
+              <div className="flex items-center gap-2 mb-1">
+                <Receipt className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                <h3 className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                  Record Payment
+                </h3>
+              </div>
+              <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                Record payment details before creating the contract. You can also skip this step.
+              </p>
+            </div>
+
+            {/* Form Body */}
+            <div className="p-4 space-y-3">
+              {/* EMI Installment Selector */}
+              {isEmi && (
+                <div>
+                  <label style={pmtLabelStyle}>Installment</label>
+                  <select
+                    value={paymentEmiSequence}
+                    onChange={(e) => setPaymentEmiSequence(parseInt(e.target.value, 10))}
+                    style={pmtInputStyle}
+                  >
+                    {Array.from({ length: wizardState.emiMonths }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        Installment {i + 1} of {wizardState.emiMonths}
+                        {i === 0 ? ' (First)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div>
+                <label style={pmtLabelStyle}>
+                  Amount ({pmtCurrency})
+                  {isEmi && (
+                    <span style={{ color: colors.utility.secondaryText, fontWeight: 400 }}>
+                      {' '}&middot; Per installment: {fmtPmt(emiInstallmentAmount)}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.00"
+                  min="0"
+                  step="0.01"
+                  style={pmtInputStyle}
+                />
+              </div>
+
+              {/* Payment Method */}
+              <div>
+                <label style={pmtLabelStyle}>Payment Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                  style={pmtInputStyle}
+                >
+                  {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Date */}
+              <div>
+                <label style={pmtLabelStyle}>Payment Date</label>
+                <input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  style={pmtInputStyle}
+                />
+              </div>
+
+              {/* Reference Number */}
+              <div>
+                <label style={pmtLabelStyle}>Reference / Transaction ID (optional)</label>
+                <input
+                  type="text"
+                  value={paymentReference}
+                  onChange={(e) => setPaymentReference(e.target.value)}
+                  placeholder="e.g. UTR number, cheque no."
+                  style={pmtInputStyle}
+                />
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label style={pmtLabelStyle}>Notes (optional)</label>
+                <textarea
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  placeholder="Any additional notes..."
+                  rows={2}
+                  style={{ ...pmtInputStyle, resize: 'none' as const }}
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div
+              className="p-4 pt-2 flex flex-col gap-2"
+              style={{ borderTop: `1px solid ${colors.utility.border}` }}
+            >
+              <button
+                onClick={handleCreateWithPayment}
+                disabled={isProcessingPayment || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                className="w-full py-2.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 flex items-center justify-center gap-1.5"
+                style={{
+                  backgroundColor: colors.semantic.success,
+                  opacity: isProcessingPayment || !paymentAmount ? 0.6 : 1,
+                }}
+              >
+                {isProcessingPayment ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...</>
+                ) : (
+                  'Record Payment & Create Contract'
+                )}
+              </button>
+              <button
+                onClick={handleCreateSkipPayment}
+                disabled={isProcessingPayment}
+                className="w-full py-2 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.secondaryText,
+                  border: `1px solid ${colors.utility.border}`,
+                }}
+              >
+                Skip — Create Without Payment
+              </button>
+              <button
+                onClick={() => setShowPrePaymentDialog(false)}
+                disabled={isProcessingPayment}
+                className="text-[10px] text-center transition-all hover:opacity-70"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Go back to review
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isOpen) return null;
 
   return (
@@ -835,7 +1449,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             ? 'rgba(0, 0, 0, 0.8)'
             : 'rgba(0, 0, 0, 0.5)',
         }}
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* Wizard Container */}
@@ -927,7 +1541,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
             {/* Right: Close Button */}
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 rounded-lg transition-colors hover:opacity-80"
               style={{
                 backgroundColor: `${colors.utility.primaryText}10`,
@@ -956,7 +1570,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           isLastStep={isLastStep}
           onBack={handleBack}
           onNext={handleNext}
-          onClose={onClose}
+          onClose={handleClose}
           sendButtonText={isCreating ? 'Creating...' : isRfqMode ? 'Send RFQ' : undefined}
           showTotal={!isRfqMode}
         />

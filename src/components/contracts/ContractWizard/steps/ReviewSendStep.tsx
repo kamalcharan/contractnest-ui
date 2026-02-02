@@ -1,10 +1,9 @@
 // src/components/contracts/ContractWizard/steps/ReviewSendStep.tsx
-// Step 9: Review & Send - Paper Canvas layout with Self/Client toggle
-// Centered document view with floating action island
-// Self View: full pricing details per block
-// Client View: same layout, individual prices hidden (total only)
+// Step 9: Review & Send - 65/35 two-column layout
+// Left: Paper Canvas with Self/Client toggle
+// Right: Acceptance Flow Panel (Payment / Signoff / Auto Accept)
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   Building2,
   Mail,
@@ -23,6 +22,17 @@ import {
   MapPin,
   Loader2,
   Calendar,
+  MessageSquare,
+  ArrowDown,
+  ArrowRight,
+  Check,
+  AlertTriangle,
+  Settings,
+  Shield,
+  Send,
+  PenTool,
+  RefreshCw,
+  Link2,
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -30,6 +40,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { useTaxRates } from '@/hooks/useTaxRates';
 import { useContact } from '@/hooks/useContacts';
+import { useIntegrations } from '@/hooks/useIntegrations';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
 import { BillingCycleType } from './BillingCycleStep';
@@ -313,14 +324,470 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     return '100% Upfront';
   }, [isMixed, paymentMode, emiMonths]);
 
+  // ─── Payment gateway pre-check ──────────────────────────────────
+  const { integrations: paymentIntegrations, fetchIntegrationsByType } = useIntegrations();
+  const [paymentGatewayChecked, setPaymentGatewayChecked] = useState(false);
+  const [paymentGatewayConfigured, setPaymentGatewayConfigured] = useState(false);
+  const [paymentGatewayProvider, setPaymentGatewayProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (acceptanceMethod === 'payment' && !paymentGatewayChecked) {
+      fetchIntegrationsByType('payment_gateway');
+      setPaymentGatewayChecked(true);
+    }
+  }, [acceptanceMethod, paymentGatewayChecked, fetchIntegrationsByType]);
+
+  useEffect(() => {
+    if (paymentIntegrations && paymentIntegrations.length > 0) {
+      const configured = paymentIntegrations.find(
+        (i) => i.is_configured && i.is_active && i.connection_status === 'Connected'
+      );
+      setPaymentGatewayConfigured(!!configured);
+      setPaymentGatewayProvider(configured?.display_name || configured?.provider_name || null);
+    }
+  }, [paymentIntegrations]);
+
+  // ─── Buyer channel helpers for notification panel ─────────────
+  const buyerWhatsApp = useMemo(() => {
+    if (!buyerContact?.contact_channels?.length) return null;
+    return buyerContact.contact_channels.find((c: any) => c.channel_type === 'whatsapp');
+  }, [buyerContact]);
+
+  // ─── Render Right Panel ────────────────────────────────────────
+
+  const renderAcceptancePanel = () => {
+    if (rfqMode) return null;
+
+    const panelBg = isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF';
+    const panelBorder = isDarkMode ? `${colors.utility.primaryText}12` : '#E2E8F0';
+    const stepDot = (label: string, color: string, isActive: boolean = false) => (
+      <div className="flex items-center gap-2.5">
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+          style={{
+            backgroundColor: isActive ? color : `${color}15`,
+            border: isActive ? 'none' : `2px solid ${color}40`,
+          }}
+        >
+          {isActive && <Check className="w-3.5 h-3.5 text-white" />}
+        </div>
+        <span
+          className="text-xs font-medium"
+          style={{ color: isActive ? colors.utility.primaryText : colors.utility.secondaryText }}
+        >
+          {label}
+        </span>
+      </div>
+    );
+
+    const connector = () => (
+      <div className="flex items-center ml-3.5 py-0.5">
+        <div className="w-px h-5" style={{ backgroundColor: `${colors.utility.primaryText}15` }} />
+      </div>
+    );
+
+    // ─── Payment Flow Panel ─────────────────────────────────────
+    if (acceptanceMethod === 'payment') {
+      return (
+        <div className="space-y-4">
+          {/* Acceptance type header */}
+          <div
+            className="flex items-center gap-3 p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${brandPrimary}12` }}
+            >
+              <CreditCard className="w-5 h-5" style={{ color: brandPrimary }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                Payment Acceptance
+              </p>
+              <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                Client pays to accept the contract
+              </p>
+            </div>
+          </div>
+
+          {/* Payment gateway pre-check */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{
+              backgroundColor: paymentGatewayConfigured ? `${colors.semantic.success}06` : `${colors.semantic.warning}06`,
+              borderColor: paymentGatewayConfigured ? `${colors.semantic.success}30` : `${colors.semantic.warning}30`,
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{
+                  backgroundColor: paymentGatewayConfigured
+                    ? `${colors.semantic.success}15`
+                    : `${colors.semantic.warning}15`,
+                }}
+              >
+                {paymentGatewayConfigured ? (
+                  <Shield className="w-4 h-4" style={{ color: colors.semantic.success }} />
+                ) : (
+                  <AlertTriangle className="w-4 h-4" style={{ color: colors.semantic.warning }} />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                  {paymentGatewayConfigured
+                    ? `Online Payment: ${paymentGatewayProvider}`
+                    : 'No Payment Gateway Configured'}
+                </p>
+                <p className="text-[11px] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                  {paymentGatewayConfigured
+                    ? 'Online payment link will be included in the invoice.'
+                    : 'Invoice will require offline payment. Configure a gateway for online payments.'}
+                </p>
+                {!paymentGatewayConfigured && (
+                  <a
+                    href="/settings/integrations"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold mt-2 hover:opacity-80 transition-opacity"
+                    style={{ color: brandPrimary }}
+                  >
+                    <Settings className="w-3 h-3" />
+                    Configure in Settings
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Notification preview */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
+              Notifications
+            </p>
+            <div className="space-y-2.5">
+              {buyerPrimaryEmail ? (
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.success }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    Invoice will be sent to{' '}
+                    <span className="font-semibold px-1 py-0.5 rounded" style={{ backgroundColor: `${brandPrimary}10`, color: brandPrimary }}>
+                      {buyerPrimaryEmail.value}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.warning }} />
+                  <span className="text-xs" style={{ color: colors.semantic.warning }}>No email configured</span>
+                </div>
+              )}
+              {buyerWhatsApp ? (
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 flex-shrink-0" style={{ color: '#25D366' }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    WhatsApp notification to{' '}
+                    <span className="font-semibold px-1 py-0.5 rounded" style={{ backgroundColor: '#25D36610', color: '#25D366' }}>
+                      {buyerWhatsApp.value}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>No WhatsApp configured</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* What happens next — workflow */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.utility.secondaryText }}>
+              What Happens Next
+            </p>
+            <div>
+              {stepDot('Contract Created', brandPrimary, true)}
+              {connector()}
+              {stepDot('Invoice sent to client', brandPrimary, false)}
+              {connector()}
+              {stepDot('Awaiting payment', colors.semantic.warning || '#F59E0B', false)}
+              {connector()}
+              {stepDot('Payment received — Contract Active', colors.semantic.success, false)}
+              {connector()}
+              {stepDot('CNAK generated — Digital access enabled', colors.semantic.success, false)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Signoff Flow Panel ─────────────────────────────────────
+    if (acceptanceMethod === 'signoff') {
+      return (
+        <div className="space-y-4">
+          {/* Acceptance type header */}
+          <div
+            className="flex items-center gap-3 p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${brandPrimary}12` }}
+            >
+              <PenTool className="w-5 h-5" style={{ color: brandPrimary }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                Signoff Acceptance
+              </p>
+              <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                Client reviews and signs off to accept
+              </p>
+            </div>
+          </div>
+
+          {/* Notification preview */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
+              Notifications
+            </p>
+            <div className="space-y-2.5">
+              {buyerPrimaryEmail ? (
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.success }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    Contract view + PDF sent to{' '}
+                    <span className="font-semibold px-1 py-0.5 rounded" style={{ backgroundColor: `${brandPrimary}10`, color: brandPrimary }}>
+                      {buyerPrimaryEmail.value}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.warning }} />
+                  <span className="text-xs" style={{ color: colors.semantic.warning }}>No email configured</span>
+                </div>
+              )}
+              {buyerWhatsApp ? (
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 flex-shrink-0" style={{ color: '#25D366' }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    WhatsApp notification to{' '}
+                    <span className="font-semibold px-1 py-0.5 rounded" style={{ backgroundColor: '#25D36610', color: '#25D366' }}>
+                      {buyerWhatsApp.value}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>No WhatsApp configured</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* What happens next — 2-path workflow */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.utility.secondaryText }}>
+              What Happens Next
+            </p>
+            <div>
+              {stepDot('Contract Created & Sent', brandPrimary, true)}
+              {connector()}
+              {stepDot('Client reviews contract', brandPrimary, false)}
+              {connector()}
+
+              {/* Branch point */}
+              <div className="ml-3.5 my-2">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <div className="w-px h-3" style={{ backgroundColor: `${colors.utility.primaryText}15` }} />
+                </div>
+                {/* Two paths */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Accept path */}
+                  <div
+                    className="p-3 rounded-lg border"
+                    style={{
+                      backgroundColor: `${colors.semantic.success}06`,
+                      borderColor: `${colors.semantic.success}25`,
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Check className="w-3.5 h-3.5" style={{ color: colors.semantic.success }} />
+                      <span className="text-[11px] font-bold" style={{ color: colors.semantic.success }}>
+                        Client Accepts
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        Contract becomes Active
+                      </p>
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        Invoice triggered (if applicable)
+                      </p>
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        CNAK generated for digital access
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Reject path */}
+                  <div
+                    className="p-3 rounded-lg border"
+                    style={{
+                      backgroundColor: `${colors.semantic.error}06`,
+                      borderColor: `${colors.semantic.error}25`,
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <RefreshCw className="w-3.5 h-3.5" style={{ color: colors.semantic.error }} />
+                      <span className="text-[11px] font-bold" style={{ color: colors.semantic.error }}>
+                        Client Rejects
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        You can edit the contract
+                      </p>
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        Send it back for review
+                      </p>
+                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        Cycle continues till acceptance
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Client access note */}
+          <div
+            className="flex items-start gap-2.5 p-3 rounded-xl"
+            style={{ backgroundColor: `${brandPrimary}06` }}
+          >
+            <Link2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: brandPrimary }} />
+            <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+              Client will receive a secure link to view and accept/reject this contract. New users will be invited to create an account.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Auto Accept Flow Panel ─────────────────────────────────
+    if (acceptanceMethod === 'auto') {
+      return (
+        <div className="space-y-4">
+          {/* Acceptance type header */}
+          <div
+            className="flex items-center gap-3 p-4 rounded-xl border"
+            style={{
+              backgroundColor: `${colors.semantic.success}06`,
+              borderColor: `${colors.semantic.success}30`,
+            }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${colors.semantic.success}15` }}
+            >
+              <Check className="w-5 h-5" style={{ color: colors.semantic.success }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                Auto Accept
+              </p>
+              <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                Contract becomes active immediately upon creation
+              </p>
+            </div>
+          </div>
+
+          {/* Payment recording prompt */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
+              Payment Status
+            </p>
+            <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+              Has the client already made payment for this contract?
+            </p>
+            <div className="text-[11px] p-3 rounded-lg" style={{ backgroundColor: `${colors.semantic.warning}08` }}>
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.warning }} />
+                <span style={{ color: colors.utility.secondaryText }}>
+                  You will be able to record payment details after contract creation.
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* What happens next */}
+          <div
+            className="p-4 rounded-xl border"
+            style={{ backgroundColor: panelBg, borderColor: panelBorder }}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: colors.utility.secondaryText }}>
+              What Happens Next
+            </p>
+            <div>
+              {stepDot('Contract Created', brandPrimary, true)}
+              {connector()}
+              {stepDot('Auto-accepted — Status: Active', colors.semantic.success, false)}
+              {connector()}
+              {stepDot('CNAK generated immediately', colors.semantic.success, false)}
+              {connector()}
+              {stepDot('Record payment (if applicable)', colors.semantic.warning || '#F59E0B', false)}
+            </div>
+          </div>
+
+          {/* Notification note */}
+          <div
+            className="flex items-start gap-2.5 p-3 rounded-xl"
+            style={{ backgroundColor: `${colors.semantic.success}06` }}
+          >
+            <Check className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.success }} />
+            <p className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+              No acceptance notifications will be sent. The contract will be active immediately.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   // ─── Render ──────────────────────────────────────────────────────
 
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: canvasBg }}>
-      {/* Scrollable content */}
+      {/* Scrollable content — 65/35 two-column grid */}
       <div className="flex-1 overflow-y-auto">
+        <div className={`max-w-[1400px] mx-auto px-4 pt-6 pb-6 ${rfqMode ? '' : 'grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6'}`}>
+
+        {/* ═══ LEFT COLUMN: Paper Canvas ═══ */}
+        <div className="min-w-0">
         {/* Controls above paper */}
-        <div className="max-w-[850px] mx-auto flex items-center justify-between px-2 pt-6 pb-3">
+        <div className="flex items-center justify-between px-2 pb-3">
           {/* Self / Client pill toggle - hidden in RFQ mode */}
           {!rfqMode ? (
             <div
@@ -404,7 +871,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
         {/* ═══ THE PAPER ═══ */}
         <div
           ref={paperRef}
-          className="max-w-[850px] mx-auto rounded-lg"
+          className="rounded-lg"
           style={{
             backgroundColor: paperBg,
             boxShadow: paperShadow,
@@ -1051,6 +1518,16 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
             )}
           </div>
         </div>
+        </div>{/* end left column */}
+
+        {/* ═══ RIGHT COLUMN: Acceptance Flow Panel ═══ */}
+        {!rfqMode && (
+          <div className="lg:sticky lg:top-6 self-start">
+            {renderAcceptancePanel()}
+          </div>
+        )}
+
+        </div>{/* end grid */}
       </div>
 
     </div>

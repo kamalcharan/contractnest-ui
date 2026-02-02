@@ -187,6 +187,9 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(selectedContactPersonId || null);
   const [useCompanyContact, setUseCompanyContact] = useState(initialUseCompanyContact || false);
 
+  // Track explicit "change buyer" to prevent useEffect from re-setting selectedContact
+  const [isChangingBuyer, setIsChangingBuyer] = useState(false);
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -214,18 +217,21 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     loading: fullContactLoading
   } = useContact(selectedBuyerId || '');
 
-  // Update selected contact when full data is loaded
+  // Update selected contact when full data is loaded (skip if user just clicked "Change")
   useEffect(() => {
-    if (fullContactData && selectedBuyerId) {
+    if (fullContactData && selectedBuyerId && !isChangingBuyer) {
       setSelectedContact(fullContactData);
     }
-  }, [fullContactData, selectedBuyerId]);
+  }, [fullContactData, selectedBuyerId, isChangingBuyer]);
 
   // Handle contact selection from list
   const handleSelectContact = useCallback((contact: any) => {
     const displayName = contact.type === 'corporate'
       ? contact.company_name
       : contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim();
+
+    // Clear the change-buyer guard so useEffect can populate full data
+    setIsChangingBuyer(false);
 
     // Set basic selection first (full data will load via useContact hook)
     setSelectedContact(contact);
@@ -315,6 +321,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
 
   // Handle change buyer
   const handleChangeBuyer = useCallback(() => {
+    setIsChangingBuyer(true);
     setSelectedContact(null);
     setSelectedPersonId(null);
     setShowOtherContacts(false);

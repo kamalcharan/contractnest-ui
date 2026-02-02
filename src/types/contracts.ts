@@ -84,6 +84,8 @@ export interface Contract {
   description?: string;
   status: ContractStatus;
   acceptance_method: AcceptanceMethod;
+  // CNAK (ContractNest Access Key) — unique per tenant
+  global_access_id?: string;
   start_date?: string;
   end_date?: string;
   total_value?: number;
@@ -96,6 +98,7 @@ export interface Contract {
   // Counterparty / contact fields (populated by create RPC)
   buyer_id?: string;
   buyer_name?: string;
+  buyer_email?: string;
   contact_id?: string;
   contact_classification?: string;
   version: number;
@@ -153,6 +156,97 @@ export interface ContractDetail extends Contract {
   vendors: ContractVendor[];
   attachments: ContractAttachment[];
   history: ContractHistoryEntry[];
+}
+
+// =================================================================
+// INVOICE & RECEIPT INTERFACES
+// =================================================================
+
+export type InvoiceType = 'receivable' | 'payable';
+export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'card' | 'other';
+
+export interface Invoice {
+  id: string;
+  contract_id: string;
+  tenant_id: string;
+  invoice_number: string;
+  invoice_type: InvoiceType;
+  amount: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  amount_paid: number;
+  balance: number;
+  status: InvoiceStatus;
+  payment_mode?: string;
+  emi_sequence?: number;
+  emi_total?: number;
+  billing_cycle?: string;
+  block_ids?: string[];
+  due_date?: string;
+  issued_at: string;
+  paid_at?: string;
+  notes?: string;
+  created_at: string;
+  receipts_count?: number;
+}
+
+export interface InvoiceReceipt {
+  id: string;
+  invoice_id: string;
+  contract_id: string;
+  tenant_id: string;
+  receipt_number: string;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  reference_number?: string;
+  notes?: string;
+  is_offline: boolean;
+  is_verified: boolean;
+  recorded_by?: string;
+  created_at: string;
+}
+
+export interface InvoiceSummary {
+  total_invoiced: number;
+  total_paid: number;
+  total_balance: number;
+  invoice_count: number;
+  paid_count: number;
+  unpaid_count: number;
+  partial_count: number;
+  overdue_count: number;
+  collection_percentage: number;
+}
+
+// Payment recording
+export interface RecordPaymentPayload {
+  invoice_id: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  payment_date?: string;
+  reference_number?: string;
+  notes?: string;
+  emi_sequence?: number;
+}
+
+export interface RecordPaymentResponse {
+  receipt_id: string;
+  receipt_number: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  payment_date: string;
+  emi_sequence?: number;
+  invoice_id: string;
+  invoice_number: string;
+  invoice_status: string;
+  amount_paid: number;
+  balance: number;
+  receipts_count: number;
 }
 
 // =================================================================

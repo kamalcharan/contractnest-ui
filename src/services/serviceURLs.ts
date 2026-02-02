@@ -677,6 +677,11 @@ export const API_ENDPOINTS = {
     // Health check
     HEALTH: '/api/contracts/health',
 
+    // Invoices & Payments
+    INVOICES: (contractId: string) => `/api/contracts/${contractId}/invoices`,
+    GENERATE_INVOICES: (contractId: string) => `/api/contracts/${contractId}/invoices/generate`,
+    RECORD_PAYMENT: (contractId: string) => `/api/contracts/${contractId}/invoices/record-payment`,
+
     // Helper: build list URL with filters
     LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
       const params = new URLSearchParams();

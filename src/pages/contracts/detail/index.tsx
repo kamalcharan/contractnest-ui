@@ -29,6 +29,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { useContract } from '@/hooks/queries/useContractQueries';
+import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
 import type { ContractDetail } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
@@ -221,15 +222,46 @@ interface FinancialHealthProps {
 }
 
 const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) => {
-  const grandTotal = (contract as any).grand_total || contract.total_value || 0;
-  const taxTotal = (contract as any).tax_total || 0;
+  const { data, isLoading } = useContractInvoices(contract.id);
+  const invoices = data?.invoices || [];
+  const summary = data?.summary || {
+    total_invoiced: 0,
+    total_paid: 0,
+    total_balance: 0,
+    invoice_count: 0,
+    paid_count: 0,
+    unpaid_count: 0,
+    partial_count: 0,
+    overdue_count: 0,
+    collection_percentage: 0,
+  };
+
   const currency = contract.currency || 'USD';
+  const isReceivable = contract.contract_type !== 'vendor';
+  const arApLabel = isReceivable ? 'Receivable (AR)' : 'Payable (AP)';
+  const arApColor = isReceivable ? colors.semantic.success : colors.semantic.warning;
+
+  const getInvoiceStatusStyle = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return { bg: colors.semantic.success + '18', color: colors.semantic.success, label: 'Paid' };
+      case 'partially_paid':
+        return { bg: colors.semantic.warning + '18', color: colors.semantic.warning, label: 'Partial' };
+      case 'overdue':
+        return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Overdue' };
+      case 'cancelled':
+        return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Cancelled' };
+      default:
+        return { bg: colors.utility.primaryText + '10', color: colors.utility.secondaryText, label: 'Unpaid' };
+    }
+  };
 
   return (
     <div
       className="rounded-xl shadow-md border overflow-hidden"
       style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
     >
+      {/* Header with AR/AP badge */}
       <div
         className="px-5 py-3 border-b flex items-center justify-between"
         style={{ borderColor: colors.utility.primaryText + '10' }}
@@ -238,15 +270,16 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
           <DollarSign className="h-4 w-4" style={{ color: colors.brand.primary }} />
           <h3 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>Financial Health</h3>
         </div>
-        <button
-          className="text-[0.7rem] font-semibold px-2 py-1 rounded border transition-colors hover:opacity-80"
-          style={{ borderColor: colors.utility.primaryText + '20', color: colors.utility.secondaryText, backgroundColor: 'transparent' }}
+        <span
+          className="text-[0.65rem] font-semibold px-2 py-0.5 rounded-full"
+          style={{ backgroundColor: arApColor + '18', color: arApColor }}
         >
-          + Invoice
-        </button>
+          {arApLabel}
+        </span>
       </div>
+
       <div className="p-5">
-        {/* Collected / Pending cards */}
+        {/* Collected / Balance cards */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div
             className="p-4 rounded-lg text-center border"
@@ -256,30 +289,35 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
             }}
           >
             <div className="text-2xl font-extrabold mb-0.5" style={{ color: colors.semantic.success }}>
-              {formatCurrency(grandTotal, currency)}
+              {formatCurrency(summary.total_paid, currency)}
             </div>
             <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
-              Contract Value
+              Collected
             </div>
           </div>
           <div
             className="p-4 rounded-lg text-center"
             style={{ backgroundColor: colors.utility.primaryText + '06' }}
           >
-            <div className="text-2xl font-extrabold mb-0.5" style={{ color: colors.utility.primaryText }}>
-              {formatCurrency(taxTotal, currency)}
+            <div
+              className="text-2xl font-extrabold mb-0.5"
+              style={{ color: summary.total_balance > 0 ? colors.semantic.warning : colors.utility.primaryText }}
+            >
+              {formatCurrency(summary.total_balance, currency)}
             </div>
             <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
-              Tax
+              Balance
             </div>
           </div>
         </div>
 
-        {/* Collection Progress — placeholder for when invoicing is built */}
+        {/* Collection Progress */}
         <div className="mb-4">
           <div className="flex justify-between mb-1.5">
             <span className="text-xs" style={{ color: colors.utility.secondaryText }}>Collection Progress</span>
-            <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>\u2014</span>
+            <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
+              {summary.invoice_count > 0 ? `${summary.collection_percentage}%` : '\u2014'}
+            </span>
           </div>
           <div
             className="h-2.5 rounded-full overflow-hidden"
@@ -288,26 +326,121 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
-                width: '0%',
+                width: `${Math.min(summary.collection_percentage, 100)}%`,
                 background: `linear-gradient(90deg, ${colors.semantic.success}, ${colors.brand.primary})`,
               }}
             />
           </div>
-          <div className="text-[0.65rem] mt-1" style={{ color: colors.utility.secondaryText }}>
-            Invoicing not configured yet
-          </div>
+          {summary.invoice_count > 0 ? (
+            <div className="flex items-center gap-3 mt-1.5">
+              <span className="text-[0.65rem]" style={{ color: colors.utility.secondaryText }}>
+                {summary.paid_count} paid
+              </span>
+              {summary.partial_count > 0 && (
+                <span className="text-[0.65rem]" style={{ color: colors.semantic.warning }}>
+                  {summary.partial_count} partial
+                </span>
+              )}
+              {summary.overdue_count > 0 && (
+                <span className="text-[0.65rem]" style={{ color: colors.semantic.error }}>
+                  {summary.overdue_count} overdue
+                </span>
+              )}
+              <span className="text-[0.65rem]" style={{ color: colors.utility.secondaryText }}>
+                of {summary.invoice_count} invoice{summary.invoice_count !== 1 ? 's' : ''}
+              </span>
+            </div>
+          ) : (
+            <div className="text-[0.65rem] mt-1" style={{ color: colors.utility.secondaryText }}>
+              {contract.status === 'active' ? 'No invoices generated yet' : 'Invoices generate when contract activates'}
+            </div>
+          )}
         </div>
 
-        {/* Invoice list — empty state */}
-        <div
-          className="p-4 rounded-lg border border-dashed text-center"
-          style={{ borderColor: colors.utility.primaryText + '20' }}
-        >
-          <Receipt className="h-8 w-8 mx-auto mb-2" style={{ color: colors.utility.secondaryText + '60' }} />
-          <div className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>
-            No invoices yet
+        {/* Invoice list */}
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2].map((n) => (
+              <div
+                key={n}
+                className="h-16 rounded-lg animate-pulse"
+                style={{ backgroundColor: colors.utility.primaryText + '08' }}
+              />
+            ))}
           </div>
-        </div>
+        ) : invoices.length > 0 ? (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {invoices.map((inv) => {
+              const statusStyle = getInvoiceStatusStyle(inv.status);
+              return (
+                <div
+                  key={inv.id}
+                  className="p-3 rounded-lg border transition-all hover:shadow-sm"
+                  style={{
+                    backgroundColor: colors.utility.primaryText + '04',
+                    borderColor: colors.utility.primaryText + '10',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <Receipt className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+                      <span className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                        {inv.invoice_number}
+                      </span>
+                      {inv.emi_sequence && (
+                        <span
+                          className="text-[0.6rem] px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: colors.brand.primary + '15', color: colors.brand.primary }}
+                        >
+                          EMI {inv.emi_sequence}/{inv.emi_total}
+                        </span>
+                      )}
+                      {inv.billing_cycle && !inv.emi_sequence && (
+                        <span
+                          className="text-[0.6rem] px-1.5 py-0.5 rounded"
+                          style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+                        >
+                          {inv.billing_cycle}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: statusStyle.bg, color: statusStyle.color }}
+                    >
+                      {statusStyle.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      Due: {formatDate(inv.due_date)}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                        {formatCurrency(inv.total_amount, inv.currency)}
+                      </span>
+                      {inv.amount_paid > 0 && inv.status !== 'paid' && (
+                        <div className="text-[0.6rem]" style={{ color: colors.semantic.success }}>
+                          Paid: {formatCurrency(inv.amount_paid, inv.currency)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            className="p-4 rounded-lg border border-dashed text-center"
+            style={{ borderColor: colors.utility.primaryText + '20' }}
+          >
+            <Receipt className="h-8 w-8 mx-auto mb-2" style={{ color: colors.utility.secondaryText + '60' }} />
+            <div className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>
+              {contract.status === 'active' ? 'No invoices generated' : 'Invoices will appear when contract is activated'}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
