@@ -94,7 +94,7 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   // HIDDEN: VaNi menu - commented out for now
-  /*
+  
   {
     id: 'vani',
     label: 'VaNi',
@@ -112,7 +112,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-chat', label: 'Chat', icon: 'MessageCircle', path: '/vani/chat' }
     ]
   },
-  */
+  
   // HIDDEN: Templates, Appointments, Tasks - commented out for now
   /*
   {
