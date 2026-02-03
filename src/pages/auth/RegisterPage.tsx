@@ -1,9 +1,9 @@
 // src/pages/auth/RegisterPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight, FileText } from 'lucide-react';
 import { vaniToast } from '../../components/common/toast';
 import { supabase } from '../../utils/supabase';
 // Import analytics
@@ -35,6 +35,10 @@ const RegisterPage: React.FC = () => {
   const { register, isAuthenticated, isLoading, error, clearError } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Contract referral: ?ref=CNAK-XXXXXX from public contract review page
+  const cnakRef = searchParams.get('ref');
 
   // Ref to prevent duplicate Google signup attempts
   const googleSignupInProgress = useRef(false);
@@ -45,16 +49,23 @@ const RegisterPage: React.FC = () => {
   // Track page view when component mounts
   useEffect(() => {
     analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_START, {
-      source: document.referrer || 'direct',
-      page_name: 'register'
+      source: cnakRef ? 'contract_review' : (document.referrer || 'direct'),
+      page_name: 'register',
+      ...(cnakRef ? { cnak_ref: cnakRef } : {})
     });
   }, []);
 
   // Redirect if already authenticated
-  // NOTE: Onboarding redirects are handled by AuthContext during registration flow
+  // If user came from contract review page, redirect back there
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      const authRedirect = sessionStorage.getItem('contractnest_auth_redirect');
+      if (authRedirect) {
+        sessionStorage.removeItem('contractnest_auth_redirect');
+        navigate(authRedirect);
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [isAuthenticated, navigate]);
 
@@ -112,6 +123,9 @@ const RegisterPage: React.FC = () => {
 
       // Store a flag to indicate this is a new signup (for onboarding)
       sessionStorage.setItem('is_new_signup', 'true');
+
+      // Preserve contract review redirect for Google OAuth flow
+      // (sessionStorage already set by review page, just ensure it persists)
 
       // Use Supabase's built-in OAuth
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -489,9 +503,39 @@ const RegisterPage: React.FC = () => {
                 className="transition-colors"
                 style={{ color: colors.utility.secondaryText }}
               >
-                Start managing contracts in minutes
+                {cnakRef ? 'Sign up to manage and track your contracts' : 'Start managing contracts in minutes'}
               </p>
             </div>
+
+            {/* Contract referral banner */}
+            {cnakRef && (
+              <div
+                className="mb-6 p-3 rounded-lg border flex items-center gap-3"
+                style={{
+                  backgroundColor: `${colors.brand.primary}08`,
+                  borderColor: `${colors.brand.primary}30`,
+                }}
+              >
+                <FileText
+                  className="w-5 h-5 flex-shrink-0"
+                  style={{ color: colors.brand.primary }}
+                />
+                <div>
+                  <p
+                    className="text-sm font-medium"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Contract shared with you
+                  </p>
+                  <p
+                    className="text-xs"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Ref: {cnakRef} — create an account to accept and track it
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Google Sign-up Button - Only show if Google OAuth is enabled */}
             {isGoogleAuthEnabled && (

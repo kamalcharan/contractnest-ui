@@ -52,7 +52,7 @@ export type AcceptanceMethod = (typeof ACCEPTANCE_METHODS)[keyof typeof ACCEPTAN
 // =================================================================
 
 export const CONTRACT_STATUS_FLOW: Record<string, ContractStatus[]> = {
-  draft: ['pending_review', 'cancelled'],
+  draft: ['pending_review', 'pending_acceptance', 'cancelled'], // pending_acceptance for wizard send (skip review)
   pending_review: ['pending_acceptance', 'active', 'cancelled'], // active if auto-accept
   pending_acceptance: ['active', 'cancelled'],
   active: ['completed', 'cancelled', 'expired'],
@@ -81,73 +81,123 @@ export interface Contract {
   contract_type: ContractType;
   contract_number: string;
   title: string;
+  name?: string;
   description?: string;
   status: ContractStatus;
   acceptance_method: AcceptanceMethod;
+  path?: string;
+  template_id?: string;
   // CNAK (ContractNest Access Key) — unique per tenant
   global_access_id?: string;
-  start_date?: string;
-  end_date?: string;
-  total_value?: number;
+  // Counterparty / contact fields (populated by create RPC)
+  buyer_id?: string;
+  buyer_name?: string;
+  buyer_company?: string;
+  buyer_email?: string;
+  buyer_phone?: string;
+  buyer_contact_person_id?: string;
+  buyer_contact_person_name?: string;
+  contact_id?: string;
+  contact_classification?: string;
+  // Duration & Timeline
+  duration_value?: number;
+  duration_unit?: string;
+  grace_period_value?: number;
+  grace_period_unit?: string;
+  // Billing
   currency?: string;
-  payment_terms?: string;
+  billing_cycle_type?: string;
+  payment_mode?: string;
+  emi_months?: number;
+  per_block_payment_type?: string;
+  // Financials
+  total_value?: number;
+  tax_total?: number;
+  grand_total?: number;
+  selected_tax_rate_ids?: string[];
+  tax_breakdown?: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
+  // Dates
+  sent_at?: string;
+  accepted_at?: string;
+  completed_at?: string;
+  // Audit
+  version: number;
+  is_live?: boolean;
+  created_by: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+  // Computed counts (from get_contract_by_id)
+  blocks_count?: number;
+  vendors_count?: number;
+  attachments_count?: number;
+  // Legacy/optional
   renewal_terms?: string;
   termination_clause?: string;
   notes?: string;
   metadata?: Record<string, any>;
-  // Counterparty / contact fields (populated by create RPC)
-  buyer_id?: string;
-  buyer_name?: string;
-  buyer_email?: string;
-  contact_id?: string;
-  contact_classification?: string;
-  version: number;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string;
 }
 
 export interface ContractBlock {
   id: string;
-  contract_id: string;
-  block_id: string;
-  sort_order: number;
-  content_snapshot?: Record<string, any>;
+  contract_id?: string;
+  position: number;
+  source_type?: string;
+  source_block_id?: string;
+  block_name: string;
+  block_description?: string;
+  category_id?: string;
+  category_name?: string;
+  unit_price?: number;
+  quantity?: number;
+  billing_cycle?: string;
+  total_price?: number;
+  flyby_type?: string;
+  custom_fields?: Record<string, any>;
   created_at: string;
 }
 
 export interface ContractVendor {
   id: string;
-  contract_id: string;
-  contact_id: string;
-  role: string;
-  is_primary: boolean;
-  contact_name?: string;
-  contact_email?: string;
+  contract_id?: string;
+  vendor_id: string;
+  vendor_name?: string;
+  vendor_company?: string;
+  vendor_email?: string;
+  response_status?: string;
+  responded_at?: string;
+  quoted_amount?: number;
+  quote_notes?: string;
   created_at: string;
 }
 
 export interface ContractAttachment {
   id: string;
-  contract_id: string;
+  contract_id?: string;
+  block_id?: string;
   file_name: string;
-  file_url: string;
-  file_type: string;
-  file_size: number;
-  uploaded_by: string;
+  file_path?: string;
+  file_size?: number;
+  file_type?: string;
+  mime_type?: string;
+  download_url?: string;
+  file_category?: string;
+  metadata?: Record<string, any>;
+  uploaded_by?: string;
   created_at: string;
 }
 
 export interface ContractHistoryEntry {
   id: string;
-  contract_id: string;
+  contract_id?: string;
   action: string;
-  changed_by: string;
-  changed_at: string;
-  old_values?: Record<string, any>;
-  new_values?: Record<string, any>;
-  notes?: string;
+  from_status?: string;
+  to_status?: string;
+  changes?: Record<string, any>;
+  performed_by_type?: string;
+  performed_by_name?: string;
+  note?: string;
+  created_at: string;
 }
 
 // Full contract detail (returned by GET /:id)
@@ -255,41 +305,71 @@ export interface RecordPaymentResponse {
 
 export interface CreateContractRequest {
   record_type: ContractRecordType;
-  contract_type: ContractType;
-  title: string;
+  contract_type?: ContractType;
+  contact_classification?: string;
+  title?: string;
+  name?: string;
   description?: string;
-  acceptance_method?: AcceptanceMethod;
-  start_date?: string;
-  end_date?: string;
-  total_value?: number;
+  status?: string;
+  acceptance_method?: string;
+  path?: string;
+  template_id?: string;
+  // Counterparty
+  buyer_id?: string;
+  buyer_name?: string;
+  contact_id?: string;
+  // Duration
+  duration_value?: number;
+  duration_unit?: string;
+  grace_period_value?: number;
+  grace_period_unit?: string;
+  // Billing
   currency?: string;
-  payment_terms?: string;
-  renewal_terms?: string;
-  termination_clause?: string;
+  billing_cycle_type?: string;
+  payment_mode?: string;
+  emi_months?: number;
+  per_block_payment_type?: string;
+  // Financials
+  total_value?: number;
+  tax_total?: number;
+  grand_total?: number;
+  selected_tax_rate_ids?: string[];
+  tax_breakdown?: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
+  // Related entities (created in same transaction)
+  blocks?: Array<Record<string, any>>;
+  vendors?: Array<Record<string, any>>;
   notes?: string;
   metadata?: Record<string, any>;
-  // Related entities (created in same transaction)
-  blocks?: Array<{ block_id: string; sort_order: number; content_snapshot?: Record<string, any> }>;
-  vendors?: Array<{ contact_id: string; role: string; is_primary: boolean }>;
 }
 
 export interface UpdateContractRequest {
   title?: string;
+  name?: string;
   description?: string;
   contract_type?: ContractType;
-  acceptance_method?: AcceptanceMethod;
-  start_date?: string;
-  end_date?: string;
-  total_value?: number;
+  acceptance_method?: string;
+  // Duration
+  duration_value?: number;
+  duration_unit?: string;
+  grace_period_value?: number;
+  grace_period_unit?: string;
+  // Billing
   currency?: string;
-  payment_terms?: string;
-  renewal_terms?: string;
-  termination_clause?: string;
+  billing_cycle_type?: string;
+  payment_mode?: string;
+  emi_months?: number;
+  per_block_payment_type?: string;
+  // Financials
+  total_value?: number;
+  tax_total?: number;
+  grand_total?: number;
+  selected_tax_rate_ids?: string[];
+  tax_breakdown?: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
   notes?: string;
   metadata?: Record<string, any>;
   version: number; // Required for optimistic concurrency
-  blocks?: Array<{ block_id: string; sort_order: number; content_snapshot?: Record<string, any> }>;
-  vendors?: Array<{ contact_id: string; role: string; is_primary: boolean }>;
+  blocks?: Array<Record<string, any>>;
+  vendors?: Array<Record<string, any>>;
 }
 
 export interface UpdateContractStatusRequest {

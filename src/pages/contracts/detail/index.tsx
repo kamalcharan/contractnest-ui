@@ -279,44 +279,105 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
       </div>
 
       <div className="p-5">
-        {/* Collected / Balance cards */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div
-            className="p-4 rounded-lg text-center border"
-            style={{
-              background: `linear-gradient(135deg, ${colors.semantic.success}10, ${colors.semantic.success}20)`,
-              borderColor: colors.semantic.success + '30',
-            }}
-          >
-            <div className="text-2xl font-extrabold mb-0.5" style={{ color: colors.semantic.success }}>
-              {formatCurrency(summary.total_paid, currency)}
-            </div>
-            <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
-              Collected
-            </div>
+        {/* Contract Value Breakdown */}
+        <div
+          className="rounded-lg border p-4 mb-4"
+          style={{ borderColor: colors.utility.primaryText + '12', backgroundColor: colors.utility.primaryText + '04' }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+              Contract Value
+            </span>
+            <span className="text-lg font-extrabold" style={{ color: colors.brand.primary }}>
+              {formatCurrency(contract.grand_total || contract.total_value || 0, currency)}
+            </span>
           </div>
-          <div
-            className="p-4 rounded-lg text-center"
-            style={{ backgroundColor: colors.utility.primaryText + '06' }}
-          >
-            <div
-              className="text-2xl font-extrabold mb-0.5"
-              style={{ color: summary.total_balance > 0 ? colors.semantic.warning : colors.utility.primaryText }}
-            >
-              {formatCurrency(summary.total_balance, currency)}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[0.7rem]" style={{ color: colors.utility.secondaryText }}>Subtotal</span>
+              <span className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                {formatCurrency(contract.total_value || 0, currency)}
+              </span>
             </div>
-            <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
-              Balance
-            </div>
+            {(contract.tax_total ?? 0) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[0.7rem]" style={{ color: colors.utility.secondaryText }}>Tax</span>
+                <span className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                  {formatCurrency(contract.tax_total || 0, currency)}
+                </span>
+              </div>
+            )}
+            {contract.tax_breakdown && contract.tax_breakdown.length > 0 && (
+              <div className="pl-3 space-y-0.5">
+                {contract.tax_breakdown.map((tax, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span className="text-[0.65rem]" style={{ color: colors.utility.secondaryText }}>
+                      {tax.name} ({tax.rate}%)
+                    </span>
+                    <span className="text-[0.65rem]" style={{ color: colors.utility.secondaryText }}>
+                      {formatCurrency(tax.amount, currency)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+          {contract.payment_mode && (
+            <div className="mt-2 pt-2 border-t flex items-center justify-between" style={{ borderColor: colors.utility.primaryText + '10' }}>
+              <span className="text-[0.7rem]" style={{ color: colors.utility.secondaryText }}>Payment Mode</span>
+              <span className="text-[0.7rem] font-semibold" style={{ color: colors.utility.primaryText }}>
+                {contract.payment_mode === 'emi' ? `EMI (${contract.emi_months || 0} months)` : contract.payment_mode.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Collected / Balance cards */}
+        {(() => {
+          const contractTotal = contract.grand_total || contract.total_value || 0;
+          const collected = summary.total_paid || 0;
+          // Balance = contract total minus what's been collected
+          const balance = summary.invoice_count > 0 ? summary.total_balance : contractTotal - collected;
+          return (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div
+                className="p-4 rounded-lg text-center border"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.semantic.success}10, ${colors.semantic.success}20)`,
+                  borderColor: colors.semantic.success + '30',
+                }}
+              >
+                <div className="text-2xl font-extrabold mb-0.5" style={{ color: colors.semantic.success }}>
+                  {formatCurrency(collected, currency)}
+                </div>
+                <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
+                  Collected
+                </div>
+              </div>
+              <div
+                className="p-4 rounded-lg text-center"
+                style={{ backgroundColor: colors.utility.primaryText + '06' }}
+              >
+                <div
+                  className="text-2xl font-extrabold mb-0.5"
+                  style={{ color: balance > 0 ? colors.semantic.warning : colors.utility.primaryText }}
+                >
+                  {formatCurrency(balance, currency)}
+                </div>
+                <div className="text-[0.7rem] uppercase tracking-wider font-semibold" style={{ color: colors.utility.secondaryText }}>
+                  Balance
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Collection Progress */}
         <div className="mb-4">
           <div className="flex justify-between mb-1.5">
             <span className="text-xs" style={{ color: colors.utility.secondaryText }}>Collection Progress</span>
             <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-              {summary.invoice_count > 0 ? `${summary.collection_percentage}%` : '\u2014'}
+              {summary.invoice_count > 0 ? `${summary.collection_percentage}%` : '0%'}
             </span>
           </div>
           <div
@@ -458,12 +519,10 @@ interface ContractDetailsCardProps {
 const ContractDetailsCard: React.FC<ContractDetailsCardProps> = ({ contract, colors }) => {
   const rows: Array<{ label: string; value: string }> = [
     { label: 'Record Type', value: contract.record_type === 'rfq' ? 'RFQ' : 'Contract' },
-    { label: 'Duration', value: formatDuration((contract as any).duration_value, (contract as any).duration_unit) },
-    { label: 'Start Date', value: formatDate(contract.start_date || contract.created_at) },
-    { label: 'End Date', value: formatDate(contract.end_date) },
+    { label: 'Duration', value: formatDuration(contract.duration_value, contract.duration_unit) },
     { label: 'Acceptance', value: (contract.acceptance_method || '\u2014').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
-    { label: 'Payment Mode', value: ((contract as any).payment_mode || '\u2014').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
-    { label: 'Billing Cycle', value: ((contract as any).billing_cycle_type || '\u2014').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
+    { label: 'Payment Mode', value: (contract.payment_mode || '\u2014').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
+    { label: 'Billing Cycle', value: (contract.billing_cycle_type || '\u2014').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) },
     { label: 'Currency', value: contract.currency || 'USD' },
   ];
 
@@ -956,7 +1015,7 @@ const ContractDetailPage: React.FC = () => {
   const { data: contract, isLoading, error } = useContract(id || null);
 
   // Classification icon
-  const classType = (contract as any)?.contact_classification || contract?.contract_type || '';
+  const classType = contract?.contact_classification || contract?.contract_type || '';
   const ClassIcon = getClassificationIcon(classType);
   const classConfig = CONTACT_CLASSIFICATION_CONFIG.find((c: any) => c.id === classType);
   const classBadgeColors = classConfig
@@ -1005,10 +1064,10 @@ const ContractDetailPage: React.FC = () => {
   }
 
   // ─── Summary bar data ───
-  const grandTotal = (contract as any).grand_total || contract.total_value || 0;
-  const blocksCount = (contract as any).blocks_count ?? contract.blocks?.length ?? 0;
-  const vendorsCount = (contract as any).vendors_count ?? contract.vendors?.length ?? 0;
-  const duration = formatDuration((contract as any).duration_value, (contract as any).duration_unit);
+  const grandTotal = contract.grand_total || contract.total_value || 0;
+  const blocksCount = contract.blocks_count ?? contract.blocks?.length ?? 0;
+  const vendorsCount = contract.vendors_count ?? contract.vendors?.length ?? 0;
+  const duration = formatDuration(contract.duration_value, contract.duration_unit);
 
   // ─── Tab content ───
   const renderTabContent = () => {
@@ -1091,7 +1150,7 @@ const ContractDetailPage: React.FC = () => {
               {/* Title + meta */}
               <div>
                 <h1 className="text-xl font-bold leading-tight" style={{ color: colors.utility.primaryText }}>
-                  {contract.title || (contract as any).name || 'Untitled Contract'}
+                  {contract.title || contract.name || 'Untitled Contract'}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-xs font-semibold" style={{ color: colors.utility.secondaryText }}>
@@ -1174,7 +1233,7 @@ const ContractDetailPage: React.FC = () => {
         }}
       >
         <SummaryItem label="Contract Value" value={formatCurrency(grandTotal, contract.currency)} colors={colors} />
-        <SummaryItem label="Tax" value={formatCurrency((contract as any).tax_total, contract.currency)} colors={colors} />
+        <SummaryItem label="Tax" value={formatCurrency(contract.tax_total, contract.currency)} colors={colors} />
         <SummaryItem label="Completion" value="\u2014" colorClass="default" colors={colors} />
         <SummaryItem label="Tasks" value="\u2014" colors={colors} />
         <SummaryItem label="Blocks" value={`${blocksCount}`} colors={colors} />

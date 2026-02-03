@@ -2,7 +2,7 @@
 // Step 8: Billing View - 3-column layout
 // Column 1: Billing config summary | Column 2: Line items | Column 3: Payment + Tax + Summary
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Calendar,
   Shuffle,
@@ -38,6 +38,11 @@ export interface BillingViewStepProps {
   // Tax
   selectedTaxRateIds: string[];
   onTaxRateIdsChange: (ids: string[]) => void;
+  onTotalsChange?: (totals: {
+    taxTotal: number;
+    grandTotal: number;
+    taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
+  }) => void;
   // Payment
   paymentMode: 'prepaid' | 'emi' | 'defined';
   onPaymentModeChange: (mode: 'prepaid' | 'emi' | 'defined') => void;
@@ -88,6 +93,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
   onBlocksChange,
   selectedTaxRateIds,
   onTaxRateIdsChange,
+  onTotalsChange,
   paymentMode,
   onPaymentModeChange,
   emiMonths,
@@ -184,6 +190,22 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       emiInstallment,
     };
   }, [billableBlocks, availableTaxRates, selectedTaxRateIds, emiMonths]);
+
+  // Report computed totals to parent wizard state
+  useEffect(() => {
+    if (!onTotalsChange) return;
+    const taxBreakdown = totals.selectedRates.map((r) => ({
+      tax_rate_id: r.id,
+      name: r.name,
+      rate: r.rate,
+      amount: Math.round((totals.subtotal * r.rate / 100) * 100) / 100,
+    }));
+    onTotalsChange({
+      taxTotal: Math.round(totals.taxAmount * 100) / 100,
+      grandTotal: Math.round(totals.grandTotal * 100) / 100,
+      taxBreakdown,
+    });
+  }, [totals.taxAmount, totals.grandTotal, totals.selectedRates, totals.subtotal, onTotalsChange]);
 
   // Start editing selling price
   const handleStartEdit = useCallback((blockId: string, currentPrice: number) => {

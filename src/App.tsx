@@ -146,9 +146,10 @@ import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
 import InviteSellersPage from './pages/contracts/invite';
 
-// Contracts Hub + Detail
+// Contracts Hub + Detail + Public Review
 import ContractsHubPage from './pages/contracts/hub';
 import ContractDetailPage from './pages/contracts/detail';
+import ContractReviewPage from './pages/contracts/review';
 
 // Team Management pages (using existing components)
 import UsersPage from './pages/settings/users';
@@ -313,9 +314,11 @@ const AppContent: React.FC = () => {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/signup" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register-invitation" element={<InvitationRegisterPage />} />
+          <Route path="/contract-review" element={<ContractReviewPage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
 

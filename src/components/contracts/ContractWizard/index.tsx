@@ -63,6 +63,9 @@ export interface ContractWizardState {
   totalValue: number;
   // Step 6: Billing View - Tax & Payment
   selectedTaxRateIds: string[];
+  taxTotal: number;
+  grandTotal: number;
+  taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
@@ -218,7 +221,10 @@ function mapWizardToRequest(
     emi_months: state.paymentMode === 'emi' ? state.emiMonths : undefined,
     per_block_payment_type: JSON.stringify(state.perBlockPaymentType),
     total_value: state.totalValue,
+    tax_total: state.taxTotal,
+    grand_total: state.grandTotal,
     selected_tax_rate_ids: state.selectedTaxRateIds,
+    tax_breakdown: state.taxBreakdown,
 
     // Related entities
     blocks,
@@ -256,6 +262,9 @@ const createInitialWizardState = (): ContractWizardState => ({
   totalValue: 0,
   // Billing View - Tax & Payment
   selectedTaxRateIds: [],
+  taxTotal: 0,
+  grandTotal: 0,
+  taxBreakdown: [],
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
@@ -271,7 +280,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // API mutation
-  const { createContract, isCreating } = useContractOperations();
+  const { createContract, updateStatus, sendNotification, isCreating } = useContractOperations();
   const { addToast } = useVaNiToast();
 
   // Current step state
@@ -418,7 +427,31 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       try {
         const request = mapWizardToRequest(wizardState, contractType);
         const result = await createContract(request as CreateContractRequest);
-        setCreatedContractData(result as Record<string, any>);
+        const created = result as Record<string, any>;
+
+        // Transition status: contracts → pending_acceptance, RFQs → sent
+        if (created?.id && created?.status === 'draft') {
+          const targetStatus = created.record_type === 'rfq' ? 'sent' : 'pending_acceptance';
+          try {
+            await updateStatus({
+              contractId: created.id,
+              statusData: { status: targetStatus },
+            });
+            created.status = targetStatus;
+          } catch {
+            // Non-fatal: contract was created, status transition can be retried
+            console.warn(`Contract created but status transition to ${targetStatus} failed`);
+          }
+        }
+
+        // Send sign-off notification for signoff contracts (non-blocking)
+        if (created?.id && wizardState.acceptanceMethod === 'signoff' && created.record_type !== 'rfq') {
+          sendNotification({ contractId: created.id }).catch(() => {
+            console.warn('Contract created but sign-off notification failed to send');
+          });
+        }
+
+        setCreatedContractData(created);
         setCnakCopied(false);
         setIsContractSent(true);
       } catch {
@@ -459,7 +492,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
       setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, addToast]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateStatus, sendNotification, addToast]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -669,6 +702,19 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     [updateWizardState]
   );
 
+  // Tax totals change handler (called by BillingViewStep when computed totals change)
+  const handleTotalsChange = useCallback(
+    (totals: { taxTotal: number; grandTotal: number; taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }> }) => {
+      setWizardState((prev) => ({
+        ...prev,
+        taxTotal: totals.taxTotal,
+        grandTotal: totals.grandTotal,
+        taxBreakdown: totals.taxBreakdown,
+      }));
+    },
+    []
+  );
+
   // Payment mode change handler
   const handlePaymentModeChange = useCallback(
     (mode: 'prepaid' | 'emi' | 'defined') => {
@@ -815,6 +861,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             onBlocksChange={handleBlocksChange}
             selectedTaxRateIds={wizardState.selectedTaxRateIds}
             onTaxRateIdsChange={handleTaxRateIdsChange}
+            onTotalsChange={handleTotalsChange}
             paymentMode={wizardState.paymentMode}
             onPaymentModeChange={handlePaymentModeChange}
             emiMonths={wizardState.emiMonths}

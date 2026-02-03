@@ -282,13 +282,17 @@ export const useContractOperations = () => {
       return response.data?.data || response.data;
     },
     onSuccess: (updatedContract) => {
-      queryClient.setQueryData(contractKeys.detail(updatedContract.id), updatedContract);
       queryClient.invalidateQueries({ queryKey: contractKeys.lists() });
       queryClient.invalidateQueries({ queryKey: contractKeys.stats() });
+      if (updatedContract.id) {
+        queryClient.invalidateQueries({ queryKey: contractKeys.detail(updatedContract.id) });
+      }
 
+      const displayStatus = (updatedContract.to_status || updatedContract.status || 'updated')
+        .replace(/_/g, ' ');
       toast({
         title: 'Status Updated',
-        description: `Status changed to ${updatedContract.status.replace(/_/g, ' ')}`,
+        description: `Status changed to ${displayStatus}`,
       });
     },
     onError: (error: any) => {
@@ -302,6 +306,53 @@ export const useContractOperations = () => {
       toast({
         variant: 'destructive',
         title: 'Status Update Failed',
+        description: errorMessage,
+      });
+    },
+  });
+
+  // ── Send Notification (email/WhatsApp sign-off) ──
+  const sendNotificationMutation = useMutation({
+    mutationFn: async ({
+      contractId,
+      notifyData,
+    }: {
+      contractId: string;
+      notifyData?: {
+        recipient_name?: string;
+        recipient_email?: string;
+        recipient_mobile?: string;
+        recipient_country_code?: string;
+      };
+    }): Promise<any> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
+      }
+
+      const response = await api.post(
+        API_ENDPOINTS.CONTRACTS.NOTIFY(contractId),
+        notifyData || {}
+      );
+
+      return response.data?.data || response.data;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Notification Sent',
+        description: 'Sign-off notification has been sent to the buyer',
+      });
+    },
+    onError: (error: any) => {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send notification';
+
+      captureException(error, {
+        tags: { component: 'useContractOperations', action: 'sendNotification' },
+        extra: { tenantId: currentTenant?.id, errorMessage },
+      });
+
+      // Non-fatal: don't show destructive toast, just a warning
+      toast({
+        title: 'Notification Not Sent',
         description: errorMessage,
       });
     },
@@ -350,10 +401,12 @@ export const useContractOperations = () => {
     createContract: createContractMutation.mutateAsync,
     updateContract: updateContractMutation.mutateAsync,
     updateStatus: updateStatusMutation.mutateAsync,
+    sendNotification: sendNotificationMutation.mutateAsync,
     deleteContract: deleteContractMutation.mutateAsync,
     isCreating: createContractMutation.isPending,
     isUpdating: updateContractMutation.isPending,
     isChangingStatus: updateStatusMutation.isPending,
+    isSendingNotification: sendNotificationMutation.isPending,
     isDeleting: deleteContractMutation.isPending,
   };
 };

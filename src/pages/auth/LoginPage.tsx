@@ -44,6 +44,14 @@ const LoginPage: React.FC = () => {
   // This useEffect only handles direct navigation to /login when already logged in
   useEffect(() => {
     if (isAuthenticated && !isLoading && currentTenant) {
+      // Check for contract review redirect (from public review page)
+      const authRedirect = sessionStorage.getItem('contractnest_auth_redirect');
+      if (authRedirect) {
+        sessionStorage.removeItem('contractnest_auth_redirect');
+        navigate(authRedirect, { replace: true });
+        return;
+      }
+
       // Check onboarding status before redirecting
       if (hasCompletedOnboarding) {
         console.log('[LoginPage] Already authenticated with completed onboarding - redirecting to dashboard');

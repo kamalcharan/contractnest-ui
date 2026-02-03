@@ -682,6 +682,13 @@ export const API_ENDPOINTS = {
     GENERATE_INVOICES: (contractId: string) => `/api/contracts/${contractId}/invoices/generate`,
     RECORD_PAYMENT: (contractId: string) => `/api/contracts/${contractId}/invoices/record-payment`,
 
+    // Notifications
+    NOTIFY: (contractId: string) => `/api/contracts/${contractId}/notify`,
+
+    // Public endpoints (no auth required)
+    PUBLIC_VALIDATE: '/api/contracts/public/validate',
+    PUBLIC_RESPOND: '/api/contracts/public/respond',
+
     // Helper: build list URL with filters
     LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
       const params = new URLSearchParams();
