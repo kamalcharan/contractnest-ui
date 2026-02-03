@@ -16,8 +16,9 @@ import {
   ChevronRight,
   Loader2,
   AlertTriangle,
-  Settings,
-  Trash2
+  FlaskConical,
+  RotateCcw,
+  XCircle
 } from 'lucide-react';
 import { TenantListItem, TenantDataSummary, TenantDataCategory } from '../../../types/tenantManagement';
 import { SubscriptionStatusBadge } from '../badges/SubscriptionStatusBadge';
@@ -31,8 +32,9 @@ interface TenantDetailDrawerProps {
   tenant: TenantListItem | null;
   isOpen: boolean;
   onClose: () => void;
-  onChangeStatus: (tenant: TenantListItem) => void;
-  onDeleteData: (tenant: TenantListItem) => void;
+  onResetTestData: (tenant: TenantListItem) => void;
+  onResetAllData: (tenant: TenantListItem) => void;
+  onCloseAccount: (tenant: TenantListItem) => void;
   dataSummary?: TenantDataSummary | null;
   isLoadingDataSummary?: boolean;
 }
@@ -41,8 +43,9 @@ export const TenantDetailDrawer: React.FC<TenantDetailDrawerProps> = ({
   tenant,
   isOpen,
   onClose,
-  onChangeStatus,
-  onDeleteData,
+  onResetTestData,
+  onResetAllData,
+  onCloseAccount,
   dataSummary,
   isLoadingDataSummary = false
 }) => {
@@ -310,8 +313,8 @@ export const TenantDetailDrawer: React.FC<TenantDetailDrawerProps> = ({
             <div className="mt-4">
               <DataProgressBar
                 segments={[
-                  { label: 'Buyers', value: stats.buyer_contacts, color: '#3B82F6' },
-                  { label: 'Sellers', value: stats.seller_contacts, color: '#A855F7' }
+                  { label: 'Buyers', value: stats.buyer_contacts || 0, color: '#3B82F6' },
+                  { label: 'Sellers', value: stats.seller_contacts || 0, color: '#A855F7' }
                 ]}
                 height={6}
               />
@@ -391,30 +394,62 @@ export const TenantDetailDrawer: React.FC<TenantDetailDrawerProps> = ({
               These actions affect the tenant's account and data. Use with caution.
             </p>
 
-            <div className="flex gap-3">
+            <div className="space-y-3">
+              {/* Reset Test Data */}
               <button
-                onClick={() => onChangeStatus(tenant)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all hover:scale-[1.02]"
+                onClick={() => onResetTestData(tenant)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all hover:scale-[1.01]"
                 style={{
-                  background: isDarkMode ? 'rgba(99, 102, 241, 0.2)' : 'rgba(99, 102, 241, 0.15)',
-                  color: '#6366F1',
-                  border: `1px solid ${isDarkMode ? 'rgba(99, 102, 241, 0.3)' : 'rgba(99, 102, 241, 0.2)'}`
+                  background: isDarkMode ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.1)',
+                  color: '#F59E0B',
+                  border: `1px solid ${isDarkMode ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.2)'}`
                 }}
               >
-                <Settings size={16} />
-                Change Status
+                <FlaskConical size={18} />
+                <div className="text-left flex-1">
+                  <div className="text-sm font-semibold">Reset Test Data</div>
+                  <div className="text-xs opacity-70" style={{ color: colors.utility.secondaryText }}>
+                    Delete records where is_live = false
+                  </div>
+                </div>
               </button>
+
+              {/* Reset All Data */}
               <button
-                onClick={() => onDeleteData(tenant)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all hover:scale-[1.02]"
+                onClick={() => onResetAllData(tenant)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all hover:scale-[1.01]"
                 style={{
-                  background: isDarkMode ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.15)',
+                  background: isDarkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)',
                   color: '#EF4444',
                   border: `1px solid ${isDarkMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)'}`
                 }}
               >
-                <Trash2 size={16} />
-                Delete Data
+                <RotateCcw size={18} />
+                <div className="text-left flex-1">
+                  <div className="text-sm font-semibold">Reset All Data</div>
+                  <div className="text-xs opacity-70" style={{ color: colors.utility.secondaryText }}>
+                    Delete all tenant data, keep account open
+                  </div>
+                </div>
+              </button>
+
+              {/* Close Account */}
+              <button
+                onClick={() => onCloseAccount(tenant)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all hover:scale-[1.01]"
+                style={{
+                  background: isDarkMode ? 'rgba(127, 29, 29, 0.3)' : 'rgba(127, 29, 29, 0.1)',
+                  color: '#DC2626',
+                  border: `1px solid ${isDarkMode ? 'rgba(220, 38, 38, 0.4)' : 'rgba(220, 38, 38, 0.25)'}`
+                }}
+              >
+                <XCircle size={18} />
+                <div className="text-left flex-1">
+                  <div className="text-sm font-semibold">Close Account</div>
+                  <div className="text-xs opacity-70" style={{ color: colors.utility.secondaryText }}>
+                    Delete all data + close tenant permanently
+                  </div>
+                </div>
               </button>
             </div>
           </div>

@@ -337,6 +337,26 @@ export const API_ENDPOINTS = {
       LIST_FILES: '/api/admin/storage/diagnostic/list',
       UPLOAD_FILE: '/api/admin/storage/diagnostic/upload',
       DELETE_FILE: '/api/admin/storage/diagnostic/file'
+    },
+    TENANT_MANAGEMENT: {
+      STATS: '/api/admin/tenants/stats',
+      LIST: '/api/admin/tenants/list',
+      LIST_WITH_FILTERS: (filters: AdminTenantListFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.status) params.append('status', filters.status);
+        if (filters.subscription_status) params.append('subscription_status', filters.subscription_status);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.sort_by) params.append('sort_by', filters.sort_by);
+        if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
+        const queryString = params.toString();
+        return queryString ? `/api/admin/tenants/list?${queryString}` : '/api/admin/tenants/list';
+      },
+      DATA_SUMMARY: (tenantId: string) => `/api/admin/tenants/${tenantId}/data-summary`,
+      RESET_TEST_DATA: (tenantId: string) => `/api/admin/tenants/${tenantId}/reset-test-data`,
+      RESET_ALL_DATA: (tenantId: string) => `/api/admin/tenants/${tenantId}/reset-all-data`,
+      CLOSE_ACCOUNT: (tenantId: string) => `/api/admin/tenants/${tenantId}/close-account`
     }
   },
   
@@ -677,18 +697,6 @@ export const API_ENDPOINTS = {
     // Health check
     HEALTH: '/api/contracts/health',
 
-    // Invoices & Payments
-    INVOICES: (contractId: string) => `/api/contracts/${contractId}/invoices`,
-    GENERATE_INVOICES: (contractId: string) => `/api/contracts/${contractId}/invoices/generate`,
-    RECORD_PAYMENT: (contractId: string) => `/api/contracts/${contractId}/invoices/record-payment`,
-
-    // Notifications
-    NOTIFY: (contractId: string) => `/api/contracts/${contractId}/notify`,
-
-    // Public endpoints (no auth required)
-    PUBLIC_VALIDATE: '/api/contracts/public/validate',
-    PUBLIC_RESPOND: '/api/contracts/public/respond',
-
     // Helper: build list URL with filters
     LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
       const params = new URLSearchParams();
@@ -713,16 +721,6 @@ export const API_ENDPOINTS = {
       const queryString = params.toString();
       return queryString ? `/api/contracts?${queryString}` : '/api/contracts';
     }
-  },
-
-  // =================================================================
-  // PAYMENT GATEWAY ENDPOINTS
-  // =================================================================
-  PAYMENTS: {
-    CREATE_ORDER: '/api/payments/create-order',
-    CREATE_LINK: '/api/payments/create-link',
-    VERIFY_PAYMENT: '/api/payments/verify-payment',
-    STATUS: '/api/payments/status',
   },
 
   // System and maintenance endpoints
@@ -940,6 +938,17 @@ export type ContractCrudFilters = {
   limit?: number;
   offset?: number;
   page?: number;
+};
+
+// Admin Tenant Management filter interface
+export type AdminTenantListFilters = {
+  page?: number;
+  limit?: number;
+  status?: string;
+  subscription_status?: string;
+  search?: string;
+  sort_by?: string;
+  sort_direction?: string;
 };
 
 // Sequence Numbers filter interface

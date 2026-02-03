@@ -153,6 +153,19 @@ export const TenantCard: React.FC<TenantCardProps> = ({
           borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'}`
         }}
       >
+        {/* Test / Live Account Badge */}
+        <span
+          className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide"
+          style={{
+            background: tenant.is_test
+              ? (isDarkMode ? 'rgba(245, 158, 11, 0.3)' : 'rgba(245, 158, 11, 0.15)')
+              : (isDarkMode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.15)'),
+            color: tenant.is_test ? '#F59E0B' : '#10B981',
+            border: `1px solid ${tenant.is_test ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)'}`
+          }}
+        >
+          {tenant.is_test ? 'Test Account' : 'Live Account'}
+        </span>
         {subscription && (
           <SubscriptionStatusBadge
             status={subscription.status}

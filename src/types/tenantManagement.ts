@@ -49,6 +49,7 @@ export interface TenantListItem {
   workspace_code: string;
   status: TenantStatus;
   is_admin: boolean;
+  is_test: boolean;
   created_at: string;
   subscription: TenantSubscriptionInfo | null;
   profile: TenantProfileInfo | null;

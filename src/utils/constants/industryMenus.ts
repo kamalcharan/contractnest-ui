@@ -93,8 +93,6 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' }
     ]
   },
-  // HIDDEN: VaNi menu - commented out for now
-  
   {
     id: 'vani',
     label: 'VaNi',
@@ -112,7 +110,6 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-chat', label: 'Chat', icon: 'MessageCircle', path: '/vani/chat' }
     ]
   },
-  
   // HIDDEN: Templates, Appointments, Tasks - commented out for now
   /*
   {
@@ -234,7 +231,7 @@ export const defaultMenuItems: MenuItem[] = [
         id: 'subscription-dashboard',
         label: 'Subscription Dashboard',
         icon: 'BarChart',
-        path: '/implementation/subscription-dashboard'
+        path: '/admin/subscription-management'
       },
       {
         id: 'billing-dashboard',
