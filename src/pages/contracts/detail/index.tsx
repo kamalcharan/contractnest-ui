@@ -27,6 +27,10 @@ import {
   Paperclip,
   ExternalLink,
   Receipt,
+  CreditCard,
+  Wallet,
+  Globe,
+  Loader2,
 } from 'lucide-react';
 import { useContract } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
@@ -39,6 +43,12 @@ import {
 } from '@/utils/constants/contacts';
 import TabsNavigation from '@/components/shared/TabsNavigation';
 import ContactHeaderCard from '@/components/contacts/view/cards/ContactHeaderCard';
+import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
+import PaymentRequestHistory from '@/components/contracts/PaymentRequestHistory';
+import { useGatewayStatus } from '@/hooks/useGatewayStatus';
+import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
+import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueries';
+import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 
 // ═══════════════════════════════════════════════════
 // HELPERS
@@ -219,9 +229,11 @@ const buildBuyerContactObject = (contract: ContractDetail) => {
 interface FinancialHealthProps {
   contract: ContractDetail;
   colors: any;
+  onRecordPayment?: () => void;
+  hasActiveGateway?: boolean;
 }
 
-const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) => {
+const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onRecordPayment, hasActiveGateway }) => {
   const { data, isLoading } = useContractInvoices(contract.id);
   const invoices = data?.invoices || [];
   const summary = data?.summary || {
@@ -270,12 +282,25 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
           <DollarSign className="h-4 w-4" style={{ color: colors.brand.primary }} />
           <h3 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>Financial Health</h3>
         </div>
-        <span
-          className="text-[0.65rem] font-semibold px-2 py-0.5 rounded-full"
-          style={{ backgroundColor: arApColor + '18', color: arApColor }}
-        >
-          {arApLabel}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[0.65rem] font-semibold px-2 py-0.5 rounded-full"
+            style={{ backgroundColor: arApColor + '18', color: arApColor }}
+          >
+            {arApLabel}
+          </span>
+          {onRecordPayment && invoices.length > 0 && (
+            <button
+              onClick={onRecordPayment}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.65rem] font-semibold transition-all hover:opacity-80"
+              style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
+              title="Record a payment"
+            >
+              <Wallet className="h-3 w-3" />
+              Pay
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-5">
@@ -289,7 +314,7 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
               Contract Value
             </span>
             <span className="text-lg font-extrabold" style={{ color: colors.brand.primary }}>
-              {formatCurrency(contract.grand_total || contract.total_value || 0, currency)}
+              {formatCurrency(contract.grand_total || ((contract.total_value || 0) + (contract.tax_total || 0)), currency)}
             </span>
           </div>
           <div className="space-y-1">
@@ -334,7 +359,7 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
 
         {/* Collected / Balance cards */}
         {(() => {
-          const contractTotal = contract.grand_total || contract.total_value || 0;
+          const contractTotal = contract.grand_total || ((contract.total_value || 0) + (contract.tax_total || 0));
           const collected = summary.total_paid || 0;
           // Balance = contract total minus what's been collected
           const balance = summary.invoice_count > 0 ? summary.total_balance : contractTotal - collected;
@@ -500,6 +525,17 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors }) =
             <div className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>
               {contract.status === 'active' ? 'No invoices generated' : 'Invoices will appear when contract is activated'}
             </div>
+          </div>
+        )}
+
+        {/* Online Payment Attempts (T12, T15 polling, T16 retry) */}
+        {invoices.length > 0 && (
+          <div className="mt-4">
+            <PaymentRequestHistory
+              contractId={contract.id}
+              compact
+              onRetry={() => onRecordPayment?.()}
+            />
           </div>
         )}
       </div>
@@ -1011,8 +1047,28 @@ const ContractDetailPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: contract, isLoading, error } = useContract(id || null);
+  const { hasActiveGateway } = useGatewayStatus();
+  const { addToast } = useVaNiToast();
+
+  // ─── Razorpay Checkout (for terminal mode from RecordPaymentDialog) ───
+  const { openCheckout, isVerifying } = useRazorpayCheckout({
+    onVerified: () => {
+      addToast({ type: 'success', title: 'Payment Verified', message: 'The payment has been recorded successfully.' });
+    },
+    onFailed: (error) => {
+      addToast({ type: 'error', title: 'Payment Failed', message: error || 'Payment could not be completed.' });
+    },
+    onDismissed: () => {
+      addToast({ type: 'warning', title: 'Checkout Closed', message: 'The payment window was closed without completing payment.' });
+    },
+  });
+
+  const handleOrderCreated = (orderData: CreateOrderResponse) => {
+    openCheckout(orderData);
+  };
 
   // Classification icon
   const classType = contract?.contact_classification || contract?.contract_type || '';
@@ -1064,7 +1120,7 @@ const ContractDetailPage: React.FC = () => {
   }
 
   // ─── Summary bar data ───
-  const grandTotal = contract.grand_total || contract.total_value || 0;
+  const grandTotal = contract.grand_total || ((contract.total_value || 0) + (contract.tax_total || 0));
   const blocksCount = contract.blocks_count ?? contract.blocks?.length ?? 0;
   const vendorsCount = contract.vendors_count ?? contract.vendors?.length ?? 0;
   const duration = formatDuration(contract.duration_value, contract.duration_unit);
@@ -1086,7 +1142,12 @@ const ContractDetailPage: React.FC = () => {
             {/* Right Sidebar */}
             <div className="space-y-5">
               <ContactHeaderCard contact={buildBuyerContactObject(contract)} />
-              <FinancialHealth contract={contract} colors={colors} />
+              <FinancialHealth
+                contract={contract}
+                colors={colors}
+                hasActiveGateway={hasActiveGateway}
+                onRecordPayment={() => setIsPaymentDialogOpen(true)}
+              />
               <ContractDetailsCard contract={contract} colors={colors} />
               <AuditTrail history={contract.history} colors={colors} />
             </div>
@@ -1095,7 +1156,53 @@ const ContractDetailPage: React.FC = () => {
       case 'timeline':
         return <PlaceholderTab icon={Calendar} title="Timeline View" description="Full execution timeline with Gantt-style view of tasks, milestones, and deadlines." colors={colors} />;
       case 'financials':
-        return <PlaceholderTab icon={DollarSign} title="Financials" description="Invoices, payments, collection tracking, and financial analytics for this contract." colors={colors} />;
+        return (
+          <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 400px' }}>
+            {/* Left: Full financial details */}
+            <div className="space-y-6">
+              {/* Record Payment CTA */}
+              <div
+                className="rounded-xl border p-5 flex items-center justify-between"
+                style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
+              >
+                <div>
+                  <h3 className="text-sm font-bold mb-0.5" style={{ color: colors.utility.primaryText }}>
+                    Collect Payment
+                  </h3>
+                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Record an offline payment or collect online via{' '}
+                    {hasActiveGateway ? 'Razorpay' : 'payment gateway'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsPaymentDialogOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+                  style={{ backgroundColor: colors.brand.primary }}
+                >
+                  {hasActiveGateway ? (
+                    <><CreditCard className="h-4 w-4" /> Collect Payment</>
+                  ) : (
+                    <><Wallet className="h-4 w-4" /> Record Payment</>
+                  )}
+                </button>
+              </div>
+
+              {/* Payment Request History - full width (T15 polling + T16 retry) */}
+              <PaymentRequestHistory
+                contractId={contract.id}
+                onRetry={() => setIsPaymentDialogOpen(true)}
+              />
+            </div>
+
+            {/* Right: Financial Health sidebar */}
+            <FinancialHealth
+              contract={contract}
+              colors={colors}
+              hasActiveGateway={hasActiveGateway}
+              onRecordPayment={() => setIsPaymentDialogOpen(true)}
+            />
+          </div>
+        );
       case 'evidence':
         return <PlaceholderTab icon={Camera} title="Evidence" description="Photos, documents, and proof of delivery uploaded for tasks and milestones." colors={colors} />;
       case 'communication':
@@ -1255,6 +1362,22 @@ const ContractDetailPage: React.FC = () => {
       <div className="px-6 py-6">
         {renderTabContent()}
       </div>
+
+      {/* ═══════ RECORD PAYMENT DIALOG (T11) ═══════ */}
+      <RecordPaymentDialog
+        isOpen={isPaymentDialogOpen}
+        onClose={() => setIsPaymentDialogOpen(false)}
+        contractId={contract.id}
+        hasActiveGateway={hasActiveGateway}
+        grandTotal={grandTotal}
+        currency={contract.currency}
+        paymentMode={contract.payment_mode}
+        emiMonths={contract.emi_months}
+        onOrderCreated={handleOrderCreated}
+        onSuccess={() => {
+          setIsPaymentDialogOpen(false);
+        }}
+      />
     </div>
   );
 };

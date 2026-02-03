@@ -715,6 +715,16 @@ export const API_ENDPOINTS = {
     }
   },
 
+  // =================================================================
+  // PAYMENT GATEWAY ENDPOINTS
+  // =================================================================
+  PAYMENTS: {
+    CREATE_ORDER: '/api/payments/create-order',
+    CREATE_LINK: '/api/payments/create-link',
+    VERIFY_PAYMENT: '/api/payments/verify-payment',
+    STATUS: '/api/payments/status',
+  },
+
   // System and maintenance endpoints
   SYSTEM: {
     MAINTENANCE_STATUS: '/api/system/maintenance/status',
