@@ -94,7 +94,10 @@ export interface Contact {
   id: string;
   type: 'individual' | 'corporate';
   status: 'active' | 'inactive' | 'archived';
-  
+
+  // Sequential contact identifier (e.g., "CT-1001")
+  contact_number?: string;
+
   // Contact classifications
   classifications: string[]; // ['buyer', 'seller', 'vendor', 'partner', 'team_member']
   

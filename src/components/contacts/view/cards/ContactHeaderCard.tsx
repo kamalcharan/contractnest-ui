@@ -84,6 +84,7 @@ interface ContactHeaderCardProps {
     id: string;
     type: 'individual' | 'corporate';
     status: 'active' | 'inactive' | 'archived';
+    contact_number?: string;
     name?: string;
     salutation?: string;
     company_name?: string;
@@ -498,7 +499,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
         )}
       </div>
 
-      {/* Footer: Contact ID + Status */}
+      {/* Footer: Contact Number + Status */}
       <div
         className="flex items-center justify-between px-4 py-2 border-t"
         style={{
@@ -507,17 +508,35 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>ID:</span>
-          <code
-            className="text-xs font-mono px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
-            style={{
-              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-              color: colors.utility.secondaryText
-            }}
-            onClick={() => copyToClipboard(contact.id, 'Contact ID')}
-          >
-            {contact.id.substring(0, 8)}...
-          </code>
+          {contact.contact_number ? (
+            <>
+              <code
+                className="text-xs font-mono font-semibold px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
+                style={{
+                  backgroundColor: `${colors.brand.primary}15`,
+                  color: colors.brand.primary
+                }}
+                onClick={() => copyToClipboard(contact.contact_number!, 'Contact Number')}
+                title={`ID: ${contact.id}`}
+              >
+                {contact.contact_number}
+              </code>
+            </>
+          ) : (
+            <>
+              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>ID:</span>
+              <code
+                className="text-xs font-mono px-1.5 py-0.5 rounded cursor-pointer hover:opacity-80"
+                style={{
+                  backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                  color: colors.utility.secondaryText
+                }}
+                onClick={() => copyToClipboard(contact.id, 'Contact ID')}
+              >
+                {contact.id.substring(0, 8)}...
+              </code>
+            </>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {/* Status Badge */}

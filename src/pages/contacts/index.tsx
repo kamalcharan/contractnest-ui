@@ -1185,10 +1185,19 @@ const ContactsPage: React.FC = () => {
                                 />
                               )}
                             </div>
+                            {/* Contact Number */}
+                            {contact.contact_number && (
+                              <span
+                                className="text-xs font-mono"
+                                style={{ color: colors.utility.secondaryText }}
+                              >
+                                {contact.contact_number}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-                      
+
                       {/* FIXED: Content Section - Flexible Height */}
                       <div className="px-4 flex-grow">
                         {/* Primary Contact Channel */}
@@ -1317,20 +1326,30 @@ const ContactsPage: React.FC = () => {
                                 />
                               )}
                             </div>
-                            <span 
+                            <div className="flex items-center gap-2">
+                              {/* Contact Number */}
+                              {contact.contact_number && (
+                                <span
+                                  className="text-xs font-mono"
+                                  style={{ color: colors.utility.secondaryText }}
+                                >
+                                  {contact.contact_number}
+                                </span>
+                              )}
+                            <span
                               className="px-2 py-0.5 rounded-full text-xs font-medium border"
                               style={{
-                                backgroundColor: contact.status === 'active' 
+                                backgroundColor: contact.status === 'active'
                                   ? colors.semantic.success + '20'
-                                  : contact.status === 'inactive' 
+                                  : contact.status === 'inactive'
                                   ? colors.semantic.warning + '20'
                                   : colors.utility.secondaryText + '20',
-                                borderColor: contact.status === 'active' 
+                                borderColor: contact.status === 'active'
                                   ? colors.semantic.success + '40'
-                                  : contact.status === 'inactive' 
+                                  : contact.status === 'inactive'
                                   ? colors.semantic.warning + '40'
                                   : colors.utility.secondaryText + '40',
-                                color: contact.status === 'active' 
+                                color: contact.status === 'active'
                                   ? colors.semantic.success
                                   : contact.status === 'inactive' 
                                   ? colors.semantic.warning
@@ -1339,6 +1358,7 @@ const ContactsPage: React.FC = () => {
                             >
                               {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
                             </span>
+                            </div>
                           </div>
                         </div>
 
