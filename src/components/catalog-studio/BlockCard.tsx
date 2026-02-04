@@ -3,6 +3,7 @@ import React from 'react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Block, BlockCategory } from '../../types/catalogStudio';
+import { stripHtml } from '../../utils/catalog-studio/htmlUtils';
 
 interface BlockCardProps {
   block: Block;
@@ -27,6 +28,28 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, category, onClick, onDoubl
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const IconComponent = getIconComponent(block.icon);
+
+  // Extract primary pricing record for tax info
+  const pricingRecords = (block.meta?.pricingRecords || block.config?.pricingRecords || []) as Array<{
+    currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
+    taxes: Array<{ id: string; name: string; rate: number }>; is_active: boolean;
+  }>;
+  const primaryRecord = pricingRecords.find(r => r.is_active !== false) || pricingRecords[0];
+  const taxes = primaryRecord?.taxes || [];
+  const totalTaxRate = taxes.reduce((sum, t) => sum + t.rate, 0);
+  const taxInclusion = primaryRecord?.tax_inclusion || 'exclusive';
+  const basePrice = primaryRecord?.amount ?? block.price;
+
+  // Calculate price breakdown
+  const priceBreakdown = (() => {
+    if (!basePrice || totalTaxRate === 0) return null;
+    if (taxInclusion === 'inclusive') {
+      const priceExTax = basePrice / (1 + totalTaxRate / 100);
+      return { price: priceExTax, taxAmount: basePrice - priceExTax, total: basePrice };
+    }
+    const taxAmount = (basePrice * totalTaxRate) / 100;
+    return { price: basePrice, taxAmount, total: basePrice + taxAmount };
+  })();
 
   return (
     <div
@@ -57,18 +80,39 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, category, onClick, onDoubl
             className="text-xs line-clamp-2"
             style={{ color: colors.utility.secondaryText }}
           >
-            {block.description}
+            {stripHtml(block.description)}
           </div>
         </div>
       </div>
       <div className="px-4 pb-3">
         <div className="flex flex-wrap gap-3 mb-2 text-xs" style={{ color: colors.utility.secondaryText }}>
-          {block.price && (
+          {basePrice != null && basePrice > 0 && (
             <span className="flex items-center gap-1">
-              <LucideIcons.DollarSign className="w-3 h-3" />
-              <strong style={{ color: colors.utility.primaryText }}>
-                {formatCurrency(block.price, block.currency)}
-              </strong>
+              {priceBreakdown ? (
+                <>
+                  <strong style={{ color: colors.utility.primaryText }}>
+                    {formatCurrency(Math.round(priceBreakdown.total), primaryRecord?.currency || block.currency)}
+                  </strong>
+                  <span style={{ color: colors.utility.secondaryText }}>
+                    ({formatCurrency(Math.round(priceBreakdown.price), primaryRecord?.currency || block.currency)} + {formatCurrency(Math.round(priceBreakdown.taxAmount), primaryRecord?.currency || block.currency)} tax)
+                  </span>
+                </>
+              ) : (
+                <strong style={{ color: colors.utility.primaryText }}>
+                  {formatCurrency(basePrice, primaryRecord?.currency || block.currency)}
+                </strong>
+              )}
+            </span>
+          )}
+          {primaryRecord && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+              style={{
+                backgroundColor: taxInclusion === 'inclusive' ? `${colors.semantic.success}15` : `${colors.semantic.warning}15`,
+                color: taxInclusion === 'inclusive' ? colors.semantic.success : colors.semantic.warning,
+              }}
+            >
+              Tax {taxInclusion === 'inclusive' ? 'Incl' : 'Excl'}
             </span>
           )}
           {block.duration && (
@@ -152,7 +196,24 @@ const BlockCard: React.FC<BlockCardProps> = ({ block, category, onClick, onDoubl
         {block.usage.templates > 0 && `${block.usage.templates} templates`}
         {block.usage.templates > 0 && block.usage.contracts > 0 && ' • '}
         {block.usage.contracts > 0 && `${block.usage.contracts} contracts`}
-        {block.usage.templates === 0 && block.usage.contracts === 0 && 'Not used yet'}
+        {block.usage.templates === 0 && block.usage.contracts === 0 && (() => {
+          const records = block.meta?.pricingRecords as Array<{ currency: string; is_active: boolean }> | undefined;
+          if (records && records.length > 1) {
+            const currencies = records
+              .filter(r => r.is_active !== false)
+              .map(r => {
+                const sym: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£', AED: 'د.إ' };
+                return sym[r.currency] || r.currency;
+              });
+            const unique = [...new Set(currencies)];
+            return (
+              <span style={{ color: colors.brand.primary, fontWeight: 600 }}>
+                {unique.join(' • ')}
+              </span>
+            );
+          }
+          return null;
+        })()}
       </div>
     </div>
   );

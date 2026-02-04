@@ -11,6 +11,7 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Block } from '../../../types/catalogStudio';
 import { BLOCK_CATEGORIES } from '../../../utils/catalog-studio';
+import { sanitizeHtml, stripHtml } from '../../../utils/catalog-studio/htmlUtils';
 import * as LucideIcons from 'lucide-react';
 
 interface BlockEditorPanelProps {
@@ -222,10 +223,12 @@ const BlockEditorPanel: React.FC<BlockEditorPanelProps> = ({
         </div>
 
         {/* Description */}
-        {block.description && (
-          <p className="text-sm mt-2 leading-relaxed" style={{ color: colors.utility.secondaryText }}>
-            {block.description}
-          </p>
+        {block.description && stripHtml(block.description) && (
+          <div
+            className="text-sm mt-2 leading-relaxed [&_p]:m-0 [&_p]:mb-1"
+            style={{ color: colors.utility.secondaryText }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(block.description) }}
+          />
         )}
       </div>
 
@@ -243,29 +246,86 @@ const BlockEditorPanel: React.FC<BlockEditorPanelProps> = ({
                 colors={colors}
               />
               <ViewField label="Price Type" value={priceType} colors={colors} />
-              <ViewField
-                label="Base Price"
-                value={formatCurrency(block.price, block.currency)}
-                colors={colors}
-              />
 
-              {/* Multi-currency records */}
-              {pricingRecords.length > 0 && (
-                <div className="mt-3 p-3 rounded-lg" style={{ backgroundColor: `${colors.brand.primary}05` }}>
-                  <span className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>
-                    Currency Pricing
-                  </span>
-                  <div className="mt-2 space-y-1">
-                    {pricingRecords.map((record: any, idx: number) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span style={{ color: colors.utility.secondaryText }}>{record.currency}</span>
-                        <span className="font-medium" style={{ color: colors.utility.primaryText }}>
-                          {formatCurrency(record.amount, record.currency)}
-                        </span>
+              {/* Per-currency price breakdown with taxes */}
+              {pricingRecords.length > 0 ? (
+                <div className="mt-3 space-y-3">
+                  {pricingRecords.filter((r: any) => r.is_active !== false).map((record: any, idx: number) => {
+                    const recTaxes = record.taxes || [];
+                    const recTotalTaxRate = recTaxes.reduce((s: number, t: any) => s + t.rate, 0);
+                    const recInclusion = record.tax_inclusion || 'exclusive';
+                    let subtotal: number, taxAmount: number, total: number;
+                    if (recInclusion === 'inclusive') {
+                      subtotal = record.amount / (1 + recTotalTaxRate / 100);
+                      taxAmount = record.amount - subtotal;
+                      total = record.amount;
+                    } else {
+                      subtotal = record.amount;
+                      taxAmount = (record.amount * recTotalTaxRate) / 100;
+                      total = record.amount + taxAmount;
+                    }
+                    return (
+                      <div key={idx} className="p-3 rounded-lg" style={{ backgroundColor: `${colors.brand.primary}05` }}>
+                        {/* Currency header + tax inclusion tag */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
+                            {record.currency}
+                          </span>
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                            style={{
+                              backgroundColor: recInclusion === 'inclusive' ? `${colors.semantic.success}15` : `${colors.semantic.warning}15`,
+                              color: recInclusion === 'inclusive' ? colors.semantic.success : colors.semantic.warning,
+                            }}
+                          >
+                            Tax {recInclusion === 'inclusive' ? 'Inclusive' : 'Exclusive'}
+                          </span>
+                        </div>
+                        {/* Price line */}
+                        <div className="flex justify-between text-sm">
+                          <span style={{ color: colors.utility.secondaryText }}>Price</span>
+                          <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                            {formatCurrency(Math.round(subtotal * 100) / 100, record.currency)}
+                          </span>
+                        </div>
+                        {/* Individual tax lines */}
+                        {recTaxes.map((tax: any, tIdx: number) => {
+                          const perTaxAmount = recInclusion === 'inclusive'
+                            ? (subtotal * tax.rate) / 100
+                            : (record.amount * tax.rate) / 100;
+                          return (
+                            <div key={tIdx} className="flex justify-between text-xs mt-0.5">
+                              <span style={{ color: colors.utility.secondaryText }}>
+                                {tax.name} ({tax.rate}%)
+                              </span>
+                              <span style={{ color: colors.utility.secondaryText }}>
+                                + {formatCurrency(Math.round(perTaxAmount * 100) / 100, record.currency)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {/* Total line */}
+                        {recTaxes.length > 0 && (
+                          <div
+                            className="flex justify-between text-sm font-bold mt-1.5 pt-1.5 border-t"
+                            style={{ borderColor: `${colors.brand.primary}20` }}
+                          >
+                            <span style={{ color: colors.utility.primaryText }}>Total</span>
+                            <span style={{ color: colors.semantic.success }}>
+                              {formatCurrency(Math.round(total * 100) / 100, record.currency)}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
+              ) : (
+                <ViewField
+                  label="Base Price"
+                  value={formatCurrency(block.price, block.currency)}
+                  colors={colors}
+                />
               )}
 
               {/* Resource pricing records */}
@@ -278,7 +338,7 @@ const BlockEditorPanel: React.FC<BlockEditorPanelProps> = ({
                     {resourcePricingRecords.map((record: any, idx: number) => (
                       <div key={idx} className="flex justify-between text-sm">
                         <span style={{ color: colors.utility.secondaryText }}>{record.resourceTypeName || 'Resource'}</span>
-                        <span className="font-medium" style={{ color: colors.utility.primaryText }}>
+                        <span className="font-medium" style={{ color: colors.brand.primary }}>
                           {formatCurrency(record.pricePerUnit, record.currency)} / {record.pricingModel}
                         </span>
                       </div>

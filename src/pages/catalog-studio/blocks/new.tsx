@@ -13,7 +13,6 @@ import BlockWizardContent from '../../../components/catalog-studio/BlockWizard/B
 import { useCreateCatBlock } from '../../../hooks/mutations/useCatBlocksMutations';
 import { blockToCreateData } from '../../../utils/catalog-studio/catBlockAdapter';
 import { VaNiLoader } from '../../../components/common/loaders/UnifiedLoader';
-import { vaniToast } from '../../../components/common/toast/VaNiToast';
 
 // =================================================================
 // COMPONENT
@@ -75,21 +74,20 @@ const NewBlockPage: React.FC = () => {
         categoryId: blockType,
       } as Block;
 
-      // Build create payload with UUIDs
-      const createPayload = {
+      // Build create payload - add UUIDs only when available from master data
+      const createPayload: Record<string, any> = {
         ...blockToCreateData(fullBlockData),
-        block_type_id: blockTypeUuid, // Add the UUID
-        pricing_mode_id: pricingModeUuid, // Add the UUID
       };
+      if (blockTypeUuid) createPayload.block_type_id = blockTypeUuid;
+      if (pricingModeUuid) createPayload.pricing_mode_id = pricingModeUuid;
 
       await createBlockMutation.mutateAsync(createPayload);
 
-      // Show success toast and navigate back
-      vaniToast.success(`Block "${blockData.name}" created successfully`);
+      // Toast is handled by mutation onSuccess callback
       navigate('/catalog-studio/configure');
     } catch (error: any) {
       console.error('Failed to create block:', error);
-      vaniToast.error(error?.response?.data?.message || 'Failed to create block. Please try again.');
+      // Error toast is handled by mutation onError callback
     } finally {
       setIsSaving(false);
     }

@@ -2,6 +2,25 @@
 // Updated with Service Catalog endpoints - ALL EXISTING ENDPOINTS PRESERVED
 // Updated with Groups & Directory endpoints
 
+// Catalog Studio filter types (declared before API_ENDPOINTS so helper functions can reference them)
+export type CatBlockFilters = {
+  block_type_id?: string;
+  pricing_mode_id?: string;
+  is_active?: boolean;
+  tags?: string[];
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type CatTemplateFilters = {
+  status_id?: string;
+  is_public?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
 export const API_ENDPOINTS = {
   // =================================================================
   // ONBOARDING ENDPOINTS - PRESERVED
@@ -555,6 +574,87 @@ export const API_ENDPOINTS = {
     }
   },
   
+  // =================================================================
+  // CATALOG STUDIO ENDPOINTS
+  // =================================================================
+  CATALOG_STUDIO: {
+    // Health check
+    HEALTH: '/api/catalog-studio/health',
+
+    // Block operations
+    BLOCKS: {
+      LIST: '/api/catalog-studio/blocks',
+      GET: (id: string) => `/api/catalog-studio/blocks/${id}`,
+      CREATE: '/api/catalog-studio/blocks',
+      UPDATE: (id: string) => `/api/catalog-studio/blocks/${id}`,
+      DELETE: (id: string) => `/api/catalog-studio/blocks/${id}`,
+
+      // Helper function for listing blocks with filters
+      LIST_WITH_FILTERS: (filters: CatBlockFilters = {}) => {
+        const params = new URLSearchParams();
+
+        if (filters.block_type_id) params.append('block_type_id', filters.block_type_id);
+        if (filters.pricing_mode_id) params.append('pricing_mode_id', filters.pricing_mode_id);
+        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
+        if (filters.tags && filters.tags.length > 0) params.append('tags', filters.tags.join(','));
+        if (filters.search) params.append('search', filters.search);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+
+        const queryString = params.toString();
+        return queryString ? `/api/catalog-studio/blocks?${queryString}` : '/api/catalog-studio/blocks';
+      }
+    },
+
+    // Template operations
+    TEMPLATES: {
+      LIST: '/api/catalog-studio/templates',
+      GET: (id: string) => `/api/catalog-studio/templates/${id}`,
+      CREATE: '/api/catalog-studio/templates',
+      UPDATE: (id: string) => `/api/catalog-studio/templates/${id}`,
+      DELETE: (id: string) => `/api/catalog-studio/templates/${id}`,
+      SYSTEM: '/api/catalog-studio/templates/system',
+      PUBLIC: '/api/catalog-studio/templates/public',
+      COPY: (id: string) => `/api/catalog-studio/templates/${id}/copy`,
+
+      LIST_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
+        const params = new URLSearchParams();
+
+        if (filters.status_id) params.append('status_id', filters.status_id);
+        if (filters.is_public !== undefined) params.append('is_public', filters.is_public.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+
+        const queryString = params.toString();
+        return queryString ? `/api/catalog-studio/templates?${queryString}` : '/api/catalog-studio/templates';
+      },
+
+      SYSTEM_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
+        const params = new URLSearchParams();
+
+        if (filters.status_id) params.append('status_id', filters.status_id);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+
+        const queryString = params.toString();
+        return queryString ? `/api/catalog-studio/templates/system?${queryString}` : '/api/catalog-studio/templates/system';
+      },
+
+      PUBLIC_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
+        const params = new URLSearchParams();
+
+        if (filters.search) params.append('search', filters.search);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+
+        const queryString = params.toString();
+        return queryString ? `/api/catalog-studio/templates/public?${queryString}` : '/api/catalog-studio/templates/public';
+      }
+    }
+  },
+
   // =================================================================
   // GROUPS & DIRECTORY MANAGEMENT ENDPOINTS - NEW ADDITION
   // =================================================================

@@ -12,7 +12,7 @@ import api, {
   getVersionConflictDetails
 } from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast/VaNiToast';
 import { catBlockKeys, CatBlock, BlockConfig, ResourcePricingConfig, VariantPricingConfig } from '../queries/useCatBlocks';
 
 // =================================================================
@@ -86,10 +86,7 @@ const handleMutationError = (
     const details = getVersionConflictDetails(error);
     const message = details?.message || 'This block was modified by another user.';
 
-    toast.error(message, {
-      duration: 5000,
-      icon: '🔄'
-    });
+    vaniToast.error(message, { duration: 5000 });
 
     // Call the version conflict callback if provided
     if (onVersionConflict && blockId) {
@@ -101,15 +98,15 @@ const handleMutationError = (
   const errorMessage = error.response?.data?.error?.message || error.message;
 
   if (errorMessage?.includes('authentication') || errorMessage?.includes('unauthorized')) {
-    toast.error('Authentication required. Please log in again.');
+    vaniToast.error('Authentication required. Please log in again.');
   } else if (errorMessage?.includes('permission') || errorMessage?.includes('forbidden')) {
-    toast.error('You do not have permission for this action.');
+    vaniToast.error('You do not have permission for this action.');
   } else if (errorMessage?.includes('validation')) {
-    toast.error('Please check your input and try again.');
+    vaniToast.error('Please check your input and try again.');
   } else if (errorMessage?.includes('idempotency')) {
-    toast.error('Request already processed. Please refresh the page.');
+    vaniToast.error('Request already processed. Please refresh the page.');
   } else {
-    toast.error(errorMessage || `Failed to ${operation}. Please try again.`);
+    vaniToast.error(errorMessage || `Failed to ${operation}. Please try again.`);
   }
 };
 
@@ -151,11 +148,13 @@ export const useCreateCatBlock = () => {
       return response;
     },
     onSuccess: (data, variables) => {
-      toast.success(`Block "${variables.name}" created successfully!`);
+      vaniToast.success(`Block "${variables.name}" created successfully!`);
 
       // Invalidate and refetch blocks list
       queryClient.invalidateQueries({ queryKey: catBlockKeys.lists() });
       queryClient.invalidateQueries({ queryKey: catBlockKeys.all });
+      // Also invalidate the test hook used by configure page
+      queryClient.invalidateQueries({ queryKey: ['cat-blocks-test'] });
 
       console.log('✅ Block created successfully:', data.data?.id);
     },
@@ -220,13 +219,15 @@ export const useUpdateCatBlock = (onVersionConflict?: VersionConflictCallback) =
       return response;
     },
     onSuccess: (data, variables) => {
-      toast.success('Block updated successfully!');
+      vaniToast.success('Block updated successfully!');
 
       // Update specific block in cache
       queryClient.invalidateQueries({ queryKey: catBlockKeys.detail(variables.id) });
 
       // Invalidate list queries
       queryClient.invalidateQueries({ queryKey: catBlockKeys.lists() });
+      // Also invalidate the test hook used by configure page
+      queryClient.invalidateQueries({ queryKey: ['cat-blocks-test'] });
 
       console.log('✅ Block updated successfully:', variables.id);
     },
@@ -270,13 +271,15 @@ export const useDeleteCatBlock = () => {
       return response.data;
     },
     onSuccess: (data, blockId) => {
-      toast.success('Block deleted successfully!');
+      vaniToast.success('Block deleted successfully!');
 
       // Remove from cache
       queryClient.removeQueries({ queryKey: catBlockKeys.detail(blockId) });
 
       // Invalidate list queries
       queryClient.invalidateQueries({ queryKey: catBlockKeys.lists() });
+      // Also invalidate the test hook used by configure page
+      queryClient.invalidateQueries({ queryKey: ['cat-blocks-test'] });
 
       console.log('✅ Block deleted successfully:', blockId);
     },
@@ -315,7 +318,7 @@ export const useToggleCatBlockStatus = (onVersionConflict?: VersionConflictCallb
     },
     onSuccess: (data, variables) => {
       const status = variables.isActive ? 'activated' : 'deactivated';
-      toast.success(`Block ${status} successfully!`);
+      vaniToast.success(`Block ${status} successfully!`);
     },
     onError: (error: Error) => {
       handleMutationError(error, 'toggle block status');

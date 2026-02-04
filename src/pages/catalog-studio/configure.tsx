@@ -11,8 +11,9 @@ import { useCatBlocksTest, getBlockVersion } from '@/hooks/queries/useCatBlocksT
 import { useCatBlockMutationOperations } from '@/hooks/mutations/useCatBlocksMutations';
 import { Block } from '@/types/catalogStudio';
 import { BLOCK_CATEGORIES, getCategoryById } from '@/utils/catalog-studio';
+import { useBlockCategories } from '@/hooks/queries/useBlockTypes';
 import { CategoryPanel, BlockGrid, BlockEditorPanel } from '@/components/catalog-studio';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast/VaNiToast';
 
 import {
   catBlocksToBlocks,
@@ -103,6 +104,10 @@ const CatalogStudioConfigurePage: React.FC = () => {
 
   // API Hooks
   const { data: blocksResponse, isLoading, error, refetch } = useCatBlocksTest();
+  const { categories: apiCategories, isLoading: categoriesLoading } = useBlockCategories();
+
+  // Use API-driven categories (only active from master data), fallback to hardcoded if API empty
+  const blockCategories = apiCategories.length > 0 ? apiCategories : BLOCK_CATEGORIES;
 
   // Version conflict state
   const [conflictState, setConflictState] = useState<{
@@ -147,10 +152,10 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [isEditorPanelOpen, setIsEditorPanelOpen] = useState<boolean>(false);
 
-  // Computed
-  const currentCategory = getCategoryById(selectedCategory) || BLOCK_CATEGORIES[0];
+  // Computed - use API-driven categories
+  const currentCategory = blockCategories.find(c => c.id === selectedCategory) || blockCategories[0];
   const categoryBlocks = allBlocks.filter(block => block.categoryId === selectedCategory);
-  const categoriesWithCounts = BLOCK_CATEGORIES.map(cat => ({
+  const categoriesWithCounts = blockCategories.map(cat => ({
     ...cat,
     count: allBlocks.filter(block => block.categoryId === cat.id).length
   }));
@@ -234,7 +239,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const handleConflictRefresh = async () => {
     setConflictState({ isOpen: false, blockId: null, blockName: '' });
     await refetch();
-    toast.success('Data refreshed. Please try your changes again.');
+    vaniToast.success('Data refreshed. Please try your changes again.');
   };
 
   const handleConflictClose = () => {
@@ -242,7 +247,7 @@ const CatalogStudioConfigurePage: React.FC = () => {
   };
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || categoriesLoading) {
     return (
       <div className="h-full flex items-center justify-center">
         <p>Loading blocks...</p>

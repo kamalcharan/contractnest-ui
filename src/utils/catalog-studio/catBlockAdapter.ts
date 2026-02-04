@@ -734,8 +734,12 @@ export const blockToCreateData = (
   // Get status - check both top-level and meta
   const status = getField(block, 'status') as string || 'active';
 
-  // Get tax rate
-  const taxRate = getField(block, 'taxRate') as number || 18.00;
+  // Compute tax_rate from primary pricing record's configured taxes (per-item taxes are authoritative)
+  const primaryRecordTaxes = pricingRecords?.[0]?.taxes;
+  const computedTaxRate = primaryRecordTaxes && primaryRecordTaxes.length > 0
+    ? primaryRecordTaxes.reduce((sum: number, t: { rate: number }) => sum + t.rate, 0)
+    : undefined;
+  const taxRate = computedTaxRate ?? (getField(block, 'taxRate') as number) ?? 0;
 
   // Get visibility
   const visible = getField(block, 'visible');
@@ -811,17 +815,14 @@ export const blockToUpdateData = (
   if (updates.icon !== undefined) data.icon = updates.icon;
   if (updates.tags !== undefined) data.tags = updates.tags;
 
-  // Type change (rare but possible)
+  // Type info for config context (don't send block_type_id - it requires UUID, not string name)
   if (updates.categoryId !== undefined) {
     data.type = updates.categoryId;
-    data.block_type_id = updates.categoryId;
     data.category = updates.categoryId;
   }
 
-  // Pricing mode (edge expects pricing_mode_id)
-  if (meta.pricingMode !== undefined) {
-    data.pricing_mode_id = meta.pricingMode;
-  }
+  // NOTE: pricing_mode_id is a UUID column in DB - don't send string names like 'independent'
+  // pricingMode is stored in config.pricingMode instead (handled by buildConfig / partial config update)
 
   // Price updates
   const { price, currency } = extractPrimaryPrice(updates);
@@ -831,8 +832,16 @@ export const blockToUpdateData = (
   // NOTE: price_type_id expects UUID - store in config instead
   // NOTE: status_id expects UUID - store in config instead
 
-  // Tax rate
-  if (meta.taxRate !== undefined) data.tax_rate = meta.taxRate;
+  // Tax rate - compute from per-item taxes if pricingRecords available
+  const updatePricingRecords = meta.pricingRecords as PricingRecord[] | undefined;
+  if (updatePricingRecords && updatePricingRecords.length > 0) {
+    const primaryTaxes = updatePricingRecords[0]?.taxes;
+    if (primaryTaxes && primaryTaxes.length > 0) {
+      data.tax_rate = primaryTaxes.reduce((sum: number, t: { rate: number }) => sum + t.rate, 0);
+    }
+  } else if (meta.taxRate !== undefined) {
+    data.tax_rate = meta.taxRate;
+  }
 
   // HSN/SAC code
   const hsnSacCode = getField(updates, 'hsn') || getField(updates, 'hsnSacCode');
