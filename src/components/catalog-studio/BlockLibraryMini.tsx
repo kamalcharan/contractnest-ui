@@ -20,6 +20,8 @@ export interface BlockLibraryMiniProps {
   onAddBlock: (block: Block) => void;
   onBlockClick?: (block: Block) => void;
   maxHeight?: string;
+  // Currency filter - only show blocks with pricing in this currency
+  currency?: string;
   // FlyBy support
   flyByTypes?: FlyByCategoryId[];
   onAddFlyByBlock?: (type: FlyByCategoryId) => void;
@@ -36,11 +38,28 @@ const getIconComponent = (iconName: string) => {
   return iconsMap[iconName] || LucideIcons.Folder;
 };
 
+// Check if a block has pricing in the given currency
+const blockMatchesCurrency = (block: Block, currency: string | undefined): boolean => {
+  if (!currency) return true; // No filter
+  // Non-pricing categories (text, document, checklist) always match
+  const pricingCategories = ['service', 'spare'];
+  if (!pricingCategories.includes(block.categoryId)) return true;
+  // Check pricingRecords for the currency
+  const records = (block.meta?.pricingRecords || block.config?.pricingRecords) as
+    Array<{ currency: string; is_active: boolean }> | undefined;
+  if (!records || records.length === 0) {
+    // No pricing records - match if block's primary currency matches
+    return (block.currency || 'INR') === currency;
+  }
+  return records.some(r => r.currency === currency && r.is_active !== false);
+};
+
 const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
   selectedBlockIds,
   onAddBlock,
   onBlockClick,
   maxHeight = '100%',
+  currency,
   flyByTypes = [],
   onAddFlyByBlock,
   flyByOnly = false,
@@ -62,16 +81,19 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
     return catBlocksToBlocks(rawBlocks);
   }, [blocksResponse]);
 
-  // Get categories with counts
+  // Get categories with counts (filtered by currency if provided)
   // Show categories that have blocks OR have FlyBy enabled
   const categoriesWithCounts = useMemo(() => {
+    const currencyFiltered = currency
+      ? allBlocks.filter(block => blockMatchesCurrency(block, currency))
+      : allBlocks;
     return BLOCK_CATEGORIES.map((cat) => ({
       ...cat,
-      count: allBlocks.filter((block) => block.categoryId === cat.id).length,
-      blocks: allBlocks.filter((block) => block.categoryId === cat.id),
+      count: currencyFiltered.filter((block) => block.categoryId === cat.id).length,
+      blocks: currencyFiltered.filter((block) => block.categoryId === cat.id),
       hasFlyBy: flyByTypes.includes(cat.id as FlyByCategoryId),
     })).filter((cat) => cat.count > 0 || cat.hasFlyBy);
-  }, [allBlocks, flyByTypes]);
+  }, [allBlocks, flyByTypes, currency]);
 
   // Filter blocks by search
   // FlyBy categories remain visible even during search (user may want to add empty block)
@@ -283,6 +305,7 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
                           isSelected={isBlockSelected(block.id)}
                           onAdd={onAddBlock}
                           onClick={onBlockClick}
+                          currency={currency}
                         />
                       ))}
 

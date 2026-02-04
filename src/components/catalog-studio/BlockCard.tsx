@@ -11,6 +11,7 @@ interface BlockCardProps {
   onClick: () => void;
   onDoubleClick?: () => void;
   isSelected?: boolean;
+  currency?: string; // When provided, show pricing for this currency's record
 }
 
 // Helper to get Lucide icon component by name
@@ -24,17 +25,19 @@ const formatCurrency = (amount: number, currency: string = 'INR') => {
   return `${symbols[currency] || currency}${amount.toLocaleString()}`;
 };
 
-const BlockCard: React.FC<BlockCardProps> = ({ block, category, onClick, onDoubleClick, isSelected }) => {
+const BlockCard: React.FC<BlockCardProps> = ({ block, category, onClick, onDoubleClick, isSelected, currency }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const IconComponent = getIconComponent(block.icon);
 
-  // Extract primary pricing record for tax info
+  // Extract pricing record - prefer matching currency when provided
   const pricingRecords = (block.meta?.pricingRecords || block.config?.pricingRecords || []) as Array<{
     currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
     taxes: Array<{ id: string; name: string; rate: number }>; is_active: boolean;
   }>;
-  const primaryRecord = pricingRecords.find(r => r.is_active !== false) || pricingRecords[0];
+  const primaryRecord = currency
+    ? pricingRecords.find(r => r.currency === currency && r.is_active !== false)
+    : (pricingRecords.find(r => r.is_active !== false) || pricingRecords[0]);
   const taxes = primaryRecord?.taxes || [];
   const totalTaxRate = taxes.reduce((sum, t) => sum + t.rate, 0);
   const taxInclusion = primaryRecord?.tax_inclusion || 'exclusive';

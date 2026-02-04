@@ -151,6 +151,22 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [isEditorPanelOpen, setIsEditorPanelOpen] = useState<boolean>(false);
+  const [selectedCurrency, setSelectedCurrency] = useState<string | undefined>(undefined);
+
+  // Derive available currencies from all blocks' pricing records
+  const availableCurrencies = useMemo(() => {
+    const currencySet = new Set<string>();
+    allBlocks.forEach(block => {
+      const records = (block.meta?.pricingRecords || block.config?.pricingRecords) as
+        Array<{ currency: string; is_active: boolean }> | undefined;
+      if (records) {
+        records.filter(r => r.is_active !== false).forEach(r => currencySet.add(r.currency));
+      } else if (block.currency) {
+        currencySet.add(block.currency);
+      }
+    });
+    return Array.from(currencySet).sort();
+  }, [allBlocks]);
 
   // Computed - use API-driven categories
   const currentCategory = blockCategories.find(c => c.id === selectedCategory) || blockCategories[0];
@@ -328,6 +344,9 @@ const CatalogStudioConfigurePage: React.FC = () => {
           onBlockDoubleClick={(block) => navigateToEditBlock(block)}
           onAddBlock={() => navigateToCreateBlock(selectedCategory)}
           selectedBlockId={selectedBlock?.id}
+          currency={selectedCurrency}
+          availableCurrencies={availableCurrencies}
+          onCurrencyChange={setSelectedCurrency}
         />
         <BlockEditorPanel
           block={selectedBlock}

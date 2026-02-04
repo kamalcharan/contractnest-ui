@@ -25,11 +25,13 @@ import {
   ToggleLeft,
   ToggleRight,
   DollarSign,
+  Percent,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { ConfigurableBlock, CYCLE_OPTIONS } from './BlockCardConfigurable';
+import { useTaxRatesDropdown } from '@/hooks/queries/useProductMasterdata';
 
 export type FlyByBlockType = 'service' | 'spare' | 'text' | 'document';
 
@@ -65,8 +67,11 @@ export interface FlyByBlockCardProps {
 }
 
 // Format currency
-const formatCurrency = (amount: number, currency: string = 'INR') => {
+const formatCurrency = (amount: number, currency: string = 'INR', decimals = 0) => {
   const symbol = getCurrencySymbol(currency);
+  if (decimals > 0) {
+    return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+  }
   return `${symbol}${amount.toLocaleString()}`;
 };
 
@@ -86,6 +91,10 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   const flyByType = block.flyByType || 'service';
   const typeConfig = FLYBY_TYPE_CONFIG[flyByType];
   const TypeIcon = typeConfig.icon;
+
+  // Tax master data
+  const { options: taxRateOptions } = useTaxRatesDropdown();
+  const [taxDropdownOpen, setTaxDropdownOpen] = useState(false);
 
   // Local state for inline editing
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
@@ -245,6 +254,11 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
               <span className="text-sm font-bold" style={{ color: typeConfig.color }}>
                 {formatCurrency(block.totalPrice, block.currency)}
               </span>
+              {(block.taxRate || 0) > 0 && (
+                <span className="text-[10px] block" style={{ color: colors.utility.secondaryText }}>
+                  incl. {block.taxRate}% tax
+                </span>
+              )}
             </div>
           )}
 
@@ -562,22 +576,191 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
               </div>
             )}
 
-            {/* Price Summary - For Service, Spare */}
-            {hasPricing && block.price > 0 && (
+            {/* Tax Management - For Service, Spare */}
+            {hasPricing && (
               <div
-                className="flex items-center justify-between pt-2 border-t"
+                className="pt-3 border-t"
                 style={{ borderColor: `${colors.utility.primaryText}10` }}
               >
-                <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                  {formatCurrency(block.price, block.currency)} ×{' '}
-                  {block.unlimited ? '∞' : block.quantity}
-                  {hasBillingCycle ? ` (${currentCycle.label})` : ''}
-                </span>
-                <span className="text-sm font-bold" style={{ color: typeConfig.color }}>
-                  {formatCurrency(block.totalPrice, block.currency)}
-                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-[10px] font-medium uppercase tracking-wide flex items-center gap-1" style={{ color: colors.utility.secondaryText }}>
+                    <Percent className="w-3 h-3" />
+                    Tax Rates
+                  </label>
+                  <select
+                    value={block.taxInclusion || 'exclusive'}
+                    onChange={(e) => onUpdate(block.id, { taxInclusion: e.target.value as 'inclusive' | 'exclusive' })}
+                    className="text-[10px] px-2 py-1 rounded border cursor-pointer"
+                    style={{
+                      backgroundColor: colors.utility.primaryBackground,
+                      borderColor: `${colors.utility.primaryText}20`,
+                      color: colors.utility.primaryText,
+                    }}
+                  >
+                    <option value="exclusive">Exclusive</option>
+                    <option value="inclusive">Inclusive</option>
+                  </select>
+                </div>
+
+                {/* Tax chips from master data */}
+                <div className="flex flex-wrap gap-1.5 items-center min-h-[32px] p-2 border rounded-lg" style={{
+                  backgroundColor: colors.utility.primaryBackground,
+                  borderColor: `${colors.utility.primaryText}20`,
+                }}>
+                  {(block.taxes || []).map((tax) => (
+                    <span
+                      key={tax.id}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium"
+                      style={{ backgroundColor: `${typeConfig.color}15`, color: typeConfig.color }}
+                    >
+                      {tax.name} ({tax.rate}%)
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newTaxes = (block.taxes || []).filter(t => t.id !== tax.id);
+                          const newTaxRate = newTaxes.reduce((sum, t) => sum + Number(t.rate), 0);
+                          onUpdate(block.id, { taxes: newTaxes, taxRate: newTaxRate });
+                        }}
+                        className="hover:opacity-70"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+
+                  {/* Add Tax dropdown */}
+                  {(() => {
+                    const unused = taxRateOptions.filter(t => !(block.taxes || []).some(existing => existing.id === t.value));
+                    if (unused.length === 0) return null;
+                    return (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setTaxDropdownOpen(!taxDropdownOpen)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] border border-dashed hover:border-solid transition-all"
+                          style={{ borderColor: typeConfig.color, color: typeConfig.color }}
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Tax
+                        </button>
+
+                        {taxDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setTaxDropdownOpen(false)} />
+                            <div
+                              className="absolute left-0 z-50 mt-1 w-48 max-h-48 overflow-y-auto rounded-xl border shadow-lg"
+                              style={{
+                                backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+                                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+                              }}
+                            >
+                              {unused.map((tax) => (
+                                <button
+                                  key={tax.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const newTaxes = [...(block.taxes || []), { id: tax.value, name: tax.label, rate: tax.rate || 0 }];
+                                    const newTaxRate = newTaxes.reduce((sum, t) => sum + Number(t.rate), 0);
+                                    onUpdate(block.id, { taxes: newTaxes, taxRate: newTaxRate });
+                                    setTaxDropdownOpen(false);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800"
+                                  style={{ color: colors.utility.primaryText }}
+                                >
+                                  {tax.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {(block.taxes || []).length === 0 && taxRateOptions.length === 0 && (
+                    <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>No taxes available</span>
+                  )}
+                </div>
               </div>
             )}
+
+            {/* Price Summary - For Service, Spare */}
+            {hasPricing && block.price > 0 && (() => {
+              const taxRate = block.taxRate || 0;
+              const taxAmount = block.taxInclusion === 'inclusive'
+                ? block.price - block.price / (1 + taxRate / 100)
+                : block.price * taxRate / 100;
+              const unitTotalWithTax = block.taxInclusion === 'inclusive'
+                ? block.price
+                : block.price + taxAmount;
+
+              return (
+                <div
+                  className="pt-2 border-t space-y-1"
+                  style={{ borderColor: `${colors.utility.primaryText}10` }}
+                >
+                  {taxRate > 0 && (
+                    <>
+                      <div className="flex justify-between text-xs">
+                        <span style={{ color: colors.utility.secondaryText }}>
+                          {block.taxInclusion === 'inclusive' ? 'Base Price' : 'Price'}
+                        </span>
+                        <span style={{ color: colors.utility.primaryText }}>
+                          {block.taxInclusion === 'inclusive'
+                            ? formatCurrency(Math.round((block.price - taxAmount) * 100) / 100, block.currency, 2)
+                            : formatCurrency(block.price, block.currency, 2)}
+                        </span>
+                      </div>
+                      {block.taxes?.map((tax, i) => {
+                        const perTaxAmount = block.taxInclusion === 'inclusive'
+                          ? (block.price / (1 + taxRate / 100)) * Number(tax.rate) / 100
+                          : block.price * Number(tax.rate) / 100;
+                        return (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span style={{ color: colors.utility.secondaryText }}>
+                              {tax.name || 'Tax'} ({tax.rate}%)
+                            </span>
+                            <span style={{ color: colors.utility.primaryText }}>
+                              {formatCurrency(Math.round(perTaxAmount * 100) / 100, block.currency, 2)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {block.taxInclusion && (
+                        <span
+                          className="inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium mt-0.5"
+                          style={{
+                            backgroundColor: block.taxInclusion === 'inclusive' ? `${colors.semantic.success}15` : `${colors.semantic.warning}15`,
+                            color: block.taxInclusion === 'inclusive' ? colors.semantic.success : colors.semantic.warning,
+                          }}
+                        >
+                          Tax {block.taxInclusion === 'inclusive' ? 'Inclusive' : 'Exclusive'}
+                        </span>
+                      )}
+                      <div
+                        className="flex justify-between text-xs font-medium pt-1 mt-1 border-t"
+                        style={{ borderColor: `${colors.utility.primaryText}08` }}
+                      >
+                        <span style={{ color: colors.utility.primaryText }}>Total per unit</span>
+                        <span style={{ color: colors.semantic.success }}>
+                          {formatCurrency(Math.round(unitTotalWithTax * 100) / 100, block.currency, 2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      {formatCurrency(Math.round(unitTotalWithTax * 100) / 100, block.currency, 2)} ×{' '}
+                      {block.unlimited ? '∞' : block.quantity}
+                      {hasBillingCycle ? ` (${currentCycle.label})` : ''}
+                    </span>
+                    <span className="text-sm font-bold" style={{ color: typeConfig.color }}>
+                      {formatCurrency(Math.round(block.totalPrice * 100) / 100, block.currency, 2)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

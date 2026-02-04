@@ -15,6 +15,7 @@ export interface BlockCardSelectableProps {
   isSelected?: boolean;
   onAdd: (block: Block) => void;
   onClick?: (block: Block) => void;
+  currency?: string; // When provided, show pricing for this currency's record
 }
 
 // Helper to get Lucide icon component by name
@@ -38,10 +39,21 @@ const BlockCardSelectable: React.FC<BlockCardSelectableProps> = ({
   isSelected = false,
   onAdd,
   onClick,
+  currency,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const IconComponent = getIconComponent(block.icon);
+
+  // Resolve display price: use matching currency's pricing record when provided
+  const pricingRecords = (block.meta?.pricingRecords || block.config?.pricingRecords || []) as Array<{
+    currency: string; amount: number; is_active: boolean;
+  }>;
+  const matchingRecord = currency
+    ? pricingRecords.find(r => r.currency === currency && r.is_active !== false)
+    : (pricingRecords.find(r => r.is_active !== false) || pricingRecords[0]);
+  const displayPrice = matchingRecord?.amount ?? block.price ?? 0;
+  const displayCurrency = matchingRecord?.currency || block.currency || 'INR';
 
   const handleClick = () => {
     if (onClick) {
@@ -142,9 +154,9 @@ const BlockCardSelectable: React.FC<BlockCardSelectableProps> = ({
           >
             {category?.name || block.categoryId}
           </span>
-          {(block.price || 0) > 0 && (
+          {displayPrice > 0 && (
             <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
-              {formatCurrency(block.price || 0, block.currency)}
+              {formatCurrency(displayPrice, displayCurrency)}
             </span>
           )}
         </div>

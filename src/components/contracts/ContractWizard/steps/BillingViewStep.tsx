@@ -1,41 +1,37 @@
 // src/components/contracts/ContractWizard/steps/BillingViewStep.tsx
 // Step 8: Billing View - 3-column layout
-// Column 1: Billing config summary | Column 2: Line items | Column 3: Payment + Tax + Summary
+// Column 1: Billing config summary | Column 2: Read-only pricing cards | Column 3: Payment Schedule + Summary
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import {
   Calendar,
-  Shuffle,
   CheckCircle2,
   DollarSign,
   Receipt,
-  Percent,
-  Edit3,
-  Check,
-  X,
   CreditCard,
   CalendarRange,
-  ChevronDown,
   Minus,
   Plus,
   Info,
-  ArrowRight,
   ListChecks,
   Lock,
+  Shuffle,
+  Zap,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useTaxRates } from '@/hooks/useTaxRates';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
 import { BillingCycleType } from './BillingCycleStep';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import { FLYBY_TYPE_CONFIG } from '@/components/catalog-studio/FlyByBlockCard';
 
 export interface BillingViewStepProps {
   selectedBlocks: ConfigurableBlock[];
   currency: string;
   billingCycleType: BillingCycleType;
   onBlocksChange: (blocks: ConfigurableBlock[]) => void;
-  // Tax
+  // Tax (kept for backward compat, no longer used for contract-level tax)
   selectedTaxRateIds: string[];
   onTaxRateIdsChange: (ids: string[]) => void;
   onTotalsChange?: (totals: {
@@ -53,6 +49,27 @@ export interface BillingViewStepProps {
   // Contract info
   contractDuration?: number;
 }
+
+// Format currency
+const formatCurrency = (amount: number, currency: string = 'INR', decimals = 2) => {
+  const symbol = getCurrencySymbol(currency);
+  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+};
+
+// Get cycle label from id
+const getCycleLabel = (cycleId: string): string => {
+  const cycle = CYCLE_OPTIONS.find((c) => c.id === cycleId);
+  return cycle?.label || cycleId || '-';
+};
+
+// Helper to get Lucide icon component by name
+const getIconComponent = (iconName: string) => {
+  const iconsMap = LucideIcons as unknown as Record<
+    string,
+    React.ComponentType<{ className?: string; size?: number; style?: React.CSSProperties }>
+  >;
+  return iconsMap[iconName] || LucideIcons.Package;
+};
 
 // Billing cycle option data (reused from BillingCycleStep)
 const BILLING_CYCLE_OPTIONS = [
@@ -74,18 +91,6 @@ const BILLING_CYCLE_OPTIONS = [
   },
 ];
 
-// Format currency
-const formatCurrency = (amount: number, currency: string = 'INR') => {
-  const symbol = getCurrencySymbol(currency);
-  return `${symbol}${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
-
-// Get cycle label from id
-const getCycleLabel = (cycleId: string): string => {
-  const cycle = CYCLE_OPTIONS.find((c) => c.id === cycleId);
-  return cycle?.label || cycleId || '-';
-};
-
 const BillingViewStep: React.FC<BillingViewStepProps> = ({
   selectedBlocks,
   currency,
@@ -104,19 +109,6 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-
-  // Fetch tax rates
-  const { state: taxState } = useTaxRates();
-  const availableTaxRates = useMemo(
-    () =>
-      (taxState.data || []).map((rate) => ({
-        id: rate.id,
-        name: rate.name,
-        rate: rate.rate,
-        isDefault: rate.is_default,
-      })),
-    [taxState.data]
-  );
 
   // Filter to only billable blocks (categories that have pricing)
   const billableBlocks = useMemo(
@@ -161,114 +153,59 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       }));
   }, [billableBlocks]);
 
-  // Editing state for selling price
-  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
-  const [editPrice, setEditPrice] = useState<string>('');
-
-  // Calculate totals from billable blocks only
+  // Calculate totals from per-block taxes
   const totals = useMemo(() => {
-    const subtotal = billableBlocks.reduce((sum, b) => sum + b.totalPrice, 0);
+    let baseSubtotal = 0;
+    let totalTax = 0;
+    let grandTotal = 0;
 
-    // Calculate tax from selected tax rates
-    const selectedRates = availableTaxRates.filter((r) =>
-      selectedTaxRateIds.includes(r.id)
-    );
-    const totalTaxRate = selectedRates.reduce((sum, r) => sum + r.rate, 0);
-    const taxAmount = subtotal * (totalTaxRate / 100);
-    const grandTotal = subtotal + taxAmount;
+    billableBlocks.forEach((block) => {
+      const ep = block.config?.customPrice ?? block.price;
+      const qty = block.unlimited ? 1 : block.quantity;
+      const taxRate = block.taxRate || 0;
 
-    // EMI calculation
+      if (block.isFlyBy && taxRate === 0) {
+        // FlyBy without taxes
+        baseSubtotal += ep * qty;
+        grandTotal += block.totalPrice;
+      } else if (taxRate === 0) {
+        baseSubtotal += ep * qty;
+        grandTotal += block.totalPrice;
+      } else if (block.taxInclusion === 'inclusive') {
+        const total = ep * qty;
+        const base = total / (1 + taxRate / 100);
+        baseSubtotal += base;
+        totalTax += total - base;
+        grandTotal += block.totalPrice;
+      } else {
+        // exclusive
+        const base = ep * qty;
+        baseSubtotal += base;
+        totalTax += base * taxRate / 100;
+        grandTotal += block.totalPrice;
+      }
+    });
+
     const emiInstallment = emiMonths > 0 ? grandTotal / emiMonths : grandTotal;
 
     return {
-      subtotal,
-      selectedRates,
-      totalTaxRate,
-      taxAmount,
-      grandTotal,
+      baseSubtotal: Math.round(baseSubtotal * 100) / 100,
+      totalTax: Math.round(totalTax * 100) / 100,
+      grandTotal: Math.round(grandTotal * 100) / 100,
       blockCount: billableBlocks.length,
-      emiInstallment,
+      emiInstallment: Math.round(emiInstallment * 100) / 100,
     };
-  }, [billableBlocks, availableTaxRates, selectedTaxRateIds, emiMonths]);
+  }, [billableBlocks, emiMonths]);
 
   // Report computed totals to parent wizard state
   useEffect(() => {
     if (!onTotalsChange) return;
-    const taxBreakdown = totals.selectedRates.map((r) => ({
-      tax_rate_id: r.id,
-      name: r.name,
-      rate: r.rate,
-      amount: Math.round((totals.subtotal * r.rate / 100) * 100) / 100,
-    }));
     onTotalsChange({
-      taxTotal: Math.round(totals.taxAmount * 100) / 100,
-      grandTotal: Math.round(totals.grandTotal * 100) / 100,
-      taxBreakdown,
+      taxTotal: totals.totalTax,
+      grandTotal: totals.grandTotal,
+      taxBreakdown: [], // Per-block taxes, no contract-level breakdown
     });
-  }, [totals.taxAmount, totals.grandTotal, totals.selectedRates, totals.subtotal, onTotalsChange]);
-
-  // Start editing selling price
-  const handleStartEdit = useCallback((blockId: string, currentPrice: number) => {
-    setEditingBlockId(blockId);
-    setEditPrice(currentPrice.toString());
-  }, []);
-
-  // Save selling price
-  const handleSavePrice = useCallback(
-    (blockId: string) => {
-      const newPrice = parseFloat(editPrice) || 0;
-      onBlocksChange(
-        selectedBlocks.map((block) => {
-          if (block.id === blockId) {
-            const updated = {
-              ...block,
-              config: {
-                ...block.config,
-                customPrice: newPrice,
-              },
-            };
-            const effectivePrice = newPrice;
-            updated.totalPrice = updated.unlimited ? effectivePrice : effectivePrice * updated.quantity;
-            return updated;
-          }
-          return block;
-        })
-      );
-      setEditingBlockId(null);
-      setEditPrice('');
-    },
-    [editPrice, selectedBlocks, onBlocksChange]
-  );
-
-  // Cancel editing
-  const handleCancelEdit = useCallback(() => {
-    setEditingBlockId(null);
-    setEditPrice('');
-  }, []);
-
-  // Handle key press in price input
-  const handlePriceKeyDown = useCallback(
-    (e: React.KeyboardEvent, blockId: string) => {
-      if (e.key === 'Enter') {
-        handleSavePrice(blockId);
-      } else if (e.key === 'Escape') {
-        handleCancelEdit();
-      }
-    },
-    [handleSavePrice, handleCancelEdit]
-  );
-
-  // Toggle tax rate
-  const handleToggleTax = useCallback(
-    (taxId: string) => {
-      if (selectedTaxRateIds.includes(taxId)) {
-        onTaxRateIdsChange(selectedTaxRateIds.filter((id) => id !== taxId));
-      } else {
-        onTaxRateIdsChange([...selectedTaxRateIds, taxId]);
-      }
-    },
-    [selectedTaxRateIds, onTaxRateIdsChange]
-  );
+  }, [totals.totalTax, totals.grandTotal, onTotalsChange]);
 
   // Handle per-block payment type change
   const handleBlockPaymentTypeChange = useCallback(
@@ -283,11 +220,6 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
 
   // Get the selected billing cycle option
   const selectedCycleOption = BILLING_CYCLE_OPTIONS.find((o) => o.id === billingCycleType);
-
-  // Grid template for table - add Payment column for mixed mode
-  const gridCols = isMixed
-    ? 'grid-cols-[1fr_50px_80px_90px_90px_90px]'
-    : 'grid-cols-[1fr_60px_90px_100px_100px]';
 
   return (
     <div
@@ -306,7 +238,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
           className="text-sm"
           style={{ color: colors.utility.secondaryText }}
         >
-          Review line items, configure payment schedule, and apply tax
+          Review pricing breakdown and configure payment schedule
         </p>
       </div>
 
@@ -437,9 +369,9 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
           </div>
         </div>
 
-        {/* Column 2: Line Items */}
+        {/* Column 2: Read-Only Pricing Cards */}
         <div
-          className="flex-1 flex flex-col rounded-xl border overflow-hidden"
+          className="flex-1 flex flex-col rounded-xl border overflow-hidden min-h-0"
           style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderColor: `${colors.utility.primaryText}10`,
@@ -468,31 +400,21 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                 {totals.blockCount}
               </span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                {currency}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: colors.brand.primary }}>
+                {getCurrencySymbol(currency)}
+              </span>
+            </div>
           </div>
 
-          {/* Line Items Table */}
+          {/* Pricing Cards */}
           <div
-            className="flex-1 overflow-y-auto"
+            className="flex-1 overflow-y-auto p-4 space-y-3"
             style={{ backgroundColor: colors.utility.primaryBackground }}
           >
-            {/* Table Header */}
-            <div
-              className={`grid ${gridCols} gap-2 px-4 py-2 border-b text-[10px] font-medium uppercase tracking-wide`}
-              style={{
-                borderColor: `${colors.utility.primaryText}10`,
-                color: colors.utility.secondaryText,
-                backgroundColor: colors.utility.secondaryBackground,
-              }}
-            >
-              <span>Block</span>
-              <span className="text-center">Qty</span>
-              <span className="text-center">Cycle</span>
-              {isMixed && <span className="text-center">Payment</span>}
-              <span className="text-right">Price</span>
-              <span className="text-right">Total</span>
-            </div>
-
-            {/* Line Item Rows - only billable blocks */}
             {billableBlocks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Receipt className="w-10 h-10 mb-3" style={{ color: `${colors.utility.secondaryText}40` }} />
@@ -504,151 +426,190 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                 </p>
               </div>
             ) : (
-              billableBlocks.map((block, index) => {
-                const effectivePrice = block.config?.customPrice ?? block.price;
-                const lineTotal = block.unlimited ? effectivePrice : effectivePrice * block.quantity;
-                const isEditing = editingBlockId === block.id;
+              billableBlocks.map((block) => {
+                const ep = block.config?.customPrice ?? block.price;
+                const qty = block.unlimited ? 1 : block.quantity;
+                const taxRate = block.taxRate || 0;
                 const isFlyBy = block.isFlyBy;
+                const showTax = !isFlyBy && taxRate > 0;
                 const blockPayType = perBlockPaymentType[block.id] || 'prepaid';
+
+                let baseAmount: number;
+                let taxAmount: number;
+                if (!showTax) {
+                  baseAmount = ep * qty;
+                  taxAmount = 0;
+                } else if (block.taxInclusion === 'inclusive') {
+                  baseAmount = (ep / (1 + taxRate / 100)) * qty;
+                  taxAmount = ep * qty - baseAmount;
+                } else {
+                  baseAmount = ep * qty;
+                  taxAmount = baseAmount * taxRate / 100;
+                }
+
+                // Get icon
+                const flyByType = (block.flyByType || 'service') as keyof typeof FLYBY_TYPE_CONFIG;
+                const IconComponent = isFlyBy
+                  ? FLYBY_TYPE_CONFIG[flyByType]?.icon || LucideIcons.Zap
+                  : getIconComponent(block.icon);
+                const iconBg = isFlyBy
+                  ? FLYBY_TYPE_CONFIG[flyByType]?.bgColor || '#EFF6FF'
+                  : (block.categoryBgColor || `${block.categoryColor}20`);
+                const iconColor = isFlyBy
+                  ? FLYBY_TYPE_CONFIG[flyByType]?.color || '#3B82F6'
+                  : block.categoryColor;
 
                 return (
                   <div
                     key={block.id}
-                    className={`grid ${gridCols} gap-2 px-4 py-2.5 border-b items-center`}
+                    className="rounded-xl border overflow-hidden"
                     style={{
-                      borderColor: `${colors.utility.primaryText}08`,
-                      backgroundColor: index % 2 === 0
-                        ? 'transparent'
-                        : `${colors.utility.primaryText}03`,
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: `${colors.utility.primaryText}10`,
                     }}
                   >
-                    {/* Block Name */}
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: block.categoryColor }}
-                      />
-                      <div className="min-w-0">
-                        <span
-                          className="text-sm font-medium truncate block"
-                          style={{ color: colors.utility.primaryText }}
+                    {/* Card Header */}
+                    <div className="p-3">
+                      <div className="flex items-center gap-2.5">
+                        {/* Icon */}
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 relative"
+                          style={{ backgroundColor: iconBg }}
                         >
-                          {block.name || 'Untitled'}
-                        </span>
-                        {isFlyBy && (
+                          <IconComponent className="w-4 h-4" style={{ color: iconColor }} />
+                          {isFlyBy && (
+                            <div
+                              className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: iconColor }}
+                            >
+                              <Zap className="w-2 h-2 text-white" />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Name & badges */}
+                        <div className="flex-1 min-w-0">
+                          <h4
+                            className="font-semibold text-sm truncate"
+                            style={{ color: colors.utility.primaryText }}
+                          >
+                            {block.name || 'Untitled'}
+                          </h4>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                              style={{
+                                backgroundColor: iconBg,
+                                color: iconColor,
+                              }}
+                            >
+                              {isFlyBy ? `FlyBy ${block.categoryName}` : block.categoryName}
+                            </span>
+                            <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                              {block.unlimited ? '∞' : `×${qty}`} • {getCycleLabel(block.cycle)}
+                            </span>
+                            {isMixed && (
+                              <span
+                                className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                                style={{
+                                  backgroundColor: blockPayType === 'prepaid'
+                                    ? `${colors.semantic.success}15`
+                                    : `${colors.semantic.warning}15`,
+                                  color: blockPayType === 'prepaid'
+                                    ? colors.semantic.success
+                                    : colors.semantic.warning,
+                                }}
+                              >
+                                {blockPayType === 'prepaid' ? 'Prepaid' : 'Postpaid'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Total */}
+                        <div className="text-right flex-shrink-0">
+                          <span className="text-sm font-bold" style={{ color: colors.brand.primary }}>
+                            {formatCurrency(block.totalPrice, block.currency)}
+                          </span>
+                          {showTax && (
+                            <span className="text-[10px] block" style={{ color: colors.utility.secondaryText }}>
+                              incl. {taxRate}% tax
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Pricing Breakdown */}
+                    <div
+                      className="px-3 pb-3 pt-0"
+                    >
+                      <div
+                        className="pt-2 border-t space-y-1"
+                        style={{ borderColor: `${colors.utility.primaryText}08` }}
+                      >
+                        {/* Base / Selling Price */}
+                        <div className="flex justify-between text-xs">
+                          <span style={{ color: colors.utility.secondaryText }}>
+                            {showTax && block.taxInclusion === 'inclusive' ? 'Base Price' : 'Selling Price'}
+                            {' '}({block.unlimited ? '∞' : `×${qty}`})
+                          </span>
+                          <span style={{ color: colors.utility.primaryText }}>
+                            {formatCurrency(Math.round(baseAmount * 100) / 100, block.currency)}
+                          </span>
+                        </div>
+
+                        {/* Per-tax lines (not for FlyBy) */}
+                        {showTax && block.taxes?.map((tax, i) => {
+                          const perTaxAmount = block.taxInclusion === 'inclusive'
+                            ? (ep / (1 + taxRate / 100)) * Number(tax.rate) / 100 * qty
+                            : ep * Number(tax.rate) / 100 * qty;
+                          return (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span style={{ color: colors.utility.secondaryText }}>
+                                {tax.name || 'Tax'} ({tax.rate}%)
+                              </span>
+                              <span style={{ color: colors.utility.primaryText }}>
+                                {formatCurrency(Math.round(perTaxAmount * 100) / 100, block.currency)}
+                              </span>
+                            </div>
+                          );
+                        })}
+
+                        {/* Tax inclusion badge */}
+                        {showTax && block.taxInclusion && (
                           <span
-                            className="text-[9px] px-1 py-0.5 rounded font-medium"
+                            className="inline-block text-[10px] px-1.5 py-0.5 rounded-full font-medium"
                             style={{
-                              backgroundColor: `${block.categoryColor}15`,
-                              color: block.categoryColor,
+                              backgroundColor: block.taxInclusion === 'inclusive' ? `${colors.semantic.success}15` : `${colors.semantic.warning}15`,
+                              color: block.taxInclusion === 'inclusive' ? colors.semantic.success : colors.semantic.warning,
                             }}
                           >
-                            FlyBy
+                            Tax {block.taxInclusion === 'inclusive' ? 'Inclusive' : 'Exclusive'}
                           </span>
                         )}
-                      </div>
-                    </div>
 
-                    {/* Quantity */}
-                    <span
-                      className="text-sm text-center"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {block.unlimited ? '∞' : block.quantity}
-                    </span>
-
-                    {/* Cycle */}
-                    <span
-                      className="text-[10px] text-center px-1.5 py-1 rounded-md"
-                      style={{
-                        backgroundColor: `${colors.brand.primary}10`,
-                        color: colors.brand.primary,
-                      }}
-                    >
-                      {getCycleLabel(block.cycle)}
-                    </span>
-
-                    {/* Payment Type - Mixed mode only */}
-                    {isMixed && (
-                      <div className="flex justify-center">
-                        <select
-                          value={blockPayType}
-                          onChange={(e) => handleBlockPaymentTypeChange(block.id, e.target.value as 'prepaid' | 'postpaid')}
-                          className="text-[10px] px-1.5 py-1 rounded-md border-0 font-medium cursor-pointer"
-                          style={{
-                            backgroundColor: blockPayType === 'prepaid'
-                              ? `${colors.semantic.success}15`
-                              : `${colors.semantic.warning}15`,
-                            color: blockPayType === 'prepaid'
-                              ? colors.semantic.success
-                              : colors.semantic.warning,
-                          }}
+                        {/* Line total */}
+                        <div
+                          className="flex justify-between text-xs font-semibold pt-1 mt-1 border-t"
+                          style={{ borderColor: `${colors.utility.primaryText}06` }}
                         >
-                          <option value="prepaid">Prepaid</option>
-                          <option value="postpaid">Postpaid</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Selling Price (Editable) */}
-                    <div className="text-right">
-                      {isEditing ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <input
-                            type="number"
-                            value={editPrice}
-                            onChange={(e) => setEditPrice(e.target.value)}
-                            onKeyDown={(e) => handlePriceKeyDown(e, block.id)}
-                            autoFocus
-                            className="w-[70px] px-1.5 py-1 text-xs text-right rounded border"
-                            style={{
-                              backgroundColor: colors.utility.primaryBackground,
-                              borderColor: colors.brand.primary,
-                              color: colors.utility.primaryText,
-                            }}
-                          />
-                          <button
-                            onClick={() => handleSavePrice(block.id)}
-                            className="p-0.5 rounded"
-                            style={{ color: colors.semantic.success }}
-                          >
-                            <Check className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="p-0.5 rounded"
-                            style={{ color: colors.semantic.error }}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          <span style={{ color: colors.utility.primaryText }}>
+                            Total
+                          </span>
+                          <span style={{ color: colors.brand.primary }}>
+                            {formatCurrency(block.totalPrice, block.currency)}
+                          </span>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => handleStartEdit(block.id, effectivePrice)}
-                          className="inline-flex items-center gap-1 text-xs hover:opacity-70 transition-opacity"
-                          style={{ color: colors.utility.primaryText }}
-                          title="Click to edit"
-                        >
-                          <span>{formatCurrency(effectivePrice, currency)}</span>
-                          <Edit3 className="w-2.5 h-2.5" style={{ color: colors.utility.secondaryText }} />
-                        </button>
-                      )}
+                      </div>
                     </div>
-
-                    {/* Line Total */}
-                    <span
-                      className="text-xs font-semibold text-right"
-                      style={{ color: colors.utility.primaryText }}
-                    >
-                      {formatCurrency(lineTotal, currency)}
-                    </span>
                   </div>
                 );
               })
             )}
           </div>
 
-          {/* Simple Subtotal Footer */}
+          {/* Subtotal Footer */}
           {billableBlocks.length > 0 && (
             <div
               className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-t"
@@ -658,19 +619,19 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
               }}
             >
               <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                Subtotal ({totals.blockCount} item{totals.blockCount !== 1 ? 's' : ''})
+                {totals.blockCount} item{totals.blockCount !== 1 ? 's' : ''}
               </span>
               <span
                 className="text-sm font-semibold"
                 style={{ color: colors.utility.primaryText }}
               >
-                {formatCurrency(totals.subtotal, currency)}
+                {formatCurrency(totals.grandTotal, currency)}
               </span>
             </div>
           )}
         </div>
 
-        {/* Column 3: Payment Schedule + Tax + Summary */}
+        {/* Column 3: Payment Schedule + Summary */}
         <div className="w-[420px] flex-shrink-0 min-h-0">
           <div className="h-full overflow-y-auto flex flex-col gap-3 pr-1">
           {/* Payment Schedule Section */}
@@ -1028,7 +989,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                   )}
                 </>
               ) : (
-                /* Mixed: Show breakup by cycle type (same as "As Defined") */
+                /* Mixed: Show breakup by cycle type */
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <Shuffle className="w-4 h-4" style={{ color: colors.brand.primary }} />
@@ -1037,7 +998,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] mb-3" style={{ color: colors.utility.secondaryText }}>
-                    Each service is billed per its own cycle. Use the Payment column in the table to set Prepaid or Postpaid per block.
+                    Each service is billed per its own cycle. Payment types are shown on each card.
                   </p>
 
                   {/* Breakup by cycle type */}
@@ -1106,71 +1067,6 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
             </div>
           </div>
 
-          {/* Tax Section */}
-          <div
-            className="rounded-xl border overflow-hidden flex-shrink-0"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: `${colors.utility.primaryText}10`,
-            }}
-          >
-            {/* Header */}
-            <div
-              className="p-3 border-b flex items-center justify-between"
-              style={{ borderColor: `${colors.utility.primaryText}10` }}
-            >
-              <div className="flex items-center gap-2">
-                <Percent className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  Tax
-                </span>
-              </div>
-              {totals.totalTaxRate > 0 && (
-                <span
-                  className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                  style={{
-                    backgroundColor: `${colors.brand.primary}15`,
-                    color: colors.brand.primary,
-                  }}
-                >
-                  {totals.totalTaxRate}%
-                </span>
-              )}
-            </div>
-
-            {/* Tax Toggle Chips */}
-            <div className="p-4">
-              {availableTaxRates.length === 0 ? (
-                <p className="text-xs text-center py-2" style={{ color: colors.utility.secondaryText }}>
-                  No tax rates configured
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {availableTaxRates.map((rate) => {
-                    const isSelected = selectedTaxRateIds.includes(rate.id);
-                    return (
-                      <button
-                        key={rate.id}
-                        onClick={() => handleToggleTax(rate.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all border"
-                        style={{
-                          backgroundColor: isSelected ? colors.brand.primary : 'transparent',
-                          color: isSelected ? '#FFFFFF' : colors.utility.primaryText,
-                          borderColor: isSelected ? colors.brand.primary : `${colors.utility.primaryText}20`,
-                        }}
-                      >
-                        {rate.name} ({rate.rate}%)
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Summary Section */}
           <div
             className="rounded-xl border overflow-hidden flex-shrink-0"
@@ -1194,30 +1090,27 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
             </div>
 
             <div className="p-4 space-y-2">
-              {/* Subtotal */}
+              {/* Subtotal (before tax) */}
               <div className="flex items-center justify-between">
                 <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
                   Subtotal
                 </span>
                 <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
-                  {formatCurrency(totals.subtotal, currency)}
+                  {formatCurrency(totals.baseSubtotal, currency)}
                 </span>
               </div>
 
-              {/* Tax Breakdown */}
-              {totals.selectedRates.map((rate) => {
-                const rateAmount = totals.subtotal * (rate.rate / 100);
-                return (
-                  <div key={rate.id} className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                      {rate.name} ({rate.rate}%)
-                    </span>
-                    <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
-                      {formatCurrency(rateAmount, currency)}
-                    </span>
-                  </div>
-                );
-              })}
+              {/* Total Tax */}
+              {totals.totalTax > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Tax (per-block)
+                  </span>
+                  <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
+                    {formatCurrency(totals.totalTax, currency)}
+                  </span>
+                </div>
+              )}
 
               {/* Divider */}
               <div

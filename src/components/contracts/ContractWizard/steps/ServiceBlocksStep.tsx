@@ -154,6 +154,26 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
       const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
 
+      // Extract tax info from pricing records matching contract currency
+      const pricingRecords = ((block.meta as any)?.pricingRecords || (block.config as any)?.pricingRecords || []) as Array<{
+        currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
+        taxes: Array<{ name: string; rate: number }>; is_active: boolean;
+      }>;
+      const matchingRecord = pricingRecords.find(r => r.currency === currency && r.is_active !== false)
+        || pricingRecords.find(r => r.is_active !== false)
+        || pricingRecords[0];
+      const taxes = matchingRecord?.taxes || [];
+      const totalTaxRate = taxes.reduce((sum, t) => sum + t.rate, 0);
+      const taxInclusion = matchingRecord?.tax_inclusion || 'exclusive';
+
+      // Use the matching record's price if available
+      const blockPrice = matchingRecord?.amount ?? block.price ?? 0;
+
+      // Calculate initial total with tax
+      const unitPriceWithTax = taxInclusion === 'inclusive'
+        ? blockPrice
+        : blockPrice + (blockPrice * totalTaxRate / 100);
+
       const newBlock: ConfigurableBlock = {
         id: block.id,
         name: block.name,
@@ -163,14 +183,17 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         cycle: defaultCycle,
         customCycleDays: customCycleDays,
         unlimited: false,
-        price: block.price || 0,
-        currency: block.currency || currency,
-        totalPrice: block.price || 0,
+        price: blockPrice,
+        currency: matchingRecord?.currency || currency,
+        totalPrice: Math.round(unitPriceWithTax * 100) / 100,
         categoryName: category?.name || block.categoryId,
         categoryColor: category?.color || '#6B7280',
         categoryBgColor: category?.bgColor,
         categoryId: block.categoryId,
         isFlyBy: false,
+        taxRate: totalTaxRate,
+        taxInclusion: taxInclusion,
+        taxes: taxes.map(t => ({ name: t.name, rate: t.rate })),
         config: {
           showDescription: false,
         },
@@ -259,11 +282,17 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         selectedBlocks.map((block) => {
           if (block.id === blockId) {
             const updated = { ...block, ...updates };
-            // Recalculate total price
-            const effectivePrice = updated.config?.customPrice || updated.price;
-            updated.totalPrice = updated.unlimited
-              ? effectivePrice
-              : effectivePrice * updated.quantity;
+            // Recalculate total price with tax
+            const effectivePrice = updated.config?.customPrice ?? updated.price;
+            const taxRate = updated.taxRate || 0;
+            let unitPrice = effectivePrice;
+            if (taxRate > 0 && updated.taxInclusion === 'exclusive') {
+              unitPrice = effectivePrice + (effectivePrice * taxRate / 100);
+            }
+            // For inclusive, effectivePrice already includes tax
+            updated.totalPrice = Math.round(
+              (updated.unlimited ? unitPrice : unitPrice * updated.quantity) * 100
+            ) / 100;
             return updated;
           }
           return block;
@@ -352,6 +381,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             selectedBlockIds={selectedBlockIds}
             onAddBlock={handleAddBlock}
             maxHeight="calc(100vh - 200px)"
+            currency={currency}
             flyByTypes={['service', 'spare', 'text', 'document']}
             onAddFlyByBlock={handleAddFlyByBlock}
             flyByOnly={rfqMode}

@@ -4,6 +4,7 @@ import { Search, Plus } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { Block, BlockCategory } from '../../types/catalogStudio';
+import { getCurrencySymbol } from '../../utils/constants/currencies';
 import BlockCard from './BlockCard';
 
 interface BlockGridProps {
@@ -15,6 +16,9 @@ interface BlockGridProps {
   onBlockDoubleClick?: (block: Block) => void;
   onAddBlock: () => void;
   selectedBlockId?: string;
+  currency?: string; // Selected currency filter for pricing display
+  availableCurrencies?: string[]; // Unique currencies across all blocks
+  onCurrencyChange?: (currency: string | undefined) => void;
 }
 
 // Helper to get Lucide icon component by name
@@ -32,6 +36,9 @@ const BlockGrid: React.FC<BlockGridProps> = ({
   onBlockDoubleClick,
   onAddBlock,
   selectedBlockId,
+  currency,
+  availableCurrencies,
+  onCurrencyChange,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -76,25 +83,52 @@ const BlockGrid: React.FC<BlockGridProps> = ({
             </p>
           </div>
         </div>
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-            style={{ color: colors.utility.secondaryText }}
-          />
-          <input
-            type="text"
-            placeholder="Search blocks..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 pr-4 py-2 text-sm border rounded-lg w-48 focus:outline-none focus:ring-2"
-            style={{
-              backgroundColor: colors.utility.primaryBackground,
-              borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
-              color: colors.utility.primaryText,
-              // @ts-expect-error CSS custom property
-              '--tw-ring-color': colors.brand.primary
-            }}
-          />
+        <div className="flex items-center gap-2">
+          {/* Currency selector */}
+          {availableCurrencies && availableCurrencies.length > 1 && onCurrencyChange && (
+            <select
+              value={currency || ''}
+              onChange={(e) => onCurrencyChange(e.target.value || undefined)}
+              className="px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 appearance-none cursor-pointer"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderColor: currency ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB'),
+                color: currency ? colors.brand.primary : colors.utility.primaryText,
+                fontWeight: currency ? 600 : 400,
+                // @ts-expect-error CSS custom property
+                '--tw-ring-color': colors.brand.primary,
+              }}
+            >
+              <option value="">All Currencies</option>
+              {availableCurrencies.map((c) => (
+                <option key={c} value={c}>
+                  {getCurrencySymbol(c)} {c}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Search */}
+          <div className="relative">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
+              style={{ color: colors.utility.secondaryText }}
+            />
+            <input
+              type="text"
+              placeholder="Search blocks..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-10 pr-4 py-2 text-sm border rounded-lg w-48 focus:outline-none focus:ring-2"
+              style={{
+                backgroundColor: colors.utility.primaryBackground,
+                borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
+                color: colors.utility.primaryText,
+                // @ts-expect-error CSS custom property
+                '--tw-ring-color': colors.brand.primary
+              }}
+            />
+          </div>
         </div>
       </div>
       <div
@@ -110,6 +144,7 @@ const BlockGrid: React.FC<BlockGridProps> = ({
               onClick={() => onBlockClick(block)}
               onDoubleClick={() => onBlockDoubleClick?.(block)}
               isSelected={selectedBlockId === block.id}
+              currency={currency}
             />
           ))}
           <div
