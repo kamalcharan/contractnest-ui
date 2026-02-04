@@ -37,6 +37,7 @@ import { StatCard } from '../../../components/subscription/cards/StatCard';
 import { TenantCard } from '../../../components/subscription/cards/TenantCard';
 import { TenantFilters } from '../../../components/subscription/filters/TenantFilters';
 import { TenantDetailDrawer } from '../../../components/subscription/modals/TenantDetailDrawer';
+import { AdminActionDialog, AdminActionType } from '../../../components/subscription/modals/AdminActionDialog';
 
 // Mock data for development - replace with actual API calls
 const mockStats: AdminSubscriptionStats = {
@@ -260,6 +261,11 @@ const SubscriptionManagementPage: React.FC = () => {
   const [dataSummary, setDataSummary] = useState<TenantDataSummary | null>(null);
   const [isLoadingDataSummary, setIsLoadingDataSummary] = useState(false);
 
+  // Action dialog state
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [actionDialogAction, setActionDialogAction] = useState<AdminActionType | null>(null);
+  const [actionDialogTenant, setActionDialogTenant] = useState<TenantListItem | null>(null);
+
   // Check admin access
   const isAdmin = Boolean(currentTenant?.is_admin);
 
@@ -349,64 +355,43 @@ const SubscriptionManagementPage: React.FC = () => {
     }
   };
 
-  // Handle Reset Test Data
-  const handleResetTestData = async (tenant: TenantListItem) => {
-    if (!confirm(`Reset TEST data for "${tenant.name}"?\n\nThis will delete all records where is_live = false. This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const response = await api.post(API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.RESET_TEST_DATA(tenant.id));
-      const result = response.data?.success ? response.data.data : response.data;
-      alert(`Test data reset complete!\n\nDeleted ${result.total_deleted} records.`);
-      setIsDrawerOpen(false);
-      loadData();
-    } catch (error: any) {
-      console.error('Reset test data failed:', error);
-      alert(`Failed to reset test data: ${error.message || 'Unknown error'}`);
-    }
+  // Open action dialog for tenant operations
+  const handleResetTestData = (tenant: TenantListItem) => {
+    setActionDialogAction('reset-test-data');
+    setActionDialogTenant(tenant);
+    setActionDialogOpen(true);
   };
 
-  // Handle Reset All Data
-  const handleResetAllData = async (tenant: TenantListItem) => {
-    if (!confirm(`RESET ALL DATA for "${tenant.name}"?\n\nThis will delete ALL tenant data across all tables. The account will remain open but empty.\n\nThis action CANNOT be undone!`)) {
-      return;
-    }
-    if (!confirm(`SECOND CONFIRMATION: Are you absolutely sure you want to delete ALL data for "${tenant.name}"?`)) {
-      return;
-    }
-
-    try {
-      const response = await api.post(API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.RESET_ALL_DATA(tenant.id));
-      const result = response.data?.success ? response.data.data : response.data;
-      alert(`All data reset complete!\n\nDeleted ${result.total_deleted} records.\nAccount remains open.`);
-      setIsDrawerOpen(false);
-      loadData();
-    } catch (error: any) {
-      console.error('Reset all data failed:', error);
-      alert(`Failed to reset all data: ${error.message || 'Unknown error'}`);
-    }
+  const handleResetAllData = (tenant: TenantListItem) => {
+    setActionDialogAction('reset-all-data');
+    setActionDialogTenant(tenant);
+    setActionDialogOpen(true);
   };
 
-  // Handle Close Account
-  const handleCloseAccount = async (tenant: TenantListItem) => {
-    if (!confirm(`CLOSE ACCOUNT for "${tenant.name}"?\n\nThis will:\n- Delete ALL tenant data\n- Remove all user associations\n- Set account status to CLOSED\n\nThis action CANNOT be undone!`)) {
-      return;
-    }
-    if (!confirm(`FINAL CONFIRMATION: Close "${tenant.name}" permanently?`)) {
-      return;
-    }
+  const handleCloseAccount = (tenant: TenantListItem) => {
+    setActionDialogAction('close-account');
+    setActionDialogTenant(tenant);
+    setActionDialogOpen(true);
+  };
 
-    try {
-      const response = await api.post(API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.CLOSE_ACCOUNT(tenant.id));
-      const result = response.data?.success ? response.data.data : response.data;
-      alert(`Account closed!\n\nDeleted ${result.total_deleted} records.\nTenant status: ${result.tenant_status}`);
-      setIsDrawerOpen(false);
-      loadData();
-    } catch (error: any) {
-      console.error('Close account failed:', error);
-      alert(`Failed to close account: ${error.message || 'Unknown error'}`);
-    }
+  // Execute the action (called by AdminActionDialog after user confirms)
+  const executeAction = async (tenant: TenantListItem): Promise<any> => {
+    const endpoints: Record<AdminActionType, string> = {
+      'reset-test-data': API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.RESET_TEST_DATA(tenant.id),
+      'reset-all-data': API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.RESET_ALL_DATA(tenant.id),
+      'close-account': API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.CLOSE_ACCOUNT(tenant.id)
+    };
+
+    const endpoint = endpoints[actionDialogAction!];
+    const response = await api.post(endpoint);
+    return response.data?.success ? response.data.data : response.data;
+  };
+
+  // Called when action completes successfully
+  const handleActionComplete = () => {
+    setActionDialogOpen(false);
+    setIsDrawerOpen(false);
+    loadData();
   };
 
   // Access denied
@@ -657,6 +642,16 @@ const SubscriptionManagementPage: React.FC = () => {
         onCloseAccount={handleCloseAccount}
         dataSummary={dataSummary}
         isLoadingDataSummary={isLoadingDataSummary}
+      />
+
+      {/* Admin Action Dialog (replaces browser confirm/alert) */}
+      <AdminActionDialog
+        isOpen={actionDialogOpen}
+        onClose={() => setActionDialogOpen(false)}
+        action={actionDialogAction}
+        tenant={actionDialogTenant}
+        onExecute={executeAction}
+        onComplete={handleActionComplete}
       />
     </div>
   );

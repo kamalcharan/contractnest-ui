@@ -360,6 +360,16 @@ export const API_ENDPOINTS = {
     }
   },
   
+  // =================================================================
+  // TENANT ACCOUNT ENDPOINTS (Owner-side: data summary + close account)
+  // =================================================================
+  TENANT_ACCOUNT: {
+    DATA_SUMMARY: '/api/tenant/data-summary',
+    RESET_TEST_DATA: '/api/tenant/reset-test-data',
+    RESET_ALL_DATA: '/api/tenant/reset-all-data',
+    CLOSE_ACCOUNT: '/api/tenant/close-account'
+  },
+
   INTEGRATIONS: {
     BASE: '/api/integrations',
     LIST: '/api/integrations',

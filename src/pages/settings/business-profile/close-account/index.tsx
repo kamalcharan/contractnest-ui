@@ -19,12 +19,17 @@ import {
   FolderOpen,
   Database,
   Shield,
-  HelpCircle
+  HelpCircle,
+  FlaskConical,
+  RotateCcw
 } from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useAuth } from '../../../../context/AuthContext';
+import api from '../../../../services/api';
+import { API_ENDPOINTS } from '../../../../services/serviceURLs';
 import { TenantDataSummary, TenantListItem } from '../../../../types/tenantManagement';
 import { DeleteConfirmationFlow } from '../../../../components/subscription/modals/DeleteConfirmationFlow';
+import { AdminActionDialog, AdminActionType } from '../../../../components/subscription/modals/AdminActionDialog';
 import { AnimatedCounter } from '../../../../components/subscription/data-viz/AnimatedCounter';
 
 // Feedback reasons
@@ -37,22 +42,6 @@ const feedbackReasons = [
   { id: 'not_using', label: 'Not using it enough', icon: '📉' },
   { id: 'other', label: 'Other reason', icon: '💭' }
 ];
-
-// Mock data summary
-const mockDataSummary: TenantDataSummary = {
-  tenant_id: 'current',
-  tenant_name: 'Your Organization',
-  categories: [
-    { category: 'contacts', label: 'Contacts', count: 156, icon: 'Users', deletable: true },
-    { category: 'contracts', label: 'Contracts', count: 25, icon: 'FileText', deletable: true },
-    { category: 'users', label: 'Team Members', count: 5, icon: 'Users', deletable: true },
-    { category: 'files', label: 'Files & Documents', count: 89, icon: 'FolderOpen', deletable: true },
-    { category: 'templates', label: 'Templates', count: 12, icon: 'FileText', deletable: true }
-  ],
-  totalRecords: 287,
-  canDelete: true,
-  blockingReasons: []
-};
 
 const CloseAccountPage: React.FC = () => {
   const navigate = useNavigate();
@@ -68,6 +57,10 @@ const CloseAccountPage: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+
+  // Action dialog state (for reset test/all data)
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
+  const [actionDialogAction, setActionDialogAction] = useState<AdminActionType | null>(null);
 
   // Create pseudo tenant object
   const currentTenantAsListItem: TenantListItem | null = currentTenant ? {
@@ -86,9 +79,9 @@ const CloseAccountPage: React.FC = () => {
       business_name: currentTenant.name || 'Your Organization'
     },
     stats: {
-      total_users: dataSummary?.categories.find(c => c.category === 'users')?.count || 0,
-      total_contacts: dataSummary?.categories.find(c => c.category === 'contacts')?.count || 0,
-      total_contracts: dataSummary?.categories.find(c => c.category === 'contracts')?.count || 0,
+      total_users: dataSummary?.categories.find(c => c.id === 'users')?.totalCount || 0,
+      total_contacts: dataSummary?.categories.find(c => c.id === 'contacts')?.totalCount || 0,
+      total_contracts: dataSummary?.categories.find(c => c.id === 'contracts')?.totalCount || 0,
       buyer_contacts: 0,
       seller_contacts: 0,
       storage_used_mb: 0,
@@ -105,9 +98,9 @@ const CloseAccountPage: React.FC = () => {
   const loadDataSummary = async () => {
     setIsLoadingData(true);
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setDataSummary(mockDataSummary);
+      const response = await api.get(API_ENDPOINTS.TENANT_ACCOUNT.DATA_SUMMARY);
+      const summaryData = response.data?.success ? response.data.data : response.data;
+      setDataSummary(summaryData);
     } catch (error) {
       console.error('Failed to load data summary:', error);
     } finally {
@@ -139,11 +132,45 @@ const CloseAccountPage: React.FC = () => {
   };
 
   const handleConfirmDelete = async (tenantId: string, reason: string) => {
-    // TODO: Replace with actual API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      await api.post(API_ENDPOINTS.TENANT_ACCOUNT.CLOSE_ACCOUNT, { reason });
+    } catch (error) {
+      console.error('Failed to close account:', error);
+      throw error;
+    }
 
     // Redirect to login or landing page after account closure
     navigate('/login');
+  };
+
+  // Open action dialog for reset operations
+  const handleResetTestData = () => {
+    setActionDialogAction('reset-test-data');
+    setActionDialogOpen(true);
+  };
+
+  const handleResetAllData = () => {
+    setActionDialogAction('reset-all-data');
+    setActionDialogOpen(true);
+  };
+
+  // Execute the action (called by AdminActionDialog)
+  const executeAction = async (tenant: TenantListItem): Promise<any> => {
+    const endpoints: Record<string, string> = {
+      'reset-test-data': API_ENDPOINTS.TENANT_ACCOUNT.RESET_TEST_DATA,
+      'reset-all-data': API_ENDPOINTS.TENANT_ACCOUNT.RESET_ALL_DATA,
+      'close-account': API_ENDPOINTS.TENANT_ACCOUNT.CLOSE_ACCOUNT
+    };
+
+    const endpoint = endpoints[actionDialogAction!];
+    const response = await api.post(endpoint);
+    return response.data?.success ? response.data.data : response.data;
+  };
+
+  // Called when action completes
+  const handleActionComplete = () => {
+    setActionDialogOpen(false);
+    loadDataSummary();
   };
 
   const totalRecords = dataSummary?.totalRecords || 0;
@@ -405,7 +432,7 @@ const CloseAccountPage: React.FC = () => {
 
                   return (
                     <div
-                      key={category.category}
+                      key={category.id}
                       className="p-4 rounded-xl text-center"
                       style={{
                         background: isDarkMode
@@ -423,7 +450,7 @@ const CloseAccountPage: React.FC = () => {
                         className="text-2xl font-bold"
                         style={{ color: colors.utility.primaryText }}
                       >
-                        <AnimatedCounter value={category.count} />
+                        <AnimatedCounter value={category.totalCount} />
                       </div>
                       <div
                         className="text-xs mt-1"
@@ -436,6 +463,116 @@ const CloseAccountPage: React.FC = () => {
                 })}
               </div>
             ) : null}
+          </div>
+        </div>
+
+        {/* Data Management Actions */}
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: isDarkMode
+              ? 'rgba(30, 41, 59, 0.8)'
+              : 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(12px)',
+            border: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+          }}
+        >
+          <div
+            className="px-6 py-4 flex items-center gap-3"
+            style={{
+              background: isDarkMode
+                ? 'rgba(255, 255, 255, 0.03)'
+                : 'rgba(0, 0, 0, 0.02)',
+              borderBottom: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'}`
+            }}
+          >
+            <Database size={20} style={{ color: colors.utility.secondaryText }} />
+            <h2
+              className="text-lg font-semibold"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Data Management
+            </h2>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Reset Test Data */}
+            <div
+              className="p-4 rounded-xl flex items-center justify-between"
+              style={{
+                background: isDarkMode
+                  ? 'rgba(251, 191, 36, 0.08)'
+                  : 'rgba(251, 191, 36, 0.05)',
+                border: `1px solid ${isDarkMode ? 'rgba(251, 191, 36, 0.15)' : 'rgba(251, 191, 36, 0.1)'}`
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(251, 191, 36, 0.15)' }}
+                >
+                  <FlaskConical size={20} style={{ color: '#F59E0B' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+                    Reset Test Data
+                  </p>
+                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Remove sample/test records only. Live data stays intact.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleResetTestData}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
+                style={{
+                  background: 'rgba(251, 191, 36, 0.15)',
+                  color: isDarkMode ? '#FCD34D' : '#D97706',
+                  border: `1px solid ${isDarkMode ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.2)'}`
+                }}
+              >
+                Reset Test Data
+              </button>
+            </div>
+
+            {/* Reset All Data */}
+            <div
+              className="p-4 rounded-xl flex items-center justify-between"
+              style={{
+                background: isDarkMode
+                  ? 'rgba(239, 68, 68, 0.06)'
+                  : 'rgba(239, 68, 68, 0.03)',
+                border: `1px solid ${isDarkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)'}`
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(239, 68, 68, 0.12)' }}
+                >
+                  <RotateCcw size={20} style={{ color: '#EF4444' }} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
+                    Reset All Data
+                  </p>
+                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Delete all data but keep your account open.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleResetAllData}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-all hover:scale-[1.02]"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  color: '#EF4444',
+                  border: `1px solid ${isDarkMode ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.15)'}`
+                }}
+              >
+                Reset All Data
+              </button>
+            </div>
           </div>
         </div>
 
@@ -469,10 +606,9 @@ const CloseAccountPage: React.FC = () => {
                   className="text-sm mt-2 space-y-1"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  <li>• All your data will be <strong>permanently deleted</strong></li>
-                  <li>• This action <strong>cannot be undone</strong></li>
-                  <li>• All team members will lose access immediately</li>
-                  <li>• Your subscription will be cancelled</li>
+                  <li>• <strong>Reset Test Data</strong> removes only sample/test records</li>
+                  <li>• <strong>Reset All Data</strong> deletes everything but keeps account active</li>
+                  <li>• <strong>Close Account</strong> deletes all data and closes account permanently</li>
                 </ul>
               </div>
             </div>
@@ -500,7 +636,7 @@ const CloseAccountPage: React.FC = () => {
                 }}
               >
                 <Trash2 size={18} />
-                Proceed with Account Closure
+                Close Account
               </button>
             </div>
           </div>
@@ -534,7 +670,7 @@ const CloseAccountPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (for Close Account) */}
       <DeleteConfirmationFlow
         tenant={currentTenantAsListItem}
         isOpen={showDeleteModal}
@@ -543,6 +679,16 @@ const CloseAccountPage: React.FC = () => {
         dataSummary={dataSummary}
         isLoadingDataSummary={isLoadingData}
         mode="owner"
+      />
+
+      {/* Action Dialog (for Reset Test Data / Reset All Data) */}
+      <AdminActionDialog
+        isOpen={actionDialogOpen}
+        onClose={() => setActionDialogOpen(false)}
+        action={actionDialogAction}
+        tenant={currentTenantAsListItem}
+        onExecute={executeAction}
+        onComplete={handleActionComplete}
       />
     </div>
   );
