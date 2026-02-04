@@ -395,7 +395,21 @@ export const API_ENDPOINTS = {
         return qs ? `/api/admin/jtd/events?${qs}` : '/api/admin/jtd/events';
       },
       EVENT_DETAIL: (jtdId: string) => `/api/admin/jtd/events/${jtdId}`,
-      WORKER_HEALTH: '/api/admin/jtd/worker/health'
+      WORKER_HEALTH: '/api/admin/jtd/worker/health',
+      // R2 — Actions
+      RETRY_EVENT: '/api/admin/jtd/actions/retry',
+      CANCEL_EVENT: '/api/admin/jtd/actions/cancel',
+      FORCE_COMPLETE: '/api/admin/jtd/actions/force-complete',
+      DLQ_MESSAGES: '/api/admin/jtd/dlq/messages',
+      DLQ_MESSAGES_WITH_FILTERS: (filters: { page?: number; limit?: number } = {}) => {
+        const params = new URLSearchParams();
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        const qs = params.toString();
+        return qs ? `/api/admin/jtd/dlq/messages?${qs}` : '/api/admin/jtd/dlq/messages';
+      },
+      REQUEUE_DLQ: '/api/admin/jtd/actions/requeue-dlq',
+      PURGE_DLQ: '/api/admin/jtd/actions/purge-dlq'
     }
   },
 

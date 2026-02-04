@@ -1,5 +1,6 @@
 // src/pages/admin/jtd/EventExplorerPage.tsx
 // Admin JTD Event Explorer — searchable, filterable list of all JTD records
+// R2: Added inline action buttons (Retry, Cancel, Force Complete) + ConfirmationDialog + Toast
 
 import React, { useState } from 'react';
 import {
@@ -10,15 +11,25 @@ import {
   Clock,
   X,
   AlertCircle,
+  RotateCcw,
+  XCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
-import { useJtdEvents, useJtdEventDetail } from './hooks/useJtdAdmin';
+import { useJtdEvents, useJtdEventDetail, useJtdAction } from './hooks/useJtdAdmin';
 import { JtdFilters } from './components/JtdFilters';
 import { JtdEventRow } from './components/JtdEventRow';
 import { JtdStatusBadge } from './components/JtdStatusBadge';
 import { VaNiLoader } from '@/components/common/loaders';
+import { vaniToast } from '@/components/common/toast';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import type { JtdEventFilters, JtdEventRecord } from './types/jtdAdmin.types';
+
+// Which statuses allow which actions
+const RETRYABLE = ['failed'];
+const CANCELLABLE = ['created', 'pending', 'queued', 'scheduled'];
+const FORCE_COMPLETABLE = ['processing'];
 
 const EventExplorerPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
@@ -29,6 +40,15 @@ const EventExplorerPage: React.FC = () => {
 
   const { events, pagination, loading, error, refresh } = useJtdEvents(filters);
   const { event: detail, history, loading: detailLoading } = useJtdEventDetail(selectedId);
+  const action = useJtdAction();
+
+  // Confirmation dialog state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'retry' | 'cancel' | 'force-sent' | 'force-failed';
+    jtdId: string;
+    label: string;
+  } | null>(null);
 
   if (!currentTenant?.is_admin) {
     return (
@@ -39,6 +59,107 @@ const EventExplorerPage: React.FC = () => {
   }
 
   const clearFilters = () => setFilters({ page: 1, limit: 50 });
+
+  // Open confirmation dialog
+  const openConfirm = (type: 'retry' | 'cancel' | 'force-sent' | 'force-failed', jtdId: string) => {
+    const labels = {
+      retry: 'Retry this failed event?',
+      cancel: 'Cancel this event?',
+      'force-sent': 'Force-complete as SENT?',
+      'force-failed': 'Force-complete as FAILED?',
+    };
+    setConfirmAction({ type, jtdId, label: labels[type] });
+    setConfirmOpen(true);
+  };
+
+  // Execute confirmed action
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+    setConfirmOpen(false);
+
+    let result;
+    switch (confirmAction.type) {
+      case 'retry':
+        result = await action.retryEvent(confirmAction.jtdId);
+        break;
+      case 'cancel':
+        result = await action.cancelEvent(confirmAction.jtdId);
+        break;
+      case 'force-sent':
+        result = await action.forceComplete(confirmAction.jtdId, 'sent');
+        break;
+      case 'force-failed':
+        result = await action.forceComplete(confirmAction.jtdId, 'failed');
+        break;
+    }
+
+    if (result?.success) {
+      vaniToast.success(result.message || 'Action completed');
+      refresh();
+    } else {
+      vaniToast.error(result?.error || action.error || 'Action failed');
+    }
+    setConfirmAction(null);
+  };
+
+  // Render action buttons for a row
+  const renderRowActions = (ev: JtdEventRecord) => {
+    const buttons: React.ReactNode[] = [];
+
+    if (RETRYABLE.includes(ev.status_code)) {
+      buttons.push(
+        <button
+          key="retry"
+          onClick={(e) => { e.stopPropagation(); openConfirm('retry', ev.id); }}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.semantic.info + '20', color: colors.semantic.info }}
+          title="Retry"
+        >
+          <RotateCcw size={12} /> Retry
+        </button>
+      );
+    }
+
+    if (CANCELLABLE.includes(ev.status_code)) {
+      buttons.push(
+        <button
+          key="cancel"
+          onClick={(e) => { e.stopPropagation(); openConfirm('cancel', ev.id); }}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.semantic.warning + '20', color: colors.semantic.warning }}
+          title="Cancel"
+        >
+          <XCircle size={12} /> Cancel
+        </button>
+      );
+    }
+
+    if (FORCE_COMPLETABLE.includes(ev.status_code)) {
+      buttons.push(
+        <button
+          key="force-sent"
+          onClick={(e) => { e.stopPropagation(); openConfirm('force-sent', ev.id); }}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.semantic.success + '20', color: colors.semantic.success }}
+          title="Force Sent"
+        >
+          <CheckCircle size={12} /> Sent
+        </button>,
+        <button
+          key="force-failed"
+          onClick={(e) => { e.stopPropagation(); openConfirm('force-failed', ev.id); }}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium hover:opacity-80 transition-colors"
+          style={{ backgroundColor: colors.semantic.error + '20', color: colors.semantic.error }}
+          title="Force Failed"
+        >
+          <XCircle size={12} /> Failed
+        </button>
+      );
+    }
+
+    if (buttons.length === 0) return null;
+    return <div className="flex gap-1">{buttons}</div>;
+  };
 
   // ---- Detail Drawer ----
   if (selectedId && detail) {
@@ -64,7 +185,46 @@ const EventExplorerPage: React.FC = () => {
               {detail.id}
             </p>
           </div>
-          <JtdStatusBadge code={detail.status_code} size="md" />
+          <div className="flex items-center gap-3">
+            {/* Detail-level actions */}
+            {RETRYABLE.includes(detail.status_code) && (
+              <button
+                onClick={() => openConfirm('retry', detail.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-colors"
+                style={{ backgroundColor: colors.semantic.info + '20', color: colors.semantic.info }}
+              >
+                <RotateCcw size={14} /> Retry
+              </button>
+            )}
+            {CANCELLABLE.includes(detail.status_code) && (
+              <button
+                onClick={() => openConfirm('cancel', detail.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-colors"
+                style={{ backgroundColor: colors.semantic.warning + '20', color: colors.semantic.warning }}
+              >
+                <XCircle size={14} /> Cancel
+              </button>
+            )}
+            {FORCE_COMPLETABLE.includes(detail.status_code) && (
+              <>
+                <button
+                  onClick={() => openConfirm('force-sent', detail.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-colors"
+                  style={{ backgroundColor: colors.semantic.success + '20', color: colors.semantic.success }}
+                >
+                  <CheckCircle size={14} /> Force Sent
+                </button>
+                <button
+                  onClick={() => openConfirm('force-failed', detail.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-colors"
+                  style={{ backgroundColor: colors.semantic.error + '20', color: colors.semantic.error }}
+                >
+                  <XCircle size={14} /> Force Failed
+                </button>
+              </>
+            )}
+            <JtdStatusBadge code={detail.status_code} size="md" />
+          </div>
         </div>
 
         {/* Key Fields */}
@@ -184,6 +344,17 @@ const EventExplorerPage: React.FC = () => {
             </pre>
           </details>
         )}
+
+        {/* Confirmation Dialog */}
+        <ConfirmationDialog
+          isOpen={confirmOpen}
+          onClose={() => { setConfirmOpen(false); setConfirmAction(null); }}
+          onConfirm={handleConfirm}
+          title={confirmAction?.label || 'Confirm Action'}
+          description="This action will update the event status. Are you sure?"
+          type={confirmAction?.type === 'cancel' || confirmAction?.type === 'force-failed' ? 'danger' : 'warning'}
+          isLoading={action.loading}
+        />
       </div>
     );
   }
@@ -240,10 +411,10 @@ const EventExplorerPage: React.FC = () => {
           className="rounded-lg shadow-sm border overflow-hidden overflow-x-auto transition-colors"
           style={{ borderColor: colors.utility.primaryText + '20' }}
         >
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1050px]">
             <thead>
               <tr style={{ backgroundColor: colors.utility.secondaryBackground }}>
-                {['Tenant', 'Type', 'Channel', 'Recipient', 'Status', 'Retries', 'Cost', 'Time'].map((h) => (
+                {['Tenant', 'Type', 'Channel', 'Recipient', 'Status', 'Retries', 'Cost', 'Time', 'Actions'].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold transition-colors" style={{ color: colors.utility.secondaryText }}>
                     {h}
                   </th>
@@ -252,7 +423,30 @@ const EventExplorerPage: React.FC = () => {
             </thead>
             <tbody>
               {events.map((ev) => (
-                <JtdEventRow key={ev.id} event={ev} onClick={(e) => setSelectedId(e.id)} />
+                <tr
+                  key={ev.id}
+                  onClick={() => setSelectedId(ev.id)}
+                  className="cursor-pointer hover:opacity-80 transition-colors border-t"
+                  style={{ borderColor: colors.utility.primaryText + '10' }}
+                >
+                  <td className="px-4 py-3 text-sm transition-colors" style={{ color: colors.utility.primaryText }}>{ev.tenant_name}</td>
+                  <td className="px-4 py-3"><JtdStatusBadge code={ev.event_type_code} type="event_type" /></td>
+                  <td className="px-4 py-3"><JtdStatusBadge code={ev.channel_code || ''} type="channel" /></td>
+                  <td className="px-4 py-3 text-sm transition-colors" style={{ color: colors.utility.primaryText }}>
+                    {ev.recipient_name || ev.recipient_contact || '—'}
+                  </td>
+                  <td className="px-4 py-3"><JtdStatusBadge code={ev.status_code} /></td>
+                  <td className="px-4 py-3 text-sm transition-colors" style={{ color: colors.utility.primaryText }}>
+                    {ev.retry_count}/{ev.max_retries}
+                  </td>
+                  <td className="px-4 py-3 text-sm transition-colors" style={{ color: colors.utility.primaryText }}>
+                    {ev.cost > 0 ? `$${ev.cost.toFixed(4)}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs transition-colors" style={{ color: colors.utility.secondaryText }}>
+                    {new Date(ev.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3">{renderRowActions(ev)}</td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -295,6 +489,17 @@ const EventExplorerPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setConfirmAction(null); }}
+        onConfirm={handleConfirm}
+        title={confirmAction?.label || 'Confirm Action'}
+        description="This action will update the event status. Are you sure?"
+        type={confirmAction?.type === 'cancel' || confirmAction?.type === 'force-failed' ? 'danger' : 'warning'}
+        isLoading={action.loading}
+      />
     </div>
   );
 };

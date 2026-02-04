@@ -198,6 +198,38 @@ export interface Pagination {
   has_prev: boolean;
 }
 
+// =============================
+// R2 — DLQ & Actions
+// =============================
+export interface DlqMessage {
+  msg_id: number;
+  read_ct: number;
+  enqueued_at: string;
+  vt: string;
+  jtd_id: string | null;
+  tenant_id: string | null;
+  tenant_name: string;
+  event_type: string | null;
+  channel: string | null;
+  priority: string | null;
+  error_message: string;
+  status_code: string;
+  recipient: string;
+  age_seconds: number;
+}
+
+export interface ActionResult {
+  success: boolean;
+  event_id?: string;
+  msg_id?: number;
+  jtd_id?: string;
+  from_status?: string;
+  to_status?: string;
+  message?: string;
+  error?: string;
+  purged_count?: number;
+}
+
 // Status code → display metadata
 export const JTD_STATUS_META: Record<string, { label: string; color: string; bgColor: string }> = {
   created:     { label: 'Created',      color: '#6B7280', bgColor: '#F3F4F6' },
