@@ -206,9 +206,7 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
             disabled={!canGoNext}
             className="flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
             style={{
-              backgroundColor: isLastStep
-                ? colors.semantic.success
-                : colors.brand.primary,
+              backgroundColor: colors.brand.primary,
             }}
           >
             {isLastStep ? (sendButtonText || 'Send Contract') : 'Continue'}

@@ -31,6 +31,12 @@ import {
   Wallet,
   Globe,
   Loader2,
+  CheckCircle2,
+  FileDown,
+  ChevronDown,
+  ChevronUp,
+  Hash,
+  Download,
 } from 'lucide-react';
 import { useContract } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
@@ -49,6 +55,11 @@ import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueries';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
+import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
+import type { ReviewSendStepProps } from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
+import { ConfigurableBlock } from '@/components/catalog-studio/BlockCardConfigurable';
+import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import type { BillingCycleType } from '@/components/contracts/ContractWizard/steps/BillingCycleStep';
 
 // ═══════════════════════════════════════════════════
 // HELPERS
@@ -120,13 +131,94 @@ const timeAgo = (dateStr: string): string => {
 };
 
 // ═══════════════════════════════════════════════════
+// CONTRACT → REVIEW STEP PROPS MAPPER
+// ═══════════════════════════════════════════════════
+
+const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps => {
+  // Compute combined tax rate from contract-level breakdown
+  const taxBreakdown = contract.tax_breakdown || [];
+  const combinedTaxRate = taxBreakdown.reduce((sum, t) => sum + (t.rate || 0), 0);
+  const taxItems = taxBreakdown.map(t => ({ id: t.tax_rate_id, name: t.name, rate: t.rate }));
+
+  // Map ContractBlock[] → ConfigurableBlock[]
+  const selectedBlocks: ConfigurableBlock[] = (contract.blocks || []).map((block) => {
+    const unitPrice = block.unit_price || 0;
+    const qty = block.quantity || 1;
+    const catId = block.category_id || 'service';
+    const hasPricing = categoryHasPricing(catId);
+    const baseLine = unitPrice * qty;
+
+    return {
+      id: block.id,
+      name: block.block_name || 'Untitled',
+      description: block.block_description || '',
+      icon: catId,
+      quantity: qty,
+      cycle: block.billing_cycle || 'prepaid',
+      unlimited: false,
+      price: unitPrice,
+      currency: contract.currency || 'INR',
+      totalPrice: hasPricing && combinedTaxRate > 0
+        ? baseLine * (1 + combinedTaxRate / 100)
+        : block.total_price || baseLine,
+      categoryName: block.category_name || catId,
+      categoryColor: '#6B7280',
+      categoryId: catId,
+      taxRate: hasPricing ? combinedTaxRate : 0,
+      taxInclusion: 'exclusive' as const,
+      taxes: hasPricing ? taxItems : [],
+      config: {
+        showDescription: true,
+        customPrice: unitPrice,
+        notes: block.custom_fields?.notes,
+        content: block.custom_fields?.content,
+      },
+    };
+  });
+
+  // Map acceptance_method to ReviewSendStep's expected values
+  const mapAcceptanceMethod = (method?: string): 'payment' | 'signoff' | 'auto' | null => {
+    if (!method) return null;
+    if (method === 'auto') return 'auto';
+    if (method === 'e_signature' || method === 'manual_upload' || method === 'in_person') return 'signoff';
+    return null;
+  };
+
+  // Map payment_mode
+  const mapPaymentMode = (mode?: string): 'prepaid' | 'emi' | 'defined' => {
+    if (mode === 'emi') return 'emi';
+    if (mode === 'defined' || mode === 'as_defined') return 'defined';
+    return 'prepaid';
+  };
+
+  return {
+    contractName: contract.title || '',
+    contractStatus: contract.status || 'draft',
+    description: contract.description || '',
+    durationValue: contract.duration_value || 0,
+    durationUnit: contract.duration_unit || 'months',
+    buyerId: contract.buyer_contact_person_id || contract.buyer_id || null,
+    buyerName: contract.buyer_name || '',
+    acceptanceMethod: mapAcceptanceMethod(contract.acceptance_method),
+    billingCycleType: (contract.billing_cycle_type || 'uniform') as BillingCycleType,
+    currency: contract.currency || 'INR',
+    selectedBlocks,
+    paymentMode: mapPaymentMode(contract.payment_mode),
+    emiMonths: contract.emi_months || 0,
+    perBlockPaymentType: {},
+    selectedTaxRateIds: contract.selected_tax_rate_ids || [],
+  };
+};
+
+// ═══════════════════════════════════════════════════
 // TAB DEFINITIONS
 // ═══════════════════════════════════════════════════
 
-type TabId = 'overview' | 'timeline' | 'financials' | 'evidence' | 'communication' | 'audit';
+type TabId = 'overview' | 'document' | 'timeline' | 'financials' | 'evidence' | 'communication' | 'audit';
 
 const TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: ClipboardList },
+  { id: 'document', label: 'Document', icon: FileText },
   { id: 'timeline', label: 'Timeline', icon: Calendar },
   { id: 'financials', label: 'Financials', icon: DollarSign },
   { id: 'evidence', label: 'Evidence', icon: Camera },
@@ -231,9 +323,10 @@ interface FinancialHealthProps {
   colors: any;
   onRecordPayment?: () => void;
   hasActiveGateway?: boolean;
+  onViewInvoice?: (invoiceId: string) => void;
 }
 
-const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onRecordPayment, hasActiveGateway }) => {
+const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onRecordPayment, hasActiveGateway, onViewInvoice }) => {
   const { data, isLoading } = useContractInvoices(contract.id);
   const invoices = data?.invoices || [];
   const summary = data?.summary || {
@@ -459,12 +552,14 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
             {invoices.map((inv) => {
               const statusStyle = getInvoiceStatusStyle(inv.status);
               return (
-                <div
+                <button
                   key={inv.id}
-                  className="p-3 rounded-lg border transition-all hover:shadow-sm"
+                  onClick={() => onViewInvoice?.(inv.id)}
+                  className="w-full text-left p-3 rounded-lg border transition-all hover:shadow-sm"
                   style={{
                     backgroundColor: colors.utility.primaryText + '04',
                     borderColor: colors.utility.primaryText + '10',
+                    cursor: onViewInvoice ? 'pointer' : 'default',
                   }}
                 >
                   <div className="flex items-center justify-between mb-1.5">
@@ -512,7 +607,13 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
                       )}
                     </div>
                   </div>
-                </div>
+                  {onViewInvoice && (
+                    <div className="mt-1.5 pt-1.5 border-t flex items-center gap-1" style={{ borderColor: colors.utility.primaryText + '08' }}>
+                      <Eye className="h-3 w-3" style={{ color: colors.brand.primary }} />
+                      <span className="text-[0.6rem] font-medium" style={{ color: colors.brand.primary }}>View Invoice & Receipt</span>
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>
@@ -1048,8 +1149,13 @@ const ContractDetailPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  // expandedInvoiceId removed — invoice cards are now flat with 3 action icons
 
   const { data: contract, isLoading, error } = useContract(id || null);
+  const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
+  const pageSummary = invoiceData?.summary;
+  const pageInvoices = invoiceData?.invoices || [];
+  const isFullyPaid = (pageSummary?.collection_percentage ?? 0) >= 100 && (pageSummary?.invoice_count ?? 0) > 0;
   const { hasActiveGateway } = useGatewayStatus();
   const { addToast } = useVaNiToast();
 
@@ -1068,6 +1174,11 @@ const ContractDetailPage: React.FC = () => {
 
   const handleOrderCreated = (orderData: CreateOrderResponse) => {
     openCheckout(orderData);
+  };
+
+  // Navigate to full invoice view page
+  const handleViewInvoice = (invoiceId: string) => {
+    navigate(`/contracts/${id}/invoice/${invoiceId}`);
   };
 
   // Classification icon
@@ -1147,6 +1258,7 @@ const ContractDetailPage: React.FC = () => {
                 colors={colors}
                 hasActiveGateway={hasActiveGateway}
                 onRecordPayment={() => setIsPaymentDialogOpen(true)}
+                onViewInvoice={handleViewInvoice}
               />
               <ContractDetailsCard contract={contract} colors={colors} />
               <AuditTrail history={contract.history} colors={colors} />
@@ -1160,38 +1272,247 @@ const ContractDetailPage: React.FC = () => {
           <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 400px' }}>
             {/* Left: Full financial details */}
             <div className="space-y-6">
-              {/* Record Payment CTA */}
+              {/* Conditional: Fully Paid state OR Collect Payment CTA */}
+              {isFullyPaid ? (
+                <div
+                  className="rounded-xl border p-5 flex items-center gap-4"
+                  style={{
+                    backgroundColor: `${colors.semantic.success}08`,
+                    borderColor: `${colors.semantic.success}25`,
+                  }}
+                >
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: `${colors.semantic.success}18` }}
+                  >
+                    <CheckCircle2 className="h-6 w-6" style={{ color: colors.semantic.success }} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold mb-0.5" style={{ color: colors.semantic.success }}>
+                      Invoice Fully Paid
+                    </h3>
+                    <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      All invoices for this contract have been fully paid. Total collected:{' '}
+                      <span className="font-semibold" style={{ color: colors.utility.primaryText }}>
+                        {formatCurrency(pageSummary?.total_paid || 0, contract.currency)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="rounded-xl border p-5 flex items-center justify-between"
+                  style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
+                >
+                  <div>
+                    <h3 className="text-sm font-bold mb-0.5" style={{ color: colors.utility.primaryText }}>
+                      Collect Payment
+                    </h3>
+                    <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      Record an offline payment or collect online via{' '}
+                      {hasActiveGateway ? 'Razorpay' : 'payment gateway'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsPaymentDialogOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+                    style={{ backgroundColor: colors.brand.primary }}
+                  >
+                    {hasActiveGateway ? (
+                      <><CreditCard className="h-4 w-4" /> Collect Payment</>
+                    ) : (
+                      <><Wallet className="h-4 w-4" /> Record Payment</>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Invoice & Receipt Transaction Card */}
               <div
-                className="rounded-xl border p-5 flex items-center justify-between"
+                className="rounded-xl border overflow-hidden"
                 style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
               >
-                <div>
-                  <h3 className="text-sm font-bold mb-0.5" style={{ color: colors.utility.primaryText }}>
-                    Collect Payment
-                  </h3>
-                  <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                    Record an offline payment or collect online via{' '}
-                    {hasActiveGateway ? 'Razorpay' : 'payment gateway'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsPaymentDialogOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
-                  style={{ backgroundColor: colors.brand.primary }}
+                <div
+                  className="px-5 py-3 border-b flex items-center justify-between"
+                  style={{ borderColor: colors.utility.primaryText + '10' }}
                 >
-                  {hasActiveGateway ? (
-                    <><CreditCard className="h-4 w-4" /> Collect Payment</>
+                  <div className="flex items-center gap-2">
+                    <Receipt className="h-4 w-4" style={{ color: colors.brand.primary }} />
+                    <h3 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                      Invoices & Receipts
+                    </h3>
+                  </div>
+                  <span className="text-[0.65rem] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}>
+                    {pageInvoices.length} invoice{pageInvoices.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="p-5">
+                  {pageInvoices.length > 0 ? (
+                    <div className="space-y-3">
+                      {pageInvoices.map((inv) => {
+                        const isPaid = inv.status === 'paid';
+                        const isPartial = inv.status === 'partially_paid';
+                        const isOverdue = inv.status === 'overdue';
+                        const statusColor = isPaid ? colors.semantic.success
+                          : isPartial ? colors.semantic.warning
+                          : isOverdue ? colors.semantic.error
+                          : colors.utility.secondaryText;
+                        const statusLabel = isPaid ? 'Paid' : isPartial ? 'Partial' : isOverdue ? 'Overdue' : 'Unpaid';
+                        const balance = inv.total_amount - (inv.amount_paid || 0);
+                        const isOffline = inv.payment_mode && inv.payment_mode !== 'online' && inv.payment_mode !== 'razorpay';
+                        return (
+                          <div
+                            key={inv.id}
+                            className="rounded-lg border overflow-hidden"
+                            style={{ borderColor: colors.utility.primaryText + '10', backgroundColor: colors.utility.primaryText + '03' }}
+                          >
+                            <div className="p-4">
+                              {/* Row 1: Icon + Invoice info + Status + Amount */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style={{ backgroundColor: statusColor + '15' }}
+                                  >
+                                    {isPaid ? (
+                                      <CheckCircle2 className="h-4 w-4" style={{ color: statusColor }} />
+                                    ) : (
+                                      <FileText className="h-4 w-4" style={{ color: statusColor }} />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
+                                        {inv.invoice_number}
+                                      </span>
+                                      <span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full"
+                                        style={{ backgroundColor: statusColor + '18', color: statusColor }}>
+                                        {statusLabel}
+                                      </span>
+                                      {inv.emi_sequence && (
+                                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded"
+                                          style={{ backgroundColor: colors.brand.primary + '15', color: colors.brand.primary }}>
+                                          EMI {inv.emi_sequence}/{inv.emi_total}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>
+                                        Due: {formatDate(inv.due_date)}
+                                      </span>
+                                      <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                                      <span className="text-[0.6rem] font-semibold" style={{ color: colors.utility.primaryText }}>
+                                        {formatCurrency(inv.total_amount, inv.currency)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right flex-shrink-0 ml-3">
+                                  <div className="text-sm font-bold" style={{ color: isPaid ? colors.semantic.success : colors.utility.primaryText }}>
+                                    {formatCurrency(inv.amount_paid || 0, inv.currency)}
+                                  </div>
+                                  <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>paid</span>
+                                </div>
+                              </div>
+
+                              {/* Row 2: Capture method indicator */}
+                              {(isPaid || isPartial) && (
+                                <div
+                                  className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-md"
+                                  style={{ backgroundColor: isOffline ? '#F59E0B08' : '#10B98108', border: `1px solid ${isOffline ? '#F59E0B20' : '#10B98120'}` }}
+                                >
+                                  {isOffline ? (
+                                    <Wallet className="h-3 w-3 flex-shrink-0" style={{ color: '#F59E0B' }} />
+                                  ) : (
+                                    <CreditCard className="h-3 w-3 flex-shrink-0" style={{ color: '#10B981' }} />
+                                  )}
+                                  <span className="text-[0.6rem] font-medium" style={{ color: isOffline ? '#B45309' : '#059669' }}>
+                                    {isOffline
+                                      ? `Captured via Offline Form${inv.payment_mode ? ' \u2022 ' + inv.payment_mode.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : ''}`
+                                      : 'Captured via Online Payment'}
+                                  </span>
+                                  {inv.paid_at && (
+                                    <span className="text-[0.55rem] ml-auto" style={{ color: colors.utility.secondaryText }}>
+                                      {formatDate(inv.paid_at)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Row 3: Action icons */}
+                              <div
+                                className="flex items-center gap-1 pt-3 border-t"
+                                style={{ borderColor: colors.utility.primaryText + '08' }}
+                              >
+                                {/* View Invoice */}
+                                <button
+                                  onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
+                                  className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                                  style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+                                  title="View Invoice"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  <span>Invoice</span>
+                                </button>
+
+                                {/* Download PDF */}
+                                <button
+                                  onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
+                                  className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                                  style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '05' }}
+                                  title="Download PDF"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  <span>PDF</span>
+                                </button>
+
+                                {/* Receipt — shown when payment exists */}
+                                {(isPaid || isPartial) && (
+                                  <button
+                                    onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
+                                    className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                                    style={{ color: colors.semantic.success, backgroundColor: colors.semantic.success + '08' }}
+                                    title="View Receipt"
+                                  >
+                                    <Receipt className="h-3.5 w-3.5" />
+                                    <span>Receipt</span>
+                                  </button>
+                                )}
+
+                                {/* Balance indicator on right side */}
+                                {balance > 0 && (
+                                  <span
+                                    className="ml-auto text-[0.6rem] font-semibold px-2 py-1 rounded"
+                                    style={{ backgroundColor: colors.semantic.warning + '12', color: colors.semantic.warning }}
+                                  >
+                                    Bal: {formatCurrency(balance, inv.currency)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
-                    <><Wallet className="h-4 w-4" /> Record Payment</>
+                    <div className="p-6 text-center">
+                      <Receipt className="h-8 w-8 mx-auto mb-2" style={{ color: colors.utility.secondaryText + '50' }} />
+                      <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                        {contract.status === 'active' ? 'No invoices generated yet' : 'Invoices will appear when contract is activated'}
+                      </p>
+                    </div>
                   )}
-                </button>
+                </div>
               </div>
 
-              {/* Payment Request History - full width (T15 polling + T16 retry) */}
-              <PaymentRequestHistory
-                contractId={contract.id}
-                onRetry={() => setIsPaymentDialogOpen(true)}
-              />
+              {/* Payment Request History — only if not fully paid */}
+              {!isFullyPaid && (
+                <PaymentRequestHistory
+                  contractId={contract.id}
+                  onRetry={() => setIsPaymentDialogOpen(true)}
+                />
+              )}
             </div>
 
             {/* Right: Financial Health sidebar */}
@@ -1199,7 +1520,8 @@ const ContractDetailPage: React.FC = () => {
               contract={contract}
               colors={colors}
               hasActiveGateway={hasActiveGateway}
-              onRecordPayment={() => setIsPaymentDialogOpen(true)}
+              onRecordPayment={isFullyPaid ? undefined : () => setIsPaymentDialogOpen(true)}
+              onViewInvoice={(invoiceId) => navigate(`/contracts/${id}/invoice/${invoiceId}`)}
             />
           </div>
         );
@@ -1207,6 +1529,12 @@ const ContractDetailPage: React.FC = () => {
         return <PlaceholderTab icon={Camera} title="Evidence" description="Photos, documents, and proof of delivery uploaded for tasks and milestones." colors={colors} />;
       case 'communication':
         return <PlaceholderTab icon={MessageSquare} title="Communication" description="Messages, notifications, and updates exchanged between parties." colors={colors} />;
+      case 'document':
+        return (
+          <div className="-mx-6 -mt-4">
+            <ReviewSendStep {...mapContractToReviewProps(contract)} />
+          </div>
+        );
       case 'audit':
         return (
           <div className="max-w-3xl">

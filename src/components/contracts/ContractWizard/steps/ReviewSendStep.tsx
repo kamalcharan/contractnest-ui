@@ -41,6 +41,7 @@ import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { useTaxRates } from '@/hooks/useTaxRates';
 import { useContact } from '@/hooks/useContacts';
 import { useIntegrations } from '@/hooks/useIntegrations';
+import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
 import { BillingCycleType } from './BillingCycleStep';
@@ -147,6 +148,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   // Buyer contact details (cached from BuyerSelectionStep)
   const { data: buyerContact } = useContact(buyerId || '');
 
+  // Gateway status (for auto-accept payment indicator)
+  const { hasActiveGateway, providerDisplayName, isLoading: gatewayLoading } = useGatewayStatus();
+
   // Tax rates
   const { state: taxState } = useTaxRates();
   const availableTaxRates = useMemo(
@@ -219,19 +223,63 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     return sorted;
   }, [selectedBlocks]);
 
-  // ─── Financial calculations ──────────────────────────────────────
+  // ─── Financial calculations (per-block tax aggregation) ─────────
   const totals = useMemo(() => {
     const billableBlocks = selectedBlocks.filter((b) => categoryHasPricing(b.categoryId || ''));
-    const subtotal = billableBlocks.reduce((sum, b) => sum + b.totalPrice, 0);
+    let baseSubtotal = 0;
+    let totalTax = 0;
+    let grandTotal = 0;
+    const taxMap: Record<string, { name: string; rate: number; amount: number }> = {};
 
-    const selectedRates = availableTaxRates.filter((r) => selectedTaxRateIds.includes(r.id));
-    const totalTaxRate = selectedRates.reduce((sum, r) => sum + r.rate, 0);
-    const taxAmount = subtotal * (totalTaxRate / 100);
-    const grandTotal = subtotal + taxAmount;
+    billableBlocks.forEach((block) => {
+      const ep = block.config?.customPrice ?? block.price;
+      const qty = block.unlimited ? 1 : block.quantity;
+      const taxRate = block.taxRate || 0;
+
+      if (taxRate === 0) {
+        baseSubtotal += ep * qty;
+        grandTotal += block.totalPrice;
+      } else if (block.taxInclusion === 'inclusive') {
+        const total = ep * qty;
+        const base = total / (1 + taxRate / 100);
+        baseSubtotal += base;
+        totalTax += total - base;
+        grandTotal += block.totalPrice;
+        if (block.taxes?.length) {
+          block.taxes.forEach((tax) => {
+            const amt = (base * Number(tax.rate)) / 100;
+            const key = tax.id || tax.name || `tax-${tax.rate}`;
+            if (!taxMap[key]) taxMap[key] = { name: tax.name || 'Tax', rate: Number(tax.rate), amount: 0 };
+            taxMap[key].amount += amt;
+          });
+        }
+      } else {
+        const base = ep * qty;
+        baseSubtotal += base;
+        totalTax += base * taxRate / 100;
+        grandTotal += block.totalPrice;
+        if (block.taxes?.length) {
+          block.taxes.forEach((tax) => {
+            const amt = (base * Number(tax.rate)) / 100;
+            const key = tax.id || tax.name || `tax-${tax.rate}`;
+            if (!taxMap[key]) taxMap[key] = { name: tax.name || 'Tax', rate: Number(tax.rate), amount: 0 };
+            taxMap[key].amount += amt;
+          });
+        }
+      }
+    });
+
+    const taxBreakup = Object.values(taxMap).map((t) => ({
+      ...t,
+      amount: Math.round(t.amount * 100) / 100,
+    }));
+    const subtotal = Math.round(baseSubtotal * 100) / 100;
+    grandTotal = Math.round(grandTotal * 100) / 100;
+    totalTax = Math.round(totalTax * 100) / 100;
     const emiInstallment = emiMonths > 0 ? grandTotal / emiMonths : grandTotal;
 
-    return { subtotal, selectedRates, totalTaxRate, taxAmount, grandTotal, emiInstallment, billableCount: billableBlocks.length };
-  }, [selectedBlocks, availableTaxRates, selectedTaxRateIds, emiMonths]);
+    return { subtotal, taxBreakup, taxAmount: totalTax, grandTotal, emiInstallment, billableCount: billableBlocks.length };
+  }, [selectedBlocks, emiMonths]);
 
   // ─── Payment plan breakup (for "As Defined" / Mixed display) ─────
   const definedBreakup = useMemo(() => {
@@ -727,17 +775,49 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
             <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
               Payment Status
             </p>
-            <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
-              Has the client already made payment for this contract?
-            </p>
-            <div className="text-[11px] p-3 rounded-lg" style={{ backgroundColor: `${colors.semantic.warning}08` }}>
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.warning }} />
-                <span style={{ color: colors.utility.secondaryText }}>
-                  You will be able to record payment details after contract creation.
+
+            {/* Payment Gateway Config Indicator */}
+            <div
+              className="flex items-center gap-2.5 p-3 rounded-lg mb-3"
+              style={{
+                backgroundColor: hasActiveGateway
+                  ? `${colors.semantic.success}08`
+                  : `${colors.semantic.warning}08`,
+                border: `1px solid ${hasActiveGateway ? `${colors.semantic.success}20` : `${colors.semantic.warning}20`}`,
+              }}
+            >
+              <div
+                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: gatewayLoading
+                    ? colors.utility.secondaryText
+                    : hasActiveGateway
+                      ? colors.semantic.success
+                      : colors.semantic.warning,
+                }}
+              />
+              <div className="flex-1 min-w-0">
+                <span className="text-[11px] font-semibold block" style={{ color: colors.utility.primaryText }}>
+                  {gatewayLoading
+                    ? 'Checking gateway...'
+                    : hasActiveGateway
+                      ? `${providerDisplayName || 'Payment Gateway'} Configured`
+                      : 'No Payment Gateway Configured'}
+                </span>
+                <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                  {hasActiveGateway
+                    ? 'Online payments can be collected'
+                    : 'Only offline payment recording available'}
                 </span>
               </div>
+              <CreditCard className="w-4 h-4 flex-shrink-0" style={{
+                color: hasActiveGateway ? colors.semantic.success : colors.utility.secondaryText,
+              }} />
             </div>
+
+            <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+              You can record payment (offline or online) after clicking Create Contract.
+            </p>
           </div>
 
           {/* What happens next */}
@@ -1449,8 +1529,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                   Financial Summary
                 </h3>
 
-                {isSelfView && (
-                  <div className="space-y-2 mb-3">
+                <div className="space-y-2 mb-3">
                     <div className="flex justify-between">
                       <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
                         Subtotal ({totals.billableCount} item{totals.billableCount !== 1 ? 's' : ''})
@@ -1460,20 +1539,30 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                       </span>
                     </div>
 
-                    {totals.selectedRates.map((rate) => (
-                      <div key={rate.id} className="flex justify-between">
+                    {totals.taxBreakup.length > 0 ? (
+                      totals.taxBreakup.map((tax, idx) => (
+                        <div key={idx} className="flex justify-between">
+                          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                            {tax.name} ({tax.rate}%)
+                          </span>
+                          <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
+                            {formatCurrency(tax.amount, currency)}
+                          </span>
+                        </div>
+                      ))
+                    ) : totals.taxAmount > 0 ? (
+                      <div className="flex justify-between">
                         <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                          {rate.name} ({rate.rate}%)
+                          Tax
                         </span>
                         <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
-                          {formatCurrency(totals.subtotal * (rate.rate / 100), currency)}
+                          {formatCurrency(totals.taxAmount, currency)}
                         </span>
                       </div>
-                    ))}
+                    ) : null}
 
                     <div className="border-t my-2" style={{ borderColor }} />
                   </div>
-                )}
 
                 {/* Grand Total */}
                 <div
@@ -1481,7 +1570,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                   style={{ backgroundColor: `${brandPrimary}08` }}
                 >
                   <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-                    {isSelfView ? 'Grand Total' : 'Contract Value'}
+                    Grand Total
                   </span>
                   <span className="text-2xl font-bold" style={{ color: brandPrimary }}>
                     {formatCurrency(totals.grandTotal, currency)}

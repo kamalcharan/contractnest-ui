@@ -153,6 +153,8 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       const hasCustomCycle = blockServiceCycles?.enabled && blockServiceCycles?.days;
       const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
       const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
+      // Pre-fill service cycle interval from block catalog config
+      const serviceCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
 
       // Extract tax info from pricing records matching contract currency
       const pricingRecords = ((block.meta as any)?.pricingRecords || (block.config as any)?.pricingRecords || []) as Array<{
@@ -182,6 +184,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         quantity: 1,
         cycle: defaultCycle,
         customCycleDays: customCycleDays,
+        serviceCycleDays: serviceCycleDays,
         unlimited: false,
         price: blockPrice,
         currency: matchingRecord?.currency || currency,
@@ -538,6 +541,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                           dragHandleProps={{
                             style: { cursor: 'grab' },
                           }}
+                          contractDurationDays={contractDuration ? contractDuration * 30 : undefined}
                           onToggleExpand={handleToggleExpand}
                           onRemove={handleRemoveBlock}
                           onUpdate={handleUpdateBlock}

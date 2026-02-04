@@ -183,7 +183,9 @@ export const useContractOperations = () => {
     onSuccess: (createdContract) => {
       queryClient.invalidateQueries({ queryKey: contractKeys.lists() });
       queryClient.invalidateQueries({ queryKey: contractKeys.stats() });
-      queryClient.setQueryData(contractKeys.detail(createdContract.id), createdContract);
+      // Invalidate detail query so navigating to detail page fetches full data
+      // (create response is minimal — missing blocks, vendors, attachments, history)
+      queryClient.invalidateQueries({ queryKey: contractKeys.detail(createdContract.id) });
 
       toast({
         title: 'Success',

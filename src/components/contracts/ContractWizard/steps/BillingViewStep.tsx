@@ -153,11 +153,12 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       }));
   }, [billableBlocks]);
 
-  // Calculate totals from per-block taxes
+  // Calculate totals from per-block taxes + aggregate tax breakup by tax name
   const totals = useMemo(() => {
     let baseSubtotal = 0;
     let totalTax = 0;
     let grandTotal = 0;
+    const taxMap: Record<string, { name: string; rate: number; amount: number; tax_rate_id: string }> = {};
 
     billableBlocks.forEach((block) => {
       const ep = block.config?.customPrice ?? block.price;
@@ -165,7 +166,6 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       const taxRate = block.taxRate || 0;
 
       if (block.isFlyBy && taxRate === 0) {
-        // FlyBy without taxes
         baseSubtotal += ep * qty;
         grandTotal += block.totalPrice;
       } else if (taxRate === 0) {
@@ -177,16 +177,42 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
         baseSubtotal += base;
         totalTax += total - base;
         grandTotal += block.totalPrice;
+
+        // Aggregate per-tax lines
+        if (block.taxes?.length) {
+          block.taxes.forEach((tax) => {
+            const perTaxAmt = (base * Number(tax.rate)) / 100;
+            const key = tax.id || tax.name || `tax-${tax.rate}`;
+            if (!taxMap[key]) taxMap[key] = { name: tax.name || 'Tax', rate: Number(tax.rate), amount: 0, tax_rate_id: tax.id || '' };
+            taxMap[key].amount += perTaxAmt;
+          });
+        }
       } else {
         // exclusive
         const base = ep * qty;
         baseSubtotal += base;
         totalTax += base * taxRate / 100;
         grandTotal += block.totalPrice;
+
+        // Aggregate per-tax lines
+        if (block.taxes?.length) {
+          block.taxes.forEach((tax) => {
+            const perTaxAmt = (base * Number(tax.rate)) / 100;
+            const key = tax.id || tax.name || `tax-${tax.rate}`;
+            if (!taxMap[key]) taxMap[key] = { name: tax.name || 'Tax', rate: Number(tax.rate), amount: 0, tax_rate_id: tax.id || '' };
+            taxMap[key].amount += perTaxAmt;
+          });
+        }
       }
     });
 
     const emiInstallment = emiMonths > 0 ? grandTotal / emiMonths : grandTotal;
+
+    // Build sorted tax breakup array
+    const taxBreakup = Object.values(taxMap).map((t) => ({
+      ...t,
+      amount: Math.round(t.amount * 100) / 100,
+    }));
 
     return {
       baseSubtotal: Math.round(baseSubtotal * 100) / 100,
@@ -194,6 +220,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       grandTotal: Math.round(grandTotal * 100) / 100,
       blockCount: billableBlocks.length,
       emiInstallment: Math.round(emiInstallment * 100) / 100,
+      taxBreakup,
     };
   }, [billableBlocks, emiMonths]);
 
@@ -201,11 +228,17 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
   useEffect(() => {
     if (!onTotalsChange) return;
     onTotalsChange({
+      baseSubtotal: totals.baseSubtotal,
       taxTotal: totals.totalTax,
       grandTotal: totals.grandTotal,
-      taxBreakdown: [], // Per-block taxes, no contract-level breakdown
+      taxBreakdown: totals.taxBreakup.map((t) => ({
+        tax_rate_id: t.tax_rate_id,
+        name: t.name,
+        rate: t.rate,
+        amount: t.amount,
+      })),
     });
-  }, [totals.totalTax, totals.grandTotal, onTotalsChange]);
+  }, [totals.baseSubtotal, totals.totalTax, totals.grandTotal, totals.taxBreakup, onTotalsChange]);
 
   // Handle per-block payment type change
   const handleBlockPaymentTypeChange = useCallback(
@@ -1100,17 +1133,28 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                 </span>
               </div>
 
-              {/* Total Tax */}
-              {totals.totalTax > 0 && (
+              {/* Individual Tax Lines */}
+              {totals.taxBreakup.length > 0 ? (
+                totals.taxBreakup.map((tax, idx) => (
+                  <div key={idx} className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      {tax.name} ({tax.rate}%)
+                    </span>
+                    <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
+                      {formatCurrency(tax.amount, currency)}
+                    </span>
+                  </div>
+                ))
+              ) : totals.totalTax > 0 ? (
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                    Tax (per-block)
+                    Tax
                   </span>
                   <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
                     {formatCurrency(totals.totalTax, currency)}
                   </span>
                 </div>
-              )}
+              ) : null}
 
               {/* Divider */}
               <div
