@@ -258,6 +258,42 @@ export const defaultMenuItems: MenuItem[] = [
         path: '/vani/toolkit/product-masters'
       }
     ]
+  },
+  // JTD Admin — Release 1 (Observability)
+  {
+    id: 'jtd-admin',
+    label: 'JTD Admin',
+    icon: 'Activity',
+    path: '/admin/jtd',
+    adminOnly: true,
+    hasSubmenu: true,
+    defaultOpen: false,
+    submenuItems: [
+      {
+        id: 'jtd-queue',
+        label: 'Queue Monitor',
+        icon: 'ListOrdered',
+        path: '/admin/jtd/queue'
+      },
+      {
+        id: 'jtd-tenants',
+        label: 'Tenant Operations',
+        icon: 'Building2',
+        path: '/admin/jtd/tenants'
+      },
+      {
+        id: 'jtd-events',
+        label: 'Event Explorer',
+        icon: 'Search',
+        path: '/admin/jtd/events'
+      },
+      {
+        id: 'jtd-worker',
+        label: 'Worker Health',
+        icon: 'HeartPulse',
+        path: '/admin/jtd/worker'
+      }
+    ]
   }
 ];
 

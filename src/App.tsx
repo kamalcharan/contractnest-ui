@@ -203,6 +203,12 @@ import ContactCreateForm from './pages/contacts/create';
 // Admin - Subscription Management
 import SubscriptionManagementPage from './pages/admin/subscription-management';
 
+// Admin - JTD Management (Release 1)
+import QueueMonitorPage from './pages/admin/jtd/QueueMonitorPage';
+import TenantOperationsPage from './pages/admin/jtd/TenantOperationsPage';
+import EventExplorerPage from './pages/admin/jtd/EventExplorerPage';
+import WorkerHealthPage from './pages/admin/jtd/WorkerHealthPage';
+
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -668,6 +674,22 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<SubscriptionManagementPage />} />
+          </Route>
+
+          {/* Admin - JTD Management (Release 1) */}
+          <Route
+            path="/admin/jtd"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="queue" element={<QueueMonitorPage />} />
+            <Route path="tenants" element={<TenantOperationsPage />} />
+            <Route path="events" element={<EventExplorerPage />} />
+            <Route path="worker" element={<WorkerHealthPage />} />
+            <Route index element={<QueueMonitorPage />} />
           </Route>
 
           {/* Tenant - Pricing Plans & Subscription */}

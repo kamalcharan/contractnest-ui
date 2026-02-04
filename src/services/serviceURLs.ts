@@ -357,9 +357,48 @@ export const API_ENDPOINTS = {
       RESET_TEST_DATA: (tenantId: string) => `/api/admin/tenants/${tenantId}/reset-test-data`,
       RESET_ALL_DATA: (tenantId: string) => `/api/admin/tenants/${tenantId}/reset-all-data`,
       CLOSE_ACCOUNT: (tenantId: string) => `/api/admin/tenants/${tenantId}/close-account`
+    },
+    JTD: {
+      QUEUE_METRICS: '/api/admin/jtd/queue/metrics',
+      TENANT_STATS: '/api/admin/jtd/tenants/stats',
+      TENANT_STATS_WITH_FILTERS: (filters: { page?: number; limit?: number; search?: string; sort_by?: string; sort_dir?: string } = {}) => {
+        const params = new URLSearchParams();
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.search) params.append('search', filters.search);
+        if (filters.sort_by) params.append('sort_by', filters.sort_by);
+        if (filters.sort_dir) params.append('sort_dir', filters.sort_dir);
+        const qs = params.toString();
+        return qs ? `/api/admin/jtd/tenants/stats?${qs}` : '/api/admin/jtd/tenants/stats';
+      },
+      EVENTS: '/api/admin/jtd/events',
+      EVENTS_WITH_FILTERS: (filters: {
+        page?: number; limit?: number; tenant_id?: string; status?: string;
+        event_type?: string; channel?: string; source_type?: string;
+        search?: string; date_from?: string; date_to?: string;
+        sort_by?: string; sort_dir?: string;
+      } = {}) => {
+        const params = new URLSearchParams();
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.tenant_id) params.append('tenant_id', filters.tenant_id);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.event_type) params.append('event_type', filters.event_type);
+        if (filters.channel) params.append('channel', filters.channel);
+        if (filters.source_type) params.append('source_type', filters.source_type);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.date_from) params.append('date_from', filters.date_from);
+        if (filters.date_to) params.append('date_to', filters.date_to);
+        if (filters.sort_by) params.append('sort_by', filters.sort_by);
+        if (filters.sort_dir) params.append('sort_dir', filters.sort_dir);
+        const qs = params.toString();
+        return qs ? `/api/admin/jtd/events?${qs}` : '/api/admin/jtd/events';
+      },
+      EVENT_DETAIL: (jtdId: string) => `/api/admin/jtd/events/${jtdId}`,
+      WORKER_HEALTH: '/api/admin/jtd/worker/health'
     }
   },
-  
+
   // =================================================================
   // TENANT ACCOUNT ENDPOINTS (Owner-side: data summary + close account)
   // =================================================================
