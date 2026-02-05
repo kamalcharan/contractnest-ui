@@ -51,6 +51,7 @@ import TabsNavigation from '@/components/shared/TabsNavigation';
 import ContactHeaderCard from '@/components/contacts/view/cards/ContactHeaderCard';
 import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
 import PaymentRequestHistory from '@/components/contracts/PaymentRequestHistory';
+import TimelineTab from '@/components/contracts/TimelineTab';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueries';
@@ -1266,7 +1267,7 @@ const ContractDetailPage: React.FC = () => {
           </div>
         );
       case 'timeline':
-        return <PlaceholderTab icon={Calendar} title="Timeline View" description="Full execution timeline with Gantt-style view of tasks, milestones, and deadlines." colors={colors} />;
+        return <TimelineTab contractId={contract.id} currency={contract.currency || 'INR'} colors={colors} />;
       case 'financials':
         return (
           <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 400px' }}>

@@ -22,6 +22,7 @@ import EventsPreviewStep from './steps/EventsPreviewStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import { computeContractEvents, type ContractEvent } from '@/utils/service-contracts/contractEvents';
 
 // Keep ContractRole type export for backwards compatibility
 export type ContractRole = 'client' | 'vendor' | null;
@@ -150,6 +151,53 @@ const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 const isValidUUID = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+// Compute and format events for API (matches t_contracts.computed_events JSONB schema)
+function computeEventsForApi(state: ContractWizardState): any[] | undefined {
+  // Skip for RFQ mode
+  if (state.wizardMode === 'rfq') return undefined;
+
+  // Compute events using the same logic as EventsPreviewStep
+  const rawEvents = computeContractEvents({
+    startDate: state.startDate,
+    durationValue: state.durationValue,
+    durationUnit: state.durationUnit,
+    selectedBlocks: state.selectedBlocks,
+    paymentMode: state.paymentMode,
+    emiMonths: state.emiMonths,
+    perBlockPaymentType: state.perBlockPaymentType,
+    billingCycleType: state.billingCycleType,
+    grandTotal: state.grandTotal || state.totalValue,
+    currency: state.currency,
+  });
+
+  if (!rawEvents || rawEvents.length === 0) return undefined;
+
+  // Apply eventOverrides and convert to API format
+  return rawEvents.map((event: ContractEvent) => {
+    // Apply user override if exists
+    const overriddenDate = state.eventOverrides[event.id];
+    const scheduledDate = overriddenDate || event.scheduled_date;
+
+    return {
+      block_id: event.block_id,
+      block_name: event.block_name,
+      category_id: event.category_id || undefined,
+      event_type: event.event_type,
+      billing_sub_type: event.billing_sub_type || undefined,
+      billing_cycle_label: event.billing_cycle_label || undefined,
+      sequence_number: event.sequence_number,
+      total_occurrences: event.total_occurrences,
+      scheduled_date: scheduledDate instanceof Date
+        ? scheduledDate.toISOString()
+        : new Date(scheduledDate).toISOString(),
+      amount: event.amount || undefined,
+      currency: event.currency || state.currency,
+      assigned_to: event.assigned_to || undefined,
+      assigned_to_name: event.assigned_to_name || undefined,
+    };
+  });
+}
+
 // Map wizard state to API request payload (matches deployed DB RPC schema)
 function mapWizardToRequest(
   state: ContractWizardState,
@@ -159,6 +207,9 @@ function mapWizardToRequest(
   const apiAcceptanceMethod = state.acceptanceMethod
     ? ACCEPTANCE_METHOD_API_MAP[state.acceptanceMethod] || state.acceptanceMethod
     : undefined;
+
+  // Compute events for contract (not RFQ)
+  const computedEvents = computeEventsForApi(state);
 
   // Build blocks array — flattened to match t_contract_blocks columns
   const blocks = state.selectedBlocks.map((block, idx) => {
@@ -235,6 +286,9 @@ function mapWizardToRequest(
     // Related entities
     blocks,
     vendors,
+
+    // Computed events (for PGMQ trigger when contract becomes active)
+    computed_events: computedEvents,
   };
 }
 

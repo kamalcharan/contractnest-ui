@@ -1,9 +1,9 @@
-// src/pages/contacts/view.tsx - Theme Integrated Version
+// src/pages/contacts/view.tsx - Theme Integrated Version with Contact Cockpit
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Edit, 
+import {
+  ArrowLeft,
+  Edit,
   MoreHorizontal,
   User,
   FileText,
@@ -37,6 +37,7 @@ import { analyticsService } from '@/services/analytics.service';
 
 // Import API Hooks
 import { useContact, useUpdateContactStatus, useSendInvitation } from '../../hooks/useContacts';
+import { useContactCockpit } from '@/hooks/queries/useContactCockpit';
 
 // Import Shared Components
 import TabsNavigation from '../../components/shared/TabsNavigation';
@@ -49,8 +50,15 @@ import ServicesTab from '../../components/services/ServicesTab';
 import ContractTab from '../../components/contracts/ContractTab';
 import ContactHeaderCard from '../../components/contacts/view/cards/ContactHeaderCard';
 
+// Import Cockpit Components
+import {
+  ContactCockpitStatsBar,
+  ContactCockpitPanel,
+  ActionIsland
+} from '@/components/contacts/cockpit';
+
 // Import Constants
-import { 
+import {
   CONTACT_STATUS,
   CONTACT_STATUS_LABELS,
   getStatusColor,
@@ -127,17 +135,17 @@ interface Contact {
   id: string;
   type: 'individual' | 'corporate';
   status: 'active' | 'inactive' | 'archived';
-  
+
   // Individual fields
   name?: string;
   salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
-  
+
   // Corporate fields
   company_name?: string;
   registration_number?: string;
   website?: string;
   industry?: string;
-  
+
   // Arrays
   classifications: Classification[];
   tags: Tag[];
@@ -145,13 +153,13 @@ interface Contact {
   contact_channels: ContactChannel[];
   addresses: ContactAddress[];
   contact_persons: ContactPerson[];
-  
+
   // Other fields
   notes?: string;
   user_account_status?: string;
   potential_duplicate?: boolean;
   duplicate_reasons?: string[];
-  
+
   // Metadata
   created_at: string;
   updated_at: string;
@@ -163,10 +171,10 @@ interface Contact {
 }
 
 // Temporary placeholder for tabs not yet implemented
-const PlaceholderTab: React.FC<{ 
-  icon: React.ComponentType<any>; 
-  title: string; 
-  description: string; 
+const PlaceholderTab: React.FC<{
+  icon: React.ComponentType<any>;
+  title: string;
+  description: string;
   contactId: string;
   phase: string;
 }> = ({ icon: Icon, title, description, contactId, phase }) => {
@@ -174,36 +182,36 @@ const PlaceholderTab: React.FC<{
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   return (
-    <div 
+    <div
       className="rounded-lg border p-12 text-center transition-colors"
       style={{
         backgroundColor: colors.utility.secondaryBackground,
         borderColor: colors.utility.primaryText + '20'
       }}
     >
-      <Icon 
+      <Icon
         className="h-16 w-16 mx-auto mb-4"
         style={{ color: colors.utility.secondaryText }}
       />
-      <h3 
+      <h3
         className="text-xl font-medium mb-3 transition-colors"
         style={{ color: colors.utility.primaryText }}
       >
         {title}
       </h3>
-      <p 
+      <p
         className="mb-2 transition-colors"
         style={{ color: colors.utility.secondaryText }}
       >
         {description}
       </p>
-      <p 
+      <p
         className="text-sm transition-colors"
         style={{ color: colors.utility.secondaryText }}
       >
         Contact ID: {contactId}
       </p>
-      <div 
+      <div
         className="mt-4 inline-flex items-center px-3 py-1 rounded-full text-xs transition-colors"
         style={{
           backgroundColor: colors.brand.primary + '20',
@@ -223,20 +231,30 @@ const ContactViewPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
-  
+
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
   // State
   const [activeTab, setActiveTab] = useState<ActiveTab>('summary');
   const [showMoreActions, setShowMoreActions] = useState<boolean>(false);
   const [showArchiveDialog, setShowArchiveDialog] = useState<boolean>(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [cockpitDaysAhead, setCockpitDaysAhead] = useState<number>(7);
 
   // API Integration
   const { data: contact, loading, error, refetch } = useContact(id || '');
   const updateStatusHook = useUpdateContactStatus();
   const sendInvitationHook = useSendInvitation();
+
+  // Cockpit Data - Fetch dashboard summary
+  const {
+    data: cockpitData,
+    isLoading: cockpitLoading
+  } = useContactCockpit(id || '', { daysAhead: cockpitDaysAhead });
+
+  // Get classifications for contract creation options
+  const classifications = contact?.classifications?.map(c => c.classification_value) || [];
 
   // Track page view
   useEffect(() => {
@@ -260,7 +278,7 @@ const ContactViewPage: React.FC = () => {
   // Get contact display name
   const getContactDisplayName = (): string => {
     if (!contact) return '';
-    
+
     if (contact.type === 'corporate') {
       return contact.company_name || 'Unnamed Company';
     } else {
@@ -272,7 +290,7 @@ const ContactViewPage: React.FC = () => {
   // Get primary contact channel
   const getPrimaryChannel = (channels: ContactChannel[], type: string): ContactChannel | null => {
     if (!channels || channels.length === 0) return null;
-    return channels.find(ch => ch.channel_type === type && ch.is_primary) || 
+    return channels.find(ch => ch.channel_type === type && ch.is_primary) ||
            channels.find(ch => ch.channel_type === type) ||
            null;
   };
@@ -300,7 +318,7 @@ const ContactViewPage: React.FC = () => {
       billing: { bg: '#2563eb', hover: '#1d4ed8' },   // blue
       service: { bg: '#7c3aed', hover: '#6d28d9' }    // purple
     };
-    
+
     return {
       backgroundColor: baseColors[type].bg,
       color: '#ffffff',
@@ -330,7 +348,7 @@ const ContactViewPage: React.FC = () => {
   // Handle status updates
   const handleStatusUpdate = async (newStatus: 'active' | 'inactive' | 'archived') => {
     if (!contact) return;
-    
+
     try {
       await updateStatusHook.mutate(contact.id, newStatus);
       setShowMoreActions(false);
@@ -343,7 +361,7 @@ const ContactViewPage: React.FC = () => {
   // Handle send invitation
   const handleSendInvitation = async () => {
     if (!contact) return;
-    
+
     try {
       await sendInvitationHook.mutate(contact.id);
       setShowMoreActions(false);
@@ -355,14 +373,14 @@ const ContactViewPage: React.FC = () => {
   // Copy contact info to clipboard
   const copyContactInfo = async () => {
     if (!contact) return;
-    
+
     const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
     const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
-    
+
     const info = `${getContactDisplayName()}
 ${primaryEmail ? `Email: ${primaryEmail.value}` : ''}
 ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
-    
+
     try {
       await navigator.clipboard.writeText(info);
       toast({
@@ -386,34 +404,34 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
       contracts: 20,
       revenue: 510000,
       services: 8,
-      relationshipYears: contact?.created_at ? 
+      relationshipYears: contact?.created_at ?
         Math.floor((new Date().getTime() - new Date(contact.created_at).getTime()) / (1000 * 60 * 60 * 24 * 365)) : 0
     };
   };
 
   // Tab configuration with real counts
   const tabs = [
-    { 
-      id: 'summary', 
-      label: 'Summary', 
+    {
+      id: 'summary',
+      label: 'Summary',
       icon: User,
-      count: undefined 
+      count: undefined
     },
-    { 
-      id: 'contracts', 
-      label: 'Contracts', 
+    {
+      id: 'contracts',
+      label: 'Contracts',
       icon: FileText,
-      count: 20
+      count: cockpitData?.contracts?.total || 0
     },
-    { 
-      id: 'billing', 
-      label: 'Billing', 
+    {
+      id: 'billing',
+      label: 'Billing',
       icon: DollarSign,
       count: 9
     },
-    { 
-      id: 'services', 
-      label: 'Services', 
+    {
+      id: 'services',
+      label: 'Services',
       icon: Settings,
       count: 8
     }
@@ -428,21 +446,21 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
         return <ContactSummaryTab contact={contact} onRefresh={refetch} />;
       case 'contracts':
         return (
-          <ContractTab 
+          <ContractTab
             contactId={contact.id}
             contactStatus={contact.status}
           />
         );
       case 'billing':
         return (
-          <BillingTab 
+          <BillingTab
             contactId={contact.id}
             contactStatus={contact.status}
           />
         );
       case 'services':
         return (
-          <ServicesTab 
+          <ServicesTab
             contactId={contact.id}
             contactStatus={contact.status}
           />
@@ -486,6 +504,17 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
                 style={{ backgroundColor: colors.utility.secondaryText + '20' }}
               ></div>
             </div>
+          </div>
+
+          {/* Cockpit Stats Skeleton */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div
+                key={i}
+                className="h-24 rounded-xl"
+                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
+              ></div>
+            ))}
           </div>
 
           {/* Tabs Skeleton */}
@@ -534,29 +563,29 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   // Error State
   if (error && !contact) {
     return (
-      <div 
+      <div
         className="p-4 md:p-6 min-h-screen transition-colors"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
         <div className="text-center py-12">
-          <AlertCircle 
+          <AlertCircle
             className="h-16 w-16 mx-auto mb-4"
             style={{ color: colors.semantic.error }}
           />
-          <h3 
+          <h3
             className="text-lg font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Failed to load contact
           </h3>
-          <p 
+          <p
             className="mb-6 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             {error}
           </p>
           <div className="flex gap-3 justify-center">
-            <button 
+            <button
               onClick={refetch}
               className="px-4 py-2 rounded-md transition-colors"
               style={{
@@ -566,7 +595,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
             >
               Try Again
             </button>
-            <button 
+            <button
               onClick={() => navigate('/contacts')}
               className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors"
               style={{
@@ -586,28 +615,28 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   // Not Found State
   if (!loading && !contact) {
     return (
-      <div 
+      <div
         className="p-4 md:p-6 min-h-screen transition-colors"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
         <div className="text-center py-12">
-          <User 
+          <User
             className="h-16 w-16 mx-auto mb-4"
             style={{ color: colors.utility.secondaryText }}
           />
-          <h3 
+          <h3
             className="text-lg font-medium mb-2 transition-colors"
             style={{ color: colors.utility.primaryText }}
           >
             Contact not found
           </h3>
-          <p 
+          <p
             className="mb-6 transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
             The contact you're looking for doesn't exist or has been removed.
           </p>
-          <button 
+          <button
             onClick={() => navigate('/contacts')}
             className="px-4 py-2 rounded-md transition-colors"
             style={{
@@ -625,38 +654,38 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   if (!contact) return null;
 
   // Get user status info
-  const userStatusInfo = contact.user_account_status ? 
+  const userStatusInfo = contact.user_account_status ?
     USER_STATUS_MESSAGES[contact.user_account_status as keyof typeof USER_STATUS_MESSAGES] : null;
-  
+
   const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
   const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
   const primaryAddress = getPrimaryAddress();
   const quickStats = getQuickStats();
 
   return (
-    <div 
-      className="p-4 md:p-6 min-h-screen transition-colors"
+    <div
+      className="p-4 md:p-6 min-h-screen pb-24 transition-colors"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
       {/* Header Section */}
       <div className="flex items-center justify-between mb-6">
         {/* Left Side - Breadcrumb Navigation */}
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => navigate('/contacts')}
             className="p-2 rounded-full hover:opacity-80 transition-colors"
             style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <ArrowLeft 
+            <ArrowLeft
               className="h-5 w-5"
               style={{ color: colors.utility.primaryText }}
             />
           </button>
-          <div 
+          <div
             className="text-sm"
             style={{ color: colors.utility.secondaryText }}
           >
-            <button 
+            <button
               onClick={() => navigate('/contacts')}
               className="hover:opacity-80 cursor-pointer transition-colors"
               style={{ color: colors.brand.primary }}
@@ -664,7 +693,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
               Contacts
             </button>
             <span className="mx-2">/</span>
-            <span 
+            <span
               className="font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
@@ -673,39 +702,26 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
           </div>
         </div>
 
-        {/* Right Side - Action Buttons */}
+        {/* Right Side - Edit Button Only (Actions moved to Island) */}
         <div className="flex items-center gap-3">
-          <button 
-            style={getActionButtonStyle('contract')}
-            onClick={() => navigate(`/contracts/create?contactId=${contact.id}`)}
-            disabled={contact.status === 'archived'}
+          <button
+            onClick={() => navigate(`/contacts/${contact.id}/edit`)}
+            className="px-4 py-2 rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
+            style={{
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              border: `1px solid ${colors.utility.primaryText}20`
+            }}
           >
-            <FileText className="h-4 w-4" />
-            Contract
+            <Edit className="h-4 w-4" />
+            Edit
           </button>
-          <button 
-            style={getActionButtonStyle('billing')}
-            onClick={() => navigate(`/billing/create?contactId=${contact.id}`)}
-            disabled={contact.status === 'archived'}
-          >
-            <DollarSign className="h-4 w-4" />
-            Billing
-          </button>
-          <button 
-            style={getActionButtonStyle('service')}
-            onClick={() => navigate(`/services/create?contactId=${contact.id}`)}
-            disabled={contact.status === 'archived'}
-          >
-            <Settings className="h-4 w-4" />
-            Service
-          </button>
-          
         </div>
       </div>
 
       {/* Status Warnings */}
       {contact.status === 'inactive' && (
-        <div 
+        <div
           className="mb-6 p-4 rounded-lg border transition-colors"
           style={{
             backgroundColor: colors.semantic.warning + '10',
@@ -713,18 +729,18 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
           }}
         >
           <div className="flex items-center gap-3">
-            <AlertCircle 
+            <AlertCircle
               className="h-5 w-5"
               style={{ color: colors.semantic.warning }}
             />
             <div>
-              <p 
+              <p
                 className="text-sm font-medium"
                 style={{ color: colors.semantic.warning }}
               >
                 Contact is Inactive
               </p>
-              <p 
+              <p
                 className="text-sm"
                 style={{ color: colors.semantic.warning }}
               >
@@ -736,7 +752,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
       )}
 
       {contact.status === 'archived' && (
-        <div 
+        <div
           className="mb-6 p-4 rounded-lg border transition-colors"
           style={{
             backgroundColor: colors.utility.secondaryText + '10',
@@ -744,18 +760,18 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
           }}
         >
           <div className="flex items-center gap-3">
-            <Archive 
+            <Archive
               className="h-5 w-5"
               style={{ color: colors.utility.secondaryText }}
             />
             <div>
-              <p 
+              <p
                 className="text-sm font-medium"
                 style={{ color: colors.utility.secondaryText }}
               >
                 Contact is Archived
               </p>
-              <p 
+              <p
                 className="text-sm"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -768,7 +784,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
 
       {/* User Account Status */}
       {userStatusInfo && (
-        <div 
+        <div
           className="mb-6 p-4 rounded-lg border transition-colors"
           style={{
             backgroundColor: colors.brand.primary + '10',
@@ -778,7 +794,7 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">{userStatusInfo.icon}</span>
-              <span 
+              <span
                 className="text-sm"
                 style={{ color: colors.brand.primary }}
               >
@@ -790,14 +806,14 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
               disabled={sendInvitationHook.loading}
               className="px-3 py-1 text-sm rounded-md transition-colors disabled:opacity-50"
               style={{
-                backgroundColor: userStatusInfo.actionType === 'primary' 
-                  ? colors.brand.primary 
+                backgroundColor: userStatusInfo.actionType === 'primary'
+                  ? colors.brand.primary
                   : 'transparent',
-                color: userStatusInfo.actionType === 'primary' 
-                  ? '#ffffff' 
+                color: userStatusInfo.actionType === 'primary'
+                  ? '#ffffff'
                   : colors.brand.primary,
-                border: userStatusInfo.actionType === 'primary' 
-                  ? 'none' 
+                border: userStatusInfo.actionType === 'primary'
+                  ? 'none'
                   : `1px solid ${colors.brand.primary}`
               }}
             >
@@ -809,6 +825,23 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
 
       {/* Compact Header Card - Using Reusable Component */}
       <ContactHeaderCard contact={contact} className="mb-6" />
+
+      {/* === COCKPIT STATS BAR === */}
+      <ContactCockpitStatsBar
+        data={cockpitData}
+        isLoading={cockpitLoading}
+        className="mb-6"
+      />
+
+      {/* === COCKPIT PANEL (Contracts Pulse + Events Radar) === */}
+      <ContactCockpitPanel
+        data={cockpitData}
+        isLoading={cockpitLoading}
+        contactId={id || ''}
+        classifications={classifications}
+        onDateRangeChange={setCockpitDaysAhead}
+        className="mb-6"
+      />
 
       {/* Tabs Navigation */}
       <TabsNavigation
@@ -825,24 +858,18 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
         {renderTabContent()}
       </div>
 
-      {/* Mobile Floating Action Button */}
-      <div className="fixed bottom-6 right-6 md:hidden">
-        <button 
-          onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-          className="w-14 h-14 rounded-full shadow-lg hover:opacity-90 transition-all flex items-center justify-center"
-          style={{
-            backgroundColor: colors.brand.primary,
-            color: '#ffffff'
-          }}
-        >
-          <Edit className="h-6 w-6" />
-        </button>
-      </div>
+      {/* === ACTION ISLAND (Floating Bottom Bar) === */}
+      <ActionIsland
+        contactId={contact.id}
+        contactName={getContactDisplayName()}
+        classifications={classifications}
+        contactStatus={contact.status}
+      />
 
       {/* Click outside handler for dropdowns */}
       {showMoreActions && (
-        <div 
-          className="fixed inset-0 z-10" 
+        <div
+          className="fixed inset-0 z-10"
           onClick={() => setShowMoreActions(false)}
         />
       )}
