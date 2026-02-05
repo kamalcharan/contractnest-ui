@@ -1,72 +1,41 @@
-// src/pages/contacts/view.tsx - Theme Integrated Version with Contact Cockpit
+// src/pages/contacts/view.tsx - Contact 360° Command Center
+// THREE COLUMN LAYOUT: Contracts | Events | Financials
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Edit,
-  MoreHorizontal,
   User,
   FileText,
-  DollarSign,
-  Settings,
   Building2,
-  Loader2,
   AlertCircle,
   Plus,
-  Mail,
-  Phone,
-  MapPin,
-  Star,
-  CheckCircle,
   Archive,
-  Trash2,
-  ExternalLink,
-  Copy,
-  Send,
-  UserPlus,
-  Activity,
+  Calendar,
+  DollarSign,
+  ChevronRight,
   Clock,
-  Shield,
-  Globe,
-  MessageSquare
+  CheckCircle,
+  XCircle,
+  Loader2,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
-import { captureException } from '@/utils/sentry';
 import { analyticsService } from '@/services/analytics.service';
 
-// Import API Hooks
+// API Hooks
 import { useContact, useUpdateContactStatus, useSendInvitation } from '../../hooks/useContacts';
 import { useContactCockpit } from '@/hooks/queries/useContactCockpit';
 
-// Import Shared Components
-import TabsNavigation from '../../components/shared/TabsNavigation';
+// Components
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
-
-// Import Tab Components
-import ContactSummaryTab from '../../components/contacts/view/ContactSummaryTab';
-import BillingTab from '../../components/billing/BillingTab';
-import ServicesTab from '../../components/services/ServicesTab';
-import ContractTab from '../../components/contracts/ContractTab';
 import ContactHeaderCard from '../../components/contacts/view/cards/ContactHeaderCard';
+import { ActionIsland, ProfileDrawer } from '@/components/contacts/cockpit';
 
-// Import Cockpit Components
-import {
-  ContactCockpitStatsBar,
-  ContactCockpitPanel,
-  ActionIsland
-} from '@/components/contacts/cockpit';
+// Constants
+import { USER_STATUS_MESSAGES, BUSINESS_RULES } from '@/utils/constants/contacts';
 
-// Import Constants
-import {
-  CONTACT_STATUS,
-  CONTACT_STATUS_LABELS,
-  getStatusColor,
-  USER_STATUS_MESSAGES,
-  BUSINESS_RULES
-} from '@/utils/constants/contacts';
-
-// Complete Type Definitions
+// Types
 interface ContactChannel {
   id: string;
   channel_type: string;
@@ -74,55 +43,6 @@ interface ContactChannel {
   country_code?: string;
   is_primary: boolean;
   is_verified: boolean;
-  notes?: string;
-}
-
-interface ContactAddress {
-  id: string;
-  address_type: 'billing' | 'shipping' | 'office' | 'home' | 'factory' | 'warehouse' | 'other';
-  label?: string;
-  line1: string;
-  line2?: string;
-  line3?: string;
-  city: string;
-  state: string;
-  country: string;
-  postal_code?: string;
-  google_pin?: string;
-  is_primary: boolean;
-  is_verified: boolean;
-  notes?: string;
-}
-
-interface ComplianceNumber {
-  id: string;
-  type_value: string;
-  type_label: string;
-  number: string;
-  issuing_authority?: string;
-  valid_from?: string;
-  valid_to?: string;
-  is_verified: boolean;
-  hexcolor?: string;
-  notes?: string;
-}
-
-interface ContactPerson {
-  id: string;
-  name: string;
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
-  designation?: string;
-  department?: string;
-  is_primary: boolean;
-  contact_channels: ContactChannel[];
-  notes?: string;
-}
-
-interface Tag {
-  id: string;
-  tag_value: string;
-  tag_label: string;
-  tag_color?: string;
 }
 
 interface Classification {
@@ -135,427 +55,170 @@ interface Contact {
   id: string;
   type: 'individual' | 'corporate';
   status: 'active' | 'inactive' | 'archived';
-
-  // Individual fields
   name?: string;
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
-
-  // Corporate fields
+  salutation?: string;
   company_name?: string;
-  registration_number?: string;
-  website?: string;
-  industry?: string;
-
-  // Arrays
   classifications: Classification[];
-  tags: Tag[];
-  compliance_numbers: ComplianceNumber[];
+  tags: any[];
+  compliance_numbers: any[];
   contact_channels: ContactChannel[];
-  addresses: ContactAddress[];
-  contact_persons: ContactPerson[];
-
-  // Other fields
+  addresses: any[];
+  contact_persons: any[];
   notes?: string;
   user_account_status?: string;
-  potential_duplicate?: boolean;
-  duplicate_reasons?: string[];
-
-  // Metadata
   created_at: string;
   updated_at: string;
-  last_contact_date?: string;
-  created_by?: {
-    id: string;
-    name: string;
-  };
 }
 
-// Temporary placeholder for tabs not yet implemented
-const PlaceholderTab: React.FC<{
-  icon: React.ComponentType<any>;
-  title: string;
-  description: string;
-  contactId: string;
-  phase: string;
-}> = ({ icon: Icon, title, description, contactId, phase }) => {
-  const { isDarkMode, currentTheme } = useTheme();
-  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+// Contract type from cockpit data
+interface CockpitContract {
+  id: string;
+  contract_number: string;
+  name: string;
+  status: string;
+  grand_total: number;
+  currency: string;
+  created_at: string;
+  duration_value?: number;
+  duration_unit?: string;
+}
 
-  return (
-    <div
-      className="rounded-lg border p-12 text-center transition-colors"
-      style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderColor: colors.utility.primaryText + '20'
-      }}
-    >
-      <Icon
-        className="h-16 w-16 mx-auto mb-4"
-        style={{ color: colors.utility.secondaryText }}
-      />
-      <h3
-        className="text-xl font-medium mb-3 transition-colors"
-        style={{ color: colors.utility.primaryText }}
-      >
-        {title}
-      </h3>
-      <p
-        className="mb-2 transition-colors"
-        style={{ color: colors.utility.secondaryText }}
-      >
-        {description}
-      </p>
-      <p
-        className="text-sm transition-colors"
-        style={{ color: colors.utility.secondaryText }}
-      >
-        Contact ID: {contactId}
-      </p>
-      <div
-        className="mt-4 inline-flex items-center px-3 py-1 rounded-full text-xs transition-colors"
-        style={{
-          backgroundColor: colors.brand.primary + '20',
-          color: colors.brand.primary
-        }}
-      >
-        Coming in {phase}
-      </div>
-    </div>
-  );
-};
-
-type ActiveTab = 'summary' | 'contracts' | 'billing' | 'services';
+// Event type from cockpit data
+interface CockpitEvent {
+  id: string;
+  contract_id: string;
+  contract_number: string;
+  contract_name: string;
+  event_type: string;
+  block_name?: string;
+  scheduled_date: string;
+  status: string;
+  amount?: number;
+  currency?: string;
+  days_overdue?: number;
+  days_until?: number;
+  is_today?: boolean;
+  sequence_number?: number;
+  total_occurrences?: number;
+}
 
 const ContactViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
-
-  // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // State
-  const [activeTab, setActiveTab] = useState<ActiveTab>('summary');
-  const [showMoreActions, setShowMoreActions] = useState<boolean>(false);
-  const [showArchiveDialog, setShowArchiveDialog] = useState<boolean>(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
-  const [cockpitDaysAhead, setCockpitDaysAhead] = useState<number>(7);
+  const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
+  const [daysAhead, setDaysAhead] = useState(7);
+  const [contractFilter, setContractFilter] = useState<string>('all');
 
-  // API Integration
+  // API
   const { data: contact, loading, error, refetch } = useContact(id || '');
   const updateStatusHook = useUpdateContactStatus();
   const sendInvitationHook = useSendInvitation();
+  const { data: cockpitData, isLoading: cockpitLoading } = useContactCockpit(id || '', { daysAhead });
 
-  // Cockpit Data - Fetch dashboard summary
-  const {
-    data: cockpitData,
-    isLoading: cockpitLoading
-  } = useContactCockpit(id || '', { daysAhead: cockpitDaysAhead });
-
-  // Get classifications for contract creation options
-  const classifications = contact?.classifications?.map(c => c.classification_value) || [];
+  // Classifications for contract creation
+  const classifications = contact?.classifications?.map(c =>
+    typeof c === 'string' ? c : c.classification_value
+  ) || [];
 
   // Track page view
   useEffect(() => {
     if (id) {
-      analyticsService.trackPageView('contact-view', `Contact View: ${id}`);
+      analyticsService.trackPageView('contact-360', `Contact 360: ${id}`);
     }
   }, [id]);
 
   // Handle errors
   useEffect(() => {
     if (error) {
-      toast({
-        variant: "destructive",
-        title: "Error loading contact",
-        description: error,
-        duration: 5000
-      });
+      toast({ variant: "destructive", title: "Error loading contact", description: error });
     }
   }, [error, toast]);
 
-  // Get contact display name
+  // Get display name
   const getContactDisplayName = (): string => {
     if (!contact) return '';
-
-    if (contact.type === 'corporate') {
-      return contact.company_name || 'Unnamed Company';
-    } else {
-      const salutation = contact.salutation ? `${contact.salutation}. ` : '';
-      return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
-    }
+    if (contact.type === 'corporate') return contact.company_name || 'Unnamed Company';
+    const salutation = contact.salutation ? `${contact.salutation}. ` : '';
+    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
   };
 
-  // Get primary contact channel
-  const getPrimaryChannel = (channels: ContactChannel[], type: string): ContactChannel | null => {
-    if (!channels || channels.length === 0) return null;
-    return channels.find(ch => ch.channel_type === type && ch.is_primary) ||
-           channels.find(ch => ch.channel_type === type) ||
-           null;
+  // Get primary channel
+  const getPrimaryChannel = (type: string): ContactChannel | null => {
+    if (!contact?.contact_channels) return null;
+    return contact.contact_channels.find(ch => ch.channel_type === type && ch.is_primary) ||
+           contact.contact_channels.find(ch => ch.channel_type === type) || null;
   };
 
-  // Get primary address
-  const getPrimaryAddress = (): ContactAddress | null => {
-    if (!contact?.addresses || contact.addresses.length === 0) return null;
-    return contact.addresses.find(addr => addr.is_primary) || contact.addresses[0] || null;
+  // Format currency
+  const formatCurrency = (value: number, currency = 'INR'): string => {
+    if (value >= 10000000) return `₹${(value / 10000000).toFixed(1)}Cr`;
+    if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
+    if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K`;
+    return `₹${value.toLocaleString()}`;
   };
 
-  // Format phone number with country code
-  const formatPhoneNumber = (channel: ContactChannel): string => {
-    if (channel.channel_type === 'mobile' && channel.country_code && channel.country_code !== 'IN') {
-      return `+${channel.country_code} ${channel.value}`;
-    } else if (channel.channel_type === 'mobile' && channel.country_code === 'IN') {
-      return `+91 ${channel.value}`;
-    }
-    return channel.value;
-  };
-
-  // Get theme-aware button styles
-  const getActionButtonStyle = (type: 'contract' | 'billing' | 'service') => {
-    const baseColors = {
-      contract: { bg: '#059669', hover: '#047857' }, // green
-      billing: { bg: '#2563eb', hover: '#1d4ed8' },   // blue
-      service: { bg: '#7c3aed', hover: '#6d28d9' }    // purple
-    };
-
-    return {
-      backgroundColor: baseColors[type].bg,
-      color: '#ffffff',
-      border: 'none',
-      borderRadius: '6px',
-      padding: '8px 16px',
-      fontSize: '14px',
-      fontWeight: '500',
-      cursor: 'pointer',
-      transition: 'all 0.2s ease',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1)',
-      ':hover': {
-        backgroundColor: baseColors[type].hover,
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.15)',
-        opacity: 0.9
-      },
-      ':disabled': {
-        opacity: 0.5,
-        cursor: 'not-allowed'
-      }
-    };
-  };
-
-  // Handle status updates
+  // Handle status update
   const handleStatusUpdate = async (newStatus: 'active' | 'inactive' | 'archived') => {
     if (!contact) return;
-
     try {
       await updateStatusHook.mutate(contact.id, newStatus);
-      setShowMoreActions(false);
       refetch();
-    } catch (error) {
-      console.error('Failed to update status:', error);
+    } catch (err) {
+      console.error('Failed to update status:', err);
     }
   };
 
   // Handle send invitation
   const handleSendInvitation = async () => {
     if (!contact) return;
-
     try {
       await sendInvitationHook.mutate(contact.id);
-      setShowMoreActions(false);
-    } catch (error) {
-      console.error('Failed to send invitation:', error);
+    } catch (err) {
+      console.error('Failed to send invitation:', err);
     }
   };
 
-  // Copy contact info to clipboard
-  const copyContactInfo = async () => {
-    if (!contact) return;
+  // Get contracts from cockpit data
+  const contracts: CockpitContract[] = cockpitData?.contracts?.contracts || [];
+  const contractsByStatus = cockpitData?.contracts?.by_status || {};
 
-    const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
-    const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
+  // Filter contracts
+  const filteredContracts = contractFilter === 'all'
+    ? contracts
+    : contracts.filter(c => c.status === contractFilter);
 
-    const info = `${getContactDisplayName()}
-${primaryEmail ? `Email: ${primaryEmail.value}` : ''}
-${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
+  // Get events from cockpit data
+  const overdueEvents: CockpitEvent[] = cockpitData?.overdue_events || [];
+  const upcomingEvents: CockpitEvent[] = cockpitData?.upcoming_events || [];
+  const todayEvents = upcomingEvents.filter(e => e.is_today);
+  const futureEvents = upcomingEvents.filter(e => !e.is_today);
 
-    try {
-      await navigator.clipboard.writeText(info);
-      toast({
-        title: "Copied",
-        description: "Contact information copied to clipboard",
-        duration: 3000
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to copy contact information"
-      });
-    }
-    setShowMoreActions(false);
-  };
-
-  // Mock data for quick stats
-  const getQuickStats = () => {
-    return {
-      contracts: 20,
-      revenue: 510000,
-      services: 8,
-      relationshipYears: contact?.created_at ?
-        Math.floor((new Date().getTime() - new Date(contact.created_at).getTime()) / (1000 * 60 * 60 * 24 * 365)) : 0
-    };
-  };
-
-  // Tab configuration with real counts
-  const tabs = [
-    {
-      id: 'summary',
-      label: 'Summary',
-      icon: User,
-      count: undefined
-    },
-    {
-      id: 'contracts',
-      label: 'Contracts',
-      icon: FileText,
-      count: cockpitData?.contracts?.total || 0
-    },
-    {
-      id: 'billing',
-      label: 'Billing',
-      icon: DollarSign,
-      count: 9
-    },
-    {
-      id: 'services',
-      label: 'Services',
-      icon: Settings,
-      count: 8
-    }
-  ];
-
-  // Render tab content
-  const renderTabContent = () => {
-    if (!contact) return null;
-
-    switch (activeTab) {
-      case 'summary':
-        return <ContactSummaryTab contact={contact} onRefresh={refetch} />;
-      case 'contracts':
-        return (
-          <ContractTab
-            contactId={contact.id}
-            contactStatus={contact.status}
-          />
-        );
-      case 'billing':
-        return (
-          <BillingTab
-            contactId={contact.id}
-            contactStatus={contact.status}
-          />
-        );
-      case 'services':
-        return (
-          <ServicesTab
-            contactId={contact.id}
-            contactStatus={contact.status}
-          />
-        );
-      default:
-        return <ContactSummaryTab contact={contact} />;
+  // Get status color
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return '#22c55e';
+      case 'signed': return '#22c55e';
+      case 'draft': return '#71717a';
+      case 'pending': return '#f59e0b';
+      case 'sent': return '#f59e0b';
+      case 'review': return '#a855f7';
+      case 'expired': return '#ef4444';
+      case 'cancelled': return '#ef4444';
+      default: return '#71717a';
     }
   };
 
   // Loading State
   if (loading) {
     return (
-      <div
-        className="p-4 md:p-6 min-h-screen transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
-      >
-        <div className="animate-pulse">
-          {/* Header Skeleton */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-4 rounded w-48"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            </div>
-            <div className="flex gap-3">
-              <div
-                className="h-10 rounded w-24"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-10 rounded w-24"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-10 rounded w-24"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Cockpit Stats Skeleton */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {[1, 2, 3, 4].map(i => (
-              <div
-                key={i}
-                className="h-24 rounded-xl"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            ))}
-          </div>
-
-          {/* Tabs Skeleton */}
-          <div className="flex gap-6 mb-6">
-            {[1, 2, 3, 4].map(i => (
-              <div
-                key={i}
-                className="h-10 rounded w-24"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            ))}
-          </div>
-
-          {/* Content Skeleton */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div className="xl:col-span-2 space-y-6">
-              <div
-                className="h-64 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-48 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            </div>
-            <div className="space-y-6">
-              <div
-                className="h-32 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-40 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div
-                className="h-24 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            </div>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: colors.utility.primaryBackground }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: colors.brand.primary }} />
       </div>
     );
   }
@@ -563,50 +226,17 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   // Error State
   if (error && !contact) {
     return (
-      <div
-        className="p-4 md:p-6 min-h-screen transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
-      >
+      <div className="p-6 min-h-screen" style={{ backgroundColor: colors.utility.primaryBackground }}>
         <div className="text-center py-12">
-          <AlertCircle
-            className="h-16 w-16 mx-auto mb-4"
-            style={{ color: colors.semantic.error }}
-          />
-          <h3
-            className="text-lg font-medium mb-2 transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Failed to load contact
-          </h3>
-          <p
-            className="mb-6 transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            {error}
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={refetch}
-              className="px-4 py-2 rounded-md transition-colors"
-              style={{
-                backgroundColor: colors.brand.primary,
-                color: '#ffffff'
-              }}
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => navigate('/contacts')}
-              className="px-4 py-2 border rounded-md hover:opacity-80 transition-colors"
-              style={{
-                borderColor: colors.utility.primaryText + '40',
-                color: colors.utility.primaryText,
-                backgroundColor: 'transparent'
-              }}
-            >
-              Back to Contacts
-            </button>
-          </div>
+          <AlertCircle className="h-16 w-16 mx-auto mb-4" style={{ color: colors.semantic.error }} />
+          <h3 className="text-lg font-medium mb-2" style={{ color: colors.utility.primaryText }}>Failed to load contact</h3>
+          <p className="mb-6" style={{ color: colors.utility.secondaryText }}>{error}</p>
+          <button onClick={refetch} className="px-4 py-2 rounded-md mr-3" style={{ backgroundColor: colors.brand.primary, color: '#fff' }}>
+            Try Again
+          </button>
+          <button onClick={() => navigate('/contacts')} className="px-4 py-2 rounded-md border" style={{ borderColor: colors.utility.primaryText + '40', color: colors.utility.primaryText }}>
+            Back to Contacts
+          </button>
         </div>
       </div>
     );
@@ -615,35 +245,11 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
   // Not Found State
   if (!loading && !contact) {
     return (
-      <div
-        className="p-4 md:p-6 min-h-screen transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
-      >
+      <div className="p-6 min-h-screen" style={{ backgroundColor: colors.utility.primaryBackground }}>
         <div className="text-center py-12">
-          <User
-            className="h-16 w-16 mx-auto mb-4"
-            style={{ color: colors.utility.secondaryText }}
-          />
-          <h3
-            className="text-lg font-medium mb-2 transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Contact not found
-          </h3>
-          <p
-            className="mb-6 transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            The contact you're looking for doesn't exist or has been removed.
-          </p>
-          <button
-            onClick={() => navigate('/contacts')}
-            className="px-4 py-2 rounded-md transition-colors"
-            style={{
-              backgroundColor: colors.brand.primary,
-              color: '#ffffff'
-            }}
-          >
+          <User className="h-16 w-16 mx-auto mb-4" style={{ color: colors.utility.secondaryText }} />
+          <h3 className="text-lg font-medium mb-2" style={{ color: colors.utility.primaryText }}>Contact not found</h3>
+          <button onClick={() => navigate('/contacts')} className="px-4 py-2 rounded-md" style={{ backgroundColor: colors.brand.primary, color: '#fff' }}>
             Back to Contacts
           </button>
         </div>
@@ -653,237 +259,519 @@ ${primaryPhone ? `Phone: ${formatPhoneNumber(primaryPhone)}` : ''}`;
 
   if (!contact) return null;
 
-  // Get user status info
   const userStatusInfo = contact.user_account_status ?
     USER_STATUS_MESSAGES[contact.user_account_status as keyof typeof USER_STATUS_MESSAGES] : null;
-
-  const primaryEmail = getPrimaryChannel(contact.contact_channels, 'email');
-  const primaryPhone = getPrimaryChannel(contact.contact_channels, 'mobile');
-  const primaryAddress = getPrimaryAddress();
-  const quickStats = getQuickStats();
+  const primaryEmail = getPrimaryChannel('email');
+  const primaryPhone = getPrimaryChannel('mobile');
 
   return (
-    <div
-      className="p-4 md:p-6 min-h-screen pb-24 transition-colors"
-      style={{ backgroundColor: colors.utility.primaryBackground }}
-    >
-      {/* Header Section */}
-      <div className="flex items-center justify-between mb-6">
-        {/* Left Side - Breadcrumb Navigation */}
-        <div className="flex items-center gap-3">
+    <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: colors.utility.primaryBackground }}>
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* HERO HEADER */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <header
+        className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b"
+        style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
+      >
+        {/* Left: Back + Contact Info */}
+        <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/contacts')}
-            className="p-2 rounded-full hover:opacity-80 transition-colors"
-            style={{ backgroundColor: colors.utility.secondaryBackground }}
+            className="p-2 rounded-xl border transition-colors hover:opacity-80"
+            style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '15' }}
           >
-            <ArrowLeft
-              className="h-5 w-5"
-              style={{ color: colors.utility.primaryText }}
-            />
+            <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
           </button>
-          <div
-            className="text-sm"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            <button
-              onClick={() => navigate('/contacts')}
-              className="hover:opacity-80 cursor-pointer transition-colors"
-              style={{ color: colors.brand.primary }}
+
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg"
+              style={{ background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`, color: '#fff' }}
             >
-              Contacts
-            </button>
-            <span className="mx-2">/</span>
-            <span
-              className="font-medium transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              {getContactDisplayName()}
-            </span>
+              {contact.type === 'corporate'
+                ? (contact.company_name?.substring(0, 2).toUpperCase() || 'CO')
+                : (contact.name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'UN')}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold" style={{ color: colors.utility.primaryText }}>{getContactDisplayName()}</h1>
+                {contact.type === 'corporate' ? (
+                  <Building2 className="h-4 w-4" style={{ color: colors.brand.primary }} />
+                ) : (
+                  <User className="h-4 w-4" style={{ color: colors.brand.primary }} />
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-sm" style={{ color: colors.utility.secondaryText }}>
+                {primaryEmail && <span>{primaryEmail.value}</span>}
+                <span
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase"
+                  style={{
+                    backgroundColor: contact.status === 'active' ? '#22c55e20' : contact.status === 'inactive' ? '#f59e0b20' : '#ef444420',
+                    color: contact.status === 'active' ? '#22c55e' : contact.status === 'inactive' ? '#f59e0b' : '#ef4444'
+                  }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />
+                  {contact.status}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Right Side - Edit Button Only (Actions moved to Island) */}
-        <div className="flex items-center gap-3">
+        {/* Right: Stats + Edit */}
+        <div className="flex items-center gap-8">
+          {/* LTV */}
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: '#22c55e' }}>
+              {cockpitLoading ? '...' : formatCurrency(cockpitData?.ltv || 0)}
+            </div>
+            <div className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+              Lifetime Value
+            </div>
+          </div>
+
+          {/* Outstanding */}
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: '#f59e0b' }}>
+              {cockpitLoading ? '...' : formatCurrency(cockpitData?.outstanding || 0)}
+            </div>
+            <div className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+              Outstanding
+            </div>
+          </div>
+
+          {/* Health Score */}
+          <div className="text-right">
+            <div className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
+              {cockpitLoading ? '...' : `${cockpitData?.health_score || 0}%`}
+            </div>
+            <div className="text-xs font-bold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+              Health Score
+            </div>
+          </div>
+
+          {/* Edit Button */}
           <button
             onClick={() => navigate(`/contacts/${contact.id}/edit`)}
-            className="px-4 py-2 rounded-md transition-colors hover:opacity-80 flex items-center gap-2"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              color: colors.utility.primaryText,
-              border: `1px solid ${colors.utility.primaryText}20`
-            }}
+            className="px-4 py-2 rounded-lg flex items-center gap-2 transition-colors hover:opacity-80"
+            style={{ backgroundColor: colors.utility.primaryBackground, border: `1px solid ${colors.utility.primaryText}20`, color: colors.utility.primaryText }}
           >
             <Edit className="h-4 w-4" />
             Edit
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Status Warnings */}
       {contact.status === 'inactive' && (
-        <div
-          className="mb-6 p-4 rounded-lg border transition-colors"
-          style={{
-            backgroundColor: colors.semantic.warning + '10',
-            borderColor: colors.semantic.warning + '40'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <AlertCircle
-              className="h-5 w-5"
-              style={{ color: colors.semantic.warning }}
-            />
-            <div>
-              <p
-                className="text-sm font-medium"
-                style={{ color: colors.semantic.warning }}
-              >
-                Contact is Inactive
-              </p>
-              <p
-                className="text-sm"
-                style={{ color: colors.semantic.warning }}
-              >
-                {BUSINESS_RULES.INACTIVE_CONTACT_RESTRICTIONS.join(' • ')}
-              </p>
-            </div>
+        <div className="px-6 py-3 border-b" style={{ backgroundColor: '#f59e0b15', borderColor: '#f59e0b40' }}>
+          <div className="flex items-center gap-2 text-sm" style={{ color: '#f59e0b' }}>
+            <AlertCircle className="h-4 w-4" />
+            <span className="font-medium">Contact is Inactive</span>
+            <span>• {BUSINESS_RULES.INACTIVE_CONTACT_RESTRICTIONS.join(' • ')}</span>
           </div>
         </div>
       )}
 
       {contact.status === 'archived' && (
-        <div
-          className="mb-6 p-4 rounded-lg border transition-colors"
-          style={{
-            backgroundColor: colors.utility.secondaryText + '10',
-            borderColor: colors.utility.secondaryText + '40'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <Archive
-              className="h-5 w-5"
-              style={{ color: colors.utility.secondaryText }}
-            />
-            <div>
-              <p
-                className="text-sm font-medium"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Contact is Archived
-              </p>
-              <p
-                className="text-sm"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                {BUSINESS_RULES.ARCHIVED_CONTACT_RESTRICTIONS.join(' • ')}
-              </p>
-            </div>
+        <div className="px-6 py-3 border-b" style={{ backgroundColor: colors.utility.secondaryText + '15', borderColor: colors.utility.secondaryText + '40' }}>
+          <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
+            <Archive className="h-4 w-4" />
+            <span className="font-medium">Contact is Archived</span>
+            <span>• {BUSINESS_RULES.ARCHIVED_CONTACT_RESTRICTIONS.join(' • ')}</span>
           </div>
         </div>
       )}
 
-      {/* User Account Status */}
-      {userStatusInfo && (
-        <div
-          className="mb-6 p-4 rounded-lg border transition-colors"
-          style={{
-            backgroundColor: colors.brand.primary + '10',
-            borderColor: colors.brand.primary + '40'
-          }}
-        >
-          <div className="flex items-center justify-between">
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* THREE COLUMN LAYOUT */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <div className="flex-1 grid grid-cols-3 overflow-hidden">
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* COLUMN 1: CONTRACTS */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col border-r overflow-hidden" style={{ borderColor: colors.utility.primaryText + '10' }}>
+          {/* Column Header */}
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b"
+            style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
+          >
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{userStatusInfo.icon}</span>
-              <span
-                className="text-sm"
-                style={{ color: colors.brand.primary }}
-              >
-                {userStatusInfo.text}
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#22c55e20' }}>
+                <FileText className="h-4 w-4" style={{ color: '#22c55e' }} />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Contracts
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: colors.utility.primaryBackground, color: colors.utility.secondaryText }}>
+                {contracts.length}
               </span>
             </div>
             <button
-              onClick={handleSendInvitation}
-              disabled={sendInvitationHook.loading}
-              className="px-3 py-1 text-sm rounded-md transition-colors disabled:opacity-50"
-              style={{
-                backgroundColor: userStatusInfo.actionType === 'primary'
-                  ? colors.brand.primary
-                  : 'transparent',
-                color: userStatusInfo.actionType === 'primary'
-                  ? '#ffffff'
-                  : colors.brand.primary,
-                border: userStatusInfo.actionType === 'primary'
-                  ? 'none'
-                  : `1px solid ${colors.brand.primary}`
-              }}
+              onClick={() => navigate(`/contracts/create?contactId=${contact.id}`)}
+              className="text-sm font-semibold flex items-center gap-1"
+              style={{ color: '#3b82f6' }}
             >
-              {sendInvitationHook.loading ? 'Sending...' : userStatusInfo.action}
+              <Plus className="h-4 w-4" /> New
             </button>
           </div>
+
+          {/* Filters */}
+          <div className="flex-shrink-0 flex gap-2 px-4 py-3 flex-wrap" style={{ backgroundColor: colors.utility.primaryBackground }}>
+            {[
+              { key: 'all', label: 'All', count: contracts.length },
+              { key: 'active', label: 'Active', count: contractsByStatus.active || 0 },
+              { key: 'draft', label: 'Draft', count: contractsByStatus.draft || 0 },
+              { key: 'sent', label: 'Sent', count: contractsByStatus.sent || 0 },
+              { key: 'signed', label: 'Signed', count: contractsByStatus.signed || 0 },
+            ].filter(f => f.count > 0 || f.key === 'all').map(filter => (
+              <button
+                key={filter.key}
+                onClick={() => setContractFilter(filter.key)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors"
+                style={{
+                  backgroundColor: contractFilter === filter.key ? '#3b82f620' : 'transparent',
+                  borderColor: contractFilter === filter.key ? '#3b82f6' : colors.utility.primaryText + '20',
+                  color: contractFilter === filter.key ? '#3b82f6' : colors.utility.secondaryText
+                }}
+              >
+                {filter.label} {filter.count > 0 && <span className="ml-1 opacity-70">{filter.count}</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* Contract Cards */}
+          <div className="flex-1 overflow-y-auto px-4 py-2">
+            {cockpitLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-32 rounded-xl animate-pulse" style={{ backgroundColor: colors.utility.secondaryText + '20' }} />
+                ))}
+              </div>
+            ) : filteredContracts.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" style={{ color: colors.utility.secondaryText }} />
+                <p className="text-sm" style={{ color: colors.utility.secondaryText }}>No contracts found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredContracts.map(contract => (
+                  <div
+                    key={contract.id}
+                    onClick={() => navigate(`/contracts/${contract.id}`)}
+                    className="p-4 rounded-xl border cursor-pointer transition-all hover:translate-x-1"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      borderColor: colors.utility.primaryText + '10',
+                      borderLeftWidth: '3px',
+                      borderLeftColor: getStatusColor(contract.status)
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <span
+                        className="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                        style={{ backgroundColor: getStatusColor(contract.status) + '20', color: getStatusColor(contract.status) }}
+                      >
+                        {contract.status}
+                      </span>
+                      <span className="text-base font-bold" style={{ color: colors.utility.primaryText }}>
+                        {formatCurrency(contract.grand_total)}
+                      </span>
+                    </div>
+                    <div className="text-sm font-semibold mb-1" style={{ color: colors.utility.primaryText }}>
+                      {contract.name}
+                    </div>
+                    <div className="text-xs font-mono" style={{ color: colors.utility.secondaryText }}>
+                      {contract.contract_number}
+                    </div>
+                    {contract.duration_value && (
+                      <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}>
+                        {contract.duration_value} {contract.duration_unit}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Compact Header Card - Using Reusable Component */}
-      <ContactHeaderCard contact={contact} className="mb-6" />
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* COLUMN 2: EVENTS TIMELINE */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col border-r overflow-hidden" style={{ borderColor: colors.utility.primaryText + '10' }}>
+          {/* Column Header */}
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b"
+            style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '10' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#3b82f620' }}>
+                <Calendar className="h-4 w-4" style={{ color: '#3b82f6' }} />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Events Timeline
+              </h2>
+            </div>
+            {/* Date Range Selector */}
+            <div className="flex gap-1 p-1 rounded-lg" style={{ backgroundColor: colors.utility.secondaryBackground }}>
+              {[7, 14, 30].map(days => (
+                <button
+                  key={days}
+                  onClick={() => setDaysAhead(days)}
+                  className="px-3 py-1 rounded-md text-xs font-semibold transition-colors"
+                  style={{
+                    backgroundColor: daysAhead === days ? colors.utility.primaryBackground : 'transparent',
+                    color: daysAhead === days ? colors.utility.primaryText : colors.utility.secondaryText
+                  }}
+                >
+                  {days}D
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* === COCKPIT STATS BAR === */}
-      <ContactCockpitStatsBar
-        data={cockpitData}
-        isLoading={cockpitLoading}
-        className="mb-6"
-      />
+          {/* Events List */}
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {cockpitLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-20 rounded-xl animate-pulse" style={{ backgroundColor: colors.utility.secondaryText + '20' }} />
+                ))}
+              </div>
+            ) : (
+              <>
+                {/* OVERDUE BUCKET */}
+                {overdueEvents.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: '#ef4444', boxShadow: '0 0 12px #ef4444' }} />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#ef4444' }}>Overdue</span>
+                      <span className="text-xs ml-auto" style={{ color: colors.utility.secondaryText }}>{overdueEvents.length} events</span>
+                    </div>
+                    <div className="space-y-2">
+                      {overdueEvents.map(event => (
+                        <div
+                          key={event.id}
+                          className="p-3 rounded-xl border-l-3 flex items-start gap-3"
+                          style={{ backgroundColor: '#ef444415', borderLeftWidth: '3px', borderLeftColor: '#ef4444' }}
+                        >
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: event.event_type === 'billing' ? '#3b82f620' : '#a855f720' }}>
+                            {event.event_type === 'billing' ? '💳' : '🔧'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>{event.block_name || event.event_type}</div>
+                            <div className="text-xs" style={{ color: colors.utility.secondaryText }}>{event.contract_name}</div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-xs font-semibold" style={{ color: '#ef4444' }}>{event.days_overdue}d ago</div>
+                            {event.amount && <div className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>{formatCurrency(event.amount)}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-      {/* === COCKPIT PANEL (Contracts Pulse + Events Radar) === */}
-      <ContactCockpitPanel
-        data={cockpitData}
-        isLoading={cockpitLoading}
-        contactId={id || ''}
-        classifications={classifications}
-        onDateRangeChange={setCockpitDaysAhead}
-        className="mb-6"
-      />
+                {/* TODAY BUCKET */}
+                {todayEvents.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#f59e0b', boxShadow: '0 0 8px #f59e0b' }} />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#f59e0b' }}>Today</span>
+                      <span className="text-xs ml-auto" style={{ color: colors.utility.secondaryText }}>{todayEvents.length} events</span>
+                    </div>
+                    <div className="space-y-2">
+                      {todayEvents.map(event => (
+                        <div
+                          key={event.id}
+                          className="p-3 rounded-xl border-l-3 flex items-start gap-3"
+                          style={{ backgroundColor: '#f59e0b15', borderLeftWidth: '3px', borderLeftColor: '#f59e0b' }}
+                        >
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: event.event_type === 'billing' ? '#3b82f620' : '#a855f720' }}>
+                            {event.event_type === 'billing' ? '💳' : '🔧'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>{event.block_name || event.event_type}</div>
+                            <div className="text-xs" style={{ color: colors.utility.secondaryText }}>{event.contract_name}</div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-xs font-semibold" style={{ color: '#f59e0b' }}>Today</div>
+                            {event.amount && <div className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>{formatCurrency(event.amount)}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-      {/* Tabs Navigation */}
-      <TabsNavigation
-        tabs={tabs}
-        activeTab={activeTab}
-        onTabChange={(tabId) => setActiveTab(tabId as ActiveTab)}
-        variant="underline"
-        size="md"
-        className="mb-6"
-      />
+                {/* UPCOMING BUCKET */}
+                {futureEvents.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3 px-1">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
+                      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#22c55e' }}>Upcoming ({daysAhead} days)</span>
+                      <span className="text-xs ml-auto" style={{ color: colors.utility.secondaryText }}>{futureEvents.length} events</span>
+                    </div>
+                    <div className="space-y-2">
+                      {futureEvents.map(event => (
+                        <div
+                          key={event.id}
+                          className="p-3 rounded-xl border flex items-start gap-3"
+                          style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
+                        >
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: event.event_type === 'billing' ? '#3b82f620' : '#a855f720' }}>
+                            {event.event_type === 'billing' ? '💳' : '🔧'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>{event.block_name || event.event_type}</div>
+                            <div className="text-xs" style={{ color: colors.utility.secondaryText }}>{event.contract_name}</div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                              {new Date(event.scheduled_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </div>
+                            {event.amount && <div className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>{formatCurrency(event.amount)}</div>}
+                            {event.sequence_number && (
+                              <div className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                                {event.sequence_number}/{event.total_occurrences}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-      {/* Tab Content */}
-      <div className="tab-content">
-        {renderTabContent()}
+                {/* Empty State */}
+                {overdueEvents.length === 0 && todayEvents.length === 0 && futureEvents.length === 0 && (
+                  <div className="text-center py-12">
+                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-30" style={{ color: colors.utility.secondaryText }} />
+                    <p className="text-sm" style={{ color: colors.utility.secondaryText }}>No events in the next {daysAhead} days</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* COLUMN 3: FINANCIALS */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col overflow-hidden">
+          {/* Column Header */}
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b"
+            style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#06b6d420' }}>
+                <DollarSign className="h-4 w-4" style={{ color: '#06b6d4' }} />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Financials
+              </h2>
+            </div>
+            <button className="text-sm font-semibold" style={{ color: '#3b82f6' }}>
+              Export ↓
+            </button>
+          </div>
+
+          {/* Financials Content */}
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {/* Summary Card */}
+            <div className="p-5 rounded-2xl border mb-5" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}>
+              <div className="flex items-center justify-between mb-4">
+                <span className="px-3 py-1 rounded text-xs font-bold uppercase" style={{ backgroundColor: '#22c55e20', color: '#22c55e' }}>
+                  Accounts Receivable
+                </span>
+                <button className="text-xs font-semibold" style={{ color: '#3b82f6' }}>Record Payment</button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="p-4 rounded-xl" style={{ backgroundColor: '#22c55e15' }}>
+                  <div className="text-xl font-bold" style={{ color: '#22c55e' }}>
+                    {formatCurrency((cockpitData?.ltv || 0) - (cockpitData?.outstanding || 0))}
+                  </div>
+                  <div className="text-xs" style={{ color: colors.utility.secondaryText }}>Collected</div>
+                </div>
+                <div className="p-4 rounded-xl" style={{ backgroundColor: '#f59e0b15' }}>
+                  <div className="text-xl font-bold" style={{ color: '#f59e0b' }}>
+                    {formatCurrency(cockpitData?.outstanding || 0)}
+                  </div>
+                  <div className="text-xs" style={{ color: colors.utility.secondaryText }}>Outstanding</div>
+                </div>
+              </div>
+
+              {/* Collection Progress */}
+              <div>
+                <div className="flex justify-between text-xs mb-2">
+                  <span style={{ color: colors.utility.secondaryText }}>Collection Rate</span>
+                  <span className="font-bold" style={{ color: '#22c55e' }}>
+                    {cockpitData?.ltv ? Math.round(((cockpitData.ltv - (cockpitData.outstanding || 0)) / cockpitData.ltv) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: colors.utility.primaryText + '15' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${cockpitData?.ltv ? Math.round(((cockpitData.ltv - (cockpitData.outstanding || 0)) / cockpitData.ltv) * 100) : 0}%`,
+                      background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Activity Placeholder */}
+            <div className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: colors.utility.secondaryText }}>
+              Recent Invoices
+            </div>
+
+            <div className="text-center py-8 rounded-xl border" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}>
+              <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-30" style={{ color: colors.utility.secondaryText }} />
+              <p className="text-sm" style={{ color: colors.utility.secondaryText }}>Invoice list coming soon</p>
+              <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>Billing module integration pending</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* === ACTION ISLAND (Floating Bottom Bar) === */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ACTION ISLAND */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
       <ActionIsland
         contactId={contact.id}
         contactName={getContactDisplayName()}
         classifications={classifications}
         contactStatus={contact.status}
+        primaryEmail={primaryEmail?.value}
+        primaryPhone={primaryPhone?.value}
+        onProfileClick={() => setIsProfileDrawerOpen(true)}
       />
 
-      {/* Click outside handler for dropdowns */}
-      {showMoreActions && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => setShowMoreActions(false)}
-        />
-      )}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* PROFILE DRAWER */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <ProfileDrawer
+        isOpen={isProfileDrawerOpen}
+        onClose={() => setIsProfileDrawerOpen(false)}
+        contact={contact}
+        onRefresh={refetch}
+      />
 
-      {/* Archive Confirmation Dialog */}
+      {/* Archive Dialog */}
       <ConfirmationDialog
         isOpen={showArchiveDialog}
         onClose={() => setShowArchiveDialog(false)}
-        onConfirm={() => {
-          handleStatusUpdate('archived');
-          setShowArchiveDialog(false);
-        }}
+        onConfirm={() => { handleStatusUpdate('archived'); setShowArchiveDialog(false); }}
         title="Archive Contact"
-        description="Are you sure you want to archive this contact? This action cannot be undone."
+        description="Are you sure you want to archive this contact?"
         confirmText="Archive"
         type="danger"
         icon={<Archive className="h-6 w-6" />}

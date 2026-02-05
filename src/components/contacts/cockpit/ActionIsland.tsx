@@ -23,6 +23,9 @@ interface ActionIslandProps {
   contactName: string;
   classifications?: string[];
   contactStatus?: 'active' | 'inactive' | 'archived';
+  primaryEmail?: string;
+  primaryPhone?: string;
+  onProfileClick?: () => void;
   className?: string;
 }
 
@@ -42,6 +45,9 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
   contactName,
   classifications = [],
   contactStatus = 'active',
+  primaryEmail,
+  primaryPhone,
+  onProfileClick,
   className = '',
 }) => {
   const navigate = useNavigate();
@@ -152,6 +158,30 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
               : '0 20px 60px rgba(0, 0, 0, 0.15), 0 8px 20px rgba(0, 0, 0, 0.1)',
           }}
         >
+          {/* Profile Button - Opens ProfileDrawer */}
+          {onProfileClick && (
+            <>
+              <button
+                onClick={onProfileClick}
+                className={`
+                  flex items-center gap-2 px-4 py-2 rounded-full
+                  font-semibold text-sm transition-all
+                  hover:scale-105 active:scale-95
+                `}
+                style={{
+                  backgroundColor: isDarkMode ? '#6366F1' : '#4F46E5',
+                  color: 'white',
+                }}
+              >
+                <User className="h-4 w-4" />
+                <span>Profile</span>
+              </button>
+
+              {/* Divider */}
+              <div className={`w-px h-6 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
+            </>
+          )}
+
           {/* Contract Button with Dropdown */}
           <div className="relative">
             <button

@@ -66,13 +66,13 @@ export const useContactCockpit = (
       return result.data;
     },
     enabled: !!currentTenant?.id && !!contactId && (options?.enabled !== false),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000,   // 10 minutes
-    refetchInterval: options?.refetchInterval,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 5 * 60 * 1000, // 5 minutes - data doesn't change often
+    gcTime: 15 * 60 * 1000,   // 15 minutes
+    refetchInterval: false,   // Disabled - no auto-refresh
+    refetchOnWindowFocus: false, // Disabled - prevents constant refetching
+    refetchOnReconnect: false,   // Disabled
+    retry: 1,
+    retryDelay: 2000,
     networkMode: 'online',
   });
 };

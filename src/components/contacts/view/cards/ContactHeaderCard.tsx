@@ -1,4 +1,5 @@
-// src/components/contacts/view/cards/ContactHeaderCard.tsx - 4-Section Banner with Full Theme Support
+// src/components/contacts/view/cards/ContactHeaderCard.tsx - Enhanced with Cockpit Support
+// Cycle 2: Added compact variant with LTV, Outstanding, Health Score
 import React from 'react';
 import {
   Building2,
@@ -13,7 +14,10 @@ import {
   Shield,
   Tag,
   Copy,
-  CheckCircle
+  CheckCircle,
+  TrendingUp,
+  AlertCircle,
+  Heart
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { formatContactDisplayName } from '@/utils/constants/contacts';
@@ -79,6 +83,13 @@ interface Classification {
   classification_label: string;
 }
 
+// Cockpit data for compact variant
+interface CockpitData {
+  ltv: number;
+  outstanding?: number;
+  health_score: number;
+}
+
 interface ContactHeaderCardProps {
   contact: {
     id: string;
@@ -96,17 +107,27 @@ interface ContactHeaderCardProps {
     created_at: string;
     updated_at: string;
   };
+  cockpitData?: CockpitData;  // Optional cockpit metrics
+  variant?: 'default' | 'compact';  // Layout variant
+  isLoading?: boolean;  // Loading state for cockpit data
   className?: string;
 }
 
 const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
   contact,
+  cockpitData,
+  variant = 'default',
+  isLoading = false,
   className = ''
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { toast } = useToast();
   const [copiedValue, setCopiedValue] = React.useState<string | null>(null);
+
+  // Determine if we should show compact cockpit layout
+  // Always show compact when variant="compact", regardless of data availability
+  const showCompactCockpit = variant === 'compact';
 
   // Generate avatar initials
   const getAvatarInitials = (): string => {
@@ -199,6 +220,46 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
     return CHANNEL_ICONS[channelType] || Globe;
   };
 
+  // Format currency for display
+  const formatCurrency = (value: number): string => {
+    if (value >= 10000000) {
+      return `₹${(value / 10000000).toFixed(1)}Cr`;
+    } else if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(1)}L`;
+    } else if (value >= 1000) {
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
+    return `₹${value.toFixed(0)}`;
+  };
+
+  // Get health score color and label
+  const getHealthInfo = (score: number): { color: string; label: string; bgColor: string } => {
+    if (score >= 80) {
+      return {
+        color: colors.semantic.success,
+        bgColor: colors.semantic.success + '20',
+        label: 'Excellent'
+      };
+    } else if (score >= 60) {
+      return {
+        color: '#F59E0B',
+        bgColor: '#F59E0B20',
+        label: 'Good'
+      };
+    } else if (score >= 40) {
+      return {
+        color: '#F97316',
+        bgColor: '#F9731620',
+        label: 'Fair'
+      };
+    }
+    return {
+      color: colors.semantic.error,
+      bgColor: colors.semantic.error + '20',
+      label: 'Needs Attention'
+    };
+  };
+
   const primaryChannel = getPrimaryChannel();
   const otherChannels = getOtherChannels();
   const primaryAddress = getPrimaryAddress();
@@ -207,7 +268,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
   const hasTags = contact.tags && contact.tags.length > 0;
   const hasCompliance = contact.compliance_numbers && contact.compliance_numbers.length > 0;
 
-  // Calculate grid columns based on available data
+  // Calculate grid columns based on available data (for default variant)
   const visibleSections = [
     true, // Name/Classification always visible
     hasChannels,
@@ -215,6 +276,266 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
     hasTags || hasCompliance
   ].filter(Boolean).length;
 
+  // ═══════════════════════════════════════════════════════════════════
+  // COMPACT COCKPIT VARIANT
+  // ═══════════════════════════════════════════════════════════════════
+  if (showCompactCockpit) {
+    const healthInfo = cockpitData ? getHealthInfo(cockpitData.health_score) : null;
+
+    return (
+      <div
+        className={`rounded-xl border transition-colors ${className}`}
+        style={{
+          background: isDarkMode
+            ? `linear-gradient(135deg, ${colors.brand.primary}25 0%, ${colors.brand.secondary}15 100%)`
+            : `linear-gradient(135deg, ${colors.brand.primary}12 0%, ${colors.brand.secondary}08 100%)`,
+          backdropFilter: 'blur(12px)',
+          borderColor: isDarkMode ? `${colors.brand.primary}40` : `${colors.brand.primary}25`
+        }}
+      >
+        <div className="flex items-center justify-between p-4">
+          {/* Left Side: Avatar + Name + Classifications */}
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* Avatar */}
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0 shadow-md"
+              style={{
+                background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
+                color: '#ffffff'
+              }}
+            >
+              {getAvatarInitials()}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {/* Name + Type Icon */}
+              <div className="flex items-center gap-2">
+                <h1
+                  className="font-semibold text-lg truncate"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {displayName}
+                </h1>
+                {contact.type === 'corporate' ? (
+                  <Building2 className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
+                ) : (
+                  <User className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
+                )}
+              </div>
+
+              {/* Classifications + Contact Number + Status */}
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                {contact.classifications.slice(0, 3).map((classification, index) => {
+                  const classLabel = typeof classification === 'string'
+                    ? classification
+                    : classification.classification_label;
+                  return (
+                    <span
+                      key={typeof classification === 'string' ? `class-${index}` : ((classification as Classification).id || `class-${index}`)}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={{
+                        backgroundColor: `${colors.brand.primary}25`,
+                        color: isDarkMode ? colors.utility.primaryText : colors.brand.primary
+                      }}
+                    >
+                      {classLabel}
+                    </span>
+                  );
+                })}
+                {contact.classifications.length > 3 && (
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    +{contact.classifications.length - 3}
+                  </span>
+                )}
+
+                {/* Separator */}
+                <span
+                  className="w-1 h-1 rounded-full"
+                  style={{ backgroundColor: colors.utility.secondaryText }}
+                />
+
+                {/* Contact Number or ID */}
+                {contact.contact_number ? (
+                  <code
+                    className="text-xs font-mono font-medium cursor-pointer hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
+                    onClick={() => copyToClipboard(contact.contact_number!, 'Contact Number')}
+                  >
+                    {contact.contact_number}
+                  </code>
+                ) : (
+                  <code
+                    className="text-xs font-mono cursor-pointer hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
+                    onClick={() => copyToClipboard(contact.id, 'Contact ID')}
+                  >
+                    {contact.id.substring(0, 8)}
+                  </code>
+                )}
+
+                {/* Status Badge */}
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: contact.status === 'active'
+                      ? colors.semantic.success + '20'
+                      : contact.status === 'inactive'
+                        ? colors.semantic.warning + '20'
+                        : colors.semantic.error + '20',
+                    color: contact.status === 'active'
+                      ? colors.semantic.success
+                      : contact.status === 'inactive'
+                        ? colors.semantic.warning
+                        : colors.semantic.error
+                  }}
+                >
+                  {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Cockpit Metrics */}
+          <div
+            className="flex items-center gap-6 pl-6 border-l flex-shrink-0"
+            style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }}
+          >
+            {isLoading ? (
+              // Loading skeleton
+              <div className="flex items-center gap-6 animate-pulse">
+                <div className="text-right">
+                  <div className="h-3 w-8 rounded bg-gray-300 dark:bg-gray-600 mb-1" />
+                  <div className="h-5 w-16 rounded bg-gray-300 dark:bg-gray-600" />
+                </div>
+                <div className="text-right">
+                  <div className="h-3 w-12 rounded bg-gray-300 dark:bg-gray-600 mb-1" />
+                  <div className="h-5 w-20 rounded bg-gray-300 dark:bg-gray-600" />
+                </div>
+              </div>
+            ) : cockpitData ? (
+              <>
+                {/* LTV */}
+                <div className="text-right">
+                  <div
+                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <TrendingUp className="h-3 w-3" />
+                    LTV
+                  </div>
+                  <div
+                    className="text-lg font-bold"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {formatCurrency(cockpitData.ltv)}
+                  </div>
+                </div>
+
+                {/* Outstanding */}
+                {cockpitData.outstanding !== undefined && cockpitData.outstanding > 0 && (
+                  <div className="text-right">
+                    <div
+                      className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
+                      style={{ color: colors.semantic.warning }}
+                    >
+                      <AlertCircle className="h-3 w-3" />
+                      Outstanding
+                    </div>
+                    <div
+                      className="text-lg font-bold"
+                      style={{ color: colors.semantic.warning }}
+                    >
+                      {formatCurrency(cockpitData.outstanding)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Health Score */}
+                <div className="text-right min-w-[100px]">
+                  <div
+                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <Heart className="h-3 w-3" style={{ color: healthInfo?.color }} />
+                    Health
+                  </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <span
+                      className="text-lg font-bold"
+                      style={{ color: healthInfo?.color }}
+                    >
+                      {cockpitData.health_score}%
+                    </span>
+                    {/* Progress bar */}
+                    <div
+                      className="w-16 h-2 rounded-full overflow-hidden"
+                      style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${cockpitData.health_score}%`,
+                          backgroundColor: healthInfo?.color
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              // No data state - show placeholder metrics
+              <>
+                {/* LTV - No data */}
+                <div className="text-right">
+                  <div
+                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <TrendingUp className="h-3 w-3" />
+                    LTV
+                  </div>
+                  <div
+                    className="text-lg font-bold"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    --
+                  </div>
+                </div>
+
+                {/* Health Score - No data */}
+                <div className="text-right min-w-[100px]">
+                  <div
+                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    <Heart className="h-3 w-3" />
+                    Health
+                  </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <span
+                      className="text-lg font-bold"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      --%
+                    </span>
+                    {/* Empty progress bar */}
+                    <div
+                      className="w-16 h-2 rounded-full overflow-hidden"
+                      style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DEFAULT VARIANT (Original 4-Section Layout)
+  // ═══════════════════════════════════════════════════════════════════
   return (
     <div
       className={`rounded-xl border transition-colors ${className}`}
