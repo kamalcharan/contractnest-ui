@@ -1,6 +1,6 @@
 // src/components/contacts/cockpit/ProfileDrawer.tsx
-// Cycle 1: Profile Drawer - Matches existing ViewCard UI from ContactSummaryTab
-// All editing via modals only - NO page navigation
+// Production-grade Profile Drawer with FULL Edit Modal Functionality
+// Ported from ContactSummaryTab - All editing via modals, NO page navigation
 
 import React, { useState } from 'react';
 import {
@@ -19,10 +19,24 @@ import {
   Edit,
   Power,
   Archive,
+  Loader2,
+  Star,
+  Send,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useUpdateContactStatus } from '@/hooks/useContacts';
+import { useUpdateContact, useUpdateContactStatus } from '@/hooks/useContacts';
+
+// Import form components for modal editing
+import ContactChannelsSection from '@/components/contacts/forms/ContactChannelsSection';
+import AddressesSection from '@/components/contacts/forms/AddressesSection';
+import ComplianceNumbersSection from '@/components/contacts/forms/ComplianceNumbersSection';
+import ContactPersonsSection from '@/components/contacts/forms/ContactPersonsSection';
+import ContactTagsSection from '@/components/contacts/forms/ContactTagsSection';
+import ContactClassificationSelector from '@/components/contacts/forms/ContactClassificationSelector';
+
+// Import constants
+import { CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG, getClassificationColors } from '@/utils/constants/contacts';
 
 // Types
 interface ContactChannel {
@@ -39,12 +53,17 @@ interface ContactAddress {
   id: string;
   address_type: string;
   label?: string;
-  line1: string;
+  line1?: string;
+  address_line1?: string;
   line2?: string;
+  address_line2?: string;
   city: string;
-  state: string;
+  state?: string;
+  state_code?: string;
   country: string;
+  country_code?: string;
   postal_code?: string;
+  google_pin?: string;
   is_primary: boolean;
 }
 
@@ -56,6 +75,7 @@ interface ContactPerson {
   department?: string;
   is_primary: boolean;
   contact_channels: ContactChannel[];
+  notes?: string;
 }
 
 interface ContactTag {
@@ -71,6 +91,11 @@ interface ComplianceNumber {
   type_label: string;
   number: string;
   hexcolor?: string;
+  is_verified?: boolean;
+  valid_from?: string;
+  valid_to?: string;
+  issuing_authority?: string;
+  notes?: string;
 }
 
 interface Classification {
@@ -86,12 +111,14 @@ interface Contact {
   name?: string;
   salutation?: string;
   company_name?: string;
-  classifications: Classification[];
+  industry?: string;
+  classifications: Classification[] | string[];
   tags: ContactTag[];
   compliance_numbers: ComplianceNumber[];
   contact_channels: ContactChannel[];
   addresses: ContactAddress[];
   contact_persons: ContactPerson[];
+  notes?: string;
 }
 
 interface ProfileDrawerProps {
@@ -101,19 +128,114 @@ interface ProfileDrawerProps {
   onRefresh?: () => void;
 }
 
-// Channel icon mapping
-const CHANNEL_ICONS: Record<string, React.ElementType> = {
-  mobile: Phone,
-  phone: Phone,
-  email: Mail,
-  whatsapp: MessageSquare,
-  telegram: MessageSquare,
-  linkedin: Linkedin,
-  website: Globe,
-  skype: MessageSquare,
+type ModalType = 'channels' | 'classification' | 'persons' | 'tags' | 'address' | 'compliance' | null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EDIT MODAL COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+const EditModal: React.FC<{
+  isOpen: boolean;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  onSave: () => Promise<void>;
+  isSaving: boolean;
+}> = ({ isOpen, title, onClose, children, onSave, isSaving }) => {
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  if (!isOpen) return null;
+
+  const glassStyle: React.CSSProperties = {
+    background: isDarkMode
+      ? 'rgba(15, 23, 42, 0.95)'
+      : 'rgba(255, 255, 255, 0.98)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-2xl shadow-2xl border animate-in zoom-in-95 duration-200"
+        style={{
+          ...glassStyle,
+          borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+        }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
+          <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:opacity-70 transition-colors"
+            style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }}
+          >
+            <X className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto max-h-[calc(85vh-140px)] p-6">
+          {children}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-end gap-3 px-6 py-4 border-t"
+          style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+        >
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="px-4 py-2 rounded-xl font-medium transition-colors"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+              color: colors.utility.primaryText
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-6 py-2 rounded-xl font-medium transition-colors flex items-center gap-2"
+            style={{
+              backgroundColor: colors.brand.primary,
+              color: '#ffffff',
+              opacity: isSaving ? 0.7 : 1
+            }}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-// ViewCard Component - Same as ContactSummaryTab
+// ═══════════════════════════════════════════════════════════════════════════
+// VIEW CARD COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
 const ViewCard: React.FC<{
   title: string;
   icon: React.ReactNode;
@@ -181,6 +303,9 @@ const ViewCard: React.FC<{
   );
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN PROFILE DRAWER COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
 const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   isOpen,
   onClose,
@@ -190,11 +315,451 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { toast } = useToast();
+
+  // Hooks
+  const updateContactHook = useUpdateContact();
   const updateStatusHook = useUpdateContactStatus();
 
-  // Local state
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATE
+  // ─────────────────────────────────────────────────────────────────────────
+  const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [formData, setFormData] = useState<any>({});
+  const [isSaving, setIsSaving] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HELPER FUNCTIONS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Get classification label from value
+  const getClassificationLabel = (value: string): string => {
+    const config = CONTACT_CLASSIFICATION_CONFIG?.find(c => c.id === value);
+    if (config) return config.label;
+    return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' ');
+  };
+
+  // Normalize classifications - API returns strings, UI needs objects
+  const normalizeClassifications = (classifications: any[]): Array<{id: string; classification_value: string; classification_label: string}> => {
+    if (!classifications || !Array.isArray(classifications)) return [];
+
+    return classifications.map((cls, index) => {
+      if (typeof cls === 'object' && cls.classification_value) {
+        return {
+          id: cls.id || `cls-${index}`,
+          classification_value: cls.classification_value,
+          classification_label: cls.classification_label || getClassificationLabel(cls.classification_value)
+        };
+      }
+      if (typeof cls === 'string') {
+        return {
+          id: `cls-${index}`,
+          classification_value: cls,
+          classification_label: getClassificationLabel(cls)
+        };
+      }
+      return {
+        id: `cls-${index}`,
+        classification_value: String(cls),
+        classification_label: String(cls)
+      };
+    });
+  };
+
+  // Get classification badge colors
+  const getClassificationBadgeColors = (classificationValue: string) => {
+    const config = CONTACT_CLASSIFICATION_CONFIG?.find(c => c.id === classificationValue);
+    return getClassificationColors(config?.colorKey || 'purple', colors, 'badge');
+  };
+
+  // Transform classifications for API (MUST be strings only)
+  const transformClassificationsForAPI = (classifications: any[]): string[] => {
+    if (!classifications || !Array.isArray(classifications)) return [];
+
+    return classifications
+      .map((c: any) => {
+        if (typeof c === 'string') return c;
+        if (c && typeof c === 'object' && c.classification_value) {
+          return c.classification_value;
+        }
+        if (c && typeof c === 'object' && c.value) {
+          return c.value;
+        }
+        return String(c);
+      })
+      .filter((c: string) => c && c.length > 0);
+  };
+
+  // Transform contact channels for API
+  const transformChannelsForAPI = (channels: any[]): any[] => {
+    if (!channels || !Array.isArray(channels)) return [];
+
+    return channels.map((ch: any) => {
+      const channel: any = {
+        channel_type: ch.channel_type,
+        value: ch.value,
+        is_primary: Boolean(ch.is_primary),
+        is_verified: Boolean(ch.is_verified)
+      };
+
+      if (ch.id && typeof ch.id === 'string' && !ch.id.startsWith('temp_')) {
+        channel.id = ch.id;
+      }
+      if (ch.country_code) channel.country_code = ch.country_code;
+      if (ch.notes) channel.notes = ch.notes;
+
+      return channel;
+    }).filter((ch: any) => ch.channel_type && ch.value);
+  };
+
+  // Transform form data to API-expected format
+  const transformFormDataForAPI = (modalType: ModalType, data: any): any => {
+    const existingClassifications = transformClassificationsForAPI(contact.classifications);
+    const existingChannels = transformChannelsForAPI(contact.contact_channels);
+
+    const transformed: any = {
+      classifications: existingClassifications,
+      contact_channels: existingChannels
+    };
+
+    switch (modalType) {
+      case 'classification':
+        if (data.classifications && Array.isArray(data.classifications)) {
+          transformed.classifications = transformClassificationsForAPI(data.classifications);
+        }
+        break;
+
+      case 'channels':
+        if (data.contact_channels && Array.isArray(data.contact_channels)) {
+          transformed.contact_channels = transformChannelsForAPI(data.contact_channels);
+        }
+        break;
+
+      case 'tags':
+        if (data.tags && Array.isArray(data.tags)) {
+          transformed.tags = data.tags
+            .filter((t: any) => t.tag_value)
+            .map((t: any) => {
+              const tag: any = {
+                tag_value: t.tag_value,
+                tag_label: t.tag_label || t.tag_value
+              };
+              if (t.id && typeof t.id === 'string' && !t.id.startsWith('temp_')) {
+                tag.id = t.id;
+              }
+              if (t.tag_color) tag.tag_color = t.tag_color;
+              return tag;
+            });
+        }
+        break;
+
+      case 'address':
+        if (data.addresses && Array.isArray(data.addresses)) {
+          transformed.addresses = data.addresses
+            .filter((addr: any) => (addr.address_line1 || addr.line1) && addr.city)
+            .map((addr: any) => {
+              const address: any = {
+                type: addr.type || addr.address_type || 'office',
+                address_line1: addr.address_line1 || addr.line1,
+                city: addr.city,
+                country_code: addr.country_code || 'IN',
+                is_primary: Boolean(addr.is_primary)
+              };
+              if (addr.id && typeof addr.id === 'string' && !addr.id.startsWith('temp_')) {
+                address.id = addr.id;
+              }
+              if (addr.label) address.label = addr.label;
+              if (addr.address_line2 || addr.line2) address.address_line2 = addr.address_line2 || addr.line2;
+              if (addr.state_code || addr.state) address.state_code = addr.state_code || addr.state;
+              if (addr.postal_code) address.postal_code = addr.postal_code;
+              if (addr.google_pin) address.google_pin = addr.google_pin;
+              if (addr.notes) address.notes = addr.notes;
+              return address;
+            });
+        }
+        break;
+
+      case 'compliance':
+        if (data.compliance_numbers && Array.isArray(data.compliance_numbers)) {
+          transformed.compliance_numbers = data.compliance_numbers
+            .filter((comp: any) => comp.type_value && comp.number)
+            .map((comp: any) => {
+              const compliance: any = {
+                type_value: comp.type_value,
+                number: comp.number,
+                is_verified: Boolean(comp.is_verified)
+              };
+              if (comp.id && typeof comp.id === 'string' && !comp.id.startsWith('temp_')) {
+                compliance.id = comp.id;
+              }
+              if (comp.type_label) compliance.type_label = comp.type_label;
+              if (comp.valid_from) compliance.valid_from = comp.valid_from;
+              if (comp.valid_to) compliance.valid_to = comp.valid_to;
+              if (comp.issuing_authority) compliance.issuing_authority = comp.issuing_authority;
+              if (comp.notes) compliance.notes = comp.notes;
+              return compliance;
+            });
+        }
+        break;
+
+      case 'persons':
+        if (data.contact_persons && Array.isArray(data.contact_persons)) {
+          transformed.contact_persons = data.contact_persons
+            .filter((person: any) => person.name)
+            .map((person: any) => {
+              const p: any = {
+                name: person.name,
+                is_primary: Boolean(person.is_primary),
+                contact_channels: (person.contact_channels || [])
+                  .filter((ch: any) => ch.channel_type && ch.value)
+                  .map((ch: any) => {
+                    const channel: any = {
+                      channel_type: ch.channel_type,
+                      value: ch.value,
+                      is_primary: Boolean(ch.is_primary)
+                    };
+                    if (ch.id && typeof ch.id === 'string' && !ch.id.startsWith('temp_')) {
+                      channel.id = ch.id;
+                    }
+                    if (ch.country_code) channel.country_code = ch.country_code;
+                    return channel;
+                  })
+              };
+              if (person.id && typeof person.id === 'string' && !person.id.startsWith('temp_')) {
+                p.id = person.id;
+              }
+              if (person.salutation) p.salutation = person.salutation;
+              if (person.designation) p.designation = person.designation;
+              if (person.department) p.department = person.department;
+              if (person.notes) p.notes = person.notes;
+              return p;
+            });
+        }
+        break;
+    }
+
+    return transformed;
+  };
+
+  // Get channel icon
+  const getChannelIcon = (channelType: string): React.ElementType => {
+    switch (channelType) {
+      case CONTACT_CHANNEL_TYPES?.MOBILE:
+      case 'mobile':
+      case 'phone':
+        return Phone;
+      case CONTACT_CHANNEL_TYPES?.EMAIL:
+      case 'email':
+        return Mail;
+      case CONTACT_CHANNEL_TYPES?.WHATSAPP:
+      case 'whatsapp':
+        return MessageSquare;
+      case CONTACT_CHANNEL_TYPES?.WEBSITE:
+      case 'website':
+        return Globe;
+      case CONTACT_CHANNEL_TYPES?.LINKEDIN:
+      case 'linkedin':
+        return Linkedin;
+      case CONTACT_CHANNEL_TYPES?.TELEGRAM:
+      case 'telegram':
+        return Send;
+      case CONTACT_CHANNEL_TYPES?.SKYPE:
+      case 'skype':
+        return MessageSquare;
+      default:
+        return Phone;
+    }
+  };
+
+  // Get display name
+  const getDisplayName = () => {
+    if (contact.type === 'corporate') {
+      return contact.company_name || 'Unnamed Company';
+    }
+    const salutation = contact.salutation ? `${contact.salutation}. ` : '';
+    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
+  };
+
+  // Format channel display
+  const formatChannelValue = (channel: ContactChannel) => {
+    if (channel.channel_type === 'mobile' || channel.channel_type === 'phone') {
+      if (channel.country_code === 'IN') {
+        return `+91 ${channel.value}`;
+      }
+      const code = channel.country_code ? `+${channel.country_code}` : '';
+      return `${code} ${channel.value}`.trim();
+    }
+    return channel.value;
+  };
+
+  // Get primary channel for a person
+  const getPersonPrimaryChannel = (person: ContactPerson): string | null => {
+    if (!person.contact_channels || person.contact_channels.length === 0) {
+      return null;
+    }
+    const primary = person.contact_channels.find((ch) => ch.is_primary);
+    const channel = primary || person.contact_channels[0];
+    return channel?.value || null;
+  };
+
+  // Sort channels: primary first
+  const sortedChannels = [...(contact.contact_channels || [])].sort((a, b) => {
+    if (a.is_primary && !b.is_primary) return -1;
+    if (!a.is_primary && b.is_primary) return 1;
+    return 0;
+  });
+
+  // Normalized classifications for display
+  const normalizedClassifications = normalizeClassifications(contact.classifications);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MODAL HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Open modal with current data
+  const openModal = (type: ModalType) => {
+    switch (type) {
+      case 'channels':
+        setFormData({ contact_channels: [...(contact.contact_channels || [])] });
+        break;
+      case 'classification':
+        setFormData({ classifications: normalizeClassifications(contact.classifications) });
+        break;
+      case 'persons':
+        setFormData({ contact_persons: [...(contact.contact_persons || [])] });
+        break;
+      case 'tags':
+        setFormData({ tags: [...(contact.tags || [])] });
+        break;
+      case 'address':
+        setFormData({ addresses: [...(contact.addresses || [])] });
+        break;
+      case 'compliance':
+        setFormData({ compliance_numbers: [...(contact.compliance_numbers || [])] });
+        break;
+    }
+    setActiveModal(type);
+  };
+
+  // Save modal changes
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const transformedData = transformFormDataForAPI(activeModal, formData);
+
+      console.log('ProfileDrawer Save:', {
+        contactId: contact.id,
+        modalType: activeModal,
+        data: transformedData
+      });
+
+      await updateContactHook.mutate({
+        contactId: contact.id,
+        updates: transformedData
+      });
+
+      toast({
+        title: "Saved!",
+        description: "Changes saved successfully",
+        duration: 2000
+      });
+
+      setActiveModal(null);
+      onRefresh?.();
+    } catch (error: any) {
+      console.error('ProfileDrawer Save Error:', error);
+
+      let errorMessage = "Could not save changes. Please try again.";
+      if (error.response?.data?.validation_errors && Array.isArray(error.response.data.validation_errors)) {
+        errorMessage = error.response.data.validation_errors.join(', ');
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: errorMessage
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Get modal title
+  const getModalTitle = () => {
+    switch (activeModal) {
+      case 'channels': return 'Edit Contact Channels';
+      case 'classification': return 'Edit Classifications';
+      case 'persons': return 'Edit Contact Persons';
+      case 'tags': return 'Edit Tags';
+      case 'address': return 'Edit Addresses';
+      case 'compliance': return 'Edit Compliance Numbers';
+      default: return 'Edit';
+    }
+  };
+
+  // Render modal content
+  const renderModalContent = () => {
+    switch (activeModal) {
+      case 'channels':
+        return (
+          <ContactChannelsSection
+            value={formData.contact_channels || []}
+            onChange={(channels) => setFormData({ ...formData, contact_channels: channels })}
+            mode="edit"
+          />
+        );
+      case 'classification':
+        return (
+          <ContactClassificationSelector
+            value={formData.classifications || []}
+            onChange={(classifications) => setFormData({ ...formData, classifications })}
+            industry={contact.industry}
+          />
+        );
+      case 'persons':
+        return (
+          <ContactPersonsSection
+            value={formData.contact_persons || []}
+            onChange={(persons) => setFormData({ ...formData, contact_persons: persons })}
+            contactType={contact.type}
+          />
+        );
+      case 'tags':
+        return (
+          <ContactTagsSection
+            value={formData.tags || []}
+            onChange={(tags) => setFormData({ ...formData, tags })}
+          />
+        );
+      case 'address':
+        return (
+          <AddressesSection
+            value={formData.addresses || []}
+            onChange={(addresses) => setFormData({ ...formData, addresses })}
+            mode="edit"
+          />
+        );
+      case 'compliance':
+        return (
+          <ComplianceNumbersSection
+            value={formData.compliance_numbers || []}
+            onChange={(compliance) => setFormData({ ...formData, compliance_numbers: compliance })}
+            contactType={contact.type}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STATUS HANDLERS
+  // ─────────────────────────────────────────────────────────────────────────
 
   // Handle status toggle
   const handleStatusChange = async (newStatus: 'active' | 'inactive') => {
@@ -242,37 +807,9 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     }
   };
 
-  // Get channel icon
-  const getChannelIcon = (channelType: string): React.ElementType => {
-    return CHANNEL_ICONS[channelType] || Globe;
-  };
-
-  // Get display name
-  const getDisplayName = () => {
-    if (contact.type === 'corporate') {
-      return contact.company_name || 'Unnamed Company';
-    }
-    const salutation = contact.salutation ? `${contact.salutation}. ` : '';
-    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
-  };
-
-  // Format channel display
-  const formatChannelValue = (channel: ContactChannel) => {
-    if (channel.channel_type === 'mobile' || channel.channel_type === 'phone') {
-      const code = channel.country_code === 'IN' ? '+91' : `+${channel.country_code || ''}`;
-      return `${code} ${channel.value}`;
-    }
-    return channel.value;
-  };
-
-  // Placeholder for modal opens - TODO: Implement actual modals
-  const openModal = (modalType: string) => {
-    toast({
-      title: "Coming Soon",
-      description: `${modalType} modal editing will be implemented`,
-      duration: 2000
-    });
-  };
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
 
   if (!isOpen) return null;
 
@@ -340,6 +877,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ height: 'calc(100% - 72px)' }}>
+
           {/* 1. Contact Channels */}
           <ViewCard
             title="Contact Channels"
@@ -348,32 +886,41 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               : <User className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} />
             }
             iconBg={colors.brand.primary + '20'}
-            onEdit={() => openModal('Contact Channels')}
+            onEdit={() => openModal('channels')}
             count={contact.contact_channels?.length || 0}
           >
-            {contact.contact_channels && contact.contact_channels.length > 0 ? (
-              <div className="space-y-2">
-                {contact.contact_channels.map((channel) => {
-                  const Icon = getChannelIcon(channel.channel_type);
-                  return (
-                    <div key={channel.id} className="flex items-center gap-2">
-                      <Icon className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
-                      <span className="flex-1 truncate">{formatChannelValue(channel)}</span>
-                      {channel.is_primary && (
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded"
-                          style={{ backgroundColor: colors.brand.primary + '20', color: colors.brand.primary }}
-                        >
-                          Primary
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <span className="text-xs italic">No contact channels</span>
-            )}
+            <div className="space-y-2">
+              <p className="font-medium mb-3" style={{ color: colors.utility.primaryText }}>
+                {contact.type === 'corporate' ? contact.company_name : contact.name}
+              </p>
+              {sortedChannels.length === 0 ? (
+                <p className="text-xs italic">No contact channels</p>
+              ) : (
+                <>
+                  {sortedChannels.slice(0, 4).map((channel) => {
+                    const Icon = getChannelIcon(channel.channel_type);
+                    return (
+                      <div key={channel.id} className="flex items-center gap-2 text-xs">
+                        <Icon className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate flex-1">{formatChannelValue(channel)}</span>
+                        {channel.is_primary && (
+                          <Star className="h-3 w-3 flex-shrink-0" style={{ color: colors.brand.primary, fill: colors.brand.primary }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                  {sortedChannels.length > 4 && (
+                    <button
+                      onClick={() => openModal('channels')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: colors.brand.primary }}
+                    >
+                      +{sortedChannels.length - 4} more channels
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </ViewCard>
 
           {/* 2. Classification */}
@@ -381,22 +928,27 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             title="Classification"
             icon={<Shield className="h-3.5 w-3.5" style={{ color: '#8b5cf6' }} />}
             iconBg="#8b5cf620"
-            onEdit={() => openModal('Classification')}
+            onEdit={() => openModal('classification')}
+            count={normalizedClassifications.length}
           >
-            {contact.classifications && contact.classifications.length > 0 ? (
+            {normalizedClassifications.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {contact.classifications.map((cls) => (
-                  <span
-                    key={cls.id}
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{
-                      backgroundColor: colors.brand.primary + '20',
-                      color: isDarkMode ? colors.utility.primaryText : colors.brand.primary
-                    }}
-                  >
-                    {cls.classification_label}
-                  </span>
-                ))}
+                {normalizedClassifications.map((cls) => {
+                  const badgeColors = getClassificationBadgeColors(cls.classification_value);
+                  return (
+                    <span
+                      key={cls.id}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
+                      style={{
+                        backgroundColor: badgeColors?.bg || colors.brand.primary + '20',
+                        color: badgeColors?.text || (isDarkMode ? colors.utility.primaryText : colors.brand.primary),
+                        borderColor: badgeColors?.border || 'transparent'
+                      }}
+                    >
+                      {cls.classification_label}
+                    </span>
+                  );
+                })}
               </div>
             ) : (
               <span className="text-xs italic">No classifications</span>
@@ -409,48 +961,55 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               title="Persons"
               icon={<Users className="h-3.5 w-3.5" style={{ color: '#f59e0b' }} />}
               iconBg="#f59e0b20"
-              onEdit={() => openModal('Persons')}
+              onEdit={() => openModal('persons')}
               count={contact.contact_persons?.length || 0}
             >
               {contact.contact_persons && contact.contact_persons.length > 0 ? (
                 <div className="space-y-2">
-                  {contact.contact_persons.slice(0, 3).map((person) => (
-                    <div key={person.id} className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
-                        style={{
-                          backgroundColor: person.is_primary ? '#f59e0b20' : colors.utility.secondaryBackground,
-                          color: person.is_primary ? '#f59e0b' : colors.utility.secondaryText
-                        }}
-                      >
-                        {person.name?.charAt(0) || 'P'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1">
-                          <span className="font-medium truncate" style={{ color: colors.utility.primaryText }}>
-                            {person.name}
-                          </span>
-                          {person.is_primary && (
-                            <span
-                              className="text-xs px-1 rounded"
-                              style={{ backgroundColor: '#f59e0b20', color: '#f59e0b' }}
-                            >
-                              Primary
+                  {contact.contact_persons.slice(0, 3).map((person) => {
+                    const primaryChannel = getPersonPrimaryChannel(person);
+                    return (
+                      <div key={person.id} className="flex items-start gap-2">
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+                          style={{
+                            backgroundColor: person.is_primary ? '#f59e0b' : '#f59e0b20',
+                            color: person.is_primary ? '#fff' : '#f59e0b'
+                          }}
+                        >
+                          {person.name?.charAt(0) || 'P'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs truncate font-medium" style={{ color: colors.utility.primaryText }}>
+                              {person.name}
+                            </span>
+                            {person.is_primary && (
+                              <Star className="h-2.5 w-2.5 flex-shrink-0" style={{ color: '#f59e0b', fill: '#f59e0b' }} />
+                            )}
+                          </div>
+                          {person.designation && (
+                            <span className="text-xs truncate block" style={{ color: colors.utility.secondaryText }}>
+                              {person.designation}
+                            </span>
+                          )}
+                          {primaryChannel && (
+                            <span className="text-xs truncate block" style={{ color: colors.utility.secondaryText }}>
+                              {primaryChannel}
                             </span>
                           )}
                         </div>
-                        {person.designation && (
-                          <span className="text-xs truncate block" style={{ color: colors.utility.secondaryText }}>
-                            {person.designation}
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {contact.contact_persons.length > 3 && (
-                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    <button
+                      onClick={() => openModal('persons')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: '#f59e0b' }}
+                    >
                       +{contact.contact_persons.length - 3} more
-                    </span>
+                    </button>
                   )}
                 </div>
               ) : (
@@ -464,12 +1023,12 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             title="Tags"
             icon={<Tag className="h-3.5 w-3.5" style={{ color: '#ec4899' }} />}
             iconBg="#ec489920"
-            onEdit={() => openModal('Tags')}
+            onEdit={() => openModal('tags')}
             count={contact.tags?.length || 0}
           >
             {contact.tags && contact.tags.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {contact.tags.map((tag) => (
+                {contact.tags.slice(0, 5).map((tag) => (
                   <span
                     key={tag.id}
                     className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
@@ -481,6 +1040,15 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                     {tag.tag_label}
                   </span>
                 ))}
+                {contact.tags.length > 5 && (
+                  <button
+                    onClick={() => openModal('tags')}
+                    className="text-xs hover:underline cursor-pointer"
+                    style={{ color: '#ec4899' }}
+                  >
+                    +{contact.tags.length - 5} more
+                  </button>
+                )}
               </div>
             ) : (
               <span className="text-xs italic">No tags</span>
@@ -492,7 +1060,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
             title="Address"
             icon={<MapPin className="h-3.5 w-3.5" style={{ color: '#10b981' }} />}
             iconBg="#10b98120"
-            onEdit={() => openModal('Address')}
+            onEdit={() => openModal('address')}
             count={contact.addresses?.length || 0}
           >
             {contact.addresses && contact.addresses.length > 0 ? (
@@ -508,30 +1076,25 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                           fontSize: '10px'
                         }}
                       >
-                        {addr.address_type}
+                        {addr.address_type || addr.type || 'office'}
                       </span>
                       {addr.is_primary && (
-                        <span
-                          className="px-1 rounded"
-                          style={{
-                            backgroundColor: colors.brand.primary + '20',
-                            color: colors.brand.primary,
-                            fontSize: '10px'
-                          }}
-                        >
-                          Primary
-                        </span>
+                        <Star className="h-2.5 w-2.5" style={{ color: '#10b981', fill: '#10b981' }} />
                       )}
                     </div>
-                    <p style={{ color: colors.utility.primaryText }}>{addr.line1}</p>
-                    {addr.line2 && <p>{addr.line2}</p>}
-                    <p>{addr.city}, {addr.state} {addr.postal_code}</p>
+                    <p style={{ color: colors.utility.primaryText }}>{addr.line1 || addr.address_line1}</p>
+                    {(addr.line2 || addr.address_line2) && <p>{addr.line2 || addr.address_line2}</p>}
+                    <p>{addr.city}, {addr.state || addr.state_code} {addr.postal_code}</p>
                   </div>
                 ))}
                 {contact.addresses.length > 2 && (
-                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                  <button
+                    onClick={() => openModal('address')}
+                    className="text-xs hover:underline cursor-pointer"
+                    style={{ color: '#10b981' }}
+                  >
                     +{contact.addresses.length - 2} more
-                  </span>
+                  </button>
                 )}
               </div>
             ) : (
@@ -545,7 +1108,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               title="Compliance"
               icon={<Shield className="h-3.5 w-3.5" style={{ color: '#3b82f6' }} />}
               iconBg="#3b82f620"
-              onEdit={() => openModal('Compliance')}
+              onEdit={() => openModal('compliance')}
               count={contact.compliance_numbers?.length || 0}
             >
               {contact.compliance_numbers && contact.compliance_numbers.length > 0 ? (
@@ -559,14 +1122,18 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                         {comp.type_label || comp.type_value}:
                       </span>
                       <span className="font-mono" style={{ color: colors.utility.primaryText }}>
-                        {comp.number}
+                        {comp.number?.length > 12 ? comp.number.slice(0, 12) + '...' : comp.number}
                       </span>
                     </div>
                   ))}
                   {contact.compliance_numbers.length > 3 && (
-                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    <button
+                      onClick={() => openModal('compliance')}
+                      className="text-xs hover:underline cursor-pointer"
+                      style={{ color: '#3b82f6' }}
+                    >
                       +{contact.compliance_numbers.length - 3} more
-                    </span>
+                    </button>
                   )}
                 </div>
               ) : (
@@ -576,37 +1143,51 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           )}
 
           {/* 7. Status Card */}
-          <ViewCard
-            title="Status"
-            icon={<Power className="h-3.5 w-3.5" style={{ color: contact.status === 'active' ? '#10b981' : '#ef4444' }} />}
-            iconBg={contact.status === 'active' ? '#10b98120' : '#ef444420'}
-          >
-            <div className="space-y-3">
-              {/* Status Toggle */}
-              <div className="flex items-center justify-between">
-                <span style={{ color: colors.utility.primaryText }}>Contact Status</span>
-                <button
-                  onClick={() => handleStatusChange(contact.status === 'active' ? 'inactive' : 'active')}
-                  disabled={isUpdatingStatus || contact.status === 'archived'}
-                  className={`
-                    relative w-11 h-6 rounded-full transition-colors
-                    ${contact.status === 'archived' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                  `}
-                  style={{
-                    backgroundColor: contact.status === 'active' ? '#10b981' : '#ef4444'
-                  }}
-                >
-                  <div
+          {contact.status !== 'archived' && (
+            <ViewCard
+              title="Status"
+              icon={<Power className="h-3.5 w-3.5" style={{ color: contact.status === 'active' ? '#10b981' : '#ef4444' }} />}
+              iconBg={contact.status === 'active' ? '#10b98120' : '#ef444420'}
+            >
+              <div className="space-y-3">
+                {/* Status Toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-xs" style={{ color: colors.utility.primaryText }}>
+                      {contact.status === 'active' ? 'Active' : 'Inactive'}
+                    </p>
+                    <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      {contact.status === 'active' ? 'Available for business' : 'Temporarily disabled'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleStatusChange(contact.status === 'active' ? 'inactive' : 'active')}
+                    disabled={isUpdatingStatus}
                     className={`
-                      absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform
-                      ${contact.status === 'active' ? 'translate-x-6' : 'translate-x-1'}
+                      relative w-11 h-6 rounded-full transition-colors
+                      ${isUpdatingStatus ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                     `}
-                  />
-                </button>
-              </div>
+                    style={{
+                      backgroundColor: contact.status === 'active' ? '#10b981' : '#ef4444'
+                    }}
+                  >
+                    <div
+                      className={`
+                        absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform
+                        ${contact.status === 'active' ? 'translate-x-6' : 'translate-x-1'}
+                      `}
+                    />
+                  </button>
+                </div>
 
-              {/* Archive Button */}
-              {contact.status !== 'archived' && (
+                {isUpdatingStatus && (
+                  <div className="flex items-center text-xs" style={{ color: colors.utility.secondaryText }}>
+                    <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                    Updating status...
+                  </div>
+                )}
+
+                {/* Archive Button */}
                 <button
                   onClick={() => setShowArchiveConfirm(true)}
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -618,15 +1199,40 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
                   <Archive className="h-4 w-4" />
                   Archive Contact
                 </button>
-              )}
-            </div>
-          </ViewCard>
+              </div>
+            </ViewCard>
+          )}
+
+          {/* Archived Status Display */}
+          {contact.status === 'archived' && (
+            <ViewCard
+              title="Status"
+              icon={<Archive className="h-3.5 w-3.5" style={{ color: '#71717a' }} />}
+              iconBg="#71717a20"
+            >
+              <div className="text-xs">
+                <p className="font-medium" style={{ color: colors.utility.primaryText }}>Archived</p>
+                <p style={{ color: colors.utility.secondaryText }}>This contact has been archived and cannot be modified.</p>
+              </div>
+            </ViewCard>
+          )}
         </div>
       </div>
 
+      {/* Edit Modal */}
+      <EditModal
+        isOpen={activeModal !== null}
+        title={getModalTitle()}
+        onClose={() => setActiveModal(null)}
+        onSave={handleSave}
+        isSaving={isSaving}
+      >
+        {renderModalContent()}
+      </EditModal>
+
       {/* Archive Confirmation Modal */}
       {showArchiveConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowArchiveConfirm(false)}
@@ -669,9 +1275,16 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
               <button
                 onClick={handleArchive}
                 disabled={isUpdatingStatus}
-                className="flex-1 py-2 rounded-lg text-sm font-medium bg-red-500 text-white disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg text-sm font-medium bg-red-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isUpdatingStatus ? 'Archiving...' : 'Archive'}
+                {isUpdatingStatus ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Archiving...
+                  </>
+                ) : (
+                  'Archive'
+                )}
               </button>
             </div>
           </div>

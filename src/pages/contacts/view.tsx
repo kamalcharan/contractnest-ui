@@ -13,10 +13,6 @@ import {
   Archive,
   Calendar,
   DollarSign,
-  ChevronRight,
-  Clock,
-  CheckCircle,
-  XCircle,
   Loader2,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -31,6 +27,10 @@ import { useContactCockpit } from '@/hooks/queries/useContactCockpit';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import ContactHeaderCard from '../../components/contacts/view/cards/ContactHeaderCard';
 import { ActionIsland, ProfileDrawer } from '@/components/contacts/cockpit';
+
+// Contract Components - REUSABLE from ContractsHub
+import PipelineBar from '@/components/contracts/PipelineBar';
+import ContractCard from '@/components/contracts/ContractCard';
 
 // Constants
 import { USER_STATUS_MESSAGES, BUSINESS_RULES } from '@/utils/constants/contacts';
@@ -113,7 +113,7 @@ const ContactViewPage: React.FC = () => {
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [daysAhead, setDaysAhead] = useState(7);
-  const [contractFilter, setContractFilter] = useState<string>('all');
+  const [contractStatusFilter, setContractStatusFilter] = useState<string | null>(null);
 
   // API
   const { data: contact, loading, error, refetch } = useContact(id || '');
@@ -174,45 +174,20 @@ const ContactViewPage: React.FC = () => {
     }
   };
 
-  // Handle send invitation
-  const handleSendInvitation = async () => {
-    if (!contact) return;
-    try {
-      await sendInvitationHook.mutate(contact.id);
-    } catch (err) {
-      console.error('Failed to send invitation:', err);
-    }
-  };
-
   // Get contracts from cockpit data
   const contracts: CockpitContract[] = cockpitData?.contracts?.contracts || [];
   const contractsByStatus = cockpitData?.contracts?.by_status || {};
 
-  // Filter contracts
-  const filteredContracts = contractFilter === 'all'
-    ? contracts
-    : contracts.filter(c => c.status === contractFilter);
+  // Filter contracts based on selected status
+  const filteredContracts = contractStatusFilter
+    ? contracts.filter(c => c.status === contractStatusFilter)
+    : contracts;
 
   // Get events from cockpit data
   const overdueEvents: CockpitEvent[] = cockpitData?.overdue_events || [];
   const upcomingEvents: CockpitEvent[] = cockpitData?.upcoming_events || [];
   const todayEvents = upcomingEvents.filter(e => e.is_today);
   const futureEvents = upcomingEvents.filter(e => !e.is_today);
-
-  // Get status color
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#22c55e';
-      case 'signed': return '#22c55e';
-      case 'draft': return '#71717a';
-      case 'pending': return '#f59e0b';
-      case 'sent': return '#f59e0b';
-      case 'review': return '#a855f7';
-      case 'expired': return '#ef4444';
-      case 'cancelled': return '#ef4444';
-      default: return '#71717a';
-    }
-  };
 
   // Loading State
   if (loading) {
@@ -392,7 +367,7 @@ const ContactViewPage: React.FC = () => {
       <div className="flex-1 grid grid-cols-3 overflow-hidden">
 
         {/* ─────────────────────────────────────────────────────────────────── */}
-        {/* COLUMN 1: CONTRACTS */}
+        {/* COLUMN 1: CONTRACTS - Using Reusable Components */}
         {/* ─────────────────────────────────────────────────────────────────── */}
         <div className="flex flex-col border-r overflow-hidden" style={{ borderColor: colors.utility.primaryText + '10' }}>
           {/* Column Header */}
@@ -420,31 +395,18 @@ const ContactViewPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Filters */}
-          <div className="flex-shrink-0 flex gap-2 px-4 py-3 flex-wrap" style={{ backgroundColor: colors.utility.primaryBackground }}>
-            {[
-              { key: 'all', label: 'All', count: contracts.length },
-              { key: 'active', label: 'Active', count: contractsByStatus.active || 0 },
-              { key: 'draft', label: 'Draft', count: contractsByStatus.draft || 0 },
-              { key: 'sent', label: 'Sent', count: contractsByStatus.sent || 0 },
-              { key: 'signed', label: 'Signed', count: contractsByStatus.signed || 0 },
-            ].filter(f => f.count > 0 || f.key === 'all').map(filter => (
-              <button
-                key={filter.key}
-                onClick={() => setContractFilter(filter.key)}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors"
-                style={{
-                  backgroundColor: contractFilter === filter.key ? '#3b82f620' : 'transparent',
-                  borderColor: contractFilter === filter.key ? '#3b82f6' : colors.utility.primaryText + '20',
-                  color: contractFilter === filter.key ? '#3b82f6' : colors.utility.secondaryText
-                }}
-              >
-                {filter.label} {filter.count > 0 && <span className="ml-1 opacity-70">{filter.count}</span>}
-              </button>
-            ))}
+          {/* Status Filters - Using PipelineBar Component */}
+          <div className="flex-shrink-0 px-4 py-3" style={{ backgroundColor: colors.utility.primaryBackground }}>
+            <PipelineBar
+              statusCounts={contractsByStatus}
+              activeStatus={contractStatusFilter}
+              onStatusClick={setContractStatusFilter}
+              colors={colors}
+              compact={true}
+            />
           </div>
 
-          {/* Contract Cards */}
+          {/* Contract Cards - Using ContractCard Component */}
           <div className="flex-1 overflow-y-auto px-4 py-2">
             {cockpitLoading ? (
               <div className="space-y-3">
@@ -455,45 +417,35 @@ const ContactViewPage: React.FC = () => {
             ) : filteredContracts.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" style={{ color: colors.utility.secondaryText }} />
-                <p className="text-sm" style={{ color: colors.utility.secondaryText }}>No contracts found</p>
+                <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                  {contractStatusFilter ? `No ${contractStatusFilter} contracts` : 'No contracts found'}
+                </p>
+                <button
+                  onClick={() => navigate(`/contracts/create?contactId=${contact.id}`)}
+                  className="mt-4 px-4 py-2 rounded-lg text-sm font-semibold"
+                  style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+                >
+                  Create Contract
+                </button>
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredContracts.map(contract => (
-                  <div
+                  <ContractCard
                     key={contract.id}
-                    onClick={() => navigate(`/contracts/${contract.id}`)}
-                    className="p-4 rounded-xl border cursor-pointer transition-all hover:translate-x-1"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '10',
-                      borderLeftWidth: '3px',
-                      borderLeftColor: getStatusColor(contract.status)
+                    contract={{
+                      id: contract.id,
+                      name: contract.name,
+                      contract_number: contract.contract_number,
+                      status: contract.status,
+                      grand_total: contract.grand_total,
+                      currency: contract.currency,
+                      duration_value: contract.duration_value,
+                      duration_unit: contract.duration_unit,
                     }}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span
-                        className="px-2 py-0.5 rounded text-xs font-bold uppercase"
-                        style={{ backgroundColor: getStatusColor(contract.status) + '20', color: getStatusColor(contract.status) }}
-                      >
-                        {contract.status}
-                      </span>
-                      <span className="text-base font-bold" style={{ color: colors.utility.primaryText }}>
-                        {formatCurrency(contract.grand_total)}
-                      </span>
-                    </div>
-                    <div className="text-sm font-semibold mb-1" style={{ color: colors.utility.primaryText }}>
-                      {contract.name}
-                    </div>
-                    <div className="text-xs font-mono" style={{ color: colors.utility.secondaryText }}>
-                      {contract.contract_number}
-                    </div>
-                    {contract.duration_value && (
-                      <div className="mt-3 pt-3 border-t text-xs" style={{ borderColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}>
-                        {contract.duration_value} {contract.duration_unit}
-                      </div>
-                    )}
-                  </div>
+                    colors={colors}
+                    variant="compact"
+                  />
                 ))}
               </div>
             )}

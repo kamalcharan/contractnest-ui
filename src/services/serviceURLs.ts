@@ -865,6 +865,10 @@ export const API_ENDPOINTS = {
     // Health check
     HEALTH: '/api/contracts/health',
 
+    // Public access (CNAK sign-off flow - no auth required)
+    PUBLIC_VALIDATE: '/api/contracts/public/validate',
+    PUBLIC_RESPOND: '/api/contracts/public/respond',
+
     // Helper: build list URL with filters
     LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
       const params = new URLSearchParams();

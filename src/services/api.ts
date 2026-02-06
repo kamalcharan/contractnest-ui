@@ -134,7 +134,10 @@ api.interceptors.request.use(
       '/api/auth/reset-password',
       '/api/system/health',
       '/api/system/maintenance/status',
-      '/health'
+      '/health',
+      // CNAK public contract access (sign-off flow)
+      '/api/contracts/public/validate',
+      '/api/contracts/public/respond',
     ];
 
     // Check if current request is to a public endpoint

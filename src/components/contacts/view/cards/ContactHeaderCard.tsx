@@ -1,5 +1,5 @@
 // src/components/contacts/view/cards/ContactHeaderCard.tsx - Enhanced with Cockpit Support
-// Cycle 2: Added compact variant with LTV, Outstanding, Health Score
+// Compact variant now shows ALL contact data + LTV/Outstanding/Health metrics
 import React from 'react';
 import {
   Building2,
@@ -126,7 +126,6 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
   const [copiedValue, setCopiedValue] = React.useState<string | null>(null);
 
   // Determine if we should show compact cockpit layout
-  // Always show compact when variant="compact", regardless of data availability
   const showCompactCockpit = variant === 'compact';
 
   // Generate avatar initials
@@ -177,7 +176,17 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
     return value;
   };
 
-  // Format address for display
+  // Format address for display (compact - single line)
+  const formatAddressCompact = (address: ContactAddress): string => {
+    const parts = [];
+    const line1 = address.address_line1 || address.line1;
+    if (line1) parts.push(line1);
+    if (address.city) parts.push(address.city);
+    if (address.state) parts.push(address.state);
+    return parts.join(', ');
+  };
+
+  // Format address for display (multi-line)
   const formatAddressDisplay = (address: ContactAddress): string[] => {
     const lines: string[] = [];
     const line1 = address.address_line1 || address.line1;
@@ -277,7 +286,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
   ].filter(Boolean).length;
 
   // ═══════════════════════════════════════════════════════════════════
-  // COMPACT COCKPIT VARIANT
+  // COMPACT COCKPIT VARIANT - Shows ALL data + Metrics in single row
   // ═══════════════════════════════════════════════════════════════════
   if (showCompactCockpit) {
     const healthInfo = cockpitData ? getHealthInfo(cockpitData.health_score) : null;
@@ -293,12 +302,12 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
           borderColor: isDarkMode ? `${colors.brand.primary}40` : `${colors.brand.primary}25`
         }}
       >
-        <div className="flex items-center justify-between p-4">
-          {/* Left Side: Avatar + Name + Classifications */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="flex items-start justify-between p-4">
+          {/* Left Side: Avatar + All Contact Info */}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
             {/* Avatar */}
             <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base flex-shrink-0 shadow-md"
+              className="w-14 h-14 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-md"
               style={{
                 background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`,
                 color: '#ffffff'
@@ -308,7 +317,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
             </div>
 
             <div className="flex-1 min-w-0">
-              {/* Name + Type Icon */}
+              {/* Row 1: Name + Type + Status */}
               <div className="flex items-center gap-2">
                 <h1
                   className="font-semibold text-lg truncate"
@@ -321,9 +330,26 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                 ) : (
                   <User className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
                 )}
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: contact.status === 'active'
+                      ? colors.semantic.success + '20'
+                      : contact.status === 'inactive'
+                        ? colors.semantic.warning + '20'
+                        : colors.semantic.error + '20',
+                    color: contact.status === 'active'
+                      ? colors.semantic.success
+                      : contact.status === 'inactive'
+                        ? colors.semantic.warning
+                        : colors.semantic.error
+                  }}
+                >
+                  {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                </span>
               </div>
 
-              {/* Classifications + Contact Number + Status */}
+              {/* Row 2: Classifications + Contact Number */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {contact.classifications.slice(0, 3).map((classification, index) => {
                   const classLabel = typeof classification === 'string'
@@ -347,14 +373,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                     +{contact.classifications.length - 3}
                   </span>
                 )}
-
-                {/* Separator */}
-                <span
-                  className="w-1 h-1 rounded-full"
-                  style={{ backgroundColor: colors.utility.secondaryText }}
-                />
-
-                {/* Contact Number or ID */}
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: colors.utility.secondaryText }} />
                 {contact.contact_number ? (
                   <code
                     className="text-xs font-mono font-medium cursor-pointer hover:opacity-80"
@@ -372,26 +391,122 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                     {contact.id.substring(0, 8)}
                   </code>
                 )}
-
-                {/* Status Badge */}
-                <span
-                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
-                  style={{
-                    backgroundColor: contact.status === 'active'
-                      ? colors.semantic.success + '20'
-                      : contact.status === 'inactive'
-                        ? colors.semantic.warning + '20'
-                        : colors.semantic.error + '20',
-                    color: contact.status === 'active'
-                      ? colors.semantic.success
-                      : contact.status === 'inactive'
-                        ? colors.semantic.warning
-                        : colors.semantic.error
-                  }}
-                >
-                  {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
-                </span>
               </div>
+
+              {/* Row 3: Contact Details (Channels, Address, Tags) - inline */}
+              {(hasChannels || hasAddress || hasTags || hasCompliance) && (
+                <div className="flex items-center gap-4 mt-2 flex-wrap">
+                  {/* Channels */}
+                  {hasChannels && primaryChannel && (
+                    <div className="flex items-center gap-3">
+                      {/* Primary Channel */}
+                      <div
+                        className="flex items-center gap-1.5 group cursor-pointer"
+                        onClick={() => copyToClipboard(
+                          primaryChannel.channel_type === 'mobile' || primaryChannel.channel_type === 'phone'
+                            ? formatPhoneDisplay(primaryChannel)
+                            : primaryChannel.value,
+                          primaryChannel.channel_type
+                        )}
+                      >
+                        <Star className="h-3 w-3 flex-shrink-0" style={{ color: colors.brand.primary, fill: colors.brand.primary }} />
+                        {React.createElement(getChannelIcon(primaryChannel.channel_type), {
+                          className: "h-3.5 w-3.5 flex-shrink-0",
+                          style: { color: colors.utility.secondaryText }
+                        })}
+                        <span className="text-sm group-hover:underline" style={{ color: colors.utility.primaryText }}>
+                          {primaryChannel.channel_type === 'mobile' || primaryChannel.channel_type === 'phone'
+                            ? formatPhoneDisplay(primaryChannel)
+                            : primaryChannel.value}
+                        </span>
+                      </div>
+                      {/* Secondary channels inline */}
+                      {otherChannels.slice(0, 2).map((channel) => (
+                        <div
+                          key={channel.id || channel.value}
+                          className="flex items-center gap-1.5 group cursor-pointer"
+                          onClick={() => copyToClipboard(
+                            channel.channel_type === 'mobile' || channel.channel_type === 'phone'
+                              ? formatPhoneDisplay(channel)
+                              : channel.value,
+                            channel.channel_type
+                          )}
+                        >
+                          {React.createElement(getChannelIcon(channel.channel_type), {
+                            className: "h-3.5 w-3.5 flex-shrink-0",
+                            style: { color: colors.utility.secondaryText }
+                          })}
+                          <span className="text-sm group-hover:underline" style={{ color: colors.utility.secondaryText }}>
+                            {channel.channel_type === 'mobile' || channel.channel_type === 'phone'
+                              ? formatPhoneDisplay(channel)
+                              : channel.value}
+                          </span>
+                        </div>
+                      ))}
+                      {otherChannels.length > 2 && (
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>+{otherChannels.length - 2}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Separator */}
+                  {hasChannels && (hasAddress || hasTags || hasCompliance) && (
+                    <span className="w-px h-4" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)' }} />
+                  )}
+
+                  {/* Address */}
+                  {hasAddress && primaryAddress && (
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.semantic.warning }} />
+                      <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                        {formatAddressCompact(primaryAddress)}
+                      </span>
+                      {contact.addresses && contact.addresses.length > 1 && (
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>+{contact.addresses.length - 1}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Separator */}
+                  {hasAddress && (hasTags || hasCompliance) && (
+                    <span className="w-px h-4" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)' }} />
+                  )}
+
+                  {/* Tags */}
+                  {hasTags && (
+                    <div className="flex items-center gap-1.5">
+                      {contact.tags?.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                          style={{
+                            backgroundColor: (tag.tag_color || colors.brand.secondary) + '25',
+                            color: isDarkMode ? colors.utility.primaryText : (tag.tag_color || colors.brand.secondary)
+                          }}
+                        >
+                          {tag.tag_label}
+                        </span>
+                      ))}
+                      {contact.tags && contact.tags.length > 3 && (
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>+{contact.tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Compliance (only if no tags) */}
+                  {!hasTags && hasCompliance && (
+                    <div className="flex items-center gap-2">
+                      {contact.compliance_numbers?.slice(0, 2).map((comp) => (
+                        <div key={comp.id || comp.number} className="flex items-center gap-1 text-xs">
+                          <Shield className="h-3 w-3" style={{ color: comp.hexcolor || colors.brand.primary }} />
+                          <span style={{ color: colors.utility.secondaryText }}>{comp.type_label || comp.type_value}:</span>
+                          <span className="font-mono" style={{ color: colors.utility.primaryText }}>{comp.number}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -401,7 +516,6 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
             style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }}
           >
             {isLoading ? (
-              // Loading skeleton
               <div className="flex items-center gap-6 animate-pulse">
                 <div className="text-right">
                   <div className="h-3 w-8 rounded bg-gray-300 dark:bg-gray-600 mb-1" />
@@ -416,17 +530,11 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
               <>
                 {/* LTV */}
                 <div className="text-right">
-                  <div
-                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
+                  <div className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end" style={{ color: colors.utility.secondaryText }}>
                     <TrendingUp className="h-3 w-3" />
                     LTV
                   </div>
-                  <div
-                    className="text-lg font-bold"
-                    style={{ color: colors.utility.primaryText }}
-                  >
+                  <div className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
                     {formatCurrency(cockpitData.ltv)}
                   </div>
                 </div>
@@ -434,17 +542,11 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                 {/* Outstanding */}
                 {cockpitData.outstanding !== undefined && cockpitData.outstanding > 0 && (
                   <div className="text-right">
-                    <div
-                      className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
-                      style={{ color: colors.semantic.warning }}
-                    >
+                    <div className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end" style={{ color: colors.semantic.warning }}>
                       <AlertCircle className="h-3 w-3" />
                       Outstanding
                     </div>
-                    <div
-                      className="text-lg font-bold"
-                      style={{ color: colors.semantic.warning }}
-                    >
+                    <div className="text-lg font-bold" style={{ color: colors.semantic.warning }}>
                       {formatCurrency(cockpitData.outstanding)}
                     </div>
                   </div>
@@ -452,78 +554,38 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
 
                 {/* Health Score */}
                 <div className="text-right min-w-[100px]">
-                  <div
-                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
+                  <div className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end" style={{ color: colors.utility.secondaryText }}>
                     <Heart className="h-3 w-3" style={{ color: healthInfo?.color }} />
                     Health
                   </div>
                   <div className="flex items-center gap-2 justify-end">
-                    <span
-                      className="text-lg font-bold"
-                      style={{ color: healthInfo?.color }}
-                    >
+                    <span className="text-lg font-bold" style={{ color: healthInfo?.color }}>
                       {cockpitData.health_score}%
                     </span>
-                    {/* Progress bar */}
-                    <div
-                      className="w-16 h-2 rounded-full overflow-hidden"
-                      style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
-                    >
+                    <div className="w-16 h-2 rounded-full overflow-hidden" style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
                       <div
                         className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${cockpitData.health_score}%`,
-                          backgroundColor: healthInfo?.color
-                        }}
+                        style={{ width: `${cockpitData.health_score}%`, backgroundColor: healthInfo?.color }}
                       />
                     </div>
                   </div>
                 </div>
               </>
             ) : (
-              // No data state - show placeholder metrics
               <>
-                {/* LTV - No data */}
                 <div className="text-right">
-                  <div
-                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
+                  <div className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end" style={{ color: colors.utility.secondaryText }}>
                     <TrendingUp className="h-3 w-3" />
                     LTV
                   </div>
-                  <div
-                    className="text-lg font-bold"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    --
-                  </div>
+                  <div className="text-lg font-bold" style={{ color: colors.utility.secondaryText }}>--</div>
                 </div>
-
-                {/* Health Score - No data */}
                 <div className="text-right min-w-[100px]">
-                  <div
-                    className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
+                  <div className="text-xs font-medium uppercase tracking-wider flex items-center gap-1 justify-end" style={{ color: colors.utility.secondaryText }}>
                     <Heart className="h-3 w-3" />
                     Health
                   </div>
-                  <div className="flex items-center gap-2 justify-end">
-                    <span
-                      className="text-lg font-bold"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      --%
-                    </span>
-                    {/* Empty progress bar */}
-                    <div
-                      className="w-16 h-2 rounded-full overflow-hidden"
-                      style={{ backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
-                    />
-                  </div>
+                  <div className="text-lg font-bold" style={{ color: colors.utility.secondaryText }}>--%</div>
                 </div>
               </>
             )}
@@ -796,7 +858,7 @@ const ContactHeaderCard: React.FC<ContactHeaderCardProps> = ({
                     >
                       <span
                         className="font-medium"
-                        style={{ color: comp.hexcolor || colors.accent.accent1 }}
+                        style={{ color: comp.hexcolor || colors.accent?.accent1 || colors.brand.primary }}
                       >
                         {comp.type_label || comp.type_value}:
                       </span>
