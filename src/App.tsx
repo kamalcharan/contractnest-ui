@@ -53,6 +53,9 @@ import CreateTenantPage from './pages/auth/CreateTenantPage';
 
 // Welcome Page - CNAK claim landing page
 import WelcomePage from './pages/welcome';
+// CNAK Claim Page
+import ClaimContractPage from './pages/contracts/claim';
+
 
 // Onboarding imports
 
@@ -332,6 +335,9 @@ const AppContent: React.FC = () => {
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
+          
+          <Route path="/contracts/review" element={<ContractReviewPage />} />
+
 
 
           {/* Routes outside of MainLayout that require auth */}
@@ -531,6 +537,7 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ContractsHubPage />} />
             <Route path=":id" element={<ContractDetailPage />} />
+            <Route path="claim" element={<ClaimContractPage />} />
             <Route path=":id/invoice/:invoiceId" element={<InvoiceViewPage />} />
           </Route>
 
