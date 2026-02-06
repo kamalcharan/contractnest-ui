@@ -369,7 +369,6 @@ export const API_ENDPOINTS = {
         if (filters.search) params.append('search', filters.search);
         if (filters.sort_by) params.append('sort_by', filters.sort_by);
         if (filters.sort_direction) params.append('sort_direction', filters.sort_direction);
-        if (filters.is_test) params.append('is_test', filters.is_test);
         const queryString = params.toString();
         return queryString ? `/api/admin/tenants/list?${queryString}` : '/api/admin/tenants/list';
       },
@@ -866,9 +865,8 @@ export const API_ENDPOINTS = {
     // Health check
     HEALTH: '/api/contracts/health',
 
-    // Public access (CNAK sign-off flow - no auth required)
-    PUBLIC_VALIDATE: '/api/contracts/public/validate',
-    PUBLIC_RESPOND: '/api/contracts/public/respond',
+    // CNAK Claim endpoint
+    CLAIM: '/api/contracts/claim',
 
     // Helper: build list URL with filters
     LIST_WITH_FILTERS: (filters: ContractCrudFilters = {}) => {
@@ -1132,7 +1130,6 @@ export type AdminTenantListFilters = {
   search?: string;
   sort_by?: string;
   sort_direction?: string;
-  is_test?: string;
 };
 
 // Sequence Numbers filter interface

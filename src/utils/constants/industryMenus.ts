@@ -90,7 +90,8 @@ export const defaultMenuItems: MenuItem[] = [
     submenuItems: [
       { id: 'contracts-all', label: 'All Contracts', icon: 'FileText', path: '/contracts' },
       { id: 'contracts-preview', label: 'Contract Preview', icon: 'Eye', path: '/contracts/preview' },
-      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' }
+      { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' },
+      { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
   },
   {

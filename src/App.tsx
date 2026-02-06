@@ -51,6 +51,9 @@ import GoogleCallbackPage from './pages/auth/GoogleCallbackPage';
 import SelectTenantPage from './pages/auth/SelectTenantPage';
 import CreateTenantPage from './pages/auth/CreateTenantPage';
 
+// Welcome Page - CNAK claim landing page
+import WelcomePage from './pages/welcome';
+
 // Onboarding imports
 
 import WelcomeStep from './pages/onboarding/steps/WelcomeStep';
@@ -236,8 +239,8 @@ const SmartHomePage: React.FC = () => {
   const { isAuthenticated, isLoading, currentTenant } = useAuth();
   const location = useLocation();
 
-  // Don't redirect if user is on auth pages
-  const isAuthPage = ['/login', '/signup', '/register', '/forgot-password', '/reset-password'].includes(location.pathname);
+  // Don't redirect if user is on auth pages or welcome page
+  const isAuthPage = ['/login', '/signup', '/register', '/forgot-password', '/reset-password', '/welcome'].includes(location.pathname);
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -326,6 +329,7 @@ const AppContent: React.FC = () => {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register-invitation" element={<InvitationRegisterPage />} />
           <Route path="/contract-review" element={<ContractReviewPage />} />
+          <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
 
