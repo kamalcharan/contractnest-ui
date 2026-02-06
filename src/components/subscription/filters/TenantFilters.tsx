@@ -11,7 +11,8 @@ import {
   CheckCircle,
   Timer,
   AlertTriangle,
-  ShieldOff
+  ShieldOff,
+  FlaskConical
 } from 'lucide-react';
 import {
   AdminTenantFilters,
@@ -41,7 +42,8 @@ const quickFilterConfig: {
   { id: 'active', label: 'Active', icon: CheckCircle, color: '#10B981' },
   { id: 'trial', label: 'Trial', icon: Timer, color: '#F59E0B' },
   { id: 'expiring', label: 'Expiring', icon: AlertTriangle, color: '#EF4444' },
-  { id: 'suspended', label: 'Suspended', icon: ShieldOff, color: '#DC2626' }
+  { id: 'suspended', label: 'Suspended', icon: ShieldOff, color: '#DC2626' },
+  { id: 'test', label: 'Test Account', icon: FlaskConical, color: '#F97316' }
 ];
 
 export const TenantFilters: React.FC<TenantFiltersProps> = ({

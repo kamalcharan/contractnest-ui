@@ -199,6 +199,8 @@ export const getChannelPlaceholder = (channel: Channel, countryCode?: string): s
 
 /**
  * Format channel value for storage/display
+ * Ensures phone values are always stored as +{phoneCode}{localNumber}
+ * and country_code is always ISO format (e.g., "IN", not "+91")
  */
 export const formatChannelValue = (
     channel: Channel,
@@ -206,11 +208,26 @@ export const formatChannelValue = (
     countryCode?: string
 ): string => {
     if (channel.validation.type === 'phone' && countryCode) {
-        const country = countries.find(c => c.code === countryCode);
+        // Resolve country - support both ISO code ("IN") and phone code ("+91"/"91")
+        let country = countries.find(c => c.code === countryCode);
+        if (!country) {
+            // Try matching by phone code (strip leading +)
+            const cleanCode = countryCode.replace(/^\+/, '');
+            country = countries.find(c => c.phoneCode === cleanCode);
+        }
         if (country) {
-            // Remove any existing country code and format
-            const cleanValue = value.replace(/^\+\d+/, '').replace(/\D/g, '');
-            return `+${country.phoneCode}${cleanValue}`;
+            // Strip all non-digits from the value
+            let digits = value.replace(/\D/g, '');
+            // If the digits start with the country phone code, strip it to get local number
+            if (digits.startsWith(country.phoneCode)) {
+                const localPart = digits.slice(country.phoneCode.length);
+                // Only strip if the remaining local part is within valid phone length range
+                const { min, max } = getPhoneLengthForCountry(country.code);
+                if (localPart.length >= min && localPart.length <= max) {
+                    digits = localPart;
+                }
+            }
+            return `+${country.phoneCode}${digits}`;
         }
     }
 
@@ -219,6 +236,24 @@ export const formatChannelValue = (
     }
 
     return value;
+};
+
+/**
+ * Normalize a country_code value to ISO format.
+ * Converts "+91" or "91" to "IN", passes "IN" through as-is.
+ */
+export const normalizeCountryCode = (countryCode: string): string => {
+    // Already an ISO code?
+    const byIso = countries.find(c => c.code === countryCode);
+    if (byIso) return countryCode;
+
+    // Try matching by phone code (strip leading +)
+    const cleanCode = countryCode.replace(/^\+/, '');
+    const byPhone = countries.find(c => c.phoneCode === cleanCode);
+    if (byPhone) return byPhone.code;
+
+    // Fallback: return as-is
+    return countryCode;
 };
 
 /**

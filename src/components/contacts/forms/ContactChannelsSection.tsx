@@ -29,7 +29,8 @@ import {
   CHANNELS,
   getChannelByCode,
   formatChannelValue,
-  channelRequiresCountryCode
+  channelRequiresCountryCode,
+  normalizeCountryCode
 } from '@/utils/constants/channels';
 import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import {
@@ -159,15 +160,17 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
     const channelConfig = getChannelByCode(newChannel.channel_type);
     if (!channelConfig) return;
 
+    const normalizedCC = newChannel.country_code ? normalizeCountryCode(newChannel.country_code) : newChannel.country_code;
     const formattedValue = formatChannelValue(
       channelConfig,
       newChannel.value,
-      newChannel.country_code
+      normalizedCC
     );
 
     const channelWithId: ContactChannel = {
       ...newChannel,
       value: formattedValue,
+      country_code: normalizedCC,
       id: `temp_${Date.now()}`
     };
 
@@ -389,11 +392,9 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                       let inputValue = e.target.value;
                       const channelConfig = getChannelByCode(newChannel.channel_type);
 
+                      // For phone types, only allow digits (country code is selected separately)
                       if (channelConfig?.validation.type === 'phone') {
-                        inputValue = inputValue.replace(/[^\d+]/g, '');
-                        if (inputValue.includes('+')) {
-                          inputValue = '+' + inputValue.replace(/\+/g, '');
-                        }
+                        inputValue = inputValue.replace(/\D/g, '');
                       }
 
                       setNewChannel({ ...newChannel, value: inputValue });
@@ -577,11 +578,9 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                           value={channel.value}
                           onChange={(e) => {
                             let inputValue = e.target.value;
+                            // For phone types, only allow digits (strip + to match Quick Add behavior)
                             if (channelConfig.validation.type === 'phone') {
-                              inputValue = inputValue.replace(/[^\d+]/g, '');
-                              if (inputValue.includes('+')) {
-                                inputValue = '+' + inputValue.replace(/\+/g, '');
-                              }
+                              inputValue = inputValue.replace(/\D/g, '');
                             }
                             updateChannel(index, { value: inputValue });
                           }}
@@ -600,6 +599,13 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
+                          // Format the value before saving the edit
+                          const editChannelConfig = getChannelByCode(channel.channel_type);
+                          if (editChannelConfig) {
+                            const normalizedCC = channel.country_code ? normalizeCountryCode(channel.country_code) : channel.country_code;
+                            const formattedValue = formatChannelValue(editChannelConfig, channel.value, normalizedCC);
+                            updateChannel(index, { value: formattedValue, country_code: normalizedCC });
+                          }
                           setEditingIndex(null);
                           markFieldTouched(fieldId);
                         }}
@@ -680,8 +686,12 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         </div>
 
                         <p className="text-sm break-all" style={{ color: colors.utility.primaryText }}>
-                          {channel.country_code && channelConfig.validation.requiresCountryCode
-                            ? `+${countries.find(c => c.code === channel.country_code)?.phoneCode || ''} ${channel.value}`
+                          {channelConfig.validation.requiresCountryCode && channel.value
+                            ? (channel.value.startsWith('+')
+                              ? channel.value
+                              : `+${countries.find(c => c.code === channel.country_code)?.phoneCode
+                                  || countries.find(c => c.phoneCode === channel.country_code?.replace(/^\+/, ''))?.phoneCode
+                                  || ''} ${channel.value}`)
                             : channel.value
                           }
                         </p>

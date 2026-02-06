@@ -43,6 +43,14 @@ export interface TenantStats {
   storage_limit_mb: number;
 }
 
+export interface TenantOwnerInfo {
+  user_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  name: string;
+}
+
 export interface TenantListItem {
   id: string;
   name: string;
@@ -51,6 +59,7 @@ export interface TenantListItem {
   is_admin: boolean;
   is_test: boolean;
   created_at: string;
+  owner: TenantOwnerInfo | null;
   subscription: TenantSubscriptionInfo | null;
   profile: TenantProfileInfo | null;
   stats: TenantStats & { tenant_type: TenantType };
@@ -122,9 +131,10 @@ export interface AdminTenantFilters {
   limit?: number;
   sort_by?: 'name' | 'created_at' | 'status' | 'subscription_status';
   sort_direction?: 'asc' | 'desc';
+  is_test?: string;
 }
 
-export type QuickFilterType = 'all' | 'active' | 'trial' | 'expiring' | 'suspended';
+export type QuickFilterType = 'all' | 'active' | 'trial' | 'expiring' | 'suspended' | 'test';
 
 // ============================================
 // ACTION TYPES

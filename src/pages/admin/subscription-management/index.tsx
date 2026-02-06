@@ -16,7 +16,9 @@ import {
   LayoutGrid,
   List,
   Loader2,
-  Building2
+  Building2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -247,6 +249,7 @@ const SubscriptionManagementPage: React.FC = () => {
   const [stats, setStats] = useState<AdminSubscriptionStats | null>(null);
   const [tenants, setTenants] = useState<TenantListItem[]>([]);
   const [totalTenants, setTotalTenants] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   const [filters, setFilters] = useState<AdminTenantFilters>({
     page: 1,
@@ -283,7 +286,8 @@ const SubscriptionManagementPage: React.FC = () => {
           subscription_status: filters.subscription_status !== 'all' ? filters.subscription_status : undefined,
           search: filters.search,
           sort_by: filters.sort_by,
-          sort_direction: filters.sort_direction
+          sort_direction: filters.sort_direction,
+          is_test: filters.is_test
         }))
       ]);
 
@@ -301,6 +305,7 @@ const SubscriptionManagementPage: React.FC = () => {
 
       setTenants(Array.isArray(tenantsData) ? tenantsData : []);
       setTotalTenants(pagination?.total_records ?? tenantsData?.length ?? 0);
+      setTotalPages(pagination?.total_pages ?? 1);
 
     } catch (error) {
       console.error('Failed to load data from API, falling back to mock:', error);
@@ -308,6 +313,7 @@ const SubscriptionManagementPage: React.FC = () => {
       setStats(mockStats);
       setTenants(mockTenants);
       setTotalTenants(mockStats.total_tenants);
+      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
@@ -323,11 +329,12 @@ const SubscriptionManagementPage: React.FC = () => {
 
     // Map quick filter to actual filters
     const filterMap: Record<QuickFilterType, Partial<AdminTenantFilters>> = {
-      all: {},
-      active: { subscription_status: 'active' },
-      trial: { subscription_status: 'trial' },
-      expiring: { subscription_status: 'trial' }, // Would need additional logic for expiring
-      suspended: { status: 'suspended' }
+      all: { status: undefined, subscription_status: undefined, is_test: undefined },
+      active: { subscription_status: 'active', is_test: undefined },
+      trial: { subscription_status: 'trial', is_test: undefined },
+      expiring: { subscription_status: 'trial', is_test: undefined },
+      suspended: { status: 'suspended', is_test: undefined },
+      test: { is_test: 'true', status: undefined, subscription_status: undefined }
     };
 
     setFilters(prev => ({
@@ -626,6 +633,86 @@ const SubscriptionManagementPage: React.FC = () => {
               onViewDetails={handleViewDetails}
             />
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div
+          className="mt-6 rounded-lg shadow-sm border p-4 transition-colors"
+          style={{
+            backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.6)' : 'rgba(255, 255, 255, 0.7)',
+            borderColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Showing {((filters.page! - 1) * filters.limit!) + 1} to {Math.min(filters.page! * filters.limit!, totalTenants)} of {totalTenants} tenants
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: Math.max((prev.page || 1) - 1, 1) }))}
+                disabled={filters.page === 1}
+                className="p-2 rounded-md border hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: colors.utility.primaryText + '40',
+                  color: colors.utility.primaryText,
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const currentPage = filters.page || 1;
+                  const maxVisible = 5;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  const endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                  if (endPage - startPage + 1 < maxVisible) {
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                  }
+                  return Array.from({ length: endPage - startPage + 1 }, (_, i) => {
+                    const page = startPage + i;
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setFilters(prev => ({ ...prev, page }))}
+                        className="px-3 py-1 rounded-md text-sm font-medium transition-colors"
+                        style={{
+                          backgroundColor: currentPage === page
+                            ? colors.brand.primary
+                            : 'transparent',
+                          color: currentPage === page
+                            ? '#ffffff'
+                            : colors.utility.primaryText
+                        }}
+                      >
+                        {page}
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, page: Math.min((prev.page || 1) + 1, totalPages) }))}
+                disabled={filters.page === totalPages}
+                className="p-2 rounded-md border hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  borderColor: colors.utility.primaryText + '40',
+                  color: colors.utility.primaryText,
+                  backgroundColor: 'transparent'
+                }}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

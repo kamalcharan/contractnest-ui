@@ -11,7 +11,8 @@ import {
   Database,
   ChevronRight,
   Calendar,
-  MoreVertical
+  MoreVertical,
+  UserCircle
 } from 'lucide-react';
 import { TenantListItem } from '../../../types/tenantManagement';
 import { SubscriptionStatusBadge } from '../badges/SubscriptionStatusBadge';
@@ -122,6 +123,23 @@ export const TenantCard: React.FC<TenantCardProps> = ({
                 </span>
               )}
             </div>
+            {tenant.owner && (
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <UserCircle size={13} style={{ color: colors.brand.primary, opacity: 0.8 }} />
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: colors.brand.primary, opacity: 0.85 }}
+                >
+                  {tenant.owner.name || `${tenant.owner.first_name} ${tenant.owner.last_name}`}
+                </span>
+                <span
+                  className="text-xs truncate max-w-[160px]"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  ({tenant.owner.email})
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Actions Menu */}
