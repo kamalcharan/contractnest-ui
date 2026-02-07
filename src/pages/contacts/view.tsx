@@ -14,6 +14,10 @@ import {
   Calendar,
   DollarSign,
   Loader2,
+  Zap,
+  ShoppingCart,
+  Package,
+  Handshake,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -31,6 +35,9 @@ import { ActionIsland, ProfileDrawer } from '@/components/contacts/cockpit';
 // Contract Components - REUSABLE from ContractsHub
 import PipelineBar from '@/components/contracts/PipelineBar';
 import ContractCard from '@/components/contracts/ContractCard';
+
+// Types - V2
+import type { ContractSummaryItem, ContactRole, UrgencyLevel } from '@/types/contactCockpit';
 
 // Constants
 import { USER_STATUS_MESSAGES, BUSINESS_RULES } from '@/utils/constants/contacts';
@@ -70,19 +77,6 @@ interface Contact {
   updated_at: string;
 }
 
-// Contract type from cockpit data
-interface CockpitContract {
-  id: string;
-  contract_number: string;
-  name: string;
-  status: string;
-  grand_total: number;
-  currency: string;
-  created_at: string;
-  duration_value?: number;
-  duration_unit?: string;
-}
-
 // Event type from cockpit data
 interface CockpitEvent {
   id: string;
@@ -114,6 +108,7 @@ const ContactViewPage: React.FC = () => {
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [daysAhead, setDaysAhead] = useState(7);
   const [contractStatusFilter, setContractStatusFilter] = useState<string | null>(null);
+  const [contractRoleFilter, setContractRoleFilter] = useState<string | null>(null);
 
   // API
   const { data: contact, loading, error, refetch } = useContact(id || '');
@@ -174,20 +169,43 @@ const ContactViewPage: React.FC = () => {
     }
   };
 
-  // Get contracts from cockpit data
-  const contracts: CockpitContract[] = cockpitData?.contracts?.contracts || [];
+  // Get contracts from cockpit data (V2: typed with ContractSummaryItem)
+  const contracts: ContractSummaryItem[] = cockpitData?.contracts?.contracts || [];
   const contractsByStatus = cockpitData?.contracts?.by_status || {};
+  const contractsByRole = cockpitData?.contracts?.by_role || {};
 
-  // Filter contracts based on selected status
-  const filteredContracts = contractStatusFilter
-    ? contracts.filter(c => c.status === contractStatusFilter)
-    : contracts;
+  // Filter contracts based on selected status AND role
+  const filteredContracts = contracts.filter(c => {
+    if (contractStatusFilter && c.status !== contractStatusFilter) return false;
+    if (contractRoleFilter && c.contact_role !== contractRoleFilter) return false;
+    return true;
+  });
+
+  // Urgency config
+  const URGENCY_CONFIG: Record<string, { label: string; color: string }> = {
+    critical: { label: 'Critical', color: '#ef4444' },
+    high: { label: 'High', color: '#f59e0b' },
+    medium: { label: 'Medium', color: '#3b82f6' },
+    low: { label: 'Low', color: '#22c55e' },
+  };
+  const urgencyLevel = cockpitData?.urgency_level || 'low';
+  const urgencyConfig = URGENCY_CONFIG[urgencyLevel];
+
+  // Role filter config for pills
+  const ROLE_FILTER_CONFIG = [
+    { key: 'as_client', label: 'Client', icon: ShoppingCart, color: '#10B981' },
+    { key: 'as_vendor', label: 'Vendor', icon: Package, color: '#3B82F6' },
+    { key: 'as_partner', label: 'Partner', icon: Handshake, color: '#8B5CF6' },
+  ];
 
   // Get events from cockpit data
   const overdueEvents: CockpitEvent[] = cockpitData?.overdue_events || [];
   const upcomingEvents: CockpitEvent[] = cockpitData?.upcoming_events || [];
   const todayEvents = upcomingEvents.filter(e => e.is_today);
   const futureEvents = upcomingEvents.filter(e => !e.is_today);
+
+  // Get invoices from cockpit data
+  const invoices = cockpitData?.invoices || [];
 
   // Loading State
   if (loading) {
@@ -279,7 +297,7 @@ const ContactViewPage: React.FC = () => {
                   <User className="h-4 w-4" style={{ color: colors.brand.primary }} />
                 )}
               </div>
-              <div className="flex items-center gap-3 text-sm" style={{ color: colors.utility.secondaryText }}>
+              <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
                 {primaryEmail && <span>{primaryEmail.value}</span>}
                 <span
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase"
@@ -291,6 +309,25 @@ const ContactViewPage: React.FC = () => {
                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />
                   {contact.status}
                 </span>
+                {/* Classification Badges */}
+                {classifications.map(cls => {
+                  const clsConfig: Record<string, { label: string; color: string }> = {
+                    client: { label: 'Client', color: '#10B981' },
+                    vendor: { label: 'Vendor', color: '#3B82F6' },
+                    partner: { label: 'Partner', color: '#8B5CF6' },
+                  };
+                  const cfg = clsConfig[cls];
+                  if (!cfg) return null;
+                  return (
+                    <span
+                      key={cls}
+                      className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                      style={{ backgroundColor: cfg.color + '15', color: cfg.color }}
+                    >
+                      {cfg.label}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -328,6 +365,21 @@ const ContactViewPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Urgency Indicator */}
+          {!cockpitLoading && cockpitData?.urgency_score !== undefined && cockpitData.urgency_score > 0 && (
+            <div className="text-right">
+              <div className="flex items-center gap-1.5 justify-end">
+                <Zap className="h-5 w-5" style={{ color: urgencyConfig.color }} />
+                <span className="text-2xl font-bold" style={{ color: urgencyConfig.color }}>
+                  {cockpitData.urgency_score}
+                </span>
+              </div>
+              <div className="text-xs font-bold uppercase tracking-wider" style={{ color: urgencyConfig.color }}>
+                {urgencyConfig.label}
+              </div>
+            </div>
+          )}
+
           {/* Edit Button */}
           <button
             onClick={() => navigate(`/contacts/${contact.id}/edit`)}
@@ -357,6 +409,58 @@ const ContactViewPage: React.FC = () => {
             <Archive className="h-4 w-4" />
             <span className="font-medium">Contact is Archived</span>
             <span>• {BUSINESS_RULES.ARCHIVED_CONTACT_RESTRICTIONS.join(' • ')}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* INSIGHTS BANNER */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {!cockpitLoading && cockpitData && (overdueEvents.length > 0 || todayEvents.length > 0) && (
+        <div
+          className="flex-shrink-0 flex items-center gap-4 px-6 py-2.5 border-b"
+          style={{
+            backgroundColor: urgencyConfig.color + '08',
+            borderColor: urgencyConfig.color + '20'
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4" style={{ color: urgencyConfig.color }} />
+            <span className="text-sm font-semibold" style={{ color: urgencyConfig.color }}>
+              {urgencyConfig.label} Priority
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs" style={{ color: colors.utility.secondaryText }}>
+            {overdueEvents.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#ef4444' }} />
+                <span className="font-semibold" style={{ color: '#ef4444' }}>{overdueEvents.length} overdue</span>
+              </span>
+            )}
+            {todayEvents.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#f59e0b' }} />
+                <span className="font-semibold" style={{ color: '#f59e0b' }}>{todayEvents.length} today</span>
+              </span>
+            )}
+            {futureEvents.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#22c55e' }} />
+                <span>{futureEvents.length} upcoming</span>
+              </span>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            {cockpitData.payment_pattern && cockpitData.payment_pattern.collection_rate > 0 && (
+              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                Collection: <span className="font-semibold" style={{ color: '#22c55e' }}>{cockpitData.payment_pattern.collection_rate}%</span>
+              </span>
+            )}
+            {cockpitData.payment_pattern && cockpitData.payment_pattern.on_time_rate > 0 && (
+              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                On-time: <span className="font-semibold" style={{ color: '#3b82f6' }}>{cockpitData.payment_pattern.on_time_rate}%</span>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -395,8 +499,44 @@ const ContactViewPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Role Filter Pills */}
+          <div className="flex-shrink-0 px-4 pt-3 pb-1 flex gap-2 flex-wrap" style={{ backgroundColor: colors.utility.primaryBackground }}>
+            <button
+              onClick={() => setContractRoleFilter(null)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+              style={{
+                border: `1px solid ${contractRoleFilter === null ? colors.brand.primary : colors.utility.primaryText + '20'}`,
+                backgroundColor: contractRoleFilter === null ? colors.brand.primary + '15' : 'transparent',
+                color: contractRoleFilter === null ? colors.brand.primary : colors.utility.secondaryText,
+              }}
+            >
+              All {contracts.length}
+            </button>
+            {ROLE_FILTER_CONFIG.map(rf => {
+              const count = contractsByRole[rf.key] || 0;
+              if (count === 0) return null;
+              const isActive = contractRoleFilter === rf.key;
+              const Icon = rf.icon;
+              return (
+                <button
+                  key={rf.key}
+                  onClick={() => setContractRoleFilter(isActive ? null : rf.key)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5"
+                  style={{
+                    border: `1px solid ${isActive ? rf.color : colors.utility.primaryText + '20'}`,
+                    backgroundColor: isActive ? rf.color + '15' : 'transparent',
+                    color: isActive ? rf.color : colors.utility.secondaryText,
+                  }}
+                >
+                  <Icon className="h-3 w-3" />
+                  {rf.label} {count}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Status Filters - Using PipelineBar Component */}
-          <div className="flex-shrink-0 px-4 py-3" style={{ backgroundColor: colors.utility.primaryBackground }}>
+          <div className="flex-shrink-0 px-4 py-2" style={{ backgroundColor: colors.utility.primaryBackground }}>
             <PipelineBar
               statusCounts={contractsByStatus}
               activeStatus={contractStatusFilter}
@@ -430,18 +570,22 @@ const ContactViewPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredContracts.map(contract => (
+                {filteredContracts.map(c => (
                   <ContractCard
-                    key={contract.id}
+                    key={c.id}
                     contract={{
-                      id: contract.id,
-                      name: contract.name,
-                      contract_number: contract.contract_number,
-                      status: contract.status,
-                      grand_total: contract.grand_total,
-                      currency: contract.currency,
-                      duration_value: contract.duration_value,
-                      duration_unit: contract.duration_unit,
+                      id: c.id,
+                      name: c.name,
+                      contract_number: c.contract_number,
+                      status: c.status,
+                      contract_type: c.contract_type,
+                      grand_total: c.grand_total,
+                      currency: c.currency,
+                      duration_value: c.duration_value,
+                      duration_unit: c.duration_unit,
+                      contact_role: c.contact_role,
+                      global_access_id: c.global_access_id,
+                      cnak_status: c.cnak_status,
                     }}
                     colors={colors}
                     variant="compact"
@@ -660,36 +804,136 @@ const ContactViewPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Collection Progress */}
+              {/* Collection Progress - using payment_pattern */}
               <div>
                 <div className="flex justify-between text-xs mb-2">
                   <span style={{ color: colors.utility.secondaryText }}>Collection Rate</span>
                   <span className="font-bold" style={{ color: '#22c55e' }}>
-                    {cockpitData?.ltv ? Math.round(((cockpitData.ltv - (cockpitData.outstanding || 0)) / cockpitData.ltv) * 100) : 0}%
+                    {cockpitData?.payment_pattern?.collection_rate || 0}%
                   </span>
                 </div>
                 <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: colors.utility.primaryText + '15' }}>
                   <div
                     className="h-full rounded-full transition-all"
                     style={{
-                      width: `${cockpitData?.ltv ? Math.round(((cockpitData.ltv - (cockpitData.outstanding || 0)) / cockpitData.ltv) * 100) : 0}%`,
+                      width: `${cockpitData?.payment_pattern?.collection_rate || 0}%`,
                       background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs mt-3">
+                  <span style={{ color: colors.utility.secondaryText }}>On-time Payment</span>
+                  <span className="font-bold" style={{ color: '#3b82f6' }}>
+                    {cockpitData?.payment_pattern?.on_time_rate || 0}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden mt-1" style={{ backgroundColor: colors.utility.primaryText + '15' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${cockpitData?.payment_pattern?.on_time_rate || 0}%`,
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
                     }}
                   />
                 </div>
               </div>
             </div>
 
-            {/* Recent Activity Placeholder */}
+            {/* Invoice List */}
             <div className="text-xs font-bold uppercase tracking-wide mb-3 px-1" style={{ color: colors.utility.secondaryText }}>
-              Recent Invoices
+              Invoices ({invoices.length})
             </div>
 
-            <div className="text-center py-8 rounded-xl border" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}>
-              <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-30" style={{ color: colors.utility.secondaryText }} />
-              <p className="text-sm" style={{ color: colors.utility.secondaryText }}>Invoice list coming soon</p>
-              <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>Billing module integration pending</p>
-            </div>
+            {cockpitLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-24 rounded-xl animate-pulse" style={{ backgroundColor: colors.utility.secondaryText + '20' }} />
+                ))}
+              </div>
+            ) : invoices.length === 0 ? (
+              <div className="text-center py-8 rounded-xl border" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}>
+                <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-30" style={{ color: colors.utility.secondaryText }} />
+                <p className="text-sm" style={{ color: colors.utility.secondaryText }}>No invoices yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {invoices.map(inv => {
+                  const INVOICE_STATUS: Record<string, { label: string; color: string }> = {
+                    paid: { label: 'Paid', color: '#22c55e' },
+                    partially_paid: { label: 'Partial', color: '#f59e0b' },
+                    unpaid: { label: 'Unpaid', color: '#ef4444' },
+                    overdue: { label: 'Overdue', color: '#ef4444' },
+                    cancelled: { label: 'Cancelled', color: '#6b7280' },
+                  };
+                  const invStatus = INVOICE_STATUS[inv.status] || { label: inv.status, color: '#6b7280' };
+                  const paidPercent = inv.total_amount > 0 ? Math.round((inv.amount_paid / inv.total_amount) * 100) : 0;
+
+                  return (
+                    <div
+                      key={inv.id}
+                      className="p-3 rounded-xl border cursor-pointer transition-all hover:shadow-sm"
+                      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
+                      onClick={() => navigate(`/contracts/${inv.contract_id}`)}
+                    >
+                      {/* Row 1: Invoice # + Status */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-mono font-semibold" style={{ color: colors.utility.primaryText }}>
+                          {inv.invoice_number}
+                        </span>
+                        <span
+                          className="px-2 py-0.5 rounded text-xs font-bold uppercase"
+                          style={{ backgroundColor: invStatus.color + '15', color: invStatus.color }}
+                        >
+                          {invStatus.label}
+                        </span>
+                      </div>
+
+                      {/* Row 2: Contract name + Payment mode */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs truncate" style={{ color: colors.utility.secondaryText }}>
+                          {inv.contract_name} ({inv.contract_number})
+                        </span>
+                        <span className="text-xs uppercase ml-2 flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
+                          {inv.payment_mode}
+                        </span>
+                      </div>
+
+                      {/* Row 3: Progress bar + amounts */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: colors.utility.primaryText + '10' }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${paidPercent}%`, backgroundColor: invStatus.color }}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs flex-shrink-0">
+                          <span className="font-semibold" style={{ color: invStatus.color }}>
+                            {formatCurrency(inv.balance)}
+                          </span>
+                          <span style={{ color: colors.utility.secondaryText }}>
+                            / {formatCurrency(inv.total_amount)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Row 4: Due date + paid % */}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                          Due: {new Date(inv.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                        {paidPercent > 0 && paidPercent < 100 && (
+                          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                            {paidPercent}% paid
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -704,6 +948,7 @@ const ContactViewPage: React.FC = () => {
         contactStatus={contact.status}
         primaryEmail={primaryEmail?.value}
         primaryPhone={primaryPhone?.value}
+        phoneCountryCode={primaryPhone?.country_code}
         onProfileClick={() => setIsProfileDrawerOpen(true)}
       />
 

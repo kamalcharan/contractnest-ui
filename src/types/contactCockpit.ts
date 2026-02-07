@@ -1,22 +1,32 @@
 // src/types/contactCockpit.ts
 // Contact Cockpit Type Definitions
 
+export type ContactRole = 'as_client' | 'as_vendor' | 'as_partner';
+export type CnakStatus = 'pending' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'not_connected';
+export type UrgencyLevel = 'low' | 'medium' | 'high' | 'critical';
+
 export interface ContractSummaryItem {
   id: string;
   contract_number: string;
   name: string;
   status: string;
+  contract_type?: string;
   grand_total: number;
   currency: string;
   created_at: string;
   acceptance_method: string;
   duration_value: number;
   duration_unit: string;
+  // V2: Multi-role + CNAK
+  contact_role: ContactRole;
+  global_access_id?: string | null;
+  cnak_status?: CnakStatus | null;
 }
 
 export interface ContractsSummary {
   total: number;
   by_status: Record<string, number>;
+  by_role: Record<string, number>;
   contracts: ContractSummaryItem[];
 }
 
@@ -42,6 +52,8 @@ export interface OverdueEvent {
   currency?: string;
   assigned_to?: string;
   assigned_to_name?: string;
+  sequence_number?: number;
+  total_occurrences?: number;
 }
 
 export interface UpcomingEvent {
@@ -63,15 +75,46 @@ export interface UpcomingEvent {
   total_occurrences: number;
 }
 
+export interface CockpitInvoice {
+  id: string;
+  invoice_number: string;
+  contract_id: string;
+  contract_number: string;
+  contract_name: string;
+  invoice_type: 'receivable' | 'payable';
+  total_amount: number;
+  amount_paid: number;
+  balance: number;
+  status: 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+  due_date: string;
+  currency: string;
+  payment_mode?: string;
+  issued_at: string;
+  paid_at?: string | null;
+}
+
+export interface PaymentPattern {
+  total_invoiced: number;
+  total_paid: number;
+  invoice_count: number;
+  paid_on_time: number;
+  collection_rate: number;
+  on_time_rate: number;
+}
+
 export interface ContactCockpitData {
   contact_id: string;
   contracts: ContractsSummary;
   events: EventsSummary;
   overdue_events: OverdueEvent[];
   upcoming_events: UpcomingEvent[];
+  invoices: CockpitInvoice[];
   ltv: number;
   outstanding: number;
   health_score: number;
+  urgency_score: number;
+  urgency_level: UrgencyLevel;
+  payment_pattern: PaymentPattern;
   days_ahead: number;
 }
 

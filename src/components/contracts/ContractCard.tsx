@@ -10,12 +10,15 @@ import {
   Package,
   Handshake,
   Tag,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 import {
   CONTACT_CLASSIFICATION_CONFIG,
   getClassificationColors,
 } from '@/utils/constants/contacts';
+import type { ContactRole, CnakStatus } from '@/types/contactCockpit';
 
 // ═══════════════════════════════════════════════════
 // TYPES
@@ -37,6 +40,10 @@ export interface ContractCardData {
   end_date?: string;
   duration_value?: number;
   duration_unit?: string;
+  // V2: Contact 360 fields
+  contact_role?: ContactRole;
+  global_access_id?: string | null;
+  cnak_status?: CnakStatus | null;
 }
 
 export interface ContractCardProps {
@@ -136,10 +143,30 @@ const ContractCard: React.FC<ContractCardProps> = ({
 
   // ─── COMPACT VARIANT (for Contact Cockpit) ───
   if (variant === 'compact') {
+    // Role badge config
+    const ROLE_CONFIG: Record<string, { label: string; color: string }> = {
+      as_client: { label: 'As Client', color: '#10B981' },
+      as_vendor: { label: 'As Vendor', color: '#3B82F6' },
+      as_partner: { label: 'As Partner', color: '#8B5CF6' },
+    };
+    const roleConfig = contract.contact_role ? ROLE_CONFIG[contract.contact_role] : null;
+
+    // CNAK status config
+    const CNAK_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+      accepted: { label: 'Connected', color: '#22c55e', icon: 'check' },
+      pending: { label: 'Pending', color: '#f59e0b', icon: 'clock' },
+      sent: { label: 'Sent', color: '#3b82f6', icon: 'send' },
+      viewed: { label: 'Viewed', color: '#8b5cf6', icon: 'eye' },
+      rejected: { label: 'Rejected', color: '#ef4444', icon: 'x' },
+      expired: { label: 'Expired', color: '#6b7280', icon: 'clock' },
+      not_connected: { label: 'Not Connected', color: '#9ca3af', icon: 'link' },
+    };
+    const cnakConfig = contract.cnak_status ? CNAK_CONFIG[contract.cnak_status] : null;
+
     return (
       <div
         onClick={handleClick}
-        className="p-4 rounded-xl border cursor-pointer transition-all hover:translate-x-1 hover:shadow-md"
+        className="p-4 rounded-xl border cursor-pointer transition-all hover:translate-x-1 hover:shadow-md group"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
           borderColor: colors.utility.primaryText + '10',
@@ -147,22 +174,38 @@ const ContractCard: React.FC<ContractCardProps> = ({
           borderLeftColor: statusColor,
         }}
       >
-        {/* Row 1: Status + Amount */}
+        {/* Row 1: Status + Role Badge + Amount */}
         <div className="flex items-start justify-between mb-2">
-          <span
-            className="px-2 py-0.5 rounded text-xs font-bold uppercase"
-            style={{ backgroundColor: statusColor + '20', color: statusColor }}
-          >
-            {statusConfig.label}
-          </span>
-          <span className="text-base font-bold" style={{ color: colors.utility.primaryText }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="px-2 py-0.5 rounded text-xs font-bold uppercase"
+              style={{ backgroundColor: statusColor + '20', color: statusColor }}
+            >
+              {statusConfig.label}
+            </span>
+            {roleConfig && (
+              <span
+                className="px-2 py-0.5 rounded text-xs font-semibold"
+                style={{ backgroundColor: roleConfig.color + '15', color: roleConfig.color }}
+              >
+                {roleConfig.label}
+              </span>
+            )}
+          </div>
+          <span className="text-base font-bold flex-shrink-0" style={{ color: colors.utility.primaryText }}>
             {formatCurrency(displayValue, contract.currency)}
           </span>
         </div>
 
-        {/* Row 2: Title */}
-        <div className="text-sm font-semibold mb-1 truncate" style={{ color: colors.utility.primaryText }}>
-          {displayTitle}
+        {/* Row 2: Title + View Icon */}
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-semibold truncate flex-1" style={{ color: colors.utility.primaryText }}>
+            {displayTitle}
+          </div>
+          <ExternalLink
+            className="h-3.5 w-3.5 flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            style={{ color: colors.utility.secondaryText }}
+          />
         </div>
 
         {/* Row 3: Contract Number */}
@@ -170,15 +213,40 @@ const ContractCard: React.FC<ContractCardProps> = ({
           {contract.contract_number}
         </div>
 
-        {/* Row 4: Duration (if available) */}
-        {contract.duration_value && (
-          <div
-            className="mt-3 pt-3 border-t text-xs"
-            style={{ borderColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
-          >
-            {contract.duration_value} {contract.duration_unit}
-          </div>
-        )}
+        {/* Row 4: CNAK + Duration */}
+        <div
+          className="mt-3 pt-3 border-t flex items-center justify-between"
+          style={{ borderColor: colors.utility.primaryText + '10' }}
+        >
+          {/* CNAK Badge */}
+          {contract.global_access_id && cnakConfig ? (
+            <div className="flex items-center gap-1.5">
+              <Link2 className="h-3 w-3" style={{ color: cnakConfig.color }} />
+              <span className="text-xs font-medium" style={{ color: cnakConfig.color }}>
+                {contract.global_access_id}
+              </span>
+              <span
+                className="px-1.5 py-0.5 rounded text-xs"
+                style={{ backgroundColor: cnakConfig.color + '15', color: cnakConfig.color }}
+              >
+                {cnakConfig.label}
+              </span>
+            </div>
+          ) : contract.duration_value ? (
+            <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+              {contract.duration_value} {contract.duration_unit}
+            </span>
+          ) : (
+            <span />
+          )}
+
+          {/* Duration on the right if CNAK is shown */}
+          {contract.global_access_id && contract.duration_value && (
+            <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+              {contract.duration_value} {contract.duration_unit}
+            </span>
+          )}
+        </div>
       </div>
     );
   }

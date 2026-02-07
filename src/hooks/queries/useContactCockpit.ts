@@ -57,7 +57,8 @@ export const useContactCockpit = (
 
       const response = await api.get(COCKPIT_API.SUMMARY(contactId, daysAhead));
 
-      const result: ContactCockpitResponse = response.data?.data || response.data;
+      // API returns { success, data, generated_at } — use response.data directly
+      const result: ContactCockpitResponse = response.data;
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to load cockpit data');
@@ -116,7 +117,7 @@ export const usePrefetchContactCockpit = () => {
       queryKey: contactCockpitKeys.summary(contactId, daysAhead),
       queryFn: async () => {
         const response = await api.get(COCKPIT_API.SUMMARY(contactId, daysAhead));
-        const result: ContactCockpitResponse = response.data?.data || response.data;
+        const result: ContactCockpitResponse = response.data;
         if (!result.success || !result.data) {
           throw new Error(result.error || 'Failed to load cockpit data');
         }

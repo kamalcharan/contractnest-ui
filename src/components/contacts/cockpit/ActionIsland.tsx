@@ -1,20 +1,17 @@
 // src/components/contacts/cockpit/ActionIsland.tsx
 // Floating Action Island - Bottom center persistent actions
+// Actions: Profile | Contract ▾ | Email (mailto:) | WhatsApp (wa.me/)
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
-  DollarSign,
-  Plus,
-  MessageSquare,
   ChevronUp,
-  X,
-  Calendar,
   User,
-  Settings,
   Truck,
   Handshake,
+  Mail,
+  MessageCircle,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -25,19 +22,9 @@ interface ActionIslandProps {
   contactStatus?: 'active' | 'inactive' | 'archived';
   primaryEmail?: string;
   primaryPhone?: string;
+  phoneCountryCode?: string;
   onProfileClick?: () => void;
   className?: string;
-}
-
-interface QuickAction {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  color: string;
-  bgColor: string;
-  hoverBgColor: string;
-  onClick: () => void;
-  disabled?: boolean;
 }
 
 const ActionIsland: React.FC<ActionIslandProps> = ({
@@ -47,19 +34,19 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
   contactStatus = 'active',
   primaryEmail,
   primaryPhone,
+  phoneCountryCode,
   onProfileClick,
   className = '',
 }) => {
   const navigate = useNavigate();
   const { isDarkMode } = useTheme();
-  const [isExpanded, setIsExpanded] = useState(false);
   const [showContractMenu, setShowContractMenu] = useState(false);
 
   const isDisabled = contactStatus === 'archived';
 
   // Contract creation options based on classification
   const getContractOptions = () => {
-    const options = [];
+    const options: { id: string; label: string; icon: React.ReactNode; color: string; type: string }[] = [];
 
     if (classifications.includes('client') || classifications.length === 0) {
       options.push({
@@ -110,29 +97,24 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
     setShowContractMenu(false);
   };
 
-  const handleCreateInvoice = () => {
-    navigate(`/billing/create?contactId=${contactId}`);
+  // Email via mailto:
+  const handleEmail = () => {
+    if (primaryEmail) {
+      window.location.href = `mailto:${primaryEmail}`;
+    }
   };
 
-  const handleLogActivity = () => {
-    // TODO: Open activity log modal
-    console.log('Log activity for', contactId);
-  };
-
-  const handleScheduleEvent = () => {
-    navigate(`/calendar?contactId=${contactId}`);
+  // WhatsApp via wa.me/
+  const handleWhatsApp = () => {
+    if (primaryPhone) {
+      const digits = primaryPhone.replace(/\D/g, '');
+      const code = phoneCountryCode?.replace(/\D/g, '') || '91';
+      window.open(`https://wa.me/${code}${digits}`, '_blank');
+    }
   };
 
   return (
     <>
-      {/* Backdrop when expanded */}
-      {isExpanded && (
-        <div
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40"
-          onClick={() => setIsExpanded(false)}
-        />
-      )}
-
       {/* Island Container */}
       <div
         className={`
@@ -158,7 +140,7 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
               : '0 20px 60px rgba(0, 0, 0, 0.15), 0 8px 20px rgba(0, 0, 0, 0.1)',
           }}
         >
-          {/* Profile Button - Opens ProfileDrawer */}
+          {/* Profile Button */}
           {onProfileClick && (
             <>
               <button
@@ -243,14 +225,14 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
           {/* Divider */}
           <div className={`w-px h-6 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
 
-          {/* Invoice Button */}
+          {/* Email Button (mailto:) */}
           <button
-            onClick={handleCreateInvoice}
-            disabled={isDisabled}
+            onClick={handleEmail}
+            disabled={!primaryEmail || isDisabled}
             className={`
               flex items-center gap-2 px-4 py-2 rounded-full
               font-semibold text-sm transition-all
-              ${isDisabled
+              ${(!primaryEmail || isDisabled)
                 ? 'opacity-50 cursor-not-allowed'
                 : 'hover:scale-105 active:scale-95'
               }
@@ -259,111 +241,34 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
               backgroundColor: '#3B82F6',
               color: 'white',
             }}
+            title={primaryEmail || 'No email available'}
           >
-            <DollarSign className="h-4 w-4" />
-            <span>Invoice</span>
+            <Mail className="h-4 w-4" />
+            <span>Email</span>
           </button>
 
-          {/* Divider */}
-          <div className={`w-px h-6 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
-
-          {/* Quick Actions Toggle */}
+          {/* WhatsApp Button (wa.me/) */}
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={handleWhatsApp}
+            disabled={!primaryPhone || isDisabled}
             className={`
-              p-2.5 rounded-full transition-all
-              ${isExpanded
-                ? (isDarkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-900')
-                : (isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100')
+              flex items-center gap-2 px-4 py-2 rounded-full
+              font-semibold text-sm transition-all
+              ${(!primaryPhone || isDisabled)
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:scale-105 active:scale-95'
               }
             `}
+            style={{
+              backgroundColor: '#25D366',
+              color: 'white',
+            }}
+            title={primaryPhone ? `WhatsApp: ${primaryPhone}` : 'No phone available'}
           >
-            {isExpanded ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Plus className="h-5 w-5" />
-            )}
+            <MessageCircle className="h-4 w-4" />
+            <span>WhatsApp</span>
           </button>
         </div>
-
-        {/* Expanded Actions */}
-        {isExpanded && (
-          <div
-            className={`
-              absolute bottom-full left-1/2 -translate-x-1/2 mb-3
-              flex items-center gap-3 px-4 py-3 rounded-2xl
-              shadow-xl backdrop-blur-xl
-              animate-in slide-in-from-bottom-2 fade-in duration-200
-              ${isDarkMode
-                ? 'bg-gray-800/95 border border-gray-700'
-                : 'bg-white/95 border border-gray-200'
-              }
-            `}
-          >
-            {/* Schedule Event */}
-            <button
-              onClick={handleScheduleEvent}
-              disabled={isDisabled}
-              className={`
-                flex flex-col items-center gap-1 p-3 rounded-xl
-                transition-all
-                ${isDisabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:bg-purple-500/10 hover:scale-105'
-                }
-              `}
-            >
-              <div className="p-2 rounded-lg bg-purple-500/10">
-                <Calendar className="h-5 w-5 text-purple-500" />
-              </div>
-              <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Schedule
-              </span>
-            </button>
-
-            {/* Log Activity */}
-            <button
-              onClick={handleLogActivity}
-              disabled={isDisabled}
-              className={`
-                flex flex-col items-center gap-1 p-3 rounded-xl
-                transition-all
-                ${isDisabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:bg-amber-500/10 hover:scale-105'
-                }
-              `}
-            >
-              <div className="p-2 rounded-lg bg-amber-500/10">
-                <MessageSquare className="h-5 w-5 text-amber-500" />
-              </div>
-              <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Log Activity
-              </span>
-            </button>
-
-            {/* Assign Task */}
-            <button
-              onClick={() => navigate(`/tasks/create?contactId=${contactId}`)}
-              disabled={isDisabled}
-              className={`
-                flex flex-col items-center gap-1 p-3 rounded-xl
-                transition-all
-                ${isDisabled
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'hover:bg-cyan-500/10 hover:scale-105'
-                }
-              `}
-            >
-              <div className="p-2 rounded-lg bg-cyan-500/10">
-                <User className="h-5 w-5 text-cyan-500" />
-              </div>
-              <span className={`text-xs font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                Assign
-              </span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Click outside to close contract menu */}
