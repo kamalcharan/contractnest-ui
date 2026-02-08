@@ -4,7 +4,7 @@
 // D2: Awaiting Acceptance + Service Events + Action Queue (Revenue)
 // Theme: Uses currentTheme brand colors (not hardcoded green)
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Gauge,
@@ -23,6 +23,7 @@ import {
   CreditCard,
   Clock,
   Eye,
+  ChevronLeft,
   ChevronRight,
   CalendarDays,
   Receipt,
@@ -31,6 +32,7 @@ import {
   PlayCircle,
   Loader2,
   Edit3,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
@@ -44,6 +46,18 @@ import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import type { Contract } from '@/types/contracts';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
 import { VALID_STATUS_TRANSITIONS } from '@/types/contractEvents';
+
+// Lazy-load drawer/wizard — gracefully degrades if components don't exist
+const QuickAddContactDrawer = lazy(() =>
+  import('@/components/contacts/QuickAddContactDrawer').catch(() => ({
+    default: () => null as any,
+  }))
+);
+const ContractWizard = lazy(() =>
+  import('@/components/contracts/ContractWizard').catch(() => ({
+    default: () => null as any,
+  }))
+);
 
 // =================================================================
 // TYPES
@@ -141,7 +155,7 @@ const getAvatarColor = (str: string): string => {
 // SUB-COMPONENTS
 // =================================================================
 
-// ─── Perspective Switcher (below heading) ───────────────────────
+// ─── Perspective Switcher ────────────────────────────────────────
 
 interface PerspectiveSwitcherProps {
   active: Perspective;
@@ -162,7 +176,7 @@ const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
   ];
 
   return (
-    <div className={`inline-flex rounded-lg p-0.5 gap-0.5 mt-2 ${
+    <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
       isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
     }`}>
       {perspectives.map((p) => {
@@ -198,23 +212,33 @@ const FilterPill: React.FC<{
   isActive: boolean;
   onClick: () => void;
   isDarkMode: boolean;
+  brandColor: string;
+  colors: any;
   count?: number;
-}> = ({ label, isActive, onClick, isDarkMode, count }) => (
+}> = ({ label, isActive, onClick, isDarkMode, brandColor, colors, count }) => (
   <button
     onClick={onClick}
-    className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all whitespace-nowrap ${
-      isActive
-        ? isDarkMode ? 'bg-gray-600 text-white font-bold' : 'bg-gray-200 text-gray-900 font-bold'
-        : isDarkMode ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
-    }`}
+    className="px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all whitespace-nowrap"
+    style={isActive ? {
+      backgroundColor: brandColor + (isDarkMode ? '25' : '12'),
+      color: brandColor,
+      fontWeight: 700,
+    } : {
+      color: colors.utility.secondaryText,
+    }}
   >
     {label}
     {count !== undefined && count > 0 && (
-      <span className={`ml-1 px-1 py-0.5 rounded text-[9px] ${
-        isActive
-          ? isDarkMode ? 'bg-gray-500' : 'bg-gray-300'
-          : isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
-      }`}>
+      <span
+        className="ml-1 px-1 py-0.5 rounded text-[9px]"
+        style={isActive ? {
+          backgroundColor: brandColor + '20',
+          color: brandColor,
+        } : {
+          backgroundColor: colors.utility.primaryText + '08',
+          color: colors.utility.secondaryText,
+        }}
+      >
         {count}
       </span>
     )}
@@ -231,6 +255,7 @@ interface BucketCardProps {
   color: string;
   isDarkMode: boolean;
   isHighlighted?: boolean;
+  colors: any;
 }
 
 const BucketCard: React.FC<BucketCardProps> = ({
@@ -241,12 +266,13 @@ const BucketCard: React.FC<BucketCardProps> = ({
   color,
   isDarkMode,
   isHighlighted,
+  colors,
 }) => (
   <div
-    className={`p-3 rounded-xl border transition-all ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}
+    className="p-3 rounded-xl border shadow-sm transition-all"
     style={{
+      backgroundColor: colors.utility.primaryBackground,
+      borderColor: colors.utility.primaryText + '15',
       borderLeftWidth: isHighlighted ? '3px' : '1px',
       borderLeftColor: isHighlighted ? color : undefined,
     }}
@@ -256,13 +282,13 @@ const BucketCard: React.FC<BucketCardProps> = ({
         {title}
       </span>
       <span
-        className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
-        style={{ color: isHighlighted ? color : undefined }}
+        className="text-lg font-bold"
+        style={{ color: isHighlighted ? color : colors.utility.primaryText }}
       >
         {count}
       </span>
     </div>
-    <div className={`flex items-center gap-3 text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+    <div className="flex items-center gap-3 text-[10px]" style={{ color: colors.utility.secondaryText }}>
       <span className="flex items-center gap-1">
         <Wrench className="w-3 h-3" style={{ color: '#10B981' }} />
         {serviceCount}
@@ -277,7 +303,7 @@ const BucketCard: React.FC<BucketCardProps> = ({
 
 // ─── VaNi Sidebar (Coming Soon) ────────────────────────────────
 
-const VaNiSidebar: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
+const VaNiSidebar: React.FC<{ isDarkMode: boolean; colors: any }> = ({ isDarkMode, colors }) => {
   const futureItems = [
     { icon: AlertTriangle, label: 'SLA Breach Alerts', description: 'Auto-detect SLA violations' },
     { icon: BellRing, label: 'Renewal Reminders', description: 'Smart renewal nudges' },
@@ -287,52 +313,55 @@ const VaNiSidebar: React.FC<{ isDarkMode: boolean }> = ({ isDarkMode }) => {
   ];
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}>
-      <div className={`px-5 py-4 border-b flex items-center gap-2.5 ${
-        isDarkMode ? 'border-gray-700' : 'border-gray-200'
-      }`}>
+    <div
+      className="rounded-xl border shadow-sm overflow-hidden"
+      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+    >
+      <div className="px-5 py-4 border-b flex items-center gap-2.5" style={{ borderColor: colors.utility.primaryText + '15' }}>
         <div className="p-2 rounded-lg bg-purple-500/10">
           <Sparkles className="h-4 w-4 text-purple-500" />
         </div>
         <div>
-          <h3 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>VaNi</h3>
-          <p className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>AI Operations Assistant</p>
+          <h3 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>VaNi</h3>
+          <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>AI Operations Assistant</p>
         </div>
       </div>
       <div className="p-5">
-        <div className={`text-center py-6 mb-4 rounded-xl ${isDarkMode ? 'bg-gray-700/30' : 'bg-gray-50'}`}>
+        <div
+          className="text-center py-6 mb-4 rounded-xl"
+          style={{ backgroundColor: colors.utility.primaryText + '06' }}
+        >
           <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 ${
             isDarkMode ? 'bg-purple-500/10' : 'bg-purple-50'
           }`}>
             <Sparkles className="h-7 w-7 text-purple-500" />
           </div>
-          <p className={`text-sm font-semibold mb-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Coming Soon</p>
-          <p className={`text-xs px-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className="text-sm font-semibold mb-1" style={{ color: colors.utility.primaryText }}>Coming Soon</p>
+          <p className="text-xs px-4" style={{ color: colors.utility.secondaryText }}>
             VaNi will proactively surface alerts and recommendations here
           </p>
         </div>
         <div className="space-y-2.5">
-          <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${
-            isDarkMode ? 'text-gray-500' : 'text-gray-400'
-          }`}>
+          <p className="text-[10px] font-bold uppercase tracking-wider px-1" style={{ color: colors.utility.secondaryText }}>
             Planned Capabilities
           </p>
           {futureItems.map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.label} className={`flex items-center gap-3 p-2.5 rounded-lg ${
-                isDarkMode ? 'bg-gray-700/30' : 'bg-gray-50'
-              }`}>
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
-                }`}>
-                  <Icon className={`h-3.5 w-3.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+              <div
+                key={item.label}
+                className="flex items-center gap-3 p-2.5 rounded-lg"
+                style={{ backgroundColor: colors.utility.primaryText + '06' }}
+              >
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: colors.utility.primaryText + '10' }}
+                >
+                  <Icon className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
                 </div>
                 <div className="min-w-0">
-                  <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{item.label}</p>
-                  <p className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{item.description}</p>
+                  <p className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>{item.label}</p>
+                  <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>{item.description}</p>
                 </div>
               </div>
             );
@@ -352,7 +381,8 @@ const FooterStatusBar: React.FC<{
   onRefresh: () => void;
   isDarkMode: boolean;
   brandColor: string;
-}> = ({ totalContracts, totalEvents, isRefreshing, onRefresh, isDarkMode, brandColor }) => {
+  colors: any;
+}> = ({ totalContracts, totalEvents, isRefreshing, onRefresh, isDarkMode, brandColor, colors }) => {
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
 
   useEffect(() => {
@@ -360,10 +390,11 @@ const FooterStatusBar: React.FC<{
   }, [isRefreshing]);
 
   return (
-    <div className={`mt-6 px-5 py-3 rounded-xl border flex items-center justify-between ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}>
-      <div className={`flex items-center gap-4 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+    <div
+      className="mt-6 px-5 py-3 rounded-xl border shadow-sm flex items-center justify-between"
+      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+    >
+      <div className="flex items-center gap-4 text-xs" style={{ color: colors.utility.secondaryText }}>
         <span className="flex items-center gap-1.5">
           <FileText className="h-3 w-3" />
           {totalContracts} contracts
@@ -374,7 +405,7 @@ const FooterStatusBar: React.FC<{
         </span>
       </div>
       <div className="flex items-center gap-3">
-        <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+        <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
           Synced {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
         <button
@@ -408,32 +439,41 @@ const AwaitingAcceptanceCard: React.FC<{
   isSending: boolean;
   isDarkMode: boolean;
   brandColor: string;
-}> = ({ contracts, isLoading, onView, onResend, isSending, isDarkMode, brandColor }) => {
+  colors: any;
+}> = ({ contracts, isLoading, onView, onResend, isSending, isDarkMode, brandColor, colors }) => {
   const navigate = useNavigate();
+  const [scrollIndex, setScrollIndex] = useState(0);
+  const VISIBLE_COUNT = 4;
+  const GAP = 12; // gap-3 = 12px
+
+  const cardBg = colors.utility.secondaryBackground;
+  const cardBorder = colors.utility.primaryText + '15';
+  const cardShadow = isDarkMode ? '0 2px 8px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.04)';
+
+  const maxIndex = Math.max(0, contracts.length - VISIBLE_COUNT);
+  const canScrollLeft = scrollIndex > 0;
+  const canScrollRight = scrollIndex < maxIndex;
+
+  const handleScrollLeft = () => setScrollIndex((prev) => Math.max(0, prev - 1));
+  const handleScrollRight = () => setScrollIndex((prev) => Math.min(maxIndex, prev + 1));
 
   if (isLoading) {
     return (
-      <div className={`rounded-xl border ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'}`}>
+      <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}>
         <div className="p-5 flex items-center justify-center py-10">
           <Loader2 className="h-5 w-5 animate-spin" style={{ color: brandColor }} />
-          <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>
+          <span className={`ml-2 text-xs`} style={{ color: colors.utility.secondaryText }}>Loading...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}>
-      {/* Header — matches v3 .acceptance-header */}
-      <div className={`px-4 py-3 flex items-center justify-between border-b ${
-        isDarkMode ? 'border-gray-700' : 'border-gray-200'
-      }`}>
+    <div className="rounded-xl border overflow-hidden" style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}>
+      {/* Header with inline carousel nav arrows */}
+      <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: cardBorder }}>
         <div className="flex items-center gap-2">
-          <span className={`text-[11px] uppercase tracking-wider font-bold ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}>
+          <span className={`text-[11px] uppercase tracking-wider font-bold`} style={{ color: colors.utility.secondaryText }}>
             Awaiting Acceptance
           </span>
           <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
@@ -444,111 +484,152 @@ const AwaitingAcceptanceCard: React.FC<{
             {String(contracts.length).padStart(2, '0')}
           </span>
         </div>
-        <button
-          onClick={() => navigate('/contracts?status=pending_acceptance')}
-          className="text-[10px] font-bold hover:underline"
-          style={{ color: brandColor }}
-        >
-          View all in Hub →
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Carousel left/right buttons */}
+          {contracts.length > VISIBLE_COUNT && (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleScrollLeft}
+                disabled={!canScrollLeft}
+                className="w-7 h-7 rounded-md border flex items-center justify-center transition-all hover:shadow-sm"
+                style={{
+                  borderColor: canScrollLeft ? brandColor + '50' : colors.utility.primaryText + '15',
+                  backgroundColor: canScrollLeft ? brandColor + '10' : colors.utility.secondaryBackground,
+                  opacity: canScrollLeft ? 1 : 0.4,
+                  cursor: canScrollLeft ? 'pointer' : 'default',
+                }}
+                title="Scroll left"
+              >
+                <ChevronLeft className="h-4 w-4" style={{ color: canScrollLeft ? brandColor : colors.utility.secondaryText }} />
+              </button>
+              <button
+                onClick={handleScrollRight}
+                disabled={!canScrollRight}
+                className="w-7 h-7 rounded-md border flex items-center justify-center transition-all hover:shadow-sm"
+                style={{
+                  borderColor: canScrollRight ? brandColor + '50' : colors.utility.primaryText + '15',
+                  backgroundColor: canScrollRight ? brandColor + '10' : colors.utility.secondaryBackground,
+                  opacity: canScrollRight ? 1 : 0.4,
+                  cursor: canScrollRight ? 'pointer' : 'default',
+                }}
+                title="Scroll right"
+              >
+                <ChevronRight className="h-4 w-4" style={{ color: canScrollRight ? brandColor : colors.utility.secondaryText }} />
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/contracts?status=pending_acceptance')}
+            className="text-[10px] font-bold hover:underline"
+            style={{ color: brandColor }}
+          >
+            View all in Hub →
+          </button>
+        </div>
       </div>
 
-      {/* Body — grid layout, scrollable, matches v3 .acceptance-body */}
-      <div
-        className="overflow-y-auto"
-        style={{ maxHeight: '280px' }}
-      >
+      {/* Body — controlled inline carousel, NO overflow scroll */}
+      <div className="overflow-hidden">
         {contracts.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
-            <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>All caught up</p>
-            <p className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>No contracts awaiting acceptance</p>
+            <p className={`text-xs font-medium`} style={{ color: colors.utility.primaryText }}>All caught up</p>
+            <p className={`text-[10px]`} style={{ color: colors.utility.secondaryText }}>No contracts awaiting acceptance</p>
           </div>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-            {contracts.map((contract) => {
-              const status = getAcceptanceStatus(contract);
-              const initials = getInitials(contract.buyer_name || contract.buyer_company);
-              const avatarColor = getAvatarColor(contract.buyer_name || contract.id);
-              const sentDays = contract.sent_at ? daysSince(contract.sent_at) : null;
+          <div className="p-4">
+            <div
+              className="flex gap-3 transition-transform duration-300 ease-in-out"
+              style={{
+                transform: `translateX(-${scrollIndex * (280 + GAP)}px)`,
+              }}
+            >
+              {contracts.map((contract) => {
+                const status = getAcceptanceStatus(contract);
+                const initials = getInitials(contract.buyer_name || contract.buyer_company);
+                const avatarColor = getAvatarColor(contract.buyer_name || contract.id);
+                const sentDays = contract.sent_at ? daysSince(contract.sent_at) : null;
 
-              return (
-                <div
-                  key={contract.id}
-                  className={`flex items-center gap-3 px-4 py-3 border-b transition-colors cursor-pointer ${
-                    isDarkMode
-                      ? 'border-gray-700/50 hover:bg-gray-700/30'
-                      : 'border-gray-100 hover:bg-gray-50'
-                  }`}
-                  style={{ borderRight: '1px solid', borderRightColor: isDarkMode ? 'rgba(55,65,81,0.5)' : 'rgba(243,244,246,1)' }}
-                >
-                  {/* Avatar */}
+                return (
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
-                    style={{ backgroundColor: avatarColor }}
+                    key={contract.id}
+                    className="rounded-lg border shadow-sm hover:shadow-md transition-all cursor-pointer flex-shrink-0"
+                    style={{
+                      width: '280px',
+                      backgroundColor: colors.utility.primaryBackground,
+                      borderColor: colors.utility.primaryText + '20',
+                    }}
+                    onClick={() => onView(contract.id)}
                   >
-                    {initials}
-                  </div>
+                    {/* Top row: Avatar + contract info */}
+                    <div className="p-3.5 pb-2.5">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
+                          style={{ backgroundColor: avatarColor }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
+                            {contract.title}
+                          </p>
+                          <p className="text-[10px] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                            {contract.contract_number}
+                          </p>
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                            {contract.buyer_name || contract.buyer_company || 'Unknown'}
+                            {sentDays !== null && <span> · Sent {sentDays}d ago</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {contract.contract_number} — {contract.title}
-                    </p>
-                    <p className={`text-[10px] flex items-center gap-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {contract.buyer_name || contract.buyer_company || 'Unknown'}
-                      {sentDays !== null && (
-                        <span> · Sent {sentDays}d ago</span>
-                      )}
-                    </p>
+                    {/* Bottom row: Status badge + actions */}
+                    <div
+                      className="px-3.5 py-2.5 flex items-center justify-between border-t"
+                      style={{ borderColor: colors.utility.primaryText + '10' }}
+                    >
+                      <span
+                        className="text-[8px] font-bold uppercase tracking-wider px-2 py-1 rounded border"
+                        style={{
+                          color: status.color,
+                          backgroundColor: status.color + '10',
+                          borderColor: status.color + '30',
+                        }}
+                      >
+                        {status.label}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onView(contract.id); }}
+                          className="w-7 h-7 rounded-md border flex items-center justify-center transition-all"
+                          style={{ borderColor: colors.utility.primaryText + '20', backgroundColor: colors.utility.secondaryBackground }}
+                          title="View contract"
+                        >
+                          <Eye className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onResend(contract.id); }}
+                          disabled={isSending}
+                          className="w-7 h-7 rounded-md border flex items-center justify-center transition-all group"
+                          style={{ borderColor: colors.utility.primaryText + '20', backgroundColor: colors.utility.secondaryBackground }}
+                          title="Resend notification"
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = brandColor; e.currentTarget.style.borderColor = brandColor; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.borderColor = ''; }}
+                        >
+                          {isSending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: colors.utility.secondaryText }} />
+                          ) : (
+                            <Send className="h-3.5 w-3.5 group-hover:text-white" style={{ color: colors.utility.secondaryText }} />
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Status + Actions */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span
-                      className={`text-[8px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                        isDarkMode ? status.bgClass.replace('dark:', '') : status.bgClass.split(' ')[0]
-                      } ${isDarkMode ? status.borderClass.replace('dark:', '') : status.borderClass.split(' ')[0]}`}
-                      style={{ color: status.color }}
-                    >
-                      {status.label}
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onView(contract.id); }}
-                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
-                        isDarkMode
-                          ? 'border-gray-600 bg-gray-700 hover:bg-gray-600'
-                          : 'border-gray-200 bg-white hover:bg-gray-50'
-                      }`}
-                      title="View contract"
-                    >
-                      <Eye className={`h-3.5 w-3.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onResend(contract.id); }}
-                      disabled={isSending}
-                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
-                        isDarkMode
-                          ? 'border-gray-600 bg-gray-700'
-                          : 'border-gray-200 bg-white'
-                      } group`}
-                      title="Resend notification"
-                      style={{ '--hover-brand': brandColor } as React.CSSProperties}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = brandColor; e.currentTarget.style.borderColor = brandColor; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; e.currentTarget.style.borderColor = ''; }}
-                    >
-                      {isSending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
-                      ) : (
-                        <Send className={`h-3.5 w-3.5 ${
-                          isDarkMode ? 'text-gray-300' : 'text-gray-500'
-                        } group-hover:text-white`} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -556,169 +637,120 @@ const AwaitingAcceptanceCard: React.FC<{
   );
 };
 
-// ─── CNAK Verification Card (expense — v3 HTML style) ───────────
+// ─── CNAK Claim CTA (expense — replaces data-driven card) ───────
 
-const CnakVerificationCard: React.FC<{
-  contracts: Contract[];
-  isLoading: boolean;
-  onView: (id: string) => void;
-  onAccept: (id: string) => void;
-  onReject: (id: string) => void;
-  isProcessing: boolean;
+const CnakClaimCTA: React.FC<{
   isDarkMode: boolean;
   brandColor: string;
-}> = ({ contracts, isLoading, onView, onAccept, onReject, isProcessing, isDarkMode, brandColor }) => {
+  colors: any;
+}> = ({ isDarkMode, brandColor, colors }) => {
   const navigate = useNavigate();
 
-  if (isLoading) {
-    return (
-      <div className={`rounded-xl border ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'}`}>
-        <div className="p-5 flex items-center justify-center py-10">
-          <Loader2 className="h-5 w-5 animate-spin" style={{ color: brandColor }} />
-          <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`rounded-xl border overflow-hidden ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}>
-      {/* Header — matches v3 .cnak-header */}
-      <div className={`px-4 py-3 flex items-center justify-between border-b ${
-        isDarkMode ? 'border-gray-700' : 'border-gray-200'
-      }`}>
-        <div className="flex items-center gap-2">
-          <span className={`text-[11px] uppercase tracking-wider font-bold ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}>
-            CNAK Verification — Incoming Contracts
-          </span>
-          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
-            isDarkMode
-              ? 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-              : 'bg-blue-50 text-blue-600 border-blue-200'
-          }`}>
-            {String(contracts.length).padStart(2, '0')}
-          </span>
-        </div>
-        <button
-          onClick={() => navigate('/contracts/claim')}
-          className="text-[10px] font-bold hover:underline"
-          style={{ color: brandColor }}
+    <div
+      className="rounded-xl border overflow-hidden"
+      style={{
+        backgroundColor: colors.utility.secondaryBackground,
+        borderColor: colors.utility.primaryText + '15',
+        boxShadow: isDarkMode ? '0 2px 8px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.04)',
+      }}
+    >
+      {/* Header */}
+      <div
+        className="px-4 py-3 border-b flex items-center gap-2"
+        style={{ borderColor: colors.utility.primaryText + '15' }}
+      >
+        <ShieldCheck className="h-3.5 w-3.5" style={{ color: brandColor }} />
+        <span
+          className="text-[11px] uppercase tracking-wider font-bold"
+          style={{ color: colors.utility.secondaryText }}
         >
-          Claim via CNAK →
-        </button>
+          CNAK · Digital Visibility
+        </span>
       </div>
 
-      {/* Body — grid layout, scrollable, matches v3 .cnak-body */}
-      <div className="overflow-y-auto" style={{ maxHeight: '280px' }}>
-        {contracts.length === 0 ? (
-          <div className="text-center py-8">
-            <ShieldCheck className="h-8 w-8 mx-auto mb-2" style={{ color: brandColor }} />
-            <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>No pending verifications</p>
-            <p className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Incoming contracts will appear here</p>
+      {/* Body — horizontal layout: illustration + content */}
+      <div className="p-6 flex items-center gap-6">
+        {/* Left: Icon composition */}
+        <div className="flex-shrink-0 relative">
+          <div
+            className="w-[88px] h-[88px] rounded-2xl flex items-center justify-center"
+            style={{
+              background: `linear-gradient(135deg, ${brandColor}${isDarkMode ? '18' : '0C'}, ${brandColor}${isDarkMode ? '08' : '04'})`,
+              border: `1px solid ${brandColor}${isDarkMode ? '25' : '15'}`,
+            }}
+          >
+            <ShieldCheck className="h-10 w-10" style={{ color: brandColor, opacity: 0.9 }} />
           </div>
-        ) : (
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-            {contracts.map((contract) => {
-              const initials = getInitials(contract.buyer_name || contract.buyer_company);
-              const avatarColor = getAvatarColor(contract.buyer_name || contract.id);
-              const receivedDays = contract.sent_at ? daysSince(contract.sent_at) : null;
-              const cnakCode = contract.global_access_id || '—';
-              const amount = contract.grand_total || contract.total_value;
+          {/* Floating document badge */}
+          <div
+            className="absolute -bottom-1.5 -right-1.5 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg"
+            style={{ backgroundColor: brandColor }}
+          >
+            <FileText className="h-4 w-4 text-white" />
+          </div>
+          {/* Subtle dot accent */}
+          <div
+            className="absolute -top-1 -left-1 w-3 h-3 rounded-full"
+            style={{ backgroundColor: brandColor + '30' }}
+          />
+        </div>
 
+        {/* Right: Content */}
+        <div className="flex-1 min-w-0">
+          <h3
+            className="text-[15px] font-bold mb-1.5 leading-snug"
+            style={{ color: colors.utility.primaryText }}
+          >
+            Claim Digital Visibility
+            <span className="block text-xs font-semibold mt-0.5" style={{ color: colors.utility.secondaryText }}>
+              on Vendor Contracts
+            </span>
+          </h3>
+          <p
+            className="text-xs leading-relaxed mb-4"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Received a contract from a vendor? Use the <strong style={{ color: colors.utility.primaryText }}>CNAK</strong> (ContractNest Access Key) shared with you to securely claim and track it in your ContractHub.
+          </p>
+
+          {/* Benefit highlights */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-5">
+            {[
+              { icon: ShieldCheck, text: 'Secure verification' },
+              { icon: Eye, text: 'Instant contract visibility' },
+              { icon: Calendar, text: 'Track events & milestones' },
+            ].map((item) => {
+              const Icon = item.icon;
               return (
-                <div
-                  key={contract.id}
-                  className={`flex items-center gap-3 px-4 py-3.5 border-b transition-colors cursor-pointer ${
-                    isDarkMode
-                      ? 'border-gray-700/50 hover:bg-gray-700/30'
-                      : 'border-gray-100 hover:bg-gray-50'
-                  }`}
-                  style={{ borderRight: '1px solid', borderRightColor: isDarkMode ? 'rgba(55,65,81,0.5)' : 'rgba(243,244,246,1)' }}
-                  onClick={() => onView(contract.id)}
-                >
-                  {/* Avatar */}
+                <div key={item.text} className="flex items-center gap-1.5">
                   <div
-                    className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
-                    style={{ backgroundColor: avatarColor }}
+                    className="w-5 h-5 rounded-md flex items-center justify-center"
+                    style={{ backgroundColor: brandColor + (isDarkMode ? '20' : '10') }}
                   >
-                    {initials}
+                    <Icon className="h-3 w-3" style={{ color: brandColor }} />
                   </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {contract.contract_number} — {contract.title}
-                    </p>
-                    <p className={`text-[10px] ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                      From: {contract.buyer_name || contract.buyer_company || 'Unknown'}
-                      {receivedDays !== null && ` · ${receivedDays === 0 ? 'Today' : `${receivedDays}d ago`}`}
-                      {amount != null && amount > 0 && (
-                        <span className="font-bold"> · {Number(amount).toLocaleString()}</span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* CNAK Code + Status + Actions */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded ${
-                      isDarkMode
-                        ? 'bg-gray-700 text-blue-400'
-                        : 'bg-gray-100 text-blue-600'
-                    }`}>
-                      {cnakCode}
-                    </span>
-                    <span className={`text-[8px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                      isDarkMode
-                        ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                        : 'bg-red-50 text-red-600 border-red-200'
-                    }`}>
-                      Not Reviewed
-                    </span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onView(contract.id); }}
-                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
-                        isDarkMode
-                          ? 'border-gray-600 bg-gray-700 hover:bg-gray-600'
-                          : 'border-gray-200 bg-white hover:bg-gray-50'
-                      }`}
-                      title="View contract"
-                    >
-                      <Eye className={`h-3.5 w-3.5 ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onAccept(contract.id); }}
-                      disabled={isProcessing}
-                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
-                        isDarkMode
-                          ? 'border-green-500/30 bg-green-500/10 hover:bg-green-500 hover:border-green-500'
-                          : 'border-green-200 bg-green-50 hover:bg-green-500 hover:border-green-500'
-                      } group`}
-                      title="Accept contract"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500 group-hover:text-white" />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onReject(contract.id); }}
-                      disabled={isProcessing}
-                      className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
-                        isDarkMode
-                          ? 'border-red-500/30 bg-red-500/10 hover:bg-red-500 hover:border-red-500'
-                          : 'border-red-200 bg-red-50 hover:bg-red-500 hover:border-red-500'
-                      } group`}
-                      title="Reject contract"
-                    >
-                      <XCircle className="h-3.5 w-3.5 text-red-500 group-hover:text-white" />
-                    </button>
-                  </div>
+                  <span className="text-[11px] font-medium" style={{ color: colors.utility.secondaryText }}>
+                    {item.text}
+                  </span>
                 </div>
               );
             })}
           </div>
-        )}
+
+          {/* CTA Button */}
+          <button
+            onClick={() => navigate('/contracts/claim')}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              backgroundColor: brandColor,
+              boxShadow: `0 4px 14px ${brandColor}35`,
+            }}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Claim Contract via CNAK
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -729,7 +761,8 @@ const CnakVerificationCard: React.FC<{
 const RfqTrackerCard: React.FC<{
   isDarkMode: boolean;
   brandColor: string;
-}> = ({ isDarkMode, brandColor }) => {
+  onCreateContract?: () => void;
+}> = ({ isDarkMode, brandColor, onCreateContract }) => {
   const navigate = useNavigate();
 
   return (
@@ -755,7 +788,7 @@ const RfqTrackerCard: React.FC<{
           </span>
         </div>
         <button
-          onClick={() => navigate('/contracts?record_type=rfq')}
+          onClick={() => navigate('/contracts?contract_type=vendor')}
           className="text-[10px] font-bold hover:underline"
           style={{ color: brandColor }}
         >
@@ -778,7 +811,7 @@ const RfqTrackerCard: React.FC<{
           Create a Request for Quotation to start procurement from vendors
         </p>
         <button
-          onClick={() => navigate('/contracts/create')}
+          onClick={() => onCreateContract ? onCreateContract() : navigate('/contracts?contract_type=vendor')}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all"
           style={{ backgroundColor: brandColor }}
         >
@@ -799,7 +832,8 @@ const EventCard: React.FC<{
   isUpdatingStatus: boolean;
   isDarkMode: boolean;
   brandColor: string;
-}> = ({ event, onStatusChange, onViewContract, isUpdatingStatus, isDarkMode, brandColor }) => {
+  colors: any;
+}> = ({ event, onStatusChange, onViewContract, isUpdatingStatus, isDarkMode, brandColor, colors }) => {
   const isService = event.event_type === 'service';
   const statusCfg = getEventStatusConfig(event.status);
   const StatusIcon = statusCfg.icon;
@@ -807,11 +841,11 @@ const EventCard: React.FC<{
 
   return (
     <div
-      className={`p-3 rounded-xl border transition-all cursor-pointer ${
-        isDarkMode
-          ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-700/50'
-          : 'border-gray-200 bg-white hover:bg-gray-50'
-      }`}
+      className="p-3 rounded-xl border shadow-sm transition-all cursor-pointer hover:shadow-md"
+      style={{
+        backgroundColor: colors.utility.primaryBackground,
+        borderColor: colors.utility.primaryText + '15',
+      }}
       onClick={() => onViewContract(event.contract_id)}
     >
       <div className="flex items-start gap-2.5">
@@ -822,14 +856,14 @@ const EventCard: React.FC<{
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
             {event.block_name}
           </p>
-          <p className={`text-[10px] truncate mt-0.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          <p className="text-[10px] truncate mt-0.5" style={{ color: colors.utility.secondaryText }}>
             {event.contract_title || event.contract_number || 'Contract'}
           </p>
           <div className="flex items-center gap-2 mt-1.5">
-            <span className={`text-[10px] flex items-center gap-1 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <span className="text-[10px] flex items-center gap-1" style={{ color: colors.utility.secondaryText }}>
               <Calendar className="w-3 h-3" />
               {formatEventDate(event.scheduled_date)}
             </span>
@@ -890,10 +924,11 @@ const ServiceEventsSection: React.FC<{
   onViewContract: (contractId: string) => void;
   isDarkMode: boolean;
   brandColor: string;
+  colors: any;
 }> = ({
   events, isLoading, timeFilter, typeFilter,
   onTimeFilterChange, onTypeFilterChange,
-  onStatusChange, isUpdatingStatus, onViewContract, isDarkMode, brandColor,
+  onStatusChange, isUpdatingStatus, onViewContract, isDarkMode, brandColor, colors,
 }) => {
   const filteredEvents = useMemo(() => {
     if (typeFilter === 'all') return events;
@@ -901,32 +936,32 @@ const ServiceEventsSection: React.FC<{
   }, [events, typeFilter]);
 
   return (
-    <div className={`rounded-xl border overflow-hidden flex flex-col ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`} style={{ minHeight: '320px' }}>
+    <div
+      className="rounded-xl border shadow-sm overflow-hidden flex flex-col"
+      style={{ minHeight: '320px', minWidth: 0, backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+    >
       {/* Header + filters — matches v3 .section-header */}
-      <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+      <div className="px-4 py-3 border-b" style={{ borderColor: colors.utility.primaryText + '15' }}>
         <div className="flex items-center justify-between mb-2">
-          <span className={`text-[11px] uppercase tracking-wider font-bold ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}>
+          <span className="text-[11px] uppercase tracking-wider font-bold" style={{ color: colors.utility.secondaryText }}>
             Service Events
           </span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-            isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-          }`}>
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded"
+            style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+          >
             {filteredEvents.length}
           </span>
         </div>
         <div className="flex items-center gap-0.5">
           {(['today', 'week', 'month'] as EventTimeFilter[]).map((f) => (
             <FilterPill key={f} label={f === 'today' ? 'Today' : f === 'week' ? 'This Week' : 'This Month'}
-              isActive={timeFilter === f} onClick={() => onTimeFilterChange(f)} isDarkMode={isDarkMode} />
+              isActive={timeFilter === f} onClick={() => onTimeFilterChange(f)} isDarkMode={isDarkMode} brandColor={brandColor} colors={colors} />
           ))}
-          <div className={`w-px h-4 mx-1 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`} />
+          <div className="w-px h-4 mx-1" style={{ backgroundColor: colors.utility.primaryText + '15' }} />
           {(['all', 'service', 'billing'] as EventTypeFilter[]).map((f) => (
             <FilterPill key={f} label={f === 'all' ? 'All' : f === 'service' ? 'Deliverables' : 'Invoices'}
-              isActive={typeFilter === f} onClick={() => onTypeFilterChange(f)} isDarkMode={isDarkMode} />
+              isActive={typeFilter === f} onClick={() => onTypeFilterChange(f)} isDarkMode={isDarkMode} brandColor={brandColor} colors={colors} />
           ))}
         </div>
       </div>
@@ -936,13 +971,13 @@ const ServiceEventsSection: React.FC<{
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 className="h-5 w-5 animate-spin" style={{ color: brandColor }} />
-            <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading events...</span>
+            <span className="ml-2 text-xs" style={{ color: colors.utility.secondaryText }}>Loading events...</span>
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="text-center py-10">
-            <Calendar className={`h-8 w-8 mx-auto mb-2 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`} />
-            <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>No events</p>
-            <p className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            <Calendar className="h-8 w-8 mx-auto mb-2" style={{ color: colors.utility.secondaryText }} />
+            <p className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>No events</p>
+            <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
               No {typeFilter !== 'all' ? typeFilter : ''} events for this period
             </p>
           </div>
@@ -957,12 +992,13 @@ const ServiceEventsSection: React.FC<{
                 isUpdatingStatus={isUpdatingStatus}
                 isDarkMode={isDarkMode}
                 brandColor={brandColor}
+                colors={colors}
               />
             ))}
           </div>
         )}
         {filteredEvents.length > 6 && (
-          <p className={`text-center text-[10px] pt-2 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+          <p className="text-center text-[10px] pt-2" style={{ color: colors.utility.secondaryText }}>
             +{filteredEvents.length - 6} more events
           </p>
         )}
@@ -982,9 +1018,11 @@ const ActionQueueCard: React.FC<{
   queueFilter: QueueFilter;
   onQueueFilterChange: (f: QueueFilter) => void;
   isDarkMode: boolean;
+  brandColor: string;
+  colors: any;
 }> = ({
   draftContracts, overdueEvents, pendingContracts,
-  isLoading, onViewContract, queueFilter, onQueueFilterChange, isDarkMode,
+  isLoading, onViewContract, queueFilter, onQueueFilterChange, isDarkMode, brandColor, colors,
 }) => {
   const queueItems = useMemo(() => {
     const items: Array<{
@@ -1027,20 +1065,20 @@ const ActionQueueCard: React.FC<{
   }), [queueItems.length, draftContracts.length, overdueEvents.length, pendingContracts.length]);
 
   return (
-    <div className={`rounded-xl border overflow-hidden ${
-      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-    }`}>
+    <div
+      className="rounded-xl border shadow-sm overflow-hidden"
+      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+    >
       {/* Header */}
-      <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+      <div className="px-4 py-3 border-b" style={{ borderColor: colors.utility.primaryText + '15' }}>
         <div className="flex items-center justify-between mb-2">
-          <span className={`text-[11px] uppercase tracking-wider font-bold ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
-          }`}>
+          <span className="text-[11px] uppercase tracking-wider font-bold" style={{ color: colors.utility.secondaryText }}>
             Action Queue
           </span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-            isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-          }`}>
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded"
+            style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+          >
             {counts.all}
           </span>
         </div>
@@ -1051,6 +1089,8 @@ const ActionQueueCard: React.FC<{
               isActive={queueFilter === f}
               onClick={() => onQueueFilterChange(f)}
               isDarkMode={isDarkMode}
+              brandColor={brandColor}
+              colors={colors}
               count={counts[f]}
             />
           ))}
@@ -1061,14 +1101,14 @@ const ActionQueueCard: React.FC<{
       <div className="overflow-y-auto" style={{ maxHeight: '300px' }}>
         {isLoading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-            <span className={`ml-2 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading...</span>
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: colors.utility.secondaryText }} />
+            <span className="ml-2 text-xs" style={{ color: colors.utility.secondaryText }}>Loading...</span>
           </div>
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-8">
             <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
-            <p className={`text-xs font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Queue clear</p>
-            <p className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No actions pending</p>
+            <p className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>Queue clear</p>
+            <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>No actions pending</p>
           </div>
         ) : (
           filteredItems.map((item) => {
@@ -1076,26 +1116,25 @@ const ActionQueueCard: React.FC<{
             return (
               <div
                 key={item.id}
-                className={`flex items-center gap-3 px-4 py-3 border-b transition-colors cursor-pointer ${
-                  isDarkMode
-                    ? 'border-gray-700/50 hover:bg-gray-700/30'
-                    : 'border-gray-100 hover:bg-gray-50'
-                }`}
+                className="flex items-center gap-3 px-4 py-3 transition-colors cursor-pointer"
+                style={{ borderBottom: `1px solid ${colors.utility.primaryText}10` }}
                 onClick={() => onViewContract(item.contractId)}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = brandColor + '08'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = ''; }}
               >
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
                     {item.title}
                   </p>
-                  <p className={`text-[10px] truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
                     {item.subtitle}
                   </p>
                 </div>
-                <span className={`text-[10px] flex-shrink-0 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                <span className="text-[10px] flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
                   {formatEventDate(item.date)}
                 </span>
-                <ChevronRight className={`h-3 w-3 flex-shrink-0 ${isDarkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <ChevronRight className="h-3 w-3 flex-shrink-0" style={{ color: colors.utility.secondaryText + '60' }} />
               </div>
             );
           })
@@ -1125,7 +1164,7 @@ const OpsCockpitPage: React.FC = () => {
 
   useEffect(() => {
     if (perspective === null && profile?.business_type_id) {
-      setPerspective(profile.business_type_id === 'buyer' ? 'expense' : 'revenue');
+      setPerspective(profile.business_type_id.toLowerCase() === 'buyer' ? 'expense' : 'revenue');
     }
   }, [profile?.business_type_id, perspective]);
 
@@ -1136,6 +1175,11 @@ const OpsCockpitPage: React.FC = () => {
   // Expense = 'vendor' (they sell to us → we incur expense)
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
+  // Drawer & wizard state
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [drawerClassification, setDrawerClassification] = useState<string>('client');
+  const [showContractWizard, setShowContractWizard] = useState(false);
+
   // D2 filter state
   const [eventTimeFilter, setEventTimeFilter] = useState<EventTimeFilter>('week');
   const [eventTypeFilter, setEventTypeFilter] = useState<EventTypeFilter>('all');
@@ -1145,9 +1189,6 @@ const OpsCockpitPage: React.FC = () => {
   const { data: contractStats, isLoading: statsLoading, isFetching: statsFetching, refetch: refetchStats } = useContractStats();
 
   // D2 data hooks — ALL filtered by perspectiveType (contract_type = 'client' | 'vendor')
-  const { data: activeContractsData } = useContracts({
-    contract_type: perspectiveType as any, status: 'active' as any, limit: 1,
-  });
   const { data: pendingAcceptanceData, isLoading: acceptanceLoading } = useContracts({
     contract_type: perspectiveType as any, status: 'pending_acceptance' as any, limit: 10,
   });
@@ -1174,7 +1215,7 @@ const OpsCockpitPage: React.FC = () => {
   });
 
   // Mutations
-  const { sendNotification, isSendingNotification, updateStatus: updateContractStatus, isChangingStatus: isChangingContractStatus } = useContractOperations();
+  const { sendNotification, isSendingNotification } = useContractOperations();
   const { updateStatus: updateEventStatus, isChangingStatus } = useContractEventOperations();
 
   // Derived
@@ -1189,11 +1230,10 @@ const OpsCockpitPage: React.FC = () => {
 
   // Stats — per-perspective counts from individual queries (NOT aggregate stats endpoint)
   const stats = useMemo(() => ({
-    active: Number(activeContractsData?.total_count) || 0,
     pendingAcceptance: Number(pendingAcceptanceData?.total_count) || 0,
     drafts: Number(draftContractsData?.total_count) || 0,
     total: Number(contractStats?.by_contract_type?.[perspectiveType]) || 0,
-  }), [activeContractsData, pendingAcceptanceData, draftContractsData, contractStats, perspectiveType]);
+  }), [pendingAcceptanceData, draftContractsData, contractStats, perspectiveType]);
 
   // Event schedule buckets — computed from perspective-filtered events
   const urgency = useMemo(() => {
@@ -1287,23 +1327,11 @@ const OpsCockpitPage: React.FC = () => {
   const handleEventStatusChange = useCallback(async (eventId: string, newStatus: ContractEventStatus, version: number) => {
     try { await updateEventStatus({ eventId, newStatus, version }); } catch { /* toast handled */ }
   }, [updateEventStatus]);
-  const handleAcceptContract = useCallback(async (contractId: string) => {
-    try { await updateContractStatus({ contractId, statusData: { status: 'active' as any } }); } catch { /* toast handled */ }
-  }, [updateContractStatus]);
-  const handleRejectContract = useCallback(async (contractId: string) => {
-    try { await updateContractStatus({ contractId, statusData: { status: 'cancelled' as any } }); } catch { /* toast handled */ }
-  }, [updateContractStatus]);
-
-  // CTAs
-  const revenueCTAs = [
-    { label: 'New Contract', icon: Plus, action: () => navigate('/contracts/create') },
-    { label: 'Add Client', icon: Users, action: () => navigate('/contacts') },
-  ];
-  const expenseCTAs = [
-    { label: 'New RFQ', icon: Plus, action: () => navigate('/contracts/create') },
-    { label: 'Claim CNAK', icon: ShieldCheck, action: () => navigate('/contracts/claim') },
-  ];
-  const activeCTAs = activePerspective === 'revenue' ? revenueCTAs : expenseCTAs;
+  // Drawer open helpers
+  const openDrawerWith = (classification: string) => {
+    setDrawerClassification(classification);
+    setIsQuickAddOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -1315,12 +1343,12 @@ const OpsCockpitPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen p-6 transition-colors"
-      style={{ backgroundColor: colors.utility.primaryBackground }}
+      className="min-h-screen p-6 transition-colors overflow-x-hidden"
+      style={{ backgroundColor: colors.utility.primaryBackground, maxWidth: '100vw', overflowX: 'hidden' }}
     >
       {/* ═══════ HEADER ═══════ */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg" style={{ backgroundColor: withOpacity(brandColor, 0.1) }}>
               <Gauge className="h-5 w-5" style={{ color: brandColor }} />
@@ -1336,52 +1364,107 @@ const OpsCockpitPage: React.FC = () => {
               </p>
             </div>
           </div>
-          {/* Perspective switcher — directly below heading */}
-          <div className="ml-12">
+          {/* Perspective switcher + flip link */}
+          <div className="flex items-center gap-3">
             <PerspectiveSwitcher
               active={activePerspective}
               onChange={(p) => setPerspective(p)}
               isDarkMode={isDarkMode}
               brandColor={brandColor}
             />
+            <button
+              onClick={() => setPerspective(activePerspective === 'revenue' ? 'expense' : 'revenue')}
+              className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
+              style={{ color: brandColor }}
+            >
+              <ArrowRightLeft
+                className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180"
+              />
+              <span className="group-hover:underline">
+                flip to {activePerspective === 'revenue' ? 'Expense' : 'Revenue'} ops
+              </span>
+            </button>
           </div>
         </div>
 
         {/* CTAs — right side */}
         <div className="flex items-center gap-2">
-          {activeCTAs.map((cta) => {
-            const Icon = cta.icon;
-            return (
+          {activePerspective === 'revenue' ? (
+            <>
               <button
-                key={cta.label}
-                onClick={cta.action}
+                onClick={() => setShowContractWizard(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all"
                 style={{
                   backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.08),
                   color: brandColor,
                 }}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {cta.label}
+                <Plus className="h-3.5 w-3.5" />
+                New Contract
               </button>
-            );
-          })}
+              <button
+                onClick={() => openDrawerWith('client')}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-white transition-all hover:scale-105"
+                style={{
+                  backgroundColor: brandColor,
+                  boxShadow: `0 10px 25px -5px ${brandColor}40`,
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Client
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowContractWizard(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.08),
+                  color: brandColor,
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Vendor Contract
+              </button>
+              <button
+                onClick={() => openDrawerWith('vendor')}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-white transition-all hover:scale-105"
+                style={{
+                  backgroundColor: brandColor,
+                  boxShadow: `0 10px 25px -5px ${brandColor}40`,
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Vendor
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ═══════ ROW 1: STAT CARDS ═══════ */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Active Contracts" value={stats.active} icon={FileText} iconColor={brandColor} size="sm" />
-        <StatCard label="Pending Acceptance" value={stats.pendingAcceptance} icon={Send} iconColor="#F59E0B" size="sm" />
-        <StatCard label="Drafts" value={stats.drafts} icon={FileText} iconColor="#6B7280" size="sm" />
-        <StatCard label="Overdue Events" value={urgency.overdue.count} icon={AlertTriangle}
-          iconColor={urgency.overdue.count > 0 ? '#EF4444' : '#6B7280'} size="sm" />
-      </div>
-
-      {/* ═══════ MAIN GRID: Content + VaNi Sidebar ═══════ */}
+      {/* ═══════ MAIN GRID: Content + VaNi Sidebar (VaNi starts at stat-card level) ═══════ */}
       <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 300px' }}>
-        {/* Left: Main Content */}
-        <div className="space-y-6">
+        {/* Left: Main Content — min-width:0 prevents grid blowout */}
+        <div className="space-y-6" style={{ minWidth: 0 }}>
+
+          {/* ═══ ROW 1: STAT CARDS (3 cards) — wrapped for border visibility ═══ */}
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { label: 'Pending Acceptance', value: stats.pendingAcceptance, icon: Send, iconColor: '#F59E0B' },
+              { label: 'Drafts', value: stats.drafts, icon: FileText, iconColor: '#6B7280' },
+              { label: 'Overdue Events', value: urgency.overdue.count, icon: AlertTriangle,
+                iconColor: urgency.overdue.count > 0 ? '#EF4444' : '#6B7280' },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className="rounded-2xl border shadow-sm"
+                style={{ borderColor: colors.utility.primaryText + '15' }}
+              >
+                <StatCard label={card.label} value={card.value} icon={card.icon} iconColor={card.iconColor} size="sm" />
+              </div>
+            ))}
+          </div>
 
           {/* ═══ ROW 2: Awaiting Acceptance (revenue) — per v3 HTML ═══ */}
           {activePerspective === 'revenue' && (
@@ -1393,68 +1476,64 @@ const OpsCockpitPage: React.FC = () => {
               isSending={isSendingNotification}
               isDarkMode={isDarkMode}
               brandColor={brandColor}
+              colors={colors}
             />
           )}
 
-          {/* ═══ ROW 2: CNAK Verification (expense) — per v3 HTML ═══ */}
+          {/* ═══ ROW 2: CNAK Claim CTA (expense) — informational card ═══ */}
           {activePerspective === 'expense' && (
-            <CnakVerificationCard
-              contracts={pendingAcceptanceContracts}
-              isLoading={acceptanceLoading}
-              onView={handleViewContract}
-              onAccept={handleAcceptContract}
-              onReject={handleRejectContract}
-              isProcessing={isChangingContractStatus}
+            <CnakClaimCTA
               isDarkMode={isDarkMode}
               brandColor={brandColor}
+              colors={colors}
             />
           )}
 
           {/* ═══ ROW 3: RFQ Tracker (expense) — themed empty state ═══ */}
           {activePerspective === 'expense' && (
-            <RfqTrackerCard isDarkMode={isDarkMode} brandColor={brandColor} />
+            <RfqTrackerCard isDarkMode={isDarkMode} brandColor={brandColor} onCreateContract={() => setShowContractWizard(true)} />
           )}
 
           {/* ═══ ROW 3: Event Schedule (left 35%) + Service Events (right 65%) ═══ */}
-          <div className="grid gap-4" style={{ gridTemplateColumns: '35% 65%' }}>
+          <div className="grid gap-4" style={{ gridTemplateColumns: '7fr 13fr' }}>
             {/* Left: Event urgency buckets (stacked vertically) */}
-            <div className={`rounded-xl border p-4 ${
-              isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white'
-            }`}>
+            <div
+              className="rounded-xl border shadow-sm p-4"
+              style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20', minWidth: 0 }}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4" style={{ color: brandColor }} />
-                  <span className={`text-[11px] uppercase tracking-wider font-bold ${
-                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
+                  <span className="text-[11px] uppercase tracking-wider font-bold" style={{ color: colors.utility.secondaryText }}>
                     Event Schedule
                   </span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                  isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'
-                }`}>
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded"
+                  style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+                >
                   {urgency.totals.total_events}
                 </span>
               </div>
               <div className="space-y-2">
                 <BucketCard title="Overdue" count={urgency.overdue.count}
                   serviceCount={urgency.overdue.service_count} billingCount={urgency.overdue.billing_count}
-                  color="#EF4444" isDarkMode={isDarkMode} isHighlighted={urgency.overdue.count > 0} />
+                  color="#EF4444" isDarkMode={isDarkMode} isHighlighted={urgency.overdue.count > 0} colors={colors} />
                 <BucketCard title="Today" count={urgency.today.count}
                   serviceCount={urgency.today.service_count} billingCount={urgency.today.billing_count}
-                  color="#3B82F6" isDarkMode={isDarkMode} isHighlighted={urgency.today.count > 0} />
+                  color="#3B82F6" isDarkMode={isDarkMode} isHighlighted={urgency.today.count > 0} colors={colors} />
                 <BucketCard title="Tomorrow" count={urgency.tomorrow.count}
                   serviceCount={urgency.tomorrow.service_count} billingCount={urgency.tomorrow.billing_count}
-                  color="#8B5CF6" isDarkMode={isDarkMode} />
+                  color="#8B5CF6" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="This Week" count={urgency.this_week.count}
                   serviceCount={urgency.this_week.service_count} billingCount={urgency.this_week.billing_count}
-                  color="#06B6D4" isDarkMode={isDarkMode} />
+                  color="#06B6D4" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="Next Week" count={urgency.next_week.count}
                   serviceCount={urgency.next_week.service_count} billingCount={urgency.next_week.billing_count}
-                  color="#F59E0B" isDarkMode={isDarkMode} />
+                  color="#F59E0B" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="Later" count={urgency.later.count}
                   serviceCount={urgency.later.service_count} billingCount={urgency.later.billing_count}
-                  color="#6B7280" isDarkMode={isDarkMode} />
+                  color="#6B7280" isDarkMode={isDarkMode} colors={colors} />
               </div>
             </div>
 
@@ -1471,6 +1550,7 @@ const OpsCockpitPage: React.FC = () => {
               onViewContract={handleViewContract}
               isDarkMode={isDarkMode}
               brandColor={brandColor}
+              colors={colors}
             />
           </div>
 
@@ -1484,11 +1564,13 @@ const OpsCockpitPage: React.FC = () => {
             queueFilter={queueFilter}
             onQueueFilterChange={setQueueFilter}
             isDarkMode={isDarkMode}
+            brandColor={brandColor}
+            colors={colors}
           />
         </div>
 
-        {/* Right: VaNi Sidebar */}
-        <VaNiSidebar isDarkMode={isDarkMode} />
+        {/* Right: VaNi Sidebar (starts at stat-card level) */}
+        <VaNiSidebar isDarkMode={isDarkMode} colors={colors} />
       </div>
 
       {/* ═══════ FOOTER ═══════ */}
@@ -1499,7 +1581,22 @@ const OpsCockpitPage: React.FC = () => {
         onRefresh={handleRefresh}
         isDarkMode={isDarkMode}
         brandColor={brandColor}
+        colors={colors}
       />
+
+      {/* ═══════ MODALS / DRAWERS (lazy loaded) ═══════ */}
+      <Suspense fallback={null}>
+        <QuickAddContactDrawer
+          isOpen={isQuickAddOpen}
+          onClose={() => setIsQuickAddOpen(false)}
+          defaultClassification={drawerClassification}
+        />
+        <ContractWizard
+          isOpen={showContractWizard}
+          onClose={() => setShowContractWizard(false)}
+          contractType={activePerspective === 'revenue' ? 'client' : 'vendor'}
+        />
+      </Suspense>
     </div>
   );
 };
