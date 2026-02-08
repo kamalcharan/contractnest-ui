@@ -120,6 +120,7 @@ interface AuthContextType {
   // Onboarding properties
   hasCompletedOnboarding: boolean;
   checkOnboardingStatus: () => Promise<boolean>;
+  markOnboardingComplete: () => void;
   skipOnboarding: () => void;
 }
 
@@ -429,8 +430,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to check onboarding status
   const checkOnboardingStatus = async (): Promise<boolean> => {
     try {
-      // Only check if user is authenticated and has a current tenant
-      if (!isAuthenticated || !currentTenant) {
+      // Check API headers instead of React state to avoid stale state during login
+      const hasAuth = api.defaults.headers.common['Authorization'];
+      const hasTenant = api.defaults.headers.common['x-tenant-id'];
+      if (!hasAuth || !hasTenant) {
         return true; // Don't block if not authenticated
       }
 
@@ -466,6 +469,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Function to skip onboarding (mark as complete)
   const skipOnboarding = () => {
+    setHasCompletedOnboarding(true);
+    sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
+  };
+
+  // Function to mark onboarding as complete (called from CompleteStep)
+  const markOnboardingComplete = () => {
     setHasCompletedOnboarding(true);
     sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
   };
@@ -1339,6 +1348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTenants,
     hasCompletedOnboarding,
     checkOnboardingStatus,
+    markOnboardingComplete,
     skipOnboarding
   };
 

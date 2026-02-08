@@ -150,15 +150,16 @@ const BucketCard: React.FC<BucketCardProps> = ({ title, bucket, color, colors, i
 
 // ─── Event Card ───
 
-interface EventCardProps {
+export interface EventCardProps {
   event: ContractEvent;
   currency: string;
   colors: any;
   onStatusChange: (eventId: string, newStatus: ContractEventStatus, version: number) => void;
   isUpdating: boolean;
+  hideActions?: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, currency, colors, onStatusChange, isUpdating }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, currency, colors, onStatusChange, isUpdating, hideActions }) => {
   const [showActions, setShowActions] = useState(false);
   const isService = event.event_type === 'service';
   const accent = isService ? colors.semantic.success : colors.semantic.warning;
@@ -166,7 +167,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, currency, colors, onStatus
   const StatusIcon = statusConfig.icon;
 
   const validTransitions = VALID_STATUS_TRANSITIONS[event.status] || [];
-  const hasActions = validTransitions.length > 0;
+  const hasActions = !hideActions && validTransitions.length > 0;
 
   return (
     <div

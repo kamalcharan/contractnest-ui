@@ -322,9 +322,14 @@ export const VaNiToastProvider: React.FC<VaNiToastProviderProps> = ({
 
 // Global toast state for standalone usage
 let globalAddToast: ((toast: Omit<Toast, 'id'>) => string) | null = null;
+let globalRemoveToast: ((id: string) => void) | null = null;
 
-export const setGlobalToastHandler = (handler: (toast: Omit<Toast, 'id'>) => string) => {
-  globalAddToast = handler;
+export const setGlobalToastHandler = (
+  addHandler: (toast: Omit<Toast, 'id'>) => string,
+  removeHandler?: (id: string) => void
+) => {
+  globalAddToast = addHandler;
+  globalRemoveToast = removeHandler || null;
 };
 
 /**
@@ -359,6 +364,14 @@ export const vaniToast = {
   vani: (title: string, options?: Partial<Omit<Toast, 'id' | 'type' | 'title'>>) => {
     return vaniToast.show({ type: 'vani', title, ...options });
   },
+
+  dismiss: (id: string) => {
+    if (!globalRemoveToast) {
+      console.warn('VaNiToastProvider not mounted. Cannot dismiss toast.');
+      return;
+    }
+    globalRemoveToast(id);
+  },
 };
 
 // ============================================================================
@@ -383,12 +396,12 @@ export const VaNiToastProviderWithGlobal: React.FC<VaNiToastProviderWithGlobalPr
 };
 
 const GlobalToastRegistrar: React.FC = () => {
-  const { addToast } = useVaNiToast();
+  const { addToast, removeToast } = useVaNiToast();
 
   useEffect(() => {
-    setGlobalToastHandler(addToast);
-    return () => setGlobalToastHandler(null);
-  }, [addToast]);
+    setGlobalToastHandler(addToast, removeToast);
+    return () => setGlobalToastHandler(null as any);
+  }, [addToast, removeToast]);
 
   return null;
 };

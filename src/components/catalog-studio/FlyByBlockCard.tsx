@@ -95,6 +95,7 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   // Tax master data
   const { options: taxRateOptions } = useTaxRatesDropdown();
   const [taxDropdownOpen, setTaxDropdownOpen] = useState(false);
+  const [taxSearchQuery, setTaxSearchQuery] = useState('');
 
   // Local state for inline editing
   const [localExpanded, setLocalExpanded] = useState(isExpanded);
@@ -317,23 +318,15 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
             {/* Description - For Service, Spare, Document (always shown in hidePricing mode) */}
             {(hidePricing || flyByType === 'service' || flyByType === 'spare' || flyByType === 'document') && (
               <div>
-                <label
-                  className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Description
-                </label>
-                <textarea
-                  value={block.description}
-                  onChange={(e) => handleDescriptionChange(e.target.value)}
+                <RichTextEditor
+                  value={block.description || ''}
+                  onChange={(value) => handleDescriptionChange(value)}
+                  label="Description"
                   placeholder={`Describe this ${typeConfig.label.toLowerCase()}`}
-                  rows={2}
-                  className="w-full px-3 py-2 text-sm rounded-lg border resize-none"
-                  style={{
-                    backgroundColor: colors.utility.primaryBackground,
-                    borderColor: `${colors.utility.primaryText}20`,
-                    color: colors.utility.primaryText,
-                  }}
+                  toolbarButtons={['bold', 'italic', 'underline', 'bulletList', 'orderedList']}
+                  minHeight={80}
+                  maxHeight={200}
+                  showCharCount={false}
                 />
               </div>
             )}
@@ -646,30 +639,57 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
 
                         {taxDropdownOpen && (
                           <>
-                            <div className="fixed inset-0 z-40" onClick={() => setTaxDropdownOpen(false)} />
+                            <div className="fixed inset-0 z-40" onClick={() => { setTaxDropdownOpen(false); setTaxSearchQuery(''); }} />
                             <div
-                              className="absolute left-0 z-50 mt-1 w-48 max-h-48 overflow-y-auto rounded-xl border shadow-lg"
+                              className="absolute left-0 z-50 mt-1 w-56 rounded-xl border shadow-lg"
                               style={{
                                 backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
                                 borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
                               }}
                             >
-                              {unused.map((tax) => (
-                                <button
-                                  key={tax.value}
-                                  type="button"
-                                  onClick={() => {
-                                    const newTaxes = [...(block.taxes || []), { id: tax.value, name: tax.label, rate: tax.rate || 0 }];
-                                    const newTaxRate = newTaxes.reduce((sum, t) => sum + Number(t.rate), 0);
-                                    onUpdate(block.id, { taxes: newTaxes, taxRate: newTaxRate });
-                                    setTaxDropdownOpen(false);
-                                  }}
-                                  className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800"
-                                  style={{ color: colors.utility.primaryText }}
-                                >
-                                  {tax.label}
-                                </button>
-                              ))}
+                              {unused.length > 4 && (
+                                <div className="p-2 border-b" style={{ borderColor: `${colors.utility.primaryText}10` }}>
+                                  <input
+                                    type="text"
+                                    value={taxSearchQuery}
+                                    onChange={(e) => setTaxSearchQuery(e.target.value)}
+                                    placeholder="Search taxes..."
+                                    autoFocus
+                                    className="w-full px-2.5 py-1.5 text-xs rounded-lg border outline-none"
+                                    style={{
+                                      backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F9FAFB',
+                                      borderColor: `${colors.utility.primaryText}15`,
+                                      color: colors.utility.primaryText,
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <div className="max-h-52 overflow-y-auto">
+                                {unused
+                                  .filter(tax => !taxSearchQuery || tax.label.toLowerCase().includes(taxSearchQuery.toLowerCase()))
+                                  .map((tax) => (
+                                  <button
+                                    key={tax.value}
+                                    type="button"
+                                    onClick={() => {
+                                      const newTaxes = [...(block.taxes || []), { id: tax.value, name: tax.label, rate: tax.rate || 0 }];
+                                      const newTaxRate = newTaxes.reduce((sum, t) => sum + Number(t.rate), 0);
+                                      onUpdate(block.id, { taxes: newTaxes, taxRate: newTaxRate });
+                                      setTaxDropdownOpen(false);
+                                      setTaxSearchQuery('');
+                                    }}
+                                    className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800"
+                                    style={{ color: colors.utility.primaryText }}
+                                  >
+                                    {tax.label}
+                                  </button>
+                                ))}
+                                {unused.filter(tax => !taxSearchQuery || tax.label.toLowerCase().includes(taxSearchQuery.toLowerCase())).length === 0 && (
+                                  <div className="px-3 py-2 text-xs" style={{ color: colors.utility.secondaryText }}>
+                                    No matching taxes
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </>
                         )}

@@ -923,6 +923,10 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     const whatsappChannel = activeChannels.find(
       (ch: ContactChannel) => ch.channel_type === 'whatsapp'
     );
+    const mobileChannel = activeChannels.find(
+      (ch: ContactChannel) => ch.channel_type === 'mobile' || ch.channel_type === 'phone'
+    );
+    const notificationChannel = whatsappChannel || mobileChannel;
 
     const isPayment = acceptanceMethod === 'payment';
 
@@ -974,12 +978,14 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
               </div>
             )}
 
-            {/* WhatsApp notification line */}
-            {whatsappChannel ? (
+            {/* WhatsApp / Mobile notification line */}
+            {notificationChannel ? (
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#25D366' }} />
                 <span className="text-sm" style={{ color: colors.utility.primaryText }}>
-                  {'WhatsApp notification will be sent to '}
+                  {whatsappChannel
+                    ? 'WhatsApp notification will be sent to '
+                    : 'Notification will be sent to mobile '}
                   <span
                     className="font-semibold px-1.5 py-0.5 rounded"
                     style={{
@@ -987,7 +993,9 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
                       color: '#25D366',
                     }}
                   >
-                    {whatsappChannel.value}
+                    {notificationChannel.channel_type === 'mobile' || notificationChannel.channel_type === 'phone'
+                      ? formatPhoneDisplay(notificationChannel)
+                      : notificationChannel.value}
                   </span>
                 </span>
               </div>
@@ -995,7 +1003,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
                 <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                  No WhatsApp configured for {contactLabel}
+                  No WhatsApp or mobile configured for {contactLabel}
                 </span>
               </div>
             )}

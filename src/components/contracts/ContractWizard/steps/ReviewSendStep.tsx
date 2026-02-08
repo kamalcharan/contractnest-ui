@@ -951,11 +951,12 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
         {/* ═══ THE PAPER ═══ */}
         <div
           ref={paperRef}
-          className="rounded-lg"
+          className="rounded-lg [&_h4]:!no-underline [&_h4]:![text-decoration:none] [&_.block-name]:![text-decoration:none]"
           style={{
             backgroundColor: paperBg,
             boxShadow: paperShadow,
             marginBottom: '24px',
+            textDecoration: 'none',
           }}
         >
           {/* Branded header strip */}
@@ -1227,7 +1228,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                             <div className="flex items-center gap-2">
                               <h4
                                 className="text-sm font-semibold truncate"
-                                style={{ color: colors.utility.primaryText }}
+                                style={{ color: colors.utility.primaryText, textDecoration: 'none' }}
                               >
                                 {block.name || 'Untitled'}
                               </h4>
@@ -1273,24 +1274,22 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               </div>
                             )}
 
-                            {/* Description for pricing blocks with showDescription */}
+                            {/* Description for pricing blocks with showDescription (HTML from RichTextEditor) */}
                             {hasPricing && block.config?.showDescription && block.description && (
-                              <p
-                                className="text-[11px] mt-2 leading-relaxed"
+                              <div
+                                className="text-[11px] mt-2 leading-relaxed [&_p]:m-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:ml-4"
                                 style={{ color: colors.utility.secondaryText }}
-                              >
-                                {block.description}
-                              </p>
+                                dangerouslySetInnerHTML={{ __html: block.description }}
+                              />
                             )}
 
                             {/* Content body for text/video/image/document blocks */}
                             {!hasPricing && (block.config?.content || block.description) && (
                               <div
-                                className="text-xs mt-1.5 leading-relaxed whitespace-pre-wrap"
+                                className="text-xs mt-1.5 leading-relaxed [&_p]:m-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:ml-4"
                                 style={{ color: colors.utility.secondaryText }}
-                              >
-                                {block.config?.content || block.description}
-                              </div>
+                                dangerouslySetInnerHTML={{ __html: block.config?.content || block.description || '' }}
+                              />
                             )}
 
                             {/* Checklist items */}

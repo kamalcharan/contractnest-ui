@@ -18,6 +18,7 @@ import {
   type ContractEvent,
   type ComputeEventsInput,
 } from '@/utils/service-contracts/contractEvents';
+import { EventCard } from '@/components/contracts/TimelineTab';
 
 export interface EventsPreviewStepProps {
   startDate: Date;
@@ -132,118 +133,89 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
     const isEditing = editingEventId === event.id;
     const accent = isService ? colors.semantic.success : colors.semantic.warning;
 
+    // Convert preview event to database-compatible ContractEvent for EventCard
+    const dbEvent = {
+      id: event.id,
+      tenant_id: '',
+      contract_id: '',
+      block_id: event.block_id,
+      block_name: event.block_name,
+      category_id: null,
+      event_type: event.event_type as 'service' | 'billing',
+      billing_sub_type: null,
+      billing_cycle_label: event.billing_cycle_label || null,
+      sequence_number: event.sequence_number,
+      total_occurrences: event.total_occurrences,
+      scheduled_date: event.scheduled_date.toISOString(),
+      original_date: event.scheduled_date.toISOString(),
+      amount: event.amount,
+      currency: event.currency || currency,
+      status: 'scheduled' as const,
+      assigned_to: null,
+      assigned_to_name: null,
+      notes: null,
+      version: 1,
+      is_live: false,
+      created_at: '',
+      updated_at: '',
+    };
+
     return (
-      <div
-        key={event.id}
-        className="w-full max-w-[272px] rounded-xl border shadow-sm hover:shadow-md transition-all"
-        style={{
-          borderColor: isOverridden ? `${colors.semantic.warning}50` : `${accent}20`,
-          backgroundColor: cardBg,
-          ...(side === 'left'
-            ? { borderRight: `3px solid ${accent}` }
-            : { borderLeft: `3px solid ${accent}` }),
-        }}
-      >
-        <div className="p-3.5">
-          {/* Header: Icon + Name + Sequence */}
-          <div className="flex items-center gap-2.5 mb-2">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: `linear-gradient(135deg, ${accent}20, ${accent}08)` }}
+      <div key={event.id} className="w-full max-w-[272px]">
+        <EventCard
+          event={dbEvent}
+          currency={currency}
+          colors={colors}
+          onStatusChange={() => {}}
+          isUpdating={false}
+          hideActions
+        />
+        {/* Date editing overlay */}
+        <div className="flex items-center gap-1 mt-2">
+          {isEditing ? (
+            <input
+              type="date"
+              defaultValue={toInputDate(event.scheduled_date)}
+              onBlur={(e) => handleDateChange(event.id, e.target.value)}
+              autoFocus
+              className="text-xs px-2.5 py-1.5 rounded-lg border outline-none w-[138px]"
+              style={{
+                backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
+                borderColor: colors.brand.secondary,
+                color: colors.utility.primaryText,
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => setEditingEventId(event.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all group"
+              style={{
+                backgroundColor: isOverridden
+                  ? `${colors.semantic.warning}08`
+                  : isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
+                color: isOverridden ? colors.semantic.warning : colors.utility.primaryText,
+                border: `1px dashed ${isOverridden ? colors.semantic.warning + '40' : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')}`,
+              }}
+              title="Click to adjust date"
             >
-              {isService
-                ? <Wrench className="w-4 h-4" style={{ color: accent }} />
-                : <Receipt className="w-4 h-4" style={{ color: accent }} />
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
-                {event.block_name}
-              </p>
-              <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                {isService ? 'Service Delivery' : (event.billing_cycle_label || 'Billing')}
-              </p>
-            </div>
-            {event.total_occurrences > 1 && (
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: `${accent}12`, color: accent }}
-              >
-                {event.sequence_number}/{event.total_occurrences}
-              </span>
-            )}
-          </div>
-
-          {/* Amount (billing events) */}
-          {event.amount != null && event.amount > 0 && (
-            <div
-              className="mb-2.5 px-3 py-1.5 rounded-lg"
-              style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB' }}
-            >
-              <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-                {fmtCurrency(event.amount, event.currency || currency)}
-              </span>
-            </div>
+              <CalendarDays
+                className="w-3.5 h-3.5 flex-shrink-0"
+                style={{ color: isOverridden ? colors.semantic.warning : colors.brand.secondary }}
+              />
+              <span className="font-medium whitespace-nowrap">{formatEventDate(event.scheduled_date)}</span>
+              <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0" />
+            </button>
           )}
-
-          {/* Bottom: Date control + Status */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Date control */}
-            <div className="flex items-center gap-1 min-w-0">
-              {isEditing ? (
-                <input
-                  type="date"
-                  defaultValue={toInputDate(event.scheduled_date)}
-                  onBlur={(e) => handleDateChange(event.id, e.target.value)}
-                  autoFocus
-                  className="text-xs px-2.5 py-1.5 rounded-lg border outline-none w-[138px]"
-                  style={{
-                    backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
-                    borderColor: colors.brand.secondary,
-                    color: colors.utility.primaryText,
-                  }}
-                />
-              ) : (
-                <button
-                  onClick={() => setEditingEventId(event.id)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all group"
-                  style={{
-                    backgroundColor: isOverridden
-                      ? `${colors.semantic.warning}08`
-                      : isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
-                    color: isOverridden ? colors.semantic.warning : colors.utility.primaryText,
-                    border: `1px dashed ${isOverridden ? colors.semantic.warning + '40' : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB')}`,
-                  }}
-                  title="Click to adjust date"
-                >
-                  <CalendarDays
-                    className="w-3.5 h-3.5 flex-shrink-0"
-                    style={{ color: isOverridden ? colors.semantic.warning : colors.brand.secondary }}
-                  />
-                  <span className="font-medium whitespace-nowrap">{formatEventDate(event.scheduled_date)}</span>
-                  <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0" />
-                </button>
-              )}
-              {isOverridden && !isEditing && (
-                <button
-                  onClick={() => handleResetDate(event.id)}
-                  className="p-1 rounded-lg hover:opacity-70 transition-opacity flex-shrink-0"
-                  title="Reset to original date"
-                  style={{ color: colors.semantic.warning }}
-                >
-                  <RotateCcw className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-            {/* Status badge */}
-            <span
-              className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap"
-              style={{ backgroundColor: `${colors.semantic.info}12`, color: colors.semantic.info }}
+          {isOverridden && !isEditing && (
+            <button
+              onClick={() => handleResetDate(event.id)}
+              className="p-1 rounded-lg hover:opacity-70 transition-opacity flex-shrink-0"
+              title="Reset to original date"
+              style={{ color: colors.semantic.warning }}
             >
-              Planned
-            </span>
-          </div>
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
     );
