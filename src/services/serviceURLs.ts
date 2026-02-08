@@ -864,6 +864,10 @@ export const API_ENDPOINTS = {
 
     // Health check
     HEALTH: '/api/contracts/health',
+     // Public access (no auth required)
+   PUBLIC_VALIDATE: '/api/contracts/public/validate',
+    PUBLIC_RESPOND: '/api/contracts/public/respond',
+
 
     // CNAK Claim endpoint
     CLAIM: '/api/contracts/claim',
