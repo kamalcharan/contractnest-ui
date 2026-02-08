@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
+import { useAuth } from '@/context/AuthContext';
 import { useContractStats, useContracts, useContractOperations } from '@/hooks/queries/useContractQueries';
 import {
   useContractEvents,
@@ -44,6 +45,7 @@ import {
 import { StatCard } from '@/components/subscription/cards/StatCard';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import type { Contract } from '@/types/contracts';
+import NudgeConfirmationModal from '@/components/contracts/NudgeConfirmationModal';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
 import { VALID_STATUS_TRANSITIONS } from '@/types/contractEvents';
 
@@ -1158,6 +1160,7 @@ const OpsCockpitPage: React.FC = () => {
 
   // Tenant profile — for default perspective
   const { profile, loading: profileLoading } = useTenantContext();
+  const { currentTenant } = useAuth();
 
   // Perspective state
   const [perspective, setPerspective] = useState<Perspective | null>(null);
@@ -1179,6 +1182,9 @@ const OpsCockpitPage: React.FC = () => {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [drawerClassification, setDrawerClassification] = useState<string>('client');
   const [showContractWizard, setShowContractWizard] = useState(false);
+
+  // Nudge modal state
+  const [nudgeContract, setNudgeContract] = useState<Contract | null>(null);
 
   // D2 filter state
   const [eventTimeFilter, setEventTimeFilter] = useState<EventTimeFilter>('week');
@@ -1321,9 +1327,18 @@ const OpsCockpitPage: React.FC = () => {
   // Handlers
   const handleRefresh = useCallback(() => { refetchStats(); refetchEvents(); }, [refetchStats, refetchEvents]);
   const handleViewContract = useCallback((id: string) => { navigate(`/contracts/${id}`); }, [navigate]);
-  const handleResendNotification = useCallback(async (contractId: string) => {
-    try { await sendNotification({ contractId }); } catch { /* toast handled */ }
-  }, [sendNotification]);
+  const handleResendNotification = useCallback((contractId: string) => {
+    const contract = pendingAcceptanceContracts.find((c: Contract) => c.id === contractId);
+    if (contract) setNudgeContract(contract);
+  }, [pendingAcceptanceContracts]);
+
+  const handleNudgeConfirm = useCallback(async () => {
+    if (!nudgeContract) return;
+    try {
+      await sendNotification({ contractId: nudgeContract.id });
+      setNudgeContract(null);
+    } catch { /* toast handled by mutation */ }
+  }, [nudgeContract, sendNotification]);
   const handleEventStatusChange = useCallback(async (eventId: string, newStatus: ContractEventStatus, version: number) => {
     try { await updateEventStatus({ eventId, newStatus, version }); } catch { /* toast handled */ }
   }, [updateEventStatus]);
@@ -1583,6 +1598,18 @@ const OpsCockpitPage: React.FC = () => {
         brandColor={brandColor}
         colors={colors}
       />
+
+      {/* ═══════ NUDGE CONFIRMATION MODAL ═══════ */}
+      {nudgeContract && (
+        <NudgeConfirmationModal
+          isOpen={!!nudgeContract}
+          onClose={() => setNudgeContract(null)}
+          onConfirm={handleNudgeConfirm}
+          contract={nudgeContract}
+          senderName={profile?.business_name || currentTenant?.name || ''}
+          isSending={isSendingNotification}
+        />
+      )}
 
       {/* ═══════ MODALS / DRAWERS (lazy loaded) ═══════ */}
       <Suspense fallback={null}>

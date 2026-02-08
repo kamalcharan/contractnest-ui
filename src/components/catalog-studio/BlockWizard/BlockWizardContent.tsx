@@ -160,14 +160,8 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
     }
 
     if (type === 'spare') {
-      // Step 3 - Inventory: Stock quantity required
+      // Step 3 - Pricing: Price required
       if (step === 3) {
-        if (!data.meta?.stockQuantity || data.meta.stockQuantity < 0) {
-          errors.push('Stock quantity is required');
-        }
-      }
-      // Step 4 - Pricing: Price required
-      if (step === 4) {
         const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
         const hasValidPrice = pricingRecords && pricingRecords.length > 0 &&
                               pricingRecords.some(r => r.amount > 0);
@@ -175,7 +169,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           errors.push('Price is required');
         }
       }
-      // Step 5 - Fulfillment: No mandatory fields
+      // Step 4 - Fulfillment: No mandatory fields
     }
 
     if (type === 'billing') {
@@ -331,9 +325,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
 
       case 'spare':
         switch (currentStep) {
-          case 3: return <InventoryStep formData={formData} onChange={handleFormChange} />;
-          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 5: return <FulfillmentStep formData={formData} onChange={handleFormChange} />;
+          case 3: return <PricingStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

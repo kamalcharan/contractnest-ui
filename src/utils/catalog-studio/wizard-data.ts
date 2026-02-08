@@ -14,9 +14,7 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
   spare: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
-    { id: 3, label: 'Inventory' },
-    { id: 4, label: 'Pricing' },        // Spare parts also need pricing
-    { id: 5, label: 'Fulfillment' },
+    { id: 3, label: 'Pricing' },
   ],
   billing: [
     { id: 1, label: 'Type' },

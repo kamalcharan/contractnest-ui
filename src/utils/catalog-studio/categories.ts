@@ -176,7 +176,7 @@ export const CATEGORY_METADATA: Record<string, {
     supportsVariants: false,
   },
   spare: {
-    wizardSteps: ['basic', 'pricing', 'inventory', 'review'],
+    wizardSteps: ['basic', 'pricing', 'review'],
     defaultPricingMode: 'variant_based',
     supportsResources: false,
     supportsVariants: true,
