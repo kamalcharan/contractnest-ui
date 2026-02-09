@@ -3,6 +3,7 @@
 // Pattern: matches EventExplorerPage.tsx — hooks + toast + loaders + theme
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useFormTemplates, useFormTemplateMutations } from './hooks/useSmartFormsAdmin';
@@ -12,6 +13,7 @@ import type { FormTemplateFilters, FormTemplate, FormStatus } from './types/smar
 import { FORM_CATEGORIES, FORM_TYPES, FORM_STATUSES } from './types/smartFormsAdmin.types';
 
 const SmartFormsAdminPage: React.FC = () => {
+  const navigate = useNavigate();
   const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -150,21 +152,38 @@ const SmartFormsAdminPage: React.FC = () => {
             Manage form templates — create, review, approve, and version
           </p>
         </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          style={{
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            border: `1px solid ${colors.utility.borderLight}`,
-            backgroundColor: colors.utility.secondaryBackground,
-            color: colors.utility.textPrimary,
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-          }}
-        >
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              border: `1px solid ${colors.utility.borderLight}`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.textPrimary,
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => navigate('/admin/smart-forms/editor/new')}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              border: '1px solid #3B82F6',
+              backgroundColor: '#3B82F6',
+              color: '#fff',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}
+          >
+            + Create New
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -278,7 +297,7 @@ const SmartFormsAdminPage: React.FC = () => {
           color: colors.utility.textSecondary,
           fontSize: '0.875rem',
         }}>
-          No form templates found. Adjust filters or create your first template.
+          No form templates found. Click <strong>+ Create New</strong> to build your first template.
         </div>
       )}
 
@@ -288,6 +307,7 @@ const SmartFormsAdminPage: React.FC = () => {
           {templates.map((t) => (
             <div
               key={t.id}
+              onClick={() => navigate(`/admin/smart-forms/editor/${t.id}`)}
               style={{
                 padding: '1rem 1.25rem',
                 borderRadius: '10px',
@@ -296,7 +316,11 @@ const SmartFormsAdminPage: React.FC = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                cursor: 'pointer',
+                transition: 'box-shadow 0.15s',
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; }}
             >
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
@@ -315,7 +339,7 @@ const SmartFormsAdminPage: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setConfirmAction({ type: 'clone', template: t })}
                   disabled={mutations.loading}

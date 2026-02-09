@@ -219,6 +219,7 @@ import WorkerHealthPage from './pages/admin/jtd/WorkerHealthPage';
 
 // Admin - Smart Forms
 import SmartFormsAdminPage from './pages/admin/smart-forms/SmartFormsAdminPage';
+import FormEditorPage from './pages/admin/smart-forms/FormEditorPage';
 
 
 // Temporary API test
@@ -732,6 +733,16 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<SmartFormsAdminPage />} />
           </Route>
+
+          {/* Admin - Smart Forms Editor (full-screen, no MainLayout) */}
+          <Route
+            path="/admin/smart-forms/editor/:id"
+            element={
+              <ProtectedRoute>
+                <FormEditorPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Tenant - Pricing Plans & Subscription */}
           <Route
