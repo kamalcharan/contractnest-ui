@@ -217,6 +217,9 @@ import TenantOperationsPage from './pages/admin/jtd/TenantOperationsPage';
 import EventExplorerPage from './pages/admin/jtd/EventExplorerPage';
 import WorkerHealthPage from './pages/admin/jtd/WorkerHealthPage';
 
+// Admin - Smart Forms
+import SmartFormsAdminPage from './pages/admin/smart-forms/SmartFormsAdminPage';
+
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -716,6 +719,18 @@ const AppContent: React.FC = () => {
             <Route path="events" element={<EventExplorerPage />} />
             <Route path="worker" element={<WorkerHealthPage />} />
             <Route index element={<QueueMonitorPage />} />
+          </Route>
+
+          {/* Admin - Smart Forms */}
+          <Route
+            path="/admin/smart-forms"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<SmartFormsAdminPage />} />
           </Route>
 
           {/* Tenant - Pricing Plans & Subscription */}

@@ -43,6 +43,16 @@ type DateSummaryFilters = {
   event_type?: string;
 };
 
+// Smart Forms filter types (used by ADMIN.SMART_FORMS helper functions)
+export type SmartFormsFilters = {
+  page?: number;
+  limit?: number;
+  status?: string;
+  category?: string;
+  form_type?: string;
+  search?: string;
+};
+
 export const API_ENDPOINTS = {
   // =================================================================
   // ONBOARDING ENDPOINTS - PRESERVED
@@ -451,6 +461,34 @@ export const API_ENDPOINTS = {
       },
       REQUEUE_DLQ: '/api/admin/jtd/actions/requeue-dlq',
       PURGE_DLQ: '/api/admin/jtd/actions/purge-dlq'
+    },
+    // =================================================================
+    // SMART FORMS — Admin Form Template Management
+    // =================================================================
+    SMART_FORMS: {
+      LIST: '/api/admin/forms',
+      GET: (id: string) => `/api/admin/forms/${id}`,
+      CREATE: '/api/admin/forms',
+      UPDATE: (id: string) => `/api/admin/forms/${id}`,
+      DELETE: (id: string) => `/api/admin/forms/${id}`,
+      VALIDATE: '/api/admin/forms/validate',
+      CLONE: (id: string) => `/api/admin/forms/${id}/clone`,
+      SUBMIT_REVIEW: (id: string) => `/api/admin/forms/${id}/submit-review`,
+      APPROVE: (id: string) => `/api/admin/forms/${id}/approve`,
+      REJECT: (id: string) => `/api/admin/forms/${id}/reject`,
+      NEW_VERSION: (id: string) => `/api/admin/forms/${id}/new-version`,
+      ARCHIVE: (id: string) => `/api/admin/forms/${id}/archive`,
+      LIST_WITH_FILTERS: (filters: SmartFormsFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.status) params.append('status', filters.status);
+        if (filters.category) params.append('category', filters.category);
+        if (filters.form_type) params.append('form_type', filters.form_type);
+        if (filters.search) params.append('search', filters.search);
+        const qs = params.toString();
+        return qs ? `/api/admin/forms?${qs}` : '/api/admin/forms';
+      }
     }
   },
 
@@ -1354,6 +1392,7 @@ export type SequencesEndpoints = typeof API_ENDPOINTS.SEQUENCES;
 export type ContractsEndpoints = typeof API_ENDPOINTS.CONTRACTS;
 export type ContractEventsEndpoints = typeof API_ENDPOINTS.CONTRACT_EVENTS;
 export type EventStatusConfigEndpoints = typeof API_ENDPOINTS.EVENT_STATUS_CONFIG;
+export type SmartFormsEndpoints = typeof API_ENDPOINTS.ADMIN.SMART_FORMS;
 export type ServiceExecutionEndpoints = typeof API_ENDPOINTS.SERVICE_EXECUTION;
 
 // Contact filters interface

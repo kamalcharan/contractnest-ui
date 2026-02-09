@@ -296,6 +296,16 @@ export const defaultMenuItems: MenuItem[] = [
         path: '/admin/jtd/worker'
       }
     ]
+  },
+  // Smart Forms Admin — Form Template Management
+  {
+    id: 'smart-forms-admin',
+    label: 'Smart Forms',
+    icon: 'FileText',
+    path: '/admin/smart-forms',
+    adminOnly: true,
+    hasSubmenu: false,
+    defaultOpen: false,
   }
 ];
 
