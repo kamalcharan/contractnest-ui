@@ -52,6 +52,9 @@ import ContactHeaderCard from '@/components/contacts/view/cards/ContactHeaderCar
 import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
 import PaymentRequestHistory from '@/components/contracts/PaymentRequestHistory';
 import TimelineTab from '@/components/contracts/TimelineTab';
+import OperationsTab from '@/components/contracts/OperationsTab';
+import EvidenceTab from '@/components/contracts/EvidenceTab';
+import AuditTab from '@/components/contracts/AuditTab';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueries';
@@ -215,16 +218,15 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
 // TAB DEFINITIONS
 // ═══════════════════════════════════════════════════
 
-type TabId = 'overview' | 'document' | 'timeline' | 'financials' | 'evidence' | 'communication' | 'audit';
+type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document';
 
 const TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'overview', label: 'Overview', icon: ClipboardList },
-  { id: 'document', label: 'Document', icon: FileText },
-  { id: 'timeline', label: 'Timeline', icon: Calendar },
+  { id: 'operations', label: 'Ops Overview', icon: Calendar },
   { id: 'financials', label: 'Financials', icon: DollarSign },
   { id: 'evidence', label: 'Evidence', icon: Camera },
   { id: 'communication', label: 'Communication', icon: MessageSquare },
   { id: 'audit', label: 'Audit Log', icon: ScrollText },
+  { id: 'document', label: 'Document', icon: FileText },
 ];
 
 // ═══════════════════════════════════════════════════
@@ -1148,7 +1150,7 @@ const ContractDetailPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [activeTab, setActiveTab] = useState<TabId>('operations');
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   // expandedInvoiceId removed — invoice cards are now flat with 3 action icons
 
@@ -1240,18 +1242,20 @@ const ContractDetailPage: React.FC = () => {
   // ─── Tab content ───
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'overview':
+      case 'operations':
         return (
-          <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 420px' }}>
-            {/* Left Column */}
-            <div className="space-y-6">
-              <BlocksCard blocks={contract.blocks} currency={contract.currency} colors={colors} />
-              <TaskTimeline colors={colors} />
-              <VendorsCard vendors={contract.vendors} colors={colors} />
-              <AttachmentsCard attachments={contract.attachments} colors={colors} />
-            </div>
-
-            {/* Right Sidebar */}
+          <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 380px' }}>
+            {/* Left: Operations view */}
+            <OperationsTab
+              contractId={contract.id}
+              currency={contract.currency || 'INR'}
+              colors={colors}
+              buyerName={contract.buyer_name}
+              contractValue={grandTotal}
+              collectedAmount={pageSummary?.total_paid ?? 0}
+              collectionPct={pageSummary?.collection_percentage ?? 0}
+            />
+            {/* Right: Contact + Financial Health (from old Overview) */}
             <div className="space-y-5">
               <ContactHeaderCard contact={buildBuyerContactObject(contract)} />
               <FinancialHealth
@@ -1261,13 +1265,9 @@ const ContractDetailPage: React.FC = () => {
                 onRecordPayment={() => setIsPaymentDialogOpen(true)}
                 onViewInvoice={handleViewInvoice}
               />
-              <ContractDetailsCard contract={contract} colors={colors} />
-              <AuditTrail history={contract.history} colors={colors} />
             </div>
           </div>
         );
-      case 'timeline':
-        return <TimelineTab contractId={contract.id} currency={contract.currency || 'INR'} colors={colors} />;
       case 'financials':
         return (
           <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 400px' }}>
@@ -1527,7 +1527,13 @@ const ContractDetailPage: React.FC = () => {
           </div>
         );
       case 'evidence':
-        return <PlaceholderTab icon={Camera} title="Evidence" description="Photos, documents, and proof of delivery uploaded for tasks and milestones." colors={colors} />;
+        return (
+          <EvidenceTab
+            contractId={contract.id}
+            currency={contract.currency || 'INR'}
+            colors={colors}
+          />
+        );
       case 'communication':
         return <PlaceholderTab icon={MessageSquare} title="Communication" description="Messages, notifications, and updates exchanged between parties." colors={colors} />;
       case 'document':
@@ -1538,9 +1544,7 @@ const ContractDetailPage: React.FC = () => {
         );
       case 'audit':
         return (
-          <div className="max-w-3xl">
-            <AuditTrail history={contract.history} colors={colors} />
-          </div>
+          <AuditTab contract={contract} colors={colors} />
         );
       default:
         return null;

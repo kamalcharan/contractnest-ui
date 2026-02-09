@@ -8,8 +8,14 @@
 export const CONTRACT_EVENT_TYPES = {
   SERVICE: 'service',
   BILLING: 'billing',
+  SPARE_PART: 'spare_part',
 } as const;
 
+/**
+ * @deprecated Use dynamic statuses from useEventStatuses() hook instead.
+ * Statuses are now DB-driven and tenant-configurable via m_event_status_config.
+ * Kept as fallback for components not yet migrated.
+ */
 export const CONTRACT_EVENT_STATUSES = {
   SCHEDULED: 'scheduled',
   IN_PROGRESS: 'in_progress',
@@ -25,7 +31,10 @@ export const BILLING_SUB_TYPES = {
   FINAL: 'final',
 } as const;
 
-// Valid status transitions (for UI validation)
+/**
+ * @deprecated Use useAllowedTransitions(eventType, currentStatus) hook instead.
+ * Transitions are now DB-driven and tenant-configurable via m_event_status_transitions.
+ */
 export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   scheduled: ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
@@ -35,7 +44,8 @@ export const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 };
 
 export type ContractEventType = typeof CONTRACT_EVENT_TYPES[keyof typeof CONTRACT_EVENT_TYPES];
-export type ContractEventStatus = typeof CONTRACT_EVENT_STATUSES[keyof typeof CONTRACT_EVENT_STATUSES];
+/** Status is now dynamic (DB-driven). String type allows tenant-configured statuses. */
+export type ContractEventStatus = string;
 export type BillingSubType = typeof BILLING_SUB_TYPES[keyof typeof BILLING_SUB_TYPES];
 
 // =================================================================
@@ -110,6 +120,7 @@ export interface ContractEvent {
   contract_id: string;
   contract_number?: string;
   contract_title?: string;
+  task_id: string | null;
   block_id: string;
   block_name: string;
   category_id: string | null;
@@ -148,6 +159,7 @@ export interface DateBucketSummary {
   count: number;
   service_count: number;
   billing_count: number;
+  spare_part_count?: number;
   billing_amount: number;
   by_status: Record<string, number>;
 }

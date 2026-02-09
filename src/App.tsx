@@ -150,6 +150,7 @@ import ContractCreatePage from './pages/contracts/create';
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
+import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
 
 // Contracts Hub + Detail + Invoice View + Public Review
@@ -501,6 +502,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* Appointments — scaffold showing existing widget + placeholder */}
+          <Route
+            path="/appointments"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<AppointmentsPage />} />
           </Route>
 
           {/* NEW: Invite Sellers Route */}

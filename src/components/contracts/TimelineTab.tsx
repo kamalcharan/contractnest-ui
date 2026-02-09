@@ -1,8 +1,8 @@
 // src/components/contracts/TimelineTab.tsx
 // Contract Timeline Tab — displays live contract events from database
-// Uses useContractEventsForContract hook to fetch events
+// Uses shared EventCard component for consistent UX across the product
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   Calendar,
   CalendarDays,
@@ -10,14 +10,9 @@ import {
   Wrench,
   Clock,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  PlayCircle,
   Loader2,
-  Receipt,
-  ChevronDown,
-  ChevronUp,
   RefreshCw,
+  Package,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
@@ -26,15 +21,17 @@ import {
   useDateSummaryForContract,
   useContractEventOperations,
 } from '@/hooks/queries/useContractEventQueries';
+import {
+  useEventStatuses,
+  useEventTransitions,
+} from '@/hooks/queries/useEventStatusConfigQueries';
 import type {
   ContractEvent,
   ContractEventStatus,
   DateBucketSummary,
 } from '@/types/contractEvents';
-import {
-  CONTRACT_EVENT_STATUSES,
-  VALID_STATUS_TRANSITIONS,
-} from '@/types/contractEvents';
+import type { EventStatusDefinition } from '@/types/eventStatusConfig';
+import { EventCard } from '@/components/contracts/EventCard';
 
 export interface TimelineTabProps {
   contractId: string;
@@ -46,62 +43,10 @@ export interface TimelineTabProps {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const formatEventDate = (dateStr: string): string => {
-  const d = new Date(dateStr);
-  return `${d.getDate()}-${MONTHS[d.getMonth()]}-${d.getFullYear()}`;
-};
-
 const formatCurrency = (amount: number | null, currency: string): string => {
   if (amount == null) return '—';
   const sym = getCurrencySymbol(currency);
   return `${sym}${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-};
-
-const getStatusConfig = (status: ContractEventStatus, colors: any) => {
-  switch (status) {
-    case 'scheduled':
-      return {
-        label: 'Scheduled',
-        icon: CalendarDays,
-        bg: `${colors.semantic.info}12`,
-        color: colors.semantic.info,
-      };
-    case 'in_progress':
-      return {
-        label: 'In Progress',
-        icon: PlayCircle,
-        bg: `${colors.brand.primary}12`,
-        color: colors.brand.primary,
-      };
-    case 'completed':
-      return {
-        label: 'Completed',
-        icon: CheckCircle2,
-        bg: `${colors.semantic.success}12`,
-        color: colors.semantic.success,
-      };
-    case 'cancelled':
-      return {
-        label: 'Cancelled',
-        icon: XCircle,
-        bg: `${colors.utility.secondaryText}12`,
-        color: colors.utility.secondaryText,
-      };
-    case 'overdue':
-      return {
-        label: 'Overdue',
-        icon: AlertTriangle,
-        bg: `${colors.semantic.error}12`,
-        color: colors.semantic.error,
-      };
-    default:
-      return {
-        label: status,
-        icon: Clock,
-        bg: `${colors.utility.secondaryText}12`,
-        color: colors.utility.secondaryText,
-      };
-  }
 };
 
 // ─── Date Bucket Summary Card ───
@@ -135,6 +80,12 @@ const BucketCard: React.FC<BucketCardProps> = ({ title, bucket, color, colors, i
         <Wrench className="w-3 h-3" style={{ color: colors.semantic.success }} />
         {bucket.service_count}
       </span>
+      {(bucket.spare_part_count ?? 0) > 0 && (
+        <span className="flex items-center gap-1">
+          <Package className="w-3 h-3" style={{ color: colors.semantic.info }} />
+          {bucket.spare_part_count}
+        </span>
+      )}
       <span className="flex items-center gap-1">
         <DollarSign className="w-3 h-3" style={{ color: colors.semantic.warning }} />
         {bucket.billing_count}
@@ -147,158 +98,6 @@ const BucketCard: React.FC<BucketCardProps> = ({ title, bucket, color, colors, i
     )}
   </div>
 );
-
-// ─── Event Card ───
-
-export interface EventCardProps {
-  event: ContractEvent;
-  currency: string;
-  colors: any;
-  onStatusChange: (eventId: string, newStatus: ContractEventStatus, version: number) => void;
-  isUpdating: boolean;
-  hideActions?: boolean;
-}
-
-export const EventCard: React.FC<EventCardProps> = ({ event, currency, colors, onStatusChange, isUpdating, hideActions }) => {
-  const [showActions, setShowActions] = useState(false);
-  const isService = event.event_type === 'service';
-  const accent = isService ? colors.semantic.success : colors.semantic.warning;
-  const statusConfig = getStatusConfig(event.status, colors);
-  const StatusIcon = statusConfig.icon;
-
-  const validTransitions = VALID_STATUS_TRANSITIONS[event.status] || [];
-  const hasActions = !hideActions && validTransitions.length > 0;
-
-  return (
-    <div
-      className="rounded-xl border shadow-sm hover:shadow-md transition-all"
-      style={{
-        borderColor: `${accent}20`,
-        backgroundColor: colors.utility.secondaryBackground,
-        borderLeft: `4px solid ${accent}`,
-      }}
-    >
-      <div className="p-4">
-        {/* Header: Icon + Name + Sequence */}
-        <div className="flex items-center gap-3 mb-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: `linear-gradient(135deg, ${accent}20, ${accent}08)` }}
-          >
-            {isService ? (
-              <Wrench className="w-5 h-5" style={{ color: accent }} />
-            ) : (
-              <Receipt className="w-5 h-5" style={{ color: accent }} />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold truncate" style={{ color: colors.utility.primaryText }}>
-              {event.block_name}
-            </p>
-            <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-              {isService ? 'Service Delivery' : (event.billing_cycle_label || 'Billing')}
-            </p>
-          </div>
-          {event.total_occurrences > 1 && (
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-              style={{ backgroundColor: `${accent}12`, color: accent }}
-            >
-              {event.sequence_number}/{event.total_occurrences}
-            </span>
-          )}
-        </div>
-
-        {/* Amount (billing events) */}
-        {event.amount != null && event.amount > 0 && (
-          <div
-            className="mb-3 px-3 py-2 rounded-lg"
-            style={{ backgroundColor: `${colors.semantic.warning}08` }}
-          >
-            <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-              {formatCurrency(event.amount, event.currency || currency)}
-            </span>
-          </div>
-        )}
-
-        {/* Date + Status Row */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="w-4 h-4" style={{ color: colors.brand.secondary }} />
-            <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
-              {formatEventDate(event.scheduled_date)}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Status badge with dropdown trigger */}
-            <button
-              onClick={() => hasActions && setShowActions(!showActions)}
-              disabled={!hasActions || isUpdating}
-              className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full transition-all ${
-                hasActions ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-              }`}
-              style={{ backgroundColor: statusConfig.bg, color: statusConfig.color }}
-            >
-              {isUpdating ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <StatusIcon className="w-3 h-3" />
-              )}
-              {statusConfig.label}
-              {hasActions && !isUpdating && (
-                showActions ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Status Actions Dropdown */}
-        {showActions && hasActions && (
-          <div
-            className="mt-3 pt-3 border-t flex flex-wrap gap-2"
-            style={{ borderColor: `${colors.utility.primaryText}10` }}
-          >
-            <span className="text-[10px] mr-2" style={{ color: colors.utility.secondaryText }}>
-              Change to:
-            </span>
-            {validTransitions.map((newStatus) => {
-              const config = getStatusConfig(newStatus as ContractEventStatus, colors);
-              const Icon = config.icon;
-              return (
-                <button
-                  key={newStatus}
-                  onClick={() => {
-                    onStatusChange(event.id, newStatus as ContractEventStatus, event.version);
-                    setShowActions(false);
-                  }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold transition-all hover:opacity-80"
-                  style={{ backgroundColor: config.bg, color: config.color }}
-                >
-                  <Icon className="w-3 h-3" />
-                  {config.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Notes */}
-        {event.notes && (
-          <div
-            className="mt-3 pt-3 border-t text-xs"
-            style={{
-              borderColor: `${colors.utility.primaryText}10`,
-              color: colors.utility.secondaryText,
-            }}
-          >
-            {event.notes}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // ─── Main Component ───
 
@@ -319,8 +118,39 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
     isLoading: summaryLoading,
   } = useDateSummaryForContract(contractId);
 
+  // Fetch dynamic status definitions + transitions (10min staleTime, fetch-once)
+  const { data: serviceStatuses } = useEventStatuses('service');
+  const { data: billingStatuses } = useEventStatuses('billing');
+  const { data: sparePartStatuses } = useEventStatuses('spare_part');
+  const { data: serviceTransitions } = useEventTransitions('service');
+  const { data: billingTransitions } = useEventTransitions('billing');
+  const { data: sparePartTransitions } = useEventTransitions('spare_part');
+
+  // Build lookup maps
+  const statusDefsByType: Record<string, EventStatusDefinition[]> = useMemo(() => ({
+    service: serviceStatuses?.statuses || [],
+    billing: billingStatuses?.statuses || [],
+    spare_part: sparePartStatuses?.statuses || [],
+  }), [serviceStatuses, billingStatuses, sparePartStatuses]);
+
+  const transitionsByType = useMemo(() => {
+    const buildMap = (transitions: any[]) => {
+      const map: Record<string, string[]> = {};
+      for (const t of transitions) {
+        if (!map[t.from_status]) map[t.from_status] = [];
+        map[t.from_status].push(t.to_status);
+      }
+      return map;
+    };
+    return {
+      service: buildMap(serviceTransitions?.transitions || []),
+      billing: buildMap(billingTransitions?.transitions || []),
+      spare_part: buildMap(sparePartTransitions?.transitions || []),
+    };
+  }, [serviceTransitions, billingTransitions, sparePartTransitions]);
+
   // Mutations
-  const { updateStatus, isChangingStatus } = useContractEventOperations();
+  const { updateStatus, changingStatusEventId } = useContractEventOperations();
 
   // Group events by date
   const groupedEvents = useMemo(() => {
@@ -343,10 +173,9 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
       groups.push({
         date,
         events: eventsByDate[date].sort((a, b) => {
-          // Service events first, then billing
-          if (a.event_type === 'service' && b.event_type === 'billing') return -1;
-          if (a.event_type === 'billing' && b.event_type === 'service') return 1;
-          return 0;
+          // Sort order: service → spare_part → billing
+          const typeOrder: Record<string, number> = { service: 0, spare_part: 1, billing: 2 };
+          return (typeOrder[a.event_type] ?? 1) - (typeOrder[b.event_type] ?? 1);
         }),
       });
     });
@@ -428,7 +257,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
   return (
     <div className="space-y-6">
 
-      {/* ═══ Date Summary Buckets ═══ */}
+      {/* Date Summary Buckets */}
       {dateSummary && (
         <div
           className="rounded-xl border p-4"
@@ -487,12 +316,10 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
         </div>
       )}
 
-      {/* ═══ Timeline Events List ═══ */}
+      {/* Timeline Events List */}
       <div className="space-y-6">
         {groupedEvents.map((group) => {
           const dateObj = new Date(group.date);
-          const serviceEvts = group.events.filter(e => e.event_type === 'service');
-          const billingEvts = group.events.filter(e => e.event_type === 'billing');
 
           return (
             <div key={group.date} className="relative">
@@ -522,27 +349,16 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
 
               {/* Events Grid */}
               <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {/* Service Events */}
-                {serviceEvts.map((event) => (
+                {group.events.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
                     currency={currency}
                     colors={colors}
                     onStatusChange={handleStatusChange}
-                    isUpdating={isChangingStatus}
-                  />
-                ))}
-
-                {/* Billing Events */}
-                {billingEvts.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    currency={currency}
-                    colors={colors}
-                    onStatusChange={handleStatusChange}
-                    isUpdating={isChangingStatus}
+                    updatingEventId={changingStatusEventId}
+                    statusDefs={statusDefsByType[event.event_type]}
+                    allowedTransitions={transitionsByType[event.event_type]?.[event.status] || []}
                   />
                 ))}
               </div>

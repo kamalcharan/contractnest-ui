@@ -111,7 +111,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-chat', label: 'Chat', icon: 'MessageCircle', path: '/vani/chat' }
     ]
   },
-  // HIDDEN: Templates, Appointments, Tasks - commented out for now
+  // HIDDEN: Templates, Tasks - commented out for now
   /*
   {
     id: 'templates',
@@ -122,13 +122,6 @@ export const defaultMenuItems: MenuItem[] = [
     submenuItems: [...]
   },
   {
-    id: 'appointments',
-    label: 'Appointments',
-    icon: 'Calendar',
-    path: '/appointments',
-    hasSubmenu: false
-  },
-  {
     id: 'tasks',
     label: 'Tasks',
     icon: 'CheckSquare',
@@ -136,6 +129,14 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   */
+  // Appointments — enabled for Cycle 2
+  {
+    id: 'appointments',
+    label: 'Appointments',
+    icon: 'Calendar',
+    path: '/appointments',
+    hasSubmenu: false
+  },
   // Catalog Studio - all submenus visible
   {
     id: 'catalog-studio',

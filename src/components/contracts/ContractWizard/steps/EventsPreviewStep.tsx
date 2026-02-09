@@ -6,7 +6,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import {
   Calendar, CalendarDays, DollarSign, Wrench, Clock,
   Edit3, RotateCcw, Sparkles, Info, Receipt, Infinity,
-  CheckCircle2, Zap, Bell, Users,
+  CheckCircle2, Zap, Bell, Users, Package,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
@@ -18,7 +18,7 @@ import {
   type ContractEvent,
   type ComputeEventsInput,
 } from '@/utils/service-contracts/contractEvents';
-import { EventCard } from '@/components/contracts/TimelineTab';
+import { EventCard } from '@/components/contracts/EventCard';
 
 export interface EventsPreviewStepProps {
   startDate: Date;
@@ -90,9 +90,9 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
     }).sort((a, b) => {
       const dd = a.scheduled_date.getTime() - b.scheduled_date.getTime();
       if (dd !== 0) return dd;
-      if (a.event_type === 'service' && b.event_type === 'billing') return -1;
-      if (a.event_type === 'billing' && b.event_type === 'service') return 1;
-      return 0;
+      // Sort order: service → spare_part → billing
+      const typeOrder: Record<string, number> = { service: 0, spare_part: 1, billing: 2 };
+      return (typeOrder[a.event_type] ?? 1) - (typeOrder[b.event_type] ?? 1);
     });
   }, [computedEvents, eventOverrides]);
 
@@ -129,19 +129,21 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
   // ── Render single event card ──
   const renderEventCard = (event: ContractEvent, side: 'left' | 'right') => {
     const isService = event.event_type === 'service';
+    const isSparePart = event.event_type === 'spare_part';
     const isOverridden = !!eventOverrides[event.id];
     const isEditing = editingEventId === event.id;
-    const accent = isService ? colors.semantic.success : colors.semantic.warning;
+    const accent = isSparePart ? colors.semantic.info : isService ? colors.semantic.success : colors.semantic.warning;
 
     // Convert preview event to database-compatible ContractEvent for EventCard
     const dbEvent = {
       id: event.id,
       tenant_id: '',
       contract_id: '',
+      task_id: null,
       block_id: event.block_id,
       block_name: event.block_name,
       category_id: null,
-      event_type: event.event_type as 'service' | 'billing',
+      event_type: event.event_type as 'service' | 'billing' | 'spare_part',
       billing_sub_type: null,
       billing_cycle_label: event.billing_cycle_label || null,
       sequence_number: event.sequence_number,
@@ -398,7 +400,7 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
             {/* ── Scheduled Date Groups ── */}
             {dateGroups.map((group, gIdx) => {
               const dateKey = group.date.toISOString().split('T')[0];
-              const serviceEvts = group.events.filter(e => e.event_type === 'service');
+              const serviceEvts = group.events.filter(e => e.event_type === 'service' || e.event_type === 'spare_part');
               const billingEvts = group.events.filter(e => e.event_type === 'billing');
               const dayNum = Math.max(1, Math.round(
                 (group.date.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -421,7 +423,7 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
                               className="text-[10px] font-bold uppercase tracking-wider"
                               style={{ color: colors.semantic.success }}
                             >
-                              Service Delivery
+                              Service & Parts
                             </span>
                           </div>
                         )}
@@ -743,7 +745,7 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
             style={{ color: colors.utility.secondaryText }}
           >
             This timeline shows every scheduled event in your contract.
-            Service deliveries appear on the <strong style={{ color: colors.semantic.success }}>left</strong> and
+            Service deliveries and spare parts appear on the <strong style={{ color: colors.semantic.success }}>left</strong> and
             billing milestones on the <strong style={{ color: colors.semantic.warning }}>right</strong>.
           </p>
           <p

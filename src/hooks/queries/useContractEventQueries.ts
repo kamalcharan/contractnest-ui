@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import api from '@/services/api';
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
 import type {
   ContractEvent,
@@ -16,49 +17,6 @@ import type {
   CreateContractEventsResponse,
   UpdateContractEventRequest,
 } from '@/types/contractEvents';
-
-// =================================================================
-// API ENDPOINTS (inline until serviceURLs.ts is updated)
-// =================================================================
-
-const CONTRACT_EVENTS_API = {
-  LIST: '/api/contract-events',
-  DATES: '/api/contract-events/dates',
-  GET: (id: string) => `/api/contract-events/${id}`,
-  CREATE: '/api/contract-events',
-  UPDATE: (id: string) => `/api/contract-events/${id}`,
-
-  LIST_WITH_FILTERS: (filters: ContractEventFilters = {}) => {
-    const params = new URLSearchParams();
-
-    if (filters.contract_id) params.append('contract_id', filters.contract_id);
-    if (filters.contact_id) params.append('contact_id', filters.contact_id);
-    if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
-    if (filters.status) params.append('status', filters.status);
-    if (filters.event_type) params.append('event_type', filters.event_type);
-    if (filters.date_from) params.append('date_from', filters.date_from);
-    if (filters.date_to) params.append('date_to', filters.date_to);
-    if (filters.page !== undefined) params.append('page', filters.page.toString());
-    if (filters.per_page !== undefined) params.append('per_page', filters.per_page.toString());
-    if (filters.sort_by) params.append('sort_by', filters.sort_by);
-    if (filters.sort_order) params.append('sort_order', filters.sort_order);
-
-    const queryString = params.toString();
-    return queryString ? `/api/contract-events?${queryString}` : '/api/contract-events';
-  },
-
-  DATES_WITH_FILTERS: (filters: DateSummaryFilters = {}) => {
-    const params = new URLSearchParams();
-
-    if (filters.contract_id) params.append('contract_id', filters.contract_id);
-    if (filters.contact_id) params.append('contact_id', filters.contact_id);
-    if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
-    if (filters.event_type) params.append('event_type', filters.event_type);
-
-    const queryString = params.toString();
-    return queryString ? `/api/contract-events/dates?${queryString}` : '/api/contract-events/dates';
-  },
-};
 
 // =================================================================
 // QUERY KEYS
@@ -97,7 +55,7 @@ export const useContractEvents = (
         throw new Error('No tenant selected');
       }
 
-      const url = CONTRACT_EVENTS_API.LIST_WITH_FILTERS(filters);
+      const url = API_ENDPOINTS.CONTRACT_EVENTS.LIST_WITH_FILTERS(filters);
       const response = await api.get(url);
 
       const data = response.data?.data || response.data;
@@ -224,7 +182,7 @@ export const useContractEventDateSummary = (
         throw new Error('No tenant selected');
       }
 
-      const url = CONTRACT_EVENTS_API.DATES_WITH_FILTERS(filters);
+      const url = API_ENDPOINTS.CONTRACT_EVENTS.DATES_WITH_FILTERS(filters);
       const response = await api.get(url);
 
       const data = response.data?.data || response.data;
@@ -308,7 +266,7 @@ export const useContractEventOperations = () => {
         throw new Error('No tenant selected');
       }
 
-      const response = await api.post(CONTRACT_EVENTS_API.CREATE, data, {
+      const response = await api.post(API_ENDPOINTS.CONTRACT_EVENTS.CREATE, data, {
         headers: {
           'x-idempotency-key': `create-events-${data.contract_id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         },
@@ -356,7 +314,7 @@ export const useContractEventOperations = () => {
       }
 
       const response = await api.patch(
-        CONTRACT_EVENTS_API.UPDATE(eventId),
+        API_ENDPOINTS.CONTRACT_EVENTS.UPDATE(eventId),
         updateData
       );
 
@@ -424,7 +382,7 @@ export const useContractEventOperations = () => {
         throw new Error('No tenant selected');
       }
 
-      const response = await api.patch(CONTRACT_EVENTS_API.UPDATE(eventId), {
+      const response = await api.patch(API_ENDPOINTS.CONTRACT_EVENTS.UPDATE(eventId), {
         status: newStatus,
         version,
         reason,
@@ -473,6 +431,10 @@ export const useContractEventOperations = () => {
     isCreating: createEventsMutation.isPending,
     isUpdating: updateEventMutation.isPending,
     isChangingStatus: updateStatusMutation.isPending,
+    /** The eventId currently being status-changed (null if idle) */
+    changingStatusEventId: updateStatusMutation.isPending
+      ? (updateStatusMutation.variables as any)?.eventId ?? null
+      : null,
 
     // Error states
     createError: createEventsMutation.error,

@@ -26,13 +26,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarDays,
-  Receipt,
-  CheckCircle2,
-  XCircle,
-  PlayCircle,
   Loader2,
   Edit3,
   ArrowRightLeft,
+  Package,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
@@ -47,7 +44,12 @@ import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import type { Contract } from '@/types/contracts';
 import NudgeConfirmationModal from '@/components/contracts/NudgeConfirmationModal';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
-import { VALID_STATUS_TRANSITIONS } from '@/types/contractEvents';
+import {
+  useEventStatuses,
+  useEventTransitions,
+} from '@/hooks/queries/useEventStatusConfigQueries';
+import type { EventStatusDefinition } from '@/types/eventStatusConfig';
+import { EventCard } from '@/components/contracts/EventCard';
 
 // Lazy-load drawer/wizard — gracefully degrades if components don't exist
 const QuickAddContactDrawer = lazy(() =>
@@ -124,22 +126,6 @@ const getAcceptanceStatus = (contract: Contract): { label: string; color: string
   return { label: 'Not Seen', color: '#EF4444', bgClass: 'bg-red-50 dark:bg-red-500/10', borderClass: 'border-red-200 dark:border-red-500/30' };
 };
 
-const getEventStatusConfig = (status: ContractEventStatus) => {
-  switch (status) {
-    case 'overdue':
-      return { label: 'Overdue', icon: AlertTriangle, color: '#EF4444', dotClass: 'bg-red-500 shadow-red-500/30' };
-    case 'scheduled':
-      return { label: 'Scheduled', icon: CalendarDays, color: '#3B82F6', dotClass: 'bg-blue-500' };
-    case 'in_progress':
-      return { label: 'In Progress', icon: PlayCircle, color: '#8B5CF6', dotClass: 'bg-purple-500' };
-    case 'completed':
-      return { label: 'Completed', icon: CheckCircle2, color: '#10B981', dotClass: 'bg-green-500' };
-    case 'cancelled':
-      return { label: 'Cancelled', icon: XCircle, color: '#9CA3AF', dotClass: 'bg-gray-400' };
-    default:
-      return { label: status, icon: Clock, color: '#6B7280', dotClass: 'bg-gray-400' };
-  }
-};
 
 const getInitials = (name?: string): string => {
   if (!name) return '??';
@@ -254,6 +240,7 @@ interface BucketCardProps {
   count: number;
   serviceCount: number;
   billingCount: number;
+  sparePartCount?: number;
   color: string;
   isDarkMode: boolean;
   isHighlighted?: boolean;
@@ -265,6 +252,7 @@ const BucketCard: React.FC<BucketCardProps> = ({
   count,
   serviceCount,
   billingCount,
+  sparePartCount = 0,
   color,
   isDarkMode,
   isHighlighted,
@@ -295,6 +283,12 @@ const BucketCard: React.FC<BucketCardProps> = ({
         <Wrench className="w-3 h-3" style={{ color: '#10B981' }} />
         {serviceCount}
       </span>
+      {sparePartCount > 0 && (
+        <span className="flex items-center gap-1">
+          <Package className="w-3 h-3" style={{ color: '#3B82F6' }} />
+          {sparePartCount}
+        </span>
+      )}
       <span className="flex items-center gap-1">
         <DollarSign className="w-3 h-3" style={{ color: '#F59E0B' }} />
         {billingCount}
@@ -825,92 +819,6 @@ const RfqTrackerCard: React.FC<{
   );
 };
 
-// ─── Event Card (for 2-col grid) ────────────────────────────────
-
-const EventCard: React.FC<{
-  event: ContractEvent;
-  onStatusChange: (eventId: string, newStatus: ContractEventStatus, version: number) => void;
-  onViewContract: (contractId: string) => void;
-  isUpdatingStatus: boolean;
-  isDarkMode: boolean;
-  brandColor: string;
-  colors: any;
-}> = ({ event, onStatusChange, onViewContract, isUpdatingStatus, isDarkMode, brandColor, colors }) => {
-  const isService = event.event_type === 'service';
-  const statusCfg = getEventStatusConfig(event.status);
-  const StatusIcon = statusCfg.icon;
-  const transitions = VALID_STATUS_TRANSITIONS[event.status] || [];
-
-  return (
-    <div
-      className="p-3 rounded-xl border shadow-sm transition-all cursor-pointer hover:shadow-md"
-      style={{
-        backgroundColor: colors.utility.primaryBackground,
-        borderColor: colors.utility.primaryText + '15',
-      }}
-      onClick={() => onViewContract(event.contract_id)}
-    >
-      <div className="flex items-start gap-2.5">
-        {/* Dot indicator */}
-        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${statusCfg.dotClass}`}
-          style={{ boxShadow: event.status === 'overdue' ? '0 0 6px rgba(239,68,68,0.3)' : undefined }}
-        />
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
-            {event.block_name}
-          </p>
-          <p className="text-[10px] truncate mt-0.5" style={{ color: colors.utility.secondaryText }}>
-            {event.contract_title || event.contract_number || 'Contract'}
-          </p>
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className="text-[10px] flex items-center gap-1" style={{ color: colors.utility.secondaryText }}>
-              <Calendar className="w-3 h-3" />
-              {formatEventDate(event.scheduled_date)}
-            </span>
-            {event.amount != null && event.amount > 0 && (
-              <span className="text-[10px] font-bold text-amber-500">
-                {Number(event.amount).toLocaleString()}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right column: type + status + action */}
-        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-          <div className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-            isService
-              ? isDarkMode ? 'bg-green-500/10 text-green-400' : 'bg-green-50 text-green-600'
-              : isDarkMode ? 'bg-amber-500/10 text-amber-400' : 'bg-amber-50 text-amber-600'
-          }`}>
-            {isService ? <Wrench className="w-3 h-3" /> : <Receipt className="w-3 h-3" />}
-            {isService ? 'SVC' : 'BILL'}
-          </div>
-          <div className="flex items-center gap-1">
-            <StatusIcon className="w-3 h-3" style={{ color: statusCfg.color }} />
-            <span className="text-[9px] font-semibold" style={{ color: statusCfg.color }}>
-              {statusCfg.label}
-            </span>
-          </div>
-          {transitions.length > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onStatusChange(event.id, transitions[0] as ContractEventStatus, event.version); }}
-              disabled={isUpdatingStatus}
-              className="text-[9px] font-semibold px-1.5 py-0.5 rounded transition-all"
-              style={{
-                backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.08),
-                color: brandColor,
-              }}
-            >
-              {isUpdatingStatus ? '...' : `→ ${transitions[0]}`}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ─── Service Events Section (right side of 2-col) ───────────────
 
@@ -922,18 +830,23 @@ const ServiceEventsSection: React.FC<{
   onTimeFilterChange: (f: EventTimeFilter) => void;
   onTypeFilterChange: (f: EventTypeFilter) => void;
   onStatusChange: (eventId: string, newStatus: ContractEventStatus, version: number) => void;
-  isUpdatingStatus: boolean;
+  updatingEventId?: string | null;
   onViewContract: (contractId: string) => void;
   isDarkMode: boolean;
   brandColor: string;
   colors: any;
+  statusDefsByType?: Record<string, EventStatusDefinition[]>;
+  transitionsByType?: Record<string, Record<string, string[]>>;
 }> = ({
   events, isLoading, timeFilter, typeFilter,
   onTimeFilterChange, onTypeFilterChange,
-  onStatusChange, isUpdatingStatus, onViewContract, isDarkMode, brandColor, colors,
+  onStatusChange, updatingEventId, onViewContract, isDarkMode, brandColor, colors,
+  statusDefsByType, transitionsByType,
 }) => {
   const filteredEvents = useMemo(() => {
     if (typeFilter === 'all') return events;
+    // spare_part is a subset of service — "Deliverables" shows both
+    if (typeFilter === 'service') return events.filter((e) => e.event_type === 'service' || e.event_type === 'spare_part');
     return events.filter((e) => e.event_type === typeFilter);
   }, [events, typeFilter]);
 
@@ -962,7 +875,8 @@ const ServiceEventsSection: React.FC<{
           ))}
           <div className="w-px h-4 mx-1" style={{ backgroundColor: colors.utility.primaryText + '15' }} />
           {(['all', 'service', 'billing'] as EventTypeFilter[]).map((f) => (
-            <FilterPill key={f} label={f === 'all' ? 'All' : f === 'service' ? 'Deliverables' : 'Invoices'}
+            <FilterPill key={f}
+              label={f === 'all' ? 'All' : f === 'service' ? 'Deliverables' : 'Invoices'}
               isActive={typeFilter === f} onClick={() => onTypeFilterChange(f)} isDarkMode={isDarkMode} brandColor={brandColor} colors={colors} />
           ))}
         </div>
@@ -980,7 +894,7 @@ const ServiceEventsSection: React.FC<{
             <Calendar className="h-8 w-8 mx-auto mb-2" style={{ color: colors.utility.secondaryText }} />
             <p className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>No events</p>
             <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-              No {typeFilter !== 'all' ? typeFilter : ''} events for this period
+              No {typeFilter !== 'all' ? typeFilter.replace('_', ' ') : ''} events for this period
             </p>
           </div>
         ) : (
@@ -989,12 +903,13 @@ const ServiceEventsSection: React.FC<{
               <EventCard
                 key={event.id}
                 event={event}
-                onStatusChange={onStatusChange}
-                onViewContract={onViewContract}
-                isUpdatingStatus={isUpdatingStatus}
-                isDarkMode={isDarkMode}
-                brandColor={brandColor}
                 colors={colors}
+                variant="compact"
+                onStatusChange={onStatusChange}
+                updatingEventId={updatingEventId}
+                onViewContract={onViewContract}
+                statusDefs={statusDefsByType?.[event.event_type]}
+                allowedTransitions={transitionsByType?.[event.event_type]?.[event.status] || []}
               />
             ))}
           </div>
@@ -1222,7 +1137,38 @@ const OpsCockpitPage: React.FC = () => {
 
   // Mutations
   const { sendNotification, isSendingNotification } = useContractOperations();
-  const { updateStatus: updateEventStatus, isChangingStatus } = useContractEventOperations();
+  const { updateStatus: updateEventStatus, isChangingStatus, changingStatusEventId } = useContractEventOperations();
+
+  // Dynamic status definitions + transitions (10min staleTime, fetch-once)
+  const { data: serviceStatuses } = useEventStatuses('service');
+  const { data: billingStatuses } = useEventStatuses('billing');
+  const { data: sparePartStatuses } = useEventStatuses('spare_part');
+  const { data: serviceTransitions } = useEventTransitions('service');
+  const { data: billingTransitions } = useEventTransitions('billing');
+  const { data: sparePartTransitions } = useEventTransitions('spare_part');
+
+  // Build lookup maps for dynamic statuses
+  const statusDefsByType: Record<string, EventStatusDefinition[]> = useMemo(() => ({
+    service: serviceStatuses?.statuses || [],
+    billing: billingStatuses?.statuses || [],
+    spare_part: sparePartStatuses?.statuses || [],
+  }), [serviceStatuses, billingStatuses, sparePartStatuses]);
+
+  const transitionsByType = useMemo(() => {
+    const buildMap = (transitions: any[]) => {
+      const map: Record<string, string[]> = {};
+      for (const t of transitions) {
+        if (!map[t.from_status]) map[t.from_status] = [];
+        map[t.from_status].push(t.to_status);
+      }
+      return map;
+    };
+    return {
+      service: buildMap(serviceTransitions?.transitions || []),
+      billing: buildMap(billingTransitions?.transitions || []),
+      spare_part: buildMap(sparePartTransitions?.transitions || []),
+    };
+  }, [serviceTransitions, billingTransitions, sparePartTransitions]);
 
   // Derived
   const isLoading = profileLoading || statsLoading;
@@ -1243,7 +1189,7 @@ const OpsCockpitPage: React.FC = () => {
 
   // Event schedule buckets — computed from perspective-filtered events
   const urgency = useMemo(() => {
-    const emptyBucket = { count: 0, service_count: 0, billing_count: 0, billing_amount: 0, by_status: {} };
+    const emptyBucket = { count: 0, service_count: 0, billing_count: 0, spare_part_count: 0, billing_amount: 0, by_status: {} };
     const allEvents: ContractEvent[] = allEventsData?.items || [];
 
     // Client-side filter: only events belonging to contracts of the active perspective
@@ -1290,6 +1236,7 @@ const OpsCockpitPage: React.FC = () => {
       count: events.length,
       service_count: events.filter((e) => e.event_type === 'service').length,
       billing_count: events.filter((e) => e.event_type === 'billing').length,
+      spare_part_count: events.filter((e) => e.event_type === 'spare_part').length,
       billing_amount: events.filter((e) => e.event_type === 'billing').reduce((s, e) => s + (Number(e.amount) || 0), 0),
       by_status: {},
     });
@@ -1533,21 +1480,27 @@ const OpsCockpitPage: React.FC = () => {
               <div className="space-y-2">
                 <BucketCard title="Overdue" count={urgency.overdue.count}
                   serviceCount={urgency.overdue.service_count} billingCount={urgency.overdue.billing_count}
+                  sparePartCount={urgency.overdue.spare_part_count}
                   color="#EF4444" isDarkMode={isDarkMode} isHighlighted={urgency.overdue.count > 0} colors={colors} />
                 <BucketCard title="Today" count={urgency.today.count}
                   serviceCount={urgency.today.service_count} billingCount={urgency.today.billing_count}
+                  sparePartCount={urgency.today.spare_part_count}
                   color="#3B82F6" isDarkMode={isDarkMode} isHighlighted={urgency.today.count > 0} colors={colors} />
                 <BucketCard title="Tomorrow" count={urgency.tomorrow.count}
                   serviceCount={urgency.tomorrow.service_count} billingCount={urgency.tomorrow.billing_count}
+                  sparePartCount={urgency.tomorrow.spare_part_count}
                   color="#8B5CF6" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="This Week" count={urgency.this_week.count}
                   serviceCount={urgency.this_week.service_count} billingCount={urgency.this_week.billing_count}
+                  sparePartCount={urgency.this_week.spare_part_count}
                   color="#06B6D4" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="Next Week" count={urgency.next_week.count}
                   serviceCount={urgency.next_week.service_count} billingCount={urgency.next_week.billing_count}
+                  sparePartCount={urgency.next_week.spare_part_count}
                   color="#F59E0B" isDarkMode={isDarkMode} colors={colors} />
                 <BucketCard title="Later" count={urgency.later.count}
                   serviceCount={urgency.later.service_count} billingCount={urgency.later.billing_count}
+                  sparePartCount={urgency.later.spare_part_count}
                   color="#6B7280" isDarkMode={isDarkMode} colors={colors} />
               </div>
             </div>
@@ -1561,11 +1514,13 @@ const OpsCockpitPage: React.FC = () => {
               onTimeFilterChange={setEventTimeFilter}
               onTypeFilterChange={setEventTypeFilter}
               onStatusChange={handleEventStatusChange}
-              isUpdatingStatus={isChangingStatus}
+              updatingEventId={changingStatusEventId}
               onViewContract={handleViewContract}
               isDarkMode={isDarkMode}
               brandColor={brandColor}
               colors={colors}
+              statusDefsByType={statusDefsByType}
+              transitionsByType={transitionsByType}
             />
           </div>
 

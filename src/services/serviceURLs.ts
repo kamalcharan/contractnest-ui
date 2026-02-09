@@ -21,6 +21,28 @@ export type CatTemplateFilters = {
   limit?: number;
 };
 
+// Contract event filter types (used by CONTRACT_EVENTS helper functions)
+type ContractEventFilters = {
+  contract_id?: string;
+  contact_id?: string;
+  assigned_to?: string;
+  status?: string;
+  event_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  per_page?: number;
+  sort_by?: string;
+  sort_order?: string;
+};
+
+type DateSummaryFilters = {
+  contract_id?: string;
+  contact_id?: string;
+  assigned_to?: string;
+  event_type?: string;
+};
+
 export const API_ENDPOINTS = {
   // =================================================================
   // ONBOARDING ENDPOINTS - PRESERVED
@@ -899,6 +921,75 @@ export const API_ENDPOINTS = {
   },
 
   // =================================================================
+  // CONTRACT EVENTS (TIMELINE) ENDPOINTS
+  // =================================================================
+  CONTRACT_EVENTS: {
+    LIST: '/api/contract-events',
+    DATES: '/api/contract-events/dates',
+    GET: (id: string) => `/api/contract-events/${id}`,
+    CREATE: '/api/contract-events',
+    UPDATE: (id: string) => `/api/contract-events/${id}`,
+
+    LIST_WITH_FILTERS: (filters: ContractEventFilters = {}) => {
+      const params = new URLSearchParams();
+
+      if (filters.contract_id) params.append('contract_id', filters.contract_id);
+      if (filters.contact_id) params.append('contact_id', filters.contact_id);
+      if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.event_type) params.append('event_type', filters.event_type);
+      if (filters.date_from) params.append('date_from', filters.date_from);
+      if (filters.date_to) params.append('date_to', filters.date_to);
+      if (filters.page !== undefined) params.append('page', filters.page.toString());
+      if (filters.per_page !== undefined) params.append('per_page', filters.per_page.toString());
+      if (filters.sort_by) params.append('sort_by', filters.sort_by);
+      if (filters.sort_order) params.append('sort_order', filters.sort_order);
+
+      const queryString = params.toString();
+      return queryString ? `/api/contract-events?${queryString}` : '/api/contract-events';
+    },
+
+    DATES_WITH_FILTERS: (filters: DateSummaryFilters = {}) => {
+      const params = new URLSearchParams();
+
+      if (filters.contract_id) params.append('contract_id', filters.contract_id);
+      if (filters.contact_id) params.append('contact_id', filters.contact_id);
+      if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
+      if (filters.event_type) params.append('event_type', filters.event_type);
+
+      const queryString = params.toString();
+      return queryString ? `/api/contract-events/dates?${queryString}` : '/api/contract-events/dates';
+    },
+  },
+
+  // =================================================================
+  // EVENT STATUS CONFIG ENDPOINTS
+  // =================================================================
+  EVENT_STATUS_CONFIG: {
+    // Status definitions
+    STATUSES: '/api/event-status-config/statuses',
+
+    // Status transitions
+    TRANSITIONS: '/api/event-status-config/transitions',
+
+    // Seed defaults for tenant
+    SEED: '/api/event-status-config/seed',
+
+    // Helper: get statuses for a specific event type
+    GET_STATUSES: (eventType: string) => {
+      const params = new URLSearchParams({ event_type: eventType });
+      return `/api/event-status-config/statuses?${params.toString()}`;
+    },
+
+    // Helper: get transitions for a specific event type + optional from_status
+    GET_TRANSITIONS: (eventType: string, fromStatus?: string) => {
+      const params = new URLSearchParams({ event_type: eventType });
+      if (fromStatus) params.append('from_status', fromStatus);
+      return `/api/event-status-config/transitions?${params.toString()}`;
+    },
+  },
+
+  // =================================================================
   // PAYMENT GATEWAY ENDPOINTS
   // =================================================================
   PAYMENTS: {
@@ -906,6 +997,71 @@ export const API_ENDPOINTS = {
     CREATE_LINK: '/api/payments/create-link',
     VERIFY_PAYMENT: '/api/payments/verify-payment',
     STATUS: '/api/payments/status',
+  },
+
+  // =================================================================
+  // SERVICE EXECUTION ENDPOINTS (Tickets, Evidence, Audit)
+  // =================================================================
+  SERVICE_EXECUTION: {
+    HEALTH: '/api/service-execution/health',
+
+    // Tickets
+    TICKETS: {
+      LIST: '/api/service-execution',
+      CREATE: '/api/service-execution',
+      GET: (ticketId: string) => `/api/service-execution/${ticketId}`,
+      UPDATE: (ticketId: string) => `/api/service-execution/${ticketId}`,
+
+      LIST_WITH_FILTERS: (filters: ServiceTicketFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.contract_id) params.append('contract_id', filters.contract_id);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.assigned_to) params.append('assigned_to', filters.assigned_to);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.per_page) params.append('per_page', filters.per_page.toString());
+        const qs = params.toString();
+        return qs ? `/api/service-execution?${qs}` : '/api/service-execution';
+      },
+    },
+
+    // Evidence
+    EVIDENCE: {
+      LIST: '/api/service-execution/evidence',
+      CREATE: (ticketId: string) => `/api/service-execution/${ticketId}/evidence`,
+      UPDATE: (ticketId: string, evidenceId: string) => `/api/service-execution/${ticketId}/evidence/${evidenceId}`,
+      LIST_FOR_TICKET: (ticketId: string) => `/api/service-execution/${ticketId}/evidence`,
+
+      LIST_WITH_FILTERS: (filters: ServiceEvidenceFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.contract_id) params.append('contract_id', filters.contract_id);
+        if (filters.ticket_id) params.append('ticket_id', filters.ticket_id);
+        if (filters.evidence_type) params.append('evidence_type', filters.evidence_type);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.per_page) params.append('per_page', filters.per_page.toString());
+        const qs = params.toString();
+        return qs ? `/api/service-execution/evidence?${qs}` : '/api/service-execution/evidence';
+      },
+    },
+
+    // Audit Log
+    AUDIT: {
+      LIST: '/api/service-execution/audit',
+
+      LIST_WITH_FILTERS: (filters: AuditLogFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.contract_id) params.append('contract_id', filters.contract_id);
+        if (filters.entity_type) params.append('entity_type', filters.entity_type);
+        if (filters.entity_id) params.append('entity_id', filters.entity_id);
+        if (filters.category) params.append('category', filters.category);
+        if (filters.date_from) params.append('date_from', filters.date_from);
+        if (filters.date_to) params.append('date_to', filters.date_to);
+        if (filters.page) params.append('page', filters.page.toString());
+        if (filters.per_page) params.append('per_page', filters.per_page.toString());
+        const qs = params.toString();
+        return qs ? `/api/service-execution/audit?${qs}` : '/api/service-execution/audit';
+      },
+    },
   },
 
   // System and maintenance endpoints
@@ -1196,6 +1352,9 @@ export type ProductMasterDataEndpoints = typeof API_ENDPOINTS.PRODUCT_MASTERDATA
 export type OnboardingEndpoints = typeof API_ENDPOINTS.ONBOARDING;
 export type SequencesEndpoints = typeof API_ENDPOINTS.SEQUENCES;
 export type ContractsEndpoints = typeof API_ENDPOINTS.CONTRACTS;
+export type ContractEventsEndpoints = typeof API_ENDPOINTS.CONTRACT_EVENTS;
+export type EventStatusConfigEndpoints = typeof API_ENDPOINTS.EVENT_STATUS_CONFIG;
+export type ServiceExecutionEndpoints = typeof API_ENDPOINTS.SERVICE_EXECUTION;
 
 // Contact filters interface
 export type ContactFilters = {
@@ -1233,6 +1392,35 @@ export type BlockSearchParams = {
   q: string; // Search query
   category?: string;
   nodeType?: string;
+};
+
+// Service Execution filter types
+export type ServiceTicketFilters = {
+  contract_id?: string;
+  status?: string;
+  assigned_to?: string;
+  page?: number;
+  per_page?: number;
+};
+
+export type ServiceEvidenceFilters = {
+  contract_id?: string;
+  ticket_id?: string;
+  evidence_type?: string;
+  status?: string;
+  page?: number;
+  per_page?: number;
+};
+
+export type AuditLogFilters = {
+  contract_id?: string;
+  entity_type?: string;
+  entity_id?: string;
+  category?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  per_page?: number;
 };
 
 // =================================================================
