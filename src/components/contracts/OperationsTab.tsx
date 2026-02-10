@@ -22,11 +22,7 @@ import {
   User,
   CheckCircle2,
   Camera,
-  Shield,
   ClipboardList,
-  X,
-  Ticket,
-  Upload,
   Eye,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -35,22 +31,22 @@ import {
   useContractEventsForContract,
   useContractEventOperations,
 } from '@/hooks/queries/useContractEventQueries';
+import { useContract } from '@/hooks/queries/useContractQueries';
 import {
   useEventStatuses,
   useEventTransitions,
 } from '@/hooks/queries/useEventStatusConfigQueries';
 import {
   useServiceTicketsForContract,
-  useCreateServiceTicket,
 } from '@/hooks/queries/useServiceExecution';
 import type { ServiceTicket } from '@/hooks/queries/useServiceExecution';
-import { useContactsForResourceDropdown } from '@/hooks/queries/useContactsResource';
 import type {
   ContractEvent,
   ContractEventStatus,
 } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 import { EventCard } from '@/components/contracts/EventCard';
+import ServiceExecutionDrawer from '@/components/contracts/ServiceExecutionDrawer';
 import ServiceTicketDetail from '@/components/contracts/ServiceTicketDetail';
 import type { TicketDetailState } from '@/components/contracts/ServiceTicketDetail';
 
@@ -440,317 +436,6 @@ const TicketSummaryCard: React.FC<TicketSummaryProps> = ({ date, deliverables, b
 };
 
 // ═══════════════════════════════════════════════════
-// SERVICE EXECUTION SLIDE-IN PANEL
-// ═══════════════════════════════════════════════════
-
-interface ServicePanelProps {
-  state: ServicePanelState;
-  contractId: string;
-  onClose: () => void;
-  colors: any;
-  currency: string;
-}
-
-const ServiceExecutionPanel: React.FC<ServicePanelProps> = ({ state, contractId, onClose, colors, currency }) => {
-  const [notes, setNotes] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [assigneeName, setAssigneeName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { options: teamMembers, isLoading: loadingTeam } = useContactsForResourceDropdown();
-  const createTicket = useCreateServiceTicket();
-
-  const deliverables = state.events.filter((e) => e.event_type === 'service' || e.event_type === 'spare_part');
-  const billingEvents = state.events.filter((e) => e.event_type === 'billing');
-
-  if (!state.isOpen) return null;
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 transition-opacity"
-        style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div
-        className="fixed top-0 right-0 bottom-0 z-50 w-[440px] shadow-2xl border-l overflow-y-auto animate-slide-in-right"
-        style={{
-          backgroundColor: colors.utility.mainBackground,
-          borderColor: `${colors.utility.primaryText}15`,
-        }}
-      >
-        {/* Header */}
-        <div
-          className="sticky top-0 z-10 px-6 py-4 border-b flex items-center justify-between"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: `${colors.utility.primaryText}10`,
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${colors.brand.primary}20, ${colors.brand.primary}08)` }}
-            >
-              <Play className="w-5 h-5" style={{ color: colors.brand.primary }} />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-                Service Execution
-              </h2>
-              <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                {formatEventDate(state.date)}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:opacity-70 transition-opacity"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Ticket Info */}
-          <div
-            className="px-4 py-3 rounded-lg border"
-            style={{
-              backgroundColor: `${colors.brand.primary}06`,
-              borderColor: `${colors.brand.primary}15`,
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <Ticket className="w-4 h-4" style={{ color: colors.brand.primary }} />
-              <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
-                New Service Ticket
-              </span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full ml-auto" style={{ backgroundColor: `${colors.semantic.info}12`, color: colors.semantic.info }}>
-                TKT# assigned on create
-              </span>
-            </div>
-          </div>
-
-          {/* Events to Service */}
-          {deliverables.length > 0 && (
-            <div>
-              <h3 className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
-                Deliverables ({deliverables.length})
-              </h3>
-              <div className="space-y-2">
-                {deliverables.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: `${colors.utility.primaryText}10`,
-                    }}
-                  >
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.success }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                        {event.block_name}
-                      </p>
-                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                        {event.event_type === 'spare_part' ? 'Spare Part' : 'Service'}
-                        {event.sequence_number > 0 && ` #${event.sequence_number}`}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Billing Events */}
-          {billingEvents.length > 0 && (
-            <div>
-              <h3 className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
-                Billing ({billingEvents.length})
-              </h3>
-              <div className="space-y-2">
-                {billingEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center gap-3 p-3 rounded-lg border"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: `${colors.utility.primaryText}10`,
-                    }}
-                  >
-                    <DollarSign className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.warning }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                        {event.block_name}
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold" style={{ color: colors.semantic.warning }}>
-                      {formatCurrency(event.amount, event.currency || currency)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Assigned Person */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: colors.utility.secondaryText }}>
-              Assigned To
-            </h3>
-            <select
-              value={assigneeId}
-              onChange={(e) => {
-                setAssigneeId(e.target.value);
-                const member = teamMembers.find(m => m.value === e.target.value);
-                setAssigneeName(member?.label || '');
-              }}
-              className="w-full px-3 py-2.5 rounded-lg border text-xs"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}15`,
-                color: colors.utility.primaryText,
-              }}
-            >
-              <option value="">Select team member...</option>
-              {loadingTeam ? (
-                <option disabled>Loading team members...</option>
-              ) : (
-                teamMembers.map((member) => (
-                  <option key={member.value} value={member.value}>{member.label}</option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Evidence Required */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: colors.utility.secondaryText }}>
-              Evidence Required
-            </h3>
-            <div className="space-y-2">
-              {[
-                { icon: Upload, label: 'Upload Form', desc: 'Upload documents or photos', required: true },
-                { icon: Shield, label: 'OTP Confirmation', desc: 'Customer verification', required: false },
-              ].map((ev) => (
-                <div
-                  key={ev.label}
-                  className="flex items-center gap-3 p-3 rounded-lg border"
-                  style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderColor: `${colors.utility.primaryText}10`,
-                  }}
-                >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: `${colors.brand.primary}10` }}
-                  >
-                    <ev.icon className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>{ev.label}</p>
-                    <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>{ev.desc}</p>
-                  </div>
-                  {ev.required && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${colors.semantic.error}10`, color: colors.semantic.error }}>
-                      Required
-                    </span>
-                  )}
-                </div>
-              ))}
-              <button
-                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg border border-dashed text-xs font-medium transition-opacity hover:opacity-80"
-                style={{ borderColor: `${colors.brand.primary}30`, color: colors.brand.primary }}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Upload Evidence
-              </button>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: colors.utility.secondaryText }}>
-              Service Notes
-            </h3>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes about the service performed..."
-              rows={3}
-              className="w-full px-3 py-2.5 rounded-lg border text-xs resize-none"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}15`,
-                color: colors.utility.primaryText,
-              }}
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 rounded-lg border text-xs font-semibold transition-opacity hover:opacity-80"
-              style={{
-                borderColor: `${colors.utility.primaryText}20`,
-                color: colors.utility.secondaryText,
-                backgroundColor: 'transparent',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              disabled={isSubmitting || !assigneeId}
-              onClick={async () => {
-                setIsSubmitting(true);
-                try {
-                  await createTicket.mutateAsync({
-                    contract_id: contractId,
-                    event_ids: state.events.map(e => e.id),
-                    assigned_to_id: assigneeId || undefined,
-                    assigned_to_name: assigneeName || undefined,
-                    notes: notes || undefined,
-                  });
-                  onClose();
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
-              style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
-            >
-              {isSubmitting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-              Create Ticket
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-        .animate-slide-in-right {
-          animation: slideInRight 0.25s ease-out;
-        }
-      `}</style>
-    </>
-  );
-};
-
-// ═══════════════════════════════════════════════════
 // DATE GROUP HEADER
 // ═══════════════════════════════════════════════════
 
@@ -862,6 +547,7 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
   });
 
   // ─── Data hooks ───
+  const { data: contractData } = useContract(contractId);
   const {
     data: eventsData,
     isLoading,
@@ -1194,13 +880,19 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
         </div>
       )}
 
-      {/* Service Execution Slide-In Panel */}
-      <ServiceExecutionPanel
-        state={servicePanel}
+      {/* Service Execution Drawer */}
+      <ServiceExecutionDrawer
+        isOpen={servicePanel.isOpen}
         contractId={contractId}
-        onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}
-        colors={colors}
+        date={servicePanel.date}
+        events={servicePanel.events}
+        allContractEvents={eventsData?.items || []}
         currency={currency}
+        evidencePolicyType={contractData?.evidence_policy_type || contractData?.metadata?.evidence_policy_type || 'none'}
+        evidenceSelectedForms={contractData?.evidence_selected_forms || contractData?.metadata?.evidence_selected_forms}
+        statusDefsByType={statusDefsByType}
+        transitionsByType={transitionsByType}
+        onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}
       />
 
       {/* Service Ticket Detail Slide-In Panel */}

@@ -136,6 +136,9 @@ export interface Contract {
   termination_clause?: string;
   notes?: string;
   metadata?: Record<string, any>;
+  // Evidence policy (set during contract creation wizard)
+  evidence_policy_type?: 'none' | 'upload' | 'smart_form';
+  evidence_selected_forms?: Array<{ form_template_id: string; name: string; sequence: number }>;
 }
 
 export interface ContractBlock {
