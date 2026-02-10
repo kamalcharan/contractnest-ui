@@ -54,6 +54,7 @@ import PaymentRequestHistory from '@/components/contracts/PaymentRequestHistory'
 import TimelineTab from '@/components/contracts/TimelineTab';
 import OperationsTab from '@/components/contracts/OperationsTab';
 import EvidenceTab from '@/components/contracts/EvidenceTab';
+import EvidencePolicySection from '@/components/contracts/EvidencePolicySection';
 import AuditTab from '@/components/contracts/AuditTab';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
@@ -1528,11 +1529,17 @@ const ContractDetailPage: React.FC = () => {
         );
       case 'evidence':
         return (
-          <EvidenceTab
-            contractId={contract.id}
-            currency={contract.currency || 'INR'}
-            colors={colors}
-          />
+          <div className="space-y-6">
+            <EvidencePolicySection
+              contractId={contract.id}
+              colors={colors}
+            />
+            <EvidenceTab
+              contractId={contract.id}
+              currency={contract.currency || 'INR'}
+              colors={colors}
+            />
+          </div>
         );
       case 'communication':
         return <PlaceholderTab icon={MessageSquare} title="Communication" description="Messages, notifications, and updates exchanged between parties." colors={colors} />;

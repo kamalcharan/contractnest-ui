@@ -93,7 +93,7 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
     duration: config.duration?.value || config.duration,
     durationUnit: config.duration?.unit || config.duration_unit || 'minutes',
     tags: catBlock.tags || [],
-    evidenceTags: config.evidence_types || [],
+    evidenceTags: [],
     usage: {
       templates: 0,
       contracts: 0,
@@ -134,7 +134,7 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       bufferTime: config.buffer || config.bufferTime,
       location: config.location,
       assignment: config.assignment,
-      evidence: config.evidence,
+      // evidence: moved to contract-level policy
       sla: config.sla,
       automation: config.automation,
 
@@ -144,7 +144,7 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       cancellation: config.cancellation,
       reschedule: config.reschedule,
       autoApprove: config.autoApprove,
-      requiresOTP: config.requiresOTP,
+      // requiresOTP: moved to contract-level policy
       requiresDeposit: config.requiresDeposit,
       depositPercentage: config.depositPercentage,
 
@@ -295,25 +295,7 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   const assignment = getField(block, 'assignment');
   if (assignment) config.assignment = assignment;
 
-  // Evidence configuration - wizard sets evidenceRequired, evidenceTypes
-  const evidenceRequired = getField(block, 'evidenceRequired');
-  const evidenceTypes = getField(block, 'evidenceTypes') || block.evidenceTags;
-  const evidence = getField(block, 'evidence');
-  if (evidence || evidenceTypes?.length || evidenceRequired) {
-    config.evidence = evidence || (evidenceTypes || []).map((type: string) => ({
-      type,
-      config: { required: true },
-    }));
-    config.evidence_types = evidenceTypes;
-    config.evidenceRequired = evidenceRequired;
-  }
-
-  // OTP requirement
-  const requiresOTP = getField(block, 'requiresOTP');
-  if (requiresOTP !== undefined) {
-    config.requiresOTP = requiresOTP;
-    config.otpConfig = getField(block, 'otpConfig');
-  }
+  // Evidence configuration — removed from block level, now at contract level
 
   // SLA
   const sla = getField(block, 'sla');
@@ -872,7 +854,7 @@ export const blockToUpdateData = (
         unit: updates.durationUnit || 'minutes',
       };
     }
-    if (updates.evidenceTags !== undefined) configUpdates.evidence_types = updates.evidenceTags;
+    // evidence_types removed — now at contract level
 
     // Meta fields that go into config
     if (meta.pricingRecords !== undefined) configUpdates.pricingRecords = meta.pricingRecords;
@@ -893,7 +875,7 @@ export const blockToUpdateData = (
     if (meta.cancellation !== undefined) configUpdates.cancellation = meta.cancellation;
     if (meta.reschedule !== undefined) configUpdates.reschedule = meta.reschedule;
     if (meta.autoApprove !== undefined) configUpdates.autoApprove = meta.autoApprove;
-    if (meta.requiresOTP !== undefined) configUpdates.requiresOTP = meta.requiresOTP;
+    // requiresOTP removed — now at contract level
 
     // Spare-specific
     if (meta.sku !== undefined) configUpdates.sku = meta.sku;

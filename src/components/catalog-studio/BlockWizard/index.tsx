@@ -19,7 +19,6 @@ import {
   // Service steps
   DeliveryStep,
   PricingStep,
-  EvidenceStep,
   RulesStep,
   // Spare Parts steps
   InventoryStep,
@@ -215,8 +214,7 @@ const BlockWizard: React.FC<BlockWizardProps> = ({
           case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
           case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
           case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 6: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
-          case 7: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
+          case 6: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 
@@ -342,7 +340,6 @@ export {
   ResourceDependencyStep,
   DeliveryStep,
   PricingStep,
-  EvidenceStep,
   RulesStep,
   InventoryStep,
   FulfillmentStep,

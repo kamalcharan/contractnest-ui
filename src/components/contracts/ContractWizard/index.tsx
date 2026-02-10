@@ -19,6 +19,7 @@ import BillingCycleStep, { BillingCycleType } from './steps/BillingCycleStep';
 import BillingViewStep from './steps/BillingViewStep';
 import ReviewSendStep from './steps/ReviewSendStep';
 import EventsPreviewStep from './steps/EventsPreviewStep';
+import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -73,6 +74,9 @@ export interface ContractWizardState {
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
+  // Evidence Policy
+  evidencePolicyType: EvidencePolicyType;
+  evidenceSelectedForms: SelectedForm[];
   // Events Preview: user-adjusted dates
   eventOverrides: Record<string, Date>;
 }
@@ -85,7 +89,7 @@ interface ContractWizardProps {
 }
 
 // Step ID type for step-based routing
-type StepId = 'path' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'events' | 'review';
+type StepId = 'path' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'evidencePolicy' | 'events' | 'review';
 
 interface StepConfig {
   id: StepId;
@@ -102,6 +106,7 @@ const CONTRACT_STEPS: StepConfig[] = [
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
   { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
+  { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
   { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
   { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
 ];
@@ -287,6 +292,18 @@ function mapWizardToRequest(
     blocks,
     vendors,
 
+    // Evidence policy
+    evidence_policy_type: state.evidencePolicyType,
+    evidence_selected_forms: state.evidencePolicyType === 'smart_form'
+      ? state.evidenceSelectedForms.map((f) => ({
+          form_template_id: f.form_template_id,
+          name: f.name,
+          version: f.version,
+          category: f.category,
+          sort_order: f.sort_order,
+        }))
+      : [],
+
     // Computed events (for PGMQ trigger when contract becomes active)
     computed_events: computedEvents,
   };
@@ -329,6 +346,9 @@ const createInitialWizardState = (): ContractWizardState => ({
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
+  // Evidence Policy
+  evidencePolicyType: 'none',
+  evidenceSelectedForms: [],
   // Events Preview
   eventOverrides: {},
 });
@@ -462,6 +482,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         return wizardState.selectedBlocks.length > 0;
       case 'billingView':
         return true;
+      case 'evidencePolicy':
+        return true; // Evidence policy always has a default (none)
       case 'events':
         return true; // Events preview is informational, always valid
       case 'review':
@@ -1066,6 +1088,20 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             perBlockPaymentType={wizardState.perBlockPaymentType}
             onPerBlockPaymentTypeChange={handlePerBlockPaymentTypeChange}
             contractDuration={billingDuration}
+          />
+        );
+      }
+      case 'evidencePolicy': {
+        return (
+          <EvidencePolicyStep
+            policyType={wizardState.evidencePolicyType}
+            selectedForms={wizardState.evidenceSelectedForms}
+            onPolicyTypeChange={(type) =>
+              updateWizardState('evidencePolicyType', type)
+            }
+            onSelectedFormsChange={(forms) =>
+              updateWizardState('evidenceSelectedForms', forms)
+            }
           />
         );
       }

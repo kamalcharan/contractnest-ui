@@ -18,7 +18,6 @@ import {
   // Service steps
   DeliveryStep,
   PricingStep,
-  EvidenceStep,
   // Spare Parts steps
   InventoryStep,
   FulfillmentStep,
@@ -155,8 +154,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           errors.push('Price is required');
         }
       }
-      // Step 6 - Evidence: No mandatory fields
-      // Step 7 - Business Rules: No mandatory fields
+      // Step 6 - Business Rules: No mandatory fields
     }
 
     if (type === 'spare') {
@@ -318,8 +316,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
           case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
           case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 6: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
-          case 7: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
+          case 6: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

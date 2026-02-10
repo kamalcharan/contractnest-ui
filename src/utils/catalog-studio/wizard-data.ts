@@ -8,8 +8,7 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
     { id: 3, label: 'Resources' },      // ResourceDependencyStep - Independent vs Resource-based
     { id: 4, label: 'Delivery' },
     { id: 5, label: 'Pricing' },
-    { id: 6, label: 'Evidence' },
-    { id: 7, label: 'Business Rules' },
+    { id: 6, label: 'Business Rules' },
   ],
   spare: [
     { id: 1, label: 'Type' },
