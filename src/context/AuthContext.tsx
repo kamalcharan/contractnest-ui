@@ -175,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isMultiTenantEnabled, setIsMultiTenantEnabled] = useState<boolean>(true);
 
   // Onboarding state
-  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(true); // Default to true to not block existing users
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false); // Default to false — API must confirm completion
 
   // Refs for timeouts
   const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -434,11 +434,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const hasAuth = api.defaults.headers.common['Authorization'];
       const hasTenant = api.defaults.headers.common['x-tenant-id'];
       if (!hasAuth || !hasTenant) {
-        return true; // Don't block if not authenticated
+        return false; // Not authenticated yet — don't assume complete
       }
 
-      // Check if we already have the status in storage
-      const storedStatus = sessionStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETE);
+      // Check if we already have the status in storage (tenant-scoped)
+      const tenantId = api.defaults.headers.common['x-tenant-id'] as string;
+      const storageKey = `${STORAGE_KEYS.ONBOARDING_COMPLETE}_${tenantId}`;
+      const storedStatus = sessionStorage.getItem(storageKey);
       if (storedStatus === 'true') {
         setHasCompletedOnboarding(true);
         return true;
@@ -450,20 +452,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isComplete = response.data.data.is_complete || false;
         setHasCompletedOnboarding(isComplete);
 
-        // Store in session to avoid repeated checks
+        // Store in session to avoid repeated checks (tenant-scoped)
         if (isComplete) {
-          sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
+          sessionStorage.setItem(storageKey, 'true');
         }
 
         return isComplete;
       }
 
-      // If we can't determine status, assume complete to not block
-      return true;
+      // If we can't determine status, assume NOT complete (safe default)
+      setHasCompletedOnboarding(false);
+      return false;
     } catch (error) {
       console.error('Error checking onboarding status:', error);
-      // Don't block user if we can't check status
-      return true;
+      // On error, assume NOT complete — user sees onboarding (safe)
+      setHasCompletedOnboarding(false);
+      return false;
     }
   };
 
@@ -599,7 +603,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFailedUnlockAttempts(0);
         setUnlockBlockedUntil(null);
         setRegistrationStatus(null);
-        setHasCompletedOnboarding(true);
+        setHasCompletedOnboarding(false);
         navigate('/login');
       }
     };
@@ -1252,7 +1256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(false);
     setIsMultiTenantEnabled(true);
     setRegistrationStatus(null);
-    setHasCompletedOnboarding(true);
+    setHasCompletedOnboarding(false);
 
     setUserContext(null, null, isLive);
 
@@ -1260,7 +1264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Set current tenant
-  const updateCurrentTenant = (tenant: Tenant) => {
+  const updateCurrentTenant = async (tenant: Tenant) => {
     const normalizedTenant = {
       ...tenant,
       is_admin: tenant.is_admin || false
@@ -1276,8 +1280,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }))
     );
 
-    // Check onboarding status when tenant changes
-    checkOnboardingStatus();
+    // Reset onboarding state for new tenant — must re-check from API
+    setHasCompletedOnboarding(false);
+
+    // Await onboarding check so navigation doesn't happen before state is resolved
+    await checkOnboardingStatus();
 
     setTimeout(() => {
       refreshData();

@@ -30,6 +30,7 @@ import {
   Edit3,
   ArrowRightLeft,
   Package,
+  CheckCircle2,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';

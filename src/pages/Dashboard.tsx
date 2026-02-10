@@ -1,40 +1,212 @@
-// src/pages/Dashboard.tsx - Empty State with Coming Soon
+// src/pages/Dashboard.tsx - V4 Split-Layout Dashboard (Cockpit-Style Theme)
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import {
-  MessageCircle,
   Sparkles,
-  Rocket,
-  FileText,
-  Calendar,
-  Users,
-  Bot,
   ArrowRight,
   Clock,
+  Wrench,
+  Building2,
+  LayoutGrid,
+  FileText,
+  Gauge,
+  UserPlus,
+  ClipboardList,
+  Check,
+  Plus,
   Zap,
-  Shield,
-  BarChart3
+  MessageSquare,
 } from 'lucide-react';
 
-// Floating background icons for animation
-const floatingIcons = [
-  { Icon: FileText, top: '10%', left: '5%', delay: '0s', duration: '20s' },
-  { Icon: Calendar, top: '20%', right: '8%', delay: '2s', duration: '18s' },
-  { Icon: Users, top: '65%', left: '3%', delay: '4s', duration: '22s' },
-  { Icon: Shield, top: '75%', right: '6%', delay: '1s', duration: '19s' },
-  { Icon: BarChart3, top: '40%', left: '7%', delay: '3s', duration: '21s' },
-  { Icon: Zap, top: '30%', right: '10%', delay: '5s', duration: '17s' },
+// ─── Helpers (cockpit-style) ────────────────────────────────────
+
+/** Append hex alpha to a #RRGGBB color string */
+const withOpacity = (hex: string, opacity: number): string => {
+  const base = (hex || '#6B7280').slice(0, 7);
+  const alpha = Math.round(opacity * 255).toString(16).padStart(2, '0');
+  return base + alpha;
+};
+
+// ─── Static data ────────────────────────────────────────────────
+
+const equipmentItems = [
+  { emoji: '❄️', title: 'HVAC / AC', sub: 'AMC' },
+  { emoji: '🛗', title: 'Elevators', sub: 'Safety' },
+  { emoji: '📹', title: 'CCTV', sub: 'Surveillance' },
+  { emoji: '🔥', title: 'Fire Safety', sub: 'Compliance' },
+  { emoji: '⚡', title: 'Generators', sub: 'Power' },
+  { emoji: '💧', title: 'Water Purifiers', sub: 'Filters' },
+  { emoji: '🖨️', title: 'Printers', sub: 'Toner' },
+  { emoji: '☀️', title: 'Solar Panels', sub: 'Cleaning' },
 ];
 
-// Coming soon features
-const comingSoonFeatures = [
-  { icon: FileText, title: 'Smart Contracts', description: 'Digital contract creation & management' },
-  { icon: Calendar, title: 'Appointments', description: 'Schedule & track service visits' },
-  { icon: BarChart3, title: 'Analytics', description: 'Insights & performance reports' },
-  { icon: Shield, title: 'Compliance', description: 'Automated compliance tracking' },
+const operationsItems = [
+  { emoji: '🏭', title: 'Factory', sub: 'Machinery' },
+  { emoji: '🧪', title: 'Clean Room', sub: 'Certification' },
+  { emoji: '💚', title: 'Health Plans', sub: 'Wellness' },
+  { emoji: '🧹', title: 'Facility Mgmt', sub: 'Housekeeping' },
+  { emoji: '🌿', title: 'Landscaping', sub: 'Green care' },
+  { emoji: '🖥️', title: 'IT Infra', sub: 'Servers' },
+  { emoji: '🚗', title: 'Fleet', sub: 'Vehicles' },
 ];
+
+const valueFeatures = ['Service Schedule', 'Auto Invoicing', 'Digital Evidence', 'Acceptance & Tracking'];
+
+// =================================================================
+// SUB-COMPONENTS (cockpit card style)
+// =================================================================
+
+// ─── Section Pill Header ────────────────────────────────────────
+
+const SectionPill: React.FC<{
+  icon: React.ElementType;
+  label: string;
+  brandColor: string;
+  isDarkMode: boolean;
+}> = ({ icon: Icon, label, brandColor, isDarkMode }) => (
+  <div className="flex items-center gap-2 mb-3">
+    <div
+      className="p-1.5 rounded-lg"
+      style={{ backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.1) }}
+    >
+      <Icon className="w-3.5 h-3.5" style={{ color: brandColor }} />
+    </div>
+    <span
+      className="text-[11px] uppercase tracking-wider font-bold"
+      style={{ color: brandColor }}
+    >
+      {label}
+    </span>
+  </div>
+);
+
+// ─── Step Card (How it works) ───────────────────────────────────
+
+interface StepCardProps {
+  num: number;
+  accent: string;
+  iconBg: string;
+  Icon: React.ElementType;
+  title: string;
+  roles: Array<{ label: string; bg: string; color: string }>;
+  desc: string;
+  cta: string;
+  path: string;
+  isDarkMode: boolean;
+  brandColor: string;
+  cardBg: string;
+  cardBorder: string;
+  cardShadow: string;
+  textPrimary: string;
+  textSecondary: string;
+  isLast?: boolean;
+  onClick: () => void;
+}
+
+const StepCard: React.FC<StepCardProps> = ({
+  num, accent, iconBg, Icon, title, roles, desc, cta,
+  isDarkMode, brandColor, cardBg, cardBorder, cardShadow,
+  textPrimary, textSecondary, isLast, onClick,
+}) => (
+  <div
+    className="relative overflow-hidden rounded-xl border shadow-sm cursor-pointer transition-all hover:shadow-md"
+    style={{
+      backgroundColor: cardBg,
+      borderColor: cardBorder,
+      boxShadow: cardShadow,
+      marginBottom: isLast ? 0 : 10,
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = withOpacity(brandColor, 0.4); e.currentTarget.style.transform = 'translateX(2px)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = cardBorder; e.currentTarget.style.transform = 'translateX(0)'; }}
+    onClick={onClick}
+  >
+    {/* Left accent bar */}
+    <div
+      className="absolute top-0 left-0 bottom-0 w-[3px] rounded-l-xl"
+      style={{ backgroundColor: accent }}
+    />
+
+    <div className="p-4">
+      {/* Header row */}
+      <div className="flex items-center gap-2.5 mb-1.5">
+        <span
+          className="w-[22px] h-[22px] rounded-full text-[11px] font-bold text-white flex items-center justify-center shrink-0"
+          style={{ backgroundColor: accent }}
+        >
+          {num}
+        </span>
+        <div
+          className="w-[30px] h-[30px] rounded-lg flex items-center justify-center shrink-0"
+          style={{ backgroundColor: iconBg }}
+        >
+          <Icon className="w-[15px] h-[15px]" style={{ color: accent }} />
+        </div>
+        <h3 className="text-xs font-bold flex-1" style={{ color: textPrimary }}>
+          {title}
+        </h3>
+      </div>
+
+      {/* Role tags */}
+      <div className="flex gap-1 mb-1 pl-8">
+        {roles.map((role) => (
+          <span
+            key={role.label}
+            className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm"
+            style={{ backgroundColor: role.bg, color: role.color }}
+          >
+            {role.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Description */}
+      <p className="text-[11px] leading-snug pl-8 mb-1.5" style={{ color: textSecondary }}>
+        {desc}
+      </p>
+
+      {/* CTA */}
+      <span
+        className="inline-flex items-center gap-1 text-[11px] font-bold pl-8"
+        style={{ color: brandColor }}
+      >
+        {cta} <ArrowRight className="w-3 h-3" />
+      </span>
+    </div>
+  </div>
+);
+
+// ─── Equipment / Operations Tile ────────────────────────────────
+
+const EquipmentTile: React.FC<{
+  emoji: string;
+  title: string;
+  sub: string;
+  cardBg: string;
+  cardBorder: string;
+  cardShadow: string;
+  hoverBorder: string;
+  textPrimary: string;
+  textSecondary: string;
+  onClick: () => void;
+}> = ({ emoji, title, sub, cardBg, cardBorder, cardShadow, hoverBorder, textPrimary, textSecondary, onClick }) => (
+  <div
+    className="rounded-xl border shadow-sm py-2.5 px-1.5 text-center cursor-pointer transition-all"
+    style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = hoverBorder; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = cardBorder; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = cardShadow; }}
+    onClick={onClick}
+  >
+    <span className="text-[26px] block mb-0.5">{emoji}</span>
+    <h4 className="text-[10px] font-bold leading-tight" style={{ color: textPrimary }}>{title}</h4>
+    <p className="text-[9px]" style={{ color: textSecondary }}>{sub}</p>
+  </div>
+);
+
+// =================================================================
+// MAIN PAGE COMPONENT
+// =================================================================
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -42,241 +214,337 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const handleWhatsAppProfileClick = () => {
-    navigate('/settings/configure/customer-channels/groups');
-  };
+  // ─── Theme palette (cockpit-style) ───────────────────────────
+  const brandColor = colors.brand.primary;
+  const brandSecondary = colors.brand.secondary;
+  const brandTertiary = colors.brand.tertiary;
+  const success = colors.semantic.success;
+  const warning = colors.semantic.warning;
+  const info = colors.semantic.info;
+
+  const cardBg = colors.utility.secondaryBackground;
+  const pageBg = colors.utility.primaryBackground;
+  const textPrimary = colors.utility.primaryText;
+  const textSecondary = colors.utility.secondaryText;
+  const cardBorder = withOpacity(textPrimary, 0.08);
+  const cardShadow = isDarkMode ? '0 2px 8px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.04)';
+  const hoverBorder = withOpacity(brandColor, 0.4);
+
+  // ─── How it works steps ──────────────────────────────────────
+  const howItWorksSteps = [
+    {
+      num: 1, accent: brandColor,
+      iconBg: withOpacity(brandColor, isDarkMode ? 0.2 : 0.1),
+      Icon: LayoutGrid, title: 'Define Your Services',
+      roles: [
+        { label: 'Seller', bg: withOpacity(info, isDarkMode ? 0.2 : 0.1), color: info },
+        { label: 'Buyer', bg: withOpacity(brandTertiary, isDarkMode ? 0.2 : 0.1), color: brandTertiary },
+      ],
+      desc: 'Build a catalog with pricing, SLAs & evidence policies. Both sides see the same commitments.',
+      cta: 'Build Catalog', path: '/catalog-studio',
+    },
+    {
+      num: 2, accent: warning,
+      iconBg: withOpacity(warning, isDarkMode ? 0.2 : 0.1),
+      Icon: FileText, title: 'Create Digital Contract',
+      roles: [
+        { label: 'Sends', bg: withOpacity(info, isDarkMode ? 0.2 : 0.1), color: info },
+        { label: 'Accepts', bg: withOpacity(brandTertiary, isDarkMode ? 0.2 : 0.1), color: brandTertiary },
+      ],
+      desc: 'Lock service commitments into a contract. Billing, schedules & deliverables — agreed digitally.',
+      cta: 'Create Contract', path: '/contracts',
+    },
+    {
+      num: 3, accent: success,
+      iconBg: withOpacity(success, isDarkMode ? 0.2 : 0.1),
+      Icon: Gauge, title: 'Operate & Track',
+      roles: [
+        { label: 'Revenue', bg: withOpacity(info, isDarkMode ? 0.2 : 0.1), color: info },
+        { label: 'Expenses', bg: withOpacity(brandTertiary, isDarkMode ? 0.2 : 0.1), color: brandTertiary },
+      ],
+      desc: 'One cockpit for both sides. Events, invoices, payments & evidence — tied to the contract.',
+      cta: 'Open Cockpit', path: '/ops/cockpit',
+    },
+  ];
+
+  // ─── Quick actions ───────────────────────────────────────────
+  const quickActions = [
+    { title: 'Add Contacts', desc: 'Customers or vendors', path: '/contacts', accent: info, Icon: UserPlus },
+    { title: 'Business Profile', desc: 'Brand & preferences', path: '/settings/business-profile', accent: warning, Icon: Building2 },
+    { title: 'Ops Cockpit', desc: 'Track operations', path: '/ops/cockpit', accent: success, Icon: Gauge },
+    { title: 'Templates', desc: 'Reuse contracts', path: '/service-contracts/templates', accent: brandTertiary, Icon: ClipboardList },
+  ];
+
+  // ─── Value strip (dark-mode aware) ───────────────────────────
+  const valueStripBg = isDarkMode
+    ? cardBg
+    : 'linear-gradient(135deg, #0f172a, #1e293b 60%, #334155)';
+  const valueStripText = isDarkMode ? textPrimary : '#ffffff';
+  const valueStripSub = isDarkMode ? textSecondary : '#94a3b8';
+  const valueCheckLabel = isDarkMode ? textSecondary : '#cbd5e1';
 
   return (
     <div
-      className="relative min-h-[calc(100vh-120px)] overflow-hidden"
-      style={{ backgroundColor: colors.utility.primaryBackground }}
+      className="min-h-screen p-6 transition-colors overflow-x-hidden"
+      style={{ backgroundColor: pageBg, maxWidth: '100vw', overflowX: 'hidden' }}
     >
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.06; }
-          25% { transform: translateY(-15px) rotate(3deg); opacity: 0.1; }
-          50% { transform: translateY(-8px) rotate(-2deg); opacity: 0.08; }
-          75% { transform: translateY(-20px) rotate(2deg); opacity: 0.12; }
-        }
-        @keyframes slideUp {
-          0% { transform: translateY(30px); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 20px rgba(var(--glow-color), 0.3); }
-          50% { box-shadow: 0 0 40px rgba(var(--glow-color), 0.5); }
-        }
-        @keyframes bot-bounce {
-          0%, 100% { transform: translateY(0) scale(1); }
-          50% { transform: translateY(-10px) scale(1.05); }
-        }
-        .animate-float {
-          animation: float var(--duration, 20s) ease-in-out infinite;
-          animation-delay: var(--delay, 0s);
-        }
-        .animate-slide-up {
-          animation: slideUp 0.6s ease-out forwards;
-        }
-        .animate-slide-up-delay-1 {
-          animation: slideUp 0.6s ease-out 0.1s forwards;
-          opacity: 0;
-        }
-        .animate-slide-up-delay-2 {
-          animation: slideUp 0.6s ease-out 0.2s forwards;
-          opacity: 0;
-        }
-        .animate-slide-up-delay-3 {
-          animation: slideUp 0.6s ease-out 0.3s forwards;
-          opacity: 0;
-        }
-        .animate-bot-bounce {
-          animation: bot-bounce 2s ease-in-out infinite;
-        }
-        .hover-lift {
-          transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        .hover-lift:hover {
-          transform: translateY(-5px);
-        }
-      `}</style>
-
-      {/* Floating Background Icons */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {floatingIcons.map((item, index) => (
+      {/* ═══════ HEADER (cockpit-style) ═══════ */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
           <div
-            key={index}
-            className="absolute animate-float"
-            style={{
-              top: item.top,
-              left: item.left,
-              right: item.right,
-              ['--delay' as any]: item.delay,
-              ['--duration' as any]: item.duration,
-            } as React.CSSProperties}
+            className="p-2 rounded-lg"
+            style={{ backgroundColor: withOpacity(brandColor, 0.1) }}
           >
-            <item.Icon
-              className="w-12 h-12 md:w-16 md:h-16"
-              style={{ color: colors.brand.primary, opacity: 0.08 }}
-            />
+            <Sparkles className="h-5 w-5" style={{ color: brandColor }} />
           </div>
-        ))}
-      </div>
-
-      {/* Main Content */}
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
-
-        {/* Welcome Section */}
-        <div className="text-center mb-12 animate-slide-up">
-          <div
-            className="inline-flex items-center px-4 py-2 rounded-full mb-6"
-            style={{
-              backgroundColor: `${colors.brand.primary}15`,
-              border: `1px solid ${colors.brand.primary}30`
-            }}
-          >
-            <Sparkles className="w-4 h-4 mr-2" style={{ color: colors.brand.primary }} />
-            <span className="text-sm font-medium" style={{ color: colors.brand.primary }}>
-              Welcome to ContractNest
-            </span>
+          <div>
+            <h1 className="text-xl font-bold" style={{ color: textPrimary }}>
+              {user?.first_name ? `Welcome, ${user.first_name}` : 'Dashboard'}
+            </h1>
+            <p className="text-xs" style={{ color: textSecondary }}>
+              Every service commitment deserves a digital contract
+            </p>
           </div>
-
-          <h1
-            className="text-3xl md:text-4xl font-bold mb-4"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Hello{user?.first_name ? `, ${user.first_name}` : ''}! 👋
-          </h1>
-
-          <p
-            className="text-lg max-w-2xl mx-auto"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Your workspace is ready. We're building something amazing for you.
-          </p>
         </div>
 
-        {/* WhatsApp AI Profile CTA Card */}
-        <div
-          className="relative mb-12 animate-slide-up-delay-1 hover-lift cursor-pointer"
-          onClick={handleWhatsAppProfileClick}
+        {/* Primary CTA */}
+        <button
+          onClick={() => navigate('/contracts')}
+          className="flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-white transition-all hover:scale-105"
+          style={{
+            backgroundColor: brandColor,
+            boxShadow: `0 10px 25px -5px ${withOpacity(brandColor, 0.4)}`,
+          }}
         >
+          <Plus className="h-3.5 w-3.5" />
+          New Contract
+        </button>
+      </div>
+
+      {/* ═══════ HERO TAGLINE BAR ═══════ */}
+      <div
+        className="rounded-xl border shadow-sm px-5 py-3 mb-6 flex items-center justify-between"
+        style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+      >
+        <div>
+          <h2 className="text-sm font-bold" style={{ color: textPrimary }}>
+            Vendor or buyer — one contract connects both sides
+          </h2>
+          <p className="text-[11px]" style={{ color: textSecondary }}>
+            Schedules, billing, evidence & compliance built in.
+          </p>
+        </div>
+        <div
+          className="px-2.5 py-1 rounded-md text-[10px] font-semibold"
+          style={{
+            backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.08),
+            color: brandColor,
+          }}
+        >
+          ContractNest
+        </div>
+      </div>
+
+      {/* ═══════ MAIN SPLIT LAYOUT ═══════ */}
+      <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: '320px 1fr' }}>
+
+        {/* LEFT COLUMN: How it works */}
+        <div
+          className="rounded-xl border shadow-sm p-4"
+          style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+        >
+          <SectionPill icon={Clock} label="How it works" brandColor={brandColor} isDarkMode={isDarkMode} />
+
+          {howItWorksSteps.map((step, i) => (
+            <StepCard
+              key={step.num}
+              {...step}
+              isDarkMode={isDarkMode}
+              brandColor={brandColor}
+              cardBg={pageBg}
+              cardBorder={cardBorder}
+              cardShadow={cardShadow}
+              textPrimary={textPrimary}
+              textSecondary={textSecondary}
+              isLast={i === howItWorksSteps.length - 1}
+              onClick={() => navigate(step.path)}
+            />
+          ))}
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div className="space-y-6" style={{ minWidth: 0 }}>
+
+          {/* Equipment Section */}
           <div
-            className="rounded-2xl p-8 overflow-hidden"
-            style={{
-              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`,
-              boxShadow: `0 20px 40px ${colors.brand.primary}30`
-            }}
+            className="rounded-xl border shadow-sm p-4"
+            style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
           >
-            {/* Decorative circles */}
-            <div
-              className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-20"
-              style={{ backgroundColor: '#ffffff' }}
-            />
-            <div
-              className="absolute -bottom-10 -left-10 w-32 h-32 rounded-full opacity-10"
-              style={{ backgroundColor: '#ffffff' }}
-            />
+            <SectionPill icon={Wrench} label="What are you maintaining today" brandColor={brandColor} isDarkMode={isDarkMode} />
+            <div className="grid grid-cols-4 gap-2.5">
+              {equipmentItems.map((item) => (
+                <EquipmentTile
+                  key={item.title}
+                  {...item}
+                  cardBg={pageBg}
+                  cardBorder={cardBorder}
+                  cardShadow={cardShadow}
+                  hoverBorder={hoverBorder}
+                  textPrimary={textPrimary}
+                  textSecondary={textSecondary}
+                  onClick={() => navigate('/contracts')}
+                />
+              ))}
+            </div>
+          </div>
 
-            <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div
-                  className="w-20 h-20 rounded-2xl flex items-center justify-center animate-bot-bounce"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                >
-                  <Bot className="w-10 h-10 text-white" />
-                </div>
-                <div className="text-center md:text-left">
-                  <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
-                    Create Your WhatsApp AI Profile
-                  </h2>
-                  <p className="text-white/80 text-sm md:text-base max-w-md">
-                    If you're here from a BBB group, create your profile to be discoverable via WhatsApp Bot
-                  </p>
-                </div>
-              </div>
-
-              <button
-                className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all hover:scale-105"
+          {/* Operations & Industry Section */}
+          <div
+            className="rounded-xl border shadow-sm p-4"
+            style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+          >
+            <SectionPill icon={Building2} label="Operations & Industry" brandColor={brandColor} isDarkMode={isDarkMode} />
+            <div className="grid grid-cols-4 gap-2.5">
+              {operationsItems.map((item) => (
+                <EquipmentTile
+                  key={item.title}
+                  {...item}
+                  cardBg={pageBg}
+                  cardBorder={cardBorder}
+                  cardShadow={cardShadow}
+                  hoverBorder={hoverBorder}
+                  textPrimary={textPrimary}
+                  textSecondary={textSecondary}
+                  onClick={() => navigate('/contracts')}
+                />
+              ))}
+              {/* +Any card */}
+              <div
+                className="rounded-xl py-2.5 px-1.5 text-center cursor-pointer flex flex-col items-center justify-center transition-all"
                 style={{
-                  backgroundColor: '#ffffff',
-                  color: colors.brand.primary
+                  backgroundColor: withOpacity(brandColor, isDarkMode ? 0.08 : 0.04),
+                  border: `1.5px dashed ${withOpacity(brandColor, 0.3)}`,
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = withOpacity(brandColor, 0.6); e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = withOpacity(brandColor, 0.3); e.currentTarget.style.transform = 'translateY(0)'; }}
+                onClick={() => navigate('/contracts')}
               >
-                <MessageCircle className="w-5 h-5" />
-                <span>Get Started</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <div
+                  className="w-[22px] h-[22px] rounded-full flex items-center justify-center mb-0.5"
+                  style={{ backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.12) }}
+                >
+                  <Plus className="w-[13px] h-[13px]" style={{ color: brandColor }} />
+                </div>
+                <h4 className="text-[10px] font-bold" style={{ color: brandColor }}>Any</h4>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Coming Soon Section */}
-        <div className="animate-slide-up-delay-2">
-          <div className="flex items-center justify-center gap-3 mb-8">
-            <Clock className="w-5 h-5" style={{ color: colors.brand.primary }} />
-            <h2
-              className="text-xl font-semibold"
-              style={{ color: colors.utility.primaryText }}
-            >
-              Coming Soon
-            </h2>
+      {/* ═══════ VALUE STRIP ═══════ */}
+      <div
+        className="rounded-xl border shadow-sm px-5 py-4 mb-6 relative overflow-hidden"
+        style={{
+          background: valueStripBg,
+          borderColor: isDarkMode ? cardBorder : 'transparent',
+          boxShadow: cardShadow,
+        }}
+      >
+        <div
+          className="absolute -top-4 -right-4 w-[90px] h-[90px] rounded-full"
+          style={{ backgroundColor: withOpacity(brandColor, 0.1) }}
+        />
+        <div className="relative z-10 flex items-center gap-4 flex-wrap">
+          <div className="min-w-[180px]">
+            <h3 className="text-[13px] font-bold" style={{ color: valueStripText }}>
+              Every contract includes
+            </h3>
+            <p className="text-[10px]" style={{ color: valueStripSub }}>
+              Service commitments both sides trust
+            </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {comingSoonFeatures.map((feature, index) => (
-              <div
-                key={index}
-                className="p-6 rounded-xl border transition-all hover-lift"
-                style={{
-                  backgroundColor: colors.utility.secondaryBackground,
-                  borderColor: `${colors.utility.primaryText}10`
-                }}
-              >
+          <div className="flex gap-4 flex-wrap flex-1">
+            {valueFeatures.map((feat) => (
+              <div key={feat} className="flex items-center gap-1.5">
                 <div
-                  className="w-12 h-12 rounded-lg flex items-center justify-center mb-4"
-                  style={{ backgroundColor: `${colors.brand.primary}10` }}
+                  className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                  style={{ backgroundColor: withOpacity(success, 0.15) }}
                 >
-                  <feature.icon
-                    className="w-6 h-6"
-                    style={{ color: colors.brand.primary }}
-                  />
+                  <Check className="w-[9px] h-[9px]" style={{ color: success }} />
                 </div>
-                <h3
-                  className="font-semibold mb-2"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  {feature.title}
-                </h3>
-                <p
-                  className="text-sm"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  {feature.description}
-                </p>
+                <span className="text-[11px] font-medium" style={{ color: valueCheckLabel }}>{feat}</span>
               </div>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Bottom Message */}
-        <div className="text-center mt-12 animate-slide-up-delay-3">
+      {/* ═══════ QUICK ACTIONS ═══════ */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
           <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full"
-            style={{
-              backgroundColor: `${colors.semantic.info}10`,
-              border: `1px solid ${colors.semantic.info}20`
-            }}
+            className="p-1.5 rounded-lg"
+            style={{ backgroundColor: withOpacity(brandColor, isDarkMode ? 0.2 : 0.1) }}
           >
-            <Rocket className="w-4 h-4" style={{ color: colors.semantic.info }} />
-            <span
-              className="text-sm"
-              style={{ color: colors.semantic.info }}
-            >
-              We're working hard to bring you more features. Stay tuned!
-            </span>
+            <Zap className="w-3.5 h-3.5" style={{ color: brandColor }} />
           </div>
+          <span className="text-[11px] uppercase tracking-wider font-bold" style={{ color: textSecondary }}>
+            Quick actions
+          </span>
         </div>
+        <div className="grid grid-cols-4 gap-3">
+          {quickActions.map((action) => (
+            <div
+              key={action.title}
+              className="rounded-xl border shadow-sm p-3 cursor-pointer transition-all"
+              style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = hoverBorder; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = cardBorder; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = cardShadow; }}
+              onClick={() => navigate(action.path)}
+            >
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center mb-1.5"
+                style={{ backgroundColor: withOpacity(action.accent, isDarkMode ? 0.2 : 0.1) }}
+              >
+                <action.Icon className="w-3.5 h-3.5" style={{ color: action.accent }} />
+              </div>
+              <h3 className="text-[11px] font-bold mb-0.5" style={{ color: textPrimary }}>{action.title}</h3>
+              <p className="text-[9px]" style={{ color: textSecondary }}>{action.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ═══════ WHATSAPP STRIP (footer-bar style) ═══════ */}
+      <div
+        className="rounded-xl border shadow-sm px-5 py-3 flex items-center justify-between transition-all"
+        style={{ backgroundColor: cardBg, borderColor: cardBorder, boxShadow: cardShadow }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = withOpacity(success, 0.4); }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = cardBorder; }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ backgroundColor: withOpacity(success, isDarkMode ? 0.2 : 0.1) }}
+          >
+            <MessageSquare className="w-3.5 h-3.5" style={{ color: success }} />
+          </div>
+          <h4 className="text-xs font-semibold" style={{ color: textPrimary }}>
+            Discoverable via WhatsApp AI Bot
+          </h4>
+        </div>
+        <button
+          onClick={() => navigate('/settings/configure/customer-channels/groups')}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+          style={{
+            backgroundColor: withOpacity(success, isDarkMode ? 0.2 : 0.08),
+            color: success,
+          }}
+        >
+          Configure
+          <ArrowRight className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );

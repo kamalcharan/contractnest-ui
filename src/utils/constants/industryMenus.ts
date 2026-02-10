@@ -129,7 +129,8 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: false
   },
   */
-  // Appointments — enabled for Cycle 2
+  // HIDDEN: Appointments — commented out
+  /*
   {
     id: 'appointments',
     label: 'Appointments',
@@ -137,6 +138,7 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/appointments',
     hasSubmenu: false
   },
+  */
   // Catalog Studio - all submenus visible
   {
     id: 'catalog-studio',
