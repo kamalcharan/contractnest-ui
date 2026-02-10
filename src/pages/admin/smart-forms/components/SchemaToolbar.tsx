@@ -82,9 +82,9 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
   const btnBase: React.CSSProperties = {
     padding: '0.375rem 0.625rem',
     borderRadius: '6px',
-    border: `1px solid ${colors.utility.borderLight}`,
+    border: `1px solid ${colors.utility.secondaryText + '20'}`,
     backgroundColor: colors.utility.secondaryBackground,
-    color: colors.utility.textPrimary,
+    color: colors.utility.primaryText,
     cursor: 'pointer',
     fontSize: '0.75rem',
     fontWeight: 500,
@@ -105,7 +105,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
       alignItems: 'center',
       gap: '0.5rem',
       padding: '0.5rem 0.75rem',
-      borderBottom: `1px solid ${colors.utility.borderLight}`,
+      borderBottom: `1px solid ${colors.utility.secondaryText + '20'}`,
       backgroundColor: colors.utility.secondaryBackground,
       flexWrap: 'wrap',
     }}>
@@ -127,7 +127,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
         Redo
       </button>
 
-      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.borderLight }} />
+      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.secondaryText + '20' }} />
 
       {/* Format */}
       <button onClick={handleFormat} style={btnBase} title="Format JSON (Ctrl+Shift+F)">
@@ -143,7 +143,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
         {state.isValidating ? 'Validating...' : 'Validate'}
       </button>
 
-      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.borderLight }} />
+      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.secondaryText + '20' }} />
 
       {/* Import/Export */}
       <button onClick={handleImport} style={btnBase}>Import</button>
@@ -168,7 +168,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
             left: 0,
             marginTop: '4px',
             backgroundColor: colors.utility.secondaryBackground,
-            border: `1px solid ${colors.utility.borderLight}`,
+            border: `1px solid ${colors.utility.secondaryText + '20'}`,
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             zIndex: 100,
@@ -185,7 +185,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
                   padding: '0.5rem 0.75rem',
                   border: 'none',
                   backgroundColor: 'transparent',
-                  color: colors.utility.textPrimary,
+                  color: colors.utility.primaryText,
                   cursor: 'pointer',
                   textAlign: 'left',
                   borderRadius: '6px',
@@ -195,7 +195,7 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
                 <div style={{ fontWeight: 500 }}>{s.label}</div>
-                <div style={{ fontSize: '0.6875rem', color: colors.utility.textSecondary, marginTop: '2px' }}>
+                <div style={{ fontSize: '0.6875rem', color: colors.utility.secondaryText, marginTop: '2px' }}>
                   {s.description}
                 </div>
               </button>
@@ -209,27 +209,27 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
 
       {/* Status indicators */}
       {state.parseError && (
-        <span style={{ fontSize: '0.6875rem', color: '#EF4444', fontWeight: 500 }}>
+        <span style={{ fontSize: '0.6875rem', color: colors.semantic.error, fontWeight: 500 }}>
           JSON Error
         </span>
       )}
       {state.validationErrors.length > 0 && !state.parseError && (
-        <span style={{ fontSize: '0.6875rem', color: '#F59E0B', fontWeight: 500 }}>
+        <span style={{ fontSize: '0.6875rem', color: colors.semantic.warning, fontWeight: 500 }}>
           {state.validationErrors.length} issue{state.validationErrors.length !== 1 ? 's' : ''}
         </span>
       )}
       {state.isDirty && !state.parseError && (
-        <span style={{ fontSize: '0.6875rem', color: colors.utility.textSecondary }}>
+        <span style={{ fontSize: '0.6875rem', color: colors.utility.secondaryText }}>
           Unsaved
         </span>
       )}
       {state.lastSavedAt && !state.isDirty && (
-        <span style={{ fontSize: '0.6875rem', color: '#10B981' }}>
+        <span style={{ fontSize: '0.6875rem', color: colors.semantic.success }}>
           Saved
         </span>
       )}
 
-      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.borderLight }} />
+      <div style={{ width: '1px', height: '20px', backgroundColor: colors.utility.secondaryText + '20' }} />
 
       {/* Save */}
       <button
@@ -237,9 +237,9 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
         disabled={state.isSaving || !!state.parseError || !isDraft}
         style={{
           ...btnBase,
-          backgroundColor: (state.isSaving || !!state.parseError || !isDraft) ? undefined : '#3B82F6',
+          backgroundColor: (state.isSaving || !!state.parseError || !isDraft) ? undefined : colors.brand.primary,
           color: (state.isSaving || !!state.parseError || !isDraft) ? undefined : '#fff',
-          border: (state.isSaving || !!state.parseError || !isDraft) ? undefined : '1px solid #3B82F6',
+          border: (state.isSaving || !!state.parseError || !isDraft) ? undefined : `1px solid ${colors.brand.primary}`,
           opacity: (state.isSaving || !!state.parseError || !isDraft) ? 0.4 : 1,
           cursor: (state.isSaving || !!state.parseError || !isDraft) ? 'not-allowed' : 'pointer',
         }}
@@ -254,9 +254,9 @@ const SchemaToolbar: React.FC<SchemaToolbarProps> = ({ onSave, onValidate, onSub
           disabled={state.isDirty || state.isSaving}
           style={{
             ...btnBase,
-            backgroundColor: (state.isDirty || state.isSaving) ? undefined : '#8B5CF6',
+            backgroundColor: (state.isDirty || state.isSaving) ? undefined : colors.brand.secondary,
             color: (state.isDirty || state.isSaving) ? undefined : '#fff',
-            border: (state.isDirty || state.isSaving) ? undefined : '1px solid #8B5CF6',
+            border: (state.isDirty || state.isSaving) ? undefined : `1px solid ${colors.brand.secondary}`,
             opacity: (state.isDirty || state.isSaving) ? 0.4 : 1,
             cursor: (state.isDirty || state.isSaving) ? 'not-allowed' : 'pointer',
           }}

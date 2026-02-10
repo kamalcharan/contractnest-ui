@@ -46,7 +46,7 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
       <div style={{
         width: '40px',
         backgroundColor: colors.utility.secondaryBackground,
-        borderRight: `1px solid ${colors.utility.borderLight}`,
+        borderRight: `1px solid ${colors.utility.secondaryText + '20'}`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -60,7 +60,7 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
             border: 'none',
             cursor: 'pointer',
             fontSize: '1.25rem',
-            color: colors.utility.textSecondary,
+            color: colors.utility.secondaryText,
             padding: '0.25rem',
           }}
         >
@@ -75,7 +75,7 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
       width: '200px',
       flexShrink: 0,
       backgroundColor: colors.utility.secondaryBackground,
-      borderRight: `1px solid ${colors.utility.borderLight}`,
+      borderRight: `1px solid ${colors.utility.secondaryText + '20'}`,
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
@@ -83,12 +83,12 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
       {/* Header */}
       <div style={{
         padding: '0.75rem',
-        borderBottom: `1px solid ${colors.utility.borderLight}`,
+        borderBottom: `1px solid ${colors.utility.secondaryText + '20'}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
       }}>
-        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: colors.utility.textPrimary }}>
+        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: colors.utility.primaryText }}>
           Field Palette
         </span>
         <button
@@ -99,7 +99,7 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
             border: 'none',
             cursor: 'pointer',
             fontSize: '1rem',
-            color: colors.utility.textSecondary,
+            color: colors.utility.secondaryText,
             padding: '0.125rem 0.25rem',
           }}
         >
@@ -117,9 +117,9 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
             padding: '0.5rem',
             marginBottom: '0.75rem',
             borderRadius: '6px',
-            border: `1px dashed ${colors.utility.borderLight}`,
+            border: `1px dashed ${colors.utility.secondaryText + '20'}`,
             backgroundColor: 'transparent',
-            color: colors.utility.textSecondary,
+            color: colors.utility.secondaryText,
             cursor: 'pointer',
             fontSize: '0.75rem',
             fontWeight: 500,
@@ -143,7 +143,7 @@ const FieldPalette: React.FC<FieldPaletteProps> = ({ collapsed = false, onToggle
                   borderRadius: '4px',
                   border: 'none',
                   backgroundColor: 'transparent',
-                  color: colors.utility.textSecondary,
+                  color: colors.utility.secondaryText,
                   cursor: 'pointer',
                   fontSize: '0.6875rem',
                   fontWeight: 600,
@@ -198,12 +198,12 @@ const DraggableFieldItem: React.FC<DraggableFieldItemProps> = ({ fieldDef, color
   const style: React.CSSProperties = {
     padding: '0.375rem 0.5rem',
     borderRadius: '6px',
-    border: `1px solid ${colors.utility.borderLight}`,
+    border: `1px solid ${colors.utility.secondaryText + '20'}`,
     backgroundColor: isDragging ? colors.utility.primaryBackground : 'transparent',
     cursor: isDragging ? 'grabbing' : 'grab',
     fontSize: '0.75rem',
     fontWeight: 500,
-    color: colors.utility.textPrimary,
+    color: colors.utility.primaryText,
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',

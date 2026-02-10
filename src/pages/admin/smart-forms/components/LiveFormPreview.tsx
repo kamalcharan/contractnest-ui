@@ -1,5 +1,6 @@
 // src/pages/admin/smart-forms/components/LiveFormPreview.tsx
 // Renders a live preview of the form from the current schema JSON
+// FIXED: uses correct theme property names (primaryText, secondaryText, etc.)
 
 import React from 'react';
 import { useTheme } from '../../../../contexts/ThemeContext';
@@ -18,10 +19,11 @@ const LiveFormPreview: React.FC = () => {
         <div style={{
           padding: '1rem',
           borderRadius: '8px',
-          backgroundColor: '#FEE2E2',
-          color: '#DC2626',
+          backgroundColor: colors.semantic.error + '10',
+          color: colors.semantic.error,
           fontSize: '0.8125rem',
           fontFamily: 'monospace',
+          border: `1px solid ${colors.semantic.error}20`,
         }}>
           <strong>JSON Parse Error</strong>
           <div style={{ marginTop: '0.5rem' }}>{parseError}</div>
@@ -38,7 +40,7 @@ const LiveFormPreview: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: colors.utility.textSecondary,
+        color: colors.utility.secondaryText,
         fontSize: '0.875rem',
       }}>
         Start editing the schema to see a live preview
@@ -58,10 +60,11 @@ const LiveFormPreview: React.FC = () => {
         <div style={{
           padding: '0.75rem',
           borderRadius: '8px',
-          backgroundColor: '#FEF3C7',
-          color: '#92400E',
+          backgroundColor: colors.semantic.warning + '10',
+          color: colors.semantic.warning,
           fontSize: '0.75rem',
           marginBottom: '1rem',
+          border: `1px solid ${colors.semantic.warning}20`,
         }}>
           <strong>Validation Issues ({validationErrors.length})</strong>
           <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.25rem' }}>
@@ -78,20 +81,20 @@ const LiveFormPreview: React.FC = () => {
       {/* Form preview card */}
       <div style={{
         borderRadius: '12px',
-        border: `1px solid ${colors.utility.borderLight}`,
+        border: `1px solid ${colors.utility.secondaryText}20`,
         backgroundColor: colors.utility.secondaryBackground,
         overflow: 'hidden',
       }}>
         {/* Form header */}
         <div style={{
           padding: '1.25rem 1.5rem',
-          borderBottom: `1px solid ${colors.utility.borderLight}`,
+          borderBottom: `1px solid ${colors.utility.secondaryText}20`,
         }}>
           <h2 style={{
             margin: 0,
             fontSize: '1.25rem',
             fontWeight: 700,
-            color: colors.utility.textPrimary,
+            color: colors.utility.primaryText,
           }}>
             {schema.title || 'Untitled Form'}
           </h2>
@@ -99,7 +102,7 @@ const LiveFormPreview: React.FC = () => {
             <p style={{
               margin: '0.375rem 0 0',
               fontSize: '0.8125rem',
-              color: colors.utility.textSecondary,
+              color: colors.utility.secondaryText,
             }}>
               {schema.description}
             </p>
@@ -122,7 +125,7 @@ const LiveFormPreview: React.FC = () => {
           <div style={{
             padding: '2rem',
             textAlign: 'center',
-            color: colors.utility.textSecondary,
+            color: colors.utility.secondaryText,
             fontSize: '0.8125rem',
           }}>
             No sections defined. Add a section in the JSON editor or drag from the palette.
@@ -146,13 +149,13 @@ const SectionPreview: React.FC<SectionPreviewProps> = ({ section, colors, isLast
   return (
     <div style={{
       padding: '1.25rem 1.5rem',
-      borderBottom: isLast ? 'none' : `1px solid ${colors.utility.borderLight}`,
+      borderBottom: isLast ? 'none' : `1px solid ${colors.utility.secondaryText}20`,
     }}>
       <h3 style={{
         margin: '0 0 0.25rem',
         fontSize: '1rem',
         fontWeight: 600,
-        color: colors.utility.textPrimary,
+        color: colors.utility.primaryText,
       }}>
         {section.title || 'Untitled Section'}
       </h3>
@@ -160,7 +163,7 @@ const SectionPreview: React.FC<SectionPreviewProps> = ({ section, colors, isLast
         <p style={{
           margin: '0 0 1rem',
           fontSize: '0.75rem',
-          color: colors.utility.textSecondary,
+          color: colors.utility.secondaryText,
         }}>
           {section.description}
         </p>
@@ -173,9 +176,9 @@ const SectionPreview: React.FC<SectionPreviewProps> = ({ section, colors, isLast
           <div style={{
             padding: '1rem',
             borderRadius: '6px',
-            border: `1px dashed ${colors.utility.borderLight}`,
+            border: `1px dashed ${colors.utility.secondaryText}30`,
             textAlign: 'center',
-            color: colors.utility.textSecondary,
+            color: colors.utility.secondaryText,
             fontSize: '0.75rem',
           }}>
             No fields in this section
@@ -198,9 +201,9 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
     width: '100%',
     padding: '0.5rem 0.75rem',
     borderRadius: '6px',
-    border: `1px solid ${colors.utility.borderLight}`,
+    border: `1px solid ${colors.utility.secondaryText}20`,
     backgroundColor: colors.utility.primaryBackground,
-    color: colors.utility.textPrimary,
+    color: colors.utility.primaryText,
     fontSize: '0.8125rem',
     boxSizing: 'border-box',
   };
@@ -209,7 +212,7 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
     display: 'block',
     fontSize: '0.8125rem',
     fontWeight: 500,
-    color: colors.utility.textPrimary,
+    color: colors.utility.primaryText,
     marginBottom: '0.375rem',
   };
 
@@ -218,7 +221,7 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
     const level = (field.level as number) || 3;
     const fontSize = level <= 2 ? '1.25rem' : level === 3 ? '1.1rem' : '1rem';
     return (
-      <div style={{ fontSize, fontWeight: 600, color: colors.utility.textPrimary }}>
+      <div style={{ fontSize, fontWeight: 600, color: colors.utility.primaryText }}>
         {(field.text as string) || field.label}
       </div>
     );
@@ -226,14 +229,14 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
 
   if (field.type === 'paragraph') {
     return (
-      <p style={{ margin: 0, fontSize: '0.8125rem', color: colors.utility.textSecondary }}>
+      <p style={{ margin: 0, fontSize: '0.8125rem', color: colors.utility.secondaryText }}>
         {(field.text as string) || field.label}
       </p>
     );
   }
 
   if (field.type === 'divider') {
-    return <hr style={{ border: 'none', borderTop: `1px solid ${colors.utility.borderLight}`, margin: '0.5rem 0' }} />;
+    return <hr style={{ border: 'none', borderTop: `1px solid ${colors.utility.secondaryText}20`, margin: '0.5rem 0' }} />;
   }
 
   // Checkbox
@@ -241,7 +244,7 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
     return (
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'default' }}>
         <input type="checkbox" disabled checked={!!field.default_checked} style={{ width: 16, height: 16 }} />
-        <span style={{ fontSize: '0.8125rem', color: colors.utility.textPrimary }}>
+        <span style={{ fontSize: '0.8125rem', color: colors.utility.primaryText }}>
           {field.label}{field.required ? ' *' : ''}
         </span>
       </label>
@@ -258,7 +261,7 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
           {options.map((opt, i) => (
             <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'default' }}>
               <input type="radio" disabled name={field.id} style={{ width: 16, height: 16 }} />
-              <span style={{ fontSize: '0.8125rem', color: colors.utility.textPrimary }}>{opt.label}</span>
+              <span style={{ fontSize: '0.8125rem', color: colors.utility.primaryText }}>{opt.label}</span>
             </label>
           ))}
         </div>
@@ -306,8 +309,8 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
           ...inputStyle,
           padding: '1rem',
           textAlign: 'center',
-          border: `1px dashed ${colors.utility.borderLight}`,
-          color: colors.utility.textSecondary,
+          border: `1px dashed ${colors.utility.secondaryText}30`,
+          color: colors.utility.secondaryText,
           fontSize: '0.75rem',
         }}>
           Click or drag file to upload
