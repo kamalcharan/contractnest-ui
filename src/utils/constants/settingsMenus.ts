@@ -85,6 +85,16 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'List',
     adminOnly: false
   },
+  {
+    id: 'smart-forms',
+    settings_type: 'Smart Forms',
+    parent_type: GROUP_LIST_OF_VALUE,
+    description_short: 'Configure Smart Forms',
+    description_long: 'Select and manage dynamic form templates available to your team for service events',
+    route_path: '/settings/configure/smart-forms',
+    card_icon_name: 'FileText',
+    adminOnly: false
+  },
 
   // Integrations
   {

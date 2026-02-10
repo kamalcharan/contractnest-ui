@@ -221,6 +221,9 @@ import WorkerHealthPage from './pages/admin/jtd/WorkerHealthPage';
 import SmartFormsAdminPage from './pages/admin/smart-forms/SmartFormsAdminPage';
 import FormEditorPage from './pages/admin/smart-forms/FormEditorPage';
 
+// Tenant - Smart Forms Selection (Cycle 3)
+import SmartFormsSelectionPage from './pages/settings/smart-forms/SmartFormsSelectionPage';
+
 
 // Temporary API test
 const testAPIConnection = () => {
@@ -574,6 +577,7 @@ const AppContent: React.FC = () => {
             <Route path="configure" element={<SettingsPage />} />
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
+            <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
 
             {/* Team Management Routes */}
             <Route path="users" element={<UsersPage />} />

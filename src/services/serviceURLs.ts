@@ -53,6 +53,13 @@ export type SmartFormsFilters = {
   search?: string;
 };
 
+// Smart Forms submission filter types (Cycle 3 — tenant-facing)
+export type SmartFormSubmissionFilters = {
+  event_id?: string;
+  contract_id?: string;
+  template_id?: string;
+};
+
 export const API_ENDPOINTS = {
   // =================================================================
   // ONBOARDING ENDPOINTS - PRESERVED
@@ -1159,6 +1166,39 @@ export const API_ENDPOINTS = {
       const queryString = params.toString();
       return queryString ? `/api/sequences/configs?${queryString}` : '/api/sequences/configs';
     }
+  },
+
+  // =================================================================
+  // SMART FORMS — Tenant-facing Selections + Submissions (Cycle 3)
+  // =================================================================
+  SMART_FORMS: {
+    // Convenience: admin template endpoints (same as ADMIN.SMART_FORMS)
+    ADMIN: {
+      LIST: '/api/admin/forms',
+      GET: (id: string) => `/api/admin/forms/${id}`,
+      CREATE: '/api/admin/forms',
+      UPDATE: (id: string) => `/api/admin/forms/${id}`,
+    },
+    // Tenant form selections (bookmarks)
+    SELECTIONS: {
+      LIST: '/api/forms/selections',
+      TOGGLE: '/api/forms/selections',
+    },
+    // Tenant form submissions
+    SUBMISSIONS: {
+      LIST: '/api/forms/submissions',
+      GET: (id: string) => `/api/forms/submissions/${id}`,
+      CREATE: '/api/forms/submissions',
+      UPDATE: (id: string) => `/api/forms/submissions/${id}`,
+      LIST_WITH_FILTERS: (filters: SmartFormSubmissionFilters = {}) => {
+        const params = new URLSearchParams();
+        if (filters.event_id) params.append('event_id', filters.event_id);
+        if (filters.contract_id) params.append('contract_id', filters.contract_id);
+        if (filters.template_id) params.append('template_id', filters.template_id);
+        const qs = params.toString();
+        return qs ? `/api/forms/submissions?${qs}` : '/api/forms/submissions';
+      },
+    },
   }
 };
 
