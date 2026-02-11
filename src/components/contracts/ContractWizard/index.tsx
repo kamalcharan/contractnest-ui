@@ -11,6 +11,7 @@ import { API_ENDPOINTS } from '@/services/serviceURLs';
 import FloatingActionIsland from './FloatingActionIsland';
 import PathSelectionStep, { ContractPath, WizardMode } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
+import NomenclatureStep from './steps/NomenclatureStep';
 import BuyerSelectionStep from './steps/BuyerSelectionStep';
 import AcceptanceMethodStep, { AcceptanceMethod } from './steps/AcceptanceMethodStep';
 import ContractDetailsStep, { ContractDetailsData } from './steps/ContractDetailsStep';
@@ -48,6 +49,9 @@ export interface ContractWizardState {
   // RFQ multi-vendor selection
   vendorIds: string[];
   vendorNames: string[];
+  // Nomenclature (optional contract type classification)
+  nomenclatureId: string | null;
+  nomenclatureName: string | null;
   // Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
   // Contract Details
@@ -89,7 +93,7 @@ interface ContractWizardProps {
 }
 
 // Step ID type for step-based routing
-type StepId = 'path' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'evidencePolicy' | 'events' | 'review';
+type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'evidencePolicy' | 'events' | 'review';
 
 interface StepConfig {
   id: StepId;
@@ -100,6 +104,7 @@ interface StepConfig {
 // Contract flow: 8 steps (full flow) — acceptance before counterparty
 const CONTRACT_STEPS: StepConfig[] = [
   { id: 'path', label: 'Choose Path', heading: { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' } },
+  { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this?', subtitle: 'Select the nomenclature that best describes this contract' } },
   { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
   { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
   { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
@@ -114,6 +119,7 @@ const CONTRACT_STEPS: StepConfig[] = [
 // RFQ flow: 5 steps (no acceptance, no billing cycle, no billing view)
 const RFQ_STEPS: StepConfig[] = [
   { id: 'path', label: 'Choose Path', heading: { title: 'What would you like to create?', subtitle: 'Choose your starting point' } },
+  { id: 'nomenclature', label: 'Request Type', heading: { title: 'What type of request is this?', subtitle: 'Select the nomenclature that best describes this RFQ' } },
   { id: 'counterparty', label: 'Select Vendors', heading: { title: 'Select Vendors for RFQ', subtitle: 'Choose one or more vendors to send this RFQ to' } },
   { id: 'details', label: 'Request Details', heading: { title: 'Request Details', subtitle: 'Define the basic information for your RFQ' } },
   { id: 'blocks', label: 'Define Services', heading: { title: 'Define Required Services', subtitle: 'Add the service blocks you need quotations for' } },
@@ -264,6 +270,9 @@ function mapWizardToRequest(
     path: state.path,
     template_id: state.templateId || undefined,
 
+    // Nomenclature (optional contract type classification)
+    nomenclature_id: state.nomenclatureId || undefined,
+
     // Buyer / counterparty (contact_id + classification)
     buyer_id: state.buyerId || undefined,
     contact_id: state.buyerId || undefined,
@@ -320,6 +329,9 @@ const createInitialWizardState = (): ContractWizardState => ({
   buyerName: '',
   vendorIds: [],
   vendorNames: [],
+  // Nomenclature
+  nomenclatureId: null,
+  nomenclatureName: null,
   // Acceptance
   acceptanceMethod: null,
   // Contract Details
@@ -468,6 +480,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     switch (currentStepId) {
       case 'path':
         return wizardState.path !== null;
+      case 'nomenclature':
+        return true; // Optional step — can always proceed
       case 'counterparty':
         return isRfqMode
           ? wizardState.vendorIds.length > 0
@@ -875,6 +889,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     [updateWizardState]
   );
 
+  // Nomenclature selection handler
+  const handleNomenclatureSelect = useCallback(
+    (id: string | null, displayName: string | null) => {
+      updateWizardState('nomenclatureId', id);
+      updateWizardState('nomenclatureName', displayName);
+    },
+    [updateWizardState]
+  );
+
   // Acceptance method selection handler
   const handleAcceptanceMethodSelect = useCallback(
     (method: AcceptanceMethod) => {
@@ -982,6 +1005,13 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             showModeSelection={contractType === 'vendor'}
             wizardMode={wizardState.wizardMode}
             onModeChange={handleWizardModeChange}
+          />
+        );
+      case 'nomenclature':
+        return (
+          <NomenclatureStep
+            selectedId={wizardState.nomenclatureId}
+            onSelect={handleNomenclatureSelect}
           />
         );
       case 'counterparty':
@@ -1145,6 +1175,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             selectedTaxRateIds={wizardState.selectedTaxRateIds}
             rfqMode={isRfqMode}
             vendorNames={wizardState.vendorNames}
+            nomenclatureName={wizardState.nomenclatureName}
           />
         );
       default:

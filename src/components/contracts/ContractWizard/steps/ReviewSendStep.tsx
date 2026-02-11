@@ -71,6 +71,8 @@ export interface ReviewSendStepProps {
   // RFQ mode
   rfqMode?: boolean;
   vendorNames?: string[];
+  // Nomenclature
+  nomenclatureName?: string | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -136,6 +138,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   selectedTaxRateIds,
   rfqMode = false,
   vendorNames = [],
+  nomenclatureName,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -999,7 +1002,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               {contractName || (rfqMode ? 'Untitled RFQ' : 'Untitled Contract')}
             </h1>
 
-            {/* Status + ref + date */}
+            {/* Status + nomenclature + ref + date */}
             <div className="flex items-center gap-3 mb-8">
               <span
                 className="text-[10px] px-2.5 py-1 rounded-full font-semibold uppercase"
@@ -1007,6 +1010,14 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               >
                 {contractStatus}
               </span>
+              {nomenclatureName && (
+                <span
+                  className="text-[10px] px-2.5 py-1 rounded-full font-semibold"
+                  style={{ backgroundColor: `${brandSecondary}12`, color: brandSecondary }}
+                >
+                  {nomenclatureName}
+                </span>
+              )}
               <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
                 Ref: #CN-XXXX
               </span>
