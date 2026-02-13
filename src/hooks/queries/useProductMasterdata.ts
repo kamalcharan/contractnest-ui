@@ -379,10 +379,13 @@ export const useTenantCategories = (isActive: boolean = true) => {
 // =================================================================
 
 export const useIndustries = (filters: IndustryFilters = {}) => {
+  // Default to limit=100 (backend max) to fetch all industries in a single call
+  // There are ~68 industries total (21 parents + 47 sub-segments)
+  const effectiveFilters = { limit: 100, ...filters };
   return useQuery({
-    queryKey: productMasterdataKeys.industries(filters),
+    queryKey: productMasterdataKeys.industries(effectiveFilters),
     queryFn: async (): Promise<IndustryResponse> => {
-      const url = buildIndustriesURL(filters);
+      const url = buildIndustriesURL(effectiveFilters);
       const response = await api.get(url);
       return response.data;
     },
@@ -393,10 +396,12 @@ export const useIndustries = (filters: IndustryFilters = {}) => {
 };
 
 export const useAllCategories = (filters: CategoryFilters = {}) => {
+  // Default to limit=100 (backend max) to fetch all categories in a single call
+  const effectiveFilters = { limit: 100, ...filters };
   return useQuery({
-    queryKey: productMasterdataKeys.allCategories(filters),
+    queryKey: productMasterdataKeys.allCategories(effectiveFilters),
     queryFn: async (): Promise<CategoryMapResponse> => {
-      const url = buildAllCategoriesURL(filters);
+      const url = buildAllCategoriesURL(effectiveFilters);
       const response = await api.get(url);
       return response.data;
     },

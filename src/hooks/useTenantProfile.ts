@@ -91,6 +91,14 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
           ...profileData,
           business_name: profileData.business_name || currentTenant.name || '',
         });
+
+        // In edit mode, auto-advance wizard to the last completed step
+        // so user sees their saved data instead of starting from scratch
+        if (profileData.business_type_id && profileData.industry_id) {
+          setCurrentStep('organization-details');
+        } else if (profileData.business_type_id) {
+          setCurrentStep('industry');
+        }
       } else {
         // No profile exists yet
         setProfile(null);

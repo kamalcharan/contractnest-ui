@@ -1,10 +1,11 @@
 // src/components/tenantprofile/IndustrySelector.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useIndustries } from '@/hooks/queries/useProductMasterdata';
 import { cn } from '@/lib/utils';
-import { Search, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, RefreshCw, AlertCircle, ArrowLeft, ChevronRight, Info } from 'lucide-react';
+import type { Industry } from '@/services/serviceURLs';
 
 interface IndustrySelectorProps {
   value: string;
@@ -20,24 +21,120 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
 
-  // Fetch industries from API
-  const { data: industriesResponse, isLoading, error, refetch } = useIndustries();
-  const industries = industriesResponse?.data || [];
+  // Single API call: fetch ALL industries (default limit=100 covers all ~68 industries)
+  const {
+    data: industriesResponse,
+    isLoading,
+    error,
+    refetch
+  } = useIndustries();
+  const allIndustries = industriesResponse?.data || [];
+
+  // Derive hierarchy client-side
+  const hasHierarchy = useMemo(
+    () => allIndustries.some((i) => i.level !== undefined && i.level !== null),
+    [allIndustries]
+  );
+
+  const parentIndustries = useMemo(
+    () =>
+      hasHierarchy
+        ? allIndustries.filter((i) => i.level === 0)
+        : allIndustries,
+    [allIndustries, hasHierarchy]
+  );
+
+  const getSubSegments = (parentId: string): Industry[] =>
+    allIndustries.filter((i) => i.parent_id === parentId);
+
+  // Track previous value so we can re-resolve when it changes (e.g. profile fetch completes)
+  const [lastResolvedValue, setLastResolvedValue] = useState<string>('');
+
+  // Resolve saved value to its parent (for sub-segment values)
+  // Runs on mount AND whenever `value` changes (handles async profile fetch)
+  useEffect(() => {
+    if (!value || allIndustries.length === 0) return;
+
+    // Skip if we already resolved this exact value
+    if (value === lastResolvedValue) return;
+
+    if (!hasHierarchy) {
+      // Flat mode — nothing to resolve
+      setLastResolvedValue(value);
+      return;
+    }
+
+    // Check if the saved value is a parent
+    const isParent = parentIndustries.find((p) => p.id === value);
+    if (isParent) {
+      setSelectedParentId(value);
+      setLastResolvedValue(value);
+      return;
+    }
+
+    // Saved value is a sub-segment — find its parent
+    const savedIndustry = allIndustries.find((i) => i.id === value);
+    if (savedIndustry?.parent_id) {
+      setSelectedParentId(savedIndustry.parent_id);
+    }
+
+    setLastResolvedValue(value);
+  }, [value, allIndustries, hasHierarchy, parentIndustries, lastResolvedValue]);
 
   // Get icon component from name
-  const getIconComponent = (iconName: string, isSelected: boolean) => {
+  const getIconComponent = (iconName: string | undefined, isSelected: boolean) => {
+    if (!iconName) {
+      const IconComponent = LucideIcons.Circle;
+      return <IconComponent size={24} style={{ color: isSelected ? colors.brand.primary : colors.utility.secondaryText }} />;
+    }
     const IconComponent = (LucideIcons as any)[iconName] || LucideIcons.Circle;
     const iconColor = isSelected ? colors.brand.primary : colors.utility.secondaryText;
-
     return <IconComponent size={24} style={{ color: iconColor }} />;
   };
 
-  // Filter industries based on search term
-  const filteredIndustries = industries.filter(industry =>
-    industry.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (industry.description && industry.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  // Determine which list to show
+  const showingSubSegments = hasHierarchy && selectedParentId !== null;
+  const subSegments = selectedParentId ? getSubSegments(selectedParentId) : [];
+  const currentList = showingSubSegments ? subSegments : parentIndustries;
+  const selectedParent = parentIndustries.find((p) => p.id === selectedParentId);
+
+  // Detect legacy selection: value is a parent ID, user needs to pick a sub-segment
+  const needsSubSegmentUpdate =
+    showingSubSegments && value === selectedParentId && subSegments.length > 0;
+
+  // Filter based on search term
+  const filteredList = currentList.filter(
+    (item) =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const handleCardClick = (industry: Industry) => {
+    if (disabled) return;
+
+    if (hasHierarchy && !showingSubSegments) {
+      // Check if this parent has sub-segments
+      const children = getSubSegments(industry.id);
+      if (children.length > 0) {
+        // Drill into sub-segments
+        setSelectedParentId(industry.id);
+        setSearchTerm('');
+        return;
+      }
+      // Parent with no children — select it directly
+      onChange(industry.id);
+    } else {
+      // Flat mode or sub-segment click — select it
+      onChange(industry.id);
+    }
+  };
+
+  const handleBack = () => {
+    setSelectedParentId(null);
+    setSearchTerm('');
+  };
 
   // Loading state
   if (isLoading) {
@@ -93,11 +190,86 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
     );
   }
 
+  // Find the currently selected industry in the full list
+  const selectedIndustry = value ? allIndustries.find((i) => i.id === value) : null;
+
   return (
     <div className="space-y-6">
+      {/* Always show current selection at the top */}
+      {value && !isLoading && (
+        <div
+          className="flex items-center space-x-2 px-3 py-2 rounded-md text-sm border"
+          style={
+            selectedIndustry
+              ? {
+                  backgroundColor: colors.brand.primary + '10',
+                  borderColor: colors.brand.primary + '30',
+                  color: colors.brand.primary
+                }
+              : {
+                  backgroundColor: '#F59E0B' + '10',
+                  borderColor: '#F59E0B' + '30',
+                  color: '#F59E0B'
+                }
+          }
+        >
+          {selectedIndustry ? (
+            <>
+              <LucideIcons.CheckCircle size={16} />
+              <span>Selected: <strong>{selectedIndustry.name}</strong></span>
+            </>
+          ) : (
+            <>
+              <AlertCircle size={16} />
+              <span>Previously saved industry not found in catalog. Please select a new one.</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Back button + breadcrumb when showing sub-segments */}
+      {showingSubSegments && (
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleBack}
+            disabled={disabled}
+            className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: colors.brand.primary + '10',
+              color: colors.brand.primary
+            }}
+          >
+            <ArrowLeft size={16} className="mr-1" />
+            Back
+          </button>
+          <span
+            className="text-sm"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {selectedParent?.name} — Select a sub-segment
+          </span>
+        </div>
+      )}
+
+      {/* Prompt to update selection when existing value is a parent */}
+      {needsSubSegmentUpdate && (
+        <div
+          className="flex items-start space-x-3 p-3 rounded-lg border"
+          style={{
+            backgroundColor: colors.brand.primary + '08',
+            borderColor: colors.brand.primary + '30'
+          }}
+        >
+          <Info size={18} className="mt-0.5 flex-shrink-0" style={{ color: colors.brand.primary }} />
+          <p className="text-sm" style={{ color: colors.utility.primaryText }}>
+            Your industry now has sub-segments. Please select one below to update your profile.
+          </p>
+        </div>
+      )}
+
       {/* Search input */}
       <div className="relative">
-        <div 
+        <div
           className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"
           style={{ color: colors.utility.secondaryText }}
         >
@@ -105,7 +277,7 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
         </div>
         <input
           type="search"
-          placeholder="Search industries..."
+          placeholder={showingSubSegments ? 'Search sub-segments...' : 'Search industries...'}
           className="pl-10 w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
           style={{
             borderColor: colors.utility.secondaryText + '40',
@@ -118,12 +290,14 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
           disabled={disabled}
         />
       </div>
-      
-      {/* Industry grid */}
+
+      {/* Industry / Sub-segment grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredIndustries.map((industry) => {
+        {filteredList.map((industry) => {
           const isSelected = value === industry.id;
-          
+          const isParentCard = hasHierarchy && !showingSubSegments;
+          const hasChildren = isParentCard && getSubSegments(industry.id).length > 0;
+
           return (
             <div
               key={industry.id}
@@ -136,7 +310,7 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
                 borderColor: isSelected ? colors.brand.primary : colors.utility.secondaryText + '20',
                 borderWidth: isSelected ? '2px' : '1px'
               }}
-              onClick={() => !disabled && onChange(industry.id)}
+              onClick={() => handleCardClick(industry)}
               onMouseEnter={(e) => {
                 if (!disabled && !isSelected) {
                   e.currentTarget.style.borderColor = colors.brand.primary + '60';
@@ -150,8 +324,9 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
                 }
               }}
             >
-              {isSelected && (
-                <div 
+              {/* Checkmark for selected item (not on parent cards that drill down) */}
+              {isSelected && !hasChildren && (
+                <div
                   className="absolute top-4 right-4 h-6 w-6 rounded-full flex items-center justify-center text-white transition-colors"
                   style={{
                     background: `linear-gradient(to bottom right, ${colors.brand.primary}, ${colors.brand.secondary})`
@@ -162,21 +337,31 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
                   </svg>
                 </div>
               )}
-              
+
+              {/* Chevron for parent cards with children (drill-in indicator) */}
+              {hasChildren && (
+                <div
+                  className="absolute top-4 right-4"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <ChevronRight size={18} />
+                </div>
+              )}
+
               <div className="flex items-start space-x-3">
-                <div 
+                <div
                   className="p-2 rounded-full transition-colors"
                   style={{
-                    backgroundColor: isSelected 
-                      ? colors.brand.primary + '10' 
+                    backgroundColor: isSelected
+                      ? colors.brand.primary + '10'
                       : colors.utility.secondaryText + '10'
                   }}
                 >
                   {getIconComponent(industry.icon, isSelected)}
                 </div>
-                
-                <div className="flex-1">
-                  <h3 
+
+                <div className="flex-1 pr-6">
+                  <h3
                     className="font-medium transition-colors"
                     style={{
                       color: isSelected ? colors.brand.primary : colors.utility.primaryText
@@ -185,7 +370,7 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
                     {industry.name}
                   </h3>
                   {industry.description && (
-                    <p 
+                    <p
                       className="text-sm mt-1 line-clamp-2 transition-colors"
                       style={{ color: colors.utility.secondaryText }}
                     >
@@ -198,20 +383,23 @@ const IndustrySelector: React.FC<IndustrySelectorProps> = ({
           );
         })}
       </div>
-      
-      {filteredIndustries.length === 0 && (
-        <div 
+
+      {/* Empty state */}
+      {filteredList.length === 0 && (
+        <div
           className="text-center p-6 border border-dashed rounded-lg transition-colors"
           style={{
             backgroundColor: colors.utility.secondaryBackground,
             borderColor: colors.utility.secondaryText + '30'
           }}
         >
-          <p 
+          <p
             className="transition-colors"
             style={{ color: colors.utility.secondaryText }}
           >
-            No industries match your search.
+            {showingSubSegments
+              ? 'No sub-segments found for this industry.'
+              : 'No industries match your search.'}
           </p>
         </div>
       )}

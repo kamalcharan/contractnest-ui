@@ -188,12 +188,14 @@ export const API_ENDPOINTS = {
       // Helper function to build industries URL with parameters
       LIST_WITH_PARAMS: (filters: IndustryFilters = {}) => {
         const params = new URLSearchParams();
-        
+
         if (filters.page) params.append('page', filters.page.toString());
         if (filters.limit) params.append('limit', filters.limit.toString());
         if (filters.search) params.append('search', filters.search);
         if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
-        
+        if (filters.level !== undefined) params.append('level', filters.level.toString());
+        if (filters.parent_id) params.append('parent_id', filters.parent_id);
+
         const queryString = params.toString();
         return queryString ? `/api/product-masterdata/industries?${queryString}` : '/api/product-masterdata/industries';
       }
@@ -1222,6 +1224,8 @@ export type IndustryFilters = {
   limit?: number;
   search?: string;
   is_active?: boolean;
+  level?: number;
+  parent_id?: string;
 };
 
 export type CategoryFilters = {
@@ -1300,6 +1304,10 @@ export type Industry = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  parent_id?: string | null;
+  level?: number;
+  segment_type?: string;
+  icon?: string;
 };
 
 // Category-Industry mapping interface
