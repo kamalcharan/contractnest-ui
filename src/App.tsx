@@ -134,6 +134,9 @@ import StorageSettingsPage from './pages/settings/storagesettings';
 // FIXED: Import the actual Resources page instead of placeholder
 import ResourcesPage from './pages/settings/Resources';
 
+// Equipment Registry (P1) — standalone page under Operations
+import EquipmentPage from './pages/equipment-registry';
+
 // Service Contracts - Templates
 import MyTemplatesPage from './pages/service-contracts/templates';
 import TemplatePreviewPage from './pages/service-contracts/templates/preview';
@@ -509,6 +512,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* Equipment Registry — standalone page under Operations */}
+          <Route
+            path="/equipment-registry"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<EquipmentPage />} />
           </Route>
 
           {/* Appointments — scaffold showing existing widget + placeholder */}
