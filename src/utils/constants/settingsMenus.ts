@@ -58,8 +58,18 @@ export const settingsMenuItems: SettingsItem[] = [
   parent_type: GROUP_TEAM,
   description_short: 'Manage resources',
   description_long: 'Configure team, equipment, and service resources',
-  route_path: '/settings/configure/resources', // ✅ Fixed route
-  card_icon_name: 'Users', // ✅ Better icon than Shield
+  route_path: '/settings/configure/resources',
+  card_icon_name: 'Users',
+  adminOnly: false
+},
+{
+  id: 'equipment-registry',
+  settings_type: 'Equipment Registry',
+  parent_type: GROUP_TEAM,
+  description_short: 'Client equipment',
+  description_long: 'Register and manage your client\'s equipment — MRI scanners, ventilators, and more',
+  route_path: '/settings/configure/equipment',
+  card_icon_name: 'Wrench',
   adminOnly: false
 },
 

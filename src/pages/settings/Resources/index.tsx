@@ -1,307 +1,458 @@
-// src/pages/settings/Resources/index.tsx
-// Main Resources management page - SCALE-OPTIMIZED VERSION
-// Updated: VaNiLoader + vaniToast
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, Plus, Check, Trash2, Search, PackagePlus, X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Button } from '@/components/ui/Button';
-import { vaniToast } from '@/components/common/toast';
-import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
-import { cn } from '@/lib/utils';
-import { analyticsService } from '@/services/analytics.service';
-import { captureException } from '@/utils/sentry';
+import { useResourceTemplatesBrowser } from '@/hooks/queries/useResourceTemplates';
+import { useResources, useCreateResource, useDeleteResource } from '@/hooks/queries/useResources';
 
-// Components
-import { ResourceTypesList, ResourcesPanel } from '@/components/Resources';
-import { NoResourceTypesEmptyState } from '@/components/Resources/EmptyStates';
+const TABS = ['All', 'Equipment', 'Entities'];
 
-// Hooks
-import { useResourceTypes } from '@/hooks/queries/useResources';
+type ViewMode = 'my-resources' | 'browse-catalog';
 
-// Types
-import { ResourceType } from '@/types/resources';
+// ─── helpers ────────────────────────────────────────────────
+const isEquipmentType = (typeId: string) => ['equipment', 'asset', 'consumable'].includes(typeId.toLowerCase());
+const isEntityType = (typeId: string) => ['team_staff', 'partner'].includes(typeId.toLowerCase());
 
-/**
- * Main Resources management page
- * Layout and structure follows LOV pattern
- */
+const filterByTab = <T extends { resource_type_id: string }>(items: T[], tab: string): T[] => {
+  if (tab === 'All') return items;
+  return items.filter(item => {
+    const t = (item.resource_type_id || '').toLowerCase();
+    if (tab === 'Equipment') return isEquipmentType(t);
+    if (tab === 'Entities') return isEntityType(t);
+    return true;
+  });
+};
+
+const filterBySearch = <T extends { name: string; description?: string | null }>(items: T[], q: string): T[] => {
+  if (!q.trim()) return items;
+  const lower = q.toLowerCase();
+  return items.filter(i => i.name.toLowerCase().includes(lower) || i.description?.toLowerCase().includes(lower));
+};
+
+// ─── tab count helpers ──────────────────────────────────────
+const countByTab = <T extends { resource_type_id: string }>(items: T[]) => ({
+  All: items.length,
+  Equipment: items.filter(i => isEquipmentType((i.resource_type_id || '').toLowerCase())).length,
+  Entities: items.filter(i => isEntityType((i.resource_type_id || '').toLowerCase())).length,
+});
+
+// ─── main component ────────────────────────────────────────
 const ResourcesPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
-
-  // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Local state
-  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>('my-resources');
+  const [activeTab, setActiveTab] = useState('All');
+  const [search, setSearch] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [localSaved, setLocalSaved] = useState<Set<string>>(new Set());
 
-  // Load resource types
-  const {
-    data: rawResourceTypes = [],
-    isLoading: typesLoading,
-    error: typesError,
-    refetch: refetchTypes
-  } = useResourceTypes();
+  // ── data hooks ──
+  const { data: savedResources, isLoading: loadingSaved, isError: errorSaved, error: savedError, refetch: refetchSaved } = useResources();
+  const { templates, isLoading: loadingTemplates, isError: errorTemplates, error: templatesError, invalidate: invalidateTemplates } = useResourceTemplatesBrowser({ limit: 100 });
+  const createResource = useCreateResource();
+  const deleteResource = useDeleteResource();
 
-  // Ensure resourceTypes is always an array
-  const resourceTypes = React.useMemo(() => {
-    console.log('RAW RESOURCE TYPES:', rawResourceTypes, typeof rawResourceTypes);
+  // ── derived data ──
+  const savedList = useMemo(() => savedResources || [], [savedResources]);
+  const savedCounts = useMemo(() => countByTab(savedList), [savedList]);
+  const templateCounts = useMemo(() => countByTab(templates), [templates]);
 
-    if (Array.isArray(rawResourceTypes)) {
-      console.log('resourceTypes is array with length:', rawResourceTypes.length);
-      return rawResourceTypes;
-    }
+  const filteredSaved = useMemo(
+    () => filterBySearch(filterByTab(savedList, activeTab), search),
+    [savedList, activeTab, search]
+  );
 
-    console.log('resourceTypes is not array, returning empty array');
-    return [];
-  }, [rawResourceTypes]);
+  const filteredTemplates = useMemo(
+    () => filterBySearch(filterByTab(templates, activeTab), search),
+    [templates, activeTab, search]
+  );
 
-  // Track page view
-  useEffect(() => {
+  const addedCount = useMemo(
+    () => templates.filter(t => t.already_added || localSaved.has(t.id)).length,
+    [templates, localSaved]
+  );
+
+  // ── handlers ──
+  const handleSave = async (template: typeof templates[0]) => {
+    if (savingId || template.already_added || localSaved.has(template.id)) return;
+    setSavingId(template.id);
     try {
-      analyticsService.trackPageView('settings/resources', 'Resources Management');
-    } catch (error) {
-      console.error('Analytics error:', error);
-    }
-  }, []);
-
-  // Initialize selected type from URL params or first available type
-  useEffect(() => {
-    const typeFromUrl = searchParams.get('type');
-
-    if (typeFromUrl && resourceTypes.some(type => type.id === typeFromUrl)) {
-      // Valid type from URL
-      setSelectedTypeId(typeFromUrl);
-    } else if (resourceTypes.length > 0 && !selectedTypeId) {
-      // Auto-select first type if none selected
-      const firstType = resourceTypes[0];
-      setSelectedTypeId(firstType.id);
-
-      // Update URL without triggering navigation
-      setSearchParams(prev => {
-        const newParams = new URLSearchParams(prev);
-        newParams.set('type', firstType.id);
-        return newParams;
+      await createResource.mutateAsync({
+        data: {
+          resource_type_id: template.resource_type_id,
+          name: template.name,
+          display_name: template.name,
+          description: template.description || undefined,
+        },
       });
+      setLocalSaved(prev => new Set(prev).add(template.id));
+      invalidateTemplates();
+      refetchSaved();
+    } catch {
+      // Toast handled by hook
+    } finally {
+      setSavingId(null);
     }
-  }, [resourceTypes, searchParams, selectedTypeId, setSearchParams]);
+  };
 
-  // Handle type selection
-  const handleTypeSelection = (typeId: string) => {
-    const selectedType = resourceTypes.find(type => type.id === typeId);
-
-    setSelectedTypeId(typeId);
-
-    // Update URL
-    setSearchParams(prev => {
-      const newParams = new URLSearchParams(prev);
-      newParams.set('type', typeId);
-      return newParams;
-    });
-
-    // Track analytics
+  const handleDelete = async (resourceId: string) => {
+    if (deletingId) return;
+    setDeletingId(resourceId);
     try {
-      analyticsService.trackPageView(
-        `settings/resources/${typeId}`,
-        `Resources - ${selectedType?.name || 'Unknown'}`
-      );
-    } catch (error) {
-      console.error('Analytics error:', error);
+      await deleteResource.mutateAsync({ id: resourceId });
+      setConfirmDeleteId(null);
+      invalidateTemplates();
+      refetchSaved();
+    } catch {
+      // Toast handled by hook
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  // Handle navigation back
-  const handleGoBack = () => {
-    try {
-      analyticsService.trackPageView('settings/configure', 'Settings - Back from Resources');
-    } catch (error) {
-      console.error('Analytics error:', error);
-    }
-    navigate('/settings/configure');
+  const switchView = (newView: ViewMode) => {
+    setView(newView);
+    setActiveTab('All');
+    setSearch('');
+    setConfirmDeleteId(null);
   };
 
-  // Handle retry for loading errors
-  const handleRetryLoadTypes = () => {
-    refetchTypes();
+  const isTemplateAdded = (t: typeof templates[0]) => t.already_added || localSaved.has(t.id);
+
+  // ── shared styles ──
+  const cardStyle: React.CSSProperties = {
+    padding: '14px 16px',
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: colors.utility.secondaryBackground,
+    border: `1px solid ${colors.utility.primaryText}12`,
+    color: colors.utility.primaryText,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    transition: 'border-color 0.15s',
   };
 
-  // Get selected resource type info
-  const selectedResourceType = resourceTypes.find(type => type.id === selectedTypeId);
+  const typeBadgeStyle: React.CSSProperties = {
+    display: 'inline-block',
+    padding: '2px 8px',
+    borderRadius: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    backgroundColor: `${colors.brand.primary}18`,
+    color: colors.brand.primary,
+    marginLeft: 10,
+  };
 
-  // Show loading state for initial load - UPDATED: Using VaNiLoader
-  if (typesLoading && resourceTypes.length === 0) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-[400px] transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
-      >
-        <VaNiLoader size="md" message="LOADING RESOURCE TYPES" />
-      </div>
-    );
-  }
+  const searchBoxStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 14px',
+    borderRadius: 8,
+    border: `1px solid ${colors.utility.primaryText}20`,
+    backgroundColor: colors.utility.secondaryBackground,
+    marginBottom: 16,
+    width: '100%',
+    maxWidth: 360,
+  };
+
+  // ── loading / error states ──
+  const isLoading = view === 'my-resources' ? loadingSaved : loadingTemplates;
+  const isError = view === 'my-resources' ? errorSaved : errorTemplates;
+  const errorMsg = view === 'my-resources' ? savedError?.message : templatesError?.message;
+  const counts = view === 'my-resources' ? savedCounts : templateCounts;
 
   return (
-    <div
-      className="p-6 transition-colors duration-200 min-h-screen"
-      style={{
-        background: isDarkMode
-          ? `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-          : `linear-gradient(to bottom right, ${colors.utility.primaryBackground}, ${colors.utility.secondaryBackground})`
-      }}
-    >
-      {/* Header */}
-      <ResourcesPageHeader
-        onGoBack={handleGoBack}
-        selectedResourceType={selectedResourceType}
-        colors={colors}
-      />
+    <div style={{ padding: 24, minHeight: '100vh', background: colors.utility.primaryBackground }}>
 
-      {/* Main Content */}
-      <div className="flex gap-6 mt-8">
-        {/* Left Sidebar - Resource Types */}
-        <ResourceTypesList
-          selectedTypeId={selectedTypeId}
-          onSelectType={handleTypeSelection}
-        />
-
-        {/* Right Panel - Resources */}
-        <div className="flex-1">
-          {typesError ? (
-            <ResourcesErrorState
-              error={typesError}
-              onRetry={handleRetryLoadTypes}
-              colors={colors}
-            />
-          ) : resourceTypes.length === 0 ? (
-            <NoResourceTypesEmptyState
-              onRetry={handleRetryLoadTypes}
-            />
-          ) : (
-            <ResourcesPanel selectedTypeId={selectedTypeId} />
-          )}
+      {/* ═══ HEADER ═══ */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => view === 'browse-catalog' ? switchView('my-resources') : navigate('/settings/configure')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 36, height: 36, borderRadius: 8,
+              border: `1px solid ${colors.utility.secondaryText}40`,
+              backgroundColor: colors.utility.secondaryBackground,
+              color: colors.utility.primaryText,
+              cursor: 'pointer',
+            }}
+          >
+            <ArrowLeft size={18} />
+          </button>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: colors.utility.primaryText, margin: 0 }}>
+              {view === 'my-resources' ? 'Resources' : 'Browse & Add Resources'}
+            </h1>
+            <p style={{ fontSize: 13, color: colors.utility.secondaryText, margin: 0 }}>
+              {view === 'my-resources'
+                ? 'Equipment & entities your business services'
+                : `${addedCount} of ${templates.length} templates added`}
+            </p>
+          </div>
         </div>
+
+        {view === 'my-resources' && (
+          <button
+            onClick={() => switchView('browse-catalog')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: 'none',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              backgroundColor: colors.brand.primary,
+              color: '#FFFFFF',
+            }}
+          >
+            <PackagePlus size={15} /> Browse & Add
+          </button>
+        )}
       </div>
-    </div>
-  );
-};
 
-/**
- * Page header component
- */
-interface ResourcesPageHeaderProps {
-  onGoBack: () => void;
-  selectedResourceType?: ResourceType;
-  colors: any;
-}
-
-const ResourcesPageHeader: React.FC<ResourcesPageHeaderProps> = ({
-  onGoBack,
-  selectedResourceType,
-  colors,
-}) => {
-  return (
-    <div className="flex items-center mb-8">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onGoBack}
-        className="mr-4 transition-colors hover:opacity-80"
-        style={{
-          borderColor: colors.utility.secondaryText + '40',
-          backgroundColor: colors.utility.secondaryBackground,
-          color: colors.utility.primaryText
-        }}
-      >
-        <ArrowLeft
-          className="h-5 w-5 transition-colors"
-          style={{ color: colors.utility.secondaryText }}
+      {/* ═══ SEARCH ═══ */}
+      <div style={searchBoxStyle}>
+        <Search size={16} style={{ color: colors.utility.secondaryText, flexShrink: 0 }} />
+        <input
+          type="text"
+          placeholder={view === 'my-resources' ? 'Search your resources...' : 'Search templates...'}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
+            color: colors.utility.primaryText,
+            fontSize: 13,
+            flex: 1,
+          }}
         />
-      </Button>
-
-      <div>
-        <h1
-          className="text-2xl font-bold transition-colors"
-          style={{ color: colors.utility.primaryText }}
-        >
-          Resources Management
-        </h1>
-        <p
-          className="transition-colors"
-          style={{ color: colors.utility.secondaryText }}
-        >
-          {selectedResourceType
-            ? `Manage your ${selectedResourceType.name.replace('_', ' ')} resources`
-            : 'Manage your organization resources and assignments'
-          }
-        </p>
+        {search && (
+          <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.utility.secondaryText, padding: 0, display: 'flex' }}>
+            <X size={14} />
+          </button>
+        )}
       </div>
-    </div>
-  );
-};
 
-/**
- * Error state component for resource types loading
- */
-interface ResourcesErrorStateProps {
-  error: Error;
-  onRetry: () => void;
-  colors: any;
-}
-
-const ResourcesErrorState: React.FC<ResourcesErrorStateProps> = ({
-  error,
-  onRetry,
-  colors,
-}) => {
-  // Log error for debugging
-  useEffect(() => {
-    captureException(error, {
-      tags: { component: 'ResourcesPage', action: 'loadResourceTypes' },
-      extra: { errorMessage: error.message }
-    });
-
-    // Show error toast - UPDATED: Using vaniToast
-    vaniToast.error('Failed to Load Resources', {
-      message: error.message || 'An error occurred while loading resource types.',
-      duration: 5000
-    });
-  }, [error]);
-
-  return (
-    <div
-      className="rounded-lg shadow-sm border p-8 text-center transition-colors"
-      style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderColor: colors.semantic.error + '40'
-      }}
-    >
-      <div
-        className="text-lg font-semibold mb-2 transition-colors"
-        style={{ color: colors.semantic.error }}
-      >
-        Failed to Load Resource Types
+      {/* ═══ TABS ═══ */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {TABS.map(tab => {
+          const isActive = activeTab === tab;
+          const count = counts[tab as keyof typeof counts] ?? 0;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: 'none',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                backgroundColor: isActive ? colors.brand.primary : colors.utility.secondaryBackground,
+                color: isActive ? '#FFFFFF' : colors.utility.primaryText,
+              }}
+            >
+              {tab} ({count})
+            </button>
+          );
+        })}
       </div>
-      <p
-        className="mb-4 transition-colors"
-        style={{ color: colors.utility.secondaryText }}
-      >
-        {error.message || 'An error occurred while loading resource types.'}
-      </p>
-      <Button
-        onClick={onRetry}
-        className="transition-colors hover:opacity-90"
-        style={{
-          background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-          color: '#FFFFFF'
-        }}
-      >
-        Try Again
-      </Button>
+
+      {/* ═══ CONTENT ═══ */}
+      {isLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 40, color: colors.utility.secondaryText }}>
+          <Loader2 size={20} className="animate-spin" />
+          {view === 'my-resources' ? 'Loading your resources...' : 'Loading templates...'}
+        </div>
+      ) : isError ? (
+        <div style={{ padding: 20, color: colors.semantic?.error || '#dc2626' }}>
+          Error: {errorMsg || 'Something went wrong'}
+        </div>
+      ) : view === 'my-resources' ? (
+        /* ═══ MY RESOURCES VIEW ═══ */
+        filteredSaved.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <PackagePlus size={48} style={{ color: colors.utility.secondaryText, marginBottom: 16, opacity: 0.4 }} />
+            <p style={{ fontSize: 16, fontWeight: 600, color: colors.utility.primaryText, margin: '0 0 6px' }}>
+              {search ? 'No matching resources' : 'No resources added yet'}
+            </p>
+            <p style={{ fontSize: 13, color: colors.utility.secondaryText, margin: '0 0 20px' }}>
+              {search
+                ? 'Try a different search term'
+                : 'Browse the catalog to add equipment and entities your business services'}
+            </p>
+            {!search && (
+              <button
+                onClick={() => switchView('browse-catalog')}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: 8,
+                  border: 'none',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  backgroundColor: colors.brand.primary,
+                  color: '#FFFFFF',
+                }}
+              >
+                Browse & Add Resources
+              </button>
+            )}
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 13, color: colors.utility.secondaryText, marginBottom: 12 }}>
+              {filteredSaved.length} resource{filteredSaved.length !== 1 ? 's' : ''}
+            </p>
+            {filteredSaved.map(r => {
+              const isConfirming = confirmDeleteId === r.id;
+              const isDeleting = deletingId === r.id;
+
+              return (
+                <div
+                  key={r.id}
+                  style={{
+                    ...cardStyle,
+                    borderColor: isConfirming ? `${colors.semantic?.error || '#dc2626'}60` : `${colors.utility.primaryText}12`,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 14 }}>{r.display_name || r.name}</strong>
+                      <span style={typeBadgeStyle}>{r.resource_type_id}</span>
+                    </div>
+                    {r.description && (
+                      <p style={{ fontSize: 12, color: colors.utility.secondaryText, margin: '4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {r.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {isConfirming ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, color: colors.semantic?.error || '#dc2626', fontWeight: 600 }}>Remove?</span>
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        disabled={isDeleting}
+                        style={{
+                          padding: '4px 12px', borderRadius: 6, border: 'none',
+                          fontSize: 12, fontWeight: 600, cursor: isDeleting ? 'not-allowed' : 'pointer',
+                          backgroundColor: colors.semantic?.error || '#dc2626', color: '#FFF',
+                          opacity: isDeleting ? 0.7 : 1,
+                          display: 'flex', alignItems: 'center', gap: 4,
+                        }}
+                      >
+                        {isDeleting ? <Loader2 size={12} className="animate-spin" /> : 'Yes'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteId(null)}
+                        style={{
+                          padding: '4px 12px', borderRadius: 6,
+                          border: `1px solid ${colors.utility.primaryText}20`, backgroundColor: 'transparent',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                          color: colors.utility.primaryText,
+                        }}
+                      >
+                        No
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteId(r.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: 32, height: 32, borderRadius: 6,
+                        border: `1px solid ${colors.utility.primaryText}15`,
+                        backgroundColor: 'transparent',
+                        color: colors.utility.secondaryText,
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                      title="Remove resource"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        /* ═══ BROWSE CATALOG VIEW ═══ */
+        filteredTemplates.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <Search size={48} style={{ color: colors.utility.secondaryText, marginBottom: 16, opacity: 0.4 }} />
+            <p style={{ fontSize: 16, fontWeight: 600, color: colors.utility.primaryText, margin: '0 0 6px' }}>
+              No templates found
+            </p>
+            <p style={{ fontSize: 13, color: colors.utility.secondaryText, margin: 0 }}>
+              {search ? 'Try a different search term' : 'No templates available for your served industries'}
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p style={{ fontSize: 13, color: colors.utility.secondaryText, marginBottom: 12 }}>
+              {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
+            </p>
+            {filteredTemplates.map(t => {
+              const added = isTemplateAdded(t);
+              const isSaving = savingId === t.id;
+
+              return (
+                <div key={t.id} style={cardStyle}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: 14 }}>{t.name}</strong>
+                      <span style={typeBadgeStyle}>{t.resource_type_id}</span>
+                    </div>
+                    {t.description && (
+                      <p style={{ fontSize: 12, color: colors.utility.secondaryText, margin: '4px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {t.description}
+                      </p>
+                    )}
+                  </div>
+
+                  {added ? (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: colors.semantic?.success || '#16a34a', fontWeight: 600, flexShrink: 0 }}>
+                      <Check size={14} /> Added
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleSave(t)}
+                      disabled={isSaving}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '6px 14px', borderRadius: 6, border: 'none',
+                        fontSize: 12, fontWeight: 600,
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
+                        backgroundColor: colors.brand.primary, color: '#FFFFFF',
+                        opacity: isSaving ? 0.7 : 1, flexShrink: 0,
+                      }}
+                    >
+                      {isSaving ? (
+                        <><Loader2 size={13} className="animate-spin" /> Saving...</>
+                      ) : (
+                        <><Plus size={13} /> Add</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
     </div>
   );
 };

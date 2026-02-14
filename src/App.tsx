@@ -134,6 +134,9 @@ import StorageSettingsPage from './pages/settings/storagesettings';
 // FIXED: Import the actual Resources page instead of placeholder
 import ResourcesPage from './pages/settings/Resources';
 
+// Equipment Registry (Settings) — client equipment management
+import SettingsEquipmentPage from './pages/settings/Equipment';
+
 // Equipment Registry (P1) — standalone page under Operations
 import EquipmentPage from './pages/equipment-registry';
 
@@ -173,7 +176,6 @@ import EditBusinessProfilePage from './pages/settings/business-profile/edit';
 import OnboardingBusinessProfilePage from './pages/onboarding/business-profile';
 import SmartProfilePage from './pages/settings/business-profile/smart-profile';
 import CloseAccountPage from './pages/settings/business-profile/close-account';
-
 
 // Integration pages
 import IntegrationsPage from './pages/settings/integrations';
@@ -592,6 +594,7 @@ const AppContent: React.FC = () => {
             <Route path="configure" element={<SettingsPage />} />
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
+            <Route path="configure/equipment" element={<SettingsEquipmentPage />} />
             <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
 
             {/* Team Management Routes */}
@@ -605,7 +608,6 @@ const AppContent: React.FC = () => {
             <Route path="business-profile/edit" element={<EditBusinessProfilePage />} />
             <Route path="business-profile/smart-profile" element={<SmartProfilePage />} />
             <Route path="business-profile/close-account" element={<CloseAccountPage />} />
-
 
             {/* Storage Settings */}
             <Route path="configure/storage" element={<StorageSettingsPage />} />

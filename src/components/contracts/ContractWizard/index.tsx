@@ -21,6 +21,7 @@ import BillingViewStep from './steps/BillingViewStep';
 import ReviewSendStep from './steps/ReviewSendStep';
 import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
+import AssetSelectionStep from './steps/AssetSelectionStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -78,6 +79,8 @@ export interface ContractWizardState {
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
+  // Asset Selection
+  selectedAssetIds: string[];
   // Evidence Policy
   evidencePolicyType: EvidencePolicyType;
   evidenceSelectedForms: SelectedForm[];
@@ -93,7 +96,7 @@ interface ContractWizardProps {
 }
 
 // Step ID type for step-based routing
-type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'evidencePolicy' | 'events' | 'review';
+type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
 
 interface StepConfig {
   id: StepId;
@@ -111,6 +114,7 @@ const CONTRACT_STEPS: StepConfig[] = [
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
   { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
+  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
   { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
   { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
   { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
@@ -358,6 +362,8 @@ const createInitialWizardState = (): ContractWizardState => ({
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
+  // Asset Selection
+  selectedAssetIds: [],
   // Evidence Policy
   evidencePolicyType: 'none',
   evidenceSelectedForms: [],
@@ -1118,6 +1124,17 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             perBlockPaymentType={wizardState.perBlockPaymentType}
             onPerBlockPaymentTypeChange={handlePerBlockPaymentTypeChange}
             contractDuration={billingDuration}
+          />
+        );
+      }
+      case 'assetSelection': {
+        return (
+          <AssetSelectionStep
+            contactId={wizardState.buyerId || ''}
+            selectedAssetIds={wizardState.selectedAssetIds}
+            onSelectedAssetIdsChange={(ids) =>
+              updateWizardState('selectedAssetIds', ids)
+            }
           />
         );
       }

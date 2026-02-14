@@ -264,7 +264,13 @@ export const API_ENDPOINTS = {
     UPDATE: '/api/tenants',
     GET: '/api/tenants',
     PROFILE: '/api/tenant-profile',
-    UPLOAD_LOGO: '/api/tenant-profile/logo'
+    UPLOAD_LOGO: '/api/tenant-profile/logo',
+    SERVED_INDUSTRIES: {
+      LIST: '/api/tenant-profile/served-industries',
+      ADD: '/api/tenant-profile/served-industries',
+      REMOVE: (industryId: string) => `/api/tenant-profile/served-industries/${industryId}`,
+      UNLOCK_PREVIEW: '/api/tenant-profile/served-industries/unlock-preview'
+    }
   },
   
   // =================================================================
@@ -280,7 +286,20 @@ export const API_ENDPOINTS = {
     
     // Resource types
     RESOURCE_TYPES: '/api/resources/resource-types',
-    
+    RESOURCE_TYPES_BY_PARENT: (parentType: string) => `/api/resources/resource-types?parent=${parentType}`,
+
+    // Resource templates — browse catalog by served industries
+    RESOURCE_TEMPLATES: '/api/resources/resource-templates',
+    RESOURCE_TEMPLATES_WITH_FILTERS: (filters: { search?: string; limit?: number; offset?: number; resource_type_id?: string } = {}) => {
+      const params = new URLSearchParams();
+      if (filters.search) params.append('search', filters.search);
+      if (filters.limit) params.append('limit', String(filters.limit));
+      if (filters.offset !== undefined) params.append('offset', String(filters.offset));
+      if (filters.resource_type_id) params.append('resource_type_id', filters.resource_type_id);
+      const qs = params.toString();
+      return qs ? `/api/resources/resource-templates?${qs}` : '/api/resources/resource-templates';
+    },
+
     // Utility endpoints
     HEALTH: '/api/resources/health',
     SIGNING_STATUS: '/api/resources/signing-status',
@@ -1201,6 +1220,32 @@ export const API_ENDPOINTS = {
         return qs ? `/api/forms/submissions?${qs}` : '/api/forms/submissions';
       },
     },
+  },
+
+  // =================================================================
+  // CLIENT ASSET REGISTRY (P1 — client-owned equipment + entity)
+  // =================================================================
+  CLIENT_ASSET_REGISTRY: {
+    BASE: '/api/client-asset-registry',
+    LIST_WITH_FILTERS: (filters: { contact_id?: string; resource_type_id?: string; status?: string; limit?: number; offset?: number } = {}) => {
+      const params = new URLSearchParams();
+      if (filters.contact_id) params.append('contact_id', filters.contact_id);
+      if (filters.resource_type_id) params.append('resource_type_id', filters.resource_type_id);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.limit) params.append('limit', String(filters.limit));
+      if (filters.offset) params.append('offset', String(filters.offset));
+      const qs = params.toString();
+      return qs ? `/api/client-asset-registry?${qs}` : '/api/client-asset-registry';
+    },
+    GET: (id: string) => `/api/client-asset-registry?id=${id}`,
+    CREATE: '/api/client-asset-registry',
+    UPDATE: (id: string) => `/api/client-asset-registry?id=${id}`,
+    DELETE: (id: string) => `/api/client-asset-registry?id=${id}`,
+    CHILDREN: (parentAssetId: string) => `/api/client-asset-registry/children?parent_asset_id=${parentAssetId}`,
+    CONTRACT_ASSETS: (contractId: string) => `/api/client-asset-registry/contract-assets?contract_id=${contractId}`,
+    LINK_CONTRACT_ASSETS: '/api/client-asset-registry/contract-assets',
+    UNLINK_CONTRACT_ASSET: (contractId: string, assetId: string) =>
+      `/api/client-asset-registry/contract-assets?contract_id=${contractId}&asset_id=${assetId}`,
   }
 };
 

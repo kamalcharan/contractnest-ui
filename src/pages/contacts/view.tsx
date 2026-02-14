@@ -18,6 +18,9 @@ import {
   ShoppingCart,
   Package,
   Handshake,
+  Wrench,
+  Search,
+  X,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -35,6 +38,12 @@ import { ActionIsland, ProfileDrawer } from '@/components/contacts/cockpit';
 // Contract Components - REUSABLE from ContractsHub
 import PipelineBar from '@/components/contracts/PipelineBar';
 import ContractCard from '@/components/contracts/ContractCard';
+
+// Asset Components
+import ClientAssetCard from '@/components/assets/ClientAssetCard';
+import ClientAssetFormDialog from '@/components/assets/ClientAssetFormDialog';
+import { useClientAssetRegistryManager, useCreateClientAsset, useUpdateClientAsset, useDeleteClientAsset } from '@/hooks/queries/useClientAssetRegistry';
+import type { ClientAsset, ClientAssetFormData } from '@/types/clientAssetRegistry';
 
 // Types - V2
 import type { ContractSummaryItem, ContactRole, UrgencyLevel } from '@/types/contactCockpit';
@@ -110,11 +119,31 @@ const ContactViewPage: React.FC = () => {
   const [contractStatusFilter, setContractStatusFilter] = useState<string | null>(null);
   const [contractRoleFilter, setContractRoleFilter] = useState<string | null>(null);
 
+  // Assets state
+  const [assetSearch, setAssetSearch] = useState('');
+  const [isAssetCreateOpen, setIsAssetCreateOpen] = useState(false);
+  const [isAssetEditOpen, setIsAssetEditOpen] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<ClientAsset | null>(null);
+
   // API
   const { data: contact, loading, error, refetch } = useContact(id || '');
   const updateStatusHook = useUpdateContactStatus();
   const sendInvitationHook = useSendInvitation();
   const { data: cockpitData, isLoading: cockpitLoading } = useContactCockpit(id || '', { daysAhead });
+
+  // Client Assets
+  const {
+    assets: clientAssets,
+    isLoading: assetsLoading,
+    isMutating: assetsMutating,
+  } = useClientAssetRegistryManager({ contact_id: id || '' });
+  const createAssetMutation = useCreateClientAsset();
+  const updateAssetMutation = useUpdateClientAsset();
+  const deleteAssetMutation = useDeleteClientAsset();
+
+  const filteredAssets = assetSearch.trim()
+    ? clientAssets.filter(a => a.name.toLowerCase().includes(assetSearch.toLowerCase()))
+    : clientAssets;
 
   // Classifications for contract creation
   const classifications = contact?.classifications?.map(c =>
@@ -466,9 +495,9 @@ const ContactViewPage: React.FC = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* THREE COLUMN LAYOUT */}
+      {/* FOUR COLUMN LAYOUT */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 grid grid-cols-3 overflow-hidden">
+      <div className="flex-1 grid grid-cols-4 overflow-hidden">
 
         {/* ─────────────────────────────────────────────────────────────────── */}
         {/* COLUMN 1: CONTRACTS - Using Reusable Components */}
@@ -597,7 +626,100 @@ const ContactViewPage: React.FC = () => {
         </div>
 
         {/* ─────────────────────────────────────────────────────────────────── */}
-        {/* COLUMN 2: EVENTS TIMELINE */}
+        {/* COLUMN 2: CLIENT ASSETS */}
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col border-r overflow-hidden" style={{ borderColor: colors.utility.primaryText + '10' }}>
+          {/* Column Header */}
+          <div
+            className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b"
+            style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#f59e0b20' }}>
+                <Wrench className="h-4 w-4" style={{ color: '#f59e0b' }} />
+              </div>
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Assets
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: colors.utility.primaryBackground, color: colors.utility.secondaryText }}>
+                {clientAssets.length}
+              </span>
+            </div>
+            <button
+              onClick={() => setIsAssetCreateOpen(true)}
+              className="text-sm font-semibold flex items-center gap-1"
+              style={{ color: '#f59e0b' }}
+            >
+              <Plus className="h-4 w-4" /> Add
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="flex-shrink-0 px-4 pt-3 pb-2" style={{ backgroundColor: colors.utility.primaryBackground }}>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+              <input
+                placeholder="Search assets..."
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                className="w-full pl-8 pr-8 py-2 rounded-lg border text-xs"
+                style={{
+                  borderColor: colors.utility.primaryText + '15',
+                  backgroundColor: colors.utility.secondaryBackground,
+                  color: colors.utility.primaryText,
+                }}
+              />
+              {assetSearch && (
+                <button onClick={() => setAssetSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Asset List */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {assetsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin" style={{ color: colors.brand.primary }} />
+              </div>
+            ) : filteredAssets.length > 0 ? (
+              filteredAssets.map((asset) => (
+                <ClientAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  onEdit={(a) => { setEditingAsset(a); setIsAssetEditOpen(true); }}
+                  onDelete={async (a) => {
+                    if (window.confirm(`Remove "${a.name}"?`)) {
+                      try { await deleteAssetMutation.mutateAsync(a.id); } catch {}
+                    }
+                  }}
+                  disabled={assetsMutating}
+                />
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <Wrench className="h-10 w-10 mx-auto mb-3" style={{ color: colors.utility.secondaryText + '40' }} />
+                <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+                  {assetSearch ? `No assets matching "${assetSearch}"` : 'No assets registered for this contact'}
+                </p>
+                {!assetSearch && (
+                  <button
+                    onClick={() => setIsAssetCreateOpen(true)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: '#f59e0b15', color: '#f59e0b' }}
+                  >
+                    <Plus className="h-3 w-3 inline mr-1" />
+                    Add First Asset
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─────────────────────────────────────────────────────────────────── */}
+        {/* COLUMN 3: EVENTS TIMELINE */}
         {/* ─────────────────────────────────────────────────────────────────── */}
         <div className="flex flex-col border-r overflow-hidden" style={{ borderColor: colors.utility.primaryText + '10' }}>
           {/* Column Header */}
@@ -937,6 +1059,36 @@ const ContactViewPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ASSET DIALOGS */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      <ClientAssetFormDialog
+        isOpen={isAssetCreateOpen}
+        onClose={() => setIsAssetCreateOpen(false)}
+        mode="create"
+        contactId={contact.id}
+        onSubmit={async (data) => {
+          await createAssetMutation.mutateAsync(data);
+          setIsAssetCreateOpen(false);
+        }}
+        isSubmitting={createAssetMutation.isPending}
+      />
+      <ClientAssetFormDialog
+        isOpen={isAssetEditOpen}
+        onClose={() => { setIsAssetEditOpen(false); setEditingAsset(null); }}
+        mode="edit"
+        contactId={contact.id}
+        asset={editingAsset || undefined}
+        onSubmit={async (data) => {
+          if (editingAsset) {
+            await updateAssetMutation.mutateAsync({ id: editingAsset.id, data });
+            setIsAssetEditOpen(false);
+            setEditingAsset(null);
+          }
+        }}
+        isSubmitting={updateAssetMutation.isPending}
+      />
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* ACTION ISLAND */}

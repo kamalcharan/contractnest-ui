@@ -24,11 +24,11 @@ import {
   useCreateAsset,
   useUpdateAsset,
   useDeleteAsset,
-  useEquipmentCategories,
 } from '@/hooks/queries/useAssetRegistry';
+import { useResources } from '@/hooks/queries/useResources';
 
 // Types
-import type { TenantAsset, AssetRegistryFilters, AssetFormData, EquipmentCategory } from '@/types/assetRegistry';
+import type { TenantAsset, AssetRegistryFilters, AssetFormData } from '@/types/assetRegistry';
 
 // Components
 import EquipmentCard from './EquipmentCard';
@@ -52,12 +52,25 @@ const EquipmentPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // ── Equipment Categories (from DB) ────────────────────────────────
+  // ── Equipment Categories — tenant's resources from Step 2-3 ────────
+  const EQUIPMENT_TYPE_IDS = ['equipment', 'asset'];
   const {
-    data: categories = [],
+    data: allResources = [],
     isLoading: categoriesLoading,
     isError: categoriesError,
-  } = useEquipmentCategories();
+  } = useResources();
+
+  const categories = useMemo(() => {
+    return allResources
+      .filter((r) =>
+        EQUIPMENT_TYPE_IDS.includes((r.resource_type_id || '').toLowerCase()) && r.is_active
+      )
+      .map((r) => ({
+        id: r.id,
+        name: r.display_name || r.name,
+        icon: null as string | null,
+      }));
+  }, [allResources]);
 
   // ── Local State ─────────────────────────────────────────────────
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
@@ -442,6 +455,7 @@ const EquipmentPage: React.FC = () => {
         onClose={() => setIsCreateOpen(false)}
         mode="create"
         resourceTypeId={selectedCategoryId}
+        categories={categories}
         onSubmit={handleCreateSubmit}
         isSubmitting={createMutation.isPending}
       />
@@ -454,6 +468,7 @@ const EquipmentPage: React.FC = () => {
         }}
         mode="edit"
         asset={editingAsset || undefined}
+        categories={categories}
         onSubmit={handleEditSubmit}
         isSubmitting={updateMutation.isPending}
       />

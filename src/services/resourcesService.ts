@@ -421,8 +421,8 @@ class ResourcesService {
    * Get resources with pagination
    */
   async getResourcesPaginated(
-    page: number = 1, 
-    limit: number = 20, 
+    page: number = 1,
+    limit: number = 20,
     filters: Omit<ResourceFilters, 'page' | 'limit'> = {}
   ): Promise<Resource[]> {
     return this.getResources({
@@ -431,6 +431,64 @@ class ResourcesService {
       limit,
     });
   }
+
+  // =================================================================
+  // RESOURCE TEMPLATES — Browse catalog by served industries
+  // =================================================================
+
+  /**
+   * Get resource templates filtered by tenant's served industries
+   * Returns paginated templates with already_added flag
+   */
+  async getResourceTemplates(filters: {
+    search?: string;
+    limit?: number;
+    offset?: number;
+    resource_type_id?: string;
+  } = {}): Promise<ResourceTemplatesResponse> {
+    try {
+      const url = API_ENDPOINTS.RESOURCES.RESOURCE_TEMPLATES_WITH_FILTERS(filters);
+      const response = await api.get<ResourceTemplatesResponse>(url, {
+        headers: this.getHeaders(),
+      });
+
+      return response.data;
+    } catch (error) {
+      this.handleError(error, 'Failed to load resource templates');
+    }
+  }
+}
+
+// Template-related types (co-located with service for simplicity)
+export interface ResourceTemplate {
+  id: string;
+  industry_id: string;
+  resource_type_id: string;
+  name: string;
+  description: string | null;
+  default_attributes: Record<string, any> | null;
+  pricing_guidance: Record<string, any> | null;
+  popularity_score: number;
+  is_recommended: boolean;
+  sort_order: number;
+  already_added: boolean;
+  make_examples: string[];
+  maintenance_schedule: string | null;
+  typical_lifespan_years: number | null;
+}
+
+export interface ResourceTemplatesResponse {
+  success: boolean;
+  data: ResourceTemplate[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    has_more: boolean;
+  };
+  served_industries: string[];
+  message?: string;
+  timestamp: string;
 }
 
 // Create and export a singleton instance

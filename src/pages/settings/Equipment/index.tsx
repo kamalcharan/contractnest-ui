@@ -26,8 +26,8 @@ import EquipmentCard from './EquipmentCard';
 import EquipmentFormDialog from './EquipmentFormDialog';
 import EquipmentEmptyState from './EmptyState';
 
-// Resource types from the sidebar (loaded from the API via the resources hook)
-import { useResourceTypes } from '@/hooks/queries/useResources';
+// Tenant's saved resources — sidebar restricted to what they service
+import { useResources } from '@/hooks/queries/useResources';
 
 const EquipmentPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,16 +46,36 @@ const EquipmentPage: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<TenantAsset | null>(null);
 
-  // ── Data: Resource Types (sidebar categories) ───────────────────
+  // ── Data: Tenant's saved resources → derive equipment categories ─
+  //    Only resource types the tenant added in step 3 (Resources page)
+  //    are shown in the sidebar. Equipment types: equipment, asset, consumable.
+
+  const EQUIPMENT_TYPE_IDS = ['equipment', 'asset', 'consumable'];
 
   const {
-    data: rawResourceTypes = [],
+    data: savedResources = [],
     isLoading: typesLoading,
-  } = useResourceTypes();
+  } = useResources();
 
   const resourceTypes = useMemo(() => {
-    return Array.isArray(rawResourceTypes) ? rawResourceTypes : [];
-  }, [rawResourceTypes]);
+    const allSaved = Array.isArray(savedResources) ? savedResources : [];
+    // Keep only equipment-class resources
+    const equipmentResources = allSaved.filter((r) =>
+      EQUIPMENT_TYPE_IDS.includes((r.resource_type_id || '').toLowerCase())
+    );
+    // De-duplicate by resource_type_id + name to create sidebar categories
+    const seen = new Map<string, { id: string; name: string; is_active: boolean }>();
+    for (const r of equipmentResources) {
+      if (!seen.has(r.name)) {
+        seen.set(r.name, {
+          id: r.id,
+          name: r.display_name || r.name,
+          is_active: r.is_active,
+        });
+      }
+    }
+    return Array.from(seen.values());
+  }, [savedResources]);
 
   // ── Data: Assets (filtered) ─────────────────────────────────────
 

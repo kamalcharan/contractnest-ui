@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import ContactPicker from '@/components/common/ContactPicker';
 import {
   Dialog,
   DialogContent,
@@ -300,6 +301,20 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* ── Owner / Buyer ─────────────────────────────────────── */}
+          <div>
+            <h4 style={sectionHeaderStyle}>Owner / Buyer</h4>
+            <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+              Whose equipment is this? Select the client who owns this equipment.
+            </p>
+            <ContactPicker
+              value={formData.owner_contact_id}
+              onChange={(contactId) => updateField('owner_contact_id', contactId)}
+              placeholder="Search client by name, email, or company..."
+              classifications={['buyer']}
+            />
           </div>
 
           {/* ── Warranty & Dates ─────────────────────────────────── */}
