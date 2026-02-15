@@ -140,6 +140,9 @@ import SettingsEquipmentPage from './pages/settings/Equipment';
 // Equipment Registry (P1) — standalone page under Operations
 import EquipmentPage from './pages/equipment-registry';
 
+// Entity Registry — standalone page under Operations (shares code with Equipment Registry)
+import EntityRegistryPage from './pages/entity-registry';
+
 // Service Contracts - Templates
 import MyTemplatesPage from './pages/service-contracts/templates';
 import TemplatePreviewPage from './pages/service-contracts/templates/preview';
@@ -526,6 +529,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<EquipmentPage />} />
+          </Route>
+
+          {/* Entity Registry — standalone page under Operations */}
+          <Route
+            path="/entity-registry"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<EntityRegistryPage />} />
           </Route>
 
           {/* Appointments — scaffold showing existing widget + placeholder */}

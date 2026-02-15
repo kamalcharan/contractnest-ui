@@ -35,6 +35,7 @@ export interface Resource {
   hexcolor?: string;
   sequence_no?: number;
   contact_id?: string;
+  sub_category?: string;
   tags?: any;
   form_settings?: any;
   is_active: boolean;
@@ -81,6 +82,7 @@ export interface ResourceFilters {
   resourceTypeId?: string;
   search?: string;
   includeInactive?: boolean;
+  include_deleted?: boolean;
 }
 
 // =================================================================
@@ -233,6 +235,9 @@ export const useResources = (
         }
         if (filters.includeInactive) {
           params.append('includeInactive', 'true');
+        }
+        if (filters.include_deleted) {
+          params.append('include_deleted', 'true');
         }
         
         if (params.toString()) {

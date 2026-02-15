@@ -1,13 +1,11 @@
 // src/pages/equipment-registry/index.tsx
 // Equipment Registry — standalone page (Operations > Equipment Registry)
-// Design: 02-equipment-registry.html mockup (sidebar categories + card grid)
+// Sidebar groups equipment by sub_category from t_category_resources_master
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Plus, Search, X, Download, Package,
-  Scan, HeartPulse, FlaskConical, Thermometer, ArrowUpDown,
-  Zap, Microscope, Flame, Wifi, Wrench,
+  Plus, Search, X, Download, Package, Layers,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -17,6 +15,7 @@ import { vaniToast } from '@/components/common/toast';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import { analyticsService } from '@/services/analytics.service';
+import { getSubCategoryConfig } from '@/constants/subCategoryConfig';
 
 // Hooks
 import {
@@ -25,7 +24,7 @@ import {
   useUpdateAsset,
   useDeleteAsset,
 } from '@/hooks/queries/useAssetRegistry';
-import { useResources } from '@/hooks/queries/useResources';
+import { useResources, type Resource } from '@/hooks/queries/useResources';
 
 // Types
 import type { TenantAsset, AssetRegistryFilters, AssetFormData } from '@/types/assetRegistry';
@@ -35,46 +34,102 @@ import EquipmentCard from './EquipmentCard';
 import EquipmentFormDialog from './EquipmentFormDialog';
 import EquipmentEmptyState from './EmptyState';
 
-// ── Lucide icon mapping for DB-stored icon names ──────────────────────
-const ICON_MAP: Record<string, React.ComponentType<any>> = {
-  Scan, HeartPulse, FlaskConical, Thermometer, ArrowUpDown,
-  Zap, Microscope, Flame, Wifi, Wrench, Package,
-};
+// ── Types ───────────────────────────────────────────────────────
+export type RegistryMode = 'equipment' | 'entity';
 
-function CategoryIcon({ name, className, size = 16 }: { name: string | null; className?: string; size?: number }) {
-  const Icon = (name && ICON_MAP[name]) || Package;
-  return <Icon className={className} size={size} />;
+interface EquipmentPageProps {
+  registryMode?: RegistryMode;
 }
 
-const EquipmentPage: React.FC = () => {
+// ── Mode-specific labels ────────────────────────────────────────
+const MODE_CONFIG: Record<RegistryMode, {
+  typeIds: string[];
+  pageTitle: string;
+  pageDescription: string;
+  breadcrumb: string;
+  sidebarTitle: string;
+  allLabel: string;
+  itemLabel: string;
+  searchPlaceholder: string;
+  addLabel: string;
+}> = {
+  equipment: {
+    typeIds: ['equipment'],
+    pageTitle: 'Equipment Registry',
+    pageDescription: 'Register and manage the equipment you service. This data powers contract creation, scheduling, and evidence tracking.',
+    breadcrumb: 'Equipment Registry',
+    sidebarTitle: 'Equipment Categories',
+    allLabel: 'All Equipment',
+    itemLabel: 'equipment',
+    searchPlaceholder: 'Search equipment...',
+    addLabel: 'Add Equipment',
+  },
+  entity: {
+    typeIds: ['asset'],
+    pageTitle: 'Entity Registry',
+    pageDescription: 'Register and manage entities such as facilities, properties, and spaces. Link them to contracts and track service schedules.',
+    breadcrumb: 'Entity Registry',
+    sidebarTitle: 'Entity Categories',
+    allLabel: 'All Entities',
+    itemLabel: 'entity',
+    searchPlaceholder: 'Search entities...',
+    addLabel: 'Add Entity',
+  },
+};
+
+const EquipmentPage: React.FC<EquipmentPageProps> = ({ registryMode = 'equipment' }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const modeConfig = MODE_CONFIG[registryMode];
 
-  // ── Equipment Categories — tenant's resources from Step 2-3 ────────
-  const EQUIPMENT_TYPE_IDS = ['equipment', 'asset'];
+  // ── Resources (filtered by registry mode) ─────────────────────────
   const {
     data: allResources = [],
     isLoading: categoriesLoading,
     isError: categoriesError,
   } = useResources();
 
-  const categories = useMemo(() => {
-    return allResources
-      .filter((r) =>
-        EQUIPMENT_TYPE_IDS.includes((r.resource_type_id || '').toLowerCase()) && r.is_active
-      )
-      .map((r) => ({
-        id: r.id,
-        name: r.display_name || r.name,
-        icon: null as string | null,
-      }));
-  }, [allResources]);
+  // Filter to only the resource types for this registry mode
+  const equipmentResources = useMemo(() => {
+    return allResources.filter(
+      (r) =>
+        modeConfig.typeIds.includes((r.resource_type_id || '').toLowerCase()) &&
+        r.is_active
+    );
+  }, [allResources, modeConfig.typeIds]);
+
+  // ── Sub-category grouping ───────────────────────────────────────
+  const { subCategories, resourcesBySubCategory, resourceIdToSubCategory } =
+    useMemo(() => {
+      const bySubCat = new Map<string, Resource[]>();
+      const idToSubCat = new Map<string, string>();
+
+      for (const r of equipmentResources) {
+        const subCat = r.sub_category || 'Other';
+        if (!bySubCat.has(subCat)) bySubCat.set(subCat, []);
+        bySubCat.get(subCat)!.push(r);
+        idToSubCat.set(r.id, subCat);
+      }
+
+      // Sort alphabetically, "Other" last
+      const sorted = [...bySubCat.keys()].sort((a, b) => {
+        if (a === 'Other') return 1;
+        if (b === 'Other') return -1;
+        return a.localeCompare(b);
+      });
+
+      return {
+        subCategories: sorted,
+        resourcesBySubCategory: bySubCat,
+        resourceIdToSubCategory: idToSubCat,
+      };
+    }, [equipmentResources]);
 
   // ── Local State ─────────────────────────────────────────────────
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
-    searchParams.get('category') || ''
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string | null>(
+    searchParams.get('sub_category') || null
   );
   const [sidebarSearch, setSidebarSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -82,21 +137,11 @@ const EquipmentPage: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<TenantAsset | null>(null);
 
-  // Auto-select first category once loaded (if none selected from URL)
-  useEffect(() => {
-    if (categories.length > 0 && !selectedCategoryId) {
-      setSelectedCategoryId(categories[0].id);
-    }
-  }, [categories, selectedCategoryId]);
-
-  // ── Data: Assets (filtered) ─────────────────────────────────────
-
-  const filters: AssetRegistryFilters = useMemo(() => ({
-    resource_type_id: selectedCategoryId || undefined,
-    search: searchQuery.trim() || undefined,
-    limit: 100,
-    offset: 0,
-  }), [selectedCategoryId, searchQuery]);
+  // ── Data: Assets (fetch ALL — filter client-side) ───────────────
+  const filters: AssetRegistryFilters = useMemo(
+    () => ({ limit: 500, offset: 0 }),
+    []
+  );
 
   const {
     assets,
@@ -111,41 +156,101 @@ const EquipmentPage: React.FC = () => {
   const deleteMutation = useDeleteAsset();
 
   // ── Analytics ───────────────────────────────────────────────────
-
   useEffect(() => {
     try {
-      analyticsService.trackPageView('equipment-registry', 'Equipment Registry');
-    } catch (e) { /* ignore */ }
-  }, []);
+      analyticsService.trackPageView(`${registryMode}-registry`, modeConfig.pageTitle);
+    } catch (e) {
+      /* ignore */
+    }
+  }, [registryMode, modeConfig.pageTitle]);
 
   // ── URL Sync ────────────────────────────────────────────────────
-
   useEffect(() => {
     const newParams = new URLSearchParams();
-    if (selectedCategoryId) newParams.set('category', selectedCategoryId);
+    if (selectedSubCategory) newParams.set('sub_category', selectedSubCategory);
     if (searchQuery.trim()) newParams.set('search', searchQuery.trim());
     const qs = newParams.toString();
     if (qs !== searchParams.toString()) {
       setSearchParams(newParams, { replace: true });
     }
-  }, [selectedCategoryId, searchQuery, setSearchParams, searchParams]);
+  }, [selectedSubCategory, searchQuery, setSearchParams, searchParams]);
 
-  // ── Filtered sidebar categories ─────────────────────────────────
+  // ── Assets scoped to this registry mode ─────────────────────────
+  const modeAssets = useMemo(() => {
+    if (isError) return [];
+    // Only keep assets whose resource_type_id matches the current mode
+    // (e.g. 'equipment' for Equipment Registry, 'asset' for Entity Registry)
+    return assets.filter((a) =>
+      modeConfig.typeIds.includes((a.resource_type_id || '').toLowerCase())
+    );
+  }, [assets, isError, modeConfig.typeIds]);
 
-  const filteredCategories = useMemo(() => {
-    if (!sidebarSearch.trim()) return categories;
+  // ── Client-side filtered assets ─────────────────────────────────
+  const displayAssets = useMemo(() => {
+    let filtered = modeAssets;
+
+    // Filter by sub_category (asset_type_id holds the specific resource UUID)
+    if (selectedSubCategory) {
+      const resourceIdsInSubCat = new Set(
+        (resourcesBySubCategory.get(selectedSubCategory) || []).map((r) => r.id)
+      );
+      filtered = filtered.filter((a) =>
+        resourceIdsInSubCat.has(a.asset_type_id || '')
+      );
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (a) =>
+          a.name.toLowerCase().includes(q) ||
+          (a.make || '').toLowerCase().includes(q) ||
+          (a.model || '').toLowerCase().includes(q) ||
+          (a.serial_number || '').toLowerCase().includes(q) ||
+          (a.location || '').toLowerCase().includes(q)
+      );
+    }
+
+    return filtered;
+  }, [modeAssets, selectedSubCategory, resourcesBySubCategory, searchQuery]);
+
+  // ── Sub-category asset counts (for sidebar badges) ──────────────
+  const subCategoryAssetCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    for (const asset of modeAssets) {
+      const subCat =
+        resourceIdToSubCategory.get(asset.asset_type_id || '') || 'Other';
+      counts[subCat] = (counts[subCat] || 0) + 1;
+    }
+
+    return counts;
+  }, [modeAssets, resourceIdToSubCategory]);
+
+  const totalAssetCount = modeAssets.length;
+
+  // ── Filtered sidebar sub-categories ─────────────────────────────
+  const filteredSubCategories = useMemo(() => {
+    if (!sidebarSearch.trim()) return subCategories;
     const q = sidebarSearch.toLowerCase();
-    return categories.filter((c) => c.name.toLowerCase().includes(q));
-  }, [sidebarSearch, categories]);
+    return subCategories.filter((sc) => sc.toLowerCase().includes(q));
+  }, [sidebarSearch, subCategories]);
 
-  // ── Selected category info ──────────────────────────────────────
-
-  const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  // ── All categories for form dialog (always pass full list) ───────
+  const allFormCategories = useMemo(() => {
+    return equipmentResources.map((r) => ({
+      id: r.id,
+      name: r.display_name || r.name,
+      sub_category: r.sub_category || null,
+      resource_type_id: r.resource_type_id,
+    }));
+  }, [equipmentResources]);
 
   // ── Handlers ────────────────────────────────────────────────────
 
-  const handleCategorySelect = (catId: string) => {
-    setSelectedCategoryId(catId);
+  const handleSubCategorySelect = (subCat: string | null) => {
+    setSelectedSubCategory(subCat);
     setSearchQuery('');
   };
 
@@ -159,20 +264,22 @@ const EquipmentPage: React.FC = () => {
   };
 
   const handleDelete = async (asset: TenantAsset) => {
-    if (!window.confirm(`Are you sure you want to remove "${asset.name}"?`)) return;
+    if (!window.confirm(`Are you sure you want to remove "${asset.name}"?`))
+      return;
     try {
       await deleteMutation.mutateAsync(asset.id);
-    } catch (err: any) { /* toast handled by hook */ }
+    } catch (err: any) {
+      /* toast handled by hook */
+    }
   };
 
   const handleCreateSubmit = async (data: AssetFormData) => {
     try {
-      await createMutation.mutateAsync({
-        ...data,
-        resource_type_id: data.resource_type_id || selectedCategoryId,
-      });
+      await createMutation.mutateAsync(data);
       setIsCreateOpen(false);
-    } catch (err: any) { /* toast handled by hook */ }
+    } catch (err: any) {
+      /* toast handled by hook */
+    }
   };
 
   const handleEditSubmit = async (data: AssetFormData) => {
@@ -181,33 +288,16 @@ const EquipmentPage: React.FC = () => {
       await updateMutation.mutateAsync({ id: editingAsset.id, data });
       setIsEditOpen(false);
       setEditingAsset(null);
-    } catch (err: any) { /* toast handled by hook */ }
-  };
-
-  const handleAddSuggestions = async (names: string[]) => {
-    for (const name of names) {
-      try {
-        await createMutation.mutateAsync({
-          name,
-          resource_type_id: selectedCategoryId,
-          status: 'active',
-          condition: 'good',
-          criticality: 'medium',
-          specifications: {},
-          tags: [],
-        });
-      } catch (err: any) { /* continue */ }
+    } catch (err: any) {
+      /* toast handled by hook */
     }
   };
-
-  // If API errors (e.g. edge not deployed), treat as empty — no assets yet
-  const displayAssets = isError ? [] : assets;
 
   // ── Render ──────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* ── Page Header (mockup style) ─────────────────────────────── */}
+      {/* ── Page Header ─────────────────────────────────────────── */}
       <div
         className="px-8 pt-6 pb-5 border-b"
         style={{
@@ -221,21 +311,28 @@ const EquipmentPage: React.FC = () => {
         >
           <span>Operations</span>
           <span>&rsaquo;</span>
-          <span style={{ color: colors.utility.primaryText, fontWeight: 600 }}>Equipment Registry</span>
+          <span
+            style={{ color: colors.utility.primaryText, fontWeight: 600 }}
+          >
+            {modeConfig.breadcrumb}
+          </span>
         </div>
         <h1
           className="text-xl font-extrabold tracking-tight"
           style={{ color: colors.utility.primaryText }}
         >
-          Equipment Registry
+          {modeConfig.pageTitle}
         </h1>
-        <p className="text-sm mt-1" style={{ color: colors.utility.secondaryText }}>
-          Register and manage the equipment you service. This data powers contract creation, scheduling, and evidence tracking.
+        <p
+          className="text-sm mt-1"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          {modeConfig.pageDescription}
         </p>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Left Sidebar: Categories ──────────────────────────────── */}
+        {/* ── Left Sidebar: Sub-Category Navigation ──────────────── */}
         <div
           className="w-[280px] min-w-[280px] border-r flex flex-col overflow-hidden"
           style={{
@@ -252,7 +349,7 @@ const EquipmentPage: React.FC = () => {
               className="text-[11px] font-bold uppercase tracking-widest mb-3"
               style={{ color: colors.utility.secondaryText }}
             >
-              Equipment Categories
+              {modeConfig.sidebarTitle}
             </h3>
             <Input
               placeholder="Search categories..."
@@ -267,52 +364,143 @@ const EquipmentPage: React.FC = () => {
             />
           </div>
 
-          {/* Category List */}
+          {/* Sub-Category List */}
           <div className="flex-1 overflow-y-auto p-2">
             {categoriesLoading ? (
               <div className="flex items-center justify-center py-8">
                 <VaNiLoader size="sm" message="Loading categories..." />
               </div>
-            ) : categoriesError || categories.length === 0 ? (
-              <div className="p-4 text-center text-xs" style={{ color: colors.utility.secondaryText }}>
-                {categoriesError ? 'Failed to load categories' : 'No equipment categories configured'}
+            ) : categoriesError || subCategories.length === 0 ? (
+              <div
+                className="p-4 text-center text-xs"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {categoriesError
+                  ? 'Failed to load categories'
+                  : `No ${modeConfig.itemLabel} categories configured`}
               </div>
             ) : (
               <>
-                {filteredCategories.map((cat) => {
-                  const isActive = selectedCategoryId === cat.id;
+                {/* "All Equipment" button */}
+                {!sidebarSearch.trim() && (
+                  <button
+                    onClick={() => handleSubCategorySelect(null)}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-0.5 transition-all text-left',
+                      selectedSubCategory === null ? '' : 'hover:opacity-80'
+                    )}
+                    style={{
+                      backgroundColor:
+                        selectedSubCategory === null
+                          ? colors.brand.primary + '12'
+                          : 'transparent',
+                    }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                      style={{
+                        backgroundColor:
+                          selectedSubCategory === null
+                            ? colors.brand.primary + '18'
+                            : colors.utility.primaryText + '08',
+                      }}
+                    >
+                      <Layers
+                        size={16}
+                        style={{
+                          color:
+                            selectedSubCategory === null
+                              ? colors.brand.primary
+                              : colors.utility.secondaryText,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-sm font-semibold truncate flex-1"
+                      style={{
+                        color:
+                          selectedSubCategory === null
+                            ? colors.brand.primary
+                            : colors.utility.primaryText,
+                      }}
+                    >
+                      {modeConfig.allLabel}
+                    </span>
+                    <span
+                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: colors.utility.primaryText + '08',
+                        color: colors.utility.secondaryText,
+                      }}
+                    >
+                      {totalAssetCount}
+                    </span>
+                  </button>
+                )}
+
+                {/* Sub-category items */}
+                {filteredSubCategories.map((subCat) => {
+                  const isActive = selectedSubCategory === subCat;
+                  const config = getSubCategoryConfig(subCat);
+                  const SubCatIcon = config?.icon || Package;
+                  const iconColor = config?.color || '#6B7280';
+                  const count = subCategoryAssetCounts[subCat] || 0;
+
                   return (
                     <button
-                      key={cat.id}
-                      onClick={() => handleCategorySelect(cat.id)}
+                      key={subCat}
+                      onClick={() => handleSubCategorySelect(subCat)}
                       className={cn(
                         'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-0.5 transition-all text-left',
                         isActive ? '' : 'hover:opacity-80'
                       )}
                       style={{
-                        backgroundColor: isActive ? (colors.brand.primary + '12') : 'transparent',
+                        backgroundColor: isActive
+                          ? colors.brand.primary + '12'
+                          : 'transparent',
                       }}
                     >
                       <div
                         className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: '#fffbeb' }}
+                        style={{
+                          backgroundColor: iconColor + '15',
+                        }}
                       >
-                        <CategoryIcon name={cat.icon} size={16} />
+                        <SubCatIcon
+                          size={16}
+                          style={{ color: iconColor }}
+                        />
                       </div>
                       <span
                         className="text-sm font-semibold truncate flex-1"
                         style={{
-                          color: isActive ? colors.brand.primary : colors.utility.primaryText,
+                          color: isActive
+                            ? colors.brand.primary
+                            : colors.utility.primaryText,
                         }}
                       >
-                        {cat.name}
+                        {subCat}
                       </span>
+                      {count > 0 && (
+                        <span
+                          className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: iconColor + '12',
+                            color: iconColor,
+                          }}
+                        >
+                          {count}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
 
-                {filteredCategories.length === 0 && (
-                  <div className="p-4 text-center text-xs" style={{ color: colors.utility.secondaryText }}>
+                {filteredSubCategories.length === 0 && (
+                  <div
+                    className="p-4 text-center text-xs"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
                     No matching categories
                   </div>
                 )}
@@ -321,23 +509,41 @@ const EquipmentPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Main Content Area ────────────────────────────────────── */}
+        {/* ── Main Content Area ────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
-          {/* Toolbar (mockup style) */}
+          {/* Toolbar */}
           <div className="flex items-center justify-between mb-5 flex-wrap gap-4">
             <div>
-              <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+              <span
+                className="text-sm"
+                style={{ color: colors.utility.secondaryText }}
+              >
                 {assetsLoading && !isError ? (
                   'Loading...'
                 ) : (
                   <>
-                    <strong style={{ color: colors.utility.primaryText, fontWeight: 700 }}>
+                    <strong
+                      style={{
+                        color: colors.utility.primaryText,
+                        fontWeight: 700,
+                      }}
+                    >
                       {displayAssets.length}
                     </strong>
-                    {' '}equipment items in{' '}
-                    <strong style={{ color: colors.utility.primaryText, fontWeight: 700 }}>
-                      {selectedCategory?.name || ''}
-                    </strong>
+                    {' '}{modeConfig.itemLabel} items
+                    {selectedSubCategory && (
+                      <>
+                        {' '}in{' '}
+                        <strong
+                          style={{
+                            color: colors.utility.primaryText,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {selectedSubCategory}
+                        </strong>
+                      </>
+                    )}
                   </>
                 )}
               </span>
@@ -346,9 +552,12 @@ const EquipmentPage: React.FC = () => {
             <div className="flex items-center gap-2">
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: colors.utility.secondaryText }} />
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                  style={{ color: colors.utility.secondaryText }}
+                />
                 <Input
-                  placeholder="Search equipment..."
+                  placeholder={modeConfig.searchPlaceholder}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-9 w-56 text-sm"
@@ -359,8 +568,14 @@ const EquipmentPage: React.FC = () => {
                   }}
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <X className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                  >
+                    <X
+                      className="h-3.5 w-3.5"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
                   </button>
                 )}
               </div>
@@ -383,7 +598,7 @@ const EquipmentPage: React.FC = () => {
               {/* Add Button */}
               <Button
                 onClick={handleCreateNew}
-                disabled={isMutating || !selectedCategoryId}
+                disabled={isMutating}
                 size="sm"
                 className="text-sm transition-colors hover:opacity-90"
                 style={{
@@ -392,7 +607,7 @@ const EquipmentPage: React.FC = () => {
                 }}
               >
                 <Plus className="mr-1.5 h-4 w-4" />
-                Add Equipment
+                {modeConfig.addLabel}
               </Button>
             </div>
           </div>
@@ -400,10 +615,10 @@ const EquipmentPage: React.FC = () => {
           {/* Content */}
           {assetsLoading && !isError ? (
             <div className="flex items-center justify-center py-24">
-              <VaNiLoader size="sm" message="Loading equipment..." />
+              <VaNiLoader size="sm" message={`Loading ${modeConfig.itemLabel}...`} />
             </div>
           ) : displayAssets.length > 0 ? (
-            /* Equipment Grid (mockup: auto-fill minmax 280px) */
+            /* Equipment Grid */
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
               {displayAssets.map((asset) => (
                 <EquipmentCard
@@ -424,8 +639,11 @@ const EquipmentPage: React.FC = () => {
                 borderColor: colors.utility.primaryText + '15',
               }}
             >
-              <p className="text-sm mb-3" style={{ color: colors.utility.secondaryText }}>
-                No equipment matching &ldquo;{searchQuery}&rdquo;
+              <p
+                className="text-sm mb-3"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                No {modeConfig.itemLabel} matching &ldquo;{searchQuery}&rdquo;
               </p>
               <Button
                 variant="outline"
@@ -440,22 +658,23 @@ const EquipmentPage: React.FC = () => {
               </Button>
             </div>
           ) : (
-            /* Empty state — suggestion chips (mockup style) */
+            /* Empty state */
             <EquipmentEmptyState
-              onAddCustom={handleCreateNew}
-              onAddSuggestions={handleAddSuggestions}
+              selectedSubCategory={selectedSubCategory}
+              onAddEquipment={handleCreateNew}
+              registryMode={registryMode}
             />
           )}
         </div>
       </div>
 
-      {/* ── Dialogs ──────────────────────────────────────────────── */}
+      {/* ── Dialogs ──────────────────────────────────────────── */}
       <EquipmentFormDialog
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         mode="create"
-        resourceTypeId={selectedCategoryId}
-        categories={categories}
+        defaultSubCategory={selectedSubCategory}
+        categories={allFormCategories}
         onSubmit={handleCreateSubmit}
         isSubmitting={createMutation.isPending}
       />
@@ -468,7 +687,7 @@ const EquipmentPage: React.FC = () => {
         }}
         mode="edit"
         asset={editingAsset || undefined}
-        categories={categories}
+        categories={allFormCategories}
         onSubmit={handleEditSubmit}
         isSubmitting={updateMutation.isPending}
       />

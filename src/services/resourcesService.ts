@@ -472,6 +472,7 @@ export interface ResourceTemplate {
   is_recommended: boolean;
   sort_order: number;
   already_added: boolean;
+  sub_category: string | null;
   make_examples: string[];
   maintenance_schedule: string | null;
   typical_lifespan_years: number | null;
