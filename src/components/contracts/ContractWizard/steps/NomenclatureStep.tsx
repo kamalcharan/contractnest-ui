@@ -43,7 +43,7 @@ import {
 
 interface NomenclatureStepProps {
   selectedId: string | null;
-  onSelect: (id: string | null, displayName: string | null, formSettings?: any) => void;
+  onSelect: (id: string | null, displayName: string | null, group?: string | null) => void;
 }
 
 // ─── Local types for grouped display ────────────────────────────────
@@ -204,6 +204,7 @@ const NomenclatureStep: React.FC<NomenclatureStepProps> = ({
             style={{ color: colors.utility.secondaryText }}
           >
             Select the nomenclature that best describes this contract.
+            This is optional — you can skip and assign it later.
           </p>
         </div>
 
@@ -258,7 +259,7 @@ const NomenclatureStep: React.FC<NomenclatureStepProps> = ({
                           onSelect(
                             isSelected ? null : item.id,
                             isSelected ? null : fs?.short_name || item.display_name || item.detail_name,
-                            isSelected ? undefined : fs
+                            isSelected ? null : fs?.group || null
                           )
                         }
                         className="relative flex flex-col p-4 rounded-xl border-2 text-left transition-all duration-200 hover:shadow-md group"
@@ -419,14 +420,12 @@ const NomenclatureStep: React.FC<NomenclatureStepProps> = ({
         })()}
 
         {/* Helper text */}
-        {!selectedItem && (
-          <p
-            className="text-center text-xs mt-6"
-            style={{ color: colors.semantic.warning }}
-          >
-            Please select a contract type to continue
-          </p>
-        )}
+        <p
+          className="text-center text-xs mt-6"
+          style={{ color: colors.utility.secondaryText }}
+        >
+          This is optional — click the selected card again to deselect, or just proceed to the next step
+        </p>
       </div>
     </div>
   );

@@ -41,6 +41,9 @@ interface EquipmentFormDialogProps {
   categories?: Array<{ id: string; name: string; sub_category?: string | null; resource_type_id?: string }>;
   onSubmit: (data: AssetFormData) => Promise<void>;
   isSubmitting?: boolean;
+  /** When set, locks the owner field to this contact (used from wizard where buyer is already known) */
+  lockedContactId?: string;
+  lockedContactName?: string;
 }
 
 const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
@@ -53,6 +56,8 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
   categories = [],
   onSubmit,
   isSubmitting = false,
+  lockedContactId,
+  lockedContactName,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -129,13 +134,18 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
       const specs = asset.specifications || {};
       setSpecRows(Object.entries(specs).map(([key, value]) => ({ key, value: String(value) })));
     } else {
-      setFormData({ ...DEFAULT_FORM_DATA, resource_type_id: resourceTypeId || '' });
+      setFormData({
+        ...DEFAULT_FORM_DATA,
+        resource_type_id: resourceTypeId || '',
+        // Auto-set owner when locked (wizard context)
+        ...(lockedContactId ? { owner_contact_id: lockedContactId } : {}),
+      });
       // Pre-select sub_category from sidebar selection
       setSelectedFormSubCategory(defaultSubCategory || '');
       setSpecRows([]);
     }
     setErrors({});
-  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, resourceIdToSubCategory]);
+  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, resourceIdToSubCategory, lockedContactId]);
 
   // Auto-select equipment type if only 1 in the selected sub_category
   useEffect(() => {
@@ -212,7 +222,8 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
     if (!selectedFormSubCategory) errs.sub_category = 'Category is required';
     if (!formData.asset_type_id) errs.resource_type_id = 'Equipment type is required';
     if (!formData.name.trim()) errs.name = 'Name is required';
-    if (!formData.owner_contact_id) errs.owner_contact_id = 'Client / Owner is required';
+    // Skip owner validation when locked from wizard (already set)
+    if (!lockedContactId && !formData.owner_contact_id) errs.owner_contact_id = 'Client / Owner is required';
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -389,12 +400,37 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
             <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
               Whose equipment is this?
             </p>
-            <ContactPicker
-              value={formData.owner_contact_id}
-              onChange={(contactId) => updateField('owner_contact_id', contactId)}
-              placeholder="Search client by name, email, or company..."
-              classifications={['client']}
-            />
+            {lockedContactId ? (
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
+                style={{
+                  borderColor: colors.brand.primary + '30',
+                  backgroundColor: colors.brand.primary + '06',
+                  color: colors.utility.primaryText,
+                }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ backgroundColor: colors.brand.primary + '18', color: colors.brand.primary }}
+                >
+                  {(lockedContactName || 'C').charAt(0).toUpperCase()}
+                </div>
+                <span className="font-medium truncate">{lockedContactName || 'Selected Client'}</span>
+                <span
+                  className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}
+                >
+                  Contract Buyer
+                </span>
+              </div>
+            ) : (
+              <ContactPicker
+                value={formData.owner_contact_id}
+                onChange={(contactId) => updateField('owner_contact_id', contactId)}
+                placeholder="Search client by name, email, or company..."
+                classifications={['client']}
+              />
+            )}
             {errors.owner_contact_id && <p className="text-xs text-red-500 mt-1">{errors.owner_contact_id}</p>}
           </div>
 

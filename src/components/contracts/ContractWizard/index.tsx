@@ -5,7 +5,7 @@ import { X, CheckCircle2, ArrowRight, Loader2, Copy, Check, Key, Mail, CreditCar
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
-import type { CreateContractRequest, RecordPaymentResponse, PaymentMethod, ContractEquipmentDetail } from '@/types/contracts';
+import type { CreateContractRequest, RecordPaymentResponse, PaymentMethod } from '@/types/contracts';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import FloatingActionIsland from './FloatingActionIsland';
@@ -21,8 +21,7 @@ import BillingViewStep from './steps/BillingViewStep';
 import ReviewSendStep from './steps/ReviewSendStep';
 import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
-import AssetSelectionStep from './steps/AssetSelectionStep';
-import EquipmentStep from './steps/EquipmentStep';
+import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } from './steps/AssetSelectionStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -54,6 +53,7 @@ export interface ContractWizardState {
   // Nomenclature (optional contract type classification)
   nomenclatureId: string | null;
   nomenclatureName: string | null;
+  nomenclatureGroup: string | null;
   // Acceptance
   acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
   // Contract Details
@@ -80,10 +80,10 @@ export interface ContractWizardState {
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
-  // Equipment / Entity Details (denormalized on contract)
-  equipmentDetails: ContractEquipmentDetail[];
   // Asset Selection
-  selectedAssetIds: string[];
+  equipmentDetails: EquipmentDetailItem[];
+  allowBuyerToAdd: boolean;
+  coverageTypes: CoverageTypeItem[];
   // Evidence Policy
   evidencePolicyType: EvidencePolicyType;
   evidenceSelectedForms: SelectedForm[];
@@ -99,7 +99,7 @@ interface ContractWizardProps {
 }
 
 // Step ID type for step-based routing
-type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'equipmentDetails' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
+type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
 
 interface StepConfig {
   id: StepId;
@@ -113,12 +113,11 @@ const CONTRACT_STEPS: StepConfig[] = [
   { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this?', subtitle: 'Select the nomenclature that best describes this contract' } },
   { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
   { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
-  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
   { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
+  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
   { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
-  { id: 'equipmentDetails', label: 'Equipment', heading: { title: 'Equipment & Entities', subtitle: 'Add equipment or entity details covered by this contract' } },
   { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
   { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
   { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
@@ -321,13 +320,13 @@ function mapWizardToRequest(
         }))
       : [],
 
-    // Denormalized equipment/entity details
-    equipment_details: state.equipmentDetails.length > 0
-      ? state.equipmentDetails
-      : undefined,
-
     // Computed events (for PGMQ trigger when contract becomes active)
     computed_events: computedEvents,
+
+    // Equipment / Entity details (JSONB — matches t_contracts.equipment_details)
+    equipment_details: state.equipmentDetails.length > 0 ? state.equipmentDetails : undefined,
+    allow_buyer_to_add_equipment: state.allowBuyerToAdd || undefined,
+    coverage_types: state.coverageTypes.length > 0 ? state.coverageTypes : undefined,
   };
 }
 
@@ -345,6 +344,7 @@ const createInitialWizardState = (): ContractWizardState => ({
   // Nomenclature
   nomenclatureId: null,
   nomenclatureName: null,
+  nomenclatureGroup: null,
   // Acceptance
   acceptanceMethod: null,
   // Contract Details
@@ -371,10 +371,10 @@ const createInitialWizardState = (): ContractWizardState => ({
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
-  // Equipment / Entity Details
-  equipmentDetails: [],
   // Asset Selection
-  selectedAssetIds: [],
+  equipmentDetails: [],
+  allowBuyerToAdd: false,
+  coverageTypes: [],
   // Evidence Policy
   evidencePolicyType: 'none',
   evidenceSelectedForms: [],
@@ -513,6 +513,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         return wizardState.selectedBlocks.length > 0;
       case 'billingView':
         return true;
+      case 'assetSelection':
+        // Coverage types are mandatory — user must pick at least one type
+        return wizardState.coverageTypes.length > 0;
       case 'evidencePolicy':
         return true; // Evidence policy always has a default (none)
       case 'events':
@@ -908,9 +911,10 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Nomenclature selection handler
   const handleNomenclatureSelect = useCallback(
-    (id: string | null, displayName: string | null) => {
+    (id: string | null, displayName: string | null, group?: string | null) => {
       updateWizardState('nomenclatureId', id);
       updateWizardState('nomenclatureName', displayName);
+      updateWizardState('nomenclatureGroup', group ?? null);
     },
     [updateWizardState]
   );
@@ -1138,25 +1142,23 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           />
         );
       }
-      case 'equipmentDetails': {
-        return (
-          <EquipmentStep
-            equipmentDetails={wizardState.equipmentDetails}
-            onEquipmentDetailsChange={(details) =>
-              updateWizardState('equipmentDetails', details)
-            }
-            contractType={contractType}
-            buyerId={wizardState.buyerId}
-          />
-        );
-      }
       case 'assetSelection': {
         return (
           <AssetSelectionStep
             contactId={wizardState.buyerId || ''}
-            selectedAssetIds={wizardState.selectedAssetIds}
-            onSelectedAssetIdsChange={(ids) =>
-              updateWizardState('selectedAssetIds', ids)
+            buyerName={wizardState.buyerName}
+            nomenclatureGroup={wizardState.nomenclatureGroup}
+            equipmentDetails={wizardState.equipmentDetails}
+            onEquipmentDetailsChange={(items) =>
+              updateWizardState('equipmentDetails', items)
+            }
+            allowBuyerToAdd={wizardState.allowBuyerToAdd}
+            onAllowBuyerToAddChange={(allow) =>
+              updateWizardState('allowBuyerToAdd', allow)
+            }
+            coverageTypes={wizardState.coverageTypes}
+            onCoverageTypesChange={(types) =>
+              updateWizardState('coverageTypes', types)
             }
           />
         );

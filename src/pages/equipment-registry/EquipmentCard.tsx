@@ -1,55 +1,42 @@
-// src/pages/settings/Equipment/EquipmentCard.tsx
+// src/pages/equipment-registry/EquipmentCard.tsx
 // Card component for a single equipment item in the grid view
-// Supports 3 modes: edit (default), selectable (wizard picker), readOnly (contract detail)
+// Supports optional selectable mode for use inside the Contract Wizard
 
 import React from 'react';
-import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, Check } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, CheckSquare, Square } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import type { TenantAsset } from '@/types/assetRegistry';
-import type { ClientAsset } from '@/types/clientAssetRegistry';
+import type { TenantAsset, AssetCondition } from '@/types/assetRegistry';
 import { CONDITION_CONFIG, getWarrantyStatus } from '@/types/assetRegistry';
+import type { ClientAsset } from '@/types/clientAssetRegistry';
 
-// Accept both TenantAsset and ClientAsset — structurally compatible
-type AssetData = TenantAsset | ClientAsset;
+// Union type — both share the same fields used by this card
+export type CardAsset = TenantAsset | ClientAsset;
 
-interface EquipmentCardBaseProps {
-  asset: AssetData;
+interface EquipmentCardProps {
+  asset: CardAsset;
+  onEdit?: (asset: CardAsset) => void;
+  onDelete?: (asset: CardAsset) => void;
   disabled?: boolean;
+  // Wizard selection mode
+  selectable?: boolean;
+  isSelected?: boolean;
+  onToggle?: (asset: CardAsset) => void;
 }
 
-interface EditModeProps extends EquipmentCardBaseProps {
-  mode?: 'edit';
-  onEdit: (asset: AssetData) => void;
-  onDelete: (asset: AssetData) => void;
-  selected?: never;
-  onSelect?: never;
-}
-
-interface SelectableModeProps extends EquipmentCardBaseProps {
-  mode: 'selectable';
-  selected: boolean;
-  onSelect: (asset: AssetData) => void;
-  onEdit?: never;
-  onDelete?: never;
-}
-
-interface ReadOnlyModeProps extends EquipmentCardBaseProps {
-  mode: 'readOnly';
-  onEdit?: never;
-  onDelete?: never;
-  selected?: never;
-  onSelect?: never;
-}
-
-type EquipmentCardProps = EditModeProps | SelectableModeProps | ReadOnlyModeProps;
-
-const EquipmentCard: React.FC<EquipmentCardProps> = (props) => {
-  const { asset, disabled, mode = 'edit' } = props;
+const EquipmentCard: React.FC<EquipmentCardProps> = ({
+  asset,
+  onEdit,
+  onDelete,
+  disabled,
+  selectable = false,
+  isSelected = false,
+  onToggle,
+}) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const conditionCfg = CONDITION_CONFIG[asset.condition] || CONDITION_CONFIG.good;
+  const conditionCfg = CONDITION_CONFIG[asset.condition as AssetCondition] || CONDITION_CONFIG.good;
   const warranty = getWarrantyStatus(asset.warranty_expiry);
 
   const WarrantyIcon = warranty.variant === 'active' ? Shield
@@ -62,72 +49,56 @@ const EquipmentCard: React.FC<EquipmentCardProps> = (props) => {
     : warranty.variant === 'expired' ? '#ef4444'
     : colors.utility.secondaryText;
 
-  const isSelectable = mode === 'selectable';
-  const isSelected = isSelectable && (props as SelectableModeProps).selected;
-  const isReadOnly = mode === 'readOnly';
-
-  const isBuyerPlaceholder = (asset as any).specifications?.buyer_to_fill === 'true';
-
   const handleClick = () => {
-    if (isSelectable) {
-      (props as SelectableModeProps).onSelect(asset);
-    } else if (mode === 'edit') {
-      (props as EditModeProps).onEdit(asset);
+    if (selectable && onToggle) {
+      onToggle(asset);
+    } else if (onEdit) {
+      onEdit(asset);
     }
   };
 
   return (
     <div
-      className={`rounded-lg border transition-all duration-200 ${isReadOnly ? '' : 'hover:shadow-lg cursor-pointer'} group`}
+      className="rounded-lg border-2 transition-all duration-200 hover:shadow-lg cursor-pointer group relative"
       style={{
         backgroundColor: isSelected
-          ? colors.brand.primary + '08'
+          ? colors.brand.primary + '06'
           : colors.utility.secondaryBackground,
         borderColor: isSelected
-          ? colors.brand.primary + '50'
+          ? colors.brand.primary
           : colors.utility.primaryText + '15',
-        borderWidth: isSelected ? '2px' : '1px',
         opacity: asset.is_active ? 1 : 0.65,
       }}
       onClick={handleClick}
     >
       <div className="p-5">
-        {/* Top Row: Condition Badge + Selection Checkbox */}
+        {/* Top Row: Icon + Condition Badge / Checkbox */}
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {isSelectable && (
-              <div
-                className="w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                style={{
-                  borderColor: isSelected ? colors.brand.primary : colors.utility.primaryText + '30',
-                  backgroundColor: isSelected ? colors.brand.primary : 'transparent',
-                }}
-              >
-                {isSelected && <Check className="h-3 w-3 text-white" />}
-              </div>
-            )}
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-              style={{ backgroundColor: conditionCfg.bg }}
-            >
-              {asset.resource_type_id ? '🔧' : '🏢'}
-            </div>
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+            style={{ backgroundColor: conditionCfg.bg }}
+          >
+            {(asset.resource_type_id || '').toLowerCase() === 'asset' ? '🏢' : '🔧'}
           </div>
-          <div className="flex items-center gap-1.5">
-            {isBuyerPlaceholder && (
-              <span
-                className="text-[9px] px-2 py-0.5 rounded-full font-semibold"
-                style={{ backgroundColor: '#f59e0b18', color: '#f59e0b' }}
-              >
-                Buyer to fill
-              </span>
-            )}
+          <div className="flex items-center gap-2">
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full"
               style={{ backgroundColor: conditionCfg.bg, color: conditionCfg.color }}
             >
               {conditionCfg.label}
             </span>
+            {selectable && (
+              <div
+                onClick={(e) => { e.stopPropagation(); handleClick(); }}
+                className="flex items-center justify-center"
+              >
+                {isSelected ? (
+                  <CheckSquare size={20} style={{ color: colors.brand.primary }} />
+                ) : (
+                  <Square size={20} style={{ color: colors.utility.secondaryText }} />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -184,8 +155,8 @@ const EquipmentCard: React.FC<EquipmentCardProps> = (props) => {
           </div>
         )}
 
-        {/* Actions (visible on hover) — only in edit mode */}
-        {mode === 'edit' && (
+        {/* Actions (visible on hover) — hidden in selectable mode */}
+        {!selectable && onEdit && onDelete && (
           <div
             className="flex items-center gap-2 mt-3 pt-3 opacity-0 group-hover:opacity-100 transition-opacity"
             style={{ borderTop: `1px solid ${colors.utility.primaryText}15` }}
@@ -194,7 +165,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = (props) => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => (props as EditModeProps).onEdit(asset)}
+              onClick={() => onEdit(asset)}
               disabled={disabled}
               className="flex-1 text-xs transition-colors hover:opacity-80"
               style={{
@@ -209,7 +180,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = (props) => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => (props as EditModeProps).onDelete(asset)}
+              onClick={() => onDelete(asset)}
               disabled={disabled}
               className="text-xs transition-colors hover:opacity-80"
               style={{
