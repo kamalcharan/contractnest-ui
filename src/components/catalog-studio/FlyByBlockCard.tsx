@@ -240,6 +240,17 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
               >
                 FlyBy {typeConfig.label}
               </span>
+              {block.coverageTypeName && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                  style={{
+                    backgroundColor: `${colors.utility.primaryText}08`,
+                    color: colors.utility.secondaryText,
+                  }}
+                >
+                  {block.coverageTypeName}
+                </span>
+              )}
               {hasQuantity && (
                 <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
                   {block.unlimited ? '∞' : `×${block.quantity}`}
