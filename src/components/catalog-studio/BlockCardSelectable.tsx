@@ -113,12 +113,25 @@ const BlockCardSelectable: React.FC<BlockCardSelectableProps> = ({
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <h4
-              className="font-semibold text-sm truncate"
-              style={{ color: colors.utility.primaryText }}
-            >
-              {block.name}
-            </h4>
+            <div className="flex items-center gap-1.5">
+              <h4
+                className="font-semibold text-sm truncate"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {block.name}
+              </h4>
+              {block.meta?.resourceTag && (
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded-md font-semibold flex-shrink-0"
+                  style={{
+                    backgroundColor: `${colors.brand.primary}12`,
+                    color: colors.brand.primary,
+                  }}
+                >
+                  {block.meta.resourceTag as string}
+                </span>
+              )}
+            </div>
             <p
               className="text-xs line-clamp-1 mt-0.5"
               style={{ color: colors.utility.secondaryText }}

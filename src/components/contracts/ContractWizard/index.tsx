@@ -5,7 +5,7 @@ import { X, CheckCircle2, ArrowRight, Loader2, Copy, Check, Key, Mail, CreditCar
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
-import type { CreateContractRequest, RecordPaymentResponse, PaymentMethod } from '@/types/contracts';
+import type { CreateContractRequest, RecordPaymentResponse, PaymentMethod, ContractEquipmentDetail } from '@/types/contracts';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import FloatingActionIsland from './FloatingActionIsland';
@@ -22,6 +22,7 @@ import ReviewSendStep from './steps/ReviewSendStep';
 import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
 import AssetSelectionStep from './steps/AssetSelectionStep';
+import EquipmentStep from './steps/EquipmentStep';
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -79,6 +80,8 @@ export interface ContractWizardState {
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
+  // Equipment / Entity Details (denormalized on contract)
+  equipmentDetails: ContractEquipmentDetail[];
   // Asset Selection
   selectedAssetIds: string[];
   // Evidence Policy
@@ -96,7 +99,7 @@ interface ContractWizardProps {
 }
 
 // Step ID type for step-based routing
-type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
+type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'equipmentDetails' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
 
 interface StepConfig {
   id: StepId;
@@ -110,11 +113,12 @@ const CONTRACT_STEPS: StepConfig[] = [
   { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this?', subtitle: 'Select the nomenclature that best describes this contract' } },
   { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
   { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
+  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
   { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
   { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
-  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
+  { id: 'equipmentDetails', label: 'Equipment', heading: { title: 'Equipment & Entities', subtitle: 'Add equipment or entity details covered by this contract' } },
   { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
   { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
   { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
@@ -317,6 +321,11 @@ function mapWizardToRequest(
         }))
       : [],
 
+    // Denormalized equipment/entity details
+    equipment_details: state.equipmentDetails.length > 0
+      ? state.equipmentDetails
+      : undefined,
+
     // Computed events (for PGMQ trigger when contract becomes active)
     computed_events: computedEvents,
   };
@@ -362,6 +371,8 @@ const createInitialWizardState = (): ContractWizardState => ({
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
+  // Equipment / Entity Details
+  equipmentDetails: [],
   // Asset Selection
   selectedAssetIds: [],
   // Evidence Policy
@@ -1124,6 +1135,18 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             perBlockPaymentType={wizardState.perBlockPaymentType}
             onPerBlockPaymentTypeChange={handlePerBlockPaymentTypeChange}
             contractDuration={billingDuration}
+          />
+        );
+      }
+      case 'equipmentDetails': {
+        return (
+          <EquipmentStep
+            equipmentDetails={wizardState.equipmentDetails}
+            onEquipmentDetailsChange={(details) =>
+              updateWizardState('equipmentDetails', details)
+            }
+            contractType={contractType}
+            buyerId={wizardState.buyerId}
           />
         );
       }

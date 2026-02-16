@@ -176,6 +176,11 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         ? blockPrice
         : blockPrice + (blockPrice * totalTaxRate / 100);
 
+      // Extract resource metadata (present on fanned-out resource-based blocks)
+      const resourceTag = block.meta?.resourceTag as string | undefined;
+      const resourceId = block.meta?.resourceId as string | undefined;
+      const originalBlockId = block.meta?.originalBlockId as string | undefined;
+
       const newBlock: ConfigurableBlock = {
         id: block.id,
         name: block.name,
@@ -194,6 +199,10 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         categoryBgColor: category?.bgColor,
         categoryId: block.categoryId,
         isFlyBy: false,
+        // Resource-based block fields
+        resourceId: resourceId,
+        resourceName: resourceTag,
+        originalBlockId: originalBlockId,
         taxRate: totalTaxRate,
         taxInclusion: taxInclusion,
         taxes: taxes.map(t => ({ name: t.name, rate: t.rate })),

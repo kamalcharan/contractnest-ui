@@ -71,6 +71,48 @@ export const RFQ_STATUS_FLOW: Record<string, ContractStatus[]> = {
 };
 
 // =================================================================
+// EQUIPMENT / ENTITY DETAIL (denormalized on t_contracts)
+// =================================================================
+
+/** Single equipment or entity entry stored in t_contracts.equipment_details JSONB */
+export interface ContractEquipmentDetail {
+  /** Client-generated UUID for local list identity */
+  id: string;
+  /** Optional FK back to t_client_asset_registry */
+  asset_registry_id?: string | null;
+  /** Tenant who added this entry */
+  added_by_tenant_id?: string;
+  /** Role of who added: seller or buyer */
+  added_by_role?: 'seller' | 'buyer';
+  /** equipment or entity */
+  resource_type: 'equipment' | 'entity';
+  /** FK to m_catalog_resource_types (optional) */
+  category_id?: string | null;
+  /** Denormalized category name, e.g. "Diagnostic Imaging" */
+  category_name: string;
+  /** Specific item name, e.g. "MRI Scanner" */
+  item_name: string;
+  /** Quantity of this item */
+  quantity: number;
+  // Equipment-specific
+  make?: string | null;
+  model?: string | null;
+  serial_number?: string | null;
+  condition?: 'good' | 'fair' | 'poor' | 'critical' | null;
+  criticality?: 'low' | 'medium' | 'high' | 'critical' | null;
+  location?: string | null;
+  purchase_date?: string | null;
+  warranty_expiry?: string | null;
+  // Entity-specific
+  area_sqft?: number | null;
+  dimensions?: { length?: number; width?: number; height?: number; unit?: string } | null;
+  capacity?: number | null;
+  // Overflow
+  specifications?: Record<string, any>;
+  notes?: string | null;
+}
+
+// =================================================================
 // CORE ENTITY INTERFACES
 // =================================================================
 
@@ -139,6 +181,8 @@ export interface Contract {
   // Evidence policy (set during contract creation wizard)
   evidence_policy_type?: 'none' | 'upload' | 'smart_form';
   evidence_selected_forms?: Array<{ form_template_id: string; name: string; sequence: number }>;
+  // Denormalized equipment/entity details
+  equipment_details?: ContractEquipmentDetail[];
 }
 
 export interface ContractBlock {
@@ -343,6 +387,8 @@ export interface CreateContractRequest {
   vendors?: Array<Record<string, any>>;
   notes?: string;
   metadata?: Record<string, any>;
+  // Denormalized equipment/entity details
+  equipment_details?: ContractEquipmentDetail[];
 }
 
 export interface UpdateContractRequest {
@@ -373,6 +419,8 @@ export interface UpdateContractRequest {
   version: number; // Required for optimistic concurrency
   blocks?: Array<Record<string, any>>;
   vendors?: Array<Record<string, any>>;
+  // Denormalized equipment/entity details
+  equipment_details?: ContractEquipmentDetail[];
 }
 
 export interface UpdateContractStatusRequest {

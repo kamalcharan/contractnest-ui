@@ -74,11 +74,103 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<string[]>(['service']); // Default expand services
 
-  // Convert API blocks to UI blocks
+  // Convert API blocks to UI blocks, fanning out resource-based blocks
   const allBlocks: Block[] = useMemo(() => {
     const rawBlocks = blocksResponse?.data?.blocks;
     if (!rawBlocks || !Array.isArray(rawBlocks)) return [];
-    return catBlocksToBlocks(rawBlocks);
+    const blocks = catBlocksToBlocks(rawBlocks);
+
+    // Fan out resource-based blocks: one entry per resource option
+    const fanned: Block[] = [];
+    for (const block of blocks) {
+      const pricingMode = block.meta?.pricingMode as string;
+
+      if (pricingMode !== 'resource_based') {
+        fanned.push(block);
+        continue;
+      }
+
+      // Primary path: use resource_pricing.options (built JSONB from DB)
+      const resourcePricing = block.meta?.resource_pricing as {
+        resource_type_id?: string;
+        options?: Array<{ resource_id: string; name: string; price: number; currency?: string }>;
+      } | undefined;
+
+      // Fallback data from config
+      const selectedResources = (block.meta?.selectedResources || []) as Array<{
+        resource_id: string; resource_type_id: string; resource_name: string;
+      }>;
+      const rpRecords = (block.meta?.resourcePricingRecords || []) as Array<{
+        resourceTypeId: string; currency: string; pricePerUnit: number;
+        tax_inclusion: string; taxes: Array<{ id: string; name: string; rate: number }>;
+      }>;
+
+      const options = resourcePricing?.options;
+
+      if (options && options.length > 0) {
+        // Create one virtual block per resource option
+        for (const opt of options) {
+          const sr = selectedResources.find(s => s.resource_id === opt.resource_id);
+          const rp = sr ? rpRecords.find(r => r.resourceTypeId === sr.resource_type_id) : rpRecords[0];
+          const optCurrency = opt.currency || block.currency || 'INR';
+
+          fanned.push({
+            ...block,
+            id: `${block.id}__res__${opt.resource_id}`,
+            price: opt.price,
+            currency: optCurrency,
+            meta: {
+              ...block.meta,
+              resourceTag: opt.name,
+              resourceId: opt.resource_id,
+              originalBlockId: block.id,
+              // Override pricingRecords so currency filter & price display use resource price
+              pricingRecords: [{
+                id: `rp-${opt.resource_id}`,
+                currency: optCurrency,
+                amount: opt.price,
+                is_active: true,
+                tax_inclusion: rp?.tax_inclusion || 'exclusive',
+                taxes: rp?.taxes || [],
+              }],
+            },
+          });
+        }
+      } else if (selectedResources.length > 0) {
+        // Fallback: use selectedResources + resourcePricingRecords from config
+        for (const sr of selectedResources) {
+          const rp = rpRecords.find(r => r.resourceTypeId === sr.resource_type_id) || rpRecords[0];
+          const price = rp?.pricePerUnit || block.price || 0;
+          const cur = rp?.currency || block.currency || 'INR';
+
+          fanned.push({
+            ...block,
+            id: `${block.id}__res__${sr.resource_id}`,
+            price: price,
+            currency: cur,
+            meta: {
+              ...block.meta,
+              resourceTag: sr.resource_name,
+              resourceId: sr.resource_id,
+              originalBlockId: block.id,
+              pricingRecords: [{
+                id: `rp-${sr.resource_id}`,
+                currency: cur,
+                amount: price,
+                is_active: true,
+                tax_inclusion: rp?.tax_inclusion || 'exclusive',
+                taxes: rp?.taxes || [],
+              }],
+            },
+          });
+        }
+      } else {
+        // No resource options defined, show as-is
+        fanned.push(block);
+      }
+    }
+
+    return fanned;
   }, [blocksResponse]);
 
   // Get categories with counts (filtered by currency if provided)
@@ -101,20 +193,20 @@ const BlockLibraryMini: React.FC<BlockLibraryMiniProps> = ({
     if (!searchQuery.trim()) return categoriesWithCounts;
 
     const query = searchQuery.toLowerCase();
+    const matchesSearch = (block: Block) =>
+      block.name.toLowerCase().includes(query) ||
+      (block.description || '').toLowerCase().includes(query) ||
+      ((block.meta?.resourceTag as string) || '').toLowerCase().includes(query);
+
     return categoriesWithCounts
-      .map((cat) => ({
-        ...cat,
-        blocks: cat.blocks.filter(
-          (block) =>
-            block.name.toLowerCase().includes(query) ||
-            (block.description || '').toLowerCase().includes(query)
-        ),
-        count: cat.blocks.filter(
-          (block) =>
-            block.name.toLowerCase().includes(query) ||
-            (block.description || '').toLowerCase().includes(query)
-        ).length,
-      }))
+      .map((cat) => {
+        const filtered = cat.blocks.filter(matchesSearch);
+        return {
+          ...cat,
+          blocks: filtered,
+          count: filtered.length,
+        };
+      })
       .filter((cat) => cat.count > 0 || cat.hasFlyBy);
   }, [categoriesWithCounts, searchQuery]);
 

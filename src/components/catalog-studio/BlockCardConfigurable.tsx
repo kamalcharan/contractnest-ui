@@ -60,6 +60,10 @@ export interface ConfigurableBlock {
   categoryId?: string;
   isFlyBy?: boolean;
   flyByType?: string; // 'service' | 'spare' | 'text' | 'document'
+  // Resource-based block fields (from catalog fan-out)
+  resourceId?: string; // ID of the resource option this block is tied to
+  resourceName?: string; // Display name of the resource (e.g., "MRI Scanner")
+  originalBlockId?: string; // The base catalog block ID before fan-out
   taxRate?: number; // Total tax rate percentage (e.g. 18)
   taxInclusion?: 'inclusive' | 'exclusive';
   taxes?: Array<{ id: string; name: string; rate: number }>; // Individual tax lines from master data
@@ -270,6 +274,17 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               >
                 {block.categoryName}
               </span>
+              {block.resourceName && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                  style={{
+                    backgroundColor: `${colors.brand.primary}12`,
+                    color: colors.brand.primary,
+                  }}
+                >
+                  {block.resourceName}
+                </span>
+              )}
               {hasPricing && (
                 <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
                   {block.unlimited ? '∞' : `×${block.quantity}`} • {currentCycle.shortLabel}
