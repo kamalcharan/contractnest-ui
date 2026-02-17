@@ -2,6 +2,7 @@
 // Contract Evidence Tab — shows all service evidence across the contract
 // Grouped by ticket, filterable by type, expandable evidence items
 // Wired to real API via useContractEvidence + useServiceTicketsForContract
+// R4: Added optional `role` prop — buyer sees simplified labels, no internal assignee info
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -28,6 +29,7 @@ import {
   useServiceTicketsForContract,
 } from '@/hooks/queries/useServiceExecution';
 import type { ServiceEvidence, ServiceTicket } from '@/hooks/queries/useServiceExecution';
+import type { ContractRole } from '@/hooks/useContractRole';
 
 // ═══════════════════════════════════════════════════
 // TYPES
@@ -37,6 +39,8 @@ export interface EvidenceTabProps {
   contractId: string;
   currency: string;
   colors: any;
+  /** Optional role — when 'buyer', hides internal details (assignee, internal notes) */
+  role?: ContractRole;
 }
 
 interface TicketEvidenceGroup {
@@ -75,9 +79,11 @@ type EvidenceFilter = 'all' | 'upload-form' | 'otp' | 'service-form';
 // COMPONENT
 // ═══════════════════════════════════════════════════
 
-const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors }) => {
+const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors, role }) => {
   const [filter, setFilter] = useState<EvidenceFilter>('all');
   const [expandedTickets, setExpandedTickets] = useState<Set<string>>(new Set());
+
+  const isBuyerView = role === 'buyer';
 
   // Fetch real evidence and tickets for this contract
   const { data: evidenceData, isLoading: loadingEvidence, error, refetch } = useContractEvidence(contractId);
@@ -136,9 +142,9 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
 
   const filters: { key: EvidenceFilter; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: totalEvidence },
-    { key: 'upload-form', label: 'Uploads', count: uploadFormCount },
+    { key: 'upload-form', label: isBuyerView ? 'Photos & Files' : 'Uploads', count: uploadFormCount },
     { key: 'otp', label: 'Verifications', count: otpCount },
-    { key: 'service-form', label: 'Forms', count: serviceFormCount },
+    { key: 'service-form', label: isBuyerView ? 'Reports' : 'Forms', count: serviceFormCount },
   ];
 
   if (isLoading) {
@@ -175,10 +181,13 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
     return (
       <div className="rounded-xl border p-12 text-center" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: `${colors.utility.primaryText}15` }}>
         <Camera className="h-14 w-14 mx-auto mb-4" style={{ color: `${colors.utility.secondaryText}60` }} />
-        <h3 className="text-lg font-semibold mb-2" style={{ color: colors.utility.primaryText }}>No Evidence Yet</h3>
+        <h3 className="text-lg font-semibold mb-2" style={{ color: colors.utility.primaryText }}>
+          {isBuyerView ? 'No Proof of Work Yet' : 'No Evidence Yet'}
+        </h3>
         <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-          Evidence will appear here once service tickets are completed.
-          Photos, documents, and verification records will be organized by ticket.
+          {isBuyerView
+            ? 'Photos, documents, and verification records from completed services will appear here.'
+            : 'Evidence will appear here once service tickets are completed. Photos, documents, and verification records will be organized by ticket.'}
         </p>
       </div>
     );
@@ -194,14 +203,14 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
         <div className="flex items-center gap-2">
           <Camera className="w-4 h-4" style={{ color: colors.brand.primary }} />
           <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-            {totalEvidence} Evidence Items
+            {totalEvidence} {isBuyerView ? 'Proof Items' : 'Evidence Items'}
           </span>
         </div>
         <div className="h-4 w-px" style={{ backgroundColor: `${colors.utility.primaryText}12` }} />
         <div className="flex items-center gap-2">
           <Ticket className="w-3.5 h-3.5" style={{ color: colors.semantic?.success || '#10B981' }} />
           <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-            {ticketGroups.length} ticket{ticketGroups.length !== 1 ? 's' : ''}
+            {ticketGroups.length} {isBuyerView ? 'service' : 'ticket'}{ticketGroups.length !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -280,7 +289,7 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-                      {group.ticketNumber}
+                      {isBuyerView ? `Service #${group.ticketNumber}` : group.ticketNumber}
                     </span>
                     <span
                       className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
@@ -296,10 +305,13 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
                         {formatDate(group.date)}
                       </span>
                     )}
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {group.assignedTo}
-                    </span>
+                    {/* Hide assignee from buyer — internal info */}
+                    {!isBuyerView && (
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {group.assignedTo}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <ChevronDown
@@ -319,6 +331,28 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
                       const evType = EVIDENCE_ICON_MAP[ev.evidence_type] || EVIDENCE_ICON_MAP['upload-form'];
                       const EvIcon = evType.icon;
                       const evColor = evType.color;
+
+                      // Buyer-friendly description: no internal names
+                      const getDescription = (): string => {
+                        if (ev.evidence_type === 'otp') {
+                          if (isBuyerView) {
+                            return ev.otp_verified ? 'Verified' : 'Pending verification';
+                          }
+                          return ev.otp_verified ? `Verified by ${ev.otp_verified_by_name || 'Customer'}` : 'Pending verification';
+                        }
+                        if (ev.evidence_type === 'service-form') {
+                          return isBuyerView ? 'Service report' : 'Service form data';
+                        }
+                        // upload-form
+                        if (ev.file_size) {
+                          return `${(ev.file_size / 1024 / 1024).toFixed(1)} MB`;
+                        }
+                        if (!isBuyerView && ev.uploaded_by_name) {
+                          return ev.uploaded_by_name;
+                        }
+                        return '';
+                      };
+
                       return (
                         <div
                           key={ev.id}
@@ -339,12 +373,7 @@ const EvidenceTab: React.FC<EvidenceTabProps> = ({ contractId, currency, colors 
                               {ev.file_name || ev.block_name || ev.evidence_type.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                             </p>
                             <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
-                              {ev.evidence_type === 'otp'
-                                ? (ev.otp_verified ? `Verified by ${ev.otp_verified_by_name || 'Customer'}` : 'Pending verification')
-                                : ev.evidence_type === 'service-form'
-                                ? 'Service form data'
-                                : (ev.file_size ? `${(ev.file_size / 1024 / 1024).toFixed(1)} MB` : ev.uploaded_by_name || '')
-                              }
+                              {getDescription()}
                             </p>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">

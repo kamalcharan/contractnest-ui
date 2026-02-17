@@ -1,6 +1,7 @@
 // src/pages/contracts/detail/index.tsx
 // Contract 360° View — full lifecycle dashboard
-import React, { useState } from 'react';
+// R4: Buyer view + Document tab + edge cases (draft/cancelled/expired)
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -37,6 +38,10 @@ import {
   ChevronUp,
   Hash,
   Download,
+  LayoutDashboard,
+  Activity,
+  Inbox,
+  TrendingUp,
 } from 'lucide-react';
 import { useContract } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
@@ -64,6 +69,11 @@ import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSe
 import { useContractRole } from '@/hooks/useContractRole';
 import { useContractHealth } from '@/hooks/useContractHealth';
 import ContractHealthCard from '@/components/contracts/ContractHealthCard';
+import SellerOverview from '@/components/contracts/SellerOverview';
+import SellerTasksTab from '@/components/contracts/SellerTasksTab';
+import BuyerOverview from '@/components/contracts/BuyerOverview';
+import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
+import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
 import type { ReviewSendStepProps } from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
 import { ConfigurableBlock } from '@/components/catalog-studio/BlockCardConfigurable';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -222,15 +232,22 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
 // TAB DEFINITIONS
 // ═══════════════════════════════════════════════════
 
-type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document';
+type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document' | 'overview' | 'tasks' | 'my_services' | 'payments' | 'proof_of_work' | 'requests';
 
-const TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'operations', label: 'Ops Overview', icon: Calendar },
-  { id: 'financials', label: 'Financials', icon: DollarSign },
-  { id: 'evidence', label: 'Evidence', icon: Camera },
-  { id: 'communication', label: 'Communication', icon: MessageSquare },
-  { id: 'audit', label: 'Audit Log', icon: ScrollText },
+const BUYER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'my_services', label: 'My Services', icon: Calendar },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
+  { id: 'proof_of_work', label: 'Proof of Work', icon: Camera },
+  { id: 'requests', label: 'Requests', icon: Inbox },
   { id: 'document', label: 'Document', icon: FileText },
+];
+
+const SELLER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'tasks', label: 'Tasks', icon: Clock },
+  { id: 'financials', label: 'Financials', icon: DollarSign },
+  { id: 'audit', label: 'Audit Log', icon: ScrollText },
 ];
 
 // ═══════════════════════════════════════════════════
@@ -1155,8 +1172,8 @@ const ContractDetailPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const [activeTab, setActiveTab] = useState<TabId>('operations');
+  const [tabInitialized, setTabInitialized] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
-  // expandedInvoiceId removed — invoice cards are now flat with 3 action icons
 
   const { data: contract, isLoading, error } = useContract(id || null);
   const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
@@ -1167,7 +1184,26 @@ const ContractDetailPage: React.FC = () => {
   const { addToast } = useVaNiToast();
 
   // ─── Dual-persona role + health ───
-  const { role } = useContractRole(contract ?? null);
+  const { role, isSeller, isBuyer, permissions } = useContractRole(contract ?? null);
+
+  // ─── Edge cases: draft/cancelled/expired default to seller/creator view ───
+  const isTerminalState = contract?.status === 'cancelled' || contract?.status === 'expired';
+  const isDraft = contract?.status === 'draft';
+
+  // Set default tab based on resolved role (only once)
+  useEffect(() => {
+    if (!tabInitialized && role !== 'unknown') {
+      if (isSeller || isDraft) {
+        setActiveTab('overview');
+      } else if (isBuyer) {
+        setActiveTab('overview');
+      } else {
+        setActiveTab('overview');
+      }
+      setTabInitialized(true);
+    }
+  }, [role, isSeller, isBuyer, isDraft, tabInitialized]);
+
   const health = useContractHealth({
     contract: contract ?? null,
     invoiceSummary: pageSummary ?? null,
@@ -1206,6 +1242,12 @@ const ContractDetailPage: React.FC = () => {
   // Status
   const statusConfig = CONTRACT_STATUS_COLORS[contract?.status || 'draft'] || CONTRACT_STATUS_COLORS.draft;
   const statusColor = contract ? getSemanticColor(statusConfig.bg, colors) : colors.utility.secondaryText;
+
+  // ─── Determine effective view: seller or buyer ───
+  // Draft contracts with no buyer always show seller view
+  // Cancelled/expired show read-only version of the role's view
+  const showSellerView = isSeller || isDraft || role === 'viewer' || role === 'unknown';
+  const showBuyerView = isBuyer && !isDraft;
 
   // ─── Loading ───
   if (isLoading) {
@@ -1253,10 +1295,47 @@ const ContractDetailPage: React.FC = () => {
   // ─── Tab content ───
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'operations':
+      // ── Seller-only tabs ──
+      case 'overview':
+        if (showBuyerView) {
+          return (
+            <BuyerOverview
+              contractId={contract.id}
+              currency={contract.currency || 'INR'}
+              health={health}
+              role={role}
+              pageSummary={pageSummary}
+              colors={colors}
+              onViewContract={() => setActiveTab('document')}
+              onMakePayment={() => setIsPaymentDialogOpen(true)}
+              onViewEvidence={() => setActiveTab('proof_of_work')}
+            />
+          );
+        }
+        return (
+          <SellerOverview
+            contractId={contract.id}
+            currency={contract.currency || 'INR'}
+            health={health}
+            role={role}
+            pageSummary={pageSummary}
+            colors={colors}
+            onViewFullTimeline={() => setActiveTab('tasks')}
+          />
+        );
+      case 'tasks':
+        return (
+          <SellerTasksTab
+            contractId={contract.id}
+            currency={contract.currency || 'INR'}
+            colors={colors}
+          />
+        );
+
+      // ── Buyer-only tabs ──
+      case 'my_services':
         return (
           <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 380px' }}>
-            {/* Left: Operations view */}
             <OperationsTab
               contractId={contract.id}
               currency={contract.currency || 'INR'}
@@ -1266,7 +1345,58 @@ const ContractDetailPage: React.FC = () => {
               collectedAmount={pageSummary?.total_paid ?? 0}
               collectionPct={pageSummary?.collection_percentage ?? 0}
             />
-            {/* Right: Contact + Financial Health (from old Overview) */}
+            <div className="space-y-5">
+              <ContractHealthCard
+                health={health}
+                role={role}
+                colors={colors}
+              />
+              <ContractDetailsCard contract={contract} colors={colors} />
+            </div>
+          </div>
+        );
+      case 'payments':
+        return (
+          <BuyerPaymentsView
+            contractId={contract.id}
+            currency={contract.currency || 'INR'}
+            colors={colors}
+            onPayInvoice={() => setIsPaymentDialogOpen(true)}
+          />
+        );
+      case 'proof_of_work':
+        return (
+          <div className="space-y-6">
+            <EvidencePolicySection
+              contractId={contract.id}
+              colors={colors}
+            />
+            <EvidenceTab
+              contractId={contract.id}
+              currency={contract.currency || 'INR'}
+              colors={colors}
+              role={role}
+            />
+          </div>
+        );
+      case 'requests':
+        return (
+          <ServiceRequestsPlaceholder colors={colors} />
+        );
+
+      // ── Shared tabs ──
+      case 'operations':
+        return (
+          <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 380px' }}>
+            <OperationsTab
+              contractId={contract.id}
+              currency={contract.currency || 'INR'}
+              colors={colors}
+              buyerName={contract.buyer_name}
+              contractValue={grandTotal}
+              collectedAmount={pageSummary?.total_paid ?? 0}
+              collectionPct={pageSummary?.collection_percentage ?? 0}
+            />
             <div className="space-y-5">
               <ContactHeaderCard contact={buildBuyerContactObject(contract)} />
               <FinancialHealth
@@ -1462,7 +1592,6 @@ const ContractDetailPage: React.FC = () => {
                                 className="flex items-center gap-1 pt-3 border-t"
                                 style={{ borderColor: colors.utility.primaryText + '08' }}
                               >
-                                {/* View Invoice */}
                                 <button
                                   onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
                                   className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
@@ -1472,8 +1601,6 @@ const ContractDetailPage: React.FC = () => {
                                   <Eye className="h-3.5 w-3.5" />
                                   <span>Invoice</span>
                                 </button>
-
-                                {/* Download PDF */}
                                 <button
                                   onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
                                   className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
@@ -1483,8 +1610,6 @@ const ContractDetailPage: React.FC = () => {
                                   <Download className="h-3.5 w-3.5" />
                                   <span>PDF</span>
                                 </button>
-
-                                {/* Receipt — shown when payment exists */}
                                 {(isPaid || isPartial) && (
                                   <button
                                     onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
@@ -1496,8 +1621,6 @@ const ContractDetailPage: React.FC = () => {
                                     <span>Receipt</span>
                                   </button>
                                 )}
-
-                                {/* Balance indicator on right side */}
                                 {balance > 0 && (
                                   <span
                                     className="ml-auto text-[0.6rem] font-semibold px-2 py-1 rounded"
@@ -1553,6 +1676,7 @@ const ContractDetailPage: React.FC = () => {
               contractId={contract.id}
               currency={contract.currency || 'INR'}
               colors={colors}
+              role={role}
             />
           </div>
         );
@@ -1572,6 +1696,9 @@ const ContractDetailPage: React.FC = () => {
         return null;
     }
   };
+
+  // ─── Which tab definitions to use ───
+  const tabDefinitions = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.utility.mainBackground }}>
@@ -1641,7 +1768,7 @@ const ContractDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Right: Actions */}
+          {/* Right: Actions (role-aware) */}
           <div className="flex items-center gap-2">
             <button
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
@@ -1653,38 +1780,108 @@ const ContractDetailPage: React.FC = () => {
             >
               <FileText className="h-4 w-4" /> View PDF
             </button>
-            <button
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
-              style={{
-                backgroundColor: 'transparent',
-                borderColor: colors.utility.primaryText + '20',
-                color: colors.utility.primaryText,
-              }}
-            >
-              <Edit className="h-4 w-4" /> Edit
-            </button>
-            <button
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
-              style={{
-                backgroundColor: 'transparent',
-                borderColor: colors.utility.primaryText + '20',
-                color: colors.utility.primaryText,
-              }}
-            >
-              <Send className="h-4 w-4" /> Send Update
-            </button>
-            <button
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
-              style={{
-                backgroundColor: colors.brand.primary,
-                color: '#ffffff',
-              }}
-            >
-              <Plus className="h-4 w-4" /> Add Task
-            </button>
+            {showSellerView && !isTerminalState && (
+              <>
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
+                  style={{
+                    backgroundColor: 'transparent',
+                    borderColor: colors.utility.primaryText + '20',
+                    color: colors.utility.primaryText,
+                  }}
+                >
+                  <Send className="h-4 w-4" /> Send Update
+                </button>
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
+                  style={{
+                    backgroundColor: colors.brand.primary,
+                    color: '#ffffff',
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Add Task
+                </button>
+              </>
+            )}
+            {showBuyerView && !isTerminalState && (
+              <>
+                <button
+                  onClick={() => setActiveTab('document')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
+                  style={{
+                    backgroundColor: 'transparent',
+                    borderColor: colors.utility.primaryText + '20',
+                    color: colors.utility.primaryText,
+                  }}
+                >
+                  <Eye className="h-4 w-4" /> View Contract
+                </button>
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
+                  style={{
+                    backgroundColor: 'transparent',
+                    borderColor: colors.utility.primaryText + '20',
+                    color: colors.utility.primaryText,
+                  }}
+                >
+                  <MessageSquare className="h-4 w-4" /> Message Seller
+                </button>
+                {permissions.canAccept && (
+                  <button
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: colors.semantic.success,
+                      color: '#ffffff',
+                    }}
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Accept Contract
+                  </button>
+                )}
+                {permissions.canManageInvoices && (
+                  <button
+                    onClick={() => setIsPaymentDialogOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: colors.brand.primary,
+                      color: '#ffffff',
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4" /> Pay
+                  </button>
+                )}
+              </>
+            )}
+            {!showSellerView && !showBuyerView && (
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
+                style={{
+                  backgroundColor: 'transparent',
+                  borderColor: colors.utility.primaryText + '20',
+                  color: colors.utility.primaryText,
+                }}
+              >
+                <Edit className="h-4 w-4" /> Edit
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* ═══════ TERMINAL STATE BANNER ═══════ */}
+      {isTerminalState && (
+        <div
+          className="px-6 py-2 flex items-center gap-2 border-b"
+          style={{
+            backgroundColor: colors.semantic.error + '08',
+            borderColor: colors.semantic.error + '20',
+          }}
+        >
+          <AlertTriangle className="h-4 w-4" style={{ color: colors.semantic.error }} />
+          <span className="text-xs font-semibold" style={{ color: colors.semantic.error }}>
+            This contract has been {contract.status}. It is now read-only.
+          </span>
+        </div>
+      )}
 
       {/* ═══════ SUMMARY BAR ═══════ */}
       <div
@@ -1694,18 +1891,43 @@ const ContractDetailPage: React.FC = () => {
           borderColor: colors.utility.primaryText + '10',
         }}
       >
-        <SummaryItem label="Contract Value" value={formatCurrency(grandTotal, contract.currency)} colors={colors} />
-        <SummaryItem label="Tax" value={formatCurrency(contract.tax_total, contract.currency)} colors={colors} />
-        <SummaryItem label="Completion" value="\u2014" colorClass="default" colors={colors} />
-        <SummaryItem label="Tasks" value="\u2014" colors={colors} />
-        <SummaryItem label="Blocks" value={`${blocksCount}`} colors={colors} />
-        <SummaryItem label="Duration" value={duration} colors={colors} isLast />
+        {showBuyerView ? (
+          <>
+            <SummaryItem label="Contract Value" value={formatCurrency(grandTotal, contract.currency)} colors={colors} />
+            <SummaryItem label="Paid" value={formatCurrency(pageSummary?.total_paid ?? 0, contract.currency)} colorClass="success" colors={colors} />
+            <SummaryItem label="Remaining" value={formatCurrency(grandTotal - (pageSummary?.total_paid ?? 0), contract.currency)} colorClass={grandTotal - (pageSummary?.total_paid ?? 0) > 0 ? 'warning' : 'success'} colors={colors} />
+            <SummaryItem label="Progress" value={`${pageSummary?.collection_percentage ?? 0}%`} colorClass={(pageSummary?.collection_percentage ?? 0) >= 100 ? 'success' : 'default'} colors={colors} />
+            <SummaryItem label="Services" value={`${blocksCount}`} colors={colors} />
+            <SummaryItem
+              label="Health"
+              value={`${health.overall}/100`}
+              colorClass={health.overall >= 70 ? 'success' : health.overall >= 40 ? 'warning' : 'danger'}
+              colors={colors}
+              isLast
+            />
+          </>
+        ) : (
+          <>
+            <SummaryItem label="Contract Value" value={formatCurrency(grandTotal, contract.currency)} colors={colors} />
+            <SummaryItem label="Collected" value={formatCurrency(pageSummary?.total_paid ?? 0, contract.currency)} colorClass="success" colors={colors} />
+            <SummaryItem label="Balance" value={formatCurrency(grandTotal - (pageSummary?.total_paid ?? 0), contract.currency)} colorClass="danger" colors={colors} />
+            <SummaryItem label="Blocks" value={`${blocksCount}`} colors={colors} />
+            <SummaryItem label="Duration" value={duration} colors={colors} />
+            <SummaryItem
+              label="Health"
+              value={`${health.overall}/100`}
+              colorClass={health.overall >= 70 ? 'success' : health.overall >= 40 ? 'warning' : 'danger'}
+              colors={colors}
+              isLast
+            />
+          </>
+        )}
       </div>
 
       {/* ═══════ TABS ═══════ */}
       <div className="px-6 pt-4">
         <TabsNavigation
-          tabs={TAB_DEFINITIONS}
+          tabs={tabDefinitions}
           activeTab={activeTab}
           onTabChange={(tabId) => setActiveTab(tabId as TabId)}
           variant="underline"
