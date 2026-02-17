@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/ui/Input';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { useEquipmentCategories } from '@/hooks/queries/useClientAssetRegistry';
 import type { ClientAsset, ClientAssetFormData, AssetStatus, AssetCondition, AssetCriticality } from '@/types/clientAssetRegistry';
