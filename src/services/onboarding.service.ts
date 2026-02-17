@@ -54,7 +54,7 @@ class OnboardingService {
   async completeStep(stepId: OnboardingStepId | string, data?: Record<string, any>): Promise<CompleteStepResponse> {
     try {
       // Skip API call for UI-only steps
-      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences'];
+      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'served-industries', 'business-preferences'];
       if (uiOnlySteps.includes(stepId)) {
         return {
           success: true,
@@ -96,7 +96,7 @@ class OnboardingService {
   async skipStep(stepId: OnboardingStepId | string): Promise<SkipStepResponse> {
     try {
       // Skip API call for UI-only steps
-      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'business-preferences'];
+      const uiOnlySteps = ['welcome', 'theme-selection', 'business-branding', 'served-industries', 'business-preferences'];
       if (uiOnlySteps.includes(stepId)) {
         return {
           success: true,
@@ -245,6 +245,7 @@ class OnboardingService {
       'theme-selection': 'Choose your preferred theme',
       'business-basic': 'Enter basic business information',
       'business-branding': 'Set up your brand',
+      'served-industries': 'Select industries you serve',
       'business-preferences': 'Configure business preferences',
       'master-data': 'Set up initial data',
       'complete': 'Finish onboarding'
@@ -264,6 +265,7 @@ class OnboardingService {
       'theme-selection': 1,
       'business-basic': 2,
       'business-branding': 2,
+      'served-industries': 2,
       'business-preferences': 1,
       'master-data': 5,
       'complete': 0

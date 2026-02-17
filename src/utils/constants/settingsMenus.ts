@@ -62,17 +62,6 @@ export const settingsMenuItems: SettingsItem[] = [
   card_icon_name: 'Users',
   adminOnly: false
 },
-{
-  id: 'equipment-registry',
-  settings_type: 'Equipment Registry',
-  parent_type: GROUP_TEAM,
-  description_short: 'Client equipment',
-  description_long: 'Register and manage your client\'s equipment — MRI scanners, ventilators, and more',
-  route_path: '/settings/configure/equipment',
-  card_icon_name: 'Wrench',
-  adminOnly: false
-},
-
 
   // List of Value (LOVs)
   {

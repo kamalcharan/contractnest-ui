@@ -26,6 +26,8 @@ import {
   ToggleRight,
   DollarSign,
   Percent,
+  Repeat,
+  AlertTriangle,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
@@ -60,6 +62,7 @@ export interface FlyByBlockCardProps {
   isExpanded?: boolean;
   isDragging?: boolean;
   dragHandleProps?: any;
+  contractDurationDays?: number; // Contract duration in days for service cycle validation
   onToggleExpand?: (blockId: string) => void;
   onRemove: (blockId: string) => void;
   onUpdate: (blockId: string, updates: Partial<ConfigurableBlock>) => void;
@@ -80,6 +83,7 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   isExpanded = false,
   isDragging = false,
   dragHandleProps,
+  contractDurationDays,
   onToggleExpand,
   onRemove,
   onUpdate,
@@ -153,8 +157,19 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   );
 
   const handleUnlimitedToggle = useCallback(() => {
-    onUpdate(block.id, { unlimited: !block.unlimited });
+    onUpdate(block.id, {
+      unlimited: !block.unlimited,
+      // Clear service cycle when switching to unlimited
+      ...(!block.unlimited ? { serviceCycleDays: undefined } : {}),
+    });
   }, [block.id, block.unlimited, onUpdate]);
+
+  const handleServiceCycleDaysChange = useCallback(
+    (days: number | undefined) => {
+      onUpdate(block.id, { serviceCycleDays: days });
+    },
+    [block.id, onUpdate]
+  );
 
   const handleConfigChange = useCallback(
     (key: keyof NonNullable<ConfigurableBlock['config']>, value: any) => {
@@ -177,6 +192,14 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
   const hasQuantity = !hidePricing && (flyByType === 'service' || flyByType === 'spare');
   // Check if type has billing cycle
   const hasBillingCycle = !hidePricing && flyByType === 'service';
+  // Check if type has service cycle (service/spare, not unlimited, not hidden pricing)
+  const hasServiceCycle = !hidePricing && (flyByType === 'service' || flyByType === 'spare') && !block.unlimited;
+
+  // Service cycle validation
+  const serviceCycleSpanDays = (block.serviceCycleDays && !block.unlimited && block.quantity > 1)
+    ? (block.quantity - 1) * block.serviceCycleDays
+    : 0;
+  const serviceCycleExceedsDuration = !!(contractDurationDays && serviceCycleSpanDays > contractDurationDays);
 
   return (
     <div
@@ -542,6 +565,91 @@ const FlyByBlockCard: React.FC<FlyByBlockCardProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Service Cycle Interval - For Service, Spare (not unlimited) */}
+            {hasServiceCycle && (
+              <div
+                className="p-3 rounded-xl border-2 border-dashed"
+                style={{
+                  borderColor: serviceCycleExceedsDuration
+                    ? colors.semantic.error
+                    : block.serviceCycleDays
+                    ? typeConfig.color
+                    : `${colors.utility.primaryText}20`,
+                  backgroundColor: serviceCycleExceedsDuration
+                    ? `${colors.semantic.error}08`
+                    : block.serviceCycleDays
+                    ? `${typeConfig.color}06`
+                    : 'transparent',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Repeat className="w-3.5 h-3.5" style={{ color: typeConfig.color }} />
+                  <label
+                    className="text-[10px] font-medium uppercase tracking-wide"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Service Cycle
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>Every</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={block.serviceCycleDays || ''}
+                    onChange={(e) => handleServiceCycleDaysChange(
+                      e.target.value ? Math.max(1, Number(e.target.value)) : undefined
+                    )}
+                    placeholder="—"
+                    className="w-20 px-2.5 py-1.5 text-sm font-medium text-center rounded-lg border"
+                    style={{
+                      backgroundColor: colors.utility.primaryBackground,
+                      borderColor: serviceCycleExceedsDuration
+                        ? colors.semantic.error
+                        : `${colors.utility.primaryText}20`,
+                      color: colors.utility.primaryText,
+                    }}
+                  />
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    days from start of contract
+                  </span>
+                </div>
+
+                {/* Summary text */}
+                {block.serviceCycleDays && block.serviceCycleDays > 0 && (
+                  <div className="mt-2">
+                    <p
+                      className="text-xs leading-relaxed"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      This service will be performed every <strong>{block.serviceCycleDays} days</strong>,{' '}
+                      <strong>{block.quantity} time{block.quantity > 1 ? 's' : ''}</strong>
+                      {block.quantity > 1 && (
+                        <span style={{ color: colors.utility.secondaryText }}>
+                          {' '}(Day 1 to Day {(block.quantity - 1) * block.serviceCycleDays})
+                        </span>
+                      )}
+                    </p>
+
+                    {/* Validation warning */}
+                    {serviceCycleExceedsDuration && contractDurationDays && (
+                      <div
+                        className="flex items-start gap-1.5 mt-2 p-2 rounded-lg"
+                        style={{ backgroundColor: `${colors.semantic.error}12` }}
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.error }} />
+                        <span className="text-xs" style={{ color: colors.semantic.error }}>
+                          Cycles span {serviceCycleSpanDays} days but contract is only {contractDurationDays} days.
+                          Reduce quantity or increase interval.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

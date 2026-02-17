@@ -1,13 +1,15 @@
 // src/components/contracts/ContractWizard/steps/AssetSelectionStep.tsx
 // Equipment / Entity selection for the Contract Wizard — Guided Coverage-First UX
+// Two-column layout: 70% main content | 30% live status card
 // Phase 1: "What does this contract cover?" — pick coverage types (mandatory)
 // Phase 2: "Attach specific equipment" — optional, 4 choices
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Plus, Search, X, Layers, Package, UserPlus,
-  Trash2, CheckCircle2, ChevronDown, ChevronRight,
-  Clock, ListChecks, PackagePlus,
+  CheckCircle2, ChevronDown, ChevronRight,
+  Clock, ListChecks, PackagePlus, Shield, AlertCircle,
+  CircleDot, ArrowRight,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -402,7 +404,7 @@ const AssetSelectionStep: React.FC<AssetSelectionStepProps> = ({
   const totalCoverageCount = coverageTypes.length;
   const hasCoverage = totalCoverageCount > 0;
 
-  // ── Glassmorphic style (matches /contacts pattern) ─────────────────
+  // ── Glassmorphic style ─────────────────────────────────────────────
   const glassStyle: React.CSSProperties = {
     background: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)',
     backdropFilter: 'blur(10px)',
@@ -411,455 +413,797 @@ const AssetSelectionStep: React.FC<AssetSelectionStepProps> = ({
     boxShadow: '0 4px 20px -5px rgba(0,0,0,0.1)',
   };
 
-  const glassCardStyle = (hasAccent: boolean, accentColor: string): React.CSSProperties => ({
-    ...glassStyle,
-    borderColor: hasAccent
-      ? (isDarkMode ? accentColor + '40' : accentColor + '30')
-      : (isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)'),
-    boxShadow: hasAccent
-      ? `0 4px 20px -5px ${accentColor}15`
-      : '0 4px 20px -5px rgba(0,0,0,0.1)',
-  });
+  // ── Determine overall status for the right column ──────────────────
+  const stepStatus: 'empty' | 'coverage_only' | 'complete' = useMemo(() => {
+    if (!hasCoverage) return 'empty';
+    if (attachmentMode === 'existing' && equipmentDetails.length > 0) return 'complete';
+    if (attachmentMode === 'buyer' || attachmentMode === 'later') return 'complete';
+    return 'coverage_only';
+  }, [hasCoverage, attachmentMode, equipmentDetails.length]);
+
+  // Group coverage types by sub-category for the status panel
+  const coverageBySubCat = useMemo(() => {
+    const map = new Map<string, CoverageTypeItem[]>();
+    for (const ct of coverageTypes) {
+      if (!map.has(ct.sub_category)) map.set(ct.sub_category, []);
+      map.get(ct.sub_category)!.push(ct);
+    }
+    return map;
+  }, [coverageTypes]);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex h-full overflow-hidden">
 
       {/* ═══════════════════════════════════════════════════════════════
-          PHASE 1: "What does this contract cover?"
+          LEFT COLUMN — 70% — Main content
           ═══════════════════════════════════════════════════════════════ */}
-      <div className="px-6 pt-5 pb-4">
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="text-base font-bold" style={{ color: colors.utility.primaryText }}>
-            What does this contract cover?
-          </h2>
-          {hasCoverage && (
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ backgroundColor: '#10b98115', color: '#10b981' }}
-            >
-              {totalCoverageCount} type{totalCoverageCount > 1 ? 's' : ''} selected
-            </span>
-          )}
-        </div>
-        <p className="text-xs mb-5" style={{ color: colors.utility.secondaryText }}>
-          Select the {config.label.toLowerCase()} types this contract will service. Specific {config.label.toLowerCase()} can be attached later.
-        </p>
+      <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="px-5 pt-5 pb-4">
 
-        {/* Loading state */}
-        {categoriesLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <VaNiLoader size="sm" message="Loading categories..." />
-          </div>
-        ) : subCategories.length === 0 ? (
-          <div
-            className="rounded-lg border p-6 text-center"
-            style={{ borderColor: colors.utility.primaryText + '15', backgroundColor: colors.utility.secondaryBackground }}
-          >
-            <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-              No {config.label.toLowerCase()} categories configured. Add them in Settings &rarr; Resources.
+          {/* ── PHASE 1: Coverage Types ────────────────────────────── */}
+          <div className="mb-1">
+            <div className="flex items-center gap-2.5 mb-1">
+              <div
+                className="w-5 h-5 rounded-md flex items-center justify-center"
+                style={{ backgroundColor: hasCoverage ? '#10b98115' : `${colors.utility.primaryText}08` }}
+              >
+                {hasCoverage
+                  ? <CheckCircle2 size={12} style={{ color: '#10b981' }} />
+                  : <CircleDot size={12} style={{ color: colors.utility.secondaryText }} />
+                }
+              </div>
+              <h2 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                What does this contract cover?
+              </h2>
+              {hasCoverage && (
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#10b98115', color: '#10b981' }}
+                >
+                  {totalCoverageCount} selected
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] mb-3 ml-7.5" style={{ color: colors.utility.secondaryText, marginLeft: 30 }}>
+              Select {config.label.toLowerCase()} types this contract will service
             </p>
           </div>
-        ) : (
-          /* Sub-category cards grid */
-          <div className="space-y-2">
-            {subCategories.map((subCat) => {
-              const scConfig = getSubCategoryConfig(subCat);
-              const SubCatIcon = scConfig?.icon || Package;
-              const iconColor = scConfig?.color || '#6B7280';
-              const isExpanded = expandedSubCategory === subCat;
-              const resourcesInCat = resourcesBySubCategory.get(subCat) || [];
-              const selectedInCat = coverageCountBySubCat[subCat] || 0;
-              const totalInCat = resourcesInCat.length;
 
-              return (
-                <div
-                  key={subCat}
-                  className="rounded-2xl border overflow-hidden transition-all shadow-sm"
-                  style={glassCardStyle(selectedInCat > 0, iconColor)}
-                >
-                  {/* Card header — clickable */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedSubCategory(isExpanded ? null : subCat)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors hover:opacity-90"
+          {/* Loading state */}
+          {categoriesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <VaNiLoader size="sm" message="Loading categories..." />
+            </div>
+          ) : subCategories.length === 0 ? (
+            <div
+              className="rounded-lg border p-4 text-center"
+              style={{ borderColor: colors.utility.primaryText + '15', backgroundColor: colors.utility.secondaryBackground }}
+            >
+              <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                No {config.label.toLowerCase()} categories configured. Add them in Settings &rarr; Resources.
+              </p>
+            </div>
+          ) : (
+            /* ── Compact sub-category sections with inline chips ── */
+            <div className="space-y-1.5 mb-4">
+              {subCategories.map((subCat) => {
+                const scConfig = getSubCategoryConfig(subCat);
+                const SubCatIcon = scConfig?.icon || Package;
+                const iconColor = scConfig?.color || '#6B7280';
+                const isExpanded = expandedSubCategory === subCat;
+                const resourcesInCat = resourcesBySubCategory.get(subCat) || [];
+                const selectedInCat = coverageCountBySubCat[subCat] || 0;
+                const totalInCat = resourcesInCat.length;
+
+                return (
+                  <div
+                    key={subCat}
+                    className="rounded-xl border overflow-hidden transition-all"
+                    style={{
+                      borderColor: selectedInCat > 0
+                        ? (isDarkMode ? iconColor + '40' : iconColor + '30')
+                        : (isDarkMode ? `${colors.utility.primaryText}15` : '#E5E7EB'),
+                      backgroundColor: selectedInCat > 0
+                        ? (isDarkMode ? iconColor + '08' : iconColor + '04')
+                        : 'transparent',
+                    }}
                   >
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: iconColor + '15' }}
+                    {/* Compact header */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSubCategory(isExpanded ? null : subCat)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:opacity-90"
                     >
-                      <SubCatIcon size={18} style={{ color: iconColor }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-semibold block" style={{ color: colors.utility.primaryText }}>
+                      <div
+                        className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: iconColor + '15' }}
+                      >
+                        <SubCatIcon size={14} style={{ color: iconColor }} />
+                      </div>
+                      <span className="text-xs font-semibold flex-1 truncate" style={{ color: colors.utility.primaryText }}>
                         {subCat}
                       </span>
-                      <span className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
-                        {totalInCat} type{totalInCat > 1 ? 's' : ''} available
+                      <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        {totalInCat}
                       </span>
-                    </div>
-                    {selectedInCat > 0 && (
-                      <span
-                        className="text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1"
-                        style={{ backgroundColor: iconColor + '15', color: iconColor }}
-                      >
-                        <CheckCircle2 size={11} />
-                        {selectedInCat}
-                      </span>
-                    )}
-                    {isExpanded
-                      ? <ChevronDown size={16} style={{ color: colors.utility.secondaryText }} />
-                      : <ChevronRight size={16} style={{ color: colors.utility.secondaryText }} />
-                    }
-                  </button>
+                      {selectedInCat > 0 && (
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
+                          style={{ backgroundColor: iconColor + '15', color: iconColor }}
+                        >
+                          <CheckCircle2 size={9} />
+                          {selectedInCat}
+                        </span>
+                      )}
+                      {isExpanded
+                        ? <ChevronDown size={14} style={{ color: colors.utility.secondaryText }} />
+                        : <ChevronRight size={14} style={{ color: colors.utility.secondaryText }} />
+                      }
+                    </button>
 
-                  {/* Expanded: equipment type chips */}
-                  {isExpanded && (
-                    <div
-                      className="px-4 pb-4 pt-1 border-t"
-                      style={{ borderColor: colors.utility.primaryText + '08' }}
-                    >
-                      <p className="text-[11px] mb-3" style={{ color: colors.utility.secondaryText }}>
-                        Select the types you&apos;ll service under {subCat}:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {resourcesInCat.map((resource) => {
-                          const isSelected = coveredResourceIds.has(resource.id);
-                          return (
-                            <button
-                              key={resource.id}
-                              type="button"
-                              onClick={() => toggleCoverageType(resource)}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all border"
+                    {/* Expanded: resource type chips */}
+                    {isExpanded && (
+                      <div
+                        className="px-3 pb-3 pt-1 border-t"
+                        style={{ borderColor: colors.utility.primaryText + '06' }}
+                      >
+                        <div className="flex flex-wrap gap-1.5">
+                          {resourcesInCat.map((resource) => {
+                            const isSelected = coveredResourceIds.has(resource.id);
+                            return (
+                              <button
+                                key={resource.id}
+                                type="button"
+                                onClick={() => toggleCoverageType(resource)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all border"
+                                style={{
+                                  borderColor: isSelected ? iconColor + '50' : colors.utility.primaryText + '12',
+                                  backgroundColor: isSelected ? iconColor + '12' : 'transparent',
+                                  color: isSelected ? iconColor : colors.utility.secondaryText,
+                                }}
+                              >
+                                {isSelected && <CheckCircle2 size={11} />}
+                                {resource.display_name || resource.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── PHASE 2: Attach specific equipment ─────────────────── */}
+          {hasCoverage && (
+            <div className="mt-1">
+              <div
+                className="border-t pt-4"
+                style={{ borderColor: colors.utility.primaryText + '08' }}
+              >
+                <div className="flex items-center gap-2.5 mb-1">
+                  <div
+                    className="w-5 h-5 rounded-md flex items-center justify-center"
+                    style={{
+                      backgroundColor: (attachmentMode && (attachmentMode !== 'existing' || equipmentDetails.length > 0))
+                        ? '#10b98115'
+                        : `${colors.utility.primaryText}08`,
+                    }}
+                  >
+                    {(attachmentMode && (attachmentMode !== 'existing' || equipmentDetails.length > 0))
+                      ? <CheckCircle2 size={12} style={{ color: '#10b981' }} />
+                      : <CircleDot size={12} style={{ color: colors.utility.secondaryText }} />
+                    }
+                  </div>
+                  <h2 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
+                    Attach specific {config.label.toLowerCase()}?
+                  </h2>
+                </div>
+                <p className="text-[11px] mb-3" style={{ color: colors.utility.secondaryText, marginLeft: 30 }}>
+                  Choose how to handle specific {config.label.toLowerCase()} details
+                </p>
+
+                {/* ── Option cards — 2x2 grid ──────────────────────── */}
+                <div className="grid grid-cols-2 gap-2.5 mb-4">
+                  <OptionCard
+                    icon={<ListChecks size={16} />}
+                    label="Select Existing"
+                    hint={`Pick from ${allClientAssets.length} registered`}
+                    isSelected={attachmentMode === 'existing'}
+                    onClick={() => handleAttachmentModeChange('existing')}
+                    accentColor={colors.brand.primary}
+                    colors={colors}
+                    isDarkMode={isDarkMode}
+                    badge={equipmentDetails.length > 0 ? `${equipmentDetails.length}` : undefined}
+                  />
+                  <OptionCard
+                    icon={<PackagePlus size={16} />}
+                    label={config.addLabel}
+                    hint={`Register new ${config.label.toLowerCase()}`}
+                    isSelected={false}
+                    onClick={() => setIsDrawerOpen(true)}
+                    accentColor="#8B5CF6"
+                    colors={colors}
+                    isDarkMode={isDarkMode}
+                  />
+                  <OptionCard
+                    icon={<UserPlus size={16} />}
+                    label="Buyer Will Add"
+                    hint="After CNAK claim or review"
+                    isSelected={attachmentMode === 'buyer'}
+                    onClick={() => handleAttachmentModeChange(attachmentMode === 'buyer' ? null : 'buyer')}
+                    accentColor="#0EA5E9"
+                    colors={colors}
+                    isDarkMode={isDarkMode}
+                  />
+                  <OptionCard
+                    icon={<Clock size={16} />}
+                    label="Attach Later"
+                    hint="Add details after creation"
+                    isSelected={attachmentMode === 'later'}
+                    onClick={() => handleAttachmentModeChange(attachmentMode === 'later' ? null : 'later')}
+                    accentColor="#6B7280"
+                    colors={colors}
+                    isDarkMode={isDarkMode}
+                  />
+                </div>
+
+                {/* ── MODE: Select existing — sidebar + grid ───────── */}
+                {attachmentMode === 'existing' && (
+                  <div
+                    className="rounded-xl border overflow-hidden"
+                    style={{ ...glassStyle, minHeight: 320 }}
+                  >
+                    <div className="flex" style={{ height: 380 }}>
+                      {/* Sidebar */}
+                      <div
+                        className="w-[180px] min-w-[180px] border-r flex flex-col overflow-hidden"
+                        style={{
+                          backgroundColor: colors.utility.secondaryBackground,
+                          borderColor: colors.utility.primaryText + '10',
+                        }}
+                      >
+                        <div className="flex-1 overflow-y-auto p-1.5">
+                          <button
+                            onClick={() => setGridFilterSubCat(null)}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 transition-all text-left"
+                            style={{
+                              backgroundColor: gridFilterSubCat === null ? colors.brand.primary + '12' : 'transparent',
+                            }}
+                          >
+                            <Layers size={12} style={{
+                              color: gridFilterSubCat === null ? colors.brand.primary : colors.utility.secondaryText,
+                            }} />
+                            <span
+                              className="text-[11px] font-semibold truncate flex-1"
                               style={{
-                                borderColor: isSelected ? iconColor + '50' : colors.utility.primaryText + '15',
-                                backgroundColor: isSelected ? iconColor + '12' : 'transparent',
-                                color: isSelected ? iconColor : colors.utility.secondaryText,
+                                color: gridFilterSubCat === null ? colors.brand.primary : colors.utility.primaryText,
                               }}
                             >
-                              {isSelected && <CheckCircle2 size={13} />}
-                              {resource.display_name || resource.name}
-                            </button>
-                          );
-                        })}
+                              All
+                            </span>
+                            <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                              {allClientAssets.length}
+                            </span>
+                          </button>
+
+                          {subCategories.map((subCat) => {
+                            const isActive = gridFilterSubCat === subCat;
+                            const scConfig = getSubCategoryConfig(subCat);
+                            const SubCatIcon = scConfig?.icon || Package;
+                            const iconColor = scConfig?.color || '#6B7280';
+                            const count = subCategoryAssetCounts[subCat] || 0;
+                            if (count === 0) return null;
+
+                            return (
+                              <button
+                                key={subCat}
+                                onClick={() => setGridFilterSubCat(subCat)}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg mb-0.5 transition-all text-left"
+                                style={{
+                                  backgroundColor: isActive ? colors.brand.primary + '12' : 'transparent',
+                                }}
+                              >
+                                <SubCatIcon size={12} style={{ color: isActive ? colors.brand.primary : iconColor }} />
+                                <span
+                                  className="text-[11px] font-semibold truncate flex-1"
+                                  style={{ color: isActive ? colors.brand.primary : colors.utility.primaryText }}
+                                >
+                                  {subCat}
+                                </span>
+                                <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                                  {count}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Grid area */}
+                      <div className="flex-1 overflow-y-auto px-3 py-2.5">
+                        {/* Search + count */}
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <div className="relative flex-1 max-w-xs">
+                            <Search
+                              className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5"
+                              style={{ color: colors.utility.secondaryText }}
+                            />
+                            <Input
+                              placeholder={`Search...`}
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              className="pl-8 pr-8 text-xs h-7"
+                              style={{
+                                borderColor: colors.utility.primaryText + '20',
+                                backgroundColor: colors.utility.primaryBackground,
+                                color: colors.utility.primaryText,
+                              }}
+                            />
+                            {searchQuery && (
+                              <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                                <X className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+                              </button>
+                            )}
+                          </div>
+                          <span className="text-[10px] ml-auto" style={{ color: colors.utility.secondaryText }}>
+                            <strong>{equipmentDetails.length}</strong> / <strong>{displayAssets.length}</strong>
+                          </span>
+                        </div>
+
+                        {/* Asset grid */}
+                        {assetsLoading ? (
+                          <div className="flex items-center justify-center py-10">
+                            <VaNiLoader size="sm" message="Loading..." />
+                          </div>
+                        ) : displayAssets.length > 0 ? (
+                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                            {displayAssets.map((asset) => (
+                              <EquipmentCard
+                                key={asset.id}
+                                asset={asset}
+                                selectable
+                                isSelected={selectedRegistryIds.has(asset.id)}
+                                onToggle={handleToggle}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-10">
+                            <Package size={24} style={{ color: colors.utility.secondaryText, opacity: 0.4, margin: '0 auto 8px' }} />
+                            <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                              {searchQuery
+                                ? `No ${config.label.toLowerCase()} matching "${searchQuery}"`
+                                : `No ${config.label.toLowerCase()} registered for this client`
+                              }
+                            </p>
+                            {!searchQuery && (
+                              <Button
+                                onClick={() => setIsDrawerOpen(true)}
+                                size="sm"
+                                className="mt-2.5 text-xs"
+                                style={{
+                                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary})`,
+                                  color: '#FFFFFF',
+                                }}
+                              >
+                                <Plus className="mr-1 h-3.5 w-3.5" />
+                                {config.addLabel}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state when no coverage yet */}
+          {!hasCoverage && !categoriesLoading && subCategories.length > 0 && (
+            <div
+              className="rounded-lg border-2 border-dashed p-4 text-center"
+              style={{ borderColor: '#f59e0b40' }}
+            >
+              <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>
+                Select at least one {config.label.toLowerCase()} type above to continue
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
-          PHASE 2: "Attach specific equipment" — only shows after types picked
+          RIGHT COLUMN — 30% — Live Status Panel (sticky)
           ═══════════════════════════════════════════════════════════════ */}
-      {hasCoverage && (
-        <div className="px-6 pb-5">
+      <div
+        className="w-[30%] min-w-[240px] max-w-[320px] border-l overflow-y-auto"
+        style={{
+          borderColor: isDarkMode ? `${colors.utility.primaryText}10` : '#E5E7EB',
+          backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F3F4F6',
+        }}
+      >
+        <div className="p-4 sticky top-0">
+          {/* ── Status header card — glassmorphic ─────────────────── */}
           <div
-            className="border-t pt-5 mt-1"
-            style={{ borderColor: colors.utility.primaryText + '10' }}
+            className="rounded-xl border p-3 mb-4"
+            style={{
+              background: isDarkMode
+                ? stepStatus === 'complete'
+                  ? 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.06) 100%)'
+                  : stepStatus === 'coverage_only'
+                  ? `linear-gradient(135deg, ${colors.brand.primary}20 0%, ${colors.brand.primary}08 100%)`
+                  : 'rgba(30, 41, 59, 0.8)'
+                : stepStatus === 'complete'
+                  ? 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(255,255,255,0.9) 100%)'
+                  : stepStatus === 'coverage_only'
+                  ? `linear-gradient(135deg, ${colors.brand.primary}10 0%, rgba(255,255,255,0.9) 100%)`
+                  : 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              borderColor: stepStatus === 'complete'
+                ? (isDarkMode ? '#10b98140' : '#10b98130')
+                : stepStatus === 'coverage_only'
+                ? (isDarkMode ? `${colors.brand.primary}40` : `${colors.brand.primary}25`)
+                : (isDarkMode ? 'rgba(255,255,255,0.1)' : '#E5E7EB'),
+              boxShadow: stepStatus !== 'empty'
+                ? '0 4px 16px -4px rgba(0,0,0,0.08)'
+                : '0 1px 3px rgba(0,0,0,0.04)',
+            }}
           >
-            <h2 className="text-base font-bold mb-1" style={{ color: colors.utility.primaryText }}>
-              Attach specific {config.label.toLowerCase()}?
-            </h2>
-            <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
-              Coverage types are captured. Now choose how to handle specific {config.label.toLowerCase()} details.
-            </p>
-
-            {/* Option cards — 2x2 grid */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {/* Option 1: Select from existing */}
-              <OptionCard
-                icon={<ListChecks size={20} />}
-                title="Select Existing"
-                description={`Pick from ${allClientAssets.length} registered ${config.label.toLowerCase()}`}
-                isSelected={attachmentMode === 'existing'}
-                onClick={() => handleAttachmentModeChange('existing')}
-                colors={colors}
-                accentColor={colors.brand.primary}
-                badge={equipmentDetails.length > 0 ? `${equipmentDetails.length} selected` : undefined}
-                isDarkMode={isDarkMode}
-              />
-
-              {/* Option 2: Add new equipment */}
-              <OptionCard
-                icon={<PackagePlus size={20} />}
-                title={config.addLabel}
-                description={`Register and attach new ${config.label.toLowerCase()}`}
-                isSelected={false}
-                onClick={() => setIsDrawerOpen(true)}
-                colors={colors}
-                accentColor="#8B5CF6"
-                isDarkMode={isDarkMode}
-              />
-
-              {/* Option 3: Let buyer add */}
-              <OptionCard
-                icon={<UserPlus size={20} />}
-                title="Buyer Will Add"
-                description="Buyer adds after CNAK claim or review"
-                isSelected={attachmentMode === 'buyer'}
-                onClick={() => handleAttachmentModeChange(attachmentMode === 'buyer' ? null : 'buyer')}
-                colors={colors}
-                accentColor="#0EA5E9"
-                badge={allowBuyerToAdd ? 'Active' : undefined}
-                isDarkMode={isDarkMode}
-              />
-
-              {/* Option 4: Attach later */}
-              <OptionCard
-                icon={<Clock size={20} />}
-                title="Attach Later"
-                description="Skip for now, add details after creation"
-                isSelected={attachmentMode === 'later'}
-                onClick={() => handleAttachmentModeChange(attachmentMode === 'later' ? null : 'later')}
-                colors={colors}
-                accentColor="#6B7280"
-                isDarkMode={isDarkMode}
-              />
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{
+                  backgroundColor: stepStatus === 'complete'
+                    ? '#10b98118'
+                    : stepStatus === 'coverage_only'
+                    ? `${colors.brand.primary}15`
+                    : `${colors.utility.primaryText}08`,
+                }}
+              >
+                {stepStatus === 'complete'
+                  ? <CheckCircle2 size={16} style={{ color: '#10b981' }} />
+                  : stepStatus === 'coverage_only'
+                  ? <Shield size={16} style={{ color: colors.brand.primary }} />
+                  : <AlertCircle size={16} style={{ color: colors.utility.secondaryText }} />
+                }
+              </div>
+              <div>
+                <h3
+                  className="text-xs font-bold"
+                  style={{
+                    color: stepStatus === 'complete'
+                      ? '#10b981'
+                      : stepStatus === 'coverage_only'
+                      ? colors.brand.primary
+                      : colors.utility.secondaryText,
+                  }}
+                >
+                  {stepStatus === 'complete'
+                    ? 'Step Complete'
+                    : stepStatus === 'coverage_only'
+                    ? 'Coverage Selected'
+                    : 'Pending Selection'
+                  }
+                </h3>
+                <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                  {stepStatus === 'complete'
+                    ? 'Ready to proceed'
+                    : stepStatus === 'coverage_only'
+                    ? 'Choose equipment option'
+                    : 'Select coverage types'
+                  }
+                </p>
+              </div>
             </div>
+          </div>
 
-            {/* ── Expanded content based on selected mode ──────────── */}
-
-            {/* MODE: Buyer will add — info card */}
-            {attachmentMode === 'buyer' && (
-              <div
-                className="rounded-2xl border p-4 mb-4 shadow-sm"
-                style={glassCardStyle(true, '#0EA5E9')}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: '#0EA5E9' + '12' }}
-                  >
-                    <UserPlus size={20} style={{ color: '#0EA5E9' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold mb-1" style={{ color: colors.utility.primaryText }}>
-                      Buyer Will Add {config.label}
-                    </h4>
-                    <p className="text-xs leading-relaxed" style={{ color: colors.utility.secondaryText }}>
-                      <strong>{buyerName || 'The buyer'}</strong> will be able to add their {config.label.toLowerCase()} once
-                      the CNAK (Contract Acknowledgement) is claimed, or during the contract review stage.
-                      They can attach specific {config.label.toLowerCase()} details at that time.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleAttachmentModeChange(null)}
-                    className="p-1.5 rounded-lg transition-colors hover:opacity-70 flex-shrink-0"
-                    style={{ color: colors.utility.secondaryText }}
-                    title="Remove this option"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+          {/* ── Coverage summary ──────────────────────────────────── */}
+          {hasCoverage ? (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+                  Coverage
+                </span>
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#10b98118', color: '#10b981' }}
+                >
+                  {totalCoverageCount} type{totalCoverageCount > 1 ? 's' : ''}
+                </span>
               </div>
-            )}
+              <div className="space-y-2">
+                {[...coverageBySubCat.entries()].map(([subCat, items]) => {
+                  const scConfig = getSubCategoryConfig(subCat);
+                  const iconColor = scConfig?.color || '#6B7280';
+                  const SubCatIcon = scConfig?.icon || Package;
 
-            {/* MODE: Attach later — info card */}
-            {attachmentMode === 'later' && (
-              <div
-                className="rounded-2xl border p-4 mb-4 shadow-sm"
-                style={glassCardStyle(true, '#6B7280')}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: '#6B7280' + '12' }}
-                  >
-                    <Clock size={20} style={{ color: '#6B7280' }} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold mb-1" style={{ color: colors.utility.primaryText }}>
-                      Attach {config.label} Later
-                    </h4>
-                    <p className="text-xs leading-relaxed" style={{ color: colors.utility.secondaryText }}>
-                      Coverage types have been captured. You can attach specific {config.label.toLowerCase()} details
-                      after the contract is created — either from the contract detail page or during the review stage.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleAttachmentModeChange(null)}
-                    className="p-1.5 rounded-lg transition-colors hover:opacity-70 flex-shrink-0"
-                    style={{ color: colors.utility.secondaryText }}
-                    title="Dismiss"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* MODE: Select existing — sidebar + grid */}
-            {attachmentMode === 'existing' && (
-              <div
-                className="rounded-2xl border overflow-hidden shadow-sm"
-                style={{ ...glassStyle, minHeight: 360 }}
-              >
-                <div className="flex" style={{ height: 400 }}>
-                  {/* Sidebar */}
-                  <div
-                    className="w-[200px] min-w-[200px] border-r flex flex-col overflow-hidden"
-                    style={{
-                      backgroundColor: colors.utility.secondaryBackground,
-                      borderColor: colors.utility.primaryText + '10',
-                    }}
-                  >
-                    <div className="flex-1 overflow-y-auto p-2">
-                      {/* All items */}
-                      <button
-                        onClick={() => setGridFilterSubCat(null)}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg mb-0.5 transition-all text-left"
+                  return (
+                    <div
+                      key={subCat}
+                      className="rounded-xl border overflow-hidden"
+                      style={{
+                        background: isDarkMode
+                          ? `linear-gradient(135deg, ${iconColor}12 0%, rgba(30,41,59,0.8) 100%)`
+                          : `linear-gradient(135deg, ${iconColor}08 0%, rgba(255,255,255,0.95) 100%)`,
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        borderColor: isDarkMode ? `${iconColor}35` : `${iconColor}25`,
+                        boxShadow: `0 2px 8px -2px ${iconColor}15`,
+                      }}
+                    >
+                      {/* Colored header bar */}
+                      <div
+                        className="flex items-center gap-1.5 px-2.5 py-1.5"
                         style={{
-                          backgroundColor: gridFilterSubCat === null ? colors.brand.primary + '12' : 'transparent',
+                          backgroundColor: isDarkMode ? `${iconColor}15` : `${iconColor}10`,
+                          borderBottom: `1px solid ${isDarkMode ? `${iconColor}20` : `${iconColor}12`}`,
                         }}
                       >
-                        <Layers size={13} style={{
-                          color: gridFilterSubCat === null ? colors.brand.primary : colors.utility.secondaryText,
-                        }} />
+                        <SubCatIcon size={11} style={{ color: iconColor }} />
+                        <span className="text-[10px] font-bold" style={{ color: iconColor }}>
+                          {subCat}
+                        </span>
                         <span
-                          className="text-xs font-semibold truncate flex-1"
-                          style={{
-                            color: gridFilterSubCat === null ? colors.brand.primary : colors.utility.primaryText,
-                          }}
+                          className="text-[9px] font-bold px-1 py-0.5 rounded ml-auto"
+                          style={{ backgroundColor: isDarkMode ? `${iconColor}20` : `${iconColor}12`, color: iconColor }}
                         >
-                          All
+                          {items.length}
                         </span>
-                        <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                          {allClientAssets.length}
-                        </span>
-                      </button>
-
-                      {subCategories.map((subCat) => {
-                        const isActive = gridFilterSubCat === subCat;
-                        const scConfig = getSubCategoryConfig(subCat);
-                        const SubCatIcon = scConfig?.icon || Package;
-                        const iconColor = scConfig?.color || '#6B7280';
-                        const count = subCategoryAssetCounts[subCat] || 0;
-                        if (count === 0) return null;
-
-                        return (
-                          <button
-                            key={subCat}
-                            onClick={() => setGridFilterSubCat(subCat)}
-                            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg mb-0.5 transition-all text-left"
+                      </div>
+                      <div className="flex flex-wrap gap-1 p-2.5">
+                        {items.map((ct) => (
+                          <span
+                            key={ct.id}
+                            className="text-[10px] px-1.5 py-0.5 rounded-md font-medium"
                             style={{
-                              backgroundColor: isActive ? colors.brand.primary + '12' : 'transparent',
+                              backgroundColor: isDarkMode ? `${iconColor}18` : `${iconColor}12`,
+                              color: iconColor,
                             }}
                           >
-                            <SubCatIcon size={13} style={{ color: isActive ? colors.brand.primary : iconColor }} />
-                            <span
-                              className="text-xs font-semibold truncate flex-1"
-                              style={{ color: isActive ? colors.brand.primary : colors.utility.primaryText }}
-                            >
-                              {subCat}
-                            </span>
-                            <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                              {count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Grid area */}
-                  <div className="flex-1 overflow-y-auto px-4 py-3">
-                    {/* Search + count */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="relative flex-1 max-w-xs">
-                        <Search
-                          className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5"
-                          style={{ color: colors.utility.secondaryText }}
-                        />
-                        <Input
-                          placeholder={`Search...`}
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-8 pr-8 text-xs h-8"
-                          style={{
-                            borderColor: colors.utility.primaryText + '20',
-                            backgroundColor: colors.utility.primaryBackground,
-                            color: colors.utility.primaryText,
-                          }}
-                        />
-                        {searchQuery && (
-                          <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
-                            <X className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
-                          </button>
-                        )}
-                      </div>
-                      <span className="text-[11px] ml-auto" style={{ color: colors.utility.secondaryText }}>
-                        <strong>{equipmentDetails.length}</strong> selected of <strong>{displayAssets.length}</strong>
-                      </span>
-                    </div>
-
-                    {/* Asset grid */}
-                    {assetsLoading ? (
-                      <div className="flex items-center justify-center py-12">
-                        <VaNiLoader size="sm" message="Loading..." />
-                      </div>
-                    ) : displayAssets.length > 0 ? (
-                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                        {displayAssets.map((asset) => (
-                          <EquipmentCard
-                            key={asset.id}
-                            asset={asset}
-                            selectable
-                            isSelected={selectedRegistryIds.has(asset.id)}
-                            onToggle={handleToggle}
-                          />
+                            {ct.resource_name}
+                          </span>
                         ))}
                       </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <Package size={28} style={{ color: colors.utility.secondaryText, opacity: 0.4, margin: '0 auto 8px' }} />
-                        <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                          {searchQuery
-                            ? `No ${config.label.toLowerCase()} matching "${searchQuery}"`
-                            : `No ${config.label.toLowerCase()} registered for this client`
-                          }
-                        </p>
-                        {!searchQuery && (
-                          <Button
-                            onClick={() => setIsDrawerOpen(true)}
-                            size="sm"
-                            className="mt-3 text-xs"
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Empty coverage placeholder */
+            <div
+              className="rounded-xl border-2 border-dashed p-4 text-center mb-4"
+              style={{
+                borderColor: `${colors.utility.primaryText}15`,
+                backgroundColor: isDarkMode ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.6)',
+              }}
+            >
+              <Shield size={20} style={{ color: colors.utility.secondaryText, opacity: 0.3, margin: '0 auto 6px' }} />
+              <p className="text-[10px] font-medium" style={{ color: colors.utility.secondaryText }}>
+                No coverage types selected yet
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: colors.utility.secondaryText, opacity: 0.7 }}>
+                Select types from the left panel
+              </p>
+            </div>
+          )}
+
+          {/* ── Equipment status card ─────────────────────────────── */}
+          {hasCoverage && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
+                  {config.label} Details
+                </span>
+              </div>
+
+              {/* No mode selected yet */}
+              {!attachmentMode && (
+                <div
+                  className="rounded-xl border-2 border-dashed p-3 text-center"
+                  style={{
+                    borderColor: `${colors.utility.primaryText}15`,
+                    backgroundColor: isDarkMode ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.6)',
+                  }}
+                >
+                  <Package size={18} style={{ color: colors.utility.secondaryText, opacity: 0.3, margin: '0 auto 4px' }} />
+                  <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                    Choose how to attach {config.label.toLowerCase()}
+                  </p>
+                </div>
+              )}
+
+              {/* Mode: existing — show selected equipment */}
+              {attachmentMode === 'existing' && (
+                <div
+                  className="rounded-xl border overflow-hidden"
+                  style={{
+                    background: isDarkMode
+                      ? `linear-gradient(135deg, ${colors.brand.primary}12 0%, rgba(30,41,59,0.8) 100%)`
+                      : `linear-gradient(135deg, ${colors.brand.primary}06 0%, rgba(255,255,255,0.95) 100%)`,
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderColor: isDarkMode ? `${colors.brand.primary}35` : `${colors.brand.primary}25`,
+                    boxShadow: `0 4px 12px -3px ${colors.brand.primary}12`,
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-2"
+                    style={{
+                      backgroundColor: isDarkMode ? `${colors.brand.primary}15` : `${colors.brand.primary}08`,
+                      borderBottom: `1px solid ${isDarkMode ? `${colors.brand.primary}20` : `${colors.brand.primary}12`}`,
+                    }}
+                  >
+                    <ListChecks size={12} style={{ color: colors.brand.primary }} />
+                    <span className="text-[10px] font-bold" style={{ color: colors.brand.primary }}>
+                      From Registry
+                    </span>
+                    {equipmentDetails.length > 0 && (
+                      <span
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-auto"
+                        style={{ backgroundColor: `${colors.brand.primary}15`, color: colors.brand.primary }}
+                      >
+                        {equipmentDetails.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    {equipmentDetails.length > 0 ? (
+                      <div className="space-y-1">
+                        {equipmentDetails.slice(0, 5).map((d) => (
+                          <div
+                            key={d.id}
+                            className="flex items-center gap-1.5 text-[10px] py-1.5 px-2 rounded-lg"
                             style={{
-                              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary})`,
-                              color: '#FFFFFF',
+                              backgroundColor: isDarkMode ? `${colors.utility.primaryText}08` : '#FFFFFF',
+                              border: `1px solid ${isDarkMode ? `${colors.utility.primaryText}10` : '#E5E7EB'}`,
+                              color: colors.utility.primaryText,
                             }}
                           >
-                            <Plus className="mr-1 h-3.5 w-3.5" />
-                            {config.addLabel}
-                          </Button>
+                            <CheckCircle2 size={10} style={{ color: '#10b981' }} className="flex-shrink-0" />
+                            <span className="truncate font-medium">{d.item_name}</span>
+                          </div>
+                        ))}
+                        {equipmentDetails.length > 5 && (
+                          <p className="text-[10px] text-center pt-0.5" style={{ color: colors.utility.secondaryText }}>
+                            +{equipmentDetails.length - 5} more
+                          </p>
                         )}
                       </div>
+                    ) : (
+                      <p className="text-[10px] text-center py-2" style={{ color: colors.utility.secondaryText }}>
+                        Select items from the grid
+                      </p>
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              )}
 
-      {/* Empty state when no coverage yet — gentle prompt */}
-      {!hasCoverage && !categoriesLoading && subCategories.length > 0 && (
-        <div className="px-6 pb-6">
-          <div
-            className="rounded-lg border-2 border-dashed p-5 text-center"
-            style={{ borderColor: '#f59e0b40' }}
-          >
-            <p className="text-xs font-medium" style={{ color: '#f59e0b' }}>
-              Select at least one {config.label.toLowerCase()} type above to continue
-            </p>
-          </div>
+              {/* Mode: buyer will add */}
+              {attachmentMode === 'buyer' && (
+                <div
+                  className="rounded-xl border overflow-hidden"
+                  style={{
+                    background: isDarkMode
+                      ? 'linear-gradient(135deg, rgba(14,165,233,0.12) 0%, rgba(30,41,59,0.8) 100%)'
+                      : 'linear-gradient(135deg, rgba(14,165,233,0.06) 0%, rgba(255,255,255,0.95) 100%)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderColor: isDarkMode ? '#0EA5E940' : '#0EA5E930',
+                    boxShadow: '0 4px 12px -3px rgba(14,165,233,0.12)',
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-2"
+                    style={{
+                      backgroundColor: isDarkMode ? 'rgba(14,165,233,0.15)' : 'rgba(14,165,233,0.08)',
+                      borderBottom: `1px solid ${isDarkMode ? 'rgba(14,165,233,0.2)' : 'rgba(14,165,233,0.12)'}`,
+                    }}
+                  >
+                    <UserPlus size={12} style={{ color: '#0EA5E9' }} />
+                    <span className="text-[10px] font-bold" style={{ color: '#0EA5E9' }}>
+                      Buyer Will Add
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[10px] leading-relaxed mb-2" style={{ color: colors.utility.secondaryText }}>
+                      <strong style={{ color: colors.utility.primaryText }}>{buyerName || 'The buyer'}</strong> can add {config.label.toLowerCase()} during review or after claiming CNAK.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {[...coverageBySubCat.keys()].map((subCat) => {
+                        const scConfig = getSubCategoryConfig(subCat);
+                        const iconClr = scConfig?.color || '#6B7280';
+                        return (
+                          <span
+                            key={subCat}
+                            className="text-[9px] px-1.5 py-0.5 rounded-md font-medium"
+                            style={{ backgroundColor: `${iconClr}15`, color: iconClr }}
+                          >
+                            {subCat}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div
+                      className="flex items-center gap-1 mt-2.5 pt-2 border-t"
+                      style={{ borderColor: isDarkMode ? 'rgba(14,165,233,0.15)' : 'rgba(14,165,233,0.1)' }}
+                    >
+                      <ArrowRight size={10} style={{ color: '#0EA5E9' }} />
+                      <span className="text-[9px] font-medium" style={{ color: '#0EA5E9' }}>
+                        Buyer can add at any time
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mode: attach later */}
+              {attachmentMode === 'later' && (
+                <div
+                  className="rounded-xl border overflow-hidden"
+                  style={{
+                    background: isDarkMode
+                      ? 'linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(30,41,59,0.8) 100%)'
+                      : 'linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(255,255,255,0.95) 100%)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderColor: isDarkMode ? '#F59E0B40' : '#F59E0B30',
+                    boxShadow: '0 4px 12px -3px rgba(245,158,11,0.12)',
+                  }}
+                >
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-2"
+                    style={{
+                      backgroundColor: isDarkMode ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.08)',
+                      borderBottom: `1px solid ${isDarkMode ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.12)'}`,
+                    }}
+                  >
+                    <Clock size={12} style={{ color: '#F59E0B' }} />
+                    <span className="text-[10px] font-bold" style={{ color: '#F59E0B' }}>
+                      Attach Later
+                    </span>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[10px] leading-relaxed mb-2" style={{ color: colors.utility.secondaryText }}>
+                      {config.label} categories are captured. Specific details can be added any time after contract creation.
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {[...coverageBySubCat.keys()].map((subCat) => {
+                        const scConfig = getSubCategoryConfig(subCat);
+                        const iconClr = scConfig?.color || '#6B7280';
+                        return (
+                          <span
+                            key={subCat}
+                            className="text-[9px] px-1.5 py-0.5 rounded-md font-medium"
+                            style={{ backgroundColor: `${iconClr}15`, color: iconClr }}
+                          >
+                            {subCat}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div
+                      className="flex items-center gap-1 mt-2.5 pt-2 border-t"
+                      style={{ borderColor: isDarkMode ? 'rgba(245,158,11,0.15)' : 'rgba(245,158,11,0.1)' }}
+                    >
+                      <ArrowRight size={10} style={{ color: '#F59E0B' }} />
+                      <span className="text-[9px] font-medium" style={{ color: '#F59E0B' }}>
+                        Add from contract detail page
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* ── EquipmentFormDialog Drawer ──────────────────────────── */}
       <EquipmentFormDialog
@@ -878,64 +1222,73 @@ const AssetSelectionStep: React.FC<AssetSelectionStepProps> = ({
   );
 };
 
-// ── Option Card sub-component ────────────────────────────────────────
+// ── Option Card sub-component — elevated mini-card ────────────────────
 
 interface OptionCardProps {
   icon: React.ReactNode;
-  title: string;
-  description: string;
+  label: string;
+  hint: string;
   isSelected: boolean;
   onClick: () => void;
-  colors: any;
   accentColor: string;
-  badge?: string;
+  colors: any;
   isDarkMode?: boolean;
+  badge?: string;
 }
 
 const OptionCard: React.FC<OptionCardProps> = ({
-  icon, title, description, isSelected, onClick, colors, accentColor, badge, isDarkMode = false,
+  icon, label, hint, isSelected, onClick, accentColor, colors, isDarkMode = false, badge,
 }) => (
   <button
     type="button"
     onClick={onClick}
-    className="flex items-start gap-3 p-3.5 rounded-2xl border text-left transition-all hover:shadow-lg shadow-sm"
+    className="flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all"
     style={{
-      background: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)',
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
+      background: isDarkMode
+        ? isSelected
+          ? `linear-gradient(135deg, ${accentColor}15 0%, rgba(30,41,59,0.9) 100%)`
+          : 'rgba(30, 41, 59, 0.8)'
+        : isSelected
+          ? `linear-gradient(135deg, ${accentColor}08 0%, rgba(255,255,255,0.98) 100%)`
+          : 'rgba(255, 255, 255, 0.95)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
       borderColor: isSelected
-        ? (isDarkMode ? accentColor + '50' : accentColor + '40')
-        : (isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.5)'),
+        ? (isDarkMode ? accentColor + '50' : accentColor + '35')
+        : (isDarkMode ? 'rgba(255,255,255,0.08)' : '#E5E7EB'),
       boxShadow: isSelected
-        ? `0 4px 20px -5px ${accentColor}20`
-        : '0 4px 20px -5px rgba(0,0,0,0.08)',
+        ? `0 4px 14px -3px ${accentColor}20`
+        : '0 2px 6px -1px rgba(0,0,0,0.06)',
     } as React.CSSProperties}
   >
     <div
-      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
       style={{
-        backgroundColor: accentColor + '12',
+        backgroundColor: isSelected ? accentColor + '18' : accentColor + '10',
         color: accentColor,
       }}
     >
       {icon}
     </div>
     <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-          {title}
+      <div className="flex items-center gap-1.5">
+        <span
+          className="text-[11px] font-bold truncate"
+          style={{ color: isSelected ? accentColor : colors.utility.primaryText }}
+        >
+          {label}
         </span>
         {badge && (
           <span
-            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-            style={{ backgroundColor: accentColor + '15', color: accentColor }}
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+            style={{ backgroundColor: accentColor + '18', color: accentColor }}
           >
             {badge}
           </span>
         )}
       </div>
-      <p className="text-[11px] mt-0.5 leading-snug" style={{ color: colors.utility.secondaryText }}>
-        {description}
+      <p className="text-[10px] leading-snug truncate" style={{ color: colors.utility.secondaryText }}>
+        {hint}
       </p>
     </div>
   </button>

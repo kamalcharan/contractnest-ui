@@ -243,6 +243,8 @@ function mapWizardToRequest(
       unit_price: block.price,
       quantity: block.quantity,
       billing_cycle: block.cycle,
+      custom_cycle_days: block.customCycleDays || undefined,
+      service_cycle_days: block.serviceCycleDays || undefined,
       total_price: block.totalPrice,
       flyby_type: isFlyBy ? (block.flyByType || 'text') : undefined,
       custom_fields: {

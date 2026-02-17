@@ -1,11 +1,19 @@
 // src/components/onboarding/OnboardingLayout.tsx
+// Premium onboarding layout — Apple Dynamic Island-inspired navigation
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useOnboarding } from '@/hooks/queries/useOnboarding';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, CheckCircle, AlertCircle, Circle, CheckCircle2 } from 'lucide-react';
+import {
+  Loader2,
+  AlertCircle,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  SkipForward,
+} from 'lucide-react';
 import { OnboardingUtils } from '@/types/onboardingTypes';
 import toast from 'react-hot-toast';
 
@@ -18,7 +26,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { isDarkMode, currentTheme } = useTheme();
   const { currentTenant, user } = useAuth();
-  
+
   const {
     isLoading,
     isSubmitting,
@@ -41,36 +49,45 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     completeOnboarding,
     initializeOnboarding,
     refreshStatus,
-    error
+    error,
   } = useOnboarding();
 
   // Tenant Profile Hook for business profile steps
   const {
     updateField: updateTenantField,
     handleLogoChange: handleTenantLogoChange,
-    submitProfile
+    submitProfile,
   } = useTenantProfile({ isOnboarding: true });
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const allSteps = OnboardingUtils.getAllSteps();
   const isCompletePage = location.pathname === '/onboarding/complete';
-  
+
   // Track local UI step from URL
   const [uiStepId, setUiStepId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // Business profile data accumulation (for onboarding tracking)
   const [businessProfileData, setBusinessProfileData] = useState<Record<string, any>>({});
-  
+
   // Custom step labels override
   const stepLabelOverrides: Record<string, string> = {
     'business-basic': 'Business Profile',
     'business-branding': 'Industry',
-    'business-preferences': 'Branding'
+    'served-industries': 'Industries You Serve',
+    'business-preferences': 'Branding',
   };
-  
+
+  // Steps that have their own submit buttons (don't show island's Continue)
+  const stepsWithOwnButtons = [
+    'business-basic',
+    'business-branding',
+    'served-industries',
+    'business-preferences',
+    'storage-setup',
+  ];
+
   useEffect(() => {
-    // Extract step ID from URL path
     const pathParts = location.pathname.split('/');
     const stepFromPath = pathParts[pathParts.length - 1];
     setUiStepId(stepFromPath);
@@ -79,20 +96,15 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   // Initialize onboarding if needed
   useEffect(() => {
     const initOnboarding = async () => {
-      console.log('Init check - isLoading:', isLoading, 'needsOnboarding:', needsOnboarding, 'currentStepId:', currentStepId, 'isCompletePage:', isCompletePage);
-      
       if (!isLoading && needsOnboarding && !currentStepId && !isCompletePage) {
-        console.log('Calling initializeOnboarding...');
         try {
           await initializeOnboarding();
-          console.log('Onboarding initialized successfully');
         } catch (err) {
           console.error('Failed to initialize onboarding:', err);
           toast.error('Failed to initialize onboarding');
         }
       }
     };
-    
     initOnboarding();
   }, [needsOnboarding, currentStepId, isLoading, isCompletePage]);
 
@@ -104,159 +116,121 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     }
   }, [isOnboardingComplete, isLoading, isCompletePage, navigate]);
 
- const handleCompleteStep = async (data?: Record<string, any>) => {
-  if (isProcessing) return;
-  
-  setIsProcessing(true);
-  
-  try {
-    // Find current and next UI step
-    const currentIndex = allSteps.findIndex(s => s.id === uiStepId);
-    const nextStep = allSteps[currentIndex + 1];
-    
-    console.log(`🟢 OnboardingLayout - handleCompleteStep called for step: ${uiStepId}`);
-    console.log('🟢 Data received:', data);
-    
-    // Business profile steps that need data accumulation
-    const businessSteps = ['business-basic', 'business-branding', 'business-preferences'];
-    
-    if (businessSteps.includes(uiStepId)) {
-      // ✅ NEW: Check if this is an "already completed" skip
-      const isEmptyData = !data || Object.keys(data).length === 0;
-      
-      if (isEmptyData) {
-        // User clicked "Continue" from already completed view
-        // Just navigate without any API calls
-        console.log('🟡 Business step already completed - skipping save, just navigating');
-        toast.success('Continuing to next step');
-        
-        if (nextStep) {
-          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
-        } else {
-          navigate('/onboarding/complete');
-        }
-        setIsProcessing(false);
-        return;
-      }
-      
-      // Accumulate the data from this step
-      const updatedBusinessData = { ...businessProfileData, ...data };
-      setBusinessProfileData(updatedBusinessData);
-      
-      console.log(`🟡 Business step "${uiStepId}" completed. Accumulated data:`, updatedBusinessData);
-      
-      // Only make API calls on the LAST business step
-      if (uiStepId === 'business-preferences') {
-        console.log('🔴 LAST BUSINESS STEP - SAVING TO TENANT PROFILE');
-        
-        // First, save to tenant profile table using useTenantProfile hook
-        toast.loading('Saving your business profile...', { id: 'saving-profile' });
-        
-        const profileSaved = await submitProfile();
-        
-        if (!profileSaved) {
-          console.log('❌ Failed to save tenant profile');
-          toast.error('Failed to save business profile', { id: 'saving-profile' });
+  // ════════════════════════════════════════════════════════════════
+  // STEP COMPLETION LOGIC (preserved from original)
+  // ════════════════════════════════════════════════════════════════
+
+  const handleCompleteStep = async (data?: Record<string, any>) => {
+    if (isProcessing) return;
+
+    setIsProcessing(true);
+
+    try {
+      const currentIndex = allSteps.findIndex((s) => s.id === uiStepId);
+      const nextStep = allSteps[currentIndex + 1];
+
+      // Business profile steps that need data accumulation
+      const businessSteps = ['business-basic', 'business-branding', 'business-preferences'];
+
+      if (businessSteps.includes(uiStepId)) {
+        const isEmptyData = !data || Object.keys(data).length === 0;
+
+        if (isEmptyData) {
+          toast.success('Continuing to next step');
+          if (nextStep) {
+            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+          } else {
+            navigate('/onboarding/complete');
+          }
           setIsProcessing(false);
           return;
         }
-        
-        console.log('✅ Tenant profile saved successfully');
-        toast.success('Business profile saved successfully!', { id: 'saving-profile' });
-        
-        // Then, mark onboarding step as complete
-        console.log('🔴 Marking onboarding step complete');
-        toast.loading('Completing onboarding step...', { id: 'completing-step' });
-        
-        const success = await completeStep('business-preferences', updatedBusinessData);
-        
-        console.log('🔴 API call result:', success);
-        
-        if (success) {
-          console.log('✅ SUCCESS - Refreshing status');
-          toast.success('Step completed!', { id: 'completing-step' });
-          await refreshStatus();
-          
-          // Clear accumulated data after successful save
-          setBusinessProfileData({});
-          console.log('✅ Business profile onboarding completed and data cleared');
-          
-          if (nextStep) {
-            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+
+        const updatedBusinessData = { ...businessProfileData, ...data };
+        setBusinessProfileData(updatedBusinessData);
+
+        if (uiStepId === 'business-preferences') {
+          toast.loading('Saving your business profile...', { id: 'saving-profile' });
+
+          const profileSaved = await submitProfile();
+          if (!profileSaved) {
+            toast.error('Failed to save business profile', { id: 'saving-profile' });
+            setIsProcessing(false);
+            return;
+          }
+          toast.success('Business profile saved successfully!', { id: 'saving-profile' });
+
+          toast.loading('Completing onboarding step...', { id: 'completing-step' });
+          const success = await completeStep('business-preferences', updatedBusinessData);
+
+          if (success) {
+            toast.success('Step completed!', { id: 'completing-step' });
+            await refreshStatus();
+            setBusinessProfileData({});
+
+            if (nextStep) {
+              navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+            } else {
+              navigate('/onboarding/complete');
+            }
           } else {
-            navigate('/onboarding/complete');
+            toast.error('Failed to complete step', { id: 'completing-step' });
           }
         } else {
-          console.log('❌ FAILED - Not navigating');
-          toast.error('Failed to complete step', { id: 'completing-step' });
-        }
-      } else {
-        // For first two business steps, just navigate without API call
-        console.log(`🟡 Business step "${uiStepId}" - data saved locally, navigating to next step`);
-        toast.success('Progress saved');
-        
-        if (nextStep) {
-          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
-        }
-      }
-    } else {
-      // For non-business steps, use existing logic
-      const uiOnlySteps = ['welcome', 'storage-setup', 'theme-selection'];
-      
-      if (uiOnlySteps.includes(uiStepId)) {
-        console.log('🟡 UI-only step:', uiStepId, '- navigating to next step without backend call');
-        toast.success('Step completed');
-        
-        if (nextStep) {
-          navigate(nextStep.path || `/onboarding/${nextStep.id}`);
-        }
-      } else {
-        console.log('🔴 Backend step:', uiStepId, '- making API call');
-        toast.loading('Saving...', { id: 'saving-step' });
-        
-        const success = await completeStep(uiStepId as any, data);
-        
-        if (success) {
-          toast.success('Step completed!', { id: 'saving-step' });
-          await refreshStatus();
-          
+          toast.success('Progress saved');
           if (nextStep) {
             navigate(nextStep.path || `/onboarding/${nextStep.id}`);
-          } else {
-            navigate('/onboarding/complete');
+          }
+        }
+      } else {
+        // Non-business steps
+        const uiOnlySteps = ['welcome', 'storage-setup', 'theme-selection', 'served-industries'];
+
+        if (uiOnlySteps.includes(uiStepId)) {
+          toast.success('Step completed');
+          if (nextStep) {
+            navigate(nextStep.path || `/onboarding/${nextStep.id}`);
           }
         } else {
-          toast.error('Failed to complete step', { id: 'saving-step' });
+          toast.loading('Saving...', { id: 'saving-step' });
+          const success = await completeStep(uiStepId as any, data);
+
+          if (success) {
+            toast.success('Step completed!', { id: 'saving-step' });
+            await refreshStatus();
+            if (nextStep) {
+              navigate(nextStep.path || `/onboarding/${nextStep.id}`);
+            } else {
+              navigate('/onboarding/complete');
+            }
+          } else {
+            toast.error('Failed to complete step', { id: 'saving-step' });
+          }
         }
       }
+    } catch (err: any) {
+      console.error('Error in handleCompleteStep:', err);
+      toast.error(err?.message || 'An error occurred');
+    } finally {
+      setIsProcessing(false);
     }
-  } catch (err: any) {
-    console.error('❌ Error in handleCompleteStep:', err);
-    toast.error(err?.message || 'An error occurred');
-  } finally {
-    setIsProcessing(false);
-  }
-};
+  };
 
   const handleSkipStep = async () => {
     if (isProcessing) return;
-    
+
     setIsProcessing(true);
-    
     try {
-      // Find next UI step
-      const currentIndex = allSteps.findIndex(s => s.id === uiStepId);
+      const currentIndex = allSteps.findIndex((s) => s.id === uiStepId);
       const nextStep = allSteps[currentIndex + 1];
-      
+
       if (uiStepId && canSkip) {
         toast.loading('Skipping step...', { id: 'skip-step' });
-        
         const success = await skipStep(uiStepId as any);
-        
+
         if (success) {
           toast.success('Step skipped', { id: 'skip-step' });
           await refreshStatus();
-          
           if (nextStep) {
             navigate(nextStep.path || `/onboarding/${nextStep.id}`);
           }
@@ -265,7 +239,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
         }
       }
     } catch (err: any) {
-      console.error('❌ Error in handleSkipStep:', err);
+      console.error('Error in handleSkipStep:', err);
       toast.error(err?.message || 'An error occurred');
     } finally {
       setIsProcessing(false);
@@ -274,80 +248,83 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
   const handleFinish = async () => {
     toast.loading('Completing onboarding...', { id: 'finish-onboarding' });
-    
     try {
       await completeOnboarding();
       toast.success('Onboarding completed successfully!', { id: 'finish-onboarding' });
     } catch (err: any) {
-      console.error('❌ Error completing onboarding:', err);
+      console.error('Error completing onboarding:', err);
       toast.error(err?.message || 'Failed to complete onboarding', { id: 'finish-onboarding' });
     }
   };
 
   const handleGoToPreviousStep = () => {
-    const currentIndex = allSteps.findIndex(s => s.id === uiStepId);
+    const currentIndex = allSteps.findIndex((s) => s.id === uiStepId);
     if (currentIndex > 0) {
       const prevStep = allSteps[currentIndex - 1];
       navigate(prevStep.path || `/onboarding/${prevStep.id}`);
     }
   };
 
-  // Get step display title (with overrides)
-  const getStepTitle = (stepId: string): string => {
-    return stepLabelOverrides[stepId] || allSteps.find(s => s.id === stepId)?.title || stepId;
+  const handleClose = () => {
+    navigate('/dashboard');
   };
 
-  // Loading state
+  // ════════════════════════════════════════════════════════════════
+  // DERIVED VALUES
+  // ════════════════════════════════════════════════════════════════
+
+  const getStepTitle = (stepId: string): string => {
+    return stepLabelOverrides[stepId] || allSteps.find((s) => s.id === stepId)?.title || stepId;
+  };
+
+  const currentIndex = allSteps.findIndex((s) => s.id === uiStepId);
+  const stepLabels = allSteps.map((s) => getStepTitle(s.id));
+  const canGoBackIsland = currentIndex > 0;
+  const isLastStep = currentIndex === allSteps.length - 1;
+  const showIslandContinue = !stepsWithOwnButtons.includes(uiStepId);
+  const currentStepDef = allSteps.find((s) => s.id === uiStepId);
+  const isStepSkippable = currentStepDef ? !currentStepDef.isRequired : false;
+
+  // ════════════════════════════════════════════════════════════════
+  // LOADING STATE
+  // ════════════════════════════════════════════════════════════════
+
   if (isLoading) {
     return (
-      <div 
+      <div
         className="h-screen flex items-center justify-center"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
         <div className="text-center">
-          <Loader2 
-            className="w-12 h-12 animate-spin mx-auto mb-4"
-            style={{ color: colors.brand.primary }}
-          />
-          <p style={{ color: colors.utility.secondaryText }}>
-            Loading onboarding...
-          </p>
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: colors.brand.primary }} />
+          <p style={{ color: colors.utility.secondaryText }}>Loading onboarding...</p>
         </div>
       </div>
     );
   }
 
-  // Error state
+  // ════════════════════════════════════════════════════════════════
+  // ERROR STATE
+  // ════════════════════════════════════════════════════════════════
+
   if (error && !needsOnboarding) {
     return (
-      <div 
+      <div
         className="h-screen flex items-center justify-center"
         style={{ backgroundColor: colors.utility.primaryBackground }}
       >
         <div className="text-center max-w-md">
-          <AlertCircle 
-            className="w-12 h-12 mx-auto mb-4"
-            style={{ color: colors.semantic.error }}
-          />
-          <h2 
-            className="text-xl font-semibold mb-2"
-            style={{ color: colors.utility.primaryText }}
-          >
+          <AlertCircle className="w-12 h-12 mx-auto mb-4" style={{ color: colors.semantic.error }} />
+          <h2 className="text-xl font-semibold mb-2" style={{ color: colors.utility.primaryText }}>
             Onboarding Error
           </h2>
-          <p 
-            className="mb-6"
-            style={{ color: colors.utility.secondaryText }}
-          >
+          <p className="mb-6" style={{ color: colors.utility.secondaryText }}>
             {error}
           </p>
           <button
             onClick={() => navigate('/dashboard')}
             className="px-6 py-2 rounded-md transition-colors hover:opacity-90"
-            style={{
-              backgroundColor: colors.brand.primary,
-              color: '#ffffff'
-            }}
+            style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
           >
             Go to Dashboard
           </button>
@@ -356,309 +333,271 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     );
   }
 
-  // Steps that have their own submit buttons (don't show layout's Continue button)
-  const stepsWithOwnButtons = ['business-basic', 'business-branding', 'business-preferences', 'storage-setup'];
+  // ════════════════════════════════════════════════════════════════
+  // MAIN LAYOUT
+  // ════════════════════════════════════════════════════════════════
 
   return (
-    <div 
-      className="h-screen flex overflow-hidden"
+    <div
+      className="h-screen flex flex-col overflow-hidden"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
-      {/* Vertical Sidebar */}
-      <div 
-        className="w-72 flex-shrink-0 border-r flex flex-col"
-        style={{ 
-          backgroundColor: colors.utility.secondaryBackground,
-          borderColor: colors.utility.primaryText + '20' 
+      {/* ─── Premium Header ────────────────────────────────────── */}
+      <div
+        className="flex-shrink-0 px-6 py-4 flex items-center justify-between border-b"
+        style={{
+          backgroundColor: isDarkMode
+            ? 'rgba(17, 24, 39, 0.95)'
+            : 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(12px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+          borderColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
         }}
       >
-        {/* Header */}
-        <div className="p-6 border-b" style={{ borderColor: colors.utility.primaryText + '20' }}>
-          <h1 
-            className="text-xl font-bold mb-1"
-            style={{ color: colors.utility.primaryText }}
+        {/* Left: Logo + Step title */}
+        <div className="flex items-center gap-4">
+          {/* CN Badge */}
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white"
+            style={{ backgroundColor: colors.brand.primary }}
           >
-            Welcome to {currentTenant?.name || 'ContractNest'}
-          </h1>
-          <p 
-            className="text-sm"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Let's get your workspace set up
-          </p>
-        </div>
-
-        {/* User Info */}
-        <div className="px-6 py-4 border-b" style={{ borderColor: colors.utility.primaryText + '20' }}>
-          <p 
-            className="font-medium text-sm"
-            style={{ color: colors.utility.primaryText }}
-          >
-            {user?.first_name} {user?.last_name}
-          </p>
-          <p 
-            className="text-xs"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            {user?.email}
-          </p>
-        </div>
-
-        {/* Overall Progress */}
-        <div className="px-6 py-4">
-          <div className="flex justify-between items-center mb-2">
-            <span 
-              className="text-sm font-medium"
-              style={{ color: colors.utility.primaryText }}
-            >
-              Overall Progress
-            </span>
-            <span 
-              className="text-sm"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              {progressPercentage}% Complete
-            </span>
+            CN
           </div>
-          <div 
-            className="w-full h-2 rounded-full overflow-hidden"
-            style={{ backgroundColor: colors.utility.primaryText + '20' }}
-          >
-            <div 
-              className="h-full rounded-full transition-all duration-500"
-              style={{ 
-                width: `${progressPercentage}%`,
-                backgroundColor: colors.brand.primary 
-              }}
-            />
-          </div>
-        </div>
 
-        {/* Step List */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-3">
-            {allSteps.map((step) => {
-              const isCompleted = completedSteps.includes(step.id);
-              const isSkipped = skippedSteps.includes(step.id);
-              const isCurrent = uiStepId === step.id;
-              const displayTitle = getStepTitle(step.id);
-              
-              return (
-                <div 
-                  key={step.id}
-                  className={`flex items-start gap-3 p-3 rounded-lg transition-all cursor-pointer ${
-                    isCurrent ? 'shadow-sm' : 'hover:opacity-80'
-                  }`}
-                  style={{ 
-                    backgroundColor: isCurrent ? colors.brand.primary + '10' : 'transparent',
-                    borderLeft: isCurrent ? `3px solid ${colors.brand.primary}` : '3px solid transparent'
-                  }}
-                  onClick={() => {
-                    navigate(step.path || `/onboarding/${step.id}`);
-                  }}
-                >
-                  <div className="flex-shrink-0">
-                    {isCompleted ? (
-                      <CheckCircle2 
-                        className="w-5 h-5"
-                        style={{ color: colors.semantic.success }}
-                      />
-                    ) : isSkipped ? (
-                      <CheckCircle 
-                        className="w-5 h-5"
-                        style={{ color: colors.utility.secondaryText }}
-                      />
-                    ) : (
-                      <Circle 
-                        className={`w-5 h-5 ${isCurrent ? 'fill-current' : ''}`}
-                        style={{ 
-                          color: isCurrent ? colors.brand.primary : colors.utility.secondaryText + '60'
-                        }}
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className="text-sm font-medium"
-                        style={{ 
-                          color: isCurrent ? colors.utility.primaryText : 
-                                 isCompleted ? colors.utility.primaryText :
-                                 colors.utility.secondaryText 
-                        }}
-                      >
-                        {displayTitle}
-                      </span>
-                      {step.isRequired && !isCompleted && !isSkipped && (
-                        <span 
-                          className="text-xs px-1.5 py-0.5 rounded"
-                          style={{ 
-                            backgroundColor: colors.semantic.warning + '20',
-                            color: colors.semantic.warning
-                          }}
-                        >
-                          Required
-                        </span>
-                      )}
-                    </div>
-                    {isCurrent && (
-                      <p 
-                        className="text-xs mt-1"
-                        style={{ color: colors.utility.secondaryText }}
-                      >
-                        {step.estimatedTime}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Time Remaining */}
-        {estimatedTimeRemaining > 0 && (
-          <div 
-            className="px-6 py-4 border-t"
-            style={{ borderColor: colors.utility.primaryText + '20' }}
-          >
-            <p 
-              className="text-xs"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              Estimated time remaining: {OnboardingUtils.formatTimeEstimate(estimatedTimeRemaining)}
+          <div>
+            <h1 className="text-base font-semibold" style={{ color: colors.utility.primaryText }}>
+              {getStepTitle(uiStepId) || 'Getting Started'}
+            </h1>
+            <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+              {currentStepDef?.description || 'Begin your setup journey'}
             </p>
           </div>
-        )}
+        </div>
+
+        {/* Center: Progress Dots */}
+        <div className="hidden md:flex items-center gap-1.5">
+          {allSteps.map((step, index) => {
+            const isCompleted = completedSteps.includes(step.id) || skippedSteps.includes(step.id);
+            const isCurrent = index === currentIndex;
+
+            return (
+              <div
+                key={step.id}
+                className="h-1.5 rounded-full transition-all duration-300 cursor-pointer"
+                style={{
+                  width: isCurrent ? '28px' : '10px',
+                  backgroundColor: isCurrent
+                    ? colors.brand.primary
+                    : isCompleted
+                      ? colors.semantic.success
+                      : isDarkMode
+                        ? 'rgba(255, 255, 255, 0.15)'
+                        : 'rgba(0, 0, 0, 0.12)',
+                }}
+                title={getStepTitle(step.id)}
+                onClick={() => navigate(step.path || `/onboarding/${step.id}`)}
+              />
+            );
+          })}
+        </div>
+
+        {/* Right: Step counter + Close */}
+        <div className="flex items-center gap-3">
+          <span
+            className="text-xs font-medium px-2.5 py-1 rounded-full"
+            style={{
+              backgroundColor: colors.brand.primary + '15',
+              color: colors.brand.primary,
+            }}
+          >
+            {currentIndex + 1} / {allSteps.length}
+          </span>
+          <button
+            onClick={handleClose}
+            className="p-1.5 rounded-full transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+            }}
+            title="Exit onboarding"
+          >
+            <X className="w-4 h-4" style={{ color: colors.utility.secondaryText }} />
+          </button>
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <div 
-          className="px-8 py-4 border-b flex items-center justify-between"
-          style={{ 
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: colors.utility.primaryText + '20' 
-          }}
-        >
-          <div>
-            <h2 
-              className="text-2xl font-bold"
-              style={{ color: colors.utility.primaryText }}
-            >
-              {getStepTitle(uiStepId) || 'Getting Started'}
-            </h2>
-            <p 
-              className="text-sm mt-1"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              {allSteps.find(s => s.id === uiStepId)?.description || 'Begin your setup journey'}
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <span 
-              className="text-sm font-medium px-3 py-1 rounded-full"
-              style={{ 
-                backgroundColor: colors.brand.primary + '20',
-                color: colors.brand.primary
-              }}
-            >
-              Step {allSteps.findIndex(s => s.id === uiStepId) + 1} of {allSteps.length}
-            </span>
-          </div>
-        </div>
-
-        {/* Step Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="h-full">
-            <Outlet context={{ 
+      {/* ─── Step Content ──────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="h-full pb-24">
+          <Outlet
+            context={{
               onComplete: handleCompleteStep,
               onSkip: handleSkipStep,
               onFinish: handleFinish,
               isSubmitting: isSubmitting || isProcessing,
               stepData: {},
-              // Business profile helpers
               updateTenantField,
               handleTenantLogoChange,
-              submitProfile
-            }} />
-          </div>
+              submitProfile,
+            }}
+          />
         </div>
+      </div>
 
-        {/* Bottom Navigation */}
-        {!isCompletePage && (
-          <div 
-            className="px-8 py-4 border-t flex items-center justify-between"
-            style={{ 
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20' 
+      {/* ─── Floating Action Island ────────────────────────────── */}
+      {!isCompletePage && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div
+            className="flex items-center gap-3 px-5 py-2.5 rounded-full shadow-2xl border"
+            style={{
+              backgroundColor: isDarkMode
+                ? 'rgba(17, 24, 39, 0.95)'
+                : 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(16px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+              borderColor: isDarkMode
+                ? 'rgba(255, 255, 255, 0.1)'
+                : 'rgba(0, 0, 0, 0.1)',
+              boxShadow: isDarkMode
+                ? '0 20px 50px rgba(0, 0, 0, 0.5)'
+                : '0 20px 50px rgba(0, 0, 0, 0.15)',
             }}
           >
-            <button
-              onClick={handleGoToPreviousStep}
-              disabled={allSteps.findIndex(s => s.id === uiStepId) === 0 || isSubmitting || isProcessing}
-              className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-80"
+            {/* Skip button (for optional steps) */}
+            {isStepSkippable && !isLastStep && (
+              <>
+                <button
+                  onClick={handleSkipStep}
+                  disabled={isSubmitting || isProcessing}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:opacity-80 disabled:opacity-40"
+                  style={{
+                    backgroundColor: isDarkMode
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                    color: colors.utility.secondaryText,
+                  }}
+                >
+                  <SkipForward className="w-3.5 h-3.5" />
+                  Skip
+                </button>
+
+                {/* Divider */}
+                <div
+                  className="w-px h-6"
+                  style={{
+                    backgroundColor: isDarkMode
+                      ? 'rgba(255, 255, 255, 0.1)'
+                      : 'rgba(0, 0, 0, 0.1)',
+                  }}
+                />
+              </>
+            )}
+
+            {/* Status Pill */}
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
               style={{
-                backgroundColor: 'transparent',
-                border: `1px solid ${colors.utility.primaryText}20`,
-                color: colors.utility.primaryText
+                backgroundColor: isDarkMode
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(0, 0, 0, 0.04)',
               }}
             >
-              Previous
-            </button>
-            
-            {/* Only show Continue button for steps that DON'T have their own submit button */}
-            {!stepsWithOwnButtons.includes(uiStepId) ? (
-              <div className="flex gap-2">
-                {canSkip && (
-                  <button
-                    onClick={handleSkipStep}
-                    disabled={isSubmitting || isProcessing}
-                    className="px-6 py-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-80"
+              {/* Pulsing Status Dot */}
+              <div className="relative">
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: colors.semantic.success }}
+                />
+                <div
+                  className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
+                  style={{ backgroundColor: colors.semantic.success, opacity: 0.75 }}
+                />
+              </div>
+              <span
+                className="text-sm font-medium whitespace-nowrap"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {stepLabels[currentIndex] || `Step ${currentIndex + 1}`}
+              </span>
+            </div>
+
+            {/* Progress Dots (mobile-friendly compact) */}
+            <div className="hidden sm:flex items-center gap-1">
+              {allSteps.map((step, index) => {
+                const isCompleted = completedSteps.includes(step.id) || skippedSteps.includes(step.id);
+                const isCurrent = index === currentIndex;
+
+                return (
+                  <div
+                    key={step.id}
+                    className="h-1 rounded-full transition-all duration-300"
                     style={{
-                      backgroundColor: 'transparent',
-                      color: colors.utility.secondaryText
+                      width: isCurrent ? '20px' : '6px',
+                      backgroundColor: isCurrent
+                        ? colors.brand.primary
+                        : isCompleted
+                          ? colors.semantic.success
+                          : isDarkMode
+                            ? 'rgba(255, 255, 255, 0.2)'
+                            : 'rgba(0, 0, 0, 0.12)',
                     }}
-                  >
-                    Skip
-                  </button>
-                )}
-                
+                  />
+                );
+              })}
+            </div>
+
+            {/* Divider */}
+            <div
+              className="w-px h-6"
+              style={{
+                backgroundColor: isDarkMode
+                  ? 'rgba(255, 255, 255, 0.1)'
+                  : 'rgba(0, 0, 0, 0.1)',
+              }}
+            />
+
+            {/* Navigation Buttons */}
+            <div className="flex items-center gap-2">
+              {/* Back Button */}
+              <button
+                onClick={handleGoToPreviousStep}
+                disabled={!canGoBackIsland || isSubmitting || isProcessing}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-80"
+                style={{
+                  backgroundColor: isDarkMode
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : 'rgba(0, 0, 0, 0.05)',
+                  color: colors.utility.primaryText,
+                }}
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Back
+              </button>
+
+              {/* Continue Button (only for steps without own buttons) */}
+              {showIslandContinue && (
                 <button
                   onClick={() => handleCompleteStep()}
                   disabled={isSubmitting || isProcessing}
-                  className="px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-medium hover:opacity-90 flex items-center"
-                  style={{
-                    backgroundColor: colors.brand.primary,
-                    color: '#ffffff'
-                  }}
+                  className="flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+                  style={{ backgroundColor: colors.brand.primary }}
                 >
-                  {(isSubmitting || isProcessing) ? (
+                  {isSubmitting || isProcessing ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
                     </>
                   ) : (
-                    'Continue'
+                    <>
+                      Continue
+                      <ChevronRight className="w-4 h-4" />
+                    </>
                   )}
                 </button>
-              </div>
-            ) : (
-              <div 
-                className="text-sm text-center px-4 py-2 rounded-lg"
-                style={{ 
-                  color: colors.utility.secondaryText,
-                  backgroundColor: colors.utility.primaryText + '05'
-                }}
-              >
-                Complete the form above to continue
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

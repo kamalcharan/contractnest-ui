@@ -84,13 +84,11 @@ const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, onCreateC
     { id: 'all', label: 'All Contracts', icon: FileText, count: stats.all, color: colors.brand.primary },
     { id: 'client', label: 'Client', icon: Users, count: stats.client, color: colors.brand.primary },
     { id: 'vendor', label: 'Vendor', icon: Building2, count: stats.vendor, color: colors.semantic.success },
-    { id: 'partner', label: 'Partner', icon: Handshake, count: stats.partner, color: colors.semantic.warning },
   ];
 
   const createItems: Array<{ label: string; type: ContractType; color: string }> = [
     { label: 'Client Contract', type: 'client', color: colors.brand.primary },
     { label: 'Vendor Contract', type: 'vendor', color: colors.semantic.success },
-    { label: 'Partner Contract', type: 'partner', color: colors.semantic.warning },
   ];
 
   return (
@@ -374,7 +372,6 @@ const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateCli
   const createOptions: Array<{ label: string; type: ContractType; icon: React.ElementType; color: string }> = [
     { label: 'Client Contract', type: 'client', icon: Users, color: colors.brand.primary },
     { label: 'Vendor Contract', type: 'vendor', icon: Building2, color: colors.semantic.success },
-    { label: 'Partner Contract', type: 'partner', icon: Handshake, color: colors.semantic.warning },
   ];
 
   const isAll = typeFilter === 'all';
@@ -801,7 +798,6 @@ const ContractsHubPage: React.FC = () => {
   const createOptions = useMemo(() => [
     { label: 'Client Contract', type: 'client', icon: Users, color: colors.brand.primary },
     { label: 'Vendor Contract', type: 'vendor', icon: Building2, color: colors.semantic.success },
-    { label: 'Partner Contract', type: 'partner', icon: Handshake, color: colors.semantic.warning },
   ], [colors]);
 
   const openWizard = (type: ContractType) => {

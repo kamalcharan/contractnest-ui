@@ -134,9 +134,6 @@ import StorageSettingsPage from './pages/settings/storagesettings';
 // FIXED: Import the actual Resources page instead of placeholder
 import ResourcesPage from './pages/settings/Resources';
 
-// Equipment Registry (Settings) — client equipment management
-import SettingsEquipmentPage from './pages/settings/Equipment';
-
 // Equipment Registry (P1) — standalone page under Operations
 import EquipmentPage from './pages/equipment-registry';
 
@@ -609,7 +606,6 @@ const AppContent: React.FC = () => {
             <Route path="configure" element={<SettingsPage />} />
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
-            <Route path="configure/equipment" element={<SettingsEquipmentPage />} />
             <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
 
             {/* Team Management Routes */}

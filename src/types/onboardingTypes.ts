@@ -193,7 +193,7 @@ export const ONBOARDING_CONSTANTS = {
     TOUR: 'tour' as OnboardingStepId,
   },
   REQUIRED_STEPS: ['user-profile', 'business-basic', 'sequence-numbers'] as string[],
-  TOTAL_STEPS: 10, // Updated: removed team-invite, product-tour, sample-contract
+  TOTAL_STEPS: 11, // Updated: added served-industries step
 
   // UI specific - routing paths
   ROUTES: {
@@ -204,6 +204,7 @@ export const ONBOARDING_CONSTANTS = {
     THEME_SELECTION: '/onboarding/theme-selection',
     BUSINESS_BASIC: '/onboarding/business-basic',
     BUSINESS_BRANDING: '/onboarding/business-branding',
+    SERVED_INDUSTRIES: '/onboarding/served-industries',
     BUSINESS_PREFERENCES: '/onboarding/business-preferences',
     SEQUENCE_NUMBERS: '/onboarding/sequence-numbers',
     MASTER_DATA: '/onboarding/master-data',
@@ -347,8 +348,19 @@ export const OnboardingUtils = {
         component: 'BusinessBrandingStep'
       },
       {
-        id: 'business-preferences',
+        id: 'served-industries',
         sequence: 7,
+        title: 'Industries You Serve',
+        description: 'Select the industries your business serves',
+        isRequired: false,
+        estimatedTime: '2 min',
+        icon: 'Globe',
+        path: ONBOARDING_CONSTANTS.ROUTES.SERVED_INDUSTRIES,
+        component: 'ServedIndustriesStep'
+      },
+      {
+        id: 'business-preferences',
+        sequence: 8,
         title: 'Branding',
         description: 'Customize your workspace with logo and colors',
         isRequired: false,
@@ -359,7 +371,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'sequence-numbers',
-        sequence: 8,
+        sequence: 9,
         title: 'Sequence Numbers',
         description: 'Configure auto-generated number formats',
         isRequired: true,
@@ -370,7 +382,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'master-data',
-        sequence: 9,
+        sequence: 10,
         title: 'Data Setup',
         description: 'Import or set up your initial data',
         isRequired: false,
@@ -381,7 +393,7 @@ export const OnboardingUtils = {
       },
       {
         id: 'complete',
-        sequence: 10,
+        sequence: 11,
         title: 'All Done!',
         description: 'Complete your onboarding',
         isRequired: false,
@@ -406,6 +418,7 @@ export const OnboardingUtils = {
       'theme-selection',
       'business-basic',
       'business-branding',
+      'served-industries',
       'business-preferences',
       'sequence-numbers',
       'master-data',
@@ -526,6 +539,7 @@ export const OnboardingUtils = {
       'theme-selection': 1,
       'business-basic': 2,
       'business-branding': 2,
+      'served-industries': 2,
       'business-preferences': 3,
       'sequence-numbers': 2,
       'master-data': 5,

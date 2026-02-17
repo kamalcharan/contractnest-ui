@@ -501,6 +501,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                   dragHandleProps={{
                     style: { cursor: 'grab' },
                   }}
+                  contractDurationDays={contractDuration ? contractDuration * 30 : undefined}
                   onToggleExpand={handleToggleExpand}
                   onRemove={handleRemoveBlock}
                   onUpdate={handleUpdateBlock}
