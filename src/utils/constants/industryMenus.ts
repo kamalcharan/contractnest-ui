@@ -100,19 +100,9 @@ export const defaultMenuItems: MenuItem[] = [
   {
     id: 'vani',
     label: 'VaNi',
-    icon: 'MessageSquare',
-    path: '/vani/dashboard',
-    hasSubmenu: true,
-    submenuItems: [
-      { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
-      { id: 'vani-events', label: 'Business Events', icon: 'Zap', path: '/vani/events' },
-      { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
-      { id: 'vani-templates', label: 'Templates', icon: 'FileTemplate', path: '/vani/templates' },
-      { id: 'vani-channels', label: 'Channels', icon: 'Radio', path: '/vani/channels' },
-      { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
-      { id: 'vani-rules', label: 'Process Rules', icon: 'GitBranch', path: '/vani/rules' },
-      { id: 'vani-chat', label: 'Chat', icon: 'MessageCircle', path: '/vani/chat' }
-    ]
+    icon: 'Sparkles',
+    path: '/vani/landing',
+    hasSubmenu: false
   },
   // HIDDEN: Templates, Tasks - commented out for now
   /*

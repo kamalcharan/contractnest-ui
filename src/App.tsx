@@ -90,6 +90,7 @@ import AccountsReceivablePage from './vani/pages/AccountsReceivablePage';
 import ServiceSchedulePage from './vani/pages/ServiceSchedulePage';
 import ProcessRulesPage from './vani/pages/ProcessRulesPage';
 import ChatPage from './vani/pages/ChatPage';
+import VaNiLandingPage from './vani/pages/VaNiLandingPage';
 import { ChatConversation, ChatMessage } from './vani/types/chat.types';
 
 // VaNi Channels Sub-pages
@@ -686,7 +687,8 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="/vani/dashboard" replace />} />
+            <Route index element={<Navigate to="/vani/landing" replace />} />
+            <Route path="landing" element={<VaNiLandingPage />} />
             <Route path="dashboard" element={<VaNiDashboard />} />
             <Route path="jobs" element={<JobsListPage />} />
             <Route path="jobs/create" element={<JobCreatePage />} />

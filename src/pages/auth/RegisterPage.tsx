@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight, FileText } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight, FileText, Lock, KeyRound, Sparkles, Rocket, MessageCircle } from 'lucide-react';
 import { vaniToast } from '../../components/common/toast';
 import { supabase } from '../../utils/supabase';
 // Import analytics
@@ -12,6 +12,13 @@ import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analyti
 const RegisterPage: React.FC = () => {
   // Check if Google OAuth is enabled - MOVED TO TOP
   const isGoogleAuthEnabled = import.meta.env.VITE_GOOGLE_AUTH_ENABLED!== 'false';
+
+  // Beta access gate state
+  const [betaUnlocked, setBetaUnlocked] = useState(false);
+  const [betaKey, setBetaKey] = useState('');
+  const [betaError, setBetaError] = useState('');
+  const [betaShake, setBetaShake] = useState(false);
+  const [betaUnlocking, setBetaUnlocking] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -93,6 +100,32 @@ const RegisterPage: React.FC = () => {
     // Clear field-specific error when changed
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
+    }
+  };
+
+  // Handle beta key submission
+  const handleBetaUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBetaError('');
+
+    if (!betaKey.trim()) {
+      setBetaError('Please enter the access key');
+      return;
+    }
+
+    if (betaKey.trim().toLowerCase() === 'bharathavarsha') {
+      setBetaUnlocking(true);
+      // Brief animation delay before revealing signup
+      setTimeout(() => {
+        setBetaUnlocked(true);
+        setBetaUnlocking(false);
+        vaniToast.success('Welcome to the beta! Create your account below.', { duration: 3000 });
+      }, 800);
+    } else {
+      setBetaError('Invalid access key. Please contact us for beta access.');
+      setBetaShake(true);
+      setTimeout(() => setBetaShake(false), 600);
+      vaniToast.error('Invalid access key', { duration: 2000 });
     }
   };
 
@@ -272,6 +305,340 @@ const RegisterPage: React.FC = () => {
       // Error is handled by auth context
     }
   };
+
+  // ─── Beta Access Gate Screen ───
+  if (!betaUnlocked) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center transition-colors duration-200 relative overflow-hidden"
+        style={{
+          background: isDarkMode
+            ? `linear-gradient(135deg, ${colors.utility.primaryBackground} 0%, ${colors.utility.secondaryBackground} 50%, ${colors.brand.primary}15 100%)`
+            : `linear-gradient(135deg, ${colors.utility.primaryBackground} 0%, ${colors.utility.secondaryBackground} 50%, ${colors.brand.primary}08 100%)`
+        }}
+      >
+        {/* Animated background orbs */}
+        <div
+          className="absolute w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse"
+          style={{
+            background: `radial-gradient(circle, ${colors.brand.primary}40, transparent)`,
+            top: '-10%',
+            right: '-5%',
+          }}
+        />
+        <div
+          className="absolute w-72 h-72 rounded-full blur-3xl opacity-15"
+          style={{
+            background: `radial-gradient(circle, ${colors.brand.secondary}30, transparent)`,
+            bottom: '-5%',
+            left: '-5%',
+            animation: 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }}
+        />
+
+        {/* Grid pattern */}
+        <div
+          className={`absolute inset-0 transition-opacity ${isDarkMode ? 'opacity-[0.03]' : 'opacity-[0.02]'}`}
+          style={{
+            backgroundImage: `
+              linear-gradient(${isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'} 1px, transparent 1px),
+              linear-gradient(90deg, ${isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'} 1px, transparent 1px)
+            `,
+            backgroundSize: '40px 40px'
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-lg mx-4">
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center mb-6">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-2xl"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                  boxShadow: `0 8px 32px ${colors.brand.primary}40`
+                }}
+              >
+                <Shield className="w-9 h-9 text-white" />
+              </div>
+            </div>
+            <h1
+              className="text-3xl font-bold mb-1 transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              ContractNest
+            </h1>
+            <p
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Contract Management Made Simple
+            </p>
+          </div>
+
+          {/* Main Card */}
+          <div
+            className="backdrop-blur-xl border rounded-2xl shadow-2xl overflow-hidden transition-colors"
+            style={{
+              backgroundColor: `${colors.utility.secondaryBackground}80`,
+              borderColor: `${colors.utility.primaryText}15`,
+              boxShadow: isDarkMode
+                ? `0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px ${colors.utility.primaryText}10`
+                : `0 25px 60px rgba(0,0,0,0.08), 0 0 0 1px ${colors.utility.primaryText}10`
+            }}
+          >
+            {/* Beta Badge Header */}
+            <div
+              className="px-8 py-4 text-center"
+              style={{
+                background: `linear-gradient(135deg, ${colors.brand.primary}15, ${colors.brand.secondary}10)`,
+                borderBottom: `1px solid ${colors.utility.primaryText}10`
+              }}
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wider uppercase"
+                style={{
+                  backgroundColor: `${colors.brand.primary}20`,
+                  color: colors.brand.primary,
+                  border: `1px solid ${colors.brand.primary}30`
+                }}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Private Beta
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-8 pt-6 pb-8">
+              {/* Thank you message */}
+              <div className="text-center mb-6">
+                <h2
+                  className="text-xl font-bold mb-3 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Thank You for Your Interest!
+                </h2>
+                <p
+                  className="text-sm leading-relaxed transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  We're building the future of contract management — powered by AI,
+                  designed for teams who want clarity, speed, and control over every agreement.
+                </p>
+              </div>
+
+              {/* What we're building */}
+              <div
+                className="rounded-xl p-4 mb-6"
+                style={{
+                  backgroundColor: `${colors.utility.primaryText}05`,
+                  border: `1px solid ${colors.utility.primaryText}08`
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <Rocket className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                  <span
+                    className="text-sm font-semibold transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Currently in Private Beta
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {[
+                    'AI-powered contract creation & analysis',
+                    'Buyer → Seller coordination with AR/AP',
+                    'Automated compliance & risk detection',
+                    'Real-time collaboration & e-signatures'
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Check
+                        className="w-3.5 h-3.5 flex-shrink-0"
+                        style={{ color: colors.semantic.success }}
+                      />
+                      <span
+                        className="text-xs transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        {item}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Beta Key Form */}
+              <form onSubmit={handleBetaUnlock} className="mb-6">
+                <label
+                  className="block text-sm font-medium mb-2 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  Enter Beta Access Key
+                </label>
+                <div className={`relative ${betaShake ? 'animate-[shake_0.5s_ease-in-out]' : ''}`}>
+                  <KeyRound
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 transition-colors"
+                    style={{ color: betaError ? '#ef4444' : colors.utility.secondaryText }}
+                  />
+                  <input
+                    type="password"
+                    value={betaKey}
+                    onChange={(e) => { setBetaKey(e.target.value); setBetaError(''); }}
+                    placeholder="Enter your secret access key"
+                    className="w-full pl-10 pr-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all"
+                    style={{
+                      borderColor: betaError ? '#ef4444' : `${colors.utility.secondaryText}30`,
+                      backgroundColor: `${colors.utility.primaryBackground}80`,
+                      color: colors.utility.primaryText,
+                      '--tw-ring-color': colors.brand.primary,
+                    } as React.CSSProperties}
+                    autoFocus
+                  />
+                </div>
+                {betaError && (
+                  <p className="mt-2 text-sm text-red-500 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5" />
+                    {betaError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={betaUnlocking}
+                  className="w-full mt-4 py-3 px-4 text-white font-medium rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-70 transition-all duration-200 flex items-center justify-center gap-2 hover:opacity-90"
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                    '--tw-ring-color': colors.brand.primary,
+                    boxShadow: `0 4px 15px ${colors.brand.primary}30`
+                  } as React.CSSProperties}
+                >
+                  {betaUnlocking ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Unlocking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      <span>Unlock Beta Access</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div
+                    className="w-full border-t transition-colors"
+                    style={{ borderColor: `${colors.utility.secondaryText}20` }}
+                  />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span
+                    className="px-3 transition-colors"
+                    style={{
+                      backgroundColor: colors.utility.secondaryBackground,
+                      color: colors.utility.secondaryText,
+                    }}
+                  >
+                    Don't have a key?
+                  </span>
+                </div>
+              </div>
+
+              {/* Contact Section */}
+              <div
+                className="rounded-xl p-4 text-center"
+                style={{
+                  backgroundColor: `${colors.utility.primaryText}04`,
+                  border: `1px solid ${colors.utility.primaryText}08`
+                }}
+              >
+                <p
+                  className="text-sm font-medium mb-3 transition-colors"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  We're onboarding select beta customers
+                </p>
+                <p
+                  className="text-xs mb-4 transition-colors"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Reach out to get early access and shape the product with us
+                </p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <a
+                    href="mailto:connect@vikuna.io"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                    style={{
+                      backgroundColor: `${colors.brand.primary}15`,
+                      color: colors.brand.primary,
+                      border: `1px solid ${colors.brand.primary}25`
+                    }}
+                  >
+                    <Mail className="w-4 h-4" />
+                    connect@vikuna.io
+                  </a>
+                  <a
+                    href="https://wa.me/919949701175"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all hover:opacity-80"
+                    style={{
+                      backgroundColor: `${colors.semantic.success}15`,
+                      color: colors.semantic.success,
+                      border: `1px solid ${colors.semantic.success}25`
+                    }}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    +91 99497 01175
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Already have an account */}
+          <div className="text-center mt-6">
+            <p
+              className="text-sm transition-colors"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Already have an account?{' '}
+              <Link
+                to="/login"
+                className="font-medium transition-colors hover:opacity-80"
+                style={{ color: colors.brand.primary }}
+              >
+                Sign in
+              </Link>
+            </p>
+          </div>
+
+          {/* Footer */}
+          <div className="text-center mt-4">
+            <p
+              className="text-xs transition-colors"
+              style={{ color: `${colors.utility.secondaryText}80` }}
+            >
+              A product by Vikuna Technologies
+            </p>
+          </div>
+        </div>
+
+        {/* Shake animation keyframes */}
+        <style>{`
+          @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-4px); }
+            80% { transform: translateX(4px); }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div

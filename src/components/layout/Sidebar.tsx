@@ -1,6 +1,6 @@
 // src/components/layout/Sidebar.tsx
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -163,6 +163,73 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
   );
 };
 
+// Special highlighted nav item for VaNi
+const VaNiNavItem: React.FC<{ item: MenuItem; collapsed: boolean }> = ({ item, collapsed }) => {
+  const location = useLocation();
+  const isActive = location.pathname.startsWith('/vani');
+
+  return (
+    <div className="mb-1 mx-1">
+      <NavLink
+        to={item.path}
+        className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group"
+        style={{
+          background: isActive
+            ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)'
+            : 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(124,58,237,0.06))',
+          border: isActive
+            ? '1px solid rgba(139,92,246,0.5)'
+            : '1px solid rgba(139,92,246,0.2)',
+          color: isActive ? '#ffffff' : '#c4b5fd',
+          boxShadow: isActive
+            ? '0 4px 15px rgba(139,92,246,0.3)'
+            : 'none',
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(124,58,237,0.12))';
+            e.currentTarget.style.borderColor = 'rgba(139,92,246,0.35)';
+            e.currentTarget.style.boxShadow = '0 2px 10px rgba(139,92,246,0.15)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.background = 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(124,58,237,0.06))';
+            e.currentTarget.style.borderColor = 'rgba(139,92,246,0.2)';
+            e.currentTarget.style.boxShadow = 'none';
+          }
+        }}
+      >
+        <div className="relative">
+          <LucideIcons.Sparkles size={20} />
+          <span
+            className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full"
+            style={{
+              background: '#10b981',
+              boxShadow: '0 0 4px rgba(16,185,129,0.6)',
+              animation: 'pulse 2s infinite',
+            }}
+          />
+        </div>
+        {!collapsed && (
+          <div className="flex items-center justify-between w-full">
+            <span className="font-semibold text-sm tracking-wide">VaNi</span>
+            <span
+              className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded"
+              style={{
+                background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(139,92,246,0.2)',
+                color: isActive ? '#ffffff' : '#a78bfa',
+              }}
+            >
+              AI
+            </span>
+          </div>
+        )}
+      </NavLink>
+    </div>
+  );
+};
+
 interface SidebarProps {
   collapsed?: boolean;
 }
@@ -290,53 +357,20 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
 
       <div className="p-2 flex-1 overflow-y-auto">
         <nav className="py-4 space-y-1">
-          {/* Regular menu items with VaNi inserted between Contracts and Catalog Studio */}
-          {regularMenuItems.map((item, index) => {
-            const nextItem = regularMenuItems[index + 1];
-            const showVaNiAfter = item.id === 'contracts' && nextItem?.id === 'catalog-studio';
-
+          {/* Regular menu items with special VaNi highlight */}
+          {regularMenuItems.map((item) => {
+            if (item.id === 'vani') {
+              return (
+                <VaNiNavItem key={item.id} item={item} collapsed={collapsed} />
+              );
+            }
             return (
-              <React.Fragment key={item.id}>
-                <NavItem
-                  item={item}
-                  collapsed={collapsed}
-                  badge={notificationCounts[item.id]}
-                />
-                {/* VaNi AI Card - between Contracts and Catalog Studio */}
-                {showVaNiAfter && !collapsed && (
-                  <div className="my-3 mx-2">
-                    <div
-                      className="bg-gradient-to-br from-gray-900 to-black rounded-2xl p-4 shadow-xl border border-white/10 relative overflow-hidden group cursor-pointer hover:shadow-2xl transition-all"
-                      onClick={() => window.location.href = '/vani/chat'}
-                    >
-                      <div
-                        className="absolute -right-4 -top-4 w-16 h-16 blur-2xl rounded-full group-hover:opacity-60 transition-all"
-                        style={{ backgroundColor: `${colors.brand.primary}30` }}
-                      />
-
-                      <div className="flex items-center gap-3 relative z-10">
-                        <div className="relative">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-inner">
-                            <LucideIcons.Sparkles
-                              size={20}
-                              style={{ color: colors.brand.primary }}
-                            />
-                          </div>
-                          <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full animate-pulse" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black text-white tracking-widest uppercase">VaNi AI</h4>
-                          <p className="text-[9px] text-gray-400 font-bold uppercase">Autonomous Mode: ON</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-3 border-t border-white/5">
-                        <p className="text-[10px] text-gray-400 leading-tight italic">"Ready to assist with your contracts."</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </React.Fragment>
+              <NavItem
+                key={item.id}
+                item={item}
+                collapsed={collapsed}
+                badge={notificationCounts[item.id]}
+              />
             );
           })}
 
