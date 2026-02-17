@@ -119,6 +119,9 @@ export interface ContractEquipmentDetail {
 export interface Contract {
   id: string;
   tenant_id: string;
+  // Dual-persona: who sells vs who buys this contract
+  seller_id?: string;           // Tenant who created/owns/sells — equals tenant_id for existing data
+  buyer_tenant_id?: string | null; // Tenant who claimed/accepted as buyer — null until claimed
   record_type: ContractRecordType;
   contract_type: ContractType;
   contract_number: string;
