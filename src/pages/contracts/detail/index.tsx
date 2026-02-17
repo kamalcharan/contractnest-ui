@@ -61,6 +61,9 @@ import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueries';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
+import { useContractRole } from '@/hooks/useContractRole';
+import { useContractHealth } from '@/hooks/useContractHealth';
+import ContractHealthCard from '@/components/contracts/ContractHealthCard';
 import type { ReviewSendStepProps } from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
 import { ConfigurableBlock } from '@/components/catalog-studio/BlockCardConfigurable';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
@@ -1163,6 +1166,13 @@ const ContractDetailPage: React.FC = () => {
   const { hasActiveGateway } = useGatewayStatus();
   const { addToast } = useVaNiToast();
 
+  // ─── Dual-persona role + health ───
+  const { role } = useContractRole(contract ?? null);
+  const health = useContractHealth({
+    contract: contract ?? null,
+    invoiceSummary: pageSummary ?? null,
+  });
+
   // ─── Razorpay Checkout (for terminal mode from RecordPaymentDialog) ───
   const { openCheckout, isVerifying } = useRazorpayCheckout({
     onVerified: () => {
@@ -1265,6 +1275,11 @@ const ContractDetailPage: React.FC = () => {
                 hasActiveGateway={hasActiveGateway}
                 onRecordPayment={() => setIsPaymentDialogOpen(true)}
                 onViewInvoice={handleViewInvoice}
+              />
+              <ContractHealthCard
+                health={health}
+                role={role}
+                colors={colors}
               />
             </div>
           </div>
