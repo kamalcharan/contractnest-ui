@@ -26,7 +26,7 @@ const BusinessProfilePage = () => {
   }, []);
 
   // Use the tenant profile hook
-  const { loading, profile } = useTenantProfile();
+  const { loading, profile, fetchProfile } = useTenantProfile();
 
   // Fetch industries from API
   const { data: industriesResponse } = useIndustries();
@@ -58,7 +58,7 @@ const BusinessProfilePage = () => {
   // Sidebar sections
   const sections = [
     { id: 'overview', label: 'Overview', icon: Building },
-    { id: 'served-industries', label: 'Served Industries', icon: Factory },
+    { id: 'industries', label: 'Industries', icon: Factory },
     { id: 'danger', label: 'Close Account', icon: AlertTriangle },
   ];
 
@@ -326,9 +326,14 @@ const BusinessProfilePage = () => {
                             <div className="font-semibold text-lg transition-colors" style={{ color: colors.utility.primaryText }}>
                               {profile.business_name}
                             </div>
-                            <div className="text-sm transition-colors" style={{ color: colors.utility.secondaryText }}>
+                            <button
+                              className="text-sm transition-colors hover:underline text-left"
+                              style={{ color: industry ? colors.brand.primary : colors.utility.secondaryText }}
+                              onClick={() => setActiveSection('industries')}
+                              title="View Industries"
+                            >
                               {industry?.name || 'Industry not specified'}
-                            </div>
+                            </button>
                           </div>
                         </div>
                         {profile.short_description && (
@@ -513,9 +518,9 @@ const BusinessProfilePage = () => {
                 </div>
               )}
 
-              {/* ═══ SERVED INDUSTRIES SECTION ═══ */}
-              {activeSection === 'served-industries' && (
-                <ServedIndustriesSection />
+              {/* ═══ INDUSTRIES SECTION (unified: your industry + served) ═══ */}
+              {activeSection === 'industries' && (
+                <ServedIndustriesSection profileIndustryId={profile?.industry_id} onIndustryChanged={fetchProfile} />
               )}
 
               {/* ═══ DANGER ZONE / CLOSE ACCOUNT SECTION ═══ */}
