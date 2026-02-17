@@ -696,20 +696,28 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
 
   // ─── Empty ───
   if (!eventsData?.items || eventsData.items.length === 0) {
+    const contractStatus = contractData?.status;
+    const isPreActive = contractStatus && contractStatus !== 'active' && contractStatus !== 'completed';
+
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <div
           className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
           style={{ background: `linear-gradient(135deg, ${colors.brand.primary}15, ${colors.brand.primary}05)` }}
         >
-          <ClipboardList className="w-10 h-10" style={{ color: colors.brand.primary }} />
+          {isPreActive
+            ? <Clock className="w-10 h-10" style={{ color: colors.brand.primary }} />
+            : <ClipboardList className="w-10 h-10" style={{ color: colors.brand.primary }} />
+          }
         </div>
         <h3 className="text-lg font-bold mb-2" style={{ color: colors.utility.primaryText }}>
-          No Operations Yet
+          {isPreActive ? 'Contract Not Yet Active' : 'No Operations Yet'}
         </h3>
         <p className="text-sm text-center max-w-md" style={{ color: colors.utility.secondaryText }}>
-          Operations will appear here once the contract is activated.
-          Service deliverables, spare parts, and billing events will be grouped by date.
+          {isPreActive
+            ? 'Operations will be generated automatically once the contract becomes active. The current status is "' + (contractStatus === 'pending_acceptance' ? 'Pending Acceptance' : contractStatus === 'pending_review' ? 'Pending Review' : 'Draft') + '".'
+            : 'No operations are scheduled for this contract. Service deliverables, spare parts, and billing events will appear here once configured.'
+          }
         </p>
       </div>
     );
