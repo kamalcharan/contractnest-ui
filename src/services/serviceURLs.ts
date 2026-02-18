@@ -945,6 +945,7 @@ export const API_ENDPOINTS = {
     // Invoices & payments
     INVOICES: (id: string) => `/api/contracts/${id}/invoices`,
     RECORD_PAYMENT: (id: string) => `/api/contracts/${id}/invoices/record-payment`,
+    CANCEL_INVOICE: (id: string) => `/api/contracts/${id}/invoices/cancel`,
     NOTIFY: (id: string) => `/api/contracts/${id}/notify`,
 
     // Dashboard stats

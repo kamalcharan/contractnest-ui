@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
-import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse } from '@/types/contracts';
+import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse, CancelInvoicePayload, CancelInvoiceResponse } from '@/types/contracts';
 
 // =================================================================
 // QUERY KEYS
@@ -61,6 +61,8 @@ export const useContractInvoices = (
           unpaid_count: 0,
           partial_count: 0,
           overdue_count: 0,
+          cancelled_count: 0,
+          bad_debt_count: 0,
           collection_percentage: 0,
         },
       };
@@ -119,6 +121,53 @@ export const useRecordPayment = (contractId: string | undefined) => {
       onError: (error: any) => {
         captureException(error, {
           tags: { component: 'useRecordPayment' },
+          extra: { contractId, tenantId: currentTenant?.id },
+        });
+      },
+    },
+  });
+};
+
+// =================================================================
+// MUTATION: Cancel / Write-off Invoice
+// =================================================================
+
+/**
+ * Cancel an invoice or mark it as bad debt.
+ * Seller-only action. Invalidates invoice queries on success.
+ */
+export const useCancelInvoice = (contractId: string | undefined) => {
+  const { currentTenant } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: CancelInvoicePayload): Promise<CancelInvoiceResponse> => {
+      if (!currentTenant?.id || !contractId) {
+        throw new Error('Missing tenant or contract ID');
+      }
+
+      const response = await api.post(
+        API_ENDPOINTS.CONTRACTS.CANCEL_INVOICE(contractId),
+        payload
+      );
+
+      const result = response.data?.data || response.data;
+
+      if (result?.success === false) {
+        throw new Error(result.error || 'Failed to process invoice action');
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      if (contractId) {
+        queryClient.invalidateQueries({ queryKey: invoiceKeys.byContract(contractId) });
+      }
+    },
+    meta: {
+      onError: (error: any) => {
+        captureException(error, {
+          tags: { component: 'useCancelInvoice' },
           extra: { contractId, tenantId: currentTenant?.id },
         });
       },

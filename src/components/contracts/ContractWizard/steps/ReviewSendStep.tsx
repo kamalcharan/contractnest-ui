@@ -73,6 +73,8 @@ export interface ReviewSendStepProps {
   vendorNames?: string[];
   // Nomenclature
   nomenclatureName?: string | null;
+  // Force a specific view mode (hides the Self/Client toggle)
+  forcedViewMode?: 'self' | 'client';
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -139,6 +141,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   rfqMode = false,
   vendorNames = [],
   nomenclatureName,
+  forcedViewMode,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -167,8 +170,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   );
 
   // View mode
-  const [viewMode, setViewMode] = useState<'self' | 'client'>('self');
-  const isSelfView = viewMode === 'self';
+  const [viewMode, setViewMode] = useState<'self' | 'client'>(forcedViewMode || 'self');
+  const effectiveViewMode = forcedViewMode || viewMode;
+  const isSelfView = effectiveViewMode === 'self';
 
   // PDF generation
   const paperRef = useRef<HTMLDivElement>(null);
@@ -871,8 +875,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
         <div className="min-w-0">
         {/* Controls above paper */}
         <div className="flex items-center justify-between px-2 pb-3">
-          {/* Self / Client pill toggle - hidden in RFQ mode */}
-          {!rfqMode ? (
+          {/* Self / Client pill toggle - hidden in RFQ mode and when forcedViewMode is set */}
+          {!rfqMode && !forcedViewMode ? (
             <div
               className="flex items-center rounded-full p-1 shadow-sm"
               style={{ backgroundColor: paperBg }}
@@ -902,12 +906,20 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                 Client View
               </button>
             </div>
-          ) : (
+          ) : rfqMode ? (
             <span
               className="text-[10px] px-3 py-1.5 rounded-full font-medium uppercase tracking-wide shadow-sm"
               style={{ backgroundColor: paperBg, color: brandPrimary }}
             >
               RFQ Preview
+            </span>
+          ) : (
+            <span
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm"
+              style={{ backgroundColor: brandPrimary, color: '#FFFFFF' }}
+            >
+              {isSelfView ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {isSelfView ? 'Self View' : 'Client View'}
             </span>
           )}
 

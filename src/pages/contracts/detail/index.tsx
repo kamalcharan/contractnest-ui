@@ -44,8 +44,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useContract, useContractOperations } from '@/hooks/queries/useContractQueries';
-import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
-import type { ContractDetail, ContractStatus } from '@/types/contracts';
+import { useContractInvoices, useCancelInvoice } from '@/hooks/queries/useInvoiceQueries';
+import type { ContractDetail, ContractStatus, InvoiceReceipt, Invoice } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS, CONTRACT_STATUS_FLOW, RFQ_STATUS_FLOW } from '@/types/contracts';
 import {
   DropdownMenu,
@@ -256,6 +256,7 @@ const SELLER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.Comp
   { id: 'tasks', label: 'Tasks', icon: Clock },
   { id: 'financials', label: 'Financials', icon: DollarSign },
   { id: 'audit', label: 'Audit Log', icon: ScrollText },
+  { id: 'document', label: 'Document', icon: FileText },
 ];
 
 // ═══════════════════════════════════════════════════
@@ -388,6 +389,8 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
         return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Overdue' };
       case 'cancelled':
         return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Cancelled' };
+      case 'bad_debt':
+        return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Bad Debt' };
       default:
         return { bg: colors.utility.primaryText + '10', color: colors.utility.secondaryText, label: 'Unpaid' };
     }
@@ -1170,6 +1173,359 @@ const PlaceholderTab: React.FC<PlaceholderTabProps> = ({ icon: Icon, title, desc
 );
 
 // ═══════════════════════════════════════════════════
+// INVOICE CARD WITH RECEIPT BREAKDOWN
+// ═══════════════════════════════════════════════════
+
+interface InvoiceCardProps {
+  inv: Invoice;
+  isPaid: boolean;
+  isPartial: boolean;
+  isCancelled: boolean;
+  isBadDebt: boolean;
+  isTerminal: boolean;
+  statusColor: string;
+  statusLabel: string;
+  balance: number;
+  receipts: InvoiceReceipt[];
+  hasReceipts: boolean;
+  colors: any;
+  isSeller: boolean;
+  contractId: string;
+  formatCurrency: (amount: number, currency?: string) => string;
+  formatDate: (date?: string | null) => string;
+  onViewInvoice: () => void;
+}
+
+const InvoiceCard: React.FC<InvoiceCardProps> = ({
+  inv, isPaid, isPartial, isCancelled, isBadDebt, isTerminal, statusColor, statusLabel,
+  balance, receipts, hasReceipts, colors, isSeller, contractId,
+  formatCurrency, formatDate, onViewInvoice,
+}) => {
+  const [showReceipts, setShowReceipts] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<'cancel' | 'bad_debt' | null>(null);
+  const [reason, setReason] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addToast } = useVaNiToast();
+  const cancelInvoiceMutation = useCancelInvoice(contractId);
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return;
+    setIsSubmitting(true);
+    try {
+      await cancelInvoiceMutation.mutateAsync({
+        invoice_id: inv.id,
+        action: confirmAction,
+        reason: reason.trim() || undefined,
+      });
+      addToast({
+        type: 'success',
+        title: confirmAction === 'cancel' ? 'Invoice Cancelled' : 'Marked as Bad Debt',
+        message: `${inv.invoice_number} has been ${confirmAction === 'cancel' ? 'cancelled' : 'marked as bad debt'}.`,
+      });
+      setConfirmAction(null);
+      setReason('');
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Action Failed',
+        message: err?.message || 'Something went wrong. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Can cancel: seller + not paid + not already terminal
+  const canCancel = isSeller && !isPaid && !isTerminal;
+  // Can mark bad debt: seller + not paid + not already terminal (works on partial too)
+  const canMarkBadDebt = isSeller && !isPaid && !isTerminal;
+
+  return (
+    <div
+      className="rounded-lg border overflow-hidden"
+      style={{
+        borderColor: isTerminal ? (isBadDebt ? colors.semantic.error + '25' : colors.utility.secondaryText + '20') : colors.utility.primaryText + '10',
+        backgroundColor: isTerminal ? colors.utility.primaryText + '02' : colors.utility.primaryText + '03',
+        opacity: isTerminal ? 0.7 : 1,
+      }}
+    >
+      <div className="p-4">
+        {/* Row 1: Icon + Invoice info + Status + Amount */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: statusColor + '15' }}
+            >
+              {isPaid ? (
+                <CheckCircle2 className="h-4 w-4" style={{ color: statusColor }} />
+              ) : isTerminal ? (
+                <AlertTriangle className="h-4 w-4" style={{ color: statusColor }} />
+              ) : (
+                <FileText className="h-4 w-4" style={{ color: statusColor }} />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
+                  {inv.invoice_number}
+                </span>
+                <span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: statusColor + '18', color: statusColor }}>
+                  {statusLabel}
+                </span>
+                {inv.emi_sequence && (
+                  <span className="text-[0.6rem] px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: colors.brand.primary + '15', color: colors.brand.primary }}>
+                    EMI {inv.emi_sequence}/{inv.emi_total}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>
+                  Due: {formatDate(inv.due_date)}
+                </span>
+                <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                <span className="text-[0.6rem] font-semibold" style={{ color: colors.utility.primaryText }}>
+                  {formatCurrency(inv.total_amount, inv.currency)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0 ml-3">
+            <div className="text-sm font-bold" style={{ color: isPaid ? colors.semantic.success : colors.utility.primaryText }}>
+              {formatCurrency(inv.amount_paid || 0, inv.currency)}
+            </div>
+            <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+              {isCancelled ? 'cancelled' : isBadDebt ? 'written off' : 'paid'}
+            </span>
+          </div>
+        </div>
+
+        {/* Row 2: Receipt summary + expand toggle */}
+        {hasReceipts && (
+          <button
+            onClick={() => setShowReceipts(!showReceipts)}
+            className="w-full flex items-center justify-between mb-3 px-2.5 py-2 rounded-md transition-all hover:opacity-80"
+            style={{ backgroundColor: colors.brand.primary + '06', border: `1px solid ${colors.brand.primary}15` }}
+          >
+            <div className="flex items-center gap-2">
+              <Receipt className="h-3 w-3 flex-shrink-0" style={{ color: colors.brand.primary }} />
+              <span className="text-[0.6rem] font-semibold" style={{ color: colors.brand.primary }}>
+                {receipts.length} Receipt{receipts.length !== 1 ? 's' : ''}
+              </span>
+              <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+                totalling {formatCurrency(receipts.reduce((sum, r) => sum + (r.amount || 0), 0), inv.currency)}
+              </span>
+            </div>
+            {showReceipts ? (
+              <ChevronUp className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+            ) : (
+              <ChevronDown className="h-3 w-3" style={{ color: colors.utility.secondaryText }} />
+            )}
+          </button>
+        )}
+
+        {/* Row 2b: Expanded receipt details */}
+        {showReceipts && hasReceipts && (
+          <div className="mb-3 space-y-1.5">
+            {receipts.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between px-3 py-2 rounded-md"
+                style={{ backgroundColor: colors.utility.primaryText + '04', border: `1px solid ${colors.utility.primaryText}08` }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: colors.semantic.success + '12' }}
+                  >
+                    <Hash className="h-3 w-3" style={{ color: colors.semantic.success }} />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[0.6rem] font-bold block" style={{ color: colors.utility.primaryText }}>
+                      {r.receipt_number}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+                        {formatDate(r.payment_date)}
+                      </span>
+                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+                        {(r.payment_method || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                      </span>
+                      {r.reference_number && (
+                        <>
+                          <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                          <span className="text-[0.55rem] font-mono" style={{ color: colors.utility.secondaryText }}>
+                            Ref: {r.reference_number}
+                          </span>
+                        </>
+                      )}
+                      {r.is_offline && (
+                        <Wallet className="h-2.5 w-2.5 flex-shrink-0" style={{ color: '#F59E0B' }} title="Offline payment" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs font-bold flex-shrink-0 ml-3" style={{ color: colors.semantic.success }}>
+                  {formatCurrency(r.amount, r.currency || inv.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Row 2c: No receipts but paid/partial — legacy capture indicator */}
+        {!hasReceipts && (isPaid || isPartial) && (
+          <div
+            className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-md"
+            style={{ backgroundColor: '#F59E0B08', border: '1px solid #F59E0B20' }}
+          >
+            <Wallet className="h-3 w-3 flex-shrink-0" style={{ color: '#F59E0B' }} />
+            <span className="text-[0.6rem] font-medium" style={{ color: '#B45309' }}>
+              Payment recorded (receipt details not available)
+            </span>
+            {inv.paid_at && (
+              <span className="text-[0.55rem] ml-auto" style={{ color: colors.utility.secondaryText }}>
+                {formatDate(inv.paid_at)}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Row 3: Action icons */}
+        <div
+          className="flex items-center gap-1 pt-3 border-t"
+          style={{ borderColor: colors.utility.primaryText + '08' }}
+        >
+          <button
+            onClick={onViewInvoice}
+            className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+            style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+            title="View Invoice"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span>Invoice</span>
+          </button>
+          <button
+            onClick={onViewInvoice}
+            className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+            style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '05' }}
+            title="Download PDF"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>PDF</span>
+          </button>
+          {hasReceipts && (
+            <button
+              onClick={() => setShowReceipts(!showReceipts)}
+              className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+              style={{ color: colors.semantic.success, backgroundColor: colors.semantic.success + '08' }}
+              title="View Receipts"
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              <span>Receipts ({receipts.length})</span>
+            </button>
+          )}
+          {balance > 0 && !isTerminal && (
+            <span
+              className="ml-auto text-[0.6rem] font-semibold px-2 py-1 rounded"
+              style={{ backgroundColor: colors.semantic.warning + '12', color: colors.semantic.warning }}
+            >
+              Bal: {formatCurrency(balance, inv.currency)}
+            </span>
+          )}
+
+          {/* Seller-only: Cancel / Bad Debt actions */}
+          {(canCancel || canMarkBadDebt) && (
+            <div className="flex items-center gap-1 ml-auto">
+              {canCancel && (
+                <button
+                  onClick={() => { setConfirmAction('cancel'); setReason(''); }}
+                  className="flex items-center gap-1 text-[0.6rem] font-medium px-2 py-1 rounded-md transition-all hover:opacity-80"
+                  style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+                  title="Cancel Invoice"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Cancel
+                </button>
+              )}
+              {canMarkBadDebt && (
+                <button
+                  onClick={() => { setConfirmAction('bad_debt'); setReason(''); }}
+                  className="flex items-center gap-1 text-[0.6rem] font-medium px-2 py-1 rounded-md transition-all hover:opacity-80"
+                  style={{ color: colors.semantic.error, backgroundColor: colors.semantic.error + '08' }}
+                  title="Mark as Bad Debt"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  Bad Debt
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Confirmation Dialog */}
+        {confirmAction && (
+          <div
+            className="mt-3 p-3 rounded-lg border"
+            style={{
+              backgroundColor: confirmAction === 'bad_debt' ? colors.semantic.error + '06' : colors.utility.primaryText + '04',
+              borderColor: confirmAction === 'bad_debt' ? colors.semantic.error + '20' : colors.utility.primaryText + '15',
+            }}
+          >
+            <p className="text-xs font-bold mb-2" style={{ color: confirmAction === 'bad_debt' ? colors.semantic.error : colors.utility.primaryText }}>
+              {confirmAction === 'cancel' ? 'Cancel Invoice' : 'Mark as Bad Debt'} — {inv.invoice_number}
+            </p>
+            <p className="text-[0.65rem] mb-2" style={{ color: colors.utility.secondaryText }}>
+              {confirmAction === 'cancel'
+                ? 'This will void the invoice. Any partial payments will remain on record.'
+                : 'This will write off the remaining balance as uncollectable. Partial payments remain on record.'}
+            </p>
+            <input
+              type="text"
+              placeholder="Reason (optional)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full text-xs px-3 py-1.5 rounded-md border mb-2 outline-none"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: colors.utility.primaryText + '15',
+                color: colors.utility.primaryText,
+              }}
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleConfirmAction}
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 text-[0.65rem] font-semibold px-3 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50"
+                style={{ backgroundColor: confirmAction === 'bad_debt' ? colors.semantic.error : colors.utility.secondaryText }}
+              >
+                {isSubmitting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-3 w-3" />
+                )}
+                {isSubmitting ? 'Processing...' : confirmAction === 'cancel' ? 'Confirm Cancel' : 'Confirm Bad Debt'}
+              </button>
+              <button
+                onClick={() => { setConfirmAction(null); setReason(''); }}
+                disabled={isSubmitting}
+                className="text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
 // MAIN PAGE COMPONENT
 // ═══════════════════════════════════════════════════
 
@@ -1365,25 +1721,12 @@ const ContractDetailPage: React.FC = () => {
       // ── Buyer-only tabs ──
       case 'my_services':
         return (
-          <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 380px' }}>
-            <OperationsTab
-              contractId={contract.id}
-              currency={contract.currency || 'INR'}
-              colors={colors}
-              buyerName={contract.buyer_name}
-              contractValue={grandTotal}
-              collectedAmount={pageSummary?.total_paid ?? 0}
-              collectionPct={pageSummary?.collection_percentage ?? 0}
-            />
-            <div className="space-y-5">
-              <ContractHealthCard
-                health={health}
-                role={role}
-                colors={colors}
-              />
-              <ContractDetailsCard contract={contract} colors={colors} />
-            </div>
-          </div>
+          <SellerTasksTab
+            contractId={contract.id}
+            currency={contract.currency || 'INR'}
+            colors={colors}
+            role="buyer"
+          />
         );
       case 'payments':
         return (
@@ -1531,137 +1874,40 @@ const ContractDetailPage: React.FC = () => {
                         const isPaid = inv.status === 'paid';
                         const isPartial = inv.status === 'partially_paid';
                         const isOverdue = inv.status === 'overdue';
+                        const isCancelled = inv.status === 'cancelled';
+                        const isBadDebt = inv.status === 'bad_debt';
+                        const isTerminal = isCancelled || isBadDebt;
                         const statusColor = isPaid ? colors.semantic.success
                           : isPartial ? colors.semantic.warning
                           : isOverdue ? colors.semantic.error
+                          : isBadDebt ? colors.semantic.error
+                          : isCancelled ? colors.utility.secondaryText
                           : colors.utility.secondaryText;
-                        const statusLabel = isPaid ? 'Paid' : isPartial ? 'Partial' : isOverdue ? 'Overdue' : 'Unpaid';
+                        const statusLabel = isPaid ? 'Fully Paid' : isPartial ? 'Partially Paid' : isOverdue ? 'Overdue' : isCancelled ? 'Cancelled' : isBadDebt ? 'Bad Debt' : 'Unpaid';
                         const balance = inv.total_amount - (inv.amount_paid || 0);
-                        const isOffline = inv.payment_mode && inv.payment_mode !== 'online' && inv.payment_mode !== 'razorpay';
+                        const receipts = inv.receipts || [];
+                        const hasReceipts = receipts.length > 0;
                         return (
-                          <div
+                          <InvoiceCard
                             key={inv.id}
-                            className="rounded-lg border overflow-hidden"
-                            style={{ borderColor: colors.utility.primaryText + '10', backgroundColor: colors.utility.primaryText + '03' }}
-                          >
-                            <div className="p-4">
-                              {/* Row 1: Icon + Invoice info + Status + Amount */}
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <div
-                                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                    style={{ backgroundColor: statusColor + '15' }}
-                                  >
-                                    {isPaid ? (
-                                      <CheckCircle2 className="h-4 w-4" style={{ color: statusColor }} />
-                                    ) : (
-                                      <FileText className="h-4 w-4" style={{ color: statusColor }} />
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-                                        {inv.invoice_number}
-                                      </span>
-                                      <span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full"
-                                        style={{ backgroundColor: statusColor + '18', color: statusColor }}>
-                                        {statusLabel}
-                                      </span>
-                                      {inv.emi_sequence && (
-                                        <span className="text-[0.6rem] px-1.5 py-0.5 rounded"
-                                          style={{ backgroundColor: colors.brand.primary + '15', color: colors.brand.primary }}>
-                                          EMI {inv.emi_sequence}/{inv.emi_total}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>
-                                        Due: {formatDate(inv.due_date)}
-                                      </span>
-                                      <span className="text-[0.6rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
-                                      <span className="text-[0.6rem] font-semibold" style={{ color: colors.utility.primaryText }}>
-                                        {formatCurrency(inv.total_amount, inv.currency)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right flex-shrink-0 ml-3">
-                                  <div className="text-sm font-bold" style={{ color: isPaid ? colors.semantic.success : colors.utility.primaryText }}>
-                                    {formatCurrency(inv.amount_paid || 0, inv.currency)}
-                                  </div>
-                                  <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>paid</span>
-                                </div>
-                              </div>
-
-                              {/* Row 2: Capture method indicator */}
-                              {(isPaid || isPartial) && (
-                                <div
-                                  className="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-md"
-                                  style={{ backgroundColor: isOffline ? '#F59E0B08' : '#10B98108', border: `1px solid ${isOffline ? '#F59E0B20' : '#10B98120'}` }}
-                                >
-                                  {isOffline ? (
-                                    <Wallet className="h-3 w-3 flex-shrink-0" style={{ color: '#F59E0B' }} />
-                                  ) : (
-                                    <CreditCard className="h-3 w-3 flex-shrink-0" style={{ color: '#10B981' }} />
-                                  )}
-                                  <span className="text-[0.6rem] font-medium" style={{ color: isOffline ? '#B45309' : '#059669' }}>
-                                    {isOffline
-                                      ? `Captured via Offline Form${inv.payment_mode ? ' \u2022 ' + inv.payment_mode.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : ''}`
-                                      : 'Captured via Online Payment'}
-                                  </span>
-                                  {inv.paid_at && (
-                                    <span className="text-[0.55rem] ml-auto" style={{ color: colors.utility.secondaryText }}>
-                                      {formatDate(inv.paid_at)}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Row 3: Action icons */}
-                              <div
-                                className="flex items-center gap-1 pt-3 border-t"
-                                style={{ borderColor: colors.utility.primaryText + '08' }}
-                              >
-                                <button
-                                  onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
-                                  className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
-                                  style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
-                                  title="View Invoice"
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                  <span>Invoice</span>
-                                </button>
-                                <button
-                                  onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
-                                  className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
-                                  style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '05' }}
-                                  title="Download PDF"
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                  <span>PDF</span>
-                                </button>
-                                {(isPaid || isPartial) && (
-                                  <button
-                                    onClick={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
-                                    className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
-                                    style={{ color: colors.semantic.success, backgroundColor: colors.semantic.success + '08' }}
-                                    title="View Receipt"
-                                  >
-                                    <Receipt className="h-3.5 w-3.5" />
-                                    <span>Receipt</span>
-                                  </button>
-                                )}
-                                {balance > 0 && (
-                                  <span
-                                    className="ml-auto text-[0.6rem] font-semibold px-2 py-1 rounded"
-                                    style={{ backgroundColor: colors.semantic.warning + '12', color: colors.semantic.warning }}
-                                  >
-                                    Bal: {formatCurrency(balance, inv.currency)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                            inv={inv}
+                            isPaid={isPaid}
+                            isPartial={isPartial}
+                            isCancelled={isCancelled}
+                            isBadDebt={isBadDebt}
+                            isTerminal={isTerminal}
+                            statusColor={statusColor}
+                            statusLabel={statusLabel}
+                            balance={balance}
+                            receipts={receipts}
+                            hasReceipts={hasReceipts}
+                            colors={colors}
+                            isSeller={!showBuyerView}
+                            contractId={contract.id}
+                            formatCurrency={formatCurrency}
+                            formatDate={formatDate}
+                            onViewInvoice={() => navigate(`/contracts/${contract.id}/invoice/${inv.id}`)}
+                          />
                         );
                       })}
                     </div>
@@ -1715,7 +1961,7 @@ const ContractDetailPage: React.FC = () => {
       case 'document':
         return (
           <div className="-mx-6 -mt-4">
-            <ReviewSendStep {...mapContractToReviewProps(contract)} />
+            <ReviewSendStep {...mapContractToReviewProps(contract)} forcedViewMode={showBuyerView ? 'client' : 'self'} />
           </div>
         );
       case 'audit':
@@ -1843,38 +2089,16 @@ const ContractDetailPage: React.FC = () => {
 
           {/* Right: Actions (role-aware) */}
           <div className="flex items-center gap-2">
-            <button
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
-              style={{
-                backgroundColor: 'transparent',
-                borderColor: colors.utility.primaryText + '20',
-                color: colors.utility.primaryText,
-              }}
-            >
-              <FileText className="h-4 w-4" /> View PDF
-            </button>
             {showSellerView && !isTerminalState && (
-              <>
-                <button
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
-                  style={{
-                    backgroundColor: 'transparent',
-                    borderColor: colors.utility.primaryText + '20',
-                    color: colors.utility.primaryText,
-                  }}
-                >
-                  <Send className="h-4 w-4" /> Send Update
-                </button>
-                <button
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
-                  style={{
-                    backgroundColor: colors.brand.primary,
-                    color: '#ffffff',
-                  }}
-                >
-                  <Plus className="h-4 w-4" /> Add Task
-                </button>
-              </>
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors hover:opacity-80"
+                style={{
+                  backgroundColor: colors.brand.primary,
+                  color: '#ffffff',
+                }}
+              >
+                <Plus className="h-4 w-4" /> Add Task
+              </button>
             )}
             {showBuyerView && !isTerminalState && (
               <>

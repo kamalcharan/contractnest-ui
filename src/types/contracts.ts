@@ -263,7 +263,7 @@ export interface ContractDetail extends Contract {
 // =================================================================
 
 export type InvoiceType = 'receivable' | 'payable';
-export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'bad_debt';
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'card' | 'other';
 
 export interface Invoice {
@@ -290,6 +290,7 @@ export interface Invoice {
   notes?: string;
   created_at: string;
   receipts_count?: number;
+  receipts?: InvoiceReceipt[];
 }
 
 export interface InvoiceReceipt {
@@ -319,6 +320,8 @@ export interface InvoiceSummary {
   unpaid_count: number;
   partial_count: number;
   overdue_count: number;
+  cancelled_count?: number;
+  bad_debt_count?: number;
   collection_percentage: number;
 }
 
@@ -347,6 +350,23 @@ export interface RecordPaymentResponse {
   amount_paid: number;
   balance: number;
   receipts_count: number;
+}
+
+// Invoice cancel / write-off
+export interface CancelInvoicePayload {
+  invoice_id: string;
+  action: 'cancel' | 'bad_debt';
+  reason?: string;
+}
+
+export interface CancelInvoiceResponse {
+  invoice_id: string;
+  invoice_number: string;
+  action: 'cancel' | 'bad_debt';
+  new_status: InvoiceStatus;
+  previous_status: InvoiceStatus;
+  previous_balance: number;
+  amount_paid: number;
 }
 
 // =================================================================

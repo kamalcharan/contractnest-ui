@@ -1,236 +1,248 @@
 // src/components/contracts/SellerTasksTab.tsx
-// Seller Tasks tab — Block-grouped dual-column timeline
-// Groups events by block, shows service tasks (left) + financial tasks (right) per block
+// Seller/Buyer Tasks tab — center-line vertical timeline with EventCard
+// Mirrors the EventsPreviewStep layout using live API data
+// Used by Seller "Tasks" tab and Buyer "My Services" tab
 
-import React from 'react';
-import { useContractEventsForContract } from '@/hooks/queries/useContractEventQueries';
+import React, { useMemo, useState, useCallback } from 'react';
+import {
+  CalendarDays,
+  DollarSign,
+  Wrench,
+  Loader2,
+  RefreshCw,
+  AlertTriangle,
+  Play,
+  FileText,
+  CheckCircle2,
+  ClipboardList,
+  CreditCard,
+  Clock,
+} from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+import {
+  useContractEventsForContract,
+  useContractEventOperations,
+} from '@/hooks/queries/useContractEventQueries';
+import { useContract } from '@/hooks/queries/useContractQueries';
+import {
+  useEventStatuses,
+  useEventTransitions,
+} from '@/hooks/queries/useEventStatusConfigQueries';
+import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
+import type { EventStatusDefinition } from '@/types/eventStatusConfig';
+import { EventCard } from '@/components/contracts/EventCard';
+import ServiceExecutionDrawer from '@/components/contracts/ServiceExecutionDrawer';
 
-// =================================================================
+// ═══════════════════════════════════════════════════
 // PROPS
-// =================================================================
+// ═══════════════════════════════════════════════════
 
 export interface SellerTasksTabProps {
   contractId: string;
   currency: string;
   colors: any;
+  /** 'seller' (default) shows Start Service / Generate Invoice actions;
+   *  'buyer' shows Make Payment action on billing side */
+  role?: 'seller' | 'buyer';
 }
 
-// =================================================================
-// STATUS COLORS
-// =================================================================
+// ═══════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════
 
-const STATUS_STYLES: Record<string, { line: string; dot: string; bg: string }> = {
-  completed:   { line: '#10b981', dot: '#10b981', bg: '#f0fdf4' },
-  in_progress: { line: '#3b82f6', dot: '#3b82f6', bg: '#eff6ff' },
-  pending:     { line: '#f59e0b', dot: '#f59e0b', bg: '#fffbeb' },
-  overdue:     { line: '#ef4444', dot: '#ef4444', bg: '#fef2f2' },
-  not_started: { line: '#e2e8f0', dot: '#cbd5e1', bg: '#f8fafc' },
-  cancelled:   { line: '#e2e8f0', dot: '#cbd5e1', bg: '#f8fafc' },
-};
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const STATUS_LABELS: Record<string, { label: string; bg: string; color: string; dot: string }> = {
-  completed:   { label: 'Completed',   bg: '#d1fae5', color: '#059669', dot: '#10b981' },
-  in_progress: { label: 'In Progress', bg: '#dbeafe', color: '#2563eb', dot: '#3b82f6' },
-  pending:     { label: 'Pending',     bg: '#fef3c7', color: '#d97706', dot: '#f59e0b' },
-  overdue:     { label: 'Overdue',     bg: '#fee2e2', color: '#dc2626', dot: '#ef4444' },
-  not_started: { label: 'Not Started', bg: '#f1f5f9', color: '#94a3b8', dot: '#cbd5e1' },
-  cancelled:   { label: 'Cancelled',   bg: '#f1f5f9', color: '#94a3b8', dot: '#cbd5e1' },
-};
-
-// =================================================================
-// TIMELINE NODE (Seller variant — with assignee, internal actions)
-// =================================================================
-
-interface NodeProps {
-  event: any;
-  isLast: boolean;
-  type: 'service' | 'billing';
-  currency: string;
+interface DateGroup {
+  date: string;
+  dateObj: Date;
+  serviceEvents: ContractEvent[];
+  billingEvents: ContractEvent[];
 }
 
-const SellerNode: React.FC<NodeProps> = ({ event, isLast, type, currency }) => {
-  const sc = STATUS_STYLES[event.status] || STATUS_STYLES.not_started;
-  const sl = STATUS_LABELS[event.status] || STATUS_LABELS.not_started;
-  const isService = type === 'service';
-
-  const fmtCurrency = (v: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: currency || 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
-
-  const fmtDate = (d?: string) => {
-    if (!d) return '';
-    return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  };
-
-  return (
-    <div style={{ display: 'flex', gap: 0, minHeight: isLast ? 50 : 70 }}>
-      {/* Dot + line */}
-      <div style={{ width: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-        <div
-          style={{
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            background: sc.dot,
-            border: '3px solid #fff',
-            boxShadow: `0 0 0 2px ${sc.dot}30`,
-            flexShrink: 0,
-            zIndex: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {event.status === 'completed' && <span style={{ color: '#fff', fontSize: 7, fontWeight: 900 }}>✓</span>}
-        </div>
-        {!isLast && (
-          <div style={{ width: 2, flex: 1, background: `linear-gradient(to bottom, ${sc.line}, #e2e8f0)` }} />
-        )}
-      </div>
-
-      {/* Content card */}
-      <div
-        style={{
-          flex: 1,
-          marginLeft: 8,
-          padding: '10px 14px',
-          borderRadius: 12,
-          background: sc.bg,
-          border: `1px solid ${sc.dot}15`,
-          marginBottom: isLast ? 0 : 6,
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
-                {event.title || event.description || (isService ? 'Service Event' : 'Billing Event')}
-              </span>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '2px 8px',
-                  borderRadius: 20,
-                  background: sl.bg,
-                  color: sl.color,
-                  fontSize: 10,
-                  fontWeight: 600,
-                }}
-              >
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: sl.dot }} />
-                {sl.label}
-              </span>
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              {event.scheduled_date && (
-                <span style={{ fontSize: 11, color: '#94a3b8' }}>📅 {fmtDate(event.scheduled_date)}</span>
-              )}
-              {isService && event.assigned_to && (
-                <span style={{ fontSize: 11, color: event.assigned_to === 'Unassigned' ? '#f59e0b' : '#64748b' }}>
-                  {event.assigned_to === 'Unassigned' ? '⚠️ Unassigned' : `👤 ${event.assigned_to}`}
-                </span>
-              )}
-              {isService && event.evidence_type && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    padding: '1px 6px',
-                    borderRadius: 4,
-                    background: '#f1f5f9',
-                    color: '#64748b',
-                  }}
-                >
-                  {event.evidence_type === 'upload' ? '📤 Upload' : '📋 Form'}
-                </span>
-              )}
-              {!isService && event.amount != null && (
-                <span
-                  style={{
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: event.status === 'overdue' ? '#ef4444' : '#0f172a',
-                  }}
-                >
-                  {fmtCurrency(event.amount)}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 }}>
-            {isService && (event.status === 'pending' || event.status === 'in_progress') && (
-              <button
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #e2e8f0',
-                  background: '#fff',
-                  color: '#0f172a',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Execute
-              </button>
-            )}
-            {!isService && event.status !== 'completed' && event.status !== 'cancelled' && (
-              <button
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: 6,
-                  border: event.status === 'overdue' ? 'none' : '1px solid #e2e8f0',
-                  background: event.status === 'overdue' ? '#ef4444' : '#fff',
-                  color: event.status === 'overdue' ? '#fff' : '#0f172a',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {event.status === 'overdue' ? 'Collect Now' : 'Invoice'}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// =================================================================
+// ═══════════════════════════════════════════════════
 // MAIN COMPONENT
-// =================================================================
+// ═══════════════════════════════════════════════════
 
 export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
   contractId,
   currency,
   colors,
+  role = 'seller',
 }) => {
-  const { data: eventsData } = useContractEventsForContract(contractId);
+  const { isDarkMode } = useTheme();
+  const isSeller = role === 'seller';
+
+  const [servicePanel, setServicePanel] = useState<{
+    isOpen: boolean;
+    date: string;
+    events: ContractEvent[];
+  }>({ isOpen: false, date: '', events: [] });
+
+  // ── Data hooks ──
+  const { data: contractData } = useContract(contractId);
+  const {
+    data: eventsData,
+    isLoading,
+    error,
+    refetch,
+  } = useContractEventsForContract(contractId);
+
+  const { data: serviceStatuses } = useEventStatuses('service');
+  const { data: billingStatuses } = useEventStatuses('billing');
+  const { data: sparePartStatuses } = useEventStatuses('spare_part');
+  const { data: serviceTransitions } = useEventTransitions('service');
+  const { data: billingTransitions } = useEventTransitions('billing');
+  const { data: sparePartTransitions } = useEventTransitions('spare_part');
+
+  const statusDefsByType = useMemo(
+    (): Record<string, EventStatusDefinition[]> => ({
+      service: serviceStatuses?.statuses || [],
+      billing: billingStatuses?.statuses || [],
+      spare_part: sparePartStatuses?.statuses || [],
+    }),
+    [serviceStatuses, billingStatuses, sparePartStatuses],
+  );
+
+  const transitionsByType = useMemo(() => {
+    const buildMap = (transitions: any[]) => {
+      const map: Record<string, string[]> = {};
+      for (const t of transitions) {
+        if (!map[t.from_status]) map[t.from_status] = [];
+        map[t.from_status].push(t.to_status);
+      }
+      return map;
+    };
+    return {
+      service: buildMap(serviceTransitions?.transitions || []),
+      billing: buildMap(billingTransitions?.transitions || []),
+      spare_part: buildMap(sparePartTransitions?.transitions || []),
+    };
+  }, [serviceTransitions, billingTransitions, sparePartTransitions]);
+
+  const { updateStatus, changingStatusEventId } = useContractEventOperations();
+
   const allEvents = eventsData?.items || [];
-
-  // Group by block_name (or "General" if no block)
-  const blockMap = new Map<string, { service: any[]; billing: any[] }>();
-
-  allEvents.forEach((e: any) => {
-    const blockName = e.block_name || e.block || 'General';
-    if (!blockMap.has(blockName)) {
-      blockMap.set(blockName, { service: [], billing: [] });
-    }
-    const group = blockMap.get(blockName)!;
-    if (e.event_type === 'billing') {
-      group.billing.push(e);
-    } else {
-      group.service.push(e);
-    }
-  });
-
-  const blocks = Array.from(blockMap.entries());
   const totalTasks = allEvents.length;
 
+  // ── Group events by scheduled date ──
+  const dateGroups: DateGroup[] = useMemo(() => {
+    const byDate: Record<string, ContractEvent[]> = {};
+    allEvents.forEach((event) => {
+      const key = event.scheduled_date.split('T')[0];
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(event);
+    });
+
+    return Object.keys(byDate)
+      .sort()
+      .map((date) => {
+        const events = byDate[date];
+        const dateObj = new Date(date + 'T00:00:00');
+        const serviceEvents = events.filter(
+          (e) => e.event_type === 'service' || e.event_type === 'spare_part',
+        );
+        const billingEvents = events.filter((e) => e.event_type === 'billing');
+        return { date, dateObj, serviceEvents, billingEvents };
+      });
+  }, [allEvents]);
+
+  // ── Handlers ──
+  const handleStatusChange = useCallback(
+    async (eventId: string, newStatus: ContractEventStatus, version: number) => {
+      try {
+        await updateStatus({ eventId, newStatus, version });
+      } catch {
+        // Error handled in hook (toast)
+      }
+    },
+    [updateStatus],
+  );
+
+  const handleStartService = useCallback(
+    (date: string, events: ContractEvent[]) => {
+      setServicePanel({ isOpen: true, date, events });
+    },
+    [],
+  );
+
+  // ── Theme colors ──
+  const dateNodeColor = colors.brand?.secondary || colors.brand?.primary || '#6366f1';
+  const successColor = colors.semantic?.success || '#10B981';
+  const warningColor = colors.semantic?.warning || '#F59E0B';
+
+  // ── Loading ──
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin" style={{ color: colors.brand.primary }} />
+          <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+            Loading timeline...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error ──
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertTriangle className="w-12 h-12" style={{ color: colors.semantic?.error || '#EF4444' }} />
+        <h3 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>
+          Failed to load timeline
+        </h3>
+        <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+          {error instanceof Error ? error.message : 'An error occurred'}
+        </p>
+        <button
+          onClick={() => refetch()}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
+          style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
+        >
+          <RefreshCw className="w-4 h-4" /> Try Again
+        </button>
+      </div>
+    );
+  }
+
+  // ── Empty state ──
+  if (totalTasks === 0) {
+    const contractStatus = (contractData as any)?.status;
+    const isPreActive =
+      contractStatus &&
+      contractStatus !== 'active' &&
+      contractStatus !== 'completed';
+
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div
+          className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6"
+          style={{
+            background: `linear-gradient(135deg, ${colors.brand.primary}15, ${colors.brand.primary}05)`,
+          }}
+        >
+          {isPreActive ? (
+            <Clock className="w-10 h-10" style={{ color: colors.brand.primary }} />
+          ) : (
+            <ClipboardList className="w-10 h-10" style={{ color: colors.brand.primary }} />
+          )}
+        </div>
+        <h3 className="text-lg font-bold mb-2" style={{ color: colors.utility.primaryText }}>
+          {isPreActive ? 'Contract Not Yet Active' : 'No Tasks Yet'}
+        </h3>
+        <p className="text-sm text-center max-w-md" style={{ color: colors.utility.secondaryText }}>
+          {isPreActive
+            ? 'Events will be generated automatically once the contract becomes active.'
+            : 'Events will appear here as the contract progresses.'}
+        </p>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════
+  // MAIN RENDER — Center-line vertical timeline
+  // ════════════════════════════════════════════════════
   return (
     <div
       style={{
@@ -241,9 +253,16 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 20,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 15 }}>⏱</span>
+          <Clock className="w-4 h-4" style={{ color: colors.utility.primaryText }} />
           <span
             style={{
               fontSize: 13,
@@ -257,7 +276,7 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
           </span>
           <span
             style={{
-              background: colors.utility.primaryText + '10',
+              background: `${colors.utility.primaryText}10`,
               color: colors.utility.secondaryText,
               fontSize: 11,
               fontWeight: 600,
@@ -270,92 +289,253 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
         </div>
       </div>
 
-      {/* Block groups */}
-      {blocks.map(([blockName, group], bi) => (
-        <div key={blockName} style={{ marginBottom: bi < blocks.length - 1 ? 24 : 0 }}>
-          {/* Block header */}
+      {/* Timeline */}
+      <div className="relative">
+        {/* Vertical center line */}
+        <div
+          className="absolute left-1/2 transform -translate-x-1/2 top-6 bottom-6 w-0.5 rounded-full"
+          style={{
+            background: `linear-gradient(180deg, transparent 0%, ${dateNodeColor}25 8%, ${dateNodeColor}25 92%, transparent 100%)`,
+          }}
+        />
+
+        <div className="space-y-10">
+          {dateGroups.map((group, gIdx) => {
+            const isFirst = gIdx === 0;
+            const isLast = gIdx === dateGroups.length - 1;
+            const dayNum = group.dateObj.getDate();
+
+            const hasIncompleteService = group.serviceEvents.some(
+              (e) => e.status !== 'completed' && e.status !== 'cancelled',
+            );
+            const hasIncompleteBilling = group.billingEvents.some(
+              (e) => e.status !== 'completed' && e.status !== 'cancelled',
+            );
+
+            return (
+              <div key={group.date} className="relative flex items-start">
+                {/* ─── LEFT: Service & Spare Part cards ─── */}
+                <div className="flex-1 flex flex-col gap-3 items-end pr-6 pt-1">
+                  {/* Column header (first date group only) */}
+                  {isFirst && group.serviceEvents.length > 0 && (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Wrench className="w-3 h-3" style={{ color: successColor }} />
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: successColor }}
+                      >
+                        Service & Parts
+                      </span>
+                    </div>
+                  )}
+
+                  {group.serviceEvents.length > 0 ? (
+                    <>
+                      {group.serviceEvents.map((evt) => (
+                        <div key={evt.id} className="w-full max-w-[272px]">
+                          <EventCard
+                            event={evt}
+                            currency={currency}
+                            colors={colors}
+                            onStatusChange={handleStatusChange}
+                            updatingEventId={changingStatusEventId}
+                            statusDefs={statusDefsByType[evt.event_type]}
+                            allowedTransitions={
+                              transitionsByType[evt.event_type]?.[evt.status] || []
+                            }
+                          />
+                        </div>
+                      ))}
+
+                      {/* Start Service button — seller only */}
+                      {isSeller && hasIncompleteService && (
+                        <button
+                          onClick={() =>
+                            handleStartService(group.date, [
+                              ...group.serviceEvents,
+                              ...group.billingEvents,
+                            ])
+                          }
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold transition-all hover:shadow-md hover:opacity-90"
+                          style={{
+                            background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.primary}DD)`,
+                            color: '#ffffff',
+                            boxShadow: `0 2px 8px ${colors.brand.primary}25`,
+                          }}
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                          Start Service
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="h-16" />
+                  )}
+                </div>
+
+                {/* ─── CENTER: Date node on vertical line ─── */}
+                <div
+                  className="relative z-10 flex flex-col items-center flex-shrink-0"
+                  style={{ width: '6rem' }}
+                >
+                  {/* Connector dot above (except first) */}
+                  {gIdx > 0 && (
+                    <div
+                      className="w-1.5 h-1.5 rounded-full mb-2"
+                      style={{ backgroundColor: `${dateNodeColor}30` }}
+                    />
+                  )}
+
+                  {/* Main date circle */}
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+                    style={{
+                      background: `linear-gradient(135deg, ${dateNodeColor}, ${dateNodeColor}CC)`,
+                      boxShadow: `0 4px 14px ${dateNodeColor}30`,
+                    }}
+                  >
+                    <span className="text-sm font-bold text-white">{dayNum}</span>
+                  </div>
+
+                  {/* Month-Year label */}
+                  <span
+                    className="text-[10px] font-bold mt-1.5 whitespace-nowrap"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {MONTHS[group.dateObj.getMonth()]} {group.dateObj.getFullYear()}
+                  </span>
+
+                  {/* Connector dot below (except last) */}
+                  {!isLast && (
+                    <div
+                      className="w-1.5 h-1.5 rounded-full mt-2"
+                      style={{ backgroundColor: `${dateNodeColor}30` }}
+                    />
+                  )}
+                </div>
+
+                {/* ─── RIGHT: Billing & Payment cards ─── */}
+                <div className="flex-1 flex flex-col gap-3 items-start pl-6 pt-1">
+                  {/* Column header (first date group only) */}
+                  {isFirst && group.billingEvents.length > 0 && (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <DollarSign className="w-3 h-3" style={{ color: warningColor }} />
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: warningColor }}
+                      >
+                        Billing & Payments
+                      </span>
+                    </div>
+                  )}
+
+                  {group.billingEvents.length > 0 ? (
+                    <>
+                      {group.billingEvents.map((evt) => (
+                        <div key={evt.id} className="w-full max-w-[272px]">
+                          <EventCard
+                            event={evt}
+                            currency={currency}
+                            colors={colors}
+                            onStatusChange={handleStatusChange}
+                            updatingEventId={changingStatusEventId}
+                            statusDefs={statusDefsByType[evt.event_type]}
+                            allowedTransitions={
+                              transitionsByType[evt.event_type]?.[evt.status] || []
+                            }
+                          />
+                        </div>
+                      ))}
+
+                      {/* Action button: Generate Invoice (seller) / Make Payment (buyer) */}
+                      {hasIncompleteBilling &&
+                        (isSeller ? (
+                          <button
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold border transition-all hover:shadow-md hover:opacity-90"
+                            style={{
+                              borderColor: `${warningColor}30`,
+                              color: warningColor,
+                              backgroundColor: `${warningColor}08`,
+                            }}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            Generate Invoice
+                          </button>
+                        ) : (
+                          <button
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold border transition-all hover:shadow-md hover:opacity-90"
+                            style={{
+                              borderColor: `${colors.brand.primary}30`,
+                              color: colors.brand.primary,
+                              backgroundColor: `${colors.brand.primary}08`,
+                            }}
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            Make Payment
+                          </button>
+                        ))}
+                    </>
+                  ) : (
+                    <div className="h-16" />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Timeline end marker */}
+        <div className="flex justify-center mt-6">
           <div
+            className="flex items-center gap-2 px-4 py-2 rounded-full"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 14px',
-              background: '#0f172a',
-              borderRadius: 8,
-              color: '#fff',
-              marginBottom: 12,
+              backgroundColor: `${dateNodeColor}08`,
+              border: `1px dashed ${dateNodeColor}25`,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }}>{blockName}</span>
-            <span
-              style={{
-                fontSize: 10,
-                padding: '2px 8px',
-                borderRadius: 6,
-                background: 'rgba(255,255,255,0.15)',
-              }}
-            >
-              {group.service.length} services
-            </span>
-            <span
-              style={{
-                fontSize: 10,
-                padding: '2px 8px',
-                borderRadius: 6,
-                background: 'rgba(255,255,255,0.15)',
-              }}
-            >
-              {group.billing.length} payments
+            <CheckCircle2 className="w-3.5 h-3.5" style={{ color: dateNodeColor }} />
+            <span className="text-[11px] font-semibold" style={{ color: dateNodeColor }}>
+              Timeline End
             </span>
           </div>
-
-          {/* Dual columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-            <div>
-              {group.service.length > 0 ? (
-                group.service.map((e: any, i: number) => (
-                  <SellerNode
-                    key={e.id}
-                    event={e}
-                    isLast={i === group.service.length - 1}
-                    type="service"
-                    currency={currency}
-                  />
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: 20, color: '#cbd5e1', fontSize: 12 }}>
-                  No service tasks
-                </div>
-              )}
-            </div>
-            <div>
-              {group.billing.length > 0 ? (
-                group.billing.map((e: any, i: number) => (
-                  <SellerNode
-                    key={e.id}
-                    event={e}
-                    isLast={i === group.billing.length - 1}
-                    type="billing"
-                    currency={currency}
-                  />
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: 20, color: '#cbd5e1', fontSize: 12 }}>
-                  No payment milestones
-                </div>
-              )}
-            </div>
-          </div>
         </div>
-      ))}
+      </div>
 
-      {/* Empty state */}
-      {blocks.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '32px 0', color: colors.utility.secondaryText }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📋</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>No tasks yet</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Events will appear here as the contract progresses.</div>
+      {/* Pagination indicator */}
+      {eventsData?.page_info && eventsData.total_count > 0 && (
+        <div
+          className="flex items-center justify-center py-4 mt-6 border-t"
+          style={{ borderColor: `${colors.utility.primaryText}10` }}
+        >
+          <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+            Showing {eventsData.items.length} of {eventsData.total_count} events
+            {eventsData.page_info.has_next_page && ' \u00B7 More events available'}
+          </span>
         </div>
+      )}
+
+      {/* Service Execution Drawer (seller only) */}
+      {isSeller && (
+        <ServiceExecutionDrawer
+          isOpen={servicePanel.isOpen}
+          contractId={contractId}
+          date={servicePanel.date}
+          events={servicePanel.events}
+          allContractEvents={allEvents}
+          currency={currency}
+          evidencePolicyType={
+            (contractData as any)?.evidence_policy_type ||
+            (contractData as any)?.metadata?.evidence_policy_type ||
+            'none'
+          }
+          evidenceSelectedForms={
+            (contractData as any)?.evidence_selected_forms ||
+            (contractData as any)?.metadata?.evidence_selected_forms
+          }
+          statusDefsByType={statusDefsByType}
+          transitionsByType={transitionsByType}
+          onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}
+        />
       )}
     </div>
   );
