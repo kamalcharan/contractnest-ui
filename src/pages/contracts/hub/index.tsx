@@ -1,333 +1,92 @@
 // src/pages/contracts/hub/index.tsx
-// ContractsHub — Option B layout: vertical type rail + horizontal pipeline + table
+// ContractsHub — Portfolio list view with pipeline bar, status filters,
+// sort controls, flat/grouped toggle, and pagination.
+// Cycle 4 v2: Single-column list rows (not grid), 6 statuses, Active default,
+// pipeline bar with counts + colored segments. Fixed By Client grouping.
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTenantContext } from '@/contexts/TenantContext';
 import {
   FileText,
-  Users,
-  Building2,
-  Handshake,
-  ShoppingCart,
-  Package,
-  Tag,
   Plus,
   Search,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Eye,
   RefreshCw,
-  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRightLeft,
 } from 'lucide-react';
-import { useContracts, useContractStats } from '@/hooks/queries/useContractQueries';
+import { useContracts, useGroupedContracts, useContractStats } from '@/hooks/queries/useContractQueries';
 import { useAuth } from '@/context/AuthContext';
 import { prefetchContacts } from '@/hooks/useContacts';
 import type {
   ContractListFilters,
-  ContractTypeFilter,
   Contract,
+  ContractGroup,
 } from '@/types/contracts';
-import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
-import {
-  CONTACT_CLASSIFICATION_CONFIG,
-  getClassificationColors,
-} from '@/utils/constants/contacts';
 import ContractWizard from '@/components/contracts/ContractWizard';
 import type { ContractType } from '@/components/contracts/ContractWizard';
 
-// ═══════════════════════════════════════════════════
-// CLASSIFICATION ICON MAP (matches contacts page)
-// ═══════════════════════════════════════════════════
+// Portfolio list components
+import ContractPortfolioRow from '@/components/contracts/list/ContractPortfolioRow';
+import PortfolioSummaryStrip from '@/components/contracts/list/PortfolioSummaryStrip';
+import PortfolioSortSelect from '@/components/contracts/list/PortfolioSortSelect';
+import type { PortfolioSortOption } from '@/components/contracts/list/PortfolioSortSelect';
 
-const CLASSIFICATION_ICON_MAP: Record<string, React.ElementType> = {
-  ShoppingCart,
-  Package,
-  Handshake,
-  Users,
-};
+// Grouped view components
+import ViewModeToggle from '@/components/contracts/list/ViewModeToggle';
+import type { ViewMode } from '@/components/contracts/list/ViewModeToggle';
+import ClientGroupHeader from '@/components/contracts/list/ClientGroupHeader';
 
-const getClassificationIcon = (classificationId: string): React.ElementType => {
-  const config = CONTACT_CLASSIFICATION_CONFIG.find((c: any) => c.id === classificationId);
-  if (config?.lucideIcon && CLASSIFICATION_ICON_MAP[config.lucideIcon]) {
-    return CLASSIFICATION_ICON_MAP[config.lucideIcon];
-  }
-  return Tag;
-};
-
-const getClassificationLabel = (classificationId: string): string => {
-  const config = CONTACT_CLASSIFICATION_CONFIG.find((c: any) => c.id === classificationId);
-  return config?.label || classificationId || '—';
-};
 
 // ═══════════════════════════════════════════════════
-// TYPE RAIL (Left vertical sidebar — glassmorphic)
+// PERSPECTIVE SWITCHER (Revenue/Expense)
 // ═══════════════════════════════════════════════════
 
-interface TypeRailProps {
-  activeType: ContractTypeFilter;
-  onTypeChange: (type: ContractTypeFilter) => void;
-  onCreateClick: (type: ContractType) => void;
-  stats: { all: number; client: number; vendor: number; partner: number };
-  colors: any;
+type Perspective = 'revenue' | 'expense';
+
+interface PerspectiveSwitcherProps {
+  active: Perspective;
+  onChange: (p: Perspective) => void;
+  isDarkMode: boolean;
+  brandColor: string;
 }
 
-const TypeRail: React.FC<TypeRailProps> = ({ activeType, onTypeChange, onCreateClick, stats, colors }) => {
-  const typeItems: Array<{
-    id: ContractTypeFilter;
-    label: string;
-    icon: React.ElementType;
-    count: number;
-    color: string;
-  }> = [
-    { id: 'all', label: 'All Contracts', icon: FileText, count: stats.all, color: colors.brand.primary },
-    { id: 'client', label: 'Client', icon: Users, count: stats.client, color: colors.brand.primary },
-    { id: 'vendor', label: 'Vendor', icon: Building2, count: stats.vendor, color: colors.semantic.success },
-  ];
-
-  const createItems: Array<{ label: string; type: ContractType; color: string }> = [
-    { label: 'Client Contract', type: 'client', color: colors.brand.primary },
-    { label: 'Vendor Contract', type: 'vendor', color: colors.semantic.success },
+const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
+  active,
+  onChange,
+  isDarkMode,
+  brandColor,
+}) => {
+  const perspectives: Array<{ id: Perspective; label: string; sublabel: string }> = [
+    { id: 'revenue', label: 'Revenue', sublabel: 'Clients' },
+    { id: 'expense', label: 'Expense', sublabel: 'Vendors' },
   ];
 
   return (
-    <div
-      style={{
-        width: 220,
-        minWidth: 220,
-        borderRight: `1px solid ${colors.utility.primaryText}20`,
-        background: `${colors.utility.secondaryBackground}CC`,
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-    >
-      {/* Type filter cards */}
-      <div style={{ padding: '16px 12px', flex: 1 }}>
-        <p
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            color: colors.utility.secondaryText,
-            marginBottom: 12,
-            paddingLeft: 8,
-          }}
-        >
-          Filter by Type
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {typeItems.map((item) => {
-            const isActive = activeType === item.id;
-            const Icon = item.icon;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => onTypeChange(item.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  border: isActive ? `1px solid ${item.color}40` : '1px solid transparent',
-                  background: isActive ? `${item.color}14` : 'transparent',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  width: '100%',
-                  textAlign: 'left',
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: isActive ? `${item.color}20` : `${colors.utility.primaryText}08`,
-                  }}
-                >
-                  <Icon size={16} style={{ color: isActive ? item.color : colors.utility.secondaryText }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: isActive ? 600 : 500,
-                      color: isActive ? colors.utility.primaryText : colors.utility.secondaryText,
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                </div>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: isActive ? item.color : colors.utility.secondaryText,
-                    minWidth: 20,
-                    textAlign: 'right',
-                  }}
-                >
-                  {item.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Create buttons */}
-      <div
-        style={{
-          padding: '12px',
-          borderTop: `1px solid ${colors.utility.primaryText}20`,
-        }}
-      >
-        <p
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            color: colors.utility.secondaryText,
-            marginBottom: 8,
-            paddingLeft: 8,
-          }}
-        >
-          Quick Create
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {createItems.map((item) => (
-            <button
-              key={item.type}
-              onClick={() => onCreateClick(item.type)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: `1px solid ${colors.utility.primaryText}20`,
-                background: 'transparent',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                width: '100%',
-                textAlign: 'left',
-                fontSize: 12,
-                fontWeight: 500,
-                color: colors.utility.secondaryText,
-              }}
-            >
-              <Plus size={14} style={{ color: item.color }} />
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════
-// PIPELINE BAR (Horizontal status strip)
-// ═══════════════════════════════════════════════════
-
-interface PipelineBarProps {
-  statusCounts: Record<string, number>;
-  activeStatus: string | null;
-  onStatusClick: (status: string | null) => void;
-  colors: any;
-}
-
-const PIPELINE_STAGES = [
-  { key: 'draft', label: 'Draft', icon: FileText, colorKey: 'secondaryText' },
-  { key: 'pending_review', label: 'In Review', icon: Eye, colorKey: 'info' },
-  { key: 'pending_acceptance', label: 'Pending', icon: Clock, colorKey: 'warning' },
-  { key: 'active', label: 'Active', icon: CheckCircle, colorKey: 'success' },
-  { key: 'completed', label: 'Completed', icon: CheckCircle, colorKey: 'success' },
-  { key: 'expired', label: 'Expired', icon: XCircle, colorKey: 'error' },
-];
-
-const getSemanticColor = (colorKey: string, colors: any): string => {
-  switch (colorKey) {
-    case 'success': return colors.semantic.success;
-    case 'warning': return colors.semantic.warning;
-    case 'error': return colors.semantic.error;
-    case 'info': return colors.brand.secondary || colors.brand.primary;
-    default: return colors.utility.secondaryText;
-  }
-};
-
-const PipelineBar: React.FC<PipelineBarProps> = ({ statusCounts, activeStatus, onStatusClick, colors }) => {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 2,
-        borderRadius: 10,
-        overflow: 'hidden',
-        background: `${colors.utility.secondaryBackground}`,
-        border: `1px solid ${colors.utility.primaryText}20`,
-      }}
-    >
-      {PIPELINE_STAGES.map((stage) => {
-        const count = statusCounts[stage.key] || 0;
-        const isActive = activeStatus === stage.key;
-        const stageColor = getSemanticColor(stage.colorKey, colors);
-        const Icon = stage.icon;
-
+    <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
+      isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
+    }`}>
+      {perspectives.map((p) => {
+        const isActive = active === p.id;
         return (
           <button
-            key={stage.key}
-            onClick={() => onStatusClick(isActive ? null : stage.key)}
-            style={{
-              flex: 1,
-              padding: '14px 12px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 4,
-              border: 'none',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              background: isActive ? `${stageColor}14` : 'transparent',
-              borderBottom: `3px solid ${isActive ? stageColor : `${stageColor}30`}`,
-              position: 'relative',
-            }}
+            key={p.id}
+            onClick={() => onChange(p.id)}
+            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+              isActive
+                ? 'text-white shadow-sm'
+                : isDarkMode
+                  ? 'text-gray-400 hover:text-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+            }`}
+            style={isActive ? { backgroundColor: brandColor } : undefined}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Icon size={14} style={{ color: stageColor, opacity: count > 0 ? 1 : 0.4 }} />
-              <span
-                style={{
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: count > 0 ? stageColor : colors.utility.secondaryText,
-                  lineHeight: 1,
-                }}
-              >
-                {count}
-              </span>
-            </div>
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                color: colors.utility.secondaryText,
-              }}
-            >
-              {stage.label}
+            {p.label}
+            <span className={`ml-1 text-xs font-normal ${isActive ? 'opacity-80' : ''}`}>
+              · {p.sublabel}
             </span>
           </button>
         );
@@ -336,45 +95,127 @@ const PipelineBar: React.FC<PipelineBarProps> = ({ statusCounts, activeStatus, o
   );
 };
 
+
+// ═══════════════════════════════════════════════════
+// STATUS PIPELINE BAR (6 statuses with counts + colored bar)
+// Draft | In Review | Pending | Active | Completed | Expired
+// ═══════════════════════════════════════════════════
+
+interface StatusStage {
+  key: string;
+  label: string;
+  count: number;
+  color: string;
+}
+
+interface StatusPipelineBarProps {
+  stages: StatusStage[];
+  activeStatus: string | null;
+  onStatusClick: (status: string | null) => void;
+  colors: any;
+}
+
+const StatusPipelineBar: React.FC<StatusPipelineBarProps> = ({
+  stages,
+  activeStatus,
+  onStatusClick,
+  colors,
+}) => {
+  const totalCount = stages.reduce((s, st) => s + st.count, 0);
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      {/* Status counts row */}
+      <div style={{ display: 'flex', marginBottom: 8 }}>
+        {stages.map((stage) => {
+          const isActive = activeStatus === stage.key;
+          const isAll = !activeStatus;
+          return (
+            <div
+              key={stage.key}
+              onClick={() => onStatusClick(isActive ? null : stage.key)}
+              style={{
+                flex: 1,
+                textAlign: 'center',
+                cursor: 'pointer',
+                padding: '10px 4px',
+                borderRadius: 8,
+                background: isActive ? colors.brand.primary + '10' : 'transparent',
+                transition: 'all 0.15s',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: isActive ? stage.color : (isAll ? colors.utility.primaryText : colors.utility.secondaryText),
+                  lineHeight: 1.2,
+                }}
+              >
+                {stage.count}
+              </div>
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  textTransform: 'uppercase' as const,
+                  letterSpacing: 0.5,
+                  color: isActive ? stage.color : colors.utility.secondaryText,
+                  marginTop: 2,
+                }}
+              >
+                {stage.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Colored bar segments */}
+      <div
+        style={{
+          display: 'flex',
+          height: 6,
+          borderRadius: 3,
+          overflow: 'hidden',
+          background: colors.utility.primaryText + '08',
+        }}
+      >
+        {stages.map((stage) => {
+          const isActive = activeStatus === stage.key;
+          const proportion = totalCount > 0 ? stage.count / totalCount : 0;
+          if (proportion === 0 && !isActive) return null;
+          return (
+            <div
+              key={stage.key}
+              style={{
+                flex: Math.max(proportion, 0.02), // minimum visible width
+                background: stage.color,
+                opacity: !activeStatus ? 0.8 : (isActive ? 1 : 0.2),
+                transition: 'opacity 0.2s',
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
 // ═══════════════════════════════════════════════════
 // EMPTY STATE
 // ═══════════════════════════════════════════════════
 
 interface EmptyStateProps {
-  typeFilter: ContractTypeFilter;
+  perspective: Perspective;
   colors: any;
-  onCreateClick: () => void;
   onCreateType: (type: ContractType) => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateClick, onCreateType }) => {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [dropdownOpen]);
-
-  const labels: Record<ContractTypeFilter, string> = {
-    all: 'contracts',
-    client: 'client contracts',
-    vendor: 'vendor contracts',
-    partner: 'partner contracts',
-  };
-
-  const createOptions: Array<{ label: string; type: ContractType; icon: React.ElementType; color: string }> = [
-    { label: 'Client Contract', type: 'client', icon: Users, color: colors.brand.primary },
-    { label: 'Vendor Contract', type: 'vendor', icon: Building2, color: colors.semantic.success },
-  ];
-
-  const isAll = typeFilter === 'all';
+const EmptyState: React.FC<EmptyStateProps> = ({ perspective, colors, onCreateType }) => {
+  const label = perspective === 'revenue' ? 'client' : 'vendor';
 
   return (
     <div
@@ -395,13 +236,12 @@ const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateCli
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: `${colors.brand.primary}14`,
+          background: colors.brand.primary + '14',
           marginBottom: 20,
         }}
       >
         <FileText size={32} style={{ color: colors.brand.primary, opacity: 0.6 }} />
       </div>
-
       <h3
         style={{
           fontSize: 18,
@@ -410,9 +250,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateCli
           marginBottom: 8,
         }}
       >
-        No {labels[typeFilter]} yet
+        No {label} contracts yet
       </h3>
-
       <p
         style={{
           fontSize: 14,
@@ -422,300 +261,160 @@ const EmptyState: React.FC<EmptyStateProps> = ({ typeFilter, colors, onCreateCli
           marginBottom: 24,
         }}
       >
-        Create your first {isAll ? 'contract' : `${typeFilter} contract`} to start
-        managing agreements, tracking status, and keeping everything organized.
+        Create your first {label} contract to start managing agreements,
+        tracking health, and keeping everything organized.
       </p>
+      <button
+        onClick={() => onCreateType(label as ContractType)}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 24px',
+          borderRadius: 10,
+          border: 'none',
+          background: colors.brand.primary,
+          color: '#fff',
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        <Plus size={16} />
+        New {label.charAt(0).toUpperCase() + label.slice(1)} Contract
+      </button>
+    </div>
+  );
+};
 
-      <div ref={dropdownRef} style={{ position: 'relative', display: 'inline-block' }}>
+
+// ═══════════════════════════════════════════════════
+// PAGINATION
+// ═══════════════════════════════════════════════════
+
+interface PaginationProps {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+  colors: any;
+}
+
+const Pagination: React.FC<PaginationProps> = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+  colors,
+}) => {
+  if (totalPages <= 1) return null;
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + 4);
+    if (end - start < 4) start = Math.max(1, end - 4);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '14px 20px',
+        marginTop: 12,
+        borderRadius: 10,
+        background: colors.utility.secondaryBackground,
+        border: `1px solid ${colors.utility.primaryText}10`,
+      }}
+    >
+      <span style={{ fontSize: 13, color: colors.utility.secondaryText }}>
+        Showing {startItem} to {endItem} of {totalItems} contracts
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <button
-          onClick={isAll ? () => setDropdownOpen((prev) => !prev) : onCreateClick}
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
           style={{
-            display: 'inline-flex',
+            padding: '6px 8px',
+            borderRadius: 6,
+            border: `1px solid ${colors.utility.primaryText}20`,
+            background: 'transparent',
+            color: currentPage === 1 ? colors.utility.secondaryText + '40' : colors.utility.primaryText,
+            cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+            display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            padding: '10px 24px',
-            borderRadius: 10,
-            border: 'none',
-            background: colors.brand.primary,
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
           }}
         >
-          <Plus size={16} />
-          {isAll ? 'New Contract' : `Create ${typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)} Contract`}
-          {isAll && (
-            <ChevronDown
-              size={14}
-              style={{
-                transition: 'transform 0.15s ease',
-                transform: dropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-              }}
-            />
-          )}
+          <ChevronLeft size={16} />
         </button>
 
-        {dropdownOpen && isAll && (
-          <div
+        {getPageNumbers().map((page) => (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
             style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              minWidth: 200,
-              borderRadius: 10,
-              border: `1px solid ${colors.utility.primaryText}20`,
-              background: colors.utility.secondaryBackground,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-              zIndex: 50,
-              overflow: 'hidden',
+              padding: '4px 10px',
+              borderRadius: 6,
+              border: 'none',
+              background: currentPage === page ? colors.brand.primary : 'transparent',
+              color: currentPage === page ? '#ffffff' : colors.utility.primaryText,
+              fontSize: 13,
+              fontWeight: currentPage === page ? 600 : 400,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
             }}
           >
-            {createOptions.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.type}
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    onCreateType(opt.type);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    width: '100%',
-                    padding: '10px 14px',
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    transition: 'background 0.1s',
-                    textAlign: 'left',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: colors.utility.primaryText,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = `${colors.utility.primaryText}08`)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: `${opt.color}14`,
-                    }}
-                  >
-                    <Icon size={14} style={{ color: opt.color }} />
-                  </div>
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+            {page}
+          </button>
+        ))}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          style={{
+            padding: '6px 8px',
+            borderRadius: 6,
+            border: `1px solid ${colors.utility.primaryText}20`,
+            background: 'transparent',
+            color: currentPage === totalPages ? colors.utility.secondaryText + '40' : colors.utility.primaryText,
+            cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
   );
 };
 
-// ═══════════════════════════════════════════════════
-// CONTRACTS LIST (card-based, matches contacts list view)
-// ═══════════════════════════════════════════════════
-
-interface ContractsListProps {
-  contracts: Contract[];
-  colors: any;
-  onRowClick: (id: string) => void;
-}
-
-const ContractsList: React.FC<ContractsListProps> = ({ contracts, colors, onRowClick }) => {
-  const formatValue = (value?: number, currency?: string) => {
-    if (!value) return '—';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD',
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const formatDateRange = (start?: string, end?: string) => {
-    const fmt = (d: string) => {
-      const date = new Date(d);
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    };
-    if (start && end) return `${fmt(start)} – ${fmt(end)}`;
-    if (start) return `From ${fmt(start)}`;
-    return '—';
-  };
-
-  return (
-    <div className="space-y-2">
-      {contracts.map((c) => {
-        const statusConfig = CONTRACT_STATUS_COLORS[c.status] || CONTRACT_STATUS_COLORS.draft;
-
-        // Classification icon & colors (matches contacts page pattern)
-        const classType = c.contact_classification || c.contract_type || '';
-        const ClassIcon = getClassificationIcon(classType);
-        const classLabel = getClassificationLabel(classType);
-        const badgeColors = getClassificationColors(
-          CONTACT_CLASSIFICATION_CONFIG.find((cfg: any) => cfg.id === classType)?.colorKey || 'default',
-          colors,
-          'badge'
-        );
-
-        return (
-          <div
-            key={c.id}
-            className="rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-3"
-            style={{
-              backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.primaryText + '20',
-            }}
-          >
-            <div className="flex items-center justify-between">
-              {/* Left Section — Avatar + Name + ClassIcon + Contract# + Status */}
-              <div className="flex items-center gap-3 min-w-0" style={{ flex: '1.2' }}>
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm border flex-shrink-0"
-                  style={{
-                    backgroundColor: colors.brand.primary + '20',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '40',
-                  }}
-                >
-                  {c.title?.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase() || 'C'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3
-                      className="font-semibold text-base truncate"
-                      style={{ color: colors.utility.primaryText }}
-                      title={c.title}
-                    >
-                      {c.title}
-                    </h3>
-                    {/* Classification icon inline after name */}
-                    <ClassIcon
-                      className="h-4 w-4 flex-shrink-0"
-                      style={{ color: badgeColors.text }}
-                      title={classLabel}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-xs"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      {c.contract_number}
-                    </span>
-                    {/* Status badge */}
-                    <span
-                      className="px-2 py-0.5 rounded-full text-xs font-medium border"
-                      style={{
-                        backgroundColor: `${getSemanticColor(statusConfig.bg, colors)}20`,
-                        borderColor: `${getSemanticColor(statusConfig.bg, colors)}40`,
-                        color: getSemanticColor(statusConfig.text, colors),
-                      }}
-                    >
-                      {statusConfig.label}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Middle Section — Contact Name (with salutation) */}
-              <div
-                className="flex items-center gap-2 min-w-0 px-4"
-                style={{ flex: '1', color: colors.utility.primaryText }}
-              >
-                <Users className="h-4 w-4 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
-                <span className="truncate text-sm" title={c.buyer_name || '—'}>
-                  {c.buyer_name || '—'}
-                </span>
-              </div>
-
-              {/* Classification label (e.g. "Client - Primary") */}
-              <div
-                className="flex items-center gap-2 min-w-0 px-4"
-                style={{ flex: '0.8' }}
-              >
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
-                  style={{
-                    backgroundColor: badgeColors.bg,
-                    borderColor: badgeColors.border,
-                    color: badgeColors.text,
-                  }}
-                >
-                  <ClassIcon className="h-3 w-3" />
-                  {classLabel}
-                </span>
-              </div>
-
-              {/* Right Section — Value + Dates + View button */}
-              <div className="flex items-center gap-4 flex-shrink-0">
-                {/* Value */}
-                <div className="text-right" style={{ minWidth: 80 }}>
-                  <div
-                    className="text-sm font-semibold"
-                    style={{ color: colors.utility.primaryText }}
-                  >
-                    {formatValue(c.total_value, c.currency)}
-                  </div>
-                </div>
-
-                {/* Start-End dates */}
-                <div className="text-right" style={{ minWidth: 120 }}>
-                  <span
-                    className="text-xs"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    {formatDateRange(c.start_date, c.end_date)}
-                  </span>
-                </div>
-
-                {/* View button (Eye icon — same as contacts) */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRowClick(c.id);
-                  }}
-                  className="p-1.5 rounded-md transition-colors"
-                  style={{
-                    backgroundColor: colors.utility.secondaryText + '20',
-                    color: colors.utility.primaryText,
-                  }}
-                  title="View contract details"
-                >
-                  <Eye className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
 
 // ═══════════════════════════════════════════════════
 // MAIN HUB PAGE
 // ═══════════════════════════════════════════════════
+
+const ITEMS_PER_PAGE = 25;
 
 const ContractsHubPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const brandColor = colors.brand.primary;
   const { currentTenant, isLive } = useAuth();
+  const { profile } = useTenantContext();
 
-  // ── Prefetch contacts for wizard (client/vendor/partner) ──
+  // ── Prefetch contacts for wizard ──
   useEffect(() => {
     if (!currentTenant?.id) return;
     ['client', 'vendor', 'partner'].forEach((cls) => {
@@ -723,69 +422,136 @@ const ContractsHubPage: React.FC = () => {
     });
   }, [currentTenant?.id, isLive]);
 
-  // ── State ──
-  const [activeType, setActiveType] = useState<ContractTypeFilter>(
-    (searchParams.get('type') as ContractTypeFilter) || 'all'
-  );
+  // ── Perspective state (Revenue/Expense) ──
+  const [perspective, setPerspective] = useState<Perspective | null>(null);
+
+  useEffect(() => {
+    if (perspective === null && profile?.business_type_id) {
+      setPerspective(
+        profile.business_type_id.toLowerCase() === 'buyer' ? 'expense' : 'revenue'
+      );
+    }
+  }, [profile?.business_type_id, perspective]);
+
+  const activePerspective: Perspective = perspective || 'revenue';
+  const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
+
+  // ── Filter state — Active is the default status ──
   const [activeStatus, setActiveStatus] = useState<string | null>(
-    searchParams.get('status') || null
+    searchParams.get('status') || 'active'
   );
   const [searchQuery, setSearchQuery] = useState('');
-  const [createDropdownOpen, setCreateDropdownOpen] = useState(false);
-  const createDropdownRef = useRef<HTMLDivElement>(null);
+  const [sortBy, setSortBy] = useState<PortfolioSortOption>('health_score');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // ── View mode state (flat vs grouped) ──
+  const [viewMode, setViewMode] = useState<ViewMode>('flat');
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+
+  const toggleClientExpand = (key: string) => {
+    setExpandedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // ── Wizard state ──
   const [showWizard, setShowWizard] = useState(false);
   const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
 
-  // ── Close dropdown on outside click ──
+  // ── Reset page when filters change ──
   useEffect(() => {
-    if (!createDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (createDropdownRef.current && !createDropdownRef.current.contains(e.target as Node)) {
-        setCreateDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [createDropdownOpen]);
+    setCurrentPage(1);
+  }, [activePerspective, activeStatus, searchQuery, sortBy, viewMode]);
+
+  // ── Derive sort direction ──
+  const sortOrder = sortBy === 'health_score' || sortBy === 'completion' ? 'asc' : 'desc';
 
   // ── Build API filters ──
+  // Revenue mode: contract_type='client' (I sell to clients)
+  // Expense mode: contract_type='vendor' (I buy from vendors)
   const filters: ContractListFilters = useMemo(() => {
-    const f: ContractListFilters = { limit: 25 };
-    if (activeType !== 'all') f.contract_type = activeType as any;
+    const f: ContractListFilters = {
+      limit: ITEMS_PER_PAGE,
+      page: currentPage,
+      contract_type: (activePerspective === 'revenue' ? 'client' : 'vendor') as any,
+      sort_by: sortBy as any,
+      sort_direction: sortOrder,
+    };
     if (activeStatus) f.status = activeStatus as any;
     if (searchQuery.trim()) f.search = searchQuery.trim();
     return f;
-  }, [activeType, activeStatus, searchQuery]);
+  }, [activePerspective, activeStatus, searchQuery, sortBy, sortOrder, currentPage]);
 
   // ── Data hooks ──
-  const { data: contractsData, isLoading, isError, refetch } = useContracts(filters);
-  const { data: statsData } = useContractStats();
+  const { data: contractsData, isLoading: isLoadingFlat, isError: isErrorFlat, refetch: refetchFlat } = useContracts(
+    filters,
+    { enabled: viewMode === 'flat' }
+  );
+  const { data: groupedData, isLoading: isLoadingGrouped, isError: isErrorGrouped, refetch: refetchGrouped } = useGroupedContracts(
+    filters,
+    { enabled: viewMode === 'grouped' }
+  );
+  const { data: statsData } = useContractStats(perspectiveType);
+
+  const isLoading = viewMode === 'flat' ? isLoadingFlat : isLoadingGrouped;
+  const isError = viewMode === 'flat' ? isErrorFlat : isErrorGrouped;
+  const refetch = viewMode === 'flat' ? refetchFlat : refetchGrouped;
 
   const contracts = contractsData?.items || [];
-  const totalCount = contractsData?.total_count || 0;
+  const groups = groupedData?.groups || [];
+  const totalCount = viewMode === 'flat'
+    ? (contractsData?.total_count || 0)
+    : (groupedData?.total_count || 0);
 
-  // ── Derive type counts from stats ──
-  const typeCounts = useMemo(() => {
-    const byType = statsData?.by_contract_type || {};
+  // ── Pagination info ──
+  const pageInfo = viewMode === 'flat' ? contractsData?.page_info : groupedData?.page_info;
+  const totalPages = pageInfo?.total_pages || Math.ceil(totalCount / ITEMS_PER_PAGE) || 1;
+
+  // ── Compute perspective-specific portfolio stats from loaded contracts ──
+  const visibleContracts = viewMode === 'flat'
+    ? contracts
+    : groups.flatMap((g: ContractGroup) => g.contracts);
+
+  const computedPortfolio = useMemo(() => {
+    const list = visibleContracts;
+    const totalVal = list.reduce((s: number, c: Contract) => s + (c.grand_total || c.total_value || 0), 0);
+    const collected = list.reduce((s: number, c: Contract) => s + (c.total_collected || 0), 0);
+    const healthSum = list.reduce((s: number, c: Contract) => s + (c.health_score ?? 100), 0);
+    const overdue = list.reduce((s: number, c: Contract) => s + (c.events_overdue || 0), 0);
+    const attention = list.filter((c: Contract) =>
+      (c.events_overdue || 0) > 0 || ((c.health_score ?? 100) > 0 && (c.health_score ?? 100) < 50)
+    ).length;
+
     return {
-      all: statsData?.total || 0,
-      client: byType['client'] || 0,
-      vendor: byType['vendor'] || 0,
-      partner: byType['partner'] || 0,
+      totalValue: totalVal,
+      stats: {
+        total_collected: collected,
+        outstanding: totalVal - collected,
+        avg_health_score: list.length > 0 ? Math.round(healthSum / list.length) : 0,
+        needs_attention_count: attention,
+        total_overdue_events: overdue,
+        total_invoiced: 0,
+      },
     };
-  }, [statsData]);
+  }, [visibleContracts]);
 
-  const statusCounts = statsData?.by_status || {};
+  // ── Status counts from stats ──
+  const statusCounts: Record<string, number> = statsData?.by_status || {};
 
-  // ── Handlers ──
-  const handleTypeChange = (type: ContractTypeFilter) => {
-    setActiveType(type);
-    const params = new URLSearchParams(searchParams);
-    if (type === 'all') params.delete('type');
-    else params.set('type', type);
-    setSearchParams(params, { replace: true });
-  };
+  // ── Pipeline stages: exactly 6 statuses ──
+  const pipelineStages: StatusStage[] = useMemo(() => [
+    { key: 'draft', label: 'Draft', count: statusCounts['draft'] || 0, color: colors.utility.secondaryText },
+    { key: 'pending_review', label: 'In Review', count: statusCounts['pending_review'] || 0, color: colors.brand.secondary || colors.brand.primary },
+    { key: 'pending_acceptance', label: 'Pending', count: statusCounts['pending_acceptance'] || 0, color: colors.semantic.warning },
+    { key: 'active', label: 'Active', count: statusCounts['active'] || 0, color: colors.semantic.success },
+    { key: 'completed', label: 'Completed', count: statusCounts['completed'] || 0, color: colors.brand.tertiary || colors.brand.primary },
+    { key: 'expired', label: 'Expired', count: statusCounts['expired'] || 0, color: colors.semantic.error },
+  ], [statusCounts, colors]);
 
+  // ── URL sync ──
   const handleStatusClick = (status: string | null) => {
     setActiveStatus(status);
     const params = new URLSearchParams(searchParams);
@@ -794,80 +560,93 @@ const ContractsHubPage: React.FC = () => {
     setSearchParams(params, { replace: true });
   };
 
-  // ── Create options for dropdown ──
-  const createOptions = useMemo(() => [
-    { label: 'Client Contract', type: 'client', icon: Users, color: colors.brand.primary },
-    { label: 'Vendor Contract', type: 'vendor', icon: Building2, color: colors.semantic.success },
-  ], [colors]);
-
+  // ── Wizard handlers ──
   const openWizard = (type: ContractType) => {
     setWizardContractType(type);
     setShowWizard(true);
   };
 
   const handleCreateClick = () => {
-    if (activeType === 'all') {
-      setCreateDropdownOpen((prev) => !prev);
-    } else {
-      openWizard(activeType as ContractType);
-    }
-  };
-
-  const handleCreateOption = (type: string) => {
-    setCreateDropdownOpen(false);
-    openWizard(type as ContractType);
+    openWizard(perspectiveType as ContractType);
   };
 
   const handleRowClick = (id: string) => {
     navigate(`/contracts/${id}`);
   };
 
-  // ── Derive whether to show empty state (no data + error = treat as empty) ──
-  const showEmptyState = (!isLoading && contracts.length === 0) || (isError && !contractsData);
+  // ── Expand all groups by default when switching to grouped mode ──
+  useEffect(() => {
+    if (viewMode === 'grouped' && groups.length > 0 && expandedClients.size === 0) {
+      setExpandedClients(new Set(groups.map((g) => g.buyer_id || g.buyer_company)));
+    }
+  }, [viewMode, groups.length]);
+
+  // ── Show states ──
+  const hasData = viewMode === 'flat' ? contracts.length > 0 : groups.length > 0;
+  const hasLoadedData = viewMode === 'flat' ? !!contractsData : !!groupedData;
+  const showEmptyState = (!isLoading && !hasData) || (isError && !hasLoadedData);
 
   // ── Render ──
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: colors.utility.primaryBackground }}>
-      {/* Left: Type Rail */}
-      <TypeRail
-        activeType={activeType}
-        onTypeChange={handleTypeChange}
-        onCreateClick={openWizard}
-        stats={typeCounts}
-        colors={colors}
-      />
+    <div style={{ height: '100%', overflow: 'auto', background: colors.utility.primaryBackground }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 28px' }}>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '24px 28px' }}>
-        {/* Header row */}
+        {/* ═══ HEADER ═══ */}
         <div
           style={{
             display: 'flex',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
-            alignItems: 'center',
             marginBottom: 20,
           }}
         >
           <div>
-            <h1
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                color: colors.utility.primaryText,
-                letterSpacing: '-0.3px',
-              }}
-            >
-              {activeType === 'all'
-                ? 'All Contracts'
-                : `${activeType.charAt(0).toUpperCase() + activeType.slice(1)} Contracts`}
-            </h1>
-            <p style={{ fontSize: 13, color: colors.utility.secondaryText, marginTop: 2 }}>
-              {totalCount} {totalCount === 1 ? 'contract' : 'contracts'}
-              {activeStatus ? ` · filtered by ${activeStatus.replace(/_/g, ' ')}` : ''}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <h1
+                style={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  color: colors.utility.primaryText,
+                  letterSpacing: -0.5,
+                  margin: 0,
+                }}
+              >
+                All Contracts
+              </h1>
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 13,
+                  color: colors.utility.secondaryText,
+                  fontWeight: 500,
+                }}
+              >
+                {totalCount} contract{totalCount !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+              <PerspectiveSwitcher
+                active={activePerspective}
+                onChange={(p) => setPerspective(p)}
+                isDarkMode={isDarkMode}
+                brandColor={brandColor}
+              />
+              <button
+                onClick={() =>
+                  setPerspective(activePerspective === 'revenue' ? 'expense' : 'revenue')
+                }
+                className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
+                style={{ color: brandColor }}
+              >
+                <ArrowRightLeft className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180" />
+                <span className="group-hover:underline">
+                  flip to {activePerspective === 'revenue' ? 'Expense' : 'Revenue'}
+                </span>
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {/* Search */}
             <div
               style={{
@@ -875,9 +654,9 @@ const ContractsHubPage: React.FC = () => {
                 alignItems: 'center',
                 gap: 6,
                 padding: '8px 14px',
-                borderRadius: 8,
+                borderRadius: 10,
                 border: `1px solid ${colors.utility.primaryText}20`,
-                background: `${colors.utility.primaryText}06`,
+                background: colors.utility.secondaryBackground,
               }}
             >
               <Search size={14} style={{ color: colors.utility.secondaryText }} />
@@ -915,129 +694,154 @@ const ContractsHubPage: React.FC = () => {
               <RefreshCw size={14} />
             </button>
 
-            {/* Primary create — dropdown when "All", direct when specific type */}
-            <div ref={createDropdownRef} style={{ position: 'relative' }}>
-              <button
-                onClick={handleCreateClick}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '8px 18px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: colors.brand.primary,
-                  color: '#fff',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <Plus size={14} />
-                {activeType === 'all'
-                  ? 'New Contract'
-                  : `New ${activeType.charAt(0).toUpperCase() + activeType.slice(1)} Contract`}
-                {activeType === 'all' && (
-                  <ChevronDown
-                    size={14}
-                    style={{
-                      transition: 'transform 0.15s ease',
-                      transform: createDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    }}
-                  />
-                )}
-              </button>
-
-              {/* Dropdown menu */}
-              {createDropdownOpen && activeType === 'all' && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 6px)',
-                    right: 0,
-                    minWidth: 200,
-                    borderRadius: 10,
-                    border: `1px solid ${colors.utility.primaryText}20`,
-                    background: colors.utility.secondaryBackground,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                    zIndex: 50,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {createOptions.map((opt) => {
-                    const Icon = opt.icon;
-                    return (
-                      <button
-                        key={opt.type}
-                        onClick={() => handleCreateOption(opt.type)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          width: '100%',
-                          padding: '10px 14px',
-                          border: 'none',
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          transition: 'background 0.1s',
-                          textAlign: 'left',
-                          fontSize: 13,
-                          fontWeight: 500,
-                          color: colors.utility.primaryText,
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = `${colors.utility.primaryText}08`)}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <div
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: 6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: `${opt.color}14`,
-                          }}
-                        >
-                          <Icon size={14} style={{ color: opt.color }} />
-                        </div>
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {/* Create button */}
+            <button
+              onClick={handleCreateClick}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 18px',
+                borderRadius: 10,
+                border: 'none',
+                background: colors.brand.primary,
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Plus size={14} />
+              New Contract
+            </button>
           </div>
         </div>
 
-        {/* Pipeline Bar */}
-        <div style={{ marginBottom: 20 }}>
-          <PipelineBar
-            statusCounts={statusCounts}
-            activeStatus={activeStatus}
-            onStatusClick={handleStatusClick}
+        {/* ═══ SUMMARY STRIP (computed from loaded contracts per perspective) ═══ */}
+        <PortfolioSummaryStrip
+          stats={computedPortfolio.stats}
+          totalValue={computedPortfolio.totalValue}
+          colors={colors}
+        />
+
+        {/* ═══ PIPELINE BAR (6 statuses with counts + colored bar) ═══ */}
+        <StatusPipelineBar
+          stages={pipelineStages}
+          activeStatus={activeStatus}
+          onStatusClick={handleStatusClick}
+          colors={colors}
+        />
+
+        {/* ═══ CONTROLS: View mode + Sort ═══ */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            marginBottom: 12,
+            gap: 8,
+          }}
+        >
+          <ViewModeToggle
+            value={viewMode}
+            onChange={setViewMode}
+            groupLabel={activePerspective === 'revenue' ? 'By Client' : 'By Vendor'}
             colors={colors}
           />
+          <PortfolioSortSelect value={sortBy} onChange={setSortBy} colors={colors} />
         </div>
 
-        {/* Content: Loading / Empty / Table */}
-        {isLoading && !contractsData ? (
-          <VaNiLoader
-            size="md"
-            message={
-              activeType === 'all'
-                ? 'VaNi is Loading Contracts...'
-                : `VaNi is Loading ${activeType.charAt(0).toUpperCase() + activeType.slice(1)} Contracts...`
-            }
-            showSkeleton={true}
-            skeletonVariant="list"
-            skeletonCount={8}
-          />
+        {/* ═══ CONTRACT LIST / GROUPED CONTENT ═══ */}
+        {isLoading && !hasLoadedData ? (
+          <div
+            style={{
+              background: colors.utility.secondaryBackground,
+              borderRadius: 14,
+              border: `1px solid ${colors.utility.primaryText}10`,
+              overflow: 'hidden',
+            }}
+          >
+            <VaNiLoader
+              size="md"
+              message={`Loading ${perspectiveType} contracts...`}
+              showSkeleton={true}
+              skeletonVariant="list"
+              skeletonCount={8}
+            />
+          </div>
         ) : showEmptyState ? (
-          <EmptyState typeFilter={activeType} colors={colors} onCreateClick={handleCreateClick} onCreateType={openWizard} />
+          <div
+            style={{
+              background: colors.utility.secondaryBackground,
+              borderRadius: 14,
+              border: `1px solid ${colors.utility.primaryText}10`,
+              overflow: 'hidden',
+            }}
+          >
+            <EmptyState
+              perspective={activePerspective}
+              colors={colors}
+              onCreateType={openWizard}
+            />
+          </div>
+        ) : viewMode === 'grouped' ? (
+          /* ═══ GROUPED VIEW ═══ */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {groups.map((group: ContractGroup) => {
+              const groupKey = group.buyer_id || group.buyer_company;
+              const isExpanded = expandedClients.has(groupKey);
+              return (
+                <div key={groupKey}>
+                  <ClientGroupHeader
+                    buyerName={group.buyer_name}
+                    buyerCompany={group.buyer_company}
+                    totals={group.group_totals}
+                    isExpanded={isExpanded}
+                    onToggle={() => toggleClientExpand(groupKey)}
+                    colors={colors}
+                  />
+                  {isExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 36, paddingTop: 6, paddingBottom: 8 }}>
+                      {group.contracts.map((c: Contract) => (
+                        <ContractPortfolioRow
+                          key={c.id}
+                          contract={c}
+                          colors={colors}
+                          isDarkMode={isDarkMode}
+                          onRowClick={handleRowClick}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
-          <ContractsList contracts={contracts} colors={colors} onRowClick={handleRowClick} />
+          /* ═══ FLAT VIEW — Single Column List ═══ */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {contracts.map((c: Contract) => (
+              <ContractPortfolioRow
+                key={c.id}
+                contract={c}
+                colors={colors}
+                isDarkMode={isDarkMode}
+                onRowClick={handleRowClick}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ═══ PAGINATION ═══ */}
+        {hasData && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalCount}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+            colors={colors}
+          />
         )}
       </div>
 

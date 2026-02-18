@@ -176,6 +176,15 @@ export interface Contract {
   blocks_count?: number;
   vendors_count?: number;
   attachments_count?: number;
+  // Portfolio enrichment (from get_contracts_list v2 — Cycle 1)
+  events_total?: number;
+  events_completed?: number;
+  events_overdue?: number;
+  total_invoiced?: number;
+  total_collected?: number;
+  outstanding?: number;
+  health_score?: number;
+  completion_pct?: number;
   // Legacy/optional
   renewal_terms?: string;
   termination_clause?: string;
@@ -467,6 +476,44 @@ export interface ContractListResponse {
   filters_applied: ContractListFilters;
 }
 
+// Grouped response types (Cycle 3 — server-side grouping)
+export interface ContractGroupTotals {
+  contract_count: number;
+  total_value: number;
+  total_collected: number;
+  avg_health: number;
+  total_overdue: number;
+}
+
+export interface ContractGroup {
+  buyer_name: string;
+  buyer_company: string;
+  buyer_id: string | null;
+  contracts: Contract[];
+  group_totals: ContractGroupTotals;
+}
+
+export interface ContractGroupedResponse {
+  groups: ContractGroup[];
+  total_count: number;
+  page_info: {
+    has_next_page: boolean;
+    has_prev_page: boolean;
+    current_page: number;
+    total_pages: number;
+  };
+  filters_applied: ContractListFilters;
+}
+
+export interface ContractPortfolioStats {
+  total_overdue_events: number;
+  total_invoiced: number;
+  total_collected: number;
+  outstanding: number;
+  avg_health_score: number;
+  needs_attention_count: number;
+}
+
 export interface ContractStatsResponse {
   total: number;
   by_status: Record<string, number>;
@@ -474,6 +521,8 @@ export interface ContractStatsResponse {
   by_contract_type: Record<string, number>;
   total_value: number;
   currency_breakdown: Array<{ currency: string; total: number; count: number }>;
+  // Portfolio aggregates (from enriched get_contract_stats — Cycle 1)
+  portfolio?: ContractPortfolioStats;
 }
 
 // =================================================================
@@ -492,11 +541,12 @@ export interface ContractListFilters {
   min_value?: number;
   max_value?: number;
   currency?: string;
-  sort_by?: 'title' | 'contract_number' | 'status' | 'total_value' | 'start_date' | 'end_date' | 'created_at' | 'updated_at';
+  sort_by?: 'title' | 'contract_number' | 'status' | 'total_value' | 'start_date' | 'end_date' | 'created_at' | 'updated_at' | 'health_score' | 'completion';
   sort_direction?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
   page?: number;
+  group_by?: 'buyer';
 }
 
 // =================================================================

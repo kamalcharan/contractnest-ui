@@ -11,6 +11,7 @@ import type {
   Contract,
   ContractDetail,
   ContractListResponse,
+  ContractGroupedResponse,
   ContractStatsResponse,
   ContractListFilters,
   CreateContractRequest,
@@ -26,6 +27,7 @@ export const contractKeys = {
   all: ['contracts'] as const,
   lists: () => [...contractKeys.all, 'list'] as const,
   list: (filters: ContractListFilters) => [...contractKeys.lists(), { filters }] as const,
+  grouped: (filters: ContractListFilters) => [...contractKeys.all, 'grouped', { filters }] as const,
   details: () => [...contractKeys.all, 'detail'] as const,
   detail: (id: string) => [...contractKeys.details(), id] as const,
   stats: () => [...contractKeys.all, 'stats'] as const,
@@ -88,6 +90,62 @@ export const useContracts = (
 };
 
 /**
+ * Hook to fetch contracts grouped by buyer (Cycle 3 — grouped portfolio view)
+ * Sends group_by=buyer filter; API returns { groups: [...], total_count, page_info }
+ */
+export const useGroupedContracts = (
+  filters: ContractListFilters = {},
+  options?: {
+    enabled?: boolean;
+    refetchOnWindowFocus?: boolean;
+  }
+) => {
+  const { currentTenant } = useAuth();
+
+  // Force group_by=buyer in the filters
+  const groupedFilters: ContractListFilters = { ...filters, group_by: 'buyer' };
+
+  return useQuery({
+    queryKey: contractKeys.grouped(groupedFilters),
+    queryFn: async (): Promise<ContractGroupedResponse> => {
+      if (!currentTenant?.id) {
+        throw new Error('No tenant selected');
+      }
+
+      const url = API_ENDPOINTS.CONTRACTS.LIST_WITH_FILTERS(groupedFilters);
+      const response = await api.get(url);
+
+      const data = response.data?.data || response.data;
+
+      if (!data || !data.groups) {
+        return {
+          groups: [],
+          total_count: 0,
+          page_info: {
+            has_next_page: false,
+            has_prev_page: false,
+            current_page: 1,
+            total_pages: 0,
+          },
+          filters_applied: groupedFilters,
+        };
+      }
+
+      return data;
+    },
+    enabled: !!currentTenant?.id && (options?.enabled !== false),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
+    refetchOnReconnect: true,
+    retry: 1,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    networkMode: 'online',
+    structuralSharing: true,
+  });
+};
+
+/**
  * Hook to fetch a single contract by ID (with blocks, vendors, attachments, history)
  */
 export const useContract = (contractId: string | null) => {
@@ -118,18 +176,24 @@ export const useContract = (contractId: string | null) => {
 
 /**
  * Hook to fetch contract dashboard stats (counts by status, by type, totals)
+ * @param contractType - Optional perspective filter ('client' for revenue, 'vendor' for expense).
+ *                       When provided, stats are scoped to that perspective (including claimed contracts for expense).
  */
-export const useContractStats = (options?: { enabled?: boolean }) => {
+export const useContractStats = (contractType?: string, options?: { enabled?: boolean }) => {
   const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: contractKeys.stats(),
+    queryKey: [...contractKeys.stats(), contractType || 'all'],
     queryFn: async (): Promise<ContractStatsResponse> => {
       if (!currentTenant?.id) {
         throw new Error('No tenant selected');
       }
 
-      const response = await api.get(API_ENDPOINTS.CONTRACTS.STATS);
+      const baseUrl = API_ENDPOINTS.CONTRACTS.STATS;
+      const url = contractType
+        ? `${baseUrl}?contract_type=${encodeURIComponent(contractType)}`
+        : baseUrl;
+      const response = await api.get(url);
       const data = response.data?.data || response.data;
 
       return data || {

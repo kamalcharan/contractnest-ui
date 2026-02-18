@@ -981,6 +981,7 @@ export const API_ENDPOINTS = {
       if (filters.limit !== undefined) params.append('limit', filters.limit.toString());
       if (filters.offset !== undefined) params.append('offset', filters.offset.toString());
       if (filters.page !== undefined) params.append('page', filters.page.toString());
+      if (filters.group_by) params.append('group_by', filters.group_by);
 
       const queryString = params.toString();
       return queryString ? `/api/contracts?${queryString}` : '/api/contracts';
@@ -1406,11 +1407,12 @@ export type ContractCrudFilters = {
   min_value?: number;
   max_value?: number;
   currency?: string;
-  sort_by?: 'title' | 'contract_number' | 'status' | 'total_value' | 'start_date' | 'end_date' | 'created_at' | 'updated_at';
+  sort_by?: 'title' | 'contract_number' | 'status' | 'total_value' | 'start_date' | 'end_date' | 'created_at' | 'updated_at' | 'health_score' | 'completion';
   sort_direction?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
   page?: number;
+  group_by?: 'buyer';
 };
 
 // Admin Tenant Management filter interface
