@@ -169,6 +169,9 @@ const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 const isValidUUID = (id: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
+// Nomenclature groups that require the asset selection step
+const ASSET_STEP_GROUPS = new Set(['equipment_maintenance', 'facility_property']);
+
 // Compute and format events for API (matches t_contracts.computed_events JSONB schema)
 function computeEventsForApi(state: ContractWizardState): any[] | undefined {
   // Skip for RFQ mode
@@ -478,6 +481,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const totalSteps = activeSteps.length;
   const stepLabels = activeSteps.map(s => s.label);
 
+  // Skip asset selection step when nomenclature group has no resource mapping
+  const shouldSkipAssetStep = !isRfqMode && !ASSET_STEP_GROUPS.has(wizardState.nomenclatureGroup || '');
+
+  // Find the index of the assetSelection step (for skip logic)
+  const assetStepIndex = activeSteps.findIndex(s => s.id === 'assetSelection');
+
   // Get current step ID
   const currentStepId = activeSteps[currentStep]?.id || 'path';
 
@@ -618,9 +627,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         }
       }
 
-      setCurrentStep((prev) => Math.min(prev + 1, totalSteps - 1));
+      setCurrentStep((prev) => {
+        let next = Math.min(prev + 1, totalSteps - 1);
+        // Skip asset selection step when nomenclature group has no resource mapping
+        if (shouldSkipAssetStep && next === assetStepIndex) {
+          next = Math.min(next + 1, totalSteps - 1);
+        }
+        return next;
+      });
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateStatus, sendNotification, addToast]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateStatus, sendNotification, addToast, shouldSkipAssetStep, assetStepIndex]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -847,9 +863,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       setShowTemplateSelection(false);
       updateWizardState('templateId', null);
     } else {
-      setCurrentStep((prev) => Math.max(prev - 1, 0));
+      setCurrentStep((prev) => {
+        let back = Math.max(prev - 1, 0);
+        // Skip asset selection step when nomenclature group has no resource mapping
+        if (shouldSkipAssetStep && back === assetStepIndex) {
+          back = Math.max(back - 1, 0);
+        }
+        return back;
+      });
     }
-  }, [showTemplateSelection, updateWizardState]);
+  }, [showTemplateSelection, updateWizardState, shouldSkipAssetStep, assetStepIndex]);
 
   // Path selection handler
   const handlePathSelect = useCallback(
@@ -917,6 +940,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       updateWizardState('nomenclatureId', id);
       updateWizardState('nomenclatureName', displayName);
       updateWizardState('nomenclatureGroup', group ?? null);
+
+      // Clear asset-related state when switching to a nomenclature group
+      // that doesn't use the asset selection step
+      const resolvedGroup = group ?? null;
+      if (!ASSET_STEP_GROUPS.has(resolvedGroup || '')) {
+        updateWizardState('equipmentDetails', []);
+        updateWizardState('coverageTypes', []);
+        updateWizardState('allowBuyerToAdd', false);
+      }
     },
     [updateWizardState]
   );
@@ -2054,29 +2086,35 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
             {/* Center: Progress Dots */}
             <div className="flex items-center gap-2">
-              {Array.from({ length: totalSteps }).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    if (index < currentStep) {
-                      setCurrentStep(index);
-                    }
-                  }}
-                  disabled={index > currentStep}
-                  className="transition-all duration-300 rounded-full"
-                  style={{
-                    width: index === currentStep ? '32px' : '8px',
-                    height: '8px',
-                    backgroundColor:
-                      index === currentStep
-                        ? colors.brand.primary
-                        : index < currentStep
-                          ? colors.semantic.success
-                          : `${colors.utility.primaryText}20`,
-                    cursor: index < currentStep ? 'pointer' : 'default',
-                  }}
-                />
-              ))}
+              {Array.from({ length: totalSteps }).map((_, index) => {
+                // Hide the asset selection dot when step is skipped
+                if (shouldSkipAssetStep && index === assetStepIndex) return null;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (index < currentStep) {
+                        // Prevent navigating to the skipped asset step
+                        if (shouldSkipAssetStep && index === assetStepIndex) return;
+                        setCurrentStep(index);
+                      }
+                    }}
+                    disabled={index > currentStep}
+                    className="transition-all duration-300 rounded-full"
+                    style={{
+                      width: index === currentStep ? '32px' : '8px',
+                      height: '8px',
+                      backgroundColor:
+                        index === currentStep
+                          ? colors.brand.primary
+                          : index < currentStep
+                            ? colors.semantic.success
+                            : `${colors.utility.primaryText}20`,
+                      cursor: index < currentStep ? 'pointer' : 'default',
+                    }}
+                  />
+                );
+              })}
             </div>
 
             {/* Right: Close Button */}
@@ -2100,9 +2138,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
         {/* Floating Action Island */}
         <FloatingActionIsland
-          currentStep={showTemplateSelection ? 0 : currentStep}
-          totalSteps={totalSteps}
-          stepLabels={showTemplateSelection ? ['Select Template', ...stepLabels.slice(1)] : stepLabels}
+          currentStep={showTemplateSelection ? 0 : (shouldSkipAssetStep && currentStep > assetStepIndex ? currentStep - 1 : currentStep)}
+          totalSteps={shouldSkipAssetStep ? totalSteps - 1 : totalSteps}
+          stepLabels={showTemplateSelection ? ['Select Template', ...stepLabels.slice(1)] : (shouldSkipAssetStep ? stepLabels.filter((_, i) => i !== assetStepIndex) : stepLabels)}
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
