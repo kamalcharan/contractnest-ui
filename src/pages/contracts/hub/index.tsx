@@ -17,7 +17,8 @@ import {
   ChevronRight,
   ArrowRightLeft,
 } from 'lucide-react';
-import { useContracts, useGroupedContracts, useContractStats } from '@/hooks/queries/useContractQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { useContracts, useGroupedContracts, useContractStats, contractKeys } from '@/hooks/queries/useContractQueries';
 import { useAuth } from '@/context/AuthContext';
 import { prefetchContacts } from '@/hooks/useContacts';
 import type {
@@ -125,49 +126,86 @@ const StatusPipelineBar: React.FC<StatusPipelineBarProps> = ({
 
   return (
     <div style={{ marginBottom: 20 }}>
-      {/* Status counts row */}
-      <div style={{ display: 'flex', marginBottom: 8 }}>
+      {/* Status pill tabs */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        {/* "All" pill */}
+        <button
+          onClick={() => onStatusClick(null)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 14px',
+            borderRadius: 20,
+            border: !activeStatus
+              ? `1.5px solid ${colors.brand.primary}`
+              : `1px solid ${colors.utility.primaryText}20`,
+            background: !activeStatus ? colors.brand.primary + '12' : 'transparent',
+            color: !activeStatus ? colors.brand.primary : colors.utility.secondaryText,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            lineHeight: 1,
+          }}
+        >
+          All
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: 10,
+              background: !activeStatus ? colors.brand.primary : colors.utility.primaryText + '12',
+              color: !activeStatus ? '#fff' : colors.utility.secondaryText,
+              lineHeight: 1.2,
+            }}
+          >
+            {totalCount}
+          </span>
+        </button>
+
         {stages.map((stage) => {
           const isActive = activeStatus === stage.key;
-          const isAll = !activeStatus;
           return (
-            <div
+            <button
               key={stage.key}
               onClick={() => onStatusClick(isActive ? null : stage.key)}
               style={{
-                flex: 1,
-                textAlign: 'center',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 14px',
+                borderRadius: 20,
+                border: isActive
+                  ? `1.5px solid ${stage.color}`
+                  : `1px solid ${colors.utility.primaryText}20`,
+                background: isActive ? stage.color + '12' : 'transparent',
+                color: isActive ? stage.color : colors.utility.secondaryText,
+                fontSize: 12,
+                fontWeight: 600,
                 cursor: 'pointer',
-                padding: '10px 4px',
-                borderRadius: 8,
-                background: isActive ? colors.brand.primary + '10' : 'transparent',
                 transition: 'all 0.15s',
+                lineHeight: 1,
               }}
             >
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: isActive ? stage.color : (isAll ? colors.utility.primaryText : colors.utility.secondaryText),
-                  lineHeight: 1.2,
-                }}
-              >
-                {stage.count}
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  textTransform: 'uppercase' as const,
-                  letterSpacing: 0.5,
-                  color: isActive ? stage.color : colors.utility.secondaryText,
-                  marginTop: 2,
-                }}
-              >
-                {stage.label}
-              </div>
-            </div>
+              {stage.label}
+              {stage.count > 0 && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 10,
+                    background: isActive ? stage.color : colors.utility.primaryText + '12',
+                    color: isActive ? '#fff' : colors.utility.secondaryText,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {stage.count}
+                </span>
+              )}
+            </button>
           );
         })}
       </div>
@@ -176,8 +214,8 @@ const StatusPipelineBar: React.FC<StatusPipelineBarProps> = ({
       <div
         style={{
           display: 'flex',
-          height: 6,
-          borderRadius: 3,
+          height: 4,
+          borderRadius: 2,
           overflow: 'hidden',
           background: colors.utility.primaryText + '08',
         }}
@@ -190,7 +228,7 @@ const StatusPipelineBar: React.FC<StatusPipelineBarProps> = ({
             <div
               key={stage.key}
               style={{
-                flex: Math.max(proportion, 0.02), // minimum visible width
+                flex: Math.max(proportion, 0.02),
                 background: stage.color,
                 opacity: !activeStatus ? 0.8 : (isActive ? 1 : 0.2),
                 transition: 'opacity 0.2s',
@@ -413,6 +451,7 @@ const ContractsHubPage: React.FC = () => {
   const brandColor = colors.brand.primary;
   const { currentTenant, isLive } = useAuth();
   const { profile } = useTenantContext();
+  const queryClient = useQueryClient();
 
   // ── Prefetch contacts for wizard ──
   useEffect(() => {
@@ -461,9 +500,14 @@ const ContractsHubPage: React.FC = () => {
   const [showWizard, setShowWizard] = useState(false);
   const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
 
-  // ── Reset page when filters change ──
+  // ── Reset page + invalidate stats when perspective changes ──
+  const prevPerspective = useRef(activePerspective);
   useEffect(() => {
     setCurrentPage(1);
+    if (prevPerspective.current !== activePerspective) {
+      prevPerspective.current = activePerspective;
+      queryClient.invalidateQueries({ queryKey: contractKeys.stats() });
+    }
   }, [activePerspective, activeStatus, searchQuery, sortBy, viewMode]);
 
   // ── Derive sort direction ──

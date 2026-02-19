@@ -68,6 +68,7 @@ import UserProfileStep from '@/pages/onboarding/steps/userProfileStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
+import ServedIndustriesStep from '@/pages/onboarding/steps/ServedIndustriesStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
 import MasterDataStep from '@/pages/onboarding/steps/MasterDataStep';
@@ -138,7 +139,7 @@ import ResourcesPage from './pages/settings/Resources';
 // Equipment Registry (P1) — standalone page under Operations
 import EquipmentPage from './pages/equipment-registry';
 
-// Entity Registry — standalone page under Operations (shares code with Equipment Registry)
+// Facility Registry — standalone page under Operations (shares code with Equipment Registry)
 import EntityRegistryPage from './pages/entity-registry';
 
 // Service Contracts - Templates
@@ -395,10 +396,11 @@ const AppContent: React.FC = () => {
   <Route path="welcome" element={<WelcomeStep />} />
   <Route path="storage-setup" element={<StorageSetupStep />} />
   <Route path="user-profile" element={<UserProfileStep />} />
- <Route path="/onboarding/theme-selection" element={<ThemeSelectionStep />} />
- <Route path="/onboarding/business-basic" element={<BusinessBasicStep />} />
-<Route path="business-branding" element={<BusinessBrandingStep />} />
-<Route path="business-preferences" element={<BusinessPreferencesStep />} />
+  <Route path="theme-selection" element={<ThemeSelectionStep />} />
+  <Route path="business-basic" element={<BusinessBasicStep />} />
+  <Route path="business-branding" element={<BusinessBrandingStep />} />
+  <Route path="served-industries" element={<ServedIndustriesStep />} />
+  <Route path="business-preferences" element={<BusinessPreferencesStep />} />
 <Route path="sequence-numbers" element={<SequenceNumbersStep />} />
   <Route path="master-data" element={<MasterDataStep />} />
   <Route path="complete" element={<CompleteStep />} />
@@ -529,9 +531,9 @@ const AppContent: React.FC = () => {
             <Route index element={<EquipmentPage />} />
           </Route>
 
-          {/* Entity Registry — standalone page under Operations */}
+          {/* Facility Registry — standalone page under Operations */}
           <Route
-            path="/entity-registry"
+            path="/facility-registry"
             element={
               <ProtectedRoute>
                 <MainLayout />

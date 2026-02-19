@@ -66,14 +66,14 @@
     },
     entity: {
       typeIds: ['asset'],
-      pageTitle: 'Entity Registry',
-      pageDescription: 'Register and manage entities such as facilities, properties, and spaces. Link them to contracts and track service schedules.',
-      breadcrumb: 'Entity Registry',
-      sidebarTitle: 'Entity Categories',
-      allLabel: 'All Entities',
-      itemLabel: 'entity',
-      searchPlaceholder: 'Search entities...',
-      addLabel: 'Add Entity',
+      pageTitle: 'Facility Registry',
+      pageDescription: 'Register and manage facilities, properties, and spaces. Link them to contracts and track service schedules.',
+      breadcrumb: 'Facility Registry',
+      sidebarTitle: 'Facility Categories',
+      allLabel: 'All Facilities',
+      itemLabel: 'facility',
+      searchPlaceholder: 'Search facilities...',
+      addLabel: 'Add Facility',
     },
   };
 

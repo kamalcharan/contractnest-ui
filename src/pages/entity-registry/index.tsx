@@ -1,5 +1,5 @@
 // src/pages/entity-registry/index.tsx
-// Entity Registry — thin wrapper around the shared Equipment/Entity Registry page
+// Facility Registry — thin wrapper around the shared Equipment/Facility Registry page
 // Shows only resources with resource_type_id = 'asset'
 
 import React from 'react';

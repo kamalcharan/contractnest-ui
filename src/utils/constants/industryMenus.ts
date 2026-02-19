@@ -40,7 +40,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
       { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
       { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
-      { id: 'entity-registry', label: 'Entity Registry', icon: 'Landmark', path: '/entity-registry' }
+      { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' }
       // HIDDEN: Activity Feed, Reports - commented out
       // { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' }
       // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }

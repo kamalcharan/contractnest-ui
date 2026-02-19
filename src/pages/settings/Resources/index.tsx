@@ -15,7 +15,7 @@ import { SUB_CATEGORY_CONFIG, getSubCategoryConfig } from '@/constants/subCatego
 
 // ─── Constants ───────────────────────────────────────────────
 const ITEMS_PER_PAGE = 10;
-const TABS = ['All', 'Equipment', 'Entities'] as const;
+const TABS = ['All', 'Equipment', 'Facilities'] as const;
 type Tab = typeof TABS[number];
 type ViewMode = 'my-resources' | 'browse-catalog';
 
@@ -23,7 +23,7 @@ type ViewMode = 'my-resources' | 'browse-catalog';
 const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Wrench }> = {
   equipment:  { color: '#3B82F6', label: 'Equipment', icon: Wrench },
   consumable: { color: '#F59E0B', label: 'Consumable', icon: Package },
-  asset:      { color: '#8B5CF6', label: 'Entity',    icon: Building },
+  asset:      { color: '#8B5CF6', label: 'Facility',  icon: Building },
 };
 
 const getTypeConfig = (typeId: string) =>
@@ -31,13 +31,13 @@ const getTypeConfig = (typeId: string) =>
 
 // ─── Tab filter helpers ──────────────────────────────────────
 const isEquipmentType = (t: string) => ['equipment', 'consumable'].includes(t.toLowerCase());
-const isEntityType = (t: string) => t.toLowerCase() === 'asset';
+const isFacilityType = (t: string) => t.toLowerCase() === 'asset';
 
 const filterByTab = <T extends { resource_type_id: string }>(items: T[], tab: Tab): T[] => {
   if (tab === 'All') return items;
   return items.filter(i => {
     const t = (i.resource_type_id || '').toLowerCase();
-    return tab === 'Equipment' ? isEquipmentType(t) : isEntityType(t);
+    return tab === 'Equipment' ? isEquipmentType(t) : isFacilityType(t);
   });
 };
 
@@ -50,7 +50,7 @@ const filterBySearch = <T extends { name: string; description?: string | null }>
 const countByTab = <T extends { resource_type_id: string }>(items: T[]) => ({
   All: items.length,
   Equipment: items.filter(i => isEquipmentType(i.resource_type_id || '')).length,
-  Entities: items.filter(i => isEntityType(i.resource_type_id || '')).length,
+  Facilities: items.filter(i => isFacilityType(i.resource_type_id || '')).length,
 });
 
 // ─── Industry display helper ─────────────────────────────────
@@ -291,7 +291,7 @@ const ResourcesPage: React.FC = () => {
             </h1>
             <p style={{ fontSize: 13, color: colors.utility.secondaryText, margin: 0 }}>
               {view === 'my-resources'
-                ? `Equipment & entities you service${showDeleted ? ` (showing ${deletedOnly.length} deleted)` : ''}`
+                ? `Equipment & facilities you service${showDeleted ? ` (showing ${deletedOnly.length} deleted)` : ''}`
                 : `${addedCount} of ${templates.length} resources added`}
             </p>
           </div>
@@ -346,7 +346,7 @@ const ResourcesPage: React.FC = () => {
           {TABS.map(tab => {
             const isActive = activeTab === tab;
             const count = counts[tab] ?? 0;
-            const tabColor = tab === 'Equipment' ? '#3B82F6' : tab === 'Entities' ? '#8B5CF6' : colors.brand.primary;
+            const tabColor = tab === 'Equipment' ? '#3B82F6' : tab === 'Facilities' ? '#8B5CF6' : colors.brand.primary;
             return (
               <button
                 key={tab}
@@ -435,7 +435,7 @@ const ResourcesPage: React.FC = () => {
                 {search ? 'No matching resources' : showDeleted ? 'No deleted resources' : 'No resources added yet'}
               </p>
               <p style={{ fontSize: 13, color: colors.utility.secondaryText, margin: '0 0 20px' }}>
-                {search ? 'Try a different search term' : showDeleted ? 'None of your resources have been deleted' : 'Browse the catalog to add equipment and entities'}
+                {search ? 'Try a different search term' : showDeleted ? 'None of your resources have been deleted' : 'Browse the catalog to add equipment and facilities'}
               </p>
               {!search && !showDeleted && (
                 <button
@@ -871,7 +871,7 @@ const ResourcesPage: React.FC = () => {
         }}>
           <Headset size={16} style={{ color: colors.brand.primary, flexShrink: 0 }} />
           <span style={{ fontSize: 12, color: colors.utility.secondaryText, lineHeight: '1.5' }}>
-            Don't see what you need? Not all equipment and entities may be listed here.{' '}
+            Don't see what you need? Not all equipment and facilities may be listed here.{' '}
             <strong style={{ color: colors.utility.primaryText }}>Contact support</strong> to request additional resources for your catalog.
           </span>
         </div>

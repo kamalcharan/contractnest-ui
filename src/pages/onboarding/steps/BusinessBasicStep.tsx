@@ -1,5 +1,5 @@
 // src/pages/onboarding/steps/BusinessBasicStep.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -24,6 +24,20 @@ const BusinessBasicStep: React.FC = () => {
 
   const [selectedBusinessType, setSelectedBusinessType] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Ref to auto-scroll Continue button into view after selection
+  const continueButtonRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to Continue button when it appears after business type selection
+  useEffect(() => {
+    if (selectedBusinessType && continueButtonRef.current) {
+      // Small delay to let the animation start before scrolling
+      const timer = setTimeout(() => {
+        continueButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedBusinessType]);
 
   // Check if already completed
   const isAlreadyCompleted = !!profile?.business_type_id;
@@ -252,7 +266,7 @@ const BusinessBasicStep: React.FC = () => {
 
           {/* Continue Button */}
           {selectedBusinessType && (
-            <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div ref={continueButtonRef} className="mt-8 text-center animate-in fade-in slide-in-from-bottom-4 duration-300">
               <button
                 onClick={handleContinue}
                 disabled={!canContinue}

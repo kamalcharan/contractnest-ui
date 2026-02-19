@@ -1,5 +1,5 @@
 // src/pages/equipment-registry/EmptyState.tsx
-// Empty state for Equipment/Entity Registry — context-aware based on selected sub_category
+// Empty state for Equipment/Facility Registry — context-aware based on selected sub_category
 
 import React from 'react';
 import { Plus, Package } from 'lucide-react';
@@ -42,16 +42,16 @@ const EquipmentEmptyState: React.FC<EquipmentEmptyStateProps> = ({
         style={{ color: colors.utility.primaryText }}
       >
         {selectedSubCategory
-          ? `No ${registryMode === 'entity' ? 'entities' : 'equipment'} in ${selectedSubCategory}`
-          : `No ${registryMode === 'entity' ? 'entities' : 'equipment'} registered yet`}
+          ? `No ${registryMode === 'entity' ? 'facilities' : 'equipment'} in ${selectedSubCategory}`
+          : `No ${registryMode === 'entity' ? 'facilities' : 'equipment'} registered yet`}
       </h2>
       <p
         className="text-sm max-w-md mx-auto mb-7 leading-relaxed"
         style={{ color: colors.utility.secondaryText }}
       >
         {selectedSubCategory
-          ? `Add ${registryMode === 'entity' ? 'entities' : 'equipment'} under ${selectedSubCategory} to track assets, link contracts, and manage service schedules.`
-          : `Get started by adding your first ${registryMode === 'entity' ? 'entity' : 'equipment'}. Registered items can be linked to contracts, scheduled for service, and tracked with evidence.`}
+          ? `Add ${registryMode === 'entity' ? 'facilities' : 'equipment'} under ${selectedSubCategory} to track assets, link contracts, and manage service schedules.`
+          : `Get started by adding your first ${registryMode === 'entity' ? 'facility' : 'equipment'}. Registered items can be linked to contracts, scheduled for service, and tracked with evidence.`}
       </p>
 
       {/* CTA Button */}
@@ -64,7 +64,7 @@ const EquipmentEmptyState: React.FC<EquipmentEmptyStateProps> = ({
         }}
       >
         <Plus className="mr-1.5 h-4 w-4" />
-        {registryMode === 'entity' ? 'Add Entity' : 'Add Equipment'}
+        {registryMode === 'entity' ? 'Add Facility' : 'Add Equipment'}
       </Button>
     </div>
   );

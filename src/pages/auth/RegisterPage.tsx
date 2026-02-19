@@ -64,8 +64,15 @@ const RegisterPage: React.FC = () => {
 
   // Redirect if already authenticated
   // If user came from contract review page, redirect back there
+  // Skip redirect when registration just happened — AuthContext handles /onboarding navigation
   useEffect(() => {
     if (isAuthenticated) {
+      // New signup: AuthContext.register() already navigated to /onboarding — don't override
+      if (sessionStorage.getItem('is_new_signup') === 'true') {
+        sessionStorage.removeItem('is_new_signup');
+        return;
+      }
+
       const authRedirect = sessionStorage.getItem('contractnest_auth_redirect');
       if (authRedirect) {
         sessionStorage.removeItem('contractnest_auth_redirect');

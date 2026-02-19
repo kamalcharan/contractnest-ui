@@ -14,8 +14,8 @@ interface NavItemProps {
 }
 
 const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
-  // Use defaultOpen from item config, fallback to false
-  const [isSubmenuOpen, setIsSubmenuOpen] = useState(item.defaultOpen || false);
+  // All submenus open by default unless explicitly set to false
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState(item.defaultOpen !== false);
   const { isDarkMode, currentTheme } = useTheme();
 
   // Get theme colors

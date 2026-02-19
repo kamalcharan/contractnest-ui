@@ -1,5 +1,5 @@
 // src/components/onboarding/OnboardingLayout.tsx
-// Premium onboarding layout — Apple Dynamic Island-inspired navigation
+// Premium onboarding layout — header-integrated navigation
 import React, { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useOnboarding } from '@/hooks/queries/useOnboarding';
@@ -78,7 +78,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     'business-preferences': 'Branding',
   };
 
-  // Steps that have their own submit buttons (don't show island's Continue)
+  // Steps that have their own submit buttons (hide header Continue)
   const stepsWithOwnButtons = [
     'business-basic',
     'business-branding',
@@ -278,7 +278,6 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   };
 
   const currentIndex = allSteps.findIndex((s) => s.id === uiStepId);
-  const stepLabels = allSteps.map((s) => getStepTitle(s.id));
   const canGoBackIsland = currentIndex > 0;
   const isLastStep = currentIndex === allSteps.length - 1;
   const showIslandContinue = !stepsWithOwnButtons.includes(uiStepId);
@@ -401,8 +400,75 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
           })}
         </div>
 
-        {/* Right: Step counter + Close */}
-        <div className="flex items-center gap-3">
+        {/* Right: Navigation + Step counter + Close */}
+        <div className="flex items-center gap-2">
+          {/* Skip (optional steps only) */}
+          {!isCompletePage && isStepSkippable && !isLastStep && (
+            <button
+              onClick={handleSkipStep}
+              disabled={isSubmitting || isProcessing}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:opacity-80 disabled:opacity-40"
+              style={{
+                backgroundColor: isDarkMode
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(0, 0, 0, 0.05)',
+                color: colors.utility.secondaryText,
+              }}
+            >
+              <SkipForward className="w-3.5 h-3.5" />
+              Skip
+            </button>
+          )}
+
+          {/* Back */}
+          {!isCompletePage && (
+            <button
+              onClick={handleGoToPreviousStep}
+              disabled={!canGoBackIsland || isSubmitting || isProcessing}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-80"
+              style={{
+                backgroundColor: isDarkMode
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'rgba(0, 0, 0, 0.05)',
+                color: colors.utility.primaryText,
+              }}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+          )}
+
+          {/* Continue (steps without own buttons) */}
+          {!isCompletePage && showIslandContinue && (
+            <button
+              onClick={() => handleCompleteStep()}
+              disabled={isSubmitting || isProcessing}
+              className="flex items-center gap-1 px-4 py-1.5 rounded-full text-xs font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+              style={{ backgroundColor: colors.brand.primary }}
+            >
+              {isSubmitting || isProcessing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  Continue
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Divider */}
+          <div
+            className="w-px h-5 mx-1"
+            style={{
+              backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+            }}
+          />
+
+          {/* Step counter */}
           <span
             className="text-xs font-medium px-2.5 py-1 rounded-full"
             style={{
@@ -412,6 +478,8 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
           >
             {currentIndex + 1} / {allSteps.length}
           </span>
+
+          {/* Close */}
           <button
             onClick={handleClose}
             className="p-1.5 rounded-full transition-colors hover:opacity-80"
@@ -427,7 +495,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
       {/* ─── Step Content ──────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="h-full pb-24">
+        <div className="h-full pb-6">
           <Outlet
             context={{
               onComplete: handleCompleteStep,
@@ -443,161 +511,6 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
         </div>
       </div>
 
-      {/* ─── Floating Action Island ────────────────────────────── */}
-      {!isCompletePage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-          <div
-            className="flex items-center gap-3 px-5 py-2.5 rounded-full shadow-2xl border"
-            style={{
-              backgroundColor: isDarkMode
-                ? 'rgba(17, 24, 39, 0.95)'
-                : 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(16px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-              borderColor: isDarkMode
-                ? 'rgba(255, 255, 255, 0.1)'
-                : 'rgba(0, 0, 0, 0.1)',
-              boxShadow: isDarkMode
-                ? '0 20px 50px rgba(0, 0, 0, 0.5)'
-                : '0 20px 50px rgba(0, 0, 0, 0.15)',
-            }}
-          >
-            {/* Skip button (for optional steps) */}
-            {isStepSkippable && !isLastStep && (
-              <>
-                <button
-                  onClick={handleSkipStep}
-                  disabled={isSubmitting || isProcessing}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:opacity-80 disabled:opacity-40"
-                  style={{
-                    backgroundColor: isDarkMode
-                      ? 'rgba(255, 255, 255, 0.08)'
-                      : 'rgba(0, 0, 0, 0.05)',
-                    color: colors.utility.secondaryText,
-                  }}
-                >
-                  <SkipForward className="w-3.5 h-3.5" />
-                  Skip
-                </button>
-
-                {/* Divider */}
-                <div
-                  className="w-px h-6"
-                  style={{
-                    backgroundColor: isDarkMode
-                      ? 'rgba(255, 255, 255, 0.1)'
-                      : 'rgba(0, 0, 0, 0.1)',
-                  }}
-                />
-              </>
-            )}
-
-            {/* Status Pill */}
-            <div
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-              style={{
-                backgroundColor: isDarkMode
-                  ? 'rgba(255, 255, 255, 0.08)'
-                  : 'rgba(0, 0, 0, 0.04)',
-              }}
-            >
-              {/* Pulsing Status Dot */}
-              <div className="relative">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: colors.semantic.success }}
-                />
-                <div
-                  className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
-                  style={{ backgroundColor: colors.semantic.success, opacity: 0.75 }}
-                />
-              </div>
-              <span
-                className="text-sm font-medium whitespace-nowrap"
-                style={{ color: colors.utility.primaryText }}
-              >
-                {stepLabels[currentIndex] || `Step ${currentIndex + 1}`}
-              </span>
-            </div>
-
-            {/* Progress Dots (mobile-friendly compact) */}
-            <div className="hidden sm:flex items-center gap-1">
-              {allSteps.map((step, index) => {
-                const isCompleted = completedSteps.includes(step.id) || skippedSteps.includes(step.id);
-                const isCurrent = index === currentIndex;
-
-                return (
-                  <div
-                    key={step.id}
-                    className="h-1 rounded-full transition-all duration-300"
-                    style={{
-                      width: isCurrent ? '20px' : '6px',
-                      backgroundColor: isCurrent
-                        ? colors.brand.primary
-                        : isCompleted
-                          ? colors.semantic.success
-                          : isDarkMode
-                            ? 'rgba(255, 255, 255, 0.2)'
-                            : 'rgba(0, 0, 0, 0.12)',
-                    }}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Divider */}
-            <div
-              className="w-px h-6"
-              style={{
-                backgroundColor: isDarkMode
-                  ? 'rgba(255, 255, 255, 0.1)'
-                  : 'rgba(0, 0, 0, 0.1)',
-              }}
-            />
-
-            {/* Navigation Buttons */}
-            <div className="flex items-center gap-2">
-              {/* Back Button */}
-              <button
-                onClick={handleGoToPreviousStep}
-                disabled={!canGoBackIsland || isSubmitting || isProcessing}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-80"
-                style={{
-                  backgroundColor: isDarkMode
-                    ? 'rgba(255, 255, 255, 0.08)'
-                    : 'rgba(0, 0, 0, 0.05)',
-                  color: colors.utility.primaryText,
-                }}
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back
-              </button>
-
-              {/* Continue Button (only for steps without own buttons) */}
-              {showIslandContinue && (
-                <button
-                  onClick={() => handleCompleteStep()}
-                  disabled={isSubmitting || isProcessing}
-                  className="flex items-center gap-1 px-4 py-1.5 rounded-full text-sm font-medium text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
-                  style={{ backgroundColor: colors.brand.primary }}
-                >
-                  {isSubmitting || isProcessing ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      Continue
-                      <ChevronRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
