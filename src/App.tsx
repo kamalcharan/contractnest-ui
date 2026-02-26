@@ -4,6 +4,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Outlet }
 import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+
+
+
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
 import { QueryProvider } from './providers/QueryProvider'; // TanStack Query Provider
@@ -150,6 +153,8 @@ import TemplateDesignerPage from './pages/service-contracts/templates/designer';
 
 // Service Contracts - Contracts
 import ContractsPage from './pages/service-contracts/contracts';
+import ContactsPage from './pages/contacts/index';
+
 
 // Contract Builder
 import ContractCreatePage from './pages/contracts/create';
@@ -210,8 +215,7 @@ import PricingPlansPage from './pages/settings/businessmodel/tenants/pricing-pla
 import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscription';
 // REMOVED: CreditsPage import - Credits functionality now merged into SubscriptionPage
 
-// Contacts pages
-import ContactsPage from './pages/contacts/index';
+// Contacts pages — list page removed (unified into Contracts hub)
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
 
@@ -665,7 +669,7 @@ const AppContent: React.FC = () => {
             <Route path="businessmodel/admin/billing/invoices/:id" element={<InvoiceDetailPage />} />
           </Route>
 
-          {/* Contacts Routes */}
+          {/* Contacts Routes — list redirects to unified Relationships view */}
           <Route
             path="/contacts"
             element={
@@ -674,7 +678,9 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
+
             <Route index element={<ContactsPage />} />
+
             <Route path="create" element={<ContactCreateForm />} />
             <Route path=":id" element={<ContactViewPage />} />
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />

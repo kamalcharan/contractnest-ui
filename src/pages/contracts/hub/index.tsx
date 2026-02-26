@@ -618,6 +618,10 @@ const ContractsHubPage: React.FC = () => {
     navigate(`/contracts/${id}`);
   };
 
+  const handleContactClick = (contactId: string) => {
+    navigate(`/contacts/${contactId}`);
+  };
+
   // ── Expand all groups by default when switching to grouped mode ──
   useEffect(() => {
     if (viewMode === 'grouped' && groups.length > 0 && expandedClients.size === 0) {
@@ -839,9 +843,11 @@ const ContractsHubPage: React.FC = () => {
                   <ClientGroupHeader
                     buyerName={group.buyer_name}
                     buyerCompany={group.buyer_company}
+                    buyerId={group.buyer_id}
                     totals={group.group_totals}
                     isExpanded={isExpanded}
                     onToggle={() => toggleClientExpand(groupKey)}
+                    onViewContact={handleContactClick}
                     colors={colors}
                   />
                   {isExpanded && (
@@ -853,6 +859,7 @@ const ContractsHubPage: React.FC = () => {
                           colors={colors}
                           isDarkMode={isDarkMode}
                           onRowClick={handleRowClick}
+                          onContactClick={handleContactClick}
                         />
                       ))}
                     </div>
@@ -871,6 +878,7 @@ const ContractsHubPage: React.FC = () => {
                 colors={colors}
                 isDarkMode={isDarkMode}
                 onRowClick={handleRowClick}
+                onContactClick={handleContactClick}
               />
             ))}
           </div>

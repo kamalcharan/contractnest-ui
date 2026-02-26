@@ -4,15 +4,17 @@
 // Shows: initials avatar, client name, contract count, avg health, total value, collected, overdue badge
 
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import type { ContractGroupTotals } from '@/types/contracts';
 
 interface ClientGroupHeaderProps {
   buyerName: string;
   buyerCompany: string;
+  buyerId?: string | null;
   totals: ContractGroupTotals;
   isExpanded: boolean;
   onToggle: () => void;
+  onViewContact?: (buyerId: string) => void;
   currency?: string;
   colors: {
     brand: { primary: string };
@@ -29,9 +31,11 @@ const fmt = (n: number, currency?: string) => {
 const ClientGroupHeader: React.FC<ClientGroupHeaderProps> = ({
   buyerName,
   buyerCompany,
+  buyerId,
   totals,
   isExpanded,
   onToggle,
+  onViewContact,
   currency,
   colors,
 }) => {
@@ -236,6 +240,43 @@ const ClientGroupHeader: React.FC<ClientGroupHeaderProps> = ({
         >
           {totals.total_overdue} overdue
         </div>
+      )}
+
+      {/* View Contact button */}
+      {buyerId && onViewContact && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewContact(buyerId);
+          }}
+          title="View contact dashboard"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: `1px solid ${colors.utility.primaryText}12`,
+            background: 'transparent',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: colors.utility.secondaryText,
+            transition: 'all 0.15s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = colors.brand.primary;
+            e.currentTarget.style.color = colors.brand.primary;
+            e.currentTarget.style.background = colors.brand.primary + '08';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = colors.utility.primaryText + '12';
+            e.currentTarget.style.color = colors.utility.secondaryText;
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <ExternalLink size={14} />
+        </button>
       )}
     </div>
   );

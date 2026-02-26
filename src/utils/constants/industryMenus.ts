@@ -46,8 +46,6 @@ export const defaultMenuItems: MenuItem[] = [
       // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
     ]
   },
-  // REMOVED: Contacts menu - now available under Operations > Entities
-  /*
   {
     id: 'contacts',
     label: 'Contacts',
@@ -81,7 +79,6 @@ export const defaultMenuItems: MenuItem[] = [
       }
     ]
   },
-  */
   // Contracts menu
   {
     id: 'contracts',

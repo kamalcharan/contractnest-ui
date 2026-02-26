@@ -621,7 +621,7 @@ const ContactCockpitPanel: React.FC<ContactCockpitPanelProps> = ({
       <ContractsPulse
         contracts={data.contracts.contracts}
         byStatus={data.contracts.by_status}
-        total={data.contracts.total}
+        total={Object.values(data.contracts.by_status || {}).reduce((s: number, c) => s + (c as number), 0)}
         contactId={contactId}
         classifications={classifications}
       />

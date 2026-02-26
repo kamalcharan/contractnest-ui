@@ -112,6 +112,8 @@ export interface ContactCockpitData {
   ltv: number;
   outstanding: number;
   health_score: number;
+  revenue_score: number;
+  delivery_score: number;
   urgency_score: number;
   urgency_level: UrgencyLevel;
   payment_pattern: PaymentPattern;

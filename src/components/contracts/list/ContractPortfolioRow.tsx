@@ -13,6 +13,7 @@ interface ContractPortfolioRowProps {
   colors: any;
   isDarkMode?: boolean;
   onRowClick: (id: string) => void;
+  onContactClick?: (contactId: string) => void;
 }
 
 const fmt = (n: number, currency?: string) => {
@@ -50,6 +51,7 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
   colors,
   isDarkMode = false,
   onRowClick,
+  onContactClick,
 }) => {
   const eventsOverdue = c.events_overdue ?? 0;
   const health = c.health_score ?? 100;
@@ -164,24 +166,45 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
         {statusConfig.label}
       </span>
 
-      {/* ── Client Name ── */}
+      {/* ── Client Name (clickable → contact dashboard) ── */}
       <div
+        onClick={(e) => {
+          if (c.buyer_id && onContactClick) {
+            e.stopPropagation();
+            onContactClick(c.buyer_id);
+          }
+        }}
+        title={c.buyer_id && onContactClick ? `View ${clientName} dashboard` : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
           width: 180,
           flexShrink: 0,
+          cursor: c.buyer_id && onContactClick ? 'pointer' : 'default',
+          borderRadius: 6,
+          padding: '2px 4px',
+          margin: '-2px -4px',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          if (c.buyer_id && onContactClick) {
+            e.currentTarget.style.background = colors.brand.primary + '10';
+          }
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
         }}
       >
-        <User size={13} style={{ color: colors.utility.secondaryText, flexShrink: 0 }} />
+        <User size={13} style={{ color: c.buyer_id && onContactClick ? colors.brand.primary : colors.utility.secondaryText, flexShrink: 0 }} />
         <span
           style={{
             fontSize: 13,
-            color: colors.utility.secondaryText,
+            color: c.buyer_id && onContactClick ? colors.brand.primary : colors.utility.secondaryText,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
+            textDecoration: c.buyer_id && onContactClick ? 'none' : undefined,
           }}
         >
           {clientName}
