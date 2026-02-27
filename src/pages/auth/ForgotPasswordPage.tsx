@@ -25,7 +25,7 @@ const ForgotPasswordPage: React.FC = () => {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/ops/cockpit');
     }
   }, [isAuthenticated, navigate]);
 

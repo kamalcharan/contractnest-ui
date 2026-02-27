@@ -112,7 +112,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   useEffect(() => {
     if (!isLoading && isOnboardingComplete && !isCompletePage) {
       toast.success('Onboarding already completed!');
-      navigate('/dashboard');
+      navigate('/ops/cockpit');
     }
   }, [isOnboardingComplete, isLoading, isCompletePage, navigate]);
 
@@ -266,7 +266,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   };
 
   const handleClose = () => {
-    navigate('/dashboard');
+    navigate('/ops/cockpit');
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -321,7 +321,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
             {error}
           </p>
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/ops/cockpit')}
             className="px-6 py-2 rounded-md transition-colors hover:opacity-90"
             style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
           >

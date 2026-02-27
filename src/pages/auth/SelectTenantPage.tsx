@@ -136,7 +136,7 @@ const SelectTenantPage: React.FC = () => {
   const handleContinue = () => {
     if (selectedTenant) {
       setCurrentTenant(selectedTenant);
-      navigate('/dashboard');
+      navigate('/ops/cockpit');
     }
   };
 

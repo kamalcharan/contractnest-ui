@@ -42,6 +42,7 @@ import {
   Activity,
   Inbox,
   TrendingUp,
+  Copy,
 } from 'lucide-react';
 import { useContract, useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices, useCancelInvoice } from '@/hooks/queries/useInvoiceQueries';
@@ -80,6 +81,8 @@ import ContractHealthCard from '@/components/contracts/ContractHealthCard';
 import SellerOverview from '@/components/contracts/SellerOverview';
 import SellerTasksTab from '@/components/contracts/SellerTasksTab';
 import BuyerOverview from '@/components/contracts/BuyerOverview';
+import EquipmentTab from '@/components/contracts/EquipmentTab';
+import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
 import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
 import type { ReviewSendStepProps } from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
@@ -240,7 +243,7 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
 // TAB DEFINITIONS
 // ═══════════════════════════════════════════════════
 
-type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document' | 'overview' | 'tasks' | 'my_services' | 'payments' | 'proof_of_work' | 'requests';
+type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document' | 'overview' | 'tasks' | 'equipment' | 'my_services' | 'payments' | 'proof_of_work' | 'requests';
 
 const BUYER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -254,6 +257,7 @@ const BUYER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.Compo
 const SELLER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'tasks', label: 'Tasks', icon: Clock },
+  { id: 'equipment', label: 'Equipment', icon: Package },
   { id: 'financials', label: 'Financials', icon: DollarSign },
   { id: 'audit', label: 'Audit Log', icon: ScrollText },
   { id: 'document', label: 'Document', icon: FileText },
@@ -1687,6 +1691,7 @@ const ContractDetailPage: React.FC = () => {
           return (
             <BuyerOverview
               contractId={contract.id}
+              contract={contract}
               currency={contract.currency || 'INR'}
               health={health}
               role={role}
@@ -1701,12 +1706,19 @@ const ContractDetailPage: React.FC = () => {
         return (
           <SellerOverview
             contractId={contract.id}
+            contract={contract}
             currency={contract.currency || 'INR'}
             health={health}
             role={role}
             pageSummary={pageSummary}
             colors={colors}
             onViewFullTimeline={() => setActiveTab('tasks')}
+            onSendInvoice={() => setIsPaymentDialogOpen(true)}
+            onRecordPayment={() => setIsPaymentDialogOpen(true)}
+            onResend={() => setIsPaymentDialogOpen(true)}
+            onAssignTeam={() => setActiveTab('tasks')}
+            onReviewTasks={() => setActiveTab('tasks')}
+            onFollowUp={() => setIsPaymentDialogOpen(true)}
           />
         );
       case 'tasks':
@@ -1714,6 +1726,14 @@ const ContractDetailPage: React.FC = () => {
           <SellerTasksTab
             contractId={contract.id}
             currency={contract.currency || 'INR'}
+            colors={colors}
+          />
+        );
+      case 'equipment':
+        return (
+          <EquipmentTab
+            equipmentDetails={contract.equipment_details || []}
+            allowBuyerToAdd={(contract as any).allow_buyer_to_add_equipment}
             colors={colors}
           />
         );
@@ -1783,6 +1803,7 @@ const ContractDetailPage: React.FC = () => {
                 health={health}
                 role={role}
                 colors={colors}
+                contract={contract}
               />
             </div>
           </div>
@@ -2017,10 +2038,69 @@ const ContractDetailPage: React.FC = () => {
                 <h1 className="text-xl font-bold leading-tight" style={{ color: colors.utility.primaryText }}>
                   {contract.title || contract.name || 'Untitled Contract'}
                 </h1>
-                <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-xs font-semibold" style={{ color: colors.utility.secondaryText }}>
                     {contract.contract_number}
                   </span>
+                  {/* CNAK tag */}
+                  {contract.global_access_id && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(contract.global_access_id!);
+                          addToast({ type: 'success', title: 'Copied', message: 'CNAK ID copied to clipboard', duration: 2000 });
+                        } catch {
+                          addToast({ type: 'error', title: 'Copy Failed', message: 'Could not copy to clipboard' });
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.6rem] font-mono font-semibold transition-opacity hover:opacity-80"
+                      style={{
+                        backgroundColor: colors.brand.primary + '15',
+                        color: colors.brand.primary,
+                        border: `1px solid ${colors.brand.primary}30`,
+                      }}
+                      title="Click to copy CNAK ID"
+                    >
+                      <Globe className="h-2.5 w-2.5" />
+                      {contract.global_access_id}
+                      <Copy className="h-2.5 w-2.5 opacity-60" />
+                    </button>
+                  )}
+                  {/* Nomenclature tag */}
+                  {(contract as any).nomenclature_name && (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.6rem] font-semibold"
+                      style={{
+                        backgroundColor: '#8B5CF615',
+                        color: '#8B5CF6',
+                        border: '1px solid #8B5CF630',
+                      }}
+                    >
+                      {(contract as any).nomenclature_name}
+                    </span>
+                  )}
+                  {/* Acceptance method tag */}
+                  {contract.acceptance_method && (() => {
+                    const methodMap: Record<string, { label: string; colorKey: string }> = {
+                      manual: { label: 'Payment', colorKey: 'green' },
+                      digital_signature: { label: 'Sign-off', colorKey: 'blue' },
+                      auto: { label: 'Auto-Accept', colorKey: 'purple' },
+                    };
+                    const m = methodMap[contract.acceptance_method] || { label: contract.acceptance_method, colorKey: 'default' };
+                    const c = ACCEPTANCE_METHOD_HEX_COLORS[m.colorKey] || ACCEPTANCE_METHOD_HEX_COLORS.default;
+                    return (
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[0.6rem] font-semibold"
+                        style={{
+                          backgroundColor: c + '15',
+                          color: c,
+                          border: `1px solid ${c}30`,
+                        }}
+                      >
+                        {m.label}
+                      </span>
+                    );
+                  })()}
                   <span style={{ color: colors.utility.secondaryText }}>&middot;</span>
                   {canChangeStatus ? (
                     <DropdownMenu>
@@ -2208,7 +2288,6 @@ const ContractDetailPage: React.FC = () => {
             <SummaryItem label="Contract Value" value={formatCurrency(grandTotal, contract.currency)} colors={colors} />
             <SummaryItem label="Collected" value={formatCurrency(pageSummary?.total_paid ?? 0, contract.currency)} colorClass="success" colors={colors} />
             <SummaryItem label="Balance" value={formatCurrency(grandTotal - (pageSummary?.total_paid ?? 0), contract.currency)} colorClass="danger" colors={colors} />
-            <SummaryItem label="Blocks" value={`${blocksCount}`} colors={colors} />
             <SummaryItem label="Duration" value={duration} colors={colors} />
             <SummaryItem
               label="Health"

@@ -72,7 +72,7 @@ const NotFoundPage: React.FC = () => {
 
   const handleGoHome = () => {
     analyticsService.trackMiscPageAction('not-found', 'go_home_clicked');
-    navigate('/dashboard');
+    navigate('/ops/cockpit');
   };
 
   const handleGoBack = () => {

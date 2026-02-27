@@ -1,13 +1,13 @@
 // src/components/contracts/SellerOverview.tsx
-// Seller Overview tab — Health card (left) + Needs Attention (right) + Dual Track (full width)
+// Seller Overview tab — Health card (left) + Smart Layer (full width below)
+// Smart Layer REPLACES DualTrackPreview — it IS the intelligence layer now
 
 import React from 'react';
 import ContractHealthCard from './ContractHealthCard';
 import NeedsAttentionPanel from './NeedsAttentionPanel';
-import DualTrackPreview from './DualTrackPreview';
 import type { ContractHealthResult } from '@/hooks/useContractHealth';
 import type { ContractRole } from '@/hooks/useContractRole';
-import type { InvoiceSummary } from '@/types/contracts';
+import type { Contract, InvoiceSummary } from '@/types/contracts';
 
 // =================================================================
 // PROPS
@@ -15,12 +15,21 @@ import type { InvoiceSummary } from '@/types/contracts';
 
 export interface SellerOverviewProps {
   contractId: string;
+  contract?: Contract | null;
   currency: string;
   health: ContractHealthResult;
   role: ContractRole;
   pageSummary?: InvoiceSummary | null;
   colors: any;
   onViewFullTimeline?: () => void;
+  /** Smart layer action callbacks */
+  onSendInvoice?: (channel?: 'email' | 'whatsapp') => void;
+  onRecordPayment?: () => void;
+  onResend?: () => void;
+  onResendSignoff?: () => void;
+  onAssignTeam?: () => void;
+  onReviewTasks?: () => void;
+  onFollowUp?: () => void;
 }
 
 // =================================================================
@@ -29,32 +38,41 @@ export interface SellerOverviewProps {
 
 export const SellerOverview: React.FC<SellerOverviewProps> = ({
   contractId,
+  contract,
   currency,
   health,
   role,
   pageSummary,
   colors,
   onViewFullTimeline,
+  onSendInvoice,
+  onRecordPayment,
+  onResend,
+  onResendSignoff,
+  onAssignTeam,
+  onReviewTasks,
+  onFollowUp,
 }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Row 1: Health Card (left) + Needs Attention (right) */}
+      {/* Row 1: Health Card (left) + Smart Layer (right) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <ContractHealthCard health={health} role={role} colors={colors} />
+        <ContractHealthCard health={health} role={role} colors={colors} contract={contract} />
         <NeedsAttentionPanel
           contractId={contractId}
+          contract={contract}
           pageSummary={pageSummary}
           colors={colors}
+          onSendInvoice={onSendInvoice}
+          onRecordPayment={onRecordPayment}
+          onResend={onResend}
+          onResendSignoff={onResendSignoff}
+          onAssignTeam={onAssignTeam}
+          onReviewTasks={onReviewTasks}
+          onFollowUp={onFollowUp}
+          onViewFullTimeline={onViewFullTimeline}
         />
       </div>
-
-      {/* Row 2: Dual-Track Timeline Preview (full width) */}
-      <DualTrackPreview
-        contractId={contractId}
-        currency={currency}
-        colors={colors}
-        onViewFullTimeline={onViewFullTimeline}
-      />
     </div>
   );
 };

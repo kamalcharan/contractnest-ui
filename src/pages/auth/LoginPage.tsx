@@ -55,7 +55,7 @@ const LoginPage: React.FC = () => {
       // Check onboarding status before redirecting
       if (hasCompletedOnboarding) {
         console.log('[LoginPage] Already authenticated with completed onboarding - redirecting to dashboard');
-        navigate('/dashboard', { replace: true });
+        navigate('/ops/cockpit', { replace: true });
       } else if (currentTenant.is_owner) {
         console.log('[LoginPage] Already authenticated but onboarding not complete (owner) - redirecting to onboarding');
         navigate('/onboarding', { replace: true });

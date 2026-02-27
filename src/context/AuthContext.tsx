@@ -818,7 +818,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 500);
 
     // PRODUCTION FIX: Full page reload clears React Query cache automatically
-    window.location.href = '/dashboard';
+    window.location.href = '/ops/cockpit';
   };
 
   // Cancel environment switch
@@ -980,7 +980,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             navigate('/onboarding-pending');
           }
         } else {
-          navigate('/dashboard');
+          navigate('/ops/cockpit');
         }
       }
 
@@ -1069,7 +1069,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setHasCompletedOnboarding(false);
           navigate('/onboarding');
         } else {
-          navigate('/dashboard');
+          navigate('/ops/cockpit');
         }
       }
     } catch (err: any) {

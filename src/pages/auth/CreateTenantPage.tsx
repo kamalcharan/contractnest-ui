@@ -208,7 +208,7 @@ const CreateTenantPage: React.FC = () => {
       
       // Navigate to dashboard
       setTimeout(() => {
-        navigate('/dashboard', { replace: true });
+        navigate('/ops/cockpit', { replace: true });
       }, 100);
       
     } catch (error: any) {

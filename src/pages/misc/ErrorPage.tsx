@@ -34,7 +34,7 @@ const ErrorPage: React.FC<ErrorPageProps> = ({ error, resetError }) => {
     analyticsService.trackMiscPageAction('error', 'go_home_clicked');
     if (resetError) resetError();
     // Use window.location instead of navigate since we're outside Router context
-    window.location.href = '/dashboard';
+    window.location.href = '/ops/cockpit';
   };
 
   const handleRetry = () => {

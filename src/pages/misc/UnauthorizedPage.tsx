@@ -17,7 +17,7 @@ const UnauthorizedPage: React.FC = () => {
 
   const handleGoHome = () => {
     analyticsService.trackMiscPageAction('unauthorized', 'go_home_clicked');
-    navigate('/dashboard');
+    navigate('/ops/cockpit');
   };
 
   const handleLogin = async () => {

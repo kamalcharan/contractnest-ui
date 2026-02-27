@@ -78,7 +78,7 @@ const RegisterPage: React.FC = () => {
         sessionStorage.removeItem('contractnest_auth_redirect');
         navigate(authRedirect);
       } else {
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       }
     }
   }, [isAuthenticated, navigate]);

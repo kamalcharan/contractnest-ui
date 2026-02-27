@@ -144,7 +144,12 @@ export interface Contract {
   buyer_contact_person_name?: string;
   contact_id?: string;
   contact_classification?: string;
+  // Nomenclature (contract type classification)
+  nomenclature_id?: string;
+  nomenclature_code?: string;
+  nomenclature_name?: string;
   // Duration & Timeline
+  start_date?: string;
   duration_value?: number;
   duration_unit?: string;
   grace_period_value?: number;
@@ -195,6 +200,8 @@ export interface Contract {
   evidence_selected_forms?: Array<{ form_template_id: string; name: string; sequence: number }>;
   // Denormalized equipment/entity details
   equipment_details?: ContractEquipmentDetail[];
+  // Equipment flag — buyer can add equipment to this contract
+  allow_buyer_to_add_equipment?: boolean;
 }
 
 export interface ContractBlock {

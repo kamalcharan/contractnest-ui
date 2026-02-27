@@ -1,6 +1,6 @@
 // src/components/contracts/BuyerOverview.tsx
-// Buyer Overview tab — Health card (left) + What's Happening (right) + Quick Actions (full width)
-// Mirrors SellerOverview layout pattern but with buyer-focused panels
+// Buyer Overview tab — Health card (left) + Smart Layer (right) + Quick Actions (full width)
+// Smart Layer shows guided steps for pending_acceptance, activity for active contracts
 
 import React from 'react';
 import ContractHealthCard from './ContractHealthCard';
@@ -8,7 +8,7 @@ import WhatsHappeningPanel from './WhatsHappeningPanel';
 import QuickActionsGrid from './QuickActionsGrid';
 import type { ContractHealthResult } from '@/hooks/useContractHealth';
 import type { ContractRole } from '@/hooks/useContractRole';
-import type { InvoiceSummary } from '@/types/contracts';
+import type { Contract, InvoiceSummary } from '@/types/contracts';
 
 // =================================================================
 // PROPS
@@ -16,6 +16,7 @@ import type { InvoiceSummary } from '@/types/contracts';
 
 export interface BuyerOverviewProps {
   contractId: string;
+  contract?: Contract | null;
   currency: string;
   health: ContractHealthResult;
   role: ContractRole;
@@ -35,6 +36,7 @@ export interface BuyerOverviewProps {
 
 export const BuyerOverview: React.FC<BuyerOverviewProps> = ({
   contractId,
+  contract,
   currency,
   health,
   role,
@@ -49,13 +51,15 @@ export const BuyerOverview: React.FC<BuyerOverviewProps> = ({
 }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Row 1: Health Card (left) + What's Happening (right) */}
+      {/* Row 1: Health Card (left) + What's Happening / Smart Layer (right) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <ContractHealthCard health={health} role={role} colors={colors} />
+        <ContractHealthCard health={health} role={role} colors={colors} contract={contract} />
         <WhatsHappeningPanel
           contractId={contractId}
+          contract={contract}
           pageSummary={pageSummary}
           colors={colors}
+          onMakePayment={onMakePayment}
         />
       </div>
 

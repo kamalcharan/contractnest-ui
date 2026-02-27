@@ -292,6 +292,7 @@ function mapWizardToRequest(
     buyer_name: state.buyerName || undefined,
 
     // Duration & timeline
+    start_date: state.startDate.toISOString(),
     duration_value: state.durationValue,
     duration_unit: state.durationUnit,
     grace_period_value: state.gracePeriodValue,

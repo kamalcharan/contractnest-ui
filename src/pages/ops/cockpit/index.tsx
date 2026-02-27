@@ -1133,7 +1133,7 @@ const OpsCockpitPage: React.FC = () => {
     sort_by: 'scheduled_date', sort_order: 'asc',
   });
   const { data: allEventsData, isLoading: allEventsLoading, refetch: refetchEvents } = useContractEvents({
-    per_page: 200, sort_by: 'scheduled_date', sort_order: 'asc',
+    per_page: 100, sort_by: 'scheduled_date', sort_order: 'asc',
   });
 
   // Mutations

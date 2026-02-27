@@ -1,10 +1,13 @@
 // src/components/contracts/WhatsHappeningPanel.tsx
-// Buyer Overview — "What's Happening" panel showing recent contract activity
-// Read-only timeline: buyer sees what the seller/system has done recently
+// Buyer Overview — Smart Layer for buyer perspective
+// Shows guided steps for pending_acceptance, activity timeline for active contracts
+// Powered by useNeedsAttention engine in buyer mode
 
 import React from 'react';
 import { useContractEventsForContract } from '@/hooks/queries/useContractEventQueries';
-import type { InvoiceSummary } from '@/types/contracts';
+import { useNeedsAttention } from '@/hooks/useNeedsAttention';
+import type { SmartStep, SmartAction } from '@/hooks/useNeedsAttention';
+import type { Contract, InvoiceSummary } from '@/types/contracts';
 
 // =================================================================
 // PROPS
@@ -12,20 +15,11 @@ import type { InvoiceSummary } from '@/types/contracts';
 
 export interface WhatsHappeningPanelProps {
   contractId: string;
+  contract?: Contract | null;
   pageSummary?: InvoiceSummary | null;
   colors: any;
-}
-
-// =================================================================
-// TYPES
-// =================================================================
-
-interface ActivityItem {
-  icon: string;
-  title: string;
-  description: string;
-  time: string;
-  type: 'service' | 'billing' | 'status' | 'info';
+  /** Buyer action callbacks */
+  onMakePayment?: () => void;
 }
 
 // =================================================================
@@ -46,6 +40,17 @@ const timeAgo = (dateStr: string): string => {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
+// =================================================================
+// STYLE CONSTANTS
+// =================================================================
+
+const STEP_STYLES: Record<string, { bg: string; border: string; accent: string }> = {
+  done:          { bg: '#f0fdf4', border: '#bbf7d0', accent: '#16a34a' },
+  action_needed: { bg: '#fef2f2', border: '#fecaca', accent: '#ef4444' },
+  locked:        { bg: '#f8fafc', border: '#e2e8f0', accent: '#94a3b8' },
+  info:          { bg: '#eff6ff', border: '#bfdbfe', accent: '#3b82f6' },
+};
+
 const TYPE_COLORS: Record<string, { bg: string; border: string }> = {
   service: { bg: '#eff6ff', border: '#bfdbfe' },
   billing: { bg: '#f0fdf4', border: '#bbf7d0' },
@@ -54,18 +59,176 @@ const TYPE_COLORS: Record<string, { bg: string; border: string }> = {
 };
 
 // =================================================================
-// COMPONENT
+// TYPES (legacy activity items for active contracts)
+// =================================================================
+
+interface ActivityItem {
+  icon: string;
+  title: string;
+  description: string;
+  time: string;
+  type: 'service' | 'billing' | 'status' | 'info';
+}
+
+// =================================================================
+// SUB-COMPONENTS
+// =================================================================
+
+const SmartStepCard: React.FC<{
+  step: SmartStep;
+  colors: any;
+  onAction?: (action: SmartAction) => void;
+}> = ({ step, colors, onAction }) => {
+  const style = STEP_STYLES[step.state] || STEP_STYLES.info;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: 8,
+        padding: '12px 14px',
+        borderRadius: 12,
+        background: style.bg,
+        border: `1px solid ${style.border}`,
+        opacity: step.state === 'locked' ? 0.7 : 1,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 20, flexShrink: 0 }}>{step.icon}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: colors.utility.primaryText }}>
+            {step.title}
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: colors.utility.secondaryText,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}
+          >
+            {step.description}
+          </div>
+        </div>
+      </div>
+      {/* Action buttons */}
+      {step.actions.length > 0 && onAction && (
+        <div style={{ display: 'flex', gap: 8, paddingLeft: 30 }}>
+          {step.actions.map((action) => (
+            <button
+              key={action.type}
+              onClick={() => onAction(action)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: style.accent,
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =================================================================
+// MAIN COMPONENT
 // =================================================================
 
 export const WhatsHappeningPanel: React.FC<WhatsHappeningPanelProps> = ({
   contractId,
+  contract,
   pageSummary,
   colors,
+  onMakePayment,
 }) => {
+  const isPendingAcceptance = contract?.status === 'pending_acceptance';
+  const { now, locked, completed, isLoading: smartLoading } = useNeedsAttention(
+    isPendingAcceptance ? contract : null,
+    'buyer',
+  );
+
+  // For active contracts, fall back to existing activity timeline
   const { data: eventsData } = useContractEventsForContract(contractId);
   const events = eventsData?.items || [];
 
-  // ─── Derive recent activity items ───
+  // ── Smart layer for pending_acceptance ──
+  if (isPendingAcceptance) {
+    const totalItems = now.length + locked.length + completed.length;
+
+    const handleAction = (action: SmartAction) => {
+      if (action.type === 'pay_now') {
+        onMakePayment?.();
+      }
+    };
+
+    return (
+      <div
+        style={{
+          background: colors.utility.secondaryBackground,
+          borderRadius: 16,
+          border: `1px solid ${colors.utility.primaryText}15`,
+          padding: 24,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 15 }}>{'\uD83D\uDCCB'}</span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: colors.utility.primaryText,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase' as const,
+              }}
+            >
+              Action Required
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+          {/* NOW items */}
+          {now.map((step) => (
+            <SmartStepCard key={step.id} step={step} colors={colors} onAction={handleAction} />
+          ))}
+
+          {/* COMPLETED items */}
+          {completed.map((step) => (
+            <SmartStepCard key={step.id} step={step} colors={colors} />
+          ))}
+
+          {/* LOCKED items */}
+          {locked.map((step) => (
+            <SmartStepCard key={step.id} step={step} colors={colors} />
+          ))}
+
+          {/* Empty state */}
+          {!smartLoading && totalItems === 0 && (
+            <div style={{ textAlign: 'center' as const, padding: '24px 0', color: colors.utility.secondaryText }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCCB'}</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Nothing to do</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>
+                Updates will appear here as the contract progresses.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── EXISTING ACTIVE CONTRACT LOGIC (activity timeline) ───
   const activityItems: ActivityItem[] = [];
 
   // Recent completed service events
@@ -84,7 +247,7 @@ export const WhatsHappeningPanel: React.FC<WhatsHappeningPanelProps> = ({
     });
   });
 
-  // Upcoming events (next 2)
+  // Upcoming events
   const upcoming = events
     .filter((e: any) => e.status === 'pending' || e.status === 'not_started')
     .sort((a: any, b: any) => new Date(a.scheduled_date || a.created_at).getTime() - new Date(b.scheduled_date || b.created_at).getTime())
@@ -103,7 +266,7 @@ export const WhatsHappeningPanel: React.FC<WhatsHappeningPanelProps> = ({
     });
   });
 
-  // Payment collection status
+  // Payment status
   if (pageSummary && pageSummary.invoice_count > 0) {
     if (pageSummary.collection_percentage >= 100) {
       activityItems.push({
@@ -136,7 +299,6 @@ export const WhatsHappeningPanel: React.FC<WhatsHappeningPanelProps> = ({
     });
   });
 
-  // Cap at 5 items
   const displayItems = activityItems.slice(0, 5);
 
   return (

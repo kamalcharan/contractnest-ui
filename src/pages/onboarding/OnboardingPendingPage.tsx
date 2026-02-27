@@ -205,7 +205,7 @@ const OnboardingPendingPage: React.FC = () => {
 
       // If onboarding is now complete, redirect to dashboard
       if (response.onboarding?.is_completed || !response.needs_onboarding) {
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
         return;
       }
 

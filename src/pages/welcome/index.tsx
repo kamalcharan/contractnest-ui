@@ -164,7 +164,7 @@ const WelcomePage: React.FC = () => {
   };
 
   const handleGoToDashboard = () => {
-    navigate('/dashboard');
+    navigate('/ops/cockpit');
   };
 
   // Show loading while auth is checking

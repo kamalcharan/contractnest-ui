@@ -150,10 +150,10 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
     // If onboarding is completed and user is still on onboarding path or pending path
     if (isCompleted) {
       if (isOnboardingPath && location.pathname !== '/onboarding/complete') {
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       }
       if (isOnboardingPendingPath) {
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       }
     }
   };
@@ -169,7 +169,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       
       if (response.is_completed) {
         toast.success('Onboarding already completed');
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       } else {
         toast.success('Let\'s get started!');
         await fetchStatus();
@@ -312,7 +312,7 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
           needsOnboarding: false,
           onboarding: prev.onboarding ? { ...prev.onboarding, is_completed: true } : null
         }));
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       } else {
         throw new Error(response.message || 'Failed to complete onboarding');
       }

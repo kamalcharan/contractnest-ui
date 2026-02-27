@@ -22,13 +22,14 @@ export const defaultMenuItems: MenuItem[] = [
   path: '/onboarding/welcome',
   hasSubmenu: false
 },
-  {
-    id: 'dashboard',
-    label: 'Dashboard',
-    icon: 'Home',
-    path: '/dashboard',
-    hasSubmenu: false
-  },
+  // HIDDEN: Dashboard - login/signup now redirects to /ops/cockpit
+  // {
+  //   id: 'dashboard',
+  //   label: 'Dashboard',
+  //   icon: 'Home',
+  //   path: '/dashboard',
+  //   hasSubmenu: false
+  // },
   // Operations menu - moved after Dashboard for better UX
   {
     id: 'operations',
@@ -46,6 +47,8 @@ export const defaultMenuItems: MenuItem[] = [
       // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
     ]
   },
+  // REMOVED: Contacts menu - now available under Operations > Entities
+  /*
   {
     id: 'contacts',
     label: 'Contacts',
@@ -79,6 +82,7 @@ export const defaultMenuItems: MenuItem[] = [
       }
     ]
   },
+  */
   // Contracts menu
   {
     id: 'contracts',
@@ -304,10 +308,11 @@ export const defaultMenuItems: MenuItem[] = [
 // Industry-specific menu overrides - UPDATED template paths
 export const industryMenuOverrides: Record<string, Partial<Record<string, { label: string, icon?: string }>>> = {
   healthcare: {
-    contacts: { label: 'Patients & Staff', icon: 'Users' },
-    'contacts-buyers': { label: 'Patients', icon: 'Users' },
-    'contacts-partners': { label: 'Medical Partners', icon: 'Stethoscope' },
-    'contacts-service-providers': { label: 'Healthcare Providers', icon: 'UserCheck' },
+    // HIDDEN: Contacts menu overrides - contacts menu hidden
+    // contacts: { label: 'Patients & Staff', icon: 'Users' },
+    // 'contacts-buyers': { label: 'Patients', icon: 'Users' },
+    // 'contacts-partners': { label: 'Medical Partners', icon: 'Stethoscope' },
+    // 'contacts-service-providers': { label: 'Healthcare Providers', icon: 'UserCheck' },
     contracts: { label: 'Care Packages', icon: 'Stethoscope' },
     'contracts-create': { label: 'Create Care Package', icon: 'FilePlus' },
     templates: { label: 'Care Templates', icon: 'FileTemplate' },
@@ -317,10 +322,11 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'implementation-toolkit': { label: 'Clinical Implementation Tools', icon: 'Stethoscope' }
   },
   financial_services: {
-    contacts: { label: 'Clients & Partners', icon: 'Users' },
-    'contacts-buyers': { label: 'Clients', icon: 'DollarSign' },
-    'contacts-partners': { label: 'Financial Partners', icon: 'Handshake' },
-    'contacts-service-providers': { label: 'Service Providers', icon: 'Building2' },
+    // HIDDEN: Contacts menu overrides - contacts menu hidden
+    // contacts: { label: 'Clients & Partners', icon: 'Users' },
+    // 'contacts-buyers': { label: 'Clients', icon: 'DollarSign' },
+    // 'contacts-partners': { label: 'Financial Partners', icon: 'Handshake' },
+    // 'contacts-service-providers': { label: 'Service Providers', icon: 'Building2' },
     contracts: { label: 'Financial Agreements', icon: 'DollarSign' },
     'contracts-create': { label: 'Create Agreement', icon: 'FilePlus' },
     templates: { label: 'Agreement Templates', icon: 'FileTemplate' },
@@ -330,10 +336,11 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'implementation-toolkit': { label: 'Financial Implementation Suite', icon: 'DollarSign' }
   },
   education: {
-    contacts: { label: 'Students & Faculty', icon: 'Users' },
-    'contacts-buyers': { label: 'Students', icon: 'GraduationCap' },
-    'contacts-partners': { label: 'Education Partners', icon: 'Handshake' },
-    'contacts-service-providers': { label: 'Faculty & Staff', icon: 'UserCheck' },
+    // HIDDEN: Contacts menu overrides - contacts menu hidden
+    // contacts: { label: 'Students & Faculty', icon: 'Users' },
+    // 'contacts-buyers': { label: 'Students', icon: 'GraduationCap' },
+    // 'contacts-partners': { label: 'Education Partners', icon: 'Handshake' },
+    // 'contacts-service-providers': { label: 'Faculty & Staff', icon: 'UserCheck' },
     contracts: { label: 'Learning Programs', icon: 'GraduationCap' },
     'contracts-create': { label: 'Create Program', icon: 'FilePlus' },
     templates: { label: 'Program Templates', icon: 'FileTemplate' },
@@ -343,10 +350,11 @@ export const industryMenuOverrides: Record<string, Partial<Record<string, { labe
     'implementation-toolkit': { label: 'Education Implementation Tools', icon: 'GraduationCap' }
   },
   construction: {
-    contacts: { label: 'Contractors & Clients', icon: 'Users' },
-    'contacts-buyers': { label: 'Clients', icon: 'Building2' },
-    'contacts-partners': { label: 'Construction Partners', icon: 'Handshake' },
-    'contacts-service-providers': { label: 'Contractors', icon: 'Hammer' },
+    // HIDDEN: Contacts menu overrides - contacts menu hidden
+    // contacts: { label: 'Contractors & Clients', icon: 'Users' },
+    // 'contacts-buyers': { label: 'Clients', icon: 'Building2' },
+    // 'contacts-partners': { label: 'Construction Partners', icon: 'Handshake' },
+    // 'contacts-service-providers': { label: 'Contractors', icon: 'Hammer' },
     contracts: { label: 'Project Contracts', icon: 'Hammer' },
     'contracts-create': { label: 'Create Project Contract', icon: 'FilePlus' },
     templates: { label: 'Project Templates', icon: 'FileTemplate' },

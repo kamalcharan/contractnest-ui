@@ -179,7 +179,7 @@ export const useOnboarding = (): UseOnboardingReturn => {
       if (response.is_completed) {
         toast.success('Onboarding already completed');
         setIsOnboardingComplete(true);
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       } else {
         toast.success('Onboarding initialized successfully');
         await fetchStatus();
@@ -314,7 +314,7 @@ export const useOnboarding = (): UseOnboardingReturn => {
       if (response.success) {
         toast.success('Onboarding completed successfully!');
         setIsOnboardingComplete(true);
-        navigate('/dashboard');
+        navigate('/ops/cockpit');
       } else {
         throw new Error(response.message || 'Failed to complete onboarding');
       }
