@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight, FileText, Lock, KeyRound, Sparkles, Rocket, MessageCircle } from 'lucide-react';
+import { Eye, EyeOff, User, Mail, Building, Shield, Check, Star, Gift, Users, Clock, ArrowRight, FileText, Lock, KeyRound, Sparkles, Rocket, MessageCircle, AlertCircle } from 'lucide-react';
 import { vaniToast } from '../../components/common/toast';
 import { supabase } from '../../utils/supabase';
 // Import analytics
@@ -78,7 +78,7 @@ const RegisterPage: React.FC = () => {
         sessionStorage.removeItem('contractnest_auth_redirect');
         navigate(authRedirect);
       } else {
-        navigate('/ops/cockpit');
+        navigate('/dashboard');
       }
     }
   }, [isAuthenticated, navigate]);
@@ -88,12 +88,18 @@ const RegisterPage: React.FC = () => {
     if (error) clearError();
   }, [formData, clearError, error]);
 
-  // Show error toast when error is present
+  // Check if error is an "account already exists" error
+  const isAccountExistsError = error && (
+    error.toLowerCase().includes('already exists') ||
+    error.toLowerCase().includes('account_already_exists')
+  );
+
+  // Show error toast when error is present (skip for account exists - shown inline)
   useEffect(() => {
-    if (error) {
+    if (error && !isAccountExistsError) {
       vaniToast.error(error, { duration: 2000 });
     }
-  }, [error]);
+  }, [error, isAccountExistsError]);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -969,6 +975,58 @@ const RegisterPage: React.FC = () => {
                     >
                       Or sign up with email
                     </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Account Already Exists Alert */}
+            {isAccountExistsError && (
+              <div
+                className="mb-4 p-4 rounded-xl border"
+                style={{
+                  backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)',
+                  borderColor: isDarkMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)'
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <AlertCircle
+                    size={20}
+                    className="flex-shrink-0 mt-0.5"
+                    style={{ color: '#EF4444' }}
+                  />
+                  <div>
+                    <h4
+                      className="text-sm font-semibold mb-1"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Account Already Exists
+                    </h4>
+                    <p className="text-sm mb-3" style={{ color: colors.utility.secondaryText }}>
+                      An account with this email already exists. Please sign in instead, or contact your admin for assistance.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        to="/auth/login"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg transition-all hover:opacity-90"
+                        style={{
+                          background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`
+                        }}
+                      >
+                        Sign In
+                      </Link>
+                      <a
+                        href="mailto:contact@vikuna.io"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg border transition-all hover:opacity-80"
+                        style={{
+                          borderColor: `${colors.utility.primaryText}30`,
+                          color: colors.utility.primaryText
+                        }}
+                      >
+                        <Mail size={14} />
+                        Contact Admin
+                      </a>
+                    </div>
                   </div>
                 </div>
               </div>

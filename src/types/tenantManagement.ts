@@ -137,6 +137,46 @@ export interface AdminTenantFilters {
 export type QuickFilterType = 'all' | 'active' | 'trial' | 'expiring' | 'suspended' | 'test';
 
 // ============================================
+// ADMIN CREATE TENANT TYPES
+// ============================================
+
+export interface CreateTenantRequest {
+  workspace_name: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile_number?: string;
+  country_code?: string;
+  phone_code?: string;
+  tenant_type?: TenantType;
+  is_test?: boolean;
+  send_password_reset?: boolean;
+}
+
+export interface CreateTenantResponse {
+  success: boolean;
+  data?: {
+    tenant: {
+      id: string;
+      name: string;
+      workspace_code: string;
+      status: string;
+      is_test: boolean;
+    };
+    owner: {
+      user_id: string;
+      email: string;
+      first_name: string;
+      last_name: string;
+      user_code: string;
+    };
+    password_reset_sent: boolean;
+  };
+  error?: string;
+  error_code?: string;
+}
+
+// ============================================
 // ACTION TYPES
 // ============================================
 

@@ -18,7 +18,8 @@ import {
   Loader2,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Plus
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -31,7 +32,8 @@ import {
   AdminSubscriptionStats,
   AdminTenantFilters,
   QuickFilterType,
-  TenantDataSummary
+  TenantDataSummary,
+  CreateTenantRequest
 } from '../../../types/tenantManagement';
 
 // Components
@@ -40,6 +42,8 @@ import { TenantCard } from '../../../components/subscription/cards/TenantCard';
 import { TenantFilters } from '../../../components/subscription/filters/TenantFilters';
 import { TenantDetailDrawer } from '../../../components/subscription/modals/TenantDetailDrawer';
 import { AdminActionDialog, AdminActionType } from '../../../components/subscription/modals/AdminActionDialog';
+import { AddTenantDrawer } from '../../../components/subscription/modals/AddTenantDrawer';
+import { vaniToast } from '../../../components/common/toast';
 
 // Mock data for development - replace with actual API calls
 const mockStats: AdminSubscriptionStats = {
@@ -269,6 +273,10 @@ const SubscriptionManagementPage: React.FC = () => {
   const [actionDialogAction, setActionDialogAction] = useState<AdminActionType | null>(null);
   const [actionDialogTenant, setActionDialogTenant] = useState<TenantListItem | null>(null);
 
+  // Add tenant drawer state
+  const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
+
   // Check admin access
   const isAdmin = Boolean(currentTenant?.is_admin);
 
@@ -401,6 +409,32 @@ const SubscriptionManagementPage: React.FC = () => {
     loadData();
   };
 
+  // Create new tenant
+  const handleCreateTenant = async (data: CreateTenantRequest) => {
+    setIsCreatingTenant(true);
+    try {
+      const response = await api.post(API_ENDPOINTS.ADMIN.TENANT_MANAGEMENT.CREATE, data);
+      const result = response.data;
+
+      if (result.success) {
+        const pwMsg = result.data?.password_reset_sent
+          ? ' Password reset email sent to owner.'
+          : ' Note: Password reset email could not be sent.';
+        vaniToast.success(`Tenant "${data.workspace_name}" created successfully!${pwMsg}`);
+        setIsAddTenantOpen(false);
+        loadData(); // Refresh tenant list
+      } else {
+        vaniToast.error(result.error || 'Failed to create tenant');
+      }
+    } catch (err: any) {
+      const errorData = err.response?.data;
+      const errorMsg = errorData?.error || err.message || 'Failed to create tenant';
+      vaniToast.error(errorMsg);
+    } finally {
+      setIsCreatingTenant(false);
+    }
+  };
+
   // Access denied
   if (!isAdmin) {
     return (
@@ -443,20 +477,32 @@ const SubscriptionManagementPage: React.FC = () => {
             Manage all tenant subscriptions and accounts
           </p>
         </div>
-        <button
-          onClick={loadData}
-          disabled={isLoading}
-          className="p-2.5 rounded-xl transition-all hover:scale-105"
-          style={{
-            background: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
-          }}
-        >
-          <RefreshCw
-            size={20}
-            className={isLoading ? 'animate-spin' : ''}
-            style={{ color: colors.utility.secondaryText }}
-          />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddTenantOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white transition-all hover:opacity-90 hover:scale-105"
+            style={{
+              background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary})`
+            }}
+          >
+            <Plus size={18} />
+            Add Tenant
+          </button>
+          <button
+            onClick={loadData}
+            disabled={isLoading}
+            className="p-2.5 rounded-xl transition-all hover:scale-105"
+            style={{
+              background: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'
+            }}
+          >
+            <RefreshCw
+              size={20}
+              className={isLoading ? 'animate-spin' : ''}
+              style={{ color: colors.utility.secondaryText }}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Platform Pulse - Stats */}
@@ -739,6 +785,14 @@ const SubscriptionManagementPage: React.FC = () => {
         tenant={actionDialogTenant}
         onExecute={executeAction}
         onComplete={handleActionComplete}
+      />
+
+      {/* Add Tenant Drawer */}
+      <AddTenantDrawer
+        isOpen={isAddTenantOpen}
+        onClose={() => setIsAddTenantOpen(false)}
+        onSubmit={handleCreateTenant}
+        isSubmitting={isCreatingTenant}
       />
     </div>
   );

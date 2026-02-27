@@ -420,6 +420,7 @@ export const API_ENDPOINTS = {
     TENANT_MANAGEMENT: {
       STATS: '/api/admin/tenants/stats',
       LIST: '/api/admin/tenants/list',
+      CREATE: '/api/admin/tenants/create',
       LIST_WITH_FILTERS: (filters: AdminTenantListFilters = {}) => {
         const params = new URLSearchParams();
         if (filters.page) params.append('page', filters.page.toString());
