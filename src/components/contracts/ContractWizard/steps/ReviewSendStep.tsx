@@ -1342,9 +1342,11 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               <p className="text-sm font-bold" style={{ color: catColor }}>
                                 {formatCurrency(lineTotal, currency)}
                               </p>
-                              <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                                {formatCurrency(effectivePrice, currency)}/{block.unlimited ? 'unit' : 'ea'}
-                              </p>
+                              {(block.unlimited || block.quantity > 1) && (
+                                <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                                  {formatCurrency(effectivePrice, currency)}/{block.unlimited ? 'unit' : 'ea'}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
