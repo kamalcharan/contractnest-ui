@@ -13,6 +13,8 @@ import BlockWizardContent from '../../../components/catalog-studio/BlockWizard/B
 import { useCreateCatBlock } from '../../../hooks/mutations/useCatBlocksMutations';
 import { blockToCreateData } from '../../../utils/catalog-studio/catBlockAdapter';
 import { VaNiLoader } from '../../../components/common/loaders/UnifiedLoader';
+import { useStorageManagement } from '../../../hooks/useStorageManagement';
+import { vaniToast } from '../../../components/common/toast';
 
 // =================================================================
 // COMPONENT
@@ -37,6 +39,7 @@ const NewBlockPage: React.FC = () => {
   const { categories, isLoading: categoriesLoading, getDbIdByType } = useBlockCategories();
   const { getDbIdByMode } = usePricingModes();
   const createBlockMutation = useCreateCatBlock();
+  const { uploadFile, storageSetupComplete } = useStorageManagement();
 
   // Use DB categories if available, fallback to hardcoded
   const blockCategories = categories.length > 0 ? categories : BLOCK_CATEGORIES;
@@ -64,6 +67,33 @@ const NewBlockPage: React.FC = () => {
   const handleSave = useCallback(async (blockData: Partial<Block>) => {
     setIsSaving(true);
     try {
+      // ── Upload image if a File is buffered in meta ──────────────
+      const imageFile = blockData.meta?.image as File | undefined;
+      if (imageFile) {
+        if (!storageSetupComplete) {
+          vaniToast.error('Storage is not configured. Please set up storage in Settings → Storage before uploading images.');
+          setIsSaving(false);
+          return;
+        }
+
+        const uploaded = await uploadFile(imageFile, 'block_images', {
+          source: 'catalog_block',
+          blockName: blockData.name,
+        });
+
+        if (!uploaded) {
+          // uploadFile already shows a toast on failure
+          setIsSaving(false);
+          return;
+        }
+
+        // Inject the public URL so the adapter picks it up
+        blockData = {
+          ...blockData,
+          image_url: uploaded.download_url,
+        };
+      }
+
       // Get UUIDs from lookup hooks
       const blockTypeUuid = getDbIdByType(blockType);
       const pricingModeUuid = getDbIdByMode('independent');
@@ -91,7 +121,7 @@ const NewBlockPage: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [blockType, createBlockMutation, navigate, getDbIdByType, getDbIdByMode]);
+  }, [blockType, createBlockMutation, navigate, getDbIdByType, getDbIdByMode, storageSetupComplete, uploadFile]);
 
   const handleCancel = useCallback(() => {
     // Navigate back to configure page

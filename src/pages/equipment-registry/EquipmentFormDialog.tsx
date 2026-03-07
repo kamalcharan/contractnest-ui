@@ -3,12 +3,13 @@
 // Two-level selection: Category (sub_category) → Equipment Type (resource)
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Trash2, Package } from 'lucide-react';
+import { X, Plus, Trash2, Package, Lock } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/label';
 import ContactPicker from '@/components/common/ContactPicker';
+import { useContact } from '@/hooks/useContacts';
 import {
   Select,
   SelectContent,
@@ -44,6 +45,8 @@ interface EquipmentFormDialogProps {
   /** When set, locks the owner field to this contact (used from wizard where buyer is already known) */
   lockedContactId?: string;
   lockedContactName?: string;
+  /** Controls whether header says "Equipment" or "Facility" */
+  registryMode?: 'equipment' | 'entity';
 }
 
 const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
@@ -58,9 +61,16 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
   isSubmitting = false,
   lockedContactId,
   lockedContactName,
+  registryMode = 'equipment',
 }) => {
+  const entityLabel = registryMode === 'entity' ? 'Facility' : 'Equipment';
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+
+  // ── Resolve owner contact name for edit-mode locked display ────
+  // In edit mode, owner_contact_id comes from the asset; we resolve the name via useContact
+  const editOwnerContactId = mode === 'edit' && asset?.owner_contact_id ? asset.owner_contact_id : '';
+  const { data: editOwnerContact, loading: editOwnerLoading } = useContact(editOwnerContactId);
 
   // ── Form State ──────────────────────────────────────────────────
 
@@ -283,18 +293,18 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
         >
           <div>
             <h2 className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
-              {mode === 'create' ? 'Add Equipment' : `Edit: ${asset?.name || ''}`}
+              {mode === 'create' ? `Add ${entityLabel}` : `Edit: ${asset?.name || ''}`}
             </h2>
             <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>
               {mode === 'create'
-                ? 'Register new equipment in your asset registry.'
-                : 'Update the equipment details below.'}
+                ? `Register new ${entityLabel.toLowerCase()} in your asset registry.`
+                : `Update the ${entityLabel.toLowerCase()} details below.`}
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
             className="p-2 rounded-lg transition-colors hover:opacity-70"
-            style={{ color: colors.utility.secondaryText }}
+            style={{ color: colors.utility.secondaryText, position: 'relative', zIndex: 10 }}
           >
             <X size={18} />
           </button>
@@ -348,7 +358,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
               </Select>
             ) : (
               <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                No categories configured. Add equipment in Settings &rarr; Resources first.
+                No categories configured. Add {entityLabel.toLowerCase()} in Settings &rarr; Resources first.
               </p>
             )}
             {errors.sub_category && <p className="text-xs text-red-500 mt-1">{errors.sub_category}</p>}
@@ -401,6 +411,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
               Whose equipment is this?
             </p>
             {lockedContactId ? (
+              /* Locked from wizard — Contract Buyer context */
               <div
                 className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
                 style={{
@@ -423,7 +434,57 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
                   Contract Buyer
                 </span>
               </div>
+            ) : mode === 'edit' && formData.owner_contact_id ? (
+              /* Locked in edit mode — client cannot be changed */
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
+                style={{
+                  borderColor: colors.utility.primaryText + '20',
+                  backgroundColor: colors.utility.primaryText + '04',
+                  color: colors.utility.primaryText,
+                  cursor: 'not-allowed',
+                }}
+                title="Client name cannot be edited"
+              >
+                {editOwnerLoading ? (
+                  /* Skeleton shimmer while contact name loads */
+                  <>
+                    <div
+                      className="w-7 h-7 rounded-full flex-shrink-0 animate-pulse"
+                      style={{ backgroundColor: colors.utility.primaryText + '12' }}
+                    />
+                    <div className="flex-1 space-y-1.5">
+                      <div
+                        className="h-3.5 rounded animate-pulse"
+                        style={{ backgroundColor: colors.utility.primaryText + '12', width: '60%' }}
+                      />
+                      <div
+                        className="h-2.5 rounded animate-pulse"
+                        style={{ backgroundColor: colors.utility.primaryText + '08', width: '40%' }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+                    >
+                      {(editOwnerContact?.company_name || editOwnerContact?.name || 'C').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-medium truncate">
+                      {editOwnerContact?.company_name || editOwnerContact?.name || editOwnerContact?.displayName || 'Unknown Client'}
+                    </span>
+                    <Lock
+                      size={13}
+                      className="ml-auto flex-shrink-0"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                  </>
+                )}
+              </div>
             ) : (
+              /* Create mode — full picker */
               <ContactPicker
                 value={formData.owner_contact_id}
                 onChange={(contactId) => updateField('owner_contact_id', contactId)}

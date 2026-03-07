@@ -3,11 +3,11 @@
 // Supports optional selectable mode for use inside the Contract Wizard
 
 import React from 'react';
-import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, CheckSquare, Square } from 'lucide-react';
+import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, CheckSquare, Square, User, Circle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
-import type { TenantAsset, AssetCondition } from '@/types/assetRegistry';
-import { CONDITION_CONFIG, getWarrantyStatus } from '@/types/assetRegistry';
+import type { TenantAsset, AssetCondition, AssetStatus, AssetCriticality } from '@/types/assetRegistry';
+import { CONDITION_CONFIG, STATUS_CONFIG, CRITICALITY_CONFIG, getWarrantyStatus } from '@/types/assetRegistry';
 import type { ClientAsset } from '@/types/clientAssetRegistry';
 
 // Union type — both share the same fields used by this card
@@ -15,6 +15,7 @@ export type CardAsset = TenantAsset | ClientAsset;
 
 interface EquipmentCardProps {
   asset: CardAsset;
+  clientName?: string;
   onEdit?: (asset: CardAsset) => void;
   onDelete?: (asset: CardAsset) => void;
   disabled?: boolean;
@@ -26,6 +27,7 @@ interface EquipmentCardProps {
 
 const EquipmentCard: React.FC<EquipmentCardProps> = ({
   asset,
+  clientName,
   onEdit,
   onDelete,
   disabled,
@@ -37,6 +39,10 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const conditionCfg = CONDITION_CONFIG[asset.condition as AssetCondition] || CONDITION_CONFIG.good;
+  const statusCfg = STATUS_CONFIG[(asset.status as AssetStatus) || 'active'] || STATUS_CONFIG.active;
+  const criticalityCfg = asset.criticality
+    ? CRITICALITY_CONFIG[asset.criticality as AssetCriticality]
+    : null;
   const warranty = getWarrantyStatus(asset.warranty_expiry);
 
   const WarrantyIcon = warranty.variant === 'active' ? Shield
@@ -72,7 +78,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
       onClick={handleClick}
     >
       <div className="p-5">
-        {/* Top Row: Icon + Condition Badge / Checkbox */}
+        {/* Top Row: Icon + Condition + Status Badges / Checkbox */}
         <div className="flex items-start justify-between mb-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
@@ -80,17 +86,23 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
           >
             {(asset.resource_type_id || '').toLowerCase() === 'asset' ? '🏢' : '🔧'}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <span
-              className="text-xs font-semibold px-2.5 py-1 rounded-full"
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
               style={{ backgroundColor: conditionCfg.bg, color: conditionCfg.color }}
             >
               {conditionCfg.label}
             </span>
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: statusCfg.color + '15', color: statusCfg.color }}
+            >
+              {statusCfg.label}
+            </span>
             {selectable && (
               <div
                 onClick={(e) => { e.stopPropagation(); handleClick(); }}
-                className="flex items-center justify-center"
+                className="flex items-center justify-center ml-1"
               >
                 {isSelected ? (
                   <CheckSquare size={20} style={{ color: colors.brand.primary }} />
@@ -110,11 +122,27 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
           {asset.name}
         </h3>
         <p
-          className="text-xs mb-3 truncate"
+          className="text-xs mb-1.5 truncate"
           style={{ color: colors.utility.secondaryText }}
         >
           {[asset.make, asset.model].filter(Boolean).join(' \u00B7 ') || 'No make/model'}
         </p>
+
+        {/* Client Name */}
+        {clientName && (
+          <div
+            className="flex items-center gap-1.5 mb-3"
+          >
+            <User className="h-3 w-3 flex-shrink-0" style={{ color: colors.brand.primary }} />
+            <span
+              className="text-xs font-medium truncate"
+              style={{ color: colors.brand.primary }}
+            >
+              {clientName}
+            </span>
+          </div>
+        )}
+        {!clientName && <div className="mb-1.5" />}
 
         {/* Details Grid */}
         <div className="grid grid-cols-2 gap-2 mb-3">
@@ -128,6 +156,16 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
               </div>
             </div>
           )}
+          {asset.code && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Code
+              </div>
+              <div className="text-xs font-medium truncate" style={{ color: colors.utility.primaryText }}>
+                {asset.code}
+              </div>
+            </div>
+          )}
           {asset.location && (
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
@@ -136,6 +174,17 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
               <div className="text-xs font-medium truncate flex items-center gap-1" style={{ color: colors.utility.primaryText }}>
                 <MapPin className="h-3 w-3 flex-shrink-0" />
                 {asset.location}
+              </div>
+            </div>
+          )}
+          {criticalityCfg && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+                Criticality
+              </div>
+              <div className="text-xs font-medium truncate flex items-center gap-1" style={{ color: criticalityCfg.color }}>
+                <Circle className="h-2.5 w-2.5 flex-shrink-0 fill-current" />
+                {criticalityCfg.label}
               </div>
             </div>
           )}

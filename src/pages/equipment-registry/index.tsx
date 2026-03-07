@@ -25,6 +25,7 @@
     useDeleteAsset,
   } from '@/hooks/queries/useAssetRegistry';
   import { useResources, type Resource } from '@/hooks/queries/useResources';
+  import { useContactList } from '@/hooks/useContacts';
 
   // Types
   import type { TenantAsset, AssetRegistryFilters, AssetFormData } from '@/types/assetRegistry';
@@ -154,6 +155,21 @@
     const createMutation = useCreateAsset();
     const updateMutation = useUpdateAsset();
     const deleteMutation = useDeleteAsset();
+
+    // ── Contacts (resolve owner_contact_id → display name) ──────────
+    const { data: contactsList = [] } = useContactList({
+      page: 1,
+      limit: 500,
+      status: 'active',
+    });
+
+    const contactNameMap = useMemo(() => {
+      const map = new Map<string, string>();
+      for (const c of contactsList) {
+        map.set(c.id, c.displayName || c.company_name || c.name || 'Unknown');
+      }
+      return map;
+    }, [contactsList]);
 
     // ── Analytics ───────────────────────────────────────────────────
     useEffect(() => {
@@ -624,6 +640,7 @@
                   <EquipmentCard
                     key={asset.id}
                     asset={asset}
+                    clientName={asset.owner_contact_id ? contactNameMap.get(asset.owner_contact_id) : undefined}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     disabled={isMutating}
@@ -677,6 +694,7 @@
           categories={allFormCategories}
           onSubmit={handleCreateSubmit}
           isSubmitting={createMutation.isPending}
+          registryMode={registryMode}
         />
 
         <EquipmentFormDialog
@@ -690,6 +708,7 @@
           categories={allFormCategories}
           onSubmit={handleEditSubmit}
           isSubmitting={updateMutation.isPending}
+          registryMode={registryMode}
         />
       </div>
     );

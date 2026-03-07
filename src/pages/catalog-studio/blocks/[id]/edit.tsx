@@ -16,6 +16,8 @@ import {
   useDeleteCatBlock,
 } from '../../../../hooks/mutations/useCatBlocksMutations';
 import { catBlocksToBlocks, blockToUpdateData } from '../../../../utils/catalog-studio/catBlockAdapter';
+import { useStorageManagement } from '../../../../hooks/useStorageManagement';
+import { vaniToast } from '../../../../components/common/toast';
 
 // =================================================================
 // COMPONENT
@@ -39,6 +41,7 @@ const EditBlockPage: React.FC = () => {
   const { data: blocksResponse, isLoading: blocksLoading, error: blocksError } = useCatBlocks();
   const updateBlockMutation = useUpdateCatBlock();
   const deleteBlockMutation = useDeleteCatBlock();
+  const { uploadFile, storageSetupComplete } = useStorageManagement();
 
   // Use DB categories if available, fallback to hardcoded
   const blockCategories = categories.length > 0 ? categories : BLOCK_CATEGORIES;
@@ -79,6 +82,33 @@ const EditBlockPage: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // ── Upload image if a new File is buffered in meta ─────────
+      const imageFile = blockData.meta?.image as File | undefined;
+      if (imageFile) {
+        if (!storageSetupComplete) {
+          vaniToast.error('Storage is not configured. Please set up storage in Settings → Storage before uploading images.');
+          setIsSaving(false);
+          return;
+        }
+
+        const uploaded = await uploadFile(imageFile, 'block_images', {
+          source: 'catalog_block',
+          blockName: blockData.name,
+        });
+
+        if (!uploaded) {
+          // uploadFile already shows a toast on failure
+          setIsSaving(false);
+          return;
+        }
+
+        // Inject the public URL so the adapter picks it up
+        blockData = {
+          ...blockData,
+          image_url: uploaded.download_url,
+        };
+      }
+
       await updateBlockMutation.mutateAsync({
         id,
         data: blockToUpdateData(blockData),
@@ -100,7 +130,7 @@ const EditBlockPage: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [id, updateBlockMutation, navigate]);
+  }, [id, updateBlockMutation, navigate, storageSetupComplete, uploadFile]);
 
   const handleDelete = useCallback(async () => {
     if (!id) return;
