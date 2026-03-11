@@ -14,6 +14,7 @@ import { SleekCoolTheme } from '@/config/theme/themes/sleekCool';
 import { TechAITheme } from '@/config/theme/themes/techAI';
 import { TechFutureTheme } from '@/config/theme/themes/techFuture';
 import { TechySimpleTheme } from '@/config/theme/themes/techySimple';
+import { VikunaBlackTheme } from '@/config/theme/themes/vikunaBlack';
 import { ThemeName } from '@/contexts/ThemeContext';
 
 /**
@@ -33,6 +34,7 @@ const THEME_REGISTRY = {
   'TechAITheme': TechAITheme,
   'TechFutureTheme': TechFutureTheme,
   'TechySimpleTheme': TechySimpleTheme,
+  'VikunaBlackTheme': VikunaBlackTheme,
 } as const;
 
 /**

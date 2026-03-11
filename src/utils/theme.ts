@@ -12,6 +12,7 @@ import { SleekCoolTheme } from '@/config/theme/themes/sleekCool';
 import { TechAITheme } from '@/config/theme/themes/techAI';
 import { TechFutureTheme } from '@/config/theme/themes/techFuture';
 import { TechySimpleTheme } from '@/config/theme/themes/techySimple';
+import { VikunaBlackTheme } from '@/config/theme/themes/vikunaBlack';
 
 // ✅ SIMPLE: Define theme registry matching your config/theme/index.ts
 const themes = {
@@ -26,6 +27,7 @@ const themes = {
   [TechAITheme.id]: TechAITheme,
   [TechFutureTheme.id]: TechFutureTheme,
   [TechySimpleTheme.id]: TechySimpleTheme,
+  [VikunaBlackTheme.id]: VikunaBlackTheme,
 };
 
 // ✅ SIMPLE: Default theme

@@ -13,6 +13,7 @@ import { SleekCoolTheme } from '../config/theme/themes/sleekCool';
 import { TechAITheme } from '../config/theme/themes/techAI';
 import { TechFutureTheme } from '../config/theme/themes/techFuture';
 import { TechySimpleTheme } from '../config/theme/themes/techySimple';
+import { VikunaBlackTheme } from '../config/theme/themes/vikunaBlack';
 
 // ✅ FIXED: Create themes object and types locally
 const themes = {
@@ -27,6 +28,7 @@ const themes = {
   [TechAITheme.id]: TechAITheme,
   [TechFutureTheme.id]: TechFutureTheme,
   [TechySimpleTheme.id]: TechySimpleTheme,
+  [VikunaBlackTheme.id]: VikunaBlackTheme,
 };
 
 // ✅ FIXED: Use BharathaVarshaTheme as default
@@ -276,6 +278,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       'theme-tech-ai',
       'theme-tech-future',
       'theme-techy-simple',
+      'theme-vikuna-black',
       'dark',
       'light'
     );
@@ -300,6 +303,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       'tech-ai': 'theme-tech-ai',
       'tech-future': 'theme-tech-future',
       'techy-simple': 'theme-techy-simple',
+      'vikuna-black': 'theme-vikuna-black',
     };
     
     const legacyClass = legacyThemeMap[themeId];

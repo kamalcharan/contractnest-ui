@@ -7,7 +7,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 // Import all landing page components
 import LandingNavigation from '../../components/landing/LandingNavigation';
 import LandingHero from '../../components/landing/LandingHero';
+import HeroV3 from '../../components/landing/HeroV3';
 import TheProblem from '../../components/landing/TheProblem';
+import TheProblemV3 from '../../components/landing/TheProblemV3';
+import RevenueCostCardsV3 from '../../components/landing/RevenueCostCardsV3';
+import DualPerspectiveV3 from '../../components/landing/DualPerspectiveV3';
 import LandingStats from '../../components/landing/LandingStats';
 import LandingFeatures from '../../components/landing/LandingFeatures';
 import LandingTestimonials from '../../components/landing/LandingTestimonials';
@@ -16,6 +20,9 @@ import DualPersonaTimeline from '../../components/landing/DualPersonaTimeline';
 import LandingPricing from '../../components/landing/LandingPricing';
 import LandingCTA from '../../components/landing/LandingCTA';
 import LandingPlayground from '../../components/landing/LandingPlayground';
+import PlaygroundV3 from '../../components/landing/PlaygroundV3';
+import VaniSectionV3 from '../../components/landing/VaniSectionV3';
+import SocialProofV3 from '../../components/landing/SocialProofV3';
 import LandingFooter from '../../components/landing/LandingFooter';
 
 // Import existing CRO components
@@ -533,30 +540,27 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onNavigate={(path) => navigate(path)}
         />
 
-        {/* Hero Section - Simplified */}
-        <LandingHero
+        {/* Hero Section - V3 Vikuna Black */}
+        <HeroV3
           onPlaygroundClick={() => {
             const playgroundSection = document.getElementById('playground');
             if (playgroundSection) {
               playgroundSection.scrollIntoView({ behavior: 'smooth' });
             }
           }}
-          onBuyerExplore={() => {
-            const playgroundSection = document.getElementById('playground');
-            if (playgroundSection) {
-              playgroundSection.scrollIntoView({ behavior: 'smooth' });
-            }
+          onGetEarlyAccess={(email) => {
+            handleFormSubmission({
+              email,
+              companyName: '',
+              industry: selectedIndustryState,
+              source: 'hero_v3',
+            });
           }}
-          onSellerExplore={() => {
-            const playgroundSection = document.getElementById('playground');
-            if (playgroundSection) {
-              playgroundSection.scrollIntoView({ behavior: 'smooth' });
-            }
-          }}
+          signupUrl={signupUrl}
         />
 
-        {/* The Problem Section - Dual Persona */}
-        <TheProblem
+        {/* The Problem Section - V3 */}
+        <TheProblemV3
           onCtaClick={() => {
             const playgroundSection = document.getElementById('playground');
             if (playgroundSection) {
@@ -564,10 +568,22 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
             }
           }}
         />
-        {/* Playground Section - Interactive Demo */}
-        <LandingPlayground />
 
-        
+        {/* Revenue & Cost Cards */}
+        <RevenueCostCardsV3 />
+
+        {/* Two Sides. One Platform — Dual Perspective */}
+        <DualPerspectiveV3 />
+
+        {/* Playground Section - Interactive Contract Builder */}
+        <PlaygroundV3 />
+
+        {/* Meet VaNi - AI Ops Employee */}
+        <VaniSectionV3 />
+
+        {/* Early Customers - Social Proof */}
+        <SocialProofV3 />
+
         {/* Problem Statistics - Can be removed if TheProblem covers it */}
         {/* <LandingStats
           onCalculatorOpen={handleValueCalculatorOpen}
