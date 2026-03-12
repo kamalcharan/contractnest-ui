@@ -128,8 +128,8 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
           {[asset.make, asset.model].filter(Boolean).join(' \u00B7 ') || 'No make/model'}
         </p>
 
-        {/* Client Name */}
-        {clientName && (
+        {/* Owner Name */}
+        {clientName ? (
           <div
             className="flex items-center gap-1.5 mb-3"
           >
@@ -141,8 +141,19 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
               {clientName}
             </span>
           </div>
+        ) : ('ownership_type' in asset && (asset as any).ownership_type === 'self') ? (
+          <div className="flex items-center gap-1.5 mb-3">
+            <Circle className="h-3 w-3 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+            <span
+              className="text-xs font-medium truncate"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              Self (My Equipment)
+            </span>
+          </div>
+        ) : (
+          <div className="mb-1.5" />
         )}
-        {!clientName && <div className="mb-1.5" />}
 
         {/* Details Grid */}
         <div className="grid grid-cols-2 gap-2 mb-3">

@@ -1,34 +1,13 @@
-// src/components/landing/LandingFooter.tsx
+// src/components/landing/LandingFooter.tsx — V3 Dark Theme
 import React, { useState } from 'react';
-import { 
-  CheckCircle,
-  Phone,
-  Mail,
-  MapPin,
-  ArrowRight,
-  ExternalLink,
-  Building,
-  Users,
-  FileText,
-  Shield,
-  Award,
-  Globe,
-  Linkedin,
-  Twitter,
-  Youtube,
-  Facebook,
-  Instagram,
-  MessageSquare,
-  BookOpen,
-  Download,
-  Calendar,
-  Star,
-  Heart,
-  Send,
-  AlertCircle
-} from 'lucide-react';
 
-// Types
+// ── Types ──────────────────────────────────────────────
+interface FooterProps {
+  onIndustrySelect?: (industryId: string) => void;
+  onNewsletterSignup?: (email: string) => void;
+  className?: string;
+}
+
 interface FooterLink {
   name: string;
   href: string;
@@ -40,563 +19,603 @@ interface FooterSection {
   links: FooterLink[];
 }
 
-interface SocialLink {
-  name: string;
-  href: string;
-  icon: React.ReactNode;
-  color: string;
-}
+// ── V3 Design Tokens ───────────────────────────────────
+const V3 = {
+  bg: '#0D0F14',
+  surface: '#13161D',
+  surface2: '#1C2030',
+  border: 'rgba(255,255,255,0.07)',
+  border2: 'rgba(255,255,255,0.12)',
+  amber: '#F5A623',
+  amberDim: 'rgba(245,166,35,0.12)',
+  green: '#2ECC71',
+  text: '#E8E6E0',
+  muted: '#7A8099',
+  faint: '#3A3F52',
+} as const;
 
-interface FooterProps {
-  onIndustrySelect?: (industryId: string) => void;
-  onNewsletterSignup?: (email: string) => void;
-  className?: string;
-}
+const font = {
+  heading: "'Bebas Neue', sans-serif",
+  body: "'DM Sans', sans-serif",
+  mono: "'DM Mono', monospace",
+} as const;
 
-// Mock Button and Input components
-const Button = ({ children, className = '', variant = 'primary', onClick, size = 'default', disabled = false, ...props }) => {
-  const baseClass = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-  const variants = {
-    primary: 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500',
-    secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-gray-500',
-    outline: 'border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white focus:ring-red-500',
-    ghost: 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-  };
-  const sizes = {
-    sm: 'px-4 py-2 text-sm',
-    default: 'px-6 py-3 text-sm',
-    lg: 'px-8 py-4 text-base'
-  };
-  
-  return (
-    <button 
-      className={`${baseClass} ${variants[variant]} ${sizes[size]} ${className}`}
-      onClick={onClick}
-      disabled={disabled}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
+// ── Data ───────────────────────────────────────────────
+const FOOTER_SECTIONS: FooterSection[] = [
+  {
+    title: 'Product',
+    links: [
+      { name: 'Features', href: '#features' },
+      { name: 'Pricing', href: '#pricing' },
+      { name: 'How it Works', href: '#playground' },
+      { name: 'API Docs', href: '/docs/api', external: true },
+      { name: 'Changelog', href: '/changelog' },
+    ],
+  },
+  {
+    title: 'Industries',
+    links: [
+      { name: 'Healthcare', href: '/industry/healthcare' },
+      { name: 'Manufacturing', href: '/industry/manufacturing' },
+      { name: 'Pharmaceutical', href: '/industry/pharma' },
+      { name: 'Consulting', href: '/industry/consulting' },
+      { name: 'Financial Services', href: '/industry/financial' },
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      { name: 'Blog', href: '/blog' },
+      { name: 'Case Studies', href: '/case-studies' },
+      { name: 'ROI Calculator', href: '/roi-calculator' },
+      { name: 'Best Practices', href: '/resources/best-practices' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { name: 'About Vikuna', href: '/about' },
+      { name: 'Careers', href: '/careers' },
+      { name: 'Contact', href: '/contact' },
+      { name: 'Security', href: '/security' },
+    ],
+  },
+];
 
-const Input = ({ className = '', ...props }) => (
-  <input 
-    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors ${className}`}
-    {...props}
-  />
-);
+const SOCIAL_LINKS = [
+  {
+    name: 'LinkedIn',
+    href: 'https://linkedin.com/company/contractnest',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+      </svg>
+    ),
+  },
+  {
+    name: 'Twitter',
+    href: 'https://twitter.com/contractnest',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+    ),
+  },
+  {
+    name: 'YouTube',
+    href: 'https://youtube.com/contractnest',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+      </svg>
+    ),
+  },
+];
 
-// Newsletter Signup Component
-const NewsletterSignup = ({ onSignup }: { onSignup?: (email: string) => void }) => {
+const LEGAL_LINKS = [
+  { name: 'Privacy', href: '/privacy' },
+  { name: 'Terms', href: '/terms' },
+  { name: 'Cookies', href: '/cookies' },
+  { name: 'GDPR', href: '/gdpr' },
+];
+
+// ── Newsletter Sub-component ───────────────────────────
+const NewsletterV3: React.FC<{ onSignup?: (email: string) => void }> = ({ onSignup }) => {
   const [email, setEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email.trim()) {
-      alert('Please enter your email address');
-      return;
-    }
-
-    setIsSubmitting(true);
-
+    if (!email.trim()) return;
+    setSubmitting(true);
     try {
-      // Mock API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (onSignup) {
-        onSignup(email);
-      }
-      
-      // Track newsletter signup
+      await new Promise((r) => setTimeout(r, 800));
+      onSignup?.(email);
       if (typeof gtag !== 'undefined') {
-        gtag('event', 'newsletter_signup', {
-          event_category: 'engagement',
-          event_label: 'footer_newsletter',
-          value: 1
-        });
+        gtag('event', 'newsletter_signup', { event_category: 'engagement', event_label: 'footer' });
       }
-      
-      setIsSubscribed(true);
+      setDone(true);
       setEmail('');
-    } catch (error) {
-      console.error('Newsletter signup error:', error);
-      alert('Something went wrong. Please try again.');
+    } catch {
+      // silent
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  if (isSubscribed) {
+  if (done) {
     return (
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-        <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-        <h4 className="font-semibold text-green-800 mb-1">Successfully Subscribed!</h4>
-        <p className="text-sm text-green-700">
-          Thank you for joining our newsletter. You'll receive updates on new features and industry insights.
-        </p>
+      <div
+        style={{
+          background: 'rgba(46,204,113,0.08)',
+          border: `1px solid rgba(46,204,113,0.25)`,
+          borderRadius: 8,
+          padding: '12px 16px',
+          fontSize: '0.8rem',
+          color: V3.green,
+        }}
+      >
+        Subscribed — you'll hear from us soon.
       </div>
     );
   }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="newsletter-email" className="block text-sm font-medium text-gray-700 mb-2">
-            Stay updated with ContractNest
-          </label>
-          <div className="flex space-x-2">
-            <Input
-              id="newsletter-email"
-              type="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="flex-1"
-              required
-            />
-            <Button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="flex-shrink-0"
-            >
-              {isSubmitting ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500">
-          Get industry insights, product updates, and exclusive early access to new features. 
-          No spam, unsubscribe anytime.
-        </p>
-      </form>
-    </div>
+    <form onSubmit={submit} style={{ display: 'flex', gap: 8 }}>
+      <input
+        type="email"
+        placeholder="your@email.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+        style={{
+          flex: 1,
+          background: V3.surface2,
+          border: `1px solid ${V3.border2}`,
+          borderRadius: 7,
+          padding: '9px 14px',
+          fontSize: '0.8rem',
+          fontFamily: font.body,
+          color: V3.text,
+          outline: 'none',
+          transition: 'border-color 0.2s',
+        }}
+        onFocus={(e) => { e.currentTarget.style.borderColor = V3.amber; }}
+        onBlur={(e) => { e.currentTarget.style.borderColor = V3.border2; }}
+      />
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{
+          background: V3.amber,
+          border: 'none',
+          borderRadius: 7,
+          padding: '9px 18px',
+          fontFamily: font.body,
+          fontSize: '0.8rem',
+          fontWeight: 600,
+          color: V3.bg,
+          cursor: submitting ? 'wait' : 'pointer',
+          opacity: submitting ? 0.7 : 1,
+          transition: 'all 0.2s',
+          flexShrink: 0,
+        }}
+      >
+        {submitting ? '...' : 'Subscribe'}
+      </button>
+    </form>
   );
 };
 
-// Company Stats Component
-const CompanyStats = () => {
-  const stats = [
-    { icon: <Building className="h-5 w-5" />, value: '500+', label: 'Businesses Served' },
-    { icon: <Users className="h-5 w-5" />, value: '₹50+ Cr', label: 'Contracts Managed' },
-    { icon: <Award className="h-5 w-5" />, value: '4.9/5', label: 'Customer Rating' },
-    { icon: <Globe className="h-5 w-5" />, value: '24/7', label: 'Support Available' }
-  ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-      {stats.map((stat, index) => (
-        <div key={index} className="text-center">
-          <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mx-auto mb-3 text-red-600">
-            {stat.icon}
-          </div>
-          <div className="text-xl font-bold text-gray-900 mb-1">{stat.value}</div>
-          <div className="text-sm text-gray-600">{stat.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const LandingFooter: React.FC<FooterProps> = ({ 
+// ── Main Component ─────────────────────────────────────
+const LandingFooter: React.FC<FooterProps> = ({
   onIndustrySelect,
   onNewsletterSignup,
-  className = ''
+  className = '',
 }) => {
-  // Footer sections
-  const footerSections: FooterSection[] = [
-    {
-      title: 'Product',
-      links: [
-        { name: 'Features', href: '#features' },
-        { name: 'Pricing', href: '#pricing' },
-        { name: 'Integrations', href: '/integrations' },
-        { name: 'API Documentation', href: '/docs/api', external: true },
-        { name: 'Release Notes', href: '/changelog' },
-        { name: 'Roadmap', href: '/roadmap' }
-      ]
-    },
-    {
-      title: 'Industries',
-      links: [
-        { name: 'Healthcare', href: '/industry/healthcare' },
-        { name: 'Manufacturing', href: '/industry/manufacturing' },
-        { name: 'Pharmaceutical', href: '/industry/pharma' },
-        { name: 'Consulting Services', href: '/industry/consulting' },
-        { name: 'Financial Services', href: '/industry/financial' },
-        { name: 'View All Industries', href: '/industries' }
-      ]
-    },
-    {
-      title: 'Resources',
-      links: [
-        { name: 'Blog', href: '/blog' },
-        { name: 'Case Studies', href: '/case-studies' },
-        { name: 'Whitepapers', href: '/resources/whitepapers' },
-        { name: 'ROI Calculator', href: '/roi-calculator' },
-        { name: 'Best Practices Guide', href: '/resources/best-practices' },
-        { name: 'Webinars', href: '/webinars' }
-      ]
-    },
-    {
-      title: 'Support',
-      links: [
-        { name: 'Help Center', href: '/help', external: true },
-        { name: 'Contact Support', href: '/support' },
-        { name: 'Schedule Demo', href: '/demo' },
-        { name: 'Training Videos', href: '/training' },
-        { name: 'Community Forum', href: '/community', external: true },
-        { name: 'Status Page', href: 'https://status.contractnest.com', external: true }
-      ]
-    },
-    {
-      title: 'Company',
-      links: [
-        { name: 'About Us', href: '/about' },
-        { name: 'Careers', href: '/careers' },
-        { name: 'Press Kit', href: '/press' },
-        { name: 'Partner Program', href: '/partners' },
-        { name: 'Security', href: '/security' },
-        { name: 'Contact Us', href: '/contact' }
-      ]
-    }
-  ];
-
-  // Social media links
-  const socialLinks: SocialLink[] = [
-    {
-      name: 'LinkedIn',
-      href: 'https://linkedin.com/company/contractnest',
-      icon: <Linkedin className="h-5 w-5" />,
-      color: 'hover:text-blue-600'
-    },
-    {
-      name: 'Twitter',
-      href: 'https://twitter.com/contractnest',
-      icon: <Twitter className="h-5 w-5" />,
-      color: 'hover:text-blue-400'
-    },
-    {
-      name: 'YouTube',
-      href: 'https://youtube.com/contractnest',
-      icon: <Youtube className="h-5 w-5" />,
-      color: 'hover:text-red-600'
-    },
-    {
-      name: 'Facebook',
-      href: 'https://facebook.com/contractnest',
-      icon: <Facebook className="h-5 w-5" />,
-      color: 'hover:text-blue-700'
-    }
-  ];
-
-  // Handle link clicks
-  const handleLinkClick = (href: string, external: boolean = false) => {
-    // Track footer link clicks
+  const handleLinkClick = (href: string, external?: boolean) => {
     if (typeof gtag !== 'undefined') {
-      gtag('event', 'footer_link_click', {
-        event_category: 'navigation',
-        event_label: href
-      });
+      gtag('event', 'footer_link_click', { event_category: 'navigation', event_label: href });
     }
-
     if (external || href.startsWith('http')) {
       window.open(href, '_blank', 'noopener,noreferrer');
     } else if (href.startsWith('#')) {
-      // Smooth scroll to section
-      const element = document.querySelector(href);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
+      const el = document.querySelector(href);
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else if (href.includes('/industry/') && onIndustrySelect) {
+      onIndustrySelect(href.split('/industry/')[1]);
     } else {
-      // Internal navigation
-      if (href.includes('/industry/') && onIndustrySelect) {
-        const industryId = href.split('/industry/')[1];
-        onIndustrySelect(industryId);
-      } else {
-        // Default navigation behavior
-        window.location.href = href;
-      }
+      window.location.href = href;
     }
   };
 
-  const handleSocialClick = (platform: string, href: string) => {
-    // Track social media clicks
+  const handleSocialClick = (name: string, href: string) => {
     if (typeof gtag !== 'undefined') {
-      gtag('event', 'social_media_click', {
-        event_category: 'social',
-        event_label: platform
-      });
+      gtag('event', 'social_click', { event_category: 'social', event_label: name });
     }
-
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
   return (
-    <footer className={`bg-white border-t border-gray-200 ${className}`}>
-      {/* Main Footer Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {/* Top Section - Company Info & Newsletter */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 mb-16">
-          {/* Company Information */}
-          <div className="lg:col-span-1">
-            <div className="flex items-center mb-6">
-              <div className="w-10 h-10 bg-red-500 rounded flex items-center justify-center mr-3">
-                <CheckCircle className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900">ContractNest</h3>
-                <p className="text-sm text-gray-600">Service Contract Management</p>
-              </div>
+    <footer
+      className={className}
+      style={{
+        background: V3.surface,
+        borderTop: `1px solid ${V3.border}`,
+        position: 'relative',
+        zIndex: 2,
+      }}
+    >
+      {/* ── Top CTA Banner ────────────── */}
+      <div
+        style={{
+          borderBottom: `1px solid ${V3.border}`,
+          padding: '40px 24px',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            alignItems: 'center',
+            gap: 32,
+          }}
+          className="footer-v3-cta-grid"
+        >
+          <div>
+            <div
+              style={{
+                fontFamily: font.heading,
+                fontSize: 'clamp(1.6rem, 3vw, 2.4rem)',
+                letterSpacing: '0.03em',
+                color: V3.text,
+                lineHeight: 1,
+                marginBottom: 8,
+              }}
+            >
+              READY TO RUN CONTRACTS THAT RUN THEMSELVES?
             </div>
-            
-            <p className="text-gray-600 mb-6 leading-relaxed">
-              Transform service commitments into profitable relationships with automated 
-              compliance tracking, collaborative workflows, and intelligent contract management.
-            </p>
-
-            {/* Contact Information */}
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center text-gray-600">
-                <Mail className="h-4 w-4 mr-3 text-red-500" />
-                <a href="mailto:info@vikuna.io" className="hover:text-red-600 transition-colors">
-                  info@vikuna.io
-                </a>
-              </div>
-              <div className="flex items-center text-gray-600">
-                <Phone className="h-4 w-4 mr-3 text-red-500" />
-                <a href="tel:+919949701175" className="hover:text-red-600 transition-colors">
-                  +91-9949701175
-                </a>
-              </div>
-              <div className="flex items-center text-gray-600">
-                <MapPin className="h-4 w-4 mr-3 text-red-500" />
-                <span>Hyderabad, Telangana, India</span>
-              </div>
+            <div style={{ fontSize: '0.86rem', color: V3.muted, lineHeight: 1.5 }}>
+              Start free with 3 contracts. No credit card. No seat limits.
             </div>
+          </div>
+          <button
+            onClick={() => {
+              if (typeof gtag !== 'undefined') {
+                gtag('event', 'footer_cta_click', { event_category: 'conversion' });
+              }
+              const el = document.getElementById('emailInput');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+                el.focus();
+              } else {
+                window.location.href =
+                  import.meta.env.VITE_SIGNUP_URL || 'https://www.contractnest.com/register';
+              }
+            }}
+            style={{
+              background: V3.amber,
+              border: 'none',
+              fontFamily: font.body,
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              color: V3.bg,
+              padding: '13px 28px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FFB733';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = V3.amber;
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            Get Early Access
+          </button>
+        </div>
+      </div>
 
-            {/* Social Media Links */}
-            <div className="flex space-x-4">
-              {socialLinks.map((social) => (
+      {/* ── Main Grid: Links + Newsletter ── */}
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: '0 auto',
+          padding: '48px 24px 40px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr) 1.2fr',
+          gap: 32,
+        }}
+        className="footer-v3-main-grid"
+      >
+        {/* Link Columns */}
+        {FOOTER_SECTIONS.map((section) => (
+          <div key={section.title}>
+            <div
+              style={{
+                fontFamily: font.mono,
+                fontSize: '0.62rem',
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: V3.amber,
+                marginBottom: 16,
+              }}
+            >
+              {section.title}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {section.links.map((link) => (
                 <button
-                  key={social.name}
-                  onClick={() => handleSocialClick(social.name, social.href)}
-                  className={`w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 transition-colors ${social.color} hover:bg-gray-200`}
-                  title={social.name}
+                  key={link.name}
+                  onClick={() => handleLinkClick(link.href, link.external)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    fontFamily: font.body,
+                    fontSize: '0.8rem',
+                    color: V3.muted,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    padding: 0,
+                    transition: 'color 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = V3.text; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = V3.muted; }}
                 >
-                  {social.icon}
+                  {link.name}
+                  {link.external && (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity={0.5}>
+                      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  )}
                 </button>
               ))}
             </div>
           </div>
+        ))}
 
-          {/* Newsletter Signup */}
-          <div className="lg:col-span-1">
-            <h4 className="text-lg font-semibold text-gray-900 mb-4">
-              Stay in the Loop
-            </h4>
-            <NewsletterSignup onSignup={onNewsletterSignup} />
-            
-            {/* Quick Links */}
-            <div className="mt-8">
-              <h5 className="font-medium text-gray-900 mb-4">Quick Actions</h5>
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleLinkClick('/demo')}
-                  className="flex items-center text-sm text-gray-600 hover:text-red-600 transition-colors"
-                >
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Schedule a Demo
-                </button>
-                <button
-                  onClick={() => handleLinkClick('/roi-calculator')}
-                  className="flex items-center text-sm text-gray-600 hover:text-red-600 transition-colors"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Calculate ROI
-                </button>
-                <button
-                  onClick={() => handleLinkClick('/resources/whitepapers')}
-                  className="flex items-center text-sm text-gray-600 hover:text-red-600 transition-colors"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Resources
-                </button>
-              </div>
-            </div>
+        {/* Newsletter + Contact Column */}
+        <div>
+          <div
+            style={{
+              fontFamily: font.mono,
+              fontSize: '0.62rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: V3.amber,
+              marginBottom: 16,
+            }}
+          >
+            Stay Updated
           </div>
-
-          {/* Company Stats - HIDDEN */}
-          {/* <div className="lg:col-span-1">
-            <h4 className="text-lg font-semibold text-gray-900 mb-6">
-              Trusted by Businesses
-            </h4>
-            <CompanyStats />
-
-            <div className="mt-8">
-              <h5 className="font-medium text-gray-900 mb-4">Security & Compliance</h5>
-              <div className="flex flex-wrap gap-3">
-                <div className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-lg">
-                  <Shield className="h-4 w-4 text-green-600" />
-                  <span className="text-xs font-medium text-gray-700">SOC 2 Ready</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-lg">
-                  <Heart className="h-4 w-4 text-red-600" />
-                  <span className="text-xs font-medium text-gray-700">HIPAA Compliant</span>
-                </div>
-                <div className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-lg">
-                  <Globe className="h-4 w-4 text-blue-600" />
-                  <span className="text-xs font-medium text-gray-700">99.9% Uptime</span>
-                </div>
-              </div>
-            </div>
-          </div> */}
-
-          {/* START FREE CTA */}
-          <div className="lg:col-span-1">
-            <h4 className="text-lg font-semibold text-gray-900 mb-4">
-              Get Started Today
-            </h4>
-            <p className="text-gray-600 mb-6">
-              Start managing your service contracts efficiently. No credit card required.
-            </p>
-            <Button
-              onClick={() => window.location.href = '/signup'}
-              className="w-full"
-              size="lg"
+          <div style={{ marginBottom: 20 }}>
+            <NewsletterV3 onSignup={onNewsletterSignup} />
+            <div
+              style={{
+                fontSize: '0.7rem',
+                color: V3.faint,
+                marginTop: 8,
+                lineHeight: 1.4,
+              }}
             >
-              START FREE
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Footer Links Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 mb-12">
-          {footerSections.map((section) => (
-            <div key={section.title}>
-              <h4 className="font-semibold text-gray-900 mb-4">{section.title}</h4>
-              <ul className="space-y-3">
-                {section.links.map((link) => (
-                  <li key={link.name}>
-                    <button
-                      onClick={() => handleLinkClick(link.href, link.external)}
-                      className="flex items-center text-sm text-gray-600 hover:text-red-600 transition-colors group"
-                    >
-                      <span>{link.name}</span>
-                      {link.external && (
-                        <ExternalLink className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* Awards & Recognition - HIDDEN */}
-        {/* <div className="bg-gray-50 rounded-2xl p-8 mb-12">
-          <div className="text-center mb-6">
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">
-              Recognition & Awards
-            </h4>
-            <p className="text-gray-600">
-              Trusted by industry leaders and recognized by experts
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Star className="h-8 w-8 text-yellow-600" />
-              </div>
-              <h5 className="font-medium text-gray-900 mb-1">Rising Star 2024</h5>
-              <p className="text-sm text-gray-600">Emerging SaaS Platform</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Users className="h-8 w-8 text-blue-600" />
-              </div>
-              <h5 className="font-medium text-gray-900 mb-1">Customer Choice</h5>
-              <p className="text-sm text-gray-600">Contract Management 2024</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Award className="h-8 w-8 text-green-600" />
-              </div>
-              <h5 className="font-medium text-gray-900 mb-1">Innovation Leader</h5>
-              <p className="text-sm text-gray-600">Service Automation</p>
-            </div>
-          </div>
-        </div> */}
-      </div>
-
-      {/* Bottom Section */}
-      <div className="border-t border-gray-200 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            {/* Copyright */}
-            <div className="flex items-center space-x-4 text-sm text-gray-600">
-              <p>© 2024 ContractNest. All rights reserved.</p>
-              <div className="hidden md:flex items-center space-x-1">
-                <span>Made with</span>
-                <Heart className="h-4 w-4 text-red-500" />
-                <span>in India</span>
-              </div>
-            </div>
-
-            {/* Legal Links */}
-            <div className="flex items-center space-x-6 text-sm">
-              <button
-                onClick={() => handleLinkClick('/privacy')}
-                className="text-gray-600 hover:text-red-600 transition-colors"
-              >
-                Privacy Policy
-              </button>
-              <button
-                onClick={() => handleLinkClick('/terms')}
-                className="text-gray-600 hover:text-red-600 transition-colors"
-              >
-                Terms of Service
-              </button>
-              <button
-                onClick={() => handleLinkClick('/cookies')}
-                className="text-gray-600 hover:text-red-600 transition-colors"
-              >
-                Cookie Policy
-              </button>
-              <button
-                onClick={() => handleLinkClick('/gdpr')}
-                className="text-gray-600 hover:text-red-600 transition-colors"
-              >
-                GDPR
-              </button>
+              Product updates & industry insights. No spam.
             </div>
           </div>
 
-          {/* Additional Legal Notice */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-start space-x-3 text-xs text-gray-500">
-              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-              <p className="leading-relaxed">
-                <strong>Legal Disclaimer:</strong> ContractNest is a software platform designed to assist with contract management. 
-                While we strive for accuracy and reliability, users are responsible for ensuring compliance with applicable laws and regulations. 
-                ConsultatconfigCoreNest does not provide legal advice. For legal guidance, please consult with qualified legal professionals.
-              </p>
-            </div>
+          {/* Contact */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <a
+              href="mailto:info@vikuna.io"
+              style={{
+                fontSize: '0.78rem',
+                color: V3.muted,
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = V3.text; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = V3.muted; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                <polyline points="22,6 12,13 2,6" />
+              </svg>
+              info@vikuna.io
+            </a>
+            <a
+              href="tel:+919949701175"
+              style={{
+                fontSize: '0.78rem',
+                color: V3.muted,
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = V3.text; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = V3.muted; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+              </svg>
+              +91-9949701175
+            </a>
+            <span
+              style={{
+                fontSize: '0.78rem',
+                color: V3.faint,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              Hyderabad, India
+            </span>
           </div>
         </div>
       </div>
+
+      {/* ── Bottom Bar ─────────────────── */}
+      <div
+        style={{
+          borderTop: `1px solid ${V3.border}`,
+          padding: '20px 24px',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: '0 auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 16,
+          }}
+        >
+          {/* Left: Logo + Copyright */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  background: V3.amber,
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={V3.bg} strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+                </svg>
+              </div>
+              <span style={{ fontFamily: font.heading, fontSize: '0.9rem', letterSpacing: '0.05em', color: V3.muted }}>
+                CONTRACTNEST
+              </span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: V3.faint }}>
+              © {new Date().getFullYear()} Vikuna Technologies. All rights reserved.
+            </span>
+          </div>
+
+          {/* Center: Legal links */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {LEGAL_LINKS.map((link) => (
+              <button
+                key={link.name}
+                onClick={() => handleLinkClick(link.href)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontFamily: font.body,
+                  fontSize: '0.7rem',
+                  color: V3.faint,
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = V3.muted; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = V3.faint; }}
+              >
+                {link.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Right: Social Icons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {SOCIAL_LINKS.map((social) => (
+              <button
+                key={social.name}
+                onClick={() => handleSocialClick(social.name, social.href)}
+                title={social.name}
+                style={{
+                  background: V3.surface2,
+                  border: `1px solid ${V3.border}`,
+                  borderRadius: 6,
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: V3.faint,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = V3.text;
+                  e.currentTarget.style.borderColor = V3.border2;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = V3.faint;
+                  e.currentTarget.style.borderColor = V3.border;
+                }}
+              >
+                {social.icon}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Disclaimer */}
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: '16px auto 0',
+            paddingTop: 14,
+            borderTop: `1px solid ${V3.border}`,
+            fontSize: '0.66rem',
+            color: V3.faint,
+            lineHeight: 1.5,
+          }}
+        >
+          <strong style={{ color: V3.muted, fontWeight: 500 }}>Disclaimer:</strong> ContractNest is
+          a software platform for contract management. Users are responsible for compliance with
+          applicable laws. ContractNest does not provide legal advice — consult qualified
+          professionals for legal guidance.
+        </div>
+      </div>
+
+      {/* ── Responsive CSS ──────────── */}
+      <style>{`
+        @media (max-width: 900px) {
+          .footer-v3-cta-grid {
+            grid-template-columns: 1fr !important;
+            text-align: center;
+          }
+          .footer-v3-main-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+        @media (max-width: 560px) {
+          .footer-v3-main-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </footer>
   );
 };

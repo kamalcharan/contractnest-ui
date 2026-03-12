@@ -606,11 +606,11 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
           onViewAll={() => navigate('/industries')}
         /> */}
 
-        {/* Dual Persona Timeline - NEW! */}
-        <DualPersonaTimeline
+        {/* Dual Persona Timeline - HIDDEN (V3 redesign) */}
+        {/* <DualPersonaTimeline
           selectedIndustry={selectedIndustryState}
           onStepClick={handleTimelineStepClick}
-        />
+        /> */}
 
           
         {/* Pricing with Urgency */}

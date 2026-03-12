@@ -34,6 +34,7 @@ export interface TenantAsset {
   status: AssetStatus;
   condition: AssetCondition;
   criticality: AssetCriticality;
+  ownership_type: AssetOwnershipType;
   owner_contact_id: string | null;
   location: string | null;
   // Equipment-specific
@@ -87,6 +88,7 @@ export interface AssetDimensions {
 export type AssetStatus = 'active' | 'inactive' | 'under_repair' | 'decommissioned';
 export type AssetCondition = 'good' | 'fair' | 'poor' | 'critical';
 export type AssetCriticality = 'low' | 'medium' | 'high' | 'critical';
+export type AssetOwnershipType = 'client' | 'self';
 
 // ── Form Data ─────────────────────────────────────────────────────────
 
@@ -100,6 +102,7 @@ export interface AssetFormData {
   status: AssetStatus;
   condition: AssetCondition;
   criticality: AssetCriticality;
+  ownership_type: AssetOwnershipType;
   owner_contact_id?: string;
   location?: string;
   // Equipment fields
@@ -123,6 +126,7 @@ export interface AssetRegistryFilters {
   resource_type_id?: string;
   status?: AssetStatus;
   condition?: AssetCondition;
+  ownership_type?: AssetOwnershipType;
   search?: string;
   is_live?: boolean;
   limit?: number;
@@ -194,6 +198,7 @@ export const DEFAULT_FORM_DATA: AssetFormData = {
   status: 'active',
   condition: 'good',
   criticality: 'medium',
+  ownership_type: 'client',
   specifications: {},
   tags: [],
 };

@@ -7,7 +7,7 @@
   import {
     Plus, Search, X, Download, Package, Layers,
   } from 'lucide-react';
-  import { useAuth } from '@/context/AuthContext';
+  import { useAuth, type Perspective } from '@/context/AuthContext';
   import { useTheme } from '@/contexts/ThemeContext';
   import { Button } from '@/components/ui/Button';
   import { Input } from '@/components/ui/Input';
@@ -24,7 +24,8 @@
     useUpdateAsset,
     useDeleteAsset,
   } from '@/hooks/queries/useAssetRegistry';
-  import { useResources, type Resource } from '@/hooks/queries/useResources';
+  import { useResources } from '@/hooks/queries/useResources';
+  import { useResourceTemplatesBrowser, type ResourceTemplateFilters } from '@/hooks/queries/useResourceTemplates';
   import { useContactList } from '@/hooks/useContacts';
 
   // Types
@@ -43,7 +44,7 @@
   }
 
   // ── Mode-specific labels ────────────────────────────────────────
-  const MODE_CONFIG: Record<RegistryMode, {
+  interface ModeConfigEntry {
     typeIds: string[];
     pageTitle: string;
     pageDescription: string;
@@ -53,58 +54,106 @@
     itemLabel: string;
     searchPlaceholder: string;
     addLabel: string;
-  }> = {
-    equipment: {
+  }
+
+  const getModeConfig = (mode: RegistryMode, perspective: Perspective): ModeConfigEntry => {
+    if (mode === 'entity') {
+      return {
+        typeIds: ['asset'],
+        pageTitle: 'Facility Registry',
+        pageDescription: 'Register and manage facilities, properties, and spaces. Link them to contracts and track service schedules.',
+        breadcrumb: 'Facility Registry',
+        sidebarTitle: 'Facility Categories',
+        allLabel: 'All Facilities',
+        itemLabel: 'facility',
+        searchPlaceholder: 'Search facilities...',
+        addLabel: 'Add Facility',
+      };
+    }
+
+    // Equipment mode — varies by perspective
+    return {
       typeIds: ['equipment'],
-      pageTitle: 'Equipment Registry',
-      pageDescription: 'Register and manage the equipment you service. This data powers contract creation, scheduling, and evidence tracking.',
+      pageTitle: perspective === 'revenue' ? 'Equipment Registry — Client Equipment' : 'Equipment Registry — My Equipment',
+      pageDescription: perspective === 'revenue'
+        ? 'Register and manage client equipment you service. This data powers contract creation, scheduling, and evidence tracking.'
+        : 'Register and manage your own equipment and assets. Track maintenance, depreciation, and operational readiness.',
       breadcrumb: 'Equipment Registry',
       sidebarTitle: 'Equipment Categories',
       allLabel: 'All Equipment',
       itemLabel: 'equipment',
       searchPlaceholder: 'Search equipment...',
       addLabel: 'Add Equipment',
-    },
-    entity: {
-      typeIds: ['asset'],
-      pageTitle: 'Facility Registry',
-      pageDescription: 'Register and manage facilities, properties, and spaces. Link them to contracts and track service schedules.',
-      breadcrumb: 'Facility Registry',
-      sidebarTitle: 'Facility Categories',
-      allLabel: 'All Facilities',
-      itemLabel: 'facility',
-      searchPlaceholder: 'Search facilities...',
-      addLabel: 'Add Facility',
-    },
+    };
   };
 
   const EquipmentPage: React.FC<EquipmentPageProps> = ({ registryMode = 'equipment' }) => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const { currentTenant } = useAuth();
+    const { currentTenant, perspective } = useAuth();
     const { isDarkMode, currentTheme } = useTheme();
     const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-    const modeConfig = MODE_CONFIG[registryMode];
+    const modeConfig = getModeConfig(registryMode, perspective);
 
     // ── Resources (filtered by registry mode) ─────────────────────────
+    // Revenue: tenant's configured resources only
+    // Expense: full master catalog (resource templates)
+    const isExpense = perspective === 'expense';
+
     const {
       data: allResources = [],
-      isLoading: categoriesLoading,
-      isError: categoriesError,
+      isLoading: savedResourcesLoading,
+      isError: savedResourcesError,
     } = useResources();
 
-    // Filter to only the resource types for this registry mode
-    const equipmentResources = useMemo(() => {
-      return allResources.filter(
-        (r) =>
-          modeConfig.typeIds.includes((r.resource_type_id || '').toLowerCase()) &&
-          r.is_active
-      );
-    }, [allResources, modeConfig.typeIds]);
+    const templateFilters: ResourceTemplateFilters = useMemo(
+      () => ({ limit: 500, resource_type_id: modeConfig.typeIds[0] }),
+      [modeConfig.typeIds]
+    );
+    const {
+      templates,
+      isLoading: templatesLoading,
+      isError: templatesError,
+    } = useResourceTemplatesBrowser(templateFilters);
+
+    const categoriesLoading = isExpense ? templatesLoading : savedResourcesLoading;
+    const categoriesError = isExpense ? templatesError : savedResourcesError;
+
+    // Normalise both data sources into a common shape
+    type NormalisedResource = { id: string; name: string; resource_type_id: string; sub_category: string | null; is_active: boolean };
+
+    const equipmentResources: NormalisedResource[] = useMemo(() => {
+      if (isExpense) {
+        // Master catalog templates — filter by mode typeIds
+        return templates
+          .filter((t) => modeConfig.typeIds.includes((t.resource_type_id || '').toLowerCase()))
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            resource_type_id: t.resource_type_id,
+            sub_category: t.sub_category || null,
+            is_active: true,
+          }));
+      }
+      // Revenue — tenant's saved resources
+      return allResources
+        .filter(
+          (r) =>
+            modeConfig.typeIds.includes((r.resource_type_id || '').toLowerCase()) &&
+            r.is_active
+        )
+        .map((r) => ({
+          id: r.id,
+          name: r.display_name || r.name,
+          resource_type_id: r.resource_type_id,
+          sub_category: r.sub_category || null,
+          is_active: r.is_active,
+        }));
+    }, [isExpense, templates, allResources, modeConfig.typeIds]);
 
     // ── Sub-category grouping ───────────────────────────────────────
     const { subCategories, resourcesBySubCategory, resourceIdToSubCategory } =
       useMemo(() => {
-        const bySubCat = new Map<string, Resource[]>();
+        const bySubCat = new Map<string, NormalisedResource[]>();
         const idToSubCat = new Map<string, string>();
 
         for (const r of equipmentResources) {
@@ -138,10 +187,14 @@
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<TenantAsset | null>(null);
 
-    // ── Data: Assets (fetch ALL — filter client-side) ───────────────
+    // ── Data: Assets (filtered by ownership_type based on perspective) ──
+    const ownershipType = registryMode === 'equipment'
+      ? (perspective === 'revenue' ? 'client' : 'self') as const
+      : undefined;
+
     const filters: AssetRegistryFilters = useMemo(
-      () => ({ limit: 500, offset: 0 }),
-      []
+      () => ({ limit: 500, offset: 0, ...(ownershipType ? { ownership_type: ownershipType } : {}) }),
+      [ownershipType]
     );
 
     const {
@@ -191,15 +244,14 @@
       }
     }, [selectedSubCategory, searchQuery, setSearchParams, searchParams]);
 
-    // ── Assets scoped to this registry mode ─────────────────────────
+    // ── Assets scoped to this registry mode + enforce ownership_type client-side ──
     const modeAssets = useMemo(() => {
       if (isError) return [];
-      // Only keep assets whose resource_type_id matches the current mode
-      // (e.g. 'equipment' for Equipment Registry, 'asset' for Entity Registry)
       return assets.filter((a) =>
-        modeConfig.typeIds.includes((a.resource_type_id || '').toLowerCase())
+        modeConfig.typeIds.includes((a.resource_type_id || '').toLowerCase()) &&
+        (!ownershipType || (a.ownership_type || '') === ownershipType)
       );
-    }, [assets, isError, modeConfig.typeIds]);
+    }, [assets, isError, modeConfig.typeIds, ownershipType]);
 
     // ── Client-side filtered assets ─────────────────────────────────
     const displayAssets = useMemo(() => {
@@ -257,7 +309,7 @@
     const allFormCategories = useMemo(() => {
       return equipmentResources.map((r) => ({
         id: r.id,
-        name: r.display_name || r.name,
+        name: r.name,
         sub_category: r.sub_category || null,
         resource_type_id: r.resource_type_id,
       }));
@@ -695,6 +747,7 @@
           onSubmit={handleCreateSubmit}
           isSubmitting={createMutation.isPending}
           registryMode={registryMode}
+          defaultOwnershipType={ownershipType || 'client'}
         />
 
         <EquipmentFormDialog
@@ -709,6 +762,7 @@
           onSubmit={handleEditSubmit}
           isSubmitting={updateMutation.isPending}
           registryMode={registryMode}
+          defaultOwnershipType={ownershipType || 'client'}
         />
       </div>
     );

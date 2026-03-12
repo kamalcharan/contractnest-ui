@@ -24,6 +24,7 @@ import type {
   AssetCondition,
   AssetCriticality,
   AssetStatus,
+  AssetOwnershipType,
 } from '@/types/assetRegistry';
 import {
   DEFAULT_FORM_DATA,
@@ -47,6 +48,8 @@ interface EquipmentFormDialogProps {
   lockedContactName?: string;
   /** Controls whether header says "Equipment" or "Facility" */
   registryMode?: 'equipment' | 'entity';
+  /** Default ownership type based on current perspective */
+  defaultOwnershipType?: AssetOwnershipType;
 }
 
 const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
@@ -62,6 +65,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
   lockedContactId,
   lockedContactName,
   registryMode = 'equipment',
+  defaultOwnershipType = 'client',
 }) => {
   const entityLabel = registryMode === 'entity' ? 'Facility' : 'Equipment';
   const { isDarkMode, currentTheme } = useTheme();
@@ -125,6 +129,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
         status: asset.status,
         condition: asset.condition,
         criticality: asset.criticality,
+        ownership_type: asset.ownership_type || 'client',
         owner_contact_id: asset.owner_contact_id || undefined,
         location: asset.location || undefined,
         make: asset.make || undefined,
@@ -147,6 +152,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
       setFormData({
         ...DEFAULT_FORM_DATA,
         resource_type_id: resourceTypeId || '',
+        ownership_type: lockedContactId ? 'client' : defaultOwnershipType,
         // Auto-set owner when locked (wizard context)
         ...(lockedContactId ? { owner_contact_id: lockedContactId } : {}),
       });
@@ -155,7 +161,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
       setSpecRows([]);
     }
     setErrors({});
-  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, resourceIdToSubCategory, lockedContactId]);
+  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, resourceIdToSubCategory, lockedContactId, defaultOwnershipType]);
 
   // Auto-select equipment type if only 1 in the selected sub_category
   useEffect(() => {
@@ -232,8 +238,10 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
     if (!selectedFormSubCategory) errs.sub_category = 'Category is required';
     if (!formData.asset_type_id) errs.resource_type_id = 'Equipment type is required';
     if (!formData.name.trim()) errs.name = 'Name is required';
-    // Skip owner validation when locked from wizard (already set)
-    if (!lockedContactId && !formData.owner_contact_id) errs.owner_contact_id = 'Client / Owner is required';
+    // Owner is required only for client-owned assets (and when not locked from wizard)
+    if (formData.ownership_type === 'client' && !lockedContactId && !formData.owner_contact_id) {
+      errs.owner_contact_id = 'Client / Owner is required';
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -403,96 +411,99 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
               </div>
             )}
 
-            {/* Client / Owner */}
-            <h4 style={{ ...sectionHeaderStyle, color: subCatColor, borderBottom: 'none', paddingBottom: 0, marginBottom: '8px', marginTop: '16px' }}>
-              Client / Owner
-            </h4>
-            <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
-              Whose equipment is this?
-            </p>
-            {lockedContactId ? (
-              /* Locked from wizard — Contract Buyer context */
-              <div
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
-                style={{
-                  borderColor: colors.brand.primary + '30',
-                  backgroundColor: colors.brand.primary + '06',
-                  color: colors.utility.primaryText,
-                }}
-              >
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ backgroundColor: colors.brand.primary + '18', color: colors.brand.primary }}
-                >
-                  {(lockedContactName || 'C').charAt(0).toUpperCase()}
-                </div>
-                <span className="font-medium truncate">{lockedContactName || 'Selected Client'}</span>
-                <span
-                  className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}
-                >
-                  Contract Buyer
-                </span>
-              </div>
-            ) : mode === 'edit' && formData.owner_contact_id ? (
-              /* Locked in edit mode — client cannot be changed */
-              <div
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
-                style={{
-                  borderColor: colors.utility.primaryText + '20',
-                  backgroundColor: colors.utility.primaryText + '04',
-                  color: colors.utility.primaryText,
-                  cursor: 'not-allowed',
-                }}
-                title="Client name cannot be edited"
-              >
-                {editOwnerLoading ? (
-                  /* Skeleton shimmer while contact name loads */
-                  <>
-                    <div
-                      className="w-7 h-7 rounded-full flex-shrink-0 animate-pulse"
-                      style={{ backgroundColor: colors.utility.primaryText + '12' }}
-                    />
-                    <div className="flex-1 space-y-1.5">
-                      <div
-                        className="h-3.5 rounded animate-pulse"
-                        style={{ backgroundColor: colors.utility.primaryText + '12', width: '60%' }}
-                      />
-                      <div
-                        className="h-2.5 rounded animate-pulse"
-                        style={{ backgroundColor: colors.utility.primaryText + '08', width: '40%' }}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
+            {/* Client / Owner — shown only for client-owned (Revenue perspective) */}
+            {defaultOwnershipType === 'client' && (
+              <>
+                <h4 style={{ ...sectionHeaderStyle, color: subCatColor, borderBottom: 'none', paddingBottom: 0, marginBottom: '8px', marginTop: '16px' }}>
+                  Client / Owner
+                </h4>
+                <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
+                  Which client does this equipment belong to?
+                </p>
+                {lockedContactId ? (
+                  /* Locked from wizard — Contract Buyer context */
+                  <div
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
+                    style={{
+                      borderColor: colors.brand.primary + '30',
+                      backgroundColor: colors.brand.primary + '06',
+                      color: colors.utility.primaryText,
+                    }}
+                  >
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+                      style={{ backgroundColor: colors.brand.primary + '18', color: colors.brand.primary }}
                     >
-                      {(editOwnerContact?.company_name || editOwnerContact?.name || 'C').charAt(0).toUpperCase()}
+                      {(lockedContactName || 'C').charAt(0).toUpperCase()}
                     </div>
-                    <span className="font-medium truncate">
-                      {editOwnerContact?.company_name || editOwnerContact?.name || editOwnerContact?.displayName || 'Unknown Client'}
+                    <span className="font-medium truncate">{lockedContactName || 'Selected Client'}</span>
+                    <span
+                      className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}
+                    >
+                      Contract Buyer
                     </span>
-                    <Lock
-                      size={13}
-                      className="ml-auto flex-shrink-0"
-                      style={{ color: colors.utility.secondaryText }}
-                    />
-                  </>
+                  </div>
+                ) : mode === 'edit' && formData.owner_contact_id ? (
+                  /* Locked in edit mode — client cannot be changed */
+                  <div
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm"
+                    style={{
+                      borderColor: colors.utility.primaryText + '20',
+                      backgroundColor: colors.utility.primaryText + '04',
+                      color: colors.utility.primaryText,
+                      cursor: 'not-allowed',
+                    }}
+                    title="Client name cannot be edited"
+                  >
+                    {editOwnerLoading ? (
+                      <>
+                        <div
+                          className="w-7 h-7 rounded-full flex-shrink-0 animate-pulse"
+                          style={{ backgroundColor: colors.utility.primaryText + '12' }}
+                        />
+                        <div className="flex-1 space-y-1.5">
+                          <div
+                            className="h-3.5 rounded animate-pulse"
+                            style={{ backgroundColor: colors.utility.primaryText + '12', width: '60%' }}
+                          />
+                          <div
+                            className="h-2.5 rounded animate-pulse"
+                            style={{ backgroundColor: colors.utility.primaryText + '08', width: '40%' }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          style={{ backgroundColor: colors.utility.primaryText + '10', color: colors.utility.secondaryText }}
+                        >
+                          {(editOwnerContact?.company_name || editOwnerContact?.name || 'C').charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium truncate">
+                          {editOwnerContact?.company_name || editOwnerContact?.name || editOwnerContact?.displayName || 'Unknown Client'}
+                        </span>
+                        <Lock
+                          size={13}
+                          className="ml-auto flex-shrink-0"
+                          style={{ color: colors.utility.secondaryText }}
+                        />
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  /* Create mode — full picker */
+                  <ContactPicker
+                    value={formData.owner_contact_id}
+                    onChange={(contactId) => updateField('owner_contact_id', contactId)}
+                    placeholder="Search client by name, email, or company..."
+                    classifications={['client']}
+                  />
                 )}
-              </div>
-            ) : (
-              /* Create mode — full picker */
-              <ContactPicker
-                value={formData.owner_contact_id}
-                onChange={(contactId) => updateField('owner_contact_id', contactId)}
-                placeholder="Search client by name, email, or company..."
-                classifications={['client']}
-              />
+                {errors.owner_contact_id && <p className="text-xs text-red-500 mt-1">{errors.owner_contact_id}</p>}
+              </>
             )}
-            {errors.owner_contact_id && <p className="text-xs text-red-500 mt-1">{errors.owner_contact_id}</p>}
           </div>
 
           {/* ── Basic Information ─────────────────────────────────── */}

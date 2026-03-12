@@ -1,262 +1,368 @@
-// src/components/landing/LandingNavigation.tsx
+// src/components/landing/LandingNavigation.tsx — V3 Dark Theme
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  CheckCircle, 
-  ChevronDown,
-  Menu,
-  X,
-  Stethoscope,
-  DollarSign,
-  Factory,
-  ShoppingBag,
-  Cpu,
-  GraduationCap,
-  Landmark,
-  Heart,
-  Briefcase,
-  Phone,
-  Truck,
-  Zap,
-  Construction,
-  UtensilsCrossed,
-  Film,
-  Wheat,
-  Pill,
-  Car,
-  Plane,
-  MoreHorizontal,
-  Building
-} from 'lucide-react';
 
-// Types
-interface Industry {
-  id: string;
-  name: string;
-  description?: string;
-  icon: string;
-}
-
+// ── Types ──────────────────────────────────────────────
 interface NavigationProps {
   onIndustrySelect?: (industryId: string) => void;
   onNavigate?: (path: string) => void;
   className?: string;
 }
 
-// Mock components
-const Button = ({ children, className = '', variant = 'primary', onClick, ...props }) => {
-  const baseClass = 'inline-flex items-center justify-center px-6 py-3 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
-  const variants = {
-    primary: 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500',
-    secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-gray-500',
-    outline: 'border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white focus:ring-red-500'
-  };
-  
-  return (
-    <button 
-      className={`${baseClass} ${variants[variant]} ${className}`}
-      onClick={onClick}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
+// ── V3 Design Tokens ───────────────────────────────────
+const V3 = {
+  bg: '#0D0F14',
+  surface: '#13161D',
+  border: 'rgba(255,255,255,0.07)',
+  border2: 'rgba(255,255,255,0.12)',
+  amber: '#F5A623',
+  text: '#E8E6E0',
+  muted: '#7A8099',
+} as const;
 
-// Icon mapping for industries
-const getIndustryIcon = (iconName: string) => {
-  const iconMap = {
-    'Stethoscope': <Stethoscope className="h-4 w-4" />,
-    'DollarSign': <DollarSign className="h-4 w-4" />,
-    'Factory': <Factory className="h-4 w-4" />,
-    'ShoppingBag': <ShoppingBag className="h-4 w-4" />,
-    'Cpu': <Cpu className="h-4 w-4" />,
-    'GraduationCap': <GraduationCap className="h-4 w-4" />,
-    'Landmark': <Landmark className="h-4 w-4" />,
-    'Heart': <Heart className="h-4 w-4" />,
-    'Briefcase': <Briefcase className="h-4 w-4" />,
-    'Phone': <Phone className="h-4 w-4" />,
-    'Truck': <Truck className="h-4 w-4" />,
-    'Zap': <Zap className="h-4 w-4" />,
-    'Construction': <Construction className="h-4 w-4" />,
-    'UtensilsCrossed': <UtensilsCrossed className="h-4 w-4" />,
-    'Film': <Film className="h-4 w-4" />,
-    'Wheat': <Wheat className="h-4 w-4" />,
-    'Pill': <Pill className="h-4 w-4" />,
-    'Car': <Car className="h-4 w-4" />,
-    'Plane': <Plane className="h-4 w-4" />,
-    'MoreHorizontal': <MoreHorizontal className="h-4 w-4" />
-  };
-  return iconMap[iconName] || <Building className="h-4 w-4" />;
-};
+const font = {
+  heading: "'Bebas Neue', sans-serif",
+  body: "'DM Sans', sans-serif",
+  mono: "'DM Mono', monospace",
+} as const;
 
-const LandingNavigation: React.FC<NavigationProps> = ({ 
+// ── Nav Links ──────────────────────────────────────────
+const NAV_LINKS = [
+  { label: 'Features', href: '#features' },
+  { label: 'Pricing', href: '#pricing' },
+  { label: 'How it Works', href: '#playground' },
+];
+
+// ── Component ──────────────────────────────────────────
+const LandingNavigation: React.FC<NavigationProps> = ({
   onIndustrySelect,
   onNavigate,
-  className = ''
+  className = '',
 }) => {
-  const [showIndustriesDropdown, setShowIndustriesDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [industries, setIndustries] = useState<Industry[]>([]);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Environment URLs
-const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://www.contractnest.com/register';
-const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://www.contractnest.com/login';
+  const signupUrl =
+    import.meta.env.VITE_SIGNUP_URL || 'https://www.contractnest.com/register';
+  const loginUrl =
+    import.meta.env.VITE_LOGIN_URL || 'https://www.contractnest.com/login';
 
-  // Load industries (would be imported in real implementation)
+  // Scroll detection for backdrop blur intensity
   useEffect(() => {
-    // Mock industries data - replace with actual import
-    const mockIndustries: Industry[] = [
-      { id: 'healthcare', name: 'Healthcare', description: 'Medical services, hospitals, clinics', icon: 'Stethoscope' },
-      { id: 'financial_services', name: 'Financial Services', description: 'Banking, insurance, investments', icon: 'DollarSign' },
-      { id: 'manufacturing', name: 'Manufacturing', description: 'Production of goods and industrial products', icon: 'Factory' },
-      { id: 'retail', name: 'Retail', description: 'Sale of goods to consumers', icon: 'ShoppingBag' },
-      { id: 'technology', name: 'Technology', description: 'Software, hardware, IT services', icon: 'Cpu' },
-      { id: 'education', name: 'Education', description: 'Schools, universities, e-learning', icon: 'GraduationCap' },
-      { id: 'government', name: 'Government', description: 'Public administration, governmental agencies', icon: 'Landmark' },
-      { id: 'nonprofit', name: 'Non-profit', description: 'Charitable organizations and initiatives', icon: 'Heart' },
-      { id: 'professional_services', name: 'Professional Services', description: 'Legal, accounting, consulting', icon: 'Briefcase' },
-      { id: 'telecommunications', name: 'Telecommunications', description: 'Phone, internet, communication services', icon: 'Phone' }
-    ];
-    setIndustries(mockIndustries);
+    const onScroll = () => setScrolled(window.scrollY > 16);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Handle click outside to close dropdowns
+  // Click outside to close mobile menu
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowIndustriesDropdown(false);
-      }
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
         setShowMobileMenu(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Navigation handlers
   const handleSignIn = () => {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'nav_sign_in', { event_category: 'navigation' });
+    }
     window.location.href = loginUrl;
   };
 
   const handleGetStarted = () => {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'nav_get_started', { event_category: 'conversion' });
+    }
     window.location.href = signupUrl;
   };
 
-  const handleIndustryClick = (industryId: string) => {
-    setShowIndustriesDropdown(false);
+  const handleNavClick = (href: string) => {
     setShowMobileMenu(false);
-    
-    if (onIndustrySelect) {
-      onIndustrySelect(industryId);
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'nav_click', { event_category: 'navigation', event_label: href });
+    }
+    if (href.startsWith('#')) {
+      const el = document.getElementById(href.slice(1));
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     } else if (onNavigate) {
-      onNavigate(`/industry/${industryId}`);
-    }
-    
-    // Track industry selection
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'industry_select', {
-        event_category: 'navigation',
-        event_label: industryId
-      });
+      onNavigate(href);
     }
   };
 
-  const handleNavClick = (section: string) => {
-    setShowMobileMenu(false);
-    
-    if (onNavigate) {
-      onNavigate(`#${section}`);
-    } else {
-      // Scroll to section
-      const element = document.getElementById(section);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-    
-    // Track navigation
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'nav_click', {
-        event_category: 'navigation',
-        event_label: section
-      });
-    }
+  // ── Styles ─────────────────────────────────────────
+  const navStyle: React.CSSProperties = {
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    background: scrolled
+      ? 'rgba(13,15,20,0.88)'
+      : 'rgba(13,15,20,0.65)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    borderBottom: `1px solid ${scrolled ? V3.border2 : V3.border}`,
+    transition: 'background 0.3s, border-color 0.3s',
   };
 
-  const handleAllIndustriesClick = () => {
-    setShowIndustriesDropdown(false);
-    setShowMobileMenu(false);
-    
-    if (onNavigate) {
-      onNavigate('/industries');
-    }
+  const innerStyle: React.CSSProperties = {
+    maxWidth: 1200,
+    margin: '0 auto',
+    padding: '0 24px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 60,
   };
 
   return (
-    <nav className={`bg-white border-b border-gray-200 sticky top-0 z-50 ${className}`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => onNavigate?.('/')}>
-              <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center mr-2">
-                <CheckCircle className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">ContractNest</span>
-            </div>
+    <nav style={navStyle} className={className}>
+      <div style={innerStyle}>
+        {/* ── Logo ─────────────────────── */}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+          onClick={() => onNavigate?.('/')}
+        >
+          {/* Amber square logo mark */}
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              background: V3.amber,
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={V3.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+            </svg>
           </div>
+          <span
+            style={{
+              fontFamily: font.heading,
+              fontSize: '1.35rem',
+              letterSpacing: '0.06em',
+              color: V3.text,
+              lineHeight: 1,
+            }}
+          >
+            CONTRACTNEST
+          </span>
+        </div>
 
-          {/* Desktop Navigation - Hidden for now */}
-          <div className="hidden md:flex items-center space-x-8">
-            {/* Menu items hidden - keeping space for future use */}
-          </div>
-          
-          {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
-            <Button variant="outline" onClick={handleSignIn}>
-              Sign In
-            </Button>
-            <Button onClick={handleGetStarted}>
-              Get Started
-            </Button>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
+        {/* ── Desktop Nav Links ────────── */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 32,
+          }}
+          className="landing-nav-desktop-links"
+        >
+          {NAV_LINKS.map((link) => (
             <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="text-gray-700 hover:text-gray-900 p-2 transition-colors"
+              key={link.href}
+              onClick={() => handleNavClick(link.href)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontFamily: font.body,
+                fontSize: '0.82rem',
+                color: V3.muted,
+                cursor: 'pointer',
+                padding: '4px 0',
+                transition: 'color 0.2s',
+                letterSpacing: '0.01em',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = V3.text; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = V3.muted; }}
             >
-              {showMobileMenu ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              {link.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Desktop CTAs ─────────────── */}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+          className="landing-nav-desktop-ctas"
+        >
+          <button
+            onClick={handleSignIn}
+            style={{
+              background: 'none',
+              border: `1px solid ${V3.border2}`,
+              fontFamily: font.body,
+              fontSize: '0.8rem',
+              fontWeight: 500,
+              color: V3.text,
+              padding: '7px 18px',
+              borderRadius: 7,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = V3.amber;
+              e.currentTarget.style.color = V3.amber;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = V3.border2;
+              e.currentTarget.style.color = V3.text;
+            }}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={handleGetStarted}
+            style={{
+              background: V3.amber,
+              border: 'none',
+              fontFamily: font.body,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: V3.bg,
+              padding: '8px 20px',
+              borderRadius: 7,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FFB733';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = V3.amber;
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            Get Started
+          </button>
+        </div>
+
+        {/* ── Mobile Hamburger ─────────── */}
+        <button
+          onClick={() => setShowMobileMenu(!showMobileMenu)}
+          style={{
+            display: 'none',
+            background: 'none',
+            border: 'none',
+            color: V3.text,
+            cursor: 'pointer',
+            padding: 6,
+          }}
+          className="landing-nav-mobile-toggle"
+        >
+          {showMobileMenu ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* ── Mobile Menu Dropdown ────── */}
+      {showMobileMenu && (
+        <div
+          ref={mobileMenuRef}
+          style={{
+            background: V3.surface,
+            borderTop: `1px solid ${V3.border}`,
+            padding: '16px 24px 20px',
+          }}
+          className="landing-nav-mobile-menu"
+        >
+          {/* Nav links */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
+            {NAV_LINKS.map((link) => (
+              <button
+                key={link.href}
+                onClick={() => handleNavClick(link.href)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontFamily: font.body,
+                  fontSize: '0.9rem',
+                  color: V3.muted,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  padding: '10px 0',
+                  borderBottom: `1px solid ${V3.border}`,
+                  transition: 'color 0.2s',
+                }}
+              >
+                {link.label}
+              </button>
+            ))}
+          </div>
+
+          {/* CTAs */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <button
+              onClick={handleSignIn}
+              style={{
+                background: 'none',
+                border: `1px solid ${V3.border2}`,
+                fontFamily: font.body,
+                fontSize: '0.86rem',
+                fontWeight: 500,
+                color: V3.text,
+                padding: '11px 0',
+                borderRadius: 8,
+                cursor: 'pointer',
+                width: '100%',
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={handleGetStarted}
+              style={{
+                background: V3.amber,
+                border: 'none',
+                fontFamily: font.body,
+                fontSize: '0.86rem',
+                fontWeight: 600,
+                color: V3.bg,
+                padding: '11px 0',
+                borderRadius: 8,
+                cursor: 'pointer',
+                width: '100%',
+              }}
+            >
+              Get Started
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Mobile Menu */}
-      {showMobileMenu && (
-        <div className="md:hidden border-t border-gray-200" ref={mobileMenuRef}>
-          <div className="px-4 py-4 space-y-4">
-            {/* Mobile CTA Buttons Only */}
-            <div className="space-y-3">
-              <Button variant="outline" onClick={handleSignIn} className="w-full">
-                Sign In
-              </Button>
-              <Button onClick={handleGetStarted} className="w-full">
-                Get Started
-              </Button>
-            </div>
-          </div>
-        </div>
       )}
+
+      {/* ── Responsive CSS ──────────── */}
+      <style>{`
+        @media (max-width: 768px) {
+          .landing-nav-desktop-links,
+          .landing-nav-desktop-ctas {
+            display: none !important;
+          }
+          .landing-nav-mobile-toggle {
+            display: block !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .landing-nav-mobile-menu {
+            display: none !important;
+          }
+        }
+      `}</style>
     </nav>
   );
 };

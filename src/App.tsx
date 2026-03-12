@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { MasterDataProvider } from './contexts/MasterDataContext';
+import { TenantProvider } from './contexts/TenantContext';
 import { QueryProvider } from './providers/QueryProvider'; // TanStack Query Provider
 
 import './styles/globals.css';
@@ -824,16 +825,16 @@ const App: React.FC = () => {
         <ThemeProvider>
           <Router>
             <AuthProvider>
-
                 <QueryProvider>
-                  <MasterDataProvider>
-                    {/* VaNiToast Provider wrapping the entire app - POSITION CHANGED TO TOP-RIGHT */}
-                    <VaNiToastProviderWithGlobal position="top-right" maxToasts={5}>
-                      <AppContent />
-                    </VaNiToastProviderWithGlobal>
-                  </MasterDataProvider>
+                  <TenantProvider>
+                    <MasterDataProvider>
+                      {/* VaNiToast Provider wrapping the entire app - POSITION CHANGED TO TOP-RIGHT */}
+                      <VaNiToastProviderWithGlobal position="top-right" maxToasts={5}>
+                        <AppContent />
+                      </VaNiToastProviderWithGlobal>
+                    </MasterDataProvider>
+                  </TenantProvider>
                 </QueryProvider>
-
             </AuthProvider>
           </Router>
         </ThemeProvider>

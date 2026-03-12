@@ -1230,11 +1230,12 @@ export const API_ENDPOINTS = {
   // =================================================================
   CLIENT_ASSET_REGISTRY: {
     BASE: '/api/client-asset-registry',
-    LIST_WITH_FILTERS: (filters: { contact_id?: string; resource_type_id?: string; status?: string; limit?: number; offset?: number } = {}) => {
+    LIST_WITH_FILTERS: (filters: { contact_id?: string; resource_type_id?: string; status?: string; ownership_type?: string; limit?: number; offset?: number } = {}) => {
       const params = new URLSearchParams();
       if (filters.contact_id) params.append('contact_id', filters.contact_id);
       if (filters.resource_type_id) params.append('resource_type_id', filters.resource_type_id);
       if (filters.status) params.append('status', filters.status);
+      if (filters.ownership_type) params.append('ownership_type', filters.ownership_type);
       if (filters.limit) params.append('limit', String(filters.limit));
       if (filters.offset) params.append('offset', String(filters.offset));
       const qs = params.toString();

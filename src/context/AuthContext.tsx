@@ -75,6 +75,9 @@ interface GoogleAuthData {
   isNewUser: boolean;
 }
 
+// Perspective type — Revenue (client contracts) vs Expense (vendor contracts)
+export type Perspective = 'revenue' | 'expense';
+
 // Auth context interface
 interface AuthContextType {
   user: User | null;
@@ -84,6 +87,7 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   isLive: boolean;
+  perspective: Perspective;
   registrationStatus: 'complete' | 'pending_workspace' | null;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   register: (userData: RegisterFormData) => Promise<void>;
@@ -92,6 +96,9 @@ interface AuthContextType {
   clearError: () => void;
   resetPassword: (email: string) => Promise<boolean>;
   toggleEnvironment: () => void;
+  togglePerspective: () => void;
+  setPerspectiveDirectly: (p: Perspective) => void;
+  initializePerspective: (businessTypeId: string) => void;
   updateUserPreferences: (preferences: Partial<UserPreferences>) => Promise<void>;
   refreshData: () => Promise<void>;
   // Environment switch modal
@@ -99,6 +106,11 @@ interface AuthContextType {
   pendingEnvironment: 'live' | 'test' | null;
   confirmEnvironmentSwitch: () => void;
   cancelEnvironmentSwitch: () => void;
+  // Perspective switch modal
+  showPerspectiveSwitchModal: boolean;
+  pendingPerspective: Perspective | null;
+  confirmPerspectiveSwitch: () => void;
+  cancelPerspectiveSwitch: () => void;
   // Google OAuth methods
   setGoogleAuthData: (data: GoogleAuthData) => void;
   setAuthToken: (token: string) => void;
@@ -161,6 +173,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Environment switch modal state
   const [showEnvironmentSwitchModal, setShowEnvironmentSwitchModal] = useState<boolean>(false);
   const [pendingEnvironment, setPendingEnvironment] = useState<'live' | 'test' | null>(null);
+
+  // Perspective state (Revenue/Expense) — defaults set after profile loads
+  const [perspective, setPerspective] = useState<Perspective>('revenue');
+  const [perspectiveInitialized, setPerspectiveInitialized] = useState<boolean>(false);
+
+  // Perspective switch modal state
+  const [showPerspectiveSwitchModal, setShowPerspectiveSwitchModal] = useState<boolean>(false);
+  const [pendingPerspective, setPendingPerspective] = useState<Perspective | null>(null);
 
   // Google OAuth state
   const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean>(false);
@@ -827,6 +847,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPendingEnvironment(null);
   };
 
+  // ── Initialize perspective from tenant profile (no modal, called once) ──
+  const initializePerspective = (businessTypeId: string) => {
+    if (perspectiveInitialized) return;
+    const defaultPerspective: Perspective = businessTypeId.toLowerCase() === 'buyer' ? 'expense' : 'revenue';
+    setPerspective(defaultPerspective);
+    setPerspectiveInitialized(true);
+  };
+
+  // ── Perspective toggle (Revenue/Expense) ──────────────────────────
+  const togglePerspective = () => {
+    const target: Perspective = perspective === 'revenue' ? 'expense' : 'revenue';
+    setPendingPerspective(target);
+    setShowPerspectiveSwitchModal(true);
+  };
+
+  // Set perspective directly (used by inline switchers on pages) — also shows modal
+  const setPerspectiveDirectly = (p: Perspective) => {
+    if (p === perspective) return;
+    setPendingPerspective(p);
+    setShowPerspectiveSwitchModal(true);
+  };
+
+  // Confirm perspective switch
+  const confirmPerspectiveSwitch = () => {
+    if (!pendingPerspective) return;
+
+    setShowPerspectiveSwitchModal(false);
+
+    const label = pendingPerspective === 'revenue' ? 'Revenue' : 'Expense';
+    vaniToast.info(`Switching to ${label} mode...`, { duration: 1500 });
+
+    setPerspective(pendingPerspective);
+    setPendingPerspective(null);
+
+    // Dispatch event so other contexts can react (e.g. TenantContext, query invalidation)
+    window.dispatchEvent(new CustomEvent('perspective-changed', { detail: { perspective: pendingPerspective } }));
+
+    setTimeout(() => {
+      vaniToast.success(`Switched to ${label} mode`, { duration: 2000 });
+    }, 300);
+  };
+
+  // Cancel perspective switch
+  const cancelPerspectiveSwitch = () => {
+    setShowPerspectiveSwitchModal(false);
+    setPendingPerspective(null);
+  };
+
   // Update user preferences
   const updateUserPreferences = async (preferences: Partial<UserPreferences>) => {
     try {
@@ -1283,6 +1351,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Reset onboarding state for new tenant — must re-check from API
     setHasCompletedOnboarding(false);
 
+    // Reset perspective so it re-initializes from new tenant's profile
+    setPerspective('revenue');
+    setPerspectiveInitialized(false);
+
     // Await onboarding check so navigation doesn't happen before state is resolved
     await checkOnboardingStatus();
 
@@ -1325,6 +1397,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     error,
     isLive,
+    perspective,
     registrationStatus,
     login,
     register,
@@ -1333,12 +1406,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearError,
     resetPassword,
     toggleEnvironment,
+    togglePerspective,
+    setPerspectiveDirectly,
+    initializePerspective,
     updateUserPreferences,
     refreshData,
     showEnvironmentSwitchModal,
     pendingEnvironment,
     confirmEnvironmentSwitch,
     cancelEnvironmentSwitch,
+    showPerspectiveSwitchModal,
+    pendingPerspective,
+    confirmPerspectiveSwitch,
+    cancelPerspectiveSwitch,
     setGoogleAuthData,
     setAuthToken,
     linkGoogleAccount,

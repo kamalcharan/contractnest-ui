@@ -1,55 +1,7 @@
-// src/components/landing/LandingPricing.tsx
+// src/components/landing/LandingPricing.tsx — V3 Dark Theme (Credit-Based Pricing)
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  CheckCircle,
-  X,
-  Calculator,
-  Users,
-  Building,
-  Zap,
-  Clock,
-  Timer,
-  Flame,
-  Star,
-  ArrowRight,
-  IndianRupee,
-  TrendingUp,
-  Shield,
-  Phone,
-  Mail,
-  Award,
-  Target,
-  BarChart3,
-  Globe,
-  AlertCircle,
-  Gift,
-  Sparkles
-} from 'lucide-react';
 
-// Import existing components
-import UrgencyElements from '../CRO/UrgencyElements';
-import ValueCalculator from '../CRO/ValueCalculator';
-
-// Types
-interface PricingFeature {
-  name: string;
-  included: boolean;
-  description?: string;
-}
-
-interface PricingPlan {
-  id: string;
-  name: string;
-  price: number;
-  period: string;
-  description: string;
-  features: PricingFeature[];
-  popular?: boolean;
-  earlyAdopter?: boolean;
-  originalPrice?: number;
-  savings?: string;
-}
-
+// ── Types ──────────────────────────────────────────────
 interface PricingProps {
   onPlanSelect?: (planId: string) => void;
   onCalculatorOpen?: () => void;
@@ -57,402 +9,556 @@ interface PricingProps {
   className?: string;
 }
 
-// Mock Button component
-const Button = ({ children, className = '', variant = 'primary', onClick, size = 'default', disabled = false, ...props }) => {
-  const baseClass = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-  const variants = {
-    primary: 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-500',
-    secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-900 focus:ring-gray-500',
-    outline: 'border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-white focus:ring-red-500',
-    ghost: 'text-gray-600 hover:text-gray-900 hover:bg-gray-100',
-    success: 'bg-green-500 hover:bg-green-600 text-white focus:ring-green-500'
-  };
-  const sizes = {
-    sm: 'px-4 py-2 text-sm',
-    default: 'px-6 py-3 text-sm',
-    lg: 'px-8 py-4 text-base'
-  };
-  
-  return (
-    <button 
-      className={`${baseClass} ${variants[variant]} ${sizes[size]} ${className}`}
-      onClick={onClick}
-      disabled={disabled}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
+interface PricingFeature {
+  label: string;
+  status: 'yes' | 'no' | 'soon';
+  note?: string;
+}
 
-// Badge Component
-const Badge = ({ children, className = '', variant = 'default' }) => {
-  const variants = {
-    default: 'bg-gray-100 text-gray-800',
-    success: 'bg-green-100 text-green-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    error: 'bg-red-100 text-red-800',
-    urgent: 'bg-red-50 text-red-700 border border-red-200',
-    popular: 'bg-blue-500 text-white',
-    early: 'bg-gradient-to-r from-orange-400 to-red-500 text-white animate-pulse'
+interface CreditRow {
+  label: string;
+  value: string;
+  color?: 'green' | 'amber' | 'default';
+}
+
+interface OverageRow {
+  label: string;
+  price: string;
+}
+
+interface PricingTier {
+  id: string;
+  tier: string;
+  featured?: boolean;
+  featuredLabel?: string;
+  priceDisplay: 'free' | 'currency';
+  symbol?: string;
+  amount?: string;
+  period?: string;
+  tagline: string;
+  credits: CreditRow[];
+  overage?: { rows: OverageRow[] };
+  features: PricingFeature[];
+  ctaLabel: string;
+  ctaVariant: 'primary' | 'outline';
+}
+
+// ── CSS Variables (matching V3 design tokens) ──────────
+const V3 = {
+  bg: '#0D0F14',
+  surface: '#13161D',
+  surface2: '#1C2030',
+  border: 'rgba(255,255,255,0.07)',
+  border2: 'rgba(255,255,255,0.12)',
+  amber: '#F5A623',
+  amberDim: 'rgba(245,166,35,0.12)',
+  green: '#2ECC71',
+  greenDim: 'rgba(46,204,113,0.10)',
+  red: '#E74C3C',
+  text: '#E8E6E0',
+  muted: '#7A8099',
+  faint: '#3A3F52',
+} as const;
+
+const font = {
+  heading: "'Bebas Neue', sans-serif",
+  body: "'DM Sans', sans-serif",
+  mono: "'DM Mono', monospace",
+} as const;
+
+// ── Pricing Data ───────────────────────────────────────
+const PRICING_TIERS: PricingTier[] = [
+  {
+    id: 'free',
+    tier: 'Free Tier',
+    priceDisplay: 'free',
+    tagline: 'Try ContractNest with your first 3 contracts. No card needed.',
+    credits: [
+      { label: 'Contracts included', value: '3 contracts', color: 'green' },
+      { label: 'RFQs included', value: '—' },
+    ],
+    features: [
+      { label: 'Basic contract creation', status: 'yes' },
+      { label: 'Track on system', status: 'yes' },
+      { label: 'Basic text forms', status: 'yes' },
+      { label: 'SLA alerts & notifications', status: 'no' },
+      { label: 'Smart service forms', status: 'no' },
+      { label: 'AR / AP tracking', status: 'no' },
+      { label: 'RFQ creation', status: 'no' },
+    ],
+    ctaLabel: 'Start Free',
+    ctaVariant: 'outline',
+  },
+  {
+    id: 'subscription',
+    tier: 'Subscription',
+    featured: true,
+    featuredLabel: 'Most Popular · Best Value',
+    priceDisplay: 'currency',
+    symbol: '₹',
+    amount: '2,000',
+    period: '/ month',
+    tagline: 'For businesses running contracts on both sides — revenue and cost.',
+    credits: [
+      { label: 'Contracts included', value: '8 contracts / month', color: 'amber' },
+      { label: 'RFQs included', value: '5 RFQs / month', color: 'amber' },
+    ],
+    overage: {
+      rows: [
+        { label: 'Additional contract', price: '₹60 / contract' },
+        { label: 'Additional RFQ', price: '₹100 / RFQ' },
+      ],
+    },
+    features: [
+      { label: 'Everything in Free', status: 'yes' },
+      { label: 'SLA alerts & real-time notifications', status: 'yes' },
+      { label: 'Smart service forms (calibration, OT clean, PM)', status: 'yes' },
+      { label: 'Evidence collection — photos, reports, certs', status: 'yes' },
+      { label: 'AR / AP tracking & auto-invoicing', status: 'yes' },
+      { label: 'RFQ creation & vendor responses', status: 'yes' },
+      { label: 'Compliance reports — audit ready', status: 'yes' },
+      { label: 'VaNi AI ops agent', status: 'soon', note: 'add-on · ₹5,000/mo in beta' },
+    ],
+    ctaLabel: 'Join Beta — Get Early Access',
+    ctaVariant: 'primary',
+  },
+  {
+    id: 'payg',
+    tier: 'Pay-as-you-go',
+    priceDisplay: 'currency',
+    symbol: '₹',
+    amount: '150',
+    period: '/ contract',
+    tagline: 'One-time contracts. No monthly commitment. Pay only when you create.',
+    credits: [
+      { label: 'Contracts', value: '₹150 each' },
+      { label: 'RFQs', value: '₹350 each' },
+    ],
+    features: [
+      { label: 'Digital contract creation', status: 'yes' },
+      { label: 'Track on system', status: 'yes' },
+      { label: 'Basic text forms & evidence upload', status: 'yes' },
+      { label: 'RFQ creation (₹350/RFQ)', status: 'yes' },
+      { label: 'SLA alerts & notifications', status: 'no' },
+      { label: 'Smart service forms', status: 'no' },
+      { label: 'AR / AP tracking', status: 'no' },
+    ],
+    ctaLabel: 'Get Early Access',
+    ctaVariant: 'outline',
+  },
+];
+
+const CREDIT_PILLS = [
+  '1 contract = 1 credit · charged once',
+  '1 RFQ = 1 RFQ credit · charged on creation',
+  'Credits don\'t expire within billing month',
+  'Overage billed at end of month',
+];
+
+// ── Sub-components ─────────────────────────────────────
+
+const EyebrowLine: React.FC<{ label: string }> = ({ label }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+    <div style={{ width: 32, height: 1, background: V3.amber }} />
+    <span
+      style={{
+        fontFamily: font.mono,
+        fontSize: '0.7rem',
+        letterSpacing: '0.16em',
+        textTransform: 'uppercase',
+        color: V3.amber,
+      }}
+    >
+      {label}
+    </span>
+  </div>
+);
+
+const CreditBar: React.FC = () => (
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      background: V3.surface,
+      border: `1px solid ${V3.border2}`,
+      borderRadius: 10,
+      padding: '14px 20px',
+      marginBottom: 40,
+      flexWrap: 'wrap',
+    }}
+  >
+    <div
+      style={{
+        fontFamily: font.mono,
+        fontSize: '0.65rem',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        color: V3.amber,
+        flexShrink: 0,
+      }}
+    >
+      How credits work
+    </div>
+    <div style={{ width: 1, height: 16, background: V3.border2, flexShrink: 0 }} />
+    {CREDIT_PILLS.map((text, i) => (
+      <div
+        key={i}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          background: V3.surface2,
+          border: `1px solid ${V3.border}`,
+          borderRadius: 100,
+          padding: '5px 12px',
+          fontSize: '0.78rem',
+          color: V3.muted,
+        }}
+      >
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: '50%',
+            background: V3.amber,
+            flexShrink: 0,
+          }}
+        />
+        <span dangerouslySetInnerHTML={{ __html: text.replace(/(\b\d[^·]*credit\b|don't expire|end of month)/gi, `<strong style="color:${V3.text};font-weight:500">$1</strong>`) }} />
+      </div>
+    ))}
+  </div>
+);
+
+const FeatureIcon: React.FC<{ status: 'yes' | 'no' | 'soon' }> = ({ status }) => {
+  const map = {
+    yes: { char: '✓', color: V3.green },
+    no: { char: '✕', color: V3.faint },
+    soon: { char: '◎', color: V3.amber },
   };
-  
+  const { char, color } = map[status];
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>
-      {children}
+    <span
+      style={{
+        flexShrink: 0,
+        fontSize: '0.7rem',
+        marginTop: 2,
+        color,
+      }}
+    >
+      {char}
     </span>
   );
 };
 
-// Pricing Card Component
-const PricingCard = ({ 
-  plan, 
-  onSelect,
-  isVisible,
-  delay = 0 
-}: { 
-  plan: PricingPlan;
-  onSelect: (planId: string) => void;
-  isVisible: boolean;
-  delay?: number;
-}) => {
-  const [shouldAnimate, setShouldAnimate] = useState(false);
+const PricingCard: React.FC<{
+  tier: PricingTier;
+  onCta: (id: string) => void;
+  visible: boolean;
+  delay: number;
+}> = ({ tier, onCta, visible, delay }) => {
+  const [show, setShow] = useState(false);
 
   useEffect(() => {
-    if (isVisible) {
-      const timer = setTimeout(() => {
-        setShouldAnimate(true);
-      }, delay);
-      return () => clearTimeout(timer);
+    if (visible) {
+      const t = setTimeout(() => setShow(true), delay);
+      return () => clearTimeout(t);
     }
-  }, [isVisible, delay]);
+  }, [visible, delay]);
 
-  const handleSelect = () => {
-    onSelect(plan.id);
-    
-    // Track plan selection
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'pricing_plan_select', {
-        event_category: 'conversion',
-        event_label: plan.id,
-        value: plan.price
-      });
-    }
-  };
-
-  const cardClasses = `bg-white rounded-2xl shadow-lg border-2 transition-all duration-500 hover:shadow-xl ${
-    plan.popular ? 'border-blue-500 ring-4 ring-blue-100' : 
-    plan.earlyAdopter ? 'border-red-500 ring-4 ring-red-100' : 'border-gray-200'
-  } ${shouldAnimate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`;
+  const cardBg = tier.featured
+    ? `linear-gradient(160deg, rgba(245,166,35,0.06) 0%, ${V3.surface} 40%)`
+    : V3.surface;
+  const cardBorder = tier.featured ? 'rgba(245,166,35,0.35)' : V3.border;
+  const cardHoverBorder = tier.featured ? 'rgba(245,166,35,0.5)' : V3.border2;
 
   return (
-    <div className={cardClasses}>
-      {/* Card Header */}
-      <div className="p-8 pb-4">
-        {/* Badges */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="space-x-2">
-            {plan.popular && (
-              <Badge variant="popular">
-                <Star className="h-3 w-3 mr-1" />
-                Most Popular
-              </Badge>
-            )}
-            {plan.earlyAdopter && (
-              <Badge variant="early">
-                <Flame className="h-3 w-3 mr-1" />
-                Early Adopter
-              </Badge>
-            )}
-          </div>
-          {plan.savings && (
-            <div className="text-right">
-              <div className="text-sm font-semibold text-green-600">{plan.savings} OFF</div>
-            </div>
-          )}
+    <div
+      style={{
+        background: cardBg,
+        border: `1px solid ${cardBorder}`,
+        borderRadius: 14,
+        overflow: 'hidden',
+        position: 'relative',
+        transition: 'border-color 0.25s, transform 0.25s, opacity 0.5s',
+        opacity: show ? 1 : 0,
+        transform: show ? 'translateY(0)' : 'translateY(18px)',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = cardHoverBorder;
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = cardBorder;
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+      }}
+    >
+      {/* Featured Bar */}
+      {tier.featured && tier.featuredLabel && (
+        <div
+          style={{
+            background: V3.amber,
+            color: V3.bg,
+            fontFamily: font.mono,
+            fontSize: '0.62rem',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            textAlign: 'center',
+            padding: 6,
+            fontWeight: 600,
+          }}
+        >
+          {tier.featuredLabel}
+        </div>
+      )}
+
+      {/* Top: Tier + Price + Tagline */}
+      <div style={{ padding: '28px 28px 20px', borderBottom: `1px solid ${V3.border}` }}>
+        <div
+          style={{
+            fontFamily: font.mono,
+            fontSize: '0.65rem',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            color: V3.muted,
+            marginBottom: 12,
+          }}
+        >
+          {tier.tier}
         </div>
 
-        {/* Plan Name & Description */}
-        <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-        <p className="text-gray-600 mb-6">{plan.description}</p>
-
-        {/* Pricing */}
-        <div className="flex items-baseline mb-6">
-          {plan.originalPrice && plan.originalPrice > plan.price && (
-            <div className="mr-3">
-              <span className="text-lg text-gray-400 line-through">₹{plan.originalPrice}</span>
-            </div>
-          )}
-          <div className="flex items-baseline">
-            <span className="text-4xl font-bold text-gray-900">₹{plan.price}</span>
-            <span className="text-gray-600 ml-1">{plan.period}</span>
+        {tier.priceDisplay === 'free' ? (
+          <div
+            style={{
+              fontFamily: font.heading,
+              fontSize: '3.2rem',
+              lineHeight: 1,
+              letterSpacing: '0.02em',
+              color: V3.green,
+              marginBottom: 6,
+            }}
+          >
+            FREE
           </div>
-        </div>
-
-        {/* Special Pricing Note */}
-        {plan.earlyAdopter && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6">
-            <div className="flex items-center text-orange-700">
-              <Gift className="h-4 w-4 mr-2" />
-              <span className="text-sm font-medium">
-                Limited Time: 50% off regular pricing for early adopters
-              </span>
-            </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+            <span style={{ fontFamily: font.body, fontSize: '1.2rem', color: V3.muted, fontWeight: 300 }}>
+              {tier.symbol}
+            </span>
+            <span
+              style={{
+                fontFamily: font.heading,
+                fontSize: '3.2rem',
+                lineHeight: 1,
+                letterSpacing: '0.02em',
+                color: tier.featured ? V3.amber : V3.text,
+              }}
+            >
+              {tier.amount}
+            </span>
+            <span style={{ fontSize: '0.78rem', color: V3.muted, fontWeight: 300 }}>
+              {tier.period}
+            </span>
           </div>
         )}
 
-        {/* CTA Button */}
-        <Button 
-          onClick={handleSelect} 
-          className={`w-full ${plan.popular ? 'bg-blue-500 hover:bg-blue-600 focus:ring-blue-500' : ''}`}
-          variant={plan.popular ? 'primary' : 'outline'}
-          size="lg"
-        >
-          {plan.price === 0 ? 'Start Free Trial' : 'Get Started'}
-          <ArrowRight className="ml-2 h-5 w-5" />
-        </Button>
+        <div style={{ fontSize: '0.82rem', color: V3.muted, lineHeight: 1.5, marginTop: 8 }}>
+          {tier.tagline}
+        </div>
       </div>
 
-      {/* Features List */}
-      <div className="px-8 pb-8">
-        <div className="space-y-3">
-          {plan.features.map((feature, index) => (
-            <div key={index} className="flex items-start">
-              {feature.included ? (
-                <CheckCircle className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-              ) : (
-                <X className="h-5 w-5 text-gray-300 mr-3 mt-0.5 flex-shrink-0" />
-              )}
-              <div>
-                <span className={`text-sm ${feature.included ? 'text-gray-900' : 'text-gray-400'}`}>
-                  {feature.name}
-                </span>
-                {feature.description && (
-                  <p className="text-xs text-gray-500 mt-1">{feature.description}</p>
-                )}
-              </div>
+      {/* Credits */}
+      <div
+        style={{
+          padding: '18px 28px',
+          borderBottom: `1px solid ${V3.border}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {tier.credits.map((cr, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.8rem',
+                color: V3.muted,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: tier.featured ? V3.amber : V3.faint,
+                  flexShrink: 0,
+                }}
+              />
+              {cr.label}
+            </span>
+            <span
+              style={{
+                fontFamily: font.mono,
+                fontSize: '0.72rem',
+                fontWeight: 500,
+                textAlign: 'right',
+                color: cr.color === 'green' ? V3.green : cr.color === 'amber' ? V3.amber : V3.text,
+              }}
+            >
+              {cr.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Overage (subscription only) */}
+      {tier.overage && (
+        <div
+          style={{
+            padding: '14px 28px',
+            borderBottom: `1px solid ${V3.border}`,
+            background: 'rgba(255,255,255,0.015)',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: font.mono,
+              fontSize: '0.6rem',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: V3.faint,
+              marginBottom: 8,
+            }}
+          >
+            Overage rates
+          </div>
+          {tier.overage.rows.map((row, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.76rem',
+                color: V3.muted,
+                padding: '3px 0',
+              }}
+            >
+              <span>{row.label}</span>
+              <span style={{ fontFamily: font.mono, fontSize: '0.72rem', color: V3.text }}>
+                {row.price}
+              </span>
             </div>
           ))}
         </div>
-      </div>
-    </div>
-  );
-};
+      )}
 
-// ROI Calculator Component
-const ROICalculator = ({ 
-  isVisible,
-  onCalculatorOpen 
-}: { 
-  isVisible: boolean;
-  onCalculatorOpen?: () => void;
-}) => {
-  const [contractCount, setContractCount] = useState(25);
-  const [avgValue, setAvgValue] = useState(500000);
-  const [savings, setSavings] = useState({ monthly: 0, annual: 0, roi: 0 });
-
-  useEffect(() => {
-    // Simple ROI calculation
-    const monthlyCost = Math.max(contractCount - 10, 0) * (150 / 3); // First 10 free, ₹150 per quarter
-    const monthlySavings = contractCount * 0.15 * (avgValue / 12); // 15% efficiency gain
-    const netMonthlySavings = monthlySavings - monthlyCost;
-    const annualSavings = netMonthlySavings * 12;
-    const roiPercentage = monthlyCost > 0 ? ((netMonthlySavings / monthlyCost) * 100) : 500;
-
-    setSavings({
-      monthly: Math.round(netMonthlySavings),
-      annual: Math.round(annualSavings),
-      roi: Math.round(roiPercentage)
-    });
-  }, [contractCount, avgValue]);
-
-  const formatCurrency = (amount: number) => {
-    if (amount >= 100000) {
-      return `₹${(amount / 100000).toFixed(1)}L`;
-    }
-    return `₹${amount.toLocaleString()}`;
-  };
-
-  return (
-    <div className={`bg-gradient-to-r from-green-50 to-blue-50 rounded-2xl p-8 border border-green-200 transition-all duration-500 ${isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
-      <div className="text-center mb-6">
-        <h3 className="text-2xl font-bold text-gray-900 mb-2">
-          Calculate Your ROI
-        </h3>
-        <p className="text-gray-600">
-          See how much ContractNest can save your business
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Number of Active Contracts
-            </label>
-            <input
-              type="range"
-              min="5"
-              max="100"
-              value={contractCount}
-              onChange={(e) => setContractCount(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>5</span>
-              <span className="font-semibold text-gray-700">{contractCount}</span>
-              <span>100+</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Average Contract Value
-            </label>
-            <input
-              type="range"
-              min="100000"
-              max="5000000"
-              step="100000"
-              value={avgValue}
-              onChange={(e) => setAvgValue(parseInt(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>₹1L</span>
-              <span className="font-semibold text-gray-700">{formatCurrency(avgValue)}</span>
-              <span>₹50L+</span>
-            </div>
-          </div>
-
-          <Button 
-            onClick={onCalculatorOpen}
-            variant="outline" 
-            className="w-full border-green-500 text-green-700 hover:bg-green-500 hover:text-white"
+      {/* Features */}
+      <div style={{ padding: '18px 28px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        {tier.features.map((f, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 9,
+              fontSize: '0.8rem',
+              color: V3.muted,
+              lineHeight: 1.4,
+              opacity: f.status === 'no' ? 0.45 : 1,
+            }}
           >
-            <Calculator className="mr-2 h-4 w-4" />
-            Detailed ROI Analysis
-          </Button>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-lg">
-          <h4 className="font-semibold text-gray-900 mb-4 text-center">
-            Your Potential Savings
-          </h4>
-          
-          <div className="space-y-4">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-1">
-                {formatCurrency(savings.annual)}
-              </div>
-              <div className="text-sm text-gray-600">Annual Savings</div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div>
-                <div className="text-xl font-bold text-blue-600 mb-1">
-                  {formatCurrency(savings.monthly)}
-                </div>
-                <div className="text-xs text-gray-600">Monthly Savings</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-purple-600 mb-1">
-                  {savings.roi > 1000 ? '1000+' : savings.roi}%
-                </div>
-                <div className="text-xs text-gray-600">ROI</div>
-              </div>
-            </div>
-            
-            <div className="text-xs text-gray-500 text-center pt-3 border-t">
-              Based on 15% efficiency improvement and ₹150/contract/quarter pricing
-            </div>
+            <FeatureIcon status={f.status} />
+            <span>
+              {f.label}
+              {f.note && (
+                <span
+                  style={{
+                    fontSize: '0.68rem',
+                    color: V3.amber,
+                    fontFamily: font.mono,
+                    marginLeft: 4,
+                  }}
+                >
+                  {f.note}
+                </span>
+              )}
+            </span>
           </div>
-        </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <div style={{ padding: '20px 28px', borderTop: `1px solid ${V3.border}` }}>
+        <button
+          onClick={() => onCta(tier.id)}
+          style={{
+            width: '100%',
+            padding: 12,
+            borderRadius: 8,
+            fontFamily: font.body,
+            fontSize: '0.86rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            letterSpacing: '0.01em',
+            border: tier.ctaVariant === 'outline' ? `1px solid ${V3.border2}` : 'none',
+            background: tier.ctaVariant === 'primary' ? V3.amber : 'transparent',
+            color: tier.ctaVariant === 'primary' ? V3.bg : V3.text,
+          }}
+          onMouseEnter={(e) => {
+            const btn = e.currentTarget;
+            if (tier.ctaVariant === 'primary') {
+              btn.style.background = '#FFB733';
+              btn.style.transform = 'translateY(-1px)';
+            } else {
+              btn.style.borderColor = V3.amber;
+              btn.style.color = V3.amber;
+            }
+          }}
+          onMouseLeave={(e) => {
+            const btn = e.currentTarget;
+            if (tier.ctaVariant === 'primary') {
+              btn.style.background = V3.amber;
+              btn.style.transform = 'translateY(0)';
+            } else {
+              btn.style.borderColor = V3.border2;
+              btn.style.color = V3.text;
+            }
+          }}
+        >
+          {tier.ctaLabel}
+        </button>
       </div>
     </div>
   );
 };
 
-const LandingPricing: React.FC<PricingProps> = ({ 
+// ── Main Component ─────────────────────────────────────
+const LandingPricing: React.FC<PricingProps> = ({
   onPlanSelect,
   onCalculatorOpen,
   onContactSales,
-  className = ''
+  className = '',
 }) => {
-  const [isVisible, setIsVisible] = useState(true); // Default to true to ensure content is visible
-  const [showCalculator, setShowCalculator] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  // Environment URLs
-const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-production.up.railway.app/signup';
-
-  // Pricing plans
-  const pricingPlans: PricingPlan[] = [
-    {
-      id: 'starter',
-      name: 'Starter',
-      price: 0,
-      period: 'first 10 contracts',
-      description: 'Perfect for small businesses getting started with service contract management',
-      earlyAdopter: false,
-      features: [
-        { name: 'Up to 10 contracts', included: true, description: 'Completely free forever' },
-        { name: 'Digital contract creation', included: true },
-        { name: 'Basic SLA monitoring', included: true },
-        { name: 'Email notifications', included: true },
-        { name: 'Basic reporting', included: true },
-        { name: 'Standard support', included: true },
-        { name: 'Advanced analytics', included: false },
-        { name: 'API integrations', included: false },
-        { name: 'Custom workflows', included: false },
-        { name: 'Priority support', included: false }
-      ]
-    },
-    {
-      id: 'professional',
-      name: 'Professional',
-      price: 150,
-      originalPrice: 300,
-      period: 'per contract, per quarter',
-      description: 'Full-featured solution for growing businesses with comprehensive contract management needs',
-      popular: true,
-      earlyAdopter: true,
-      savings: '50%',
-      features: [
-        { name: 'Unlimited contracts', included: true, description: 'First 10 contracts free, then ₹150/quarter each' },
-        { name: 'Digital contract creation', included: true },
-        { name: 'Advanced SLA monitoring', included: true },
-        { name: 'Automated compliance tracking', included: true },
-        { name: 'Smart invoicing & payments', included: true },
-        { name: 'Real-time collaboration', included: true },
-        { name: 'Advanced analytics & reporting', included: true },
-        { name: 'API integrations', included: true },
-        { name: 'Custom workflows', included: true },
-        { name: 'Priority support', included: true },
-        { name: 'White-label options', included: false },
-        { name: 'Dedicated account manager', included: false }
-      ]
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: 0,
-      period: 'custom pricing',
-      description: 'Tailored solution for large organizations with complex requirements and high-volume contract management',
-      features: [
-        { name: 'Volume-based pricing', included: true, description: 'Significant discounts for 500+ contracts' },
-        { name: 'All Professional features', included: true },
-        { name: 'White-label solutions', included: true },
-        { name: 'Custom integrations', included: true },
-        { name: 'Advanced security & compliance', included: true },
-        { name: 'Dedicated account manager', included: true },
-        { name: 'Custom training & onboarding', included: true },
-        { name: 'SLA guarantees', included: true },
-        { name: '24/7 phone support', included: true },
-        { name: 'Custom feature development', included: true }
-      ]
-    }
-  ];
+  const signupUrl =
+    import.meta.env.VITE_SIGNUP_URL ||
+    'https://contractnest-ui-production.up.railway.app/signup';
 
   // Intersection Observer
   useEffect(() => {
@@ -460,225 +566,278 @@ const signupUrl = import.meta.env.VITE_SIGNUP_URL || 'https://contractnest-ui-pr
       ([entry]) => {
         if (entry.isIntersecting) {
           setIsVisible(true);
-          // Track pricing section view
           if (typeof gtag !== 'undefined') {
             gtag('event', 'pricing_section_view', {
               event_category: 'engagement',
-              event_label: 'pricing_plans'
+              event_label: 'pricing_plans',
             });
           }
         }
       },
-      { threshold: 0.2 }
+      { threshold: 0.15 },
     );
-
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
-    }
-
+    if (sectionRef.current) observer.observe(sectionRef.current);
     return () => observer.disconnect();
   }, []);
 
-  const handlePlanSelect = (planId: string) => {
+  const handleCta = (planId: string) => {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'pricing_plan_select', {
+        event_category: 'conversion',
+        event_label: planId,
+      });
+    }
+
     if (onPlanSelect) {
       onPlanSelect(planId);
+    } else if (planId === 'enterprise') {
+      onContactSales?.();
     } else {
-      // Default behavior - redirect to signup
-      if (planId === 'enterprise') {
-        if (onContactSales) {
-          onContactSales();
-        }
+      const el = document.getElementById('emailInput');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth' });
+        el.focus();
       } else {
         window.location.href = signupUrl;
       }
     }
   };
 
-  const handleCalculatorOpen = () => {
-    setShowCalculator(true);
-    
-    if (onCalculatorOpen) {
-      onCalculatorOpen();
-    }
-    
-    // Track calculator open
+  const handleVaniBeta = () => {
     if (typeof gtag !== 'undefined') {
-      gtag('event', 'pricing_calculator_open', {
-        event_category: 'engagement',
-        event_label: 'roi_calculator'
-      });
-    }
-  };
-
-  const handleContactSales = () => {
-    if (onContactSales) {
-      onContactSales();
-    }
-    
-    // Track contact sales
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'contact_sales_click', {
+      gtag('event', 'vani_beta_apply', {
         event_category: 'conversion',
-        event_label: 'enterprise_pricing'
+        event_label: 'pricing_vani_callout',
       });
+    }
+    const el = document.getElementById('emailInput');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+      el.focus();
+    } else {
+      window.location.href = signupUrl;
     }
   };
 
   return (
-    <>
-      <section ref={sectionRef} id="pricing" className={`py-20 bg-gray-50 px-4 sm:px-6 lg:px-8 ${className}`}>
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium mb-6">
-              <IndianRupee className="h-4 w-4 mr-2" />
-              Transparent Pricing
-            </div>
-            
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Simple, Honest Pricing
-            </h2>
-            
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto leading-relaxed mb-8">
-              Contract-centric pricing, not per-user. Pay only for what you use. 
-              No hidden fees, no surprises.
-            </p>
+    <section
+      ref={sectionRef}
+      id="pricing"
+      className={className}
+      style={{
+        position: 'relative',
+        zIndex: 2,
+        maxWidth: 1200,
+        margin: '0 auto',
+        padding: '80px 56px',
+      }}
+    >
+      {/* ── Header ─────────────────────────── */}
+      <EyebrowLine label="Pricing" />
 
-            {/* Urgency Element */}
-            <div className="flex justify-center mb-8">
-              <UrgencyElements 
-                variant="countdown" 
-                autoShow={true}
-                onTrigger={(event, data) => {
-                  console.log('Pricing urgency triggered:', event, data);
-                }}
-              />
-            </div>
-          </div>
+      <h2
+        style={{
+          fontFamily: font.heading,
+          fontSize: 'clamp(2.4rem, 5vw, 4rem)',
+          lineHeight: 0.95,
+          letterSpacing: '0.02em',
+          color: V3.text,
+          marginBottom: 16,
+        }}
+      >
+        PAY FOR THE WORK.
+        <br />
+        NOT THE SEAT.
+      </h2>
 
-          {/* Pricing Cards - Hidden for now */}
-          {/*
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
-            {pricingPlans.map((plan, index) => (
-              <PricingCard
-                key={plan.id}
-                plan={plan}
-                onSelect={handlePlanSelect}
-                isVisible={isVisible}
-                delay={index * 200}
-              />
-            ))}
-          </div>
-          */}
+      <p
+        style={{
+          fontSize: '1rem',
+          color: V3.muted,
+          fontWeight: 300,
+          lineHeight: 1.6,
+          maxWidth: 520,
+          marginBottom: 48,
+        }}
+      >
+        ContractNest runs on a{' '}
+        <strong style={{ color: V3.text, fontWeight: 500 }}>credit system</strong> — not per-user
+        licences. Your 2-person team and a 10-person team doing the same work pay the same. Add{' '}
+        <strong style={{ color: V3.text, fontWeight: 500 }}>VaNi</strong> and you're not buying
+        software — you're hiring an AI ops employee who costs a fraction of the work they replace.
+      </p>
 
-          {/* ROI Calculator - Hidden for now */}
-          {/*
-          <div className="mb-16">
-            <ROICalculator
-              isVisible={isVisible}
-              onCalculatorOpen={handleCalculatorOpen}
-            />
-          </div>
-          */}
+      {/* ── Credit Explainer ───────────────── */}
+      <CreditBar />
 
-          {/* Value Proposition */}
-          <div className="bg-white rounded-2xl p-8 shadow-lg border border-gray-200 mb-16">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                Why ContractNest Pricing Makes Sense
-              </h3>
-              <p className="text-gray-600 max-w-2xl mx-auto">
-                Our pricing model is designed to scale with your business and deliver value from day one
-              </p>
-            </div>
+      {/* ── Pricing Cards ──────────────────── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1.1fr 1fr',
+          gap: 16,
+          alignItems: 'start',
+        }}
+        className="pricing-v3-grid"
+      >
+        {PRICING_TIERS.map((tier, i) => (
+          <PricingCard
+            key={tier.id}
+            tier={tier}
+            onCta={handleCta}
+            visible={isVisible}
+            delay={i * 150}
+          />
+        ))}
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="h-8 w-8 text-green-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Contract-Based Pricing</h4>
-                <p className="text-sm text-gray-600">
-                  Pay per contract, not per user. Scale your team without increasing costs.
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Gift className="h-8 w-8 text-blue-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">First 10 Contracts Free</h4>
-                <p className="text-sm text-gray-600">
-                  Get started immediately with no upfront costs. Perfect for testing the platform.
-                </p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <TrendingUp className="h-8 w-8 text-purple-600" />
-                </div>
-                <h4 className="font-semibold text-gray-900 mb-2">100% OpEx Model</h4>
-                <p className="text-sm text-gray-600">
-                  No capital expenditure required. Everything is operational expense for easy budgeting.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Comparison Table - Hidden for now */}
-          {/*
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden mb-16">
-            <div className="p-8 pb-4">
-              <h3 className="text-2xl font-bold text-gray-900 text-center mb-6">
-                Compare ContractNest vs Traditional Solutions
-              </h3>
-            </div>
-            ...
-          </div>
-          */}
-
-          {/* FAQ Section - Hidden for now */}
-          {/*
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-8 border border-blue-200 mb-16">
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                Pricing Questions & Answers
-              </h3>
-            </div>
-            ...
-          </div>
-          */}
-
-          {/* Final CTA - Hidden for now */}
+      {/* ── Upgrade Nudge ──────────────────── */}
+      <div
+        style={{
+          marginTop: 28,
+          padding: '16px 20px',
+          background: V3.surface,
+          border: `1px solid ${V3.border}`,
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+        }}
+      >
+        <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>💡</span>
+        <div style={{ fontSize: '0.8rem', color: V3.muted, lineHeight: 1.5 }}>
+          On pay-as-you-go doing{' '}
+          <strong style={{ color: V3.amber }}>14+ contracts/month?</strong> Subscription saves you
+          money from contract #9 onwards — and unlocks alerts, smart forms, and AR/AP tracking. Add
+          VaNi and you're replacing ₹75,000+/month in staff time for ₹5,000/month.{' '}
+          <strong style={{ color: V3.amber }}>The math works itself out.</strong>
         </div>
-      </section>
+      </div>
 
-      {/* Calculator Modal */}
-      {showCalculator && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="relative max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-2xl">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-900">Detailed ROI Calculator</h2>
-                <button
-                  onClick={() => setShowCalculator(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <span className="sr-only">Close</span>
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              {/* Modal Content */}
-              <div className="p-6">
-                <ValueCalculator />
-              </div>
-            </div>
+      {/* ── VaNi Standalone Callout ────────── */}
+      <div
+        style={{
+          marginTop: 24,
+          background: 'linear-gradient(135deg, rgba(245,166,35,0.07) 0%, rgba(13,15,20,0) 70%)',
+          border: '1px solid rgba(245,166,35,0.25)',
+          borderRadius: 12,
+          padding: '32px 36px',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gap: 32,
+          alignItems: 'center',
+        }}
+        className="pricing-v3-vani-callout"
+      >
+        <div>
+          <div
+            style={{
+              fontFamily: font.mono,
+              fontSize: '0.62rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: V3.amber,
+              marginBottom: 10,
+            }}
+          >
+            VaNi · AI Ops Employee · Private Beta
+          </div>
+          <div
+            style={{
+              fontFamily: font.heading,
+              fontSize: '1.8rem',
+              letterSpacing: '0.04em',
+              color: V3.text,
+              marginBottom: 8,
+            }}
+          >
+            YOUR CONTRACTS RUN THEMSELVES.
+          </div>
+          <div style={{ fontSize: '0.84rem', color: V3.muted, lineHeight: 1.6, maxWidth: 560 }}>
+            VaNi handles vendor scheduling, SLA monitoring, customer communications, AR/AP chasing,
+            and compliance reporting. A hospital pilot saved{' '}
+            <strong style={{ color: V3.text }}>248 hours/month</strong> across 4 departments. At
+            ₹5,000/month in beta — that's{' '}
+            <strong style={{ color: V3.amber }}>15× ROI on day one.</strong>
           </div>
         </div>
-      )}
-    </>
+
+        <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div
+            style={{
+              fontFamily: font.heading,
+              fontSize: '3rem',
+              color: V3.amber,
+              lineHeight: 1,
+            }}
+          >
+            ₹5,000
+          </div>
+          <div
+            style={{
+              fontSize: '0.72rem',
+              color: V3.muted,
+              fontFamily: font.mono,
+              letterSpacing: '0.06em',
+              marginBottom: 16,
+            }}
+          >
+            / month · beta pricing
+          </div>
+          <button
+            onClick={handleVaniBeta}
+            style={{
+              background: V3.amber,
+              color: V3.bg,
+              border: 'none',
+              fontFamily: font.body,
+              fontSize: '0.86rem',
+              fontWeight: 600,
+              padding: '12px 24px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FFB733';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = V3.amber;
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            Apply for VaNi Beta
+          </button>
+          <div
+            style={{
+              fontSize: '0.68rem',
+              color: V3.faint,
+              marginTop: 8,
+              fontFamily: font.mono,
+            }}
+          >
+            Limited to 8 pilot customers
+          </div>
+        </div>
+      </div>
+
+      {/* ── Responsive overrides (injected once) ── */}
+      <style>{`
+        @media (max-width: 900px) {
+          #pricing {
+            padding: 48px 24px !important;
+          }
+          .pricing-v3-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .pricing-v3-vani-callout {
+            grid-template-columns: 1fr !important;
+            text-align: center;
+          }
+        }
+      `}</style>
+    </section>
   );
 };
 

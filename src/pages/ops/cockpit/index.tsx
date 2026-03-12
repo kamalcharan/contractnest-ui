@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, type Perspective } from '@/context/AuthContext';
 import { useContractStats, useContracts, useContractOperations } from '@/hooks/queries/useContractQueries';
 import {
   useContractEvents,
@@ -68,7 +68,6 @@ const ContractWizard = lazy(() =>
 // TYPES
 // =================================================================
 
-type Perspective = 'revenue' | 'expense';
 type EventTimeFilter = 'today' | 'week' | 'month';
 type EventTypeFilter = 'all' | 'service' | 'billing';
 type QueueFilter = 'all' | 'drafts' | 'urgent' | 'pending';
@@ -1074,24 +1073,12 @@ const OpsCockpitPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const brandColor = colors.brand.primary;
 
-  // Tenant profile — for default perspective
+  // Tenant profile
   const { profile, loading: profileLoading } = useTenantContext();
-  const { currentTenant } = useAuth();
+  const { currentTenant, perspective, setPerspectiveDirectly } = useAuth();
 
-  // Perspective state
-  const [perspective, setPerspective] = useState<Perspective | null>(null);
-
-  useEffect(() => {
-    if (perspective === null && profile?.business_type_id) {
-      setPerspective(profile.business_type_id.toLowerCase() === 'buyer' ? 'expense' : 'revenue');
-    }
-  }, [profile?.business_type_id, perspective]);
-
-  const activePerspective: Perspective = perspective || 'revenue';
-
-  // ─── Perspective-aware contract type filter ─────────────────────
-  // Revenue = 'client' (they buy from us → we earn revenue)
-  // Expense = 'vendor' (they sell to us → we incur expense)
+  // ─── Perspective from AuthContext (global) ─────────────────────
+  const activePerspective: Perspective = perspective;
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
   // Drawer & wizard state
@@ -1331,12 +1318,12 @@ const OpsCockpitPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <PerspectiveSwitcher
               active={activePerspective}
-              onChange={(p) => setPerspective(p)}
+              onChange={(p) => setPerspectiveDirectly(p)}
               isDarkMode={isDarkMode}
               brandColor={brandColor}
             />
             <button
-              onClick={() => setPerspective(activePerspective === 'revenue' ? 'expense' : 'revenue')}
+              onClick={() => setPerspectiveDirectly(activePerspective === 'revenue' ? 'expense' : 'revenue')}
               className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
               style={{ color: brandColor }}
             >

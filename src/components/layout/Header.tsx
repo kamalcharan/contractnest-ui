@@ -14,13 +14,14 @@ import {
   Palette,
   ToggleLeft,
   ToggleRight,
-  Shield
+  Shield,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { languages } from '../../utils/constants/languages';
 import { themes } from "../../utils/theme"
 import EnvironmentSwitchModal from "../EnvironmentSwitchModal";
+import PerspectiveSwitchModal from "../PerspectiveSwitchModal";
 import TenantSwitcher from './TenantSwitcher';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const [themeMenuOpen, setThemeMenuOpen] = useState<boolean>(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState<boolean>(false);
   const { isDarkMode, toggleDarkMode, currentThemeId, setTheme, currentTheme } = useTheme();
-  const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, updateUserPreferences } = useAuth();
+  const { user, currentTenant, tenants, logout, isLive, toggleEnvironment, perspective, setPerspectiveDirectly, updateUserPreferences } = useAuth();
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -241,6 +242,33 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           {/* Tenant Switcher - Show based on user type and tenant count */}
           {showTenantSwitcher && currentTenant && (
             <TenantSwitcher showFullName={true} className="mr-4" />
+          )}
+
+          {/* Perspective Switcher (Revenue / Expense) — segmented pill */}
+          {currentTenant && (
+            <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
+              isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
+            }`}>
+              {(['revenue', 'expense'] as const).map((p) => {
+                const isActive = perspective === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPerspectiveDirectly(p)}
+                    className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                      isActive
+                        ? 'text-white shadow-sm'
+                        : isDarkMode
+                          ? 'text-gray-400 hover:text-gray-200'
+                          : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    style={isActive ? { backgroundColor: colors.brand.primary } : undefined}
+                  >
+                    {p === 'revenue' ? 'Revenue' : 'Expense'}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
         
@@ -733,6 +761,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       
       {/* Environment Switch Modal */}
       <EnvironmentSwitchModal />
+
+      {/* Perspective Switch Modal */}
+      <PerspectiveSwitchModal />
     </div>
   );
 };

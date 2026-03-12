@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useContracts, useGroupedContracts, useContractStats, contractKeys } from '@/hooks/queries/useContractQueries';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth, type Perspective } from '@/context/AuthContext';
 import { prefetchContacts } from '@/hooks/useContacts';
 import type {
   ContractListFilters,
@@ -43,10 +43,9 @@ import ClientGroupHeader from '@/components/contracts/list/ClientGroupHeader';
 
 
 // ═══════════════════════════════════════════════════
-// PERSPECTIVE SWITCHER (Revenue/Expense)
+// PERSPECTIVE SWITCHER (Revenue/Expense) — visual inline toggle
+// Reads from AuthContext, calls setPerspectiveDirectly on change
 // ═══════════════════════════════════════════════════
-
-type Perspective = 'revenue' | 'expense';
 
 interface PerspectiveSwitcherProps {
   active: Perspective;
@@ -449,7 +448,7 @@ const ContractsHubPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const brandColor = colors.brand.primary;
-  const { currentTenant, isLive } = useAuth();
+  const { currentTenant, isLive, perspective, setPerspectiveDirectly } = useAuth();
   const { profile } = useTenantContext();
   const queryClient = useQueryClient();
 
@@ -461,18 +460,8 @@ const ContractsHubPage: React.FC = () => {
     });
   }, [currentTenant?.id, isLive]);
 
-  // ── Perspective state (Revenue/Expense) ──
-  const [perspective, setPerspective] = useState<Perspective | null>(null);
-
-  useEffect(() => {
-    if (perspective === null && profile?.business_type_id) {
-      setPerspective(
-        profile.business_type_id.toLowerCase() === 'buyer' ? 'expense' : 'revenue'
-      );
-    }
-  }, [profile?.business_type_id, perspective]);
-
-  const activePerspective: Perspective = perspective || 'revenue';
+  // ── Perspective from AuthContext (global) ──
+  const activePerspective: Perspective = perspective;
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
   // ── Filter state — Active is the default status ──
@@ -675,13 +664,13 @@ const ContractsHubPage: React.FC = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
               <PerspectiveSwitcher
                 active={activePerspective}
-                onChange={(p) => setPerspective(p)}
+                onChange={(p) => setPerspectiveDirectly(p)}
                 isDarkMode={isDarkMode}
                 brandColor={brandColor}
               />
               <button
                 onClick={() =>
-                  setPerspective(activePerspective === 'revenue' ? 'expense' : 'revenue')
+                  setPerspectiveDirectly(activePerspective === 'revenue' ? 'expense' : 'revenue')
                 }
                 className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
                 style={{ color: brandColor }}

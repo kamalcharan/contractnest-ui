@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import type { Industry } from '@/services/serviceURLs';
+import { useTenantContext } from '@/contexts/TenantContext';
 
 // ════════════════════════════════════════════════════════════════════
 // PROPS
@@ -55,6 +56,7 @@ const ChangeIndustryModal: React.FC<ChangeIndustryModalProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const { profile } = useTenantContext();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -136,7 +138,10 @@ const ChangeIndustryModal: React.FC<ChangeIndustryModalProps> = ({
     savingRef.current = true;
     setSaving(true);
     try {
-      await api.put(API_ENDPOINTS.TENANTS.PROFILE, { industry_id: selectedId });
+      await api.put(API_ENDPOINTS.TENANTS.PROFILE, {
+        business_name: profile?.business_name,
+        industry_id: selectedId,
+      });
       vaniToast.success('Industry Updated', {
         message: 'Your business industry has been updated.',
         duration: 4000,

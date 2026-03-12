@@ -68,7 +68,7 @@ interface TenantProviderProps {
 }
 
 export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
-  const { currentTenant, isLive } = useAuth();
+  const { currentTenant, isLive, initializePerspective } = useAuth();
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +105,10 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       if (profileData) {
         setProfile(profileData);
         setLastFetchTime(now);
+        // Initialize perspective default from business type (only runs once)
+        if (profileData.business_type_id) {
+          initializePerspective(profileData.business_type_id);
+        }
       } else {
         setProfile(null);
       }
