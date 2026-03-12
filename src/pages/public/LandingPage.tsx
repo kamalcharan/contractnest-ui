@@ -530,9 +530,9 @@ const loginUrl = import.meta.env.VITE_LOGIN_URL || 'https://contractnest-ui-prod
         <meta name="msapplication-TileColor" content={colors.brand.primary} />
       </Helmet>
 
-      <div 
+      <div
         className="min-h-screen transition-colors"
-        style={{ backgroundColor: colors.utility.primaryBackground }}
+        style={{ backgroundColor: '#0D0F14' }}
       >
         {/* Navigation */}
         <LandingNavigation

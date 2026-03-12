@@ -1,6 +1,7 @@
-// src/components/landing/HeroV3.tsx - Vikuna Black themed hero from contractnest-v3 reference
-import React, { useState } from 'react';
+// src/components/landing/HeroV3.tsx - Vikuna Black themed hero with live cockpit preview
+import React, { useState, useEffect } from 'react';
 import { VikunaBlackTheme } from '../../config/theme/themes/vikunaBlack';
+import CockpitPreviewMock from './CockpitPreviewMock';
 
 interface HeroV3Props {
   onPlaygroundClick?: () => void;
@@ -20,10 +21,10 @@ const tickerItems = [
 ];
 
 const stats = [
-  { num: '₹700', sup: 'B+', label: 'Annual service contracts market in India' },
-  { num: '65', sup: '%', label: 'Still managed on paper, Excel & WhatsApp' },
-  { num: '250', sup: 'hrs', label: 'Avg. staff hours/month on contract ops — before VaNi' },
-  { num: '2', sup: 'hrs', label: 'After VaNi. Measured at a live pilot hospital.' },
+  { num: '45', arrow: '→', num2: '80', sup: '%', label: 'SLA compliance improvement in pilot hospitals' },
+  { num: '600', sup: '+', label: 'Service events tracked across live deployments' },
+  { num: '400', sup: '+', label: 'Contracts managed on the platform today' },
+  { num: '2', sup: 'hrs', label: 'Avg. ops time/month — down from 250 hrs before VaNi' },
 ];
 
 const HeroV3: React.FC<HeroV3Props> = ({
@@ -34,6 +35,18 @@ const HeroV3: React.FC<HeroV3Props> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  // Inject Google Fonts via <link> instead of @import (which breaks CSS parsing in <style> tags)
+  useEffect(() => {
+    const fontId = 'hero-v3-google-fonts';
+    if (!document.getElementById(fontId)) {
+      const link = document.createElement('link');
+      link.id = fontId;
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
 
   const handleJoin = () => {
     if (!email) return;
@@ -54,6 +67,8 @@ const HeroV3: React.FC<HeroV3Props> = ({
         color: colors.utility.primaryText,
         position: 'relative',
         overflow: 'hidden',
+        paddingBottom: 0,
+        marginBottom: 40,
       }}
     >
       {/* Noise texture overlay */}
@@ -68,293 +83,247 @@ const HeroV3: React.FC<HeroV3Props> = ({
         }}
       />
 
-      {/* Hero Content */}
+      {/* Hero Content — Two Column Layout */}
       <div
         style={{
           position: 'relative',
           zIndex: 2,
-          padding: '80px 56px 64px',
-          maxWidth: 1200,
+          padding: '80px 40px 64px',
+          maxWidth: 1320,
           margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: '0.85fr 1.15fr',
+          gap: 36,
+          alignItems: 'start',
         }}
+        className="hero-v3-grid"
       >
-        {/* Grid pattern on right */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: -40,
-            width: 480,
-            height: '100%',
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)`,
-            backgroundSize: '48px 48px',
-            maskImage: 'linear-gradient(to left, rgba(0,0,0,0.25) 0%, transparent 65%)',
-            WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.25) 0%, transparent 65%)',
-            pointerEvents: 'none',
-          }}
-        />
-
-        {/* Eyebrow */}
-        <div
-          className="hero-v3-fadeup"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 32,
-            animation: 'heroV3FadeUp 0.6s ease forwards 0.1s',
-            opacity: 0,
-          }}
-        >
-          <div style={{ width: 32, height: 1, background: colors.brand.primary }} />
-          <span
-            style={{
-              fontFamily: "'DM Mono', monospace",
-              fontSize: '0.7rem',
-              letterSpacing: '0.16em',
-              color: colors.brand.primary,
-              textTransform: 'uppercase',
-            }}
-          >
-            For businesses that sell services & buy them
-          </span>
-        </div>
-
-        {/* Headline */}
-        <h1
-          style={{
-            fontFamily: "'Bebas Neue', sans-serif",
-            fontSize: 'clamp(3.8rem, 8vw, 7.5rem)',
-            lineHeight: 0.92,
-            letterSpacing: '0.02em',
-            animation: 'heroV3FadeUp 0.7s ease forwards 0.2s',
-            opacity: 0,
-          }}
-        >
-          <span style={{ display: 'block', color: colors.utility.primaryText }}>
-            YOUR CONTRACTS
-          </span>
-          <span style={{ display: 'block', color: colors.brand.primary }}>
-            RUN YOUR BUSINESS.
-          </span>
-          <span style={{ display: 'block', color: colors.utility.primaryText, opacity: 0.22 }}>
-            UNTIL THEY DON'T.
-          </span>
-        </h1>
-
-        {/* Context line */}
-        <p
-          style={{
-            marginTop: 28,
-            maxWidth: 560,
-            fontSize: '1.05rem',
-            fontWeight: 300,
-            lineHeight: 1.7,
-            color: colors.utility.secondaryText,
-            animation: 'heroV3FadeUp 0.7s ease forwards 0.3s',
-            opacity: 0,
-          }}
-        >
-          AMCs. Vendor agreements. Maintenance contracts. Health packages. Whatever you call them
-          — if it involves recurring services, SLAs, and payments, that's what ContractNest
-          manages.
-        </p>
-
-        {/* Subtitle */}
-        <p
-          style={{
-            marginTop: 20,
-            maxWidth: 560,
-            fontSize: '1.1rem',
-            fontWeight: 300,
-            lineHeight: 1.7,
-            color: colors.utility.secondaryText,
-            animation: 'heroV3FadeUp 0.7s ease forwards 0.4s',
-            opacity: 0,
-          }}
-        >
-          Every business has two sides —{' '}
-          <strong style={{ color: colors.utility.primaryText, fontWeight: 500 }}>
-            revenue you're owed
-          </strong>{' '}
-          and{' '}
-          <strong style={{ color: colors.utility.primaryText, fontWeight: 500 }}>
-            costs you've committed to.
-          </strong>{' '}
-          ContractNest puts both on one platform. Every promise tracked. Every SLA enforced. Every
-          rupee accounted for.
-        </p>
-
-        {/* Proof Strip */}
-        <div
-          style={{
-            display: 'flex',
-            marginTop: 36,
-            border: `1px solid rgba(255,255,255,0.12)`,
-            borderRadius: 10,
-            overflow: 'hidden',
-            maxWidth: 580,
-            animation: 'heroV3FadeUp 0.7s ease forwards 0.5s',
-            opacity: 0,
-          }}
-        >
+        {/* ═══ LEFT COLUMN: Copy + CTA ═══ */}
+        <div>
+          {/* Grid pattern behind right column */}
           <div
             style={{
-              flex: 1,
-              padding: '16px 20px',
-              background: colors.utility.secondaryBackground,
-              borderRight: `1px solid rgba(255,255,255,0.12)`,
+              position: 'absolute',
+              top: 0,
+              right: -40,
+              width: 480,
+              height: '100%',
+              backgroundImage: `linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)`,
+              backgroundSize: '48px 48px',
+              maskImage: 'linear-gradient(to left, rgba(0,0,0,0.25) 0%, transparent 65%)',
+              WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,0.25) 0%, transparent 65%)',
+              pointerEvents: 'none',
             }}
-          >
-            <div
-              style={{
-                fontFamily: "'DM Mono', monospace",
-                fontSize: '0.64rem',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                marginBottom: 5,
-                color: colors.semantic.success,
-              }}
-            >
-              ↑ Revenue Side
-            </div>
-            <div style={{ fontSize: '0.82rem', color: colors.utility.secondaryText, lineHeight: 1.45 }}>
-              Create client contracts, track SLAs,{' '}
-              <strong style={{ color: colors.utility.primaryText, fontWeight: 500 }}>
-                collect on time.
-              </strong>
-            </div>
-          </div>
+          />
+
+          {/* Eyebrow */}
           <div
             style={{
-              flex: 1,
-              padding: '16px 20px',
-              background: colors.utility.secondaryBackground,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 32,
+              animation: 'heroV3FadeUp 0.6s ease forwards 0.1s',
+              opacity: 0,
             }}
           >
-            <div
+            <div style={{ width: 32, height: 1, background: colors.brand.primary }} />
+            <span
               style={{
                 fontFamily: "'DM Mono', monospace",
-                fontSize: '0.64rem',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                marginBottom: 5,
+                fontSize: '0.7rem',
+                letterSpacing: '0.16em',
                 color: colors.brand.primary,
+                textTransform: 'uppercase',
               }}
             >
-              ↓ Cost Side
-            </div>
-            <div style={{ fontSize: '0.82rem', color: colors.utility.secondaryText, lineHeight: 1.45 }}>
-              Manage vendors, verify work done,{' '}
-              <strong style={{ color: colors.utility.primaryText, fontWeight: 500 }}>
-                pay what's earned.
-              </strong>
-            </div>
+              For businesses that sell services & buy them
+            </span>
           </div>
-        </div>
 
-        {/* CTA Block */}
-        <div
-          style={{
-            marginTop: 36,
-            maxWidth: 480,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            animation: 'heroV3FadeUp 0.7s ease forwards 0.6s',
-            opacity: 0,
-          }}
-        >
-          {!submitted ? (
-            <>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your@business.com"
-                  onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+          {/* Headline */}
+          <h1
+            style={{
+              fontFamily: "'Bebas Neue', sans-serif",
+              fontSize: 'clamp(3rem, 6vw, 6.2rem)',
+              lineHeight: 0.92,
+              letterSpacing: '0.02em',
+              animation: 'heroV3FadeUp 0.7s ease forwards 0.2s',
+              opacity: 0,
+            }}
+          >
+            <span style={{ display: 'block', color: colors.utility.primaryText }}>
+              YOUR CONTRACTS
+            </span>
+            <span style={{ display: 'block', color: colors.brand.primary }}>
+              RUN YOUR BUSINESS.
+            </span>
+            <span style={{ display: 'block', color: colors.utility.primaryText, opacity: 0.22 }}>
+              UNTIL THEY DON'T.
+            </span>
+          </h1>
+
+          {/* Context line */}
+          <p
+            style={{
+              marginTop: 28,
+              maxWidth: 520,
+              fontSize: '1rem',
+              fontWeight: 300,
+              lineHeight: 1.7,
+              color: colors.utility.secondaryText,
+              animation: 'heroV3FadeUp 0.7s ease forwards 0.3s',
+              opacity: 0,
+            }}
+          >
+            <strong style={{ color: colors.brand.primary, fontWeight: 600 }}>
+              AMCs. Vendor agreements. Maintenance contracts. Health packages.
+            </strong>{' '}
+            Whatever you call them — if it involves recurring services, SLAs, and payments, ContractNest manages it.
+          </p>
+
+          {/* Subtitle */}
+          <p
+            style={{
+              marginTop: 18,
+              maxWidth: 520,
+              fontSize: '1.05rem',
+              fontWeight: 300,
+              lineHeight: 1.7,
+              color: colors.utility.secondaryText,
+              animation: 'heroV3FadeUp 0.7s ease forwards 0.4s',
+              opacity: 0,
+            }}
+          >
+            <strong style={{ color: colors.utility.primaryText, fontWeight: 500 }}>Both sides.</strong>{' '}
+            Revenue you're owed. Costs you've committed to. One cockpit. One truth.
+          </p>
+
+          {/* CTA Block */}
+          <div
+            style={{
+              marginTop: 32,
+              maxWidth: 460,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              animation: 'heroV3FadeUp 0.7s ease forwards 0.5s',
+              opacity: 0,
+            }}
+          >
+            {!submitted ? (
+              <>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="your@business.com"
+                    onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                    style={{
+                      flex: 1,
+                      background: colors.brand.alternate,
+                      border: `1px solid rgba(255,255,255,0.12)`,
+                      color: colors.utility.primaryText,
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '0.9rem',
+                      padding: '14px 18px',
+                      borderRadius: 8,
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={handleJoin}
+                    style={{
+                      background: colors.brand.primary,
+                      color: colors.utility.primaryBackground,
+                      border: 'none',
+                      fontFamily: "'DM Sans', sans-serif",
+                      fontSize: '0.88rem',
+                      fontWeight: 600,
+                      padding: '14px 22px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'background 0.2s, transform 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#FFB733';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = colors.brand.primary;
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    Get Early Access
+                  </button>
+                </div>
+                <div
                   style={{
-                    flex: 1,
-                    background: colors.brand.alternate,
-                    border: `1px solid rgba(255,255,255,0.12)`,
-                    color: colors.utility.primaryText,
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: '0.9rem',
-                    padding: '14px 18px',
-                    borderRadius: 8,
-                    outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={handleJoin}
-                  style={{
-                    background: colors.brand.primary,
-                    color: colors.utility.primaryBackground,
-                    border: 'none',
-                    fontFamily: "'DM Sans', sans-serif",
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    padding: '14px 22px',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    transition: 'background 0.2s, transform 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#FFB733';
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = colors.brand.primary;
-                    e.currentTarget.style.transform = 'translateY(0)';
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: '0.7rem',
+                    color: colors.brand.tertiary,
+                    letterSpacing: '0.04em',
                   }}
                 >
-                  Get Early Access
-                </button>
-              </div>
+                  <span style={{ color: colors.brand.primary, fontStyle: 'normal' }}>90+</span>{' '}
+                  businesses already waitlisted &nbsp;·&nbsp; Free beta &nbsp;·&nbsp; No credit card
+                </div>
+              </>
+            ) : (
               <div
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '14px 18px',
+                  background: `${colors.semantic.success}1A`,
+                  border: `1px solid ${colors.semantic.success}33`,
+                  borderRadius: 8,
+                  color: colors.semantic.success,
                   fontFamily: "'DM Mono', monospace",
-                  fontSize: '0.7rem',
-                  color: colors.brand.tertiary,
-                  letterSpacing: '0.04em',
+                  fontSize: '0.82rem',
                 }}
               >
-                <span style={{ color: colors.brand.primary, fontStyle: 'normal' }}>90+</span>{' '}
-                businesses already waitlisted &nbsp;·&nbsp; Free beta &nbsp;·&nbsp; No credit card
+                ✓ &nbsp;You're on the list. We'll reach out before beta opens.
               </div>
-            </>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '14px 18px',
-                background: `${colors.semantic.success}1A`,
-                border: `1px solid ${colors.semantic.success}33`,
-                borderRadius: 8,
-                color: colors.semantic.success,
-                fontFamily: "'DM Mono', monospace",
-                fontSize: '0.82rem',
-              }}
-            >
-              ✓ &nbsp;You're on the list. We'll reach out before beta opens.
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Stats Row */}
+        {/* ═══ RIGHT COLUMN: Cockpit Preview ═══ */}
+        <div
+          style={{
+            animation: 'heroV3FadeUp 0.8s ease forwards 0.4s',
+            opacity: 0,
+            paddingTop: 8,
+          }}
+        >
+          <CockpitPreviewMock />
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 2,
+          maxWidth: 1320,
+          margin: '0 auto',
+          padding: '0 40px',
+        }}
+      >
         <div
           style={{
             display: 'flex',
-            marginTop: 60,
             paddingTop: 36,
+            paddingBottom: 48,
             borderTop: '1px solid rgba(255,255,255,0.07)',
             animation: 'heroV3FadeUp 0.7s ease forwards 0.75s',
             opacity: 0,
           }}
+          className="hero-v3-stats-row"
         >
           {stats.map((stat, i) => (
             <div
@@ -375,6 +344,14 @@ const HeroV3: React.FC<HeroV3Props> = ({
                 }}
               >
                 {stat.num}
+                {stat.arrow && (
+                  <span style={{ fontSize: '1.2rem', color: colors.brand.primary, margin: '0 2px' }}>
+                    {stat.arrow}
+                  </span>
+                )}
+                {stat.num2 && (
+                  <span>{stat.num2}</span>
+                )}
                 <sup style={{ fontSize: '1.3rem', color: colors.brand.primary }}>
                   {stat.sup}
                 </sup>
@@ -413,7 +390,6 @@ const HeroV3: React.FC<HeroV3Props> = ({
             animation: 'heroV3Scroll 30s linear infinite',
           }}
         >
-          {/* Duplicate items for seamless loop */}
           {[...tickerItems, ...tickerItems].map((item, i) => (
             <div
               key={i}
@@ -446,10 +422,8 @@ const HeroV3: React.FC<HeroV3Props> = ({
         </div>
       </div>
 
-      {/* Keyframe animations injected via style tag */}
+      {/* Keyframe animations */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
-
         @keyframes heroV3FadeUp {
           from { opacity: 0; transform: translateY(18px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -465,10 +439,28 @@ const HeroV3: React.FC<HeroV3Props> = ({
           50% { opacity: 0.4; transform: scale(0.75); }
         }
 
+        /* Responsive: stack on mobile */
+        @media (max-width: 1024px) {
+          .hero-v3-grid {
+            grid-template-columns: 1fr !important;
+            padding: 60px 24px 40px !important;
+            gap: 40px !important;
+          }
+        }
+
         @media (max-width: 768px) {
-          .hero-v3-mobile-stack .hero-v3-stats-row {
-            flex-direction: column !important;
+          .hero-v3-grid {
+            padding: 48px 18px 32px !important;
+          }
+          .hero-v3-stats-row {
+            flex-wrap: wrap !important;
             gap: 20px !important;
+          }
+          .hero-v3-stats-row > div {
+            flex: 0 0 45% !important;
+            border-right: none !important;
+            margin-right: 0 !important;
+            padding-right: 0 !important;
           }
         }
       `}</style>

@@ -15,10 +15,9 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
-  ArrowRightLeft,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useContracts, useGroupedContracts, useContractStats, contractKeys } from '@/hooks/queries/useContractQueries';
+import { useContracts, useGroupedContracts, useContractStats, contractKeys, useContract } from '@/hooks/queries/useContractQueries';
 import { useAuth, type Perspective } from '@/context/AuthContext';
 import { prefetchContacts } from '@/hooks/useContacts';
 import type {
@@ -40,60 +39,6 @@ import type { PortfolioSortOption } from '@/components/contracts/list/PortfolioS
 import ViewModeToggle from '@/components/contracts/list/ViewModeToggle';
 import type { ViewMode } from '@/components/contracts/list/ViewModeToggle';
 import ClientGroupHeader from '@/components/contracts/list/ClientGroupHeader';
-
-
-// ═══════════════════════════════════════════════════
-// PERSPECTIVE SWITCHER (Revenue/Expense) — visual inline toggle
-// Reads from AuthContext, calls setPerspectiveDirectly on change
-// ═══════════════════════════════════════════════════
-
-interface PerspectiveSwitcherProps {
-  active: Perspective;
-  onChange: (p: Perspective) => void;
-  isDarkMode: boolean;
-  brandColor: string;
-}
-
-const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
-  active,
-  onChange,
-  isDarkMode,
-  brandColor,
-}) => {
-  const perspectives: Array<{ id: Perspective; label: string; sublabel: string }> = [
-    { id: 'revenue', label: 'Revenue', sublabel: 'Clients' },
-    { id: 'expense', label: 'Expense', sublabel: 'Vendors' },
-  ];
-
-  return (
-    <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
-      isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
-    }`}>
-      {perspectives.map((p) => {
-        const isActive = active === p.id;
-        return (
-          <button
-            key={p.id}
-            onClick={() => onChange(p.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-              isActive
-                ? 'text-white shadow-sm'
-                : isDarkMode
-                  ? 'text-gray-400 hover:text-gray-200'
-                  : 'text-gray-500 hover:text-gray-700'
-            }`}
-            style={isActive ? { backgroundColor: brandColor } : undefined}
-          >
-            {p.label}
-            <span className={`ml-1 text-xs font-normal ${isActive ? 'opacity-80' : ''}`}>
-              · {p.sublabel}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-};
 
 
 // ═══════════════════════════════════════════════════
@@ -448,7 +393,7 @@ const ContractsHubPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const brandColor = colors.brand.primary;
-  const { currentTenant, isLive, perspective, setPerspectiveDirectly } = useAuth();
+  const { currentTenant, isLive, perspective } = useAuth();
   const { profile } = useTenantContext();
   const queryClient = useQueryClient();
 
@@ -488,6 +433,10 @@ const ContractsHubPage: React.FC = () => {
   // ── Wizard state ──
   const [showWizard, setShowWizard] = useState(false);
   const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
+
+  // ── Draft resume state ──
+  const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
+  const { data: resumeDraftData, isLoading: isLoadingDraft } = useContract(resumeDraftId);
 
   // ── Reset page + invalidate stats when perspective changes ──
   const prevPerspective = useRef(activePerspective);
@@ -595,6 +544,7 @@ const ContractsHubPage: React.FC = () => {
 
   // ── Wizard handlers ──
   const openWizard = (type: ContractType) => {
+    setResumeDraftId(null); // Clear any draft resume
     setWizardContractType(type);
     setShowWizard(true);
   };
@@ -603,7 +553,42 @@ const ContractsHubPage: React.FC = () => {
     openWizard(perspectiveType as ContractType);
   };
 
+  // ── Draft resume handler ──
+  const handleResumeDraft = (contractId: string) => {
+    // Find contract in current list to get metadata + contract_type
+    const contract = contracts.find((c) => c.id === contractId)
+      || groups.flatMap((g: ContractGroup) => g.contracts).find((c: Contract) => c.id === contractId);
+
+    // Safety: only resume contracts that are still in draft status
+    if (contract && contract.status !== 'draft') {
+      return;
+    }
+
+    // Determine wizard contract type from saved metadata or contact_classification
+    const savedType = contract?.metadata?.wizard_contract_type;
+    const fallbackType = contract?.contact_classification || perspectiveType;
+    setWizardContractType((savedType || fallbackType) as ContractType);
+    // Set the draft ID — this triggers useContract to fetch full data.
+    // The wizard will be opened by the useEffect below once data arrives.
+    setResumeDraftId(contractId);
+  };
+
+  // Open wizard with draft data once fetched (wait for data before opening)
+  useEffect(() => {
+    if (resumeDraftId && resumeDraftData && !isLoadingDraft && !showWizard) {
+      setShowWizard(true);
+    }
+  }, [resumeDraftId, resumeDraftData, isLoadingDraft, showWizard]);
+
   const handleRowClick = (id: string) => {
+    // If contract is a draft, resume the wizard instead of navigating to detail page.
+    // Note: the list API does not return metadata, so we check status only.
+    const contract = contracts.find((c) => c.id === id)
+      || groups.flatMap((g: ContractGroup) => g.contracts).find((c: Contract) => c.id === id);
+    if (contract?.status === 'draft') {
+      handleResumeDraft(id);
+      return;
+    }
     navigate(`/contracts/${id}`);
   };
 
@@ -661,26 +646,9 @@ const ContractsHubPage: React.FC = () => {
                 {totalCount} contract{totalCount !== 1 ? 's' : ''}
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-              <PerspectiveSwitcher
-                active={activePerspective}
-                onChange={(p) => setPerspectiveDirectly(p)}
-                isDarkMode={isDarkMode}
-                brandColor={brandColor}
-              />
-              <button
-                onClick={() =>
-                  setPerspectiveDirectly(activePerspective === 'revenue' ? 'expense' : 'revenue')
-                }
-                className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
-                style={{ color: brandColor }}
-              >
-                <ArrowRightLeft className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180" />
-                <span className="group-hover:underline">
-                  flip to {activePerspective === 'revenue' ? 'Expense' : 'Revenue'}
-                </span>
-              </button>
-            </div>
+            <p style={{ fontSize: 12, color: colors.utility.secondaryText, marginTop: 4 }}>
+              {activePerspective === 'revenue' ? 'Revenue · Clients' : 'Expense · Vendors'}
+            </p>
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -849,6 +817,7 @@ const ContractsHubPage: React.FC = () => {
                           isDarkMode={isDarkMode}
                           onRowClick={handleRowClick}
                           onContactClick={handleContactClick}
+                          onResumeDraft={handleResumeDraft}
                         />
                       ))}
                     </div>
@@ -868,6 +837,7 @@ const ContractsHubPage: React.FC = () => {
                 isDarkMode={isDarkMode}
                 onRowClick={handleRowClick}
                 onContactClick={handleContactClick}
+                onResumeDraft={handleResumeDraft}
               />
             ))}
           </div>
@@ -889,12 +859,19 @@ const ContractsHubPage: React.FC = () => {
       {/* Contract Creation Wizard Modal */}
       <ContractWizard
         isOpen={showWizard}
-        onClose={() => setShowWizard(false)}
+        onClose={() => {
+          setShowWizard(false);
+          setResumeDraftId(null);
+          refetch();
+        }}
         contractType={wizardContractType}
         onComplete={() => {
           setShowWizard(false);
+          setResumeDraftId(null);
           refetch();
         }}
+        draftContractId={resumeDraftId}
+        draftContractData={resumeDraftId && resumeDraftData ? resumeDraftData as Record<string, any> : null}
       />
     </div>
   );

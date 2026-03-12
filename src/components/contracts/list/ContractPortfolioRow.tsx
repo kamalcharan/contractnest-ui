@@ -4,7 +4,7 @@
 // Shows: avatar, title+CN#, status badge, client name, value, overdue, view button
 
 import React from 'react';
-import { Eye, User } from 'lucide-react';
+import { Eye, User, Play } from 'lucide-react';
 import type { Contract } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 
@@ -14,6 +14,7 @@ interface ContractPortfolioRowProps {
   isDarkMode?: boolean;
   onRowClick: (id: string) => void;
   onContactClick?: (contactId: string) => void;
+  onResumeDraft?: (contractId: string) => void;
 }
 
 const fmt = (n: number, currency?: string) => {
@@ -52,6 +53,7 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
   isDarkMode = false,
   onRowClick,
   onContactClick,
+  onResumeDraft,
 }) => {
   const eventsOverdue = c.events_overdue ?? 0;
   const health = c.health_score ?? 100;
@@ -260,6 +262,44 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
         </span>
       ) : (
         <span style={{ width: 20, flexShrink: 0 }}>—</span>
+      )}
+
+      {/* ── Resume Button (draft contracts) ── */}
+      {c.status === 'draft' && onResumeDraft && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onResumeDraft(c.id);
+          }}
+          title="Resume editing this draft"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            padding: '5px 12px',
+            borderRadius: 8,
+            border: `1px solid ${colors.brand.primary}30`,
+            background: colors.brand.primary + '08',
+            cursor: 'pointer',
+            color: colors.brand.primary,
+            fontSize: 11,
+            fontWeight: 600,
+            transition: 'all 0.15s',
+            flexShrink: 0,
+            whiteSpace: 'nowrap' as const,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = colors.brand.primary + '15';
+            e.currentTarget.style.borderColor = colors.brand.primary + '50';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = colors.brand.primary + '08';
+            e.currentTarget.style.borderColor = colors.brand.primary + '30';
+          }}
+        >
+          <Play size={11} />
+          Resume
+        </button>
       )}
 
       {/* ── View Button ── */}

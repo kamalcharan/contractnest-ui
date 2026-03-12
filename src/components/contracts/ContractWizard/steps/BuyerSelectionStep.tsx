@@ -201,7 +201,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   }, [searchTerm]);
 
   // Fetch contacts list - filtered by contract type classification
-  const { data: contacts, loading: listLoading } = useContactList({
+  const { data: contacts, loading: listLoading, hardRefresh: refreshContactList } = useContactList({
     page: 1,
     limit: 20,
     search: debouncedSearch || undefined,
@@ -329,15 +329,17 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     onSelectBuyer('', '');
   }, [onSelectBuyer]);
 
-  // Handle quick add success
+  // Handle quick add success — refetch list so new contact appears immediately
   const handleQuickAddSuccess = useCallback((contactId: string) => {
     setIsDrawerOpen(false);
+    // Invalidate cache and refetch the contact list
+    refreshContactList();
     addToast({
       type: 'success',
       title: 'Contact created',
-      message: 'New contact added. Search to select them as buyer.',
+      message: 'New contact added and visible in the list below.',
     });
-  }, [addToast]);
+  }, [addToast, refreshContactList]);
 
   // Format phone number with country code
   const formatPhoneDisplay = (channel: ContactChannel): string => {

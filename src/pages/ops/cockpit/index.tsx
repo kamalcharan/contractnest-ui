@@ -28,7 +28,6 @@ import {
   CalendarDays,
   Loader2,
   Edit3,
-  ArrowRightLeft,
   Package,
   CheckCircle2,
 } from 'lucide-react';
@@ -142,56 +141,6 @@ const getAvatarColor = (str: string): string => {
 // =================================================================
 // SUB-COMPONENTS
 // =================================================================
-
-// ─── Perspective Switcher ────────────────────────────────────────
-
-interface PerspectiveSwitcherProps {
-  active: Perspective;
-  onChange: (p: Perspective) => void;
-  isDarkMode: boolean;
-  brandColor: string;
-}
-
-const PerspectiveSwitcher: React.FC<PerspectiveSwitcherProps> = ({
-  active,
-  onChange,
-  isDarkMode,
-  brandColor,
-}) => {
-  const perspectives: Array<{ id: Perspective; label: string; sublabel: string }> = [
-    { id: 'revenue', label: 'Revenue', sublabel: 'Clients' },
-    { id: 'expense', label: 'Expense', sublabel: 'Vendors' },
-  ];
-
-  return (
-    <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
-      isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
-    }`}>
-      {perspectives.map((p) => {
-        const isActive = active === p.id;
-        return (
-          <button
-            key={p.id}
-            onClick={() => onChange(p.id)}
-            className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-              isActive
-                ? 'text-white shadow-sm'
-                : isDarkMode
-                  ? 'text-gray-400 hover:text-gray-200'
-                  : 'text-gray-500 hover:text-gray-700'
-            }`}
-            style={isActive ? { backgroundColor: brandColor } : undefined}
-          >
-            {p.label}
-            <span className={`ml-1 text-xs font-normal ${isActive ? 'opacity-80' : ''}`}>
-              · {p.sublabel}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-};
 
 // ─── Filter Pill (contacts-style) ───────────────────────────────
 
@@ -1075,7 +1024,7 @@ const OpsCockpitPage: React.FC = () => {
 
   // Tenant profile
   const { profile, loading: profileLoading } = useTenantContext();
-  const { currentTenant, perspective, setPerspectiveDirectly } = useAuth();
+  const { currentTenant, perspective } = useAuth();
 
   // ─── Perspective from AuthContext (global) ─────────────────────
   const activePerspective: Perspective = perspective;
@@ -1313,27 +1262,6 @@ const OpsCockpitPage: React.FC = () => {
                   : 'Expense operations — procurement & vendor management'}
               </p>
             </div>
-          </div>
-          {/* Perspective switcher + flip link */}
-          <div className="flex items-center gap-3">
-            <PerspectiveSwitcher
-              active={activePerspective}
-              onChange={(p) => setPerspectiveDirectly(p)}
-              isDarkMode={isDarkMode}
-              brandColor={brandColor}
-            />
-            <button
-              onClick={() => setPerspectiveDirectly(activePerspective === 'revenue' ? 'expense' : 'revenue')}
-              className="flex items-center gap-1.5 text-[11px] font-medium transition-all group"
-              style={{ color: brandColor }}
-            >
-              <ArrowRightLeft
-                className="h-3 w-3 transition-transform duration-300 group-hover:rotate-180"
-              />
-              <span className="group-hover:underline">
-                flip to {activePerspective === 'revenue' ? 'Expense' : 'Revenue'} ops
-              </span>
-            </button>
           </div>
         </div>
 

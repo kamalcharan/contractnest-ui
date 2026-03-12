@@ -1,7 +1,7 @@
 // src/components/contracts/ContractWizard/FloatingActionIsland.tsx
 // Premium Floating Action Island - Apple Dynamic Island inspired navigation
 import React from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export interface FloatingActionIslandProps {
@@ -18,6 +18,7 @@ export interface FloatingActionIslandProps {
   onClose: () => void;
   sendButtonText?: string;
   showTotal?: boolean;
+  isSavingDraft?: boolean;
 }
 
 const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
@@ -34,6 +35,7 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
   onClose,
   sendButtonText,
   showTotal = true,
+  isSavingDraft = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -100,25 +102,29 @@ const FloatingActionIsland: React.FC<FloatingActionIslandProps> = ({
               : 'rgba(0, 0, 0, 0.05)',
           }}
         >
-          {/* Pulsing Status Dot */}
-          <div className="relative">
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: colors.semantic.success }}
-            />
-            <div
-              className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
-              style={{
-                backgroundColor: colors.semantic.success,
-                opacity: 0.75,
-              }}
-            />
-          </div>
+          {/* Pulsing Status Dot / Saving Spinner */}
+          {isSavingDraft ? (
+            <Loader2 className="w-3 h-3 animate-spin" style={{ color: colors.brand.primary }} />
+          ) : (
+            <div className="relative">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: colors.semantic.success }}
+              />
+              <div
+                className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
+                style={{
+                  backgroundColor: colors.semantic.success,
+                  opacity: 0.75,
+                }}
+              />
+            </div>
+          )}
           <span
             className="text-sm font-medium"
             style={{ color: colors.utility.primaryText }}
           >
-            {stepLabels[currentStep] || `Step ${currentStep + 1}`}
+            {isSavingDraft ? 'Saving...' : (stepLabels[currentStep] || `Step ${currentStep + 1}`)}
           </span>
         </div>
 
