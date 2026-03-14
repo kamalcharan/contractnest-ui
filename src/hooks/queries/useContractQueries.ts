@@ -1,6 +1,7 @@
 // src/hooks/queries/useContractQueries.ts
 // Contract CRUD TanStack Query Hooks — follows useServiceCatalogQueries pattern
 
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -229,6 +230,10 @@ export const useContractOperations = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // When true, onSuccess/onError callbacks skip toasts.
+  // Used by the wizard's auto-save to avoid noisy "Contract updated" toasts.
+  const silentModeRef = React.useRef(false);
+
   // ── Create ──
   const createContractMutation = useMutation({
     mutationFn: async (contractData: CreateContractRequest): Promise<Contract> => {
@@ -251,10 +256,12 @@ export const useContractOperations = () => {
       // (create response is minimal — missing blocks, vendors, attachments, history)
       queryClient.invalidateQueries({ queryKey: contractKeys.detail(createdContract.id) });
 
-      toast({
-        title: 'Success',
-        description: `Contract "${createdContract.title}" has been created`,
-      });
+      if (!silentModeRef.current) {
+        toast({
+          title: 'Success',
+          description: `Contract "${createdContract.title}" has been created`,
+        });
+      }
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create contract';
@@ -264,11 +271,13 @@ export const useContractOperations = () => {
         extra: { tenantId: currentTenant?.id, errorMessage },
       });
 
-      toast({
-        variant: 'destructive',
-        title: 'Create Failed',
-        description: errorMessage,
-      });
+      if (!silentModeRef.current) {
+        toast({
+          variant: 'destructive',
+          title: 'Create Failed',
+          description: errorMessage,
+        });
+      }
     },
   });
 
@@ -302,10 +311,12 @@ export const useContractOperations = () => {
       queryClient.invalidateQueries({ queryKey: contractKeys.lists() });
       queryClient.invalidateQueries({ queryKey: contractKeys.stats() });
 
-      toast({
-        title: 'Success',
-        description: `Contract "${updatedContract.title}" has been updated`,
-      });
+      if (!silentModeRef.current) {
+        toast({
+          title: 'Success',
+          description: `Contract "${updatedContract.title}" has been updated`,
+        });
+      }
     },
     onError: (error: any) => {
       const status = error.response?.status;
@@ -319,11 +330,13 @@ export const useContractOperations = () => {
         extra: { tenantId: currentTenant?.id, errorMessage, httpStatus: status },
       });
 
-      toast({
-        variant: 'destructive',
-        title: status === 409 ? 'Version Conflict' : 'Update Failed',
-        description: errorMessage,
-      });
+      if (!silentModeRef.current) {
+        toast({
+          variant: 'destructive',
+          title: status === 409 ? 'Version Conflict' : 'Update Failed',
+          description: errorMessage,
+        });
+      }
     },
   });
 
@@ -474,5 +487,7 @@ export const useContractOperations = () => {
     isChangingStatus: updateStatusMutation.isPending,
     isSendingNotification: sendNotificationMutation.isPending,
     isDeleting: deleteContractMutation.isPending,
+    /** Set true before silent draft saves to suppress success/error toasts */
+    setSilentMode: (silent: boolean) => { silentModeRef.current = silent; },
   };
 };
