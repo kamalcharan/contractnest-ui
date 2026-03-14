@@ -726,6 +726,7 @@ const ContractsHubPage: React.FC = () => {
         <PortfolioSummaryStrip
           stats={computedPortfolio.stats}
           totalValue={computedPortfolio.totalValue}
+          perspective={activePerspective}
           colors={colors}
         />
 
@@ -805,6 +806,7 @@ const ContractsHubPage: React.FC = () => {
                     isExpanded={isExpanded}
                     onToggle={() => toggleClientExpand(groupKey)}
                     onViewContact={handleContactClick}
+                    perspective={activePerspective}
                     colors={colors}
                   />
                   {isExpanded && (

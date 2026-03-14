@@ -47,6 +47,9 @@ export interface ContractWizardState {
   // Step 1: Counterparty (single-select for contracts)
   buyerId: string | null;
   buyerName: string;
+  buyerContactPersonId: string | null;
+  buyerContactPersonName: string | null;
+  useCompanyContact: boolean;
   // RFQ multi-vendor selection
   vendorIds: string[];
   vendorNames: string[];
@@ -291,6 +294,8 @@ function mapWizardToRequest(
     contact_id: state.buyerId || undefined,
     contact_classification: contractType,
     buyer_name: state.buyerName || undefined,
+    buyer_contact_person_id: state.buyerContactPersonId || undefined,
+    buyer_contact_person_name: state.buyerContactPersonName || undefined,
 
     // Duration & timeline
     start_date: state.startDate.toISOString(),
@@ -346,6 +351,9 @@ const createInitialWizardState = (): ContractWizardState => ({
   // Counterparty
   buyerId: null,
   buyerName: '',
+  buyerContactPersonId: null,
+  buyerContactPersonName: null,
+  useCompanyContact: false,
   vendorIds: [],
   vendorNames: [],
   // Nomenclature
@@ -1182,9 +1190,12 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Buyer selection handler
   const handleBuyerSelect = useCallback(
-    (buyerId: string, buyerName: string) => {
+    (buyerId: string, buyerName: string, contactPersonId?: string, contactPersonName?: string, companyContact?: boolean) => {
       updateWizardState('buyerId', buyerId || null);
       updateWizardState('buyerName', buyerName);
+      updateWizardState('buyerContactPersonId', contactPersonId || null);
+      updateWizardState('buyerContactPersonName', contactPersonName || null);
+      updateWizardState('useCompanyContact', companyContact || false);
     },
     [updateWizardState]
   );
@@ -1349,6 +1360,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           <BuyerSelectionStep
             selectedBuyerId={wizardState.buyerId}
             selectedBuyerName={wizardState.buyerName}
+            selectedContactPersonId={wizardState.buyerContactPersonId || undefined}
+            selectedContactPersonName={wizardState.buyerContactPersonName || undefined}
+            useCompanyContact={wizardState.useCompanyContact}
             onSelectBuyer={handleBuyerSelect}
             contractType={contractType}
             acceptanceMethod={wizardState.acceptanceMethod}

@@ -8,6 +8,7 @@ interface PortfolioSummaryStripProps {
   stats: ContractPortfolioStats | undefined;
   totalValue: number;
   currency?: string;
+  perspective?: 'revenue' | 'expense';
   colors: {
     brand: { primary: string };
     utility: { primaryText: string; secondaryText: string; secondaryBackground: string };
@@ -24,6 +25,7 @@ const PortfolioSummaryStrip: React.FC<PortfolioSummaryStripProps> = ({
   stats,
   totalValue,
   currency,
+  perspective = 'revenue',
   colors,
 }) => {
   const collected = stats?.total_collected ?? 0;
@@ -39,6 +41,8 @@ const PortfolioSummaryStrip: React.FC<PortfolioSummaryStripProps> = ({
         ? colors.semantic.warning
         : colors.semantic.error;
 
+  const isExpense = perspective === 'expense';
+
   const cards = [
     {
       label: 'Portfolio Value',
@@ -47,13 +51,13 @@ const PortfolioSummaryStrip: React.FC<PortfolioSummaryStripProps> = ({
       bg: colors.utility.secondaryBackground,
     },
     {
-      label: 'Collected',
+      label: isExpense ? 'Paid' : 'Collected',
       value: fmt(collected, currency),
       color: colors.semantic.success,
       bg: colors.semantic.success + '0a',
     },
     {
-      label: 'Outstanding',
+      label: isExpense ? 'Payable' : 'Outstanding',
       value: fmt(outstanding, currency),
       color: outstanding > 0 ? colors.semantic.error : colors.semantic.success,
       bg: outstanding > 0 ? colors.semantic.error + '08' : colors.semantic.success + '0a',

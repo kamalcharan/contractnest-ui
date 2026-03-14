@@ -4,7 +4,7 @@
 // Shows: avatar, title+CN#, status badge, client name, value, overdue, view button
 
 import React from 'react';
-import { Eye, User, Play } from 'lucide-react';
+import { Eye, FileText, User, Play } from 'lucide-react';
 import type { Contract } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS } from '@/types/contracts';
 
@@ -123,7 +123,7 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
       </div>
 
       {/* ── Title + Contract Number ── */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, maxWidth: 280 }}>
         <div
           style={{
             fontSize: 14,
@@ -168,46 +168,26 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
         {statusConfig.label}
       </span>
 
-      {/* ── Client Name (clickable → contact dashboard) ── */}
+      {/* ── Client Name (plain text, no click) ── */}
       <div
-        onClick={(e) => {
-          if (c.buyer_id && onContactClick) {
-            e.stopPropagation();
-            onContactClick(c.buyer_id);
-          }
-        }}
-        title={c.buyer_id && onContactClick ? `View ${clientName} dashboard` : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
           width: 180,
           flexShrink: 0,
-          cursor: c.buyer_id && onContactClick ? 'pointer' : 'default',
-          borderRadius: 6,
-          padding: '2px 4px',
-          margin: '-2px -4px',
-          transition: 'background 0.15s',
-        }}
-        onMouseEnter={(e) => {
-          if (c.buyer_id && onContactClick) {
-            e.currentTarget.style.background = colors.brand.primary + '10';
-          }
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
         }}
       >
-        <User size={13} style={{ color: c.buyer_id && onContactClick ? colors.brand.primary : colors.utility.secondaryText, flexShrink: 0 }} />
+        <User size={13} style={{ color: colors.utility.secondaryText, flexShrink: 0 }} />
         <span
           style={{
             fontSize: 13,
-            color: c.buyer_id && onContactClick ? colors.brand.primary : colors.utility.secondaryText,
+            color: colors.utility.secondaryText,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            textDecoration: c.buyer_id && onContactClick ? 'none' : undefined,
           }}
+          title={clientName}
         >
           {clientName}
         </span>
@@ -302,39 +282,78 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
         </button>
       )}
 
-      {/* ── View Button ── */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRowClick(c.id);
-        }}
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
-          border: `1px solid ${colors.utility.primaryText}12`,
-          background: 'transparent',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: colors.utility.secondaryText,
-          transition: 'all 0.15s',
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = colors.brand.primary;
-          e.currentTarget.style.color = colors.brand.primary;
-          e.currentTarget.style.background = colors.brand.primary + '08';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = colors.utility.primaryText + '12';
-          e.currentTarget.style.color = colors.utility.secondaryText;
-          e.currentTarget.style.background = 'transparent';
-        }}
-      >
-        <Eye size={14} />
-      </button>
+      {/* ── Action Icons: Contract View + Contact View ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {/* Contract View */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRowClick(c.id);
+          }}
+          title="View contract"
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: `1px solid ${colors.utility.primaryText}12`,
+            background: 'transparent',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: colors.utility.secondaryText,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = colors.brand.primary;
+            e.currentTarget.style.color = colors.brand.primary;
+            e.currentTarget.style.background = colors.brand.primary + '08';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = colors.utility.primaryText + '12';
+            e.currentTarget.style.color = colors.utility.secondaryText;
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <FileText size={14} />
+        </button>
+
+        {/* Contact View */}
+        {c.buyer_id && onContactClick && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onContactClick(c.buyer_id!);
+            }}
+            title={`View ${clientName}`}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: `1px solid ${colors.utility.primaryText}12`,
+              background: 'transparent',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: colors.utility.secondaryText,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = colors.semantic.success;
+              e.currentTarget.style.color = colors.semantic.success;
+              e.currentTarget.style.background = colors.semantic.success + '08';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = colors.utility.primaryText + '12';
+              e.currentTarget.style.color = colors.utility.secondaryText;
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <User size={14} />
+          </button>
+        )}
+      </div>
     </div>
   );
 };

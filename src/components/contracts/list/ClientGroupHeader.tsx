@@ -16,6 +16,7 @@ interface ClientGroupHeaderProps {
   onToggle: () => void;
   onViewContact?: (buyerId: string) => void;
   currency?: string;
+  perspective?: 'revenue' | 'expense';
   colors: {
     brand: { primary: string };
     utility: { primaryText: string; secondaryText: string; secondaryBackground: string };
@@ -37,6 +38,7 @@ const ClientGroupHeader: React.FC<ClientGroupHeaderProps> = ({
   onToggle,
   onViewContact,
   currency,
+  perspective = 'revenue',
   colors,
 }) => {
   const healthColor =
@@ -219,7 +221,7 @@ const ClientGroupHeader: React.FC<ClientGroupHeaderProps> = ({
             fontWeight: 600,
           }}
         >
-          Collected
+          {perspective === 'expense' ? 'Paid' : 'Collected'}
         </div>
       </div>
 

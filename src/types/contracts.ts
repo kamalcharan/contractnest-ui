@@ -403,6 +403,8 @@ export interface CreateContractRequest {
   // Counterparty
   buyer_id?: string;
   buyer_name?: string;
+  buyer_contact_person_id?: string;
+  buyer_contact_person_name?: string;
   contact_id?: string;
   // Duration
   duration_value?: number;
