@@ -63,7 +63,7 @@ export const useNomenclatureTypes = () => {
       }
 
       const response = await fetch(
-        `/api/functions/product-masterdata?category_name=cat_contract_nomenclature`,
+        `/api/product-masterdata/global?category_name=cat_contract_nomenclature&is_active=true`,
         {
           method: 'GET',
           headers: {
