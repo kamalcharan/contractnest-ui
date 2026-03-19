@@ -4,7 +4,7 @@
 // EquipmentCard (selectable) + EquipmentFormDialog from equipment-registry
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Wrench, Plus, X, Search, Package } from 'lucide-react';
+import { Wrench, Plus, X, Search, Package, Building2 } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -28,6 +28,9 @@ import { useContactList } from '@/hooks/useContacts';
 // PROPS
 // =================================================================
 
+/** Controls which "Add" buttons appear and what the picker filters */
+export type EquipmentTabMode = 'equipment' | 'facility' | 'both';
+
 interface EquipmentTabProps {
   equipmentDetails: ContractEquipmentDetail[];
   allowBuyerToAdd?: boolean;
@@ -36,6 +39,8 @@ interface EquipmentTabProps {
   contractId?: string;
   /** The buyer/contact on this contract — used to filter registry on Revenue side */
   buyerId?: string;
+  /** Determines which add buttons to show: equipment, facility, or both */
+  mode?: EquipmentTabMode;
 }
 
 // =================================================================
@@ -129,6 +134,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   isBuyer = false,
   contractId,
   buyerId,
+  mode = 'equipment',
 }) => {
   const { currentTenant } = useAuth();
   const tenantId = currentTenant?.id || '';
@@ -149,10 +155,17 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   // ── State ──────────────────────────────────────────────────────
 
   const [showPicker, setShowPicker] = useState(false);
+  /** Which resource type the picker is currently filtering for */
+  const [pickerResourceType, setPickerResourceType] = useState<'equipment' | 'entity'>(mode === 'facility' ? 'entity' : 'equipment');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  /** Which registryMode the form dialog should use */
+  const [addFormMode, setAddFormMode] = useState<'equipment' | 'entity'>('equipment');
   /** Track which asset ID is currently being added/removed */
   const [mutatingAssetId, setMutatingAssetId] = useState<string | null>(null);
+
+  const showEquipmentBtn = mode === 'equipment' || mode === 'both';
+  const showFacilityBtn = mode === 'facility' || mode === 'both';
 
   // ── Mutations ──────────────────────────────────────────────────
 
@@ -253,13 +266,14 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
   const canAdd = contractId && (isSeller || (isBuyer && allowBuyerToAdd));
 
-  // Filter registry assets for picker — Equipment tab only shows equipment, not facilities
+  // Filter registry assets for picker based on pickerResourceType
   // For seller view, also filter by buyer contact so only this contract's client equipment shows
   const displayAssets = useMemo(() => {
     if (!showPicker) return [];
+    const matchType = pickerResourceType === 'entity' ? 'asset' : 'equipment';
     let filtered = assets.filter(
       (a) =>
-        (a.resource_type_id || '').toLowerCase() === 'equipment' &&
+        (a.resource_type_id || '').toLowerCase() === matchType &&
         a.is_active
     );
 
@@ -281,7 +295,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     }
 
     return filtered;
-  }, [assets, searchQuery, showPicker, isSeller, buyerId]);
+  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType]);
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -382,27 +396,38 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
               Buyer can add
             </span>
           )}
-          {canAdd && (
+          {canAdd && showPicker && (
             <button
-              onClick={() => setShowPicker(!showPicker)}
+              onClick={() => { setShowPicker(false); setSearchQuery(''); }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
               style={{
-                backgroundColor: showPicker ? colors.utility.secondaryBackground : colors.brand.primary,
-                color: showPicker ? colors.utility.primaryText : '#fff',
-                border: showPicker ? `1px solid ${colors.utility.primaryText}20` : 'none',
+                backgroundColor: colors.utility.secondaryBackground,
+                color: colors.utility.primaryText,
+                border: `1px solid ${colors.utility.primaryText}20`,
               }}
             >
-              {showPicker ? (
-                <>
-                  <X className="h-3.5 w-3.5" />
-                  Close
-                </>
-              ) : (
-                <>
-                  <Plus className="h-3.5 w-3.5" />
-                  {isBuyer ? 'Add My Equipment' : 'Add Equipment'}
-                </>
-              )}
+              <X className="h-3.5 w-3.5" />
+              Close
+            </button>
+          )}
+          {canAdd && !showPicker && showEquipmentBtn && (
+            <button
+              onClick={() => { setPickerResourceType('equipment'); setSearchQuery(''); setShowPicker(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
+              style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {isBuyer ? 'Add My Equipment' : 'Add Equipment'}
+            </button>
+          )}
+          {canAdd && !showPicker && showFacilityBtn && (
+            <button
+              onClick={() => { setPickerResourceType('entity'); setSearchQuery(''); setShowPicker(true); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
+              style={{ backgroundColor: '#8B5CF6', color: '#fff' }}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              {isBuyer ? 'Add My Facility' : 'Add Facility'}
             </button>
           )}
         </div>
@@ -427,7 +452,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           >
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-                Select from Registry
+                Select {pickerResourceType === 'entity' ? 'Facility' : 'Equipment'} from Registry
               </span>
               {displayAssets.length > 0 && (
                 <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
@@ -437,14 +462,14 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* + Add Equipment (opens form dialog) */}
+              {/* + Add Equipment/Facility (opens form dialog) */}
               <button
-                onClick={() => setIsAddFormOpen(true)}
+                onClick={() => { setAddFormMode(pickerResourceType); setIsAddFormOpen(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
-                style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+                style={{ backgroundColor: pickerResourceType === 'entity' ? '#8B5CF6' : colors.brand.primary, color: '#fff' }}
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add Equipment
+                {pickerResourceType === 'entity' ? 'Add Facility' : 'Add Equipment'}
               </button>
 
               {/* Search */}
@@ -490,13 +515,13 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
                 />
                 <p className="text-sm mb-1" style={{ color: colors.utility.secondaryText }}>
                   {searchQuery
-                    ? `No equipment matching "${searchQuery}"`
-                    : 'No equipment in registry yet'}
+                    ? `No ${pickerResourceType === 'entity' ? 'facilities' : 'equipment'} matching "${searchQuery}"`
+                    : `No ${pickerResourceType === 'entity' ? 'facilities' : 'equipment'} in registry yet`}
                 </p>
                 <p className="text-xs" style={{ color: colors.utility.secondaryText + '80' }}>
                   {searchQuery
                     ? 'Try a different search term'
-                    : 'Click "+ Add Equipment" to register equipment first.'}
+                    : `Click "+ ${pickerResourceType === 'entity' ? 'Add Facility' : 'Add Equipment'}" to register first.`}
                 </p>
               </div>
             ) : (
@@ -563,7 +588,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           </h3>
           <p className="text-xs max-w-xs" style={{ color: colors.utility.secondaryText }}>
             {canAdd
-              ? 'Add equipment to this contract using the button above.'
+              ? `Add ${mode === 'facility' ? 'facilities' : mode === 'both' ? 'equipment or facilities' : 'equipment'} to this contract using the button${mode === 'both' ? 's' : ''} above.`
               : isBuyer
                 ? 'Equipment additions are not enabled for this contract.'
                 : 'No equipment has been added to this contract yet.'}
@@ -581,6 +606,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         isSubmitting={createMutation.isPending}
         defaultOwnershipType={isBuyer ? 'self' : 'client'}
         lockedContactId={isBuyer ? undefined : buyerId}
+        registryMode={addFormMode}
       />
     </div>
   );

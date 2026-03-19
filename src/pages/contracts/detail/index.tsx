@@ -82,6 +82,8 @@ import SellerOverview from '@/components/contracts/SellerOverview';
 import SellerTasksTab from '@/components/contracts/SellerTasksTab';
 import BuyerOverview from '@/components/contracts/BuyerOverview';
 import EquipmentTab from '@/components/contracts/EquipmentTab';
+import type { EquipmentTabMode } from '@/components/contracts/EquipmentTab';
+import { useNomenclatureTypes, findNomenclatureById } from '@/hooks/queries/useNomenclatureTypes';
 import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
 import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
@@ -1545,6 +1547,7 @@ const ContractDetailPage: React.FC = () => {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: contract, isLoading, error } = useContract(id || null);
+  const { data: nomenclatureGroups } = useNomenclatureTypes();
   const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
   const pageSummary = invoiceData?.summary;
   const pageInvoices = invoiceData?.invoices || [];
@@ -1730,7 +1733,7 @@ const ContractDetailPage: React.FC = () => {
             colors={colors}
           />
         );
-      case 'equipment':
+      case 'equipment': {
         console.log('[ContractDetail→Equipment] contact fields:', {
           buyer_id: contract.buyer_id,
           buyer_contact_person_id: contract.buyer_contact_person_id,
@@ -1739,6 +1742,18 @@ const ContractDetailPage: React.FC = () => {
           buyer_id: contract.buyer_id,
           resolved_buyerId: contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id,
         });
+        // Derive equipment tab mode from nomenclature form_settings
+        let equipTabMode: EquipmentTabMode = 'equipment';
+        if (contract.nomenclature_id && nomenclatureGroups) {
+          const nType = findNomenclatureById(nomenclatureGroups, contract.nomenclature_id);
+          if (nType?.form_settings) {
+            const isEq = nType.form_settings.is_equipment_based;
+            const isEn = nType.form_settings.is_entity_based;
+            if (isEq && isEn) equipTabMode = 'both';
+            else if (isEn) equipTabMode = 'facility';
+            // else default 'equipment'
+          }
+        }
         return (
           <EquipmentTab
             equipmentDetails={contract.equipment_details || []}
@@ -1747,8 +1762,10 @@ const ContractDetailPage: React.FC = () => {
             isBuyer={isBuyer}
             contractId={contract.id}
             buyerId={contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id}
+            mode={equipTabMode}
           />
         );
+      }
 
       // ── Buyer-only tabs ──
       case 'my_services':
@@ -2007,7 +2024,23 @@ const ContractDetailPage: React.FC = () => {
   };
 
   // ─── Which tab definitions to use ───
-  const tabDefinitions = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
+  // Derive equipment tab label from nomenclature
+  const equipmentTabLabel = (() => {
+    if (contract?.nomenclature_id && nomenclatureGroups) {
+      const nType = findNomenclatureById(nomenclatureGroups, contract.nomenclature_id);
+      if (nType?.form_settings) {
+        const isEq = nType.form_settings.is_equipment_based;
+        const isEn = nType.form_settings.is_entity_based;
+        if (isEq && isEn) return 'Equipment & Facility';
+        if (isEn) return 'Facility';
+      }
+    }
+    return 'Equipment';
+  })();
+  const baseTabs = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
+  const tabDefinitions = baseTabs.map(t =>
+    t.id === 'equipment' ? { ...t, label: equipmentTabLabel } : t
+  );
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.utility.mainBackground }}>
