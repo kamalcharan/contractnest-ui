@@ -761,11 +761,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         if (created?.id && created?.status === 'draft') {
           const targetStatus = created.record_type === 'rfq' ? 'sent' : 'pending_acceptance';
           try {
-            await updateStatus({
+            const statusResult = await updateStatus({
               contractId: created.id,
               statusData: { status: targetStatus },
             });
             created.status = targetStatus;
+            // Pick up CNAK generated during draft → non-draft transition
+            if (statusResult?.global_access_id) {
+              created.global_access_id = statusResult.global_access_id;
+            }
           } catch {
             // Non-fatal: contract was created, status transition can be retried
             console.warn(`Contract created but status transition to ${targetStatus} failed`);
@@ -872,11 +876,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (contractResult?.status === 'draft') {
         setProcessingStep('Activating contract...');
         try {
-          await updateStatus({
+          const statusResult = await updateStatus({
             contractId,
             statusData: { status: 'active' },
           });
           contractResult.status = 'active';
+          // Pick up CNAK generated during draft → active transition
+          if (statusResult?.global_access_id) {
+            contractResult.global_access_id = statusResult.global_access_id;
+          }
         } catch {
           console.warn('Contract created but draft→active transition failed');
         }
@@ -967,11 +975,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (result?.id && result?.status === 'draft') {
         setProcessingStep('Activating contract...');
         try {
-          await updateStatus({
+          const statusResult = await updateStatus({
             contractId: result.id,
             statusData: { status: 'active' },
           });
           result.status = 'active';
+          // Pick up CNAK generated during draft → active transition
+          if (statusResult?.global_access_id) {
+            result.global_access_id = statusResult.global_access_id;
+          }
         } catch {
           console.warn('Contract created but draft→active transition failed');
         }
@@ -1014,11 +1026,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (contractResult?.status === 'draft') {
         setProcessingStep('Activating contract...');
         try {
-          await updateStatus({
+          const statusResult = await updateStatus({
             contractId,
             statusData: { status: 'active' },
           });
           contractResult.status = 'active';
+          // Pick up CNAK generated during draft → active transition
+          if (statusResult?.global_access_id) {
+            contractResult.global_access_id = statusResult.global_access_id;
+          }
         } catch {
           console.warn('Contract created but draft→active transition failed');
         }
