@@ -197,7 +197,7 @@ export const useCatBlocks = (filters?: CatBlockFilters): UseQueryResult<CatBlock
         // x-is-admin header was causing CORS errors
         const response = await api.get(url);
 
-        const data = parseResponse(response, 'cat_blocks');
+        const data = parseResponse(response, 'm_cat_blocks');
         console.log('✅ Catalog blocks fetched:', data);
 
         return {

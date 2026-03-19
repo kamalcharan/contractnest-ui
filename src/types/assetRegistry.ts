@@ -127,6 +127,7 @@ export interface AssetRegistryFilters {
   status?: AssetStatus;
   condition?: AssetCondition;
   ownership_type?: AssetOwnershipType;
+  contact_id?: string;
   search?: string;
   is_live?: boolean;
   limit?: number;

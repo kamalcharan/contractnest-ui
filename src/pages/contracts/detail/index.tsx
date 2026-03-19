@@ -247,6 +247,7 @@ type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit
 
 const BUYER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'equipment', label: 'Equipment', icon: Package },
   { id: 'my_services', label: 'My Services', icon: Calendar },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'proof_of_work', label: 'Proof of Work', icon: Camera },
@@ -1730,11 +1731,22 @@ const ContractDetailPage: React.FC = () => {
           />
         );
       case 'equipment':
+        console.log('[ContractDetail→Equipment] contact fields:', {
+          buyer_id: contract.buyer_id,
+          buyer_contact_person_id: contract.buyer_contact_person_id,
+          contact_id: contract.contact_id,
+          buyer_name: contract.buyer_name,
+          buyer_id: contract.buyer_id,
+          resolved_buyerId: contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id,
+        });
         return (
           <EquipmentTab
             equipmentDetails={contract.equipment_details || []}
             allowBuyerToAdd={(contract as any).allow_buyer_to_add_equipment}
             colors={colors}
+            isBuyer={isBuyer}
+            contractId={contract.id}
+            buyerId={contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id}
           />
         );
 

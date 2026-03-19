@@ -948,6 +948,10 @@ export const API_ENDPOINTS = {
     RECORD_PAYMENT: (id: string) => `/api/contracts/${id}/invoices/record-payment`,
     CANCEL_INVOICE: (id: string) => `/api/contracts/${id}/invoices/cancel`,
     NOTIFY: (id: string) => `/api/contracts/${id}/notify`,
+    BUYER_ADD_EQUIPMENT: (id: string) => `/api/contracts/${id}/buyer-equipment`,
+    BUYER_REMOVE_EQUIPMENT: (id: string) => `/api/contracts/${id}/buyer-equipment`,
+    SELLER_ADD_EQUIPMENT: (id: string) => `/api/contracts/${id}/seller-equipment`,
+    SELLER_REMOVE_EQUIPMENT: (id: string) => `/api/contracts/${id}/seller-equipment`,
 
     // Dashboard stats
     STATS: '/api/contracts/stats',

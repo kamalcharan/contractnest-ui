@@ -2,8 +2,8 @@
 // Card component for a single equipment item in the grid view
 // Supports optional selectable mode for use inside the Contract Wizard
 
-import React from 'react';
-import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, CheckSquare, Square, User, Circle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Pencil, Trash2, MapPin, Shield, AlertTriangle, XCircle, Check, Plus, User, Circle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/ui/Button';
 import type { TenantAsset, AssetCondition, AssetStatus, AssetCriticality } from '@/types/assetRegistry';
@@ -19,10 +19,12 @@ interface EquipmentCardProps {
   onEdit?: (asset: CardAsset) => void;
   onDelete?: (asset: CardAsset) => void;
   disabled?: boolean;
-  // Wizard selection mode
+  // Picker mode: Add / Added / Remove flow (like /settings/configure/resources)
   selectable?: boolean;
   isSelected?: boolean;
   onToggle?: (asset: CardAsset) => void;
+  /** When true, shows "Adding..." or "Removing..." on the action button */
+  isMutating?: boolean;
 }
 
 const EquipmentCard: React.FC<EquipmentCardProps> = ({
@@ -34,9 +36,11 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
   selectable = false,
   isSelected = false,
   onToggle,
+  isMutating = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const conditionCfg = CONDITION_CONFIG[asset.condition as AssetCondition] || CONDITION_CONFIG.good;
   const statusCfg = STATUS_CONFIG[(asset.status as AssetStatus) || 'active'] || STATUS_CONFIG.active;
@@ -56,8 +60,9 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
     : colors.utility.secondaryText;
 
   const handleClick = () => {
-    if (selectable && onToggle) {
-      onToggle(asset);
+    if (selectable) {
+      // In selectable mode, card click does nothing — use footer buttons instead
+      return;
     } else if (onEdit) {
       onEdit(asset);
     }
@@ -65,7 +70,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
 
   return (
     <div
-      className="rounded-lg border-2 transition-all duration-200 hover:shadow-lg cursor-pointer group relative"
+      className="rounded-lg border-2 transition-all duration-200 hover:shadow-lg group relative"
       style={{
         backgroundColor: isSelected
           ? colors.brand.primary + '06'
@@ -74,6 +79,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
           ? colors.brand.primary
           : colors.utility.primaryText + '15',
         opacity: asset.is_active ? 1 : 0.65,
+        cursor: selectable ? 'default' : 'pointer',
       }}
       onClick={handleClick}
     >
@@ -99,18 +105,6 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
             >
               {statusCfg.label}
             </span>
-            {selectable && (
-              <div
-                onClick={(e) => { e.stopPropagation(); handleClick(); }}
-                className="flex items-center justify-center ml-1"
-              >
-                {isSelected ? (
-                  <CheckSquare size={20} style={{ color: colors.brand.primary }} />
-                ) : (
-                  <Square size={20} style={{ color: colors.utility.secondaryText }} />
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -212,6 +206,109 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
           >
             {WarrantyIcon && <WarrantyIcon className="h-3 w-3" />}
             {warranty.label}
+          </div>
+        )}
+
+        {/* ── Selectable mode: Add / Added+Remove footer (like /settings/configure/resources) ── */}
+        {selectable && onToggle && (
+          <div
+            className="flex items-center justify-end gap-2 mt-3 pt-3"
+            style={{ borderTop: `1px solid ${colors.utility.primaryText}08` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isSelected ? (
+              confirmRemove ? (
+                /* 2-step confirm: "Remove?" + "Yes, Remove" / "Cancel" */
+                <>
+                  <span className="text-xs font-medium mr-auto" style={{ color: colors.semantic.error }}>
+                    Remove?
+                  </span>
+                  <button
+                    onClick={() => { setConfirmRemove(false); onToggle(asset); }}
+                    disabled={disabled || isMutating}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '5px 12px', borderRadius: 8, border: 'none',
+                      fontSize: 12, fontWeight: 600,
+                      cursor: disabled || isMutating ? 'not-allowed' : 'pointer',
+                      backgroundColor: colors.semantic.error,
+                      color: '#fff',
+                      opacity: disabled || isMutating ? 0.7 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {isMutating ? 'Removing...' : <><Trash2 size={12} /> Yes, Remove</>}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(false)}
+                    disabled={isMutating}
+                    style={{
+                      padding: '5px 12px', borderRadius: 8,
+                      fontSize: 12, fontWeight: 600, border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: colors.utility.primaryText + '10',
+                      color: colors.utility.secondaryText,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                /* Added badge + Remove button */
+                <>
+                  <span
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      fontSize: 12, fontWeight: 600,
+                      color: colors.semantic?.success || '#16a34a',
+                      padding: '5px 14px', borderRadius: 8,
+                      backgroundColor: (colors.semantic?.success || '#16a34a') + '12',
+                    }}
+                  >
+                    <Check size={14} /> Added
+                  </span>
+                  <button
+                    onClick={() => setConfirmRemove(true)}
+                    disabled={disabled || isMutating}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 4,
+                      padding: '5px 12px', borderRadius: 8,
+                      fontSize: 12, fontWeight: 600, border: 'none',
+                      cursor: disabled || isMutating ? 'not-allowed' : 'pointer',
+                      backgroundColor: colors.semantic.error + '12',
+                      color: colors.semantic.error,
+                      opacity: disabled || isMutating ? 0.7 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { if (!disabled && !isMutating) (e.target as HTMLElement).style.transform = 'scale(1.05)'; }}
+                    onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
+                  >
+                    <Trash2 size={12} /> Remove
+                  </button>
+                </>
+              )
+            ) : (
+              /* Not added — show "Add" button */
+              <button
+                onClick={() => onToggle(asset)}
+                disabled={disabled || isMutating}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 14px', borderRadius: 8, border: 'none',
+                  fontSize: 12, fontWeight: 600,
+                  cursor: disabled || isMutating ? 'not-allowed' : 'pointer',
+                  backgroundColor: colors.brand.primary,
+                  color: '#fff',
+                  opacity: disabled || isMutating ? 0.7 : 1,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { if (!disabled && !isMutating) (e.target as HTMLElement).style.transform = 'scale(1.05)'; }}
+                onMouseLeave={e => { (e.target as HTMLElement).style.transform = 'scale(1)'; }}
+              >
+                {isMutating ? 'Adding...' : <><Plus size={13} /> Add</>}
+              </button>
+            )}
           </div>
         )}
 

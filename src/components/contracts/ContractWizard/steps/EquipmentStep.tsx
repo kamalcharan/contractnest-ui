@@ -98,7 +98,12 @@ const EquipmentStep: React.FC<EquipmentStepProps> = ({
 
   // ── Fetch registry equipment ────────────────────────────────────
 
-  const filters: AssetRegistryFilters = useMemo(() => ({ limit: 500, offset: 0 }), []);
+  const filters: AssetRegistryFilters = useMemo(() => ({
+    limit: 500,
+    offset: 0,
+    ownership_type: 'client' as const,
+    contact_id: buyerId || undefined,
+  }), [buyerId]);
 
   const {
     assets,
