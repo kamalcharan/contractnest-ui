@@ -83,7 +83,7 @@ import SellerTasksTab from '@/components/contracts/SellerTasksTab';
 import BuyerOverview from '@/components/contracts/BuyerOverview';
 import EquipmentTab from '@/components/contracts/EquipmentTab';
 import type { EquipmentTabMode } from '@/components/contracts/EquipmentTab';
-import { useNomenclatureTypes, findNomenclatureById } from '@/hooks/queries/useNomenclatureTypes';
+import { useGlobalMasterData } from '@/hooks/queries/useProductMasterdata';
 import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
 import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
@@ -1547,7 +1547,23 @@ const ContractDetailPage: React.FC = () => {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: contract, isLoading, error } = useContract(id || null);
-  const { data: nomenclatureGroups } = useNomenclatureTypes();
+  const { data: nomenclatureResponse, isLoading: nomenclatureLoading, error: nomenclatureError } = useGlobalMasterData('cat_contract_nomenclature', true);
+  const nomenclatureItems = nomenclatureResponse?.data || [];
+
+  // DEBUG: Remove after fixing equipment/facility tab issue
+  useEffect(() => {
+    console.log('[NomenclatureDebug] nomenclatureResponse:', nomenclatureResponse);
+    console.log('[NomenclatureDebug] nomenclatureItems count:', nomenclatureItems.length);
+    console.log('[NomenclatureDebug] nomenclatureLoading:', nomenclatureLoading);
+    console.log('[NomenclatureDebug] nomenclatureError:', nomenclatureError);
+    if (contract) {
+      console.log('[NomenclatureDebug] contract.nomenclature_id:', contract.nomenclature_id);
+      const matched = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
+      console.log('[NomenclatureDebug] matched item:', matched);
+      console.log('[NomenclatureDebug] form_settings:', matched?.form_settings);
+      console.log('[NomenclatureDebug] form_settings type:', typeof matched?.form_settings);
+    }
+  }, [nomenclatureResponse, nomenclatureItems, nomenclatureLoading, nomenclatureError, contract]);
   const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
   const pageSummary = invoiceData?.summary;
   const pageInvoices = invoiceData?.invoices || [];
@@ -1686,6 +1702,43 @@ const ContractDetailPage: React.FC = () => {
   const vendorsCount = contract.vendors_count ?? contract.vendors?.length ?? 0;
   const duration = formatDuration(contract.duration_value, contract.duration_unit);
 
+  // ─── Contact & Date strip data ───
+  const isVendorContract = classType === 'vendor';
+  // Revenue (seller) view: show buyer as "Client Details"
+  // Expense (buyer) view: show seller as "Vendor Details" (from RPC seller_name/seller_company)
+  const contactLabel = showBuyerView ? 'Vendor Details' : 'Client Details';
+  const stripContactName = showBuyerView
+    ? ((contract as any).seller_company || (contract as any).seller_name || null)
+    : (contract.buyer_company || contract.buyer_name || null);
+  const stripContactPerson = showBuyerView
+    ? ((contract as any).seller_name && (contract as any).seller_company ? (contract as any).seller_name : null)
+    : (contract.buyer_name && contract.buyer_company ? contract.buyer_name : null);
+  const stripChannels = showBuyerView
+    ? [] // Seller contact channels not returned by RPC
+    : [contract.buyer_email, contract.buyer_phone].filter(Boolean) as string[];
+  const showContactInStrip = !!stripContactName;
+
+  // Compute end date and prolongation date
+  const addDuration = (start: Date, value: number, unit: string): Date => {
+    const d = new Date(start);
+    switch (unit) {
+      case 'days': d.setDate(d.getDate() + value); break;
+      case 'months': d.setMonth(d.getMonth() + value); break;
+      case 'years': d.setFullYear(d.getFullYear() + value); break;
+    }
+    return d;
+  };
+
+  const contractStartDate = contract.start_date
+    ? new Date(contract.start_date)
+    : null;
+  const contractEndDate = contractStartDate && contract.duration_value && contract.duration_unit
+    ? addDuration(contractStartDate, contract.duration_value, contract.duration_unit)
+    : null;
+  const contractProlongationDate = contractEndDate && (contract as any).grace_period_value && (contract as any).grace_period_unit && (contract as any).grace_period_value > 0
+    ? addDuration(contractEndDate, (contract as any).grace_period_value, (contract as any).grace_period_unit)
+    : null;
+
   // ─── Tab content ───
   const renderTabContent = () => {
     switch (activeTab) {
@@ -1742,17 +1795,29 @@ const ContractDetailPage: React.FC = () => {
           buyer_id: contract.buyer_id,
           resolved_buyerId: contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id,
         });
-        // Derive equipment tab mode from nomenclature form_settings
+        // Derive equipment tab mode from actual asset data on the contract
+        // First try nomenclature form_settings, then fall back to data-driven detection
         let equipTabMode: EquipmentTabMode = 'equipment';
-        if (contract.nomenclature_id && nomenclatureGroups) {
-          const nType = findNomenclatureById(nomenclatureGroups, contract.nomenclature_id);
+        if (contract.nomenclature_id && nomenclatureItems.length > 0) {
+          const nType = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
           if (nType?.form_settings) {
-            const isEq = nType.form_settings.is_equipment_based;
-            const isEn = nType.form_settings.is_entity_based;
+            const fs = typeof nType.form_settings === 'string' ? JSON.parse(nType.form_settings) : nType.form_settings;
+            const isEq = fs.is_equipment_based;
+            const isEn = fs.is_entity_based;
             if (isEq && isEn) equipTabMode = 'both';
             else if (isEn) equipTabMode = 'facility';
-            // else default 'equipment'
           }
+        }
+        // Fallback: detect from actual equipment_details data
+        if (equipTabMode === 'equipment' && contract.equipment_details?.length) {
+          const hasEntity = contract.equipment_details.some((e: any) =>
+            (e.resource_type_id || '').toLowerCase() === 'asset' || e.resource_type === 'entity'
+          );
+          const hasEquip = contract.equipment_details.some((e: any) =>
+            (e.resource_type_id || '').toLowerCase() === 'equipment' || e.resource_type === 'equipment'
+          );
+          if (hasEntity && hasEquip) equipTabMode = 'both';
+          else if (hasEntity) equipTabMode = 'facility';
         }
         return (
           <EquipmentTab
@@ -2024,16 +2089,29 @@ const ContractDetailPage: React.FC = () => {
   };
 
   // ─── Which tab definitions to use ───
-  // Derive equipment tab label from nomenclature
+  // Derive equipment tab label from nomenclature + fallback to data
   const equipmentTabLabel = (() => {
-    if (contract?.nomenclature_id && nomenclatureGroups) {
-      const nType = findNomenclatureById(nomenclatureGroups, contract.nomenclature_id);
+    // First try nomenclature form_settings
+    if (contract?.nomenclature_id && nomenclatureItems.length > 0) {
+      const nType = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
       if (nType?.form_settings) {
-        const isEq = nType.form_settings.is_equipment_based;
-        const isEn = nType.form_settings.is_entity_based;
+        const fs = typeof nType.form_settings === 'string' ? JSON.parse(nType.form_settings) : nType.form_settings;
+        const isEq = fs.is_equipment_based;
+        const isEn = fs.is_entity_based;
         if (isEq && isEn) return 'Equipment & Facility';
         if (isEn) return 'Facility';
       }
+    }
+    // Fallback: detect from actual equipment_details data
+    if (contract?.equipment_details?.length) {
+      const hasEntity = contract.equipment_details.some((e: any) =>
+        (e.resource_type_id || '').toLowerCase() === 'asset' || e.resource_type === 'entity'
+      );
+      const hasEquip = contract.equipment_details.some((e: any) =>
+        (e.resource_type_id || '').toLowerCase() === 'equipment' || e.resource_type === 'equipment'
+      );
+      if (hasEntity && hasEquip) return 'Equipment & Facility';
+      if (hasEntity) return 'Facility';
     }
     return 'Equipment';
   })();
@@ -2302,6 +2380,97 @@ const ContractDetailPage: React.FC = () => {
           <span className="text-xs font-semibold" style={{ color: colors.semantic.error }}>
             This contract has been {contract.status}. It is now read-only.
           </span>
+        </div>
+      )}
+
+      {/* ═══════ CONTACT & DATES STRIP ═══════ */}
+      {(showContactInStrip || contractStartDate) && (
+        <div
+          className="border-b px-6 py-2 flex items-center gap-3 flex-wrap"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: colors.utility.primaryText + '10',
+          }}
+        >
+          {/* Contact label + inline details */}
+          {showContactInStrip && (
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider"
+                style={{
+                  color: showBuyerView ? colors.semantic.warning : colors.brand.primary,
+                  backgroundColor: (showBuyerView ? colors.semantic.warning : colors.brand.primary) + '12',
+                  border: `1px solid ${(showBuyerView ? colors.semantic.warning : colors.brand.primary)}25`,
+                }}
+              >
+                <Users className="h-3 w-3" />
+                {contactLabel}
+              </span>
+              <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                {stripContactName}
+              </span>
+              {stripContactPerson && (
+                <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                  ({stripContactPerson})
+                </span>
+              )}
+              {stripChannels.length > 0 && (
+                <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                  {stripChannels.join(' · ')}
+                </span>
+              )}
+            </>
+          )}
+
+          {/* Separator between contact and dates */}
+          {showContactInStrip && contractStartDate && (
+            <div className="w-px h-4 mx-1" style={{ backgroundColor: colors.utility.primaryText + '20' }} />
+          )}
+
+          {/* Dates as inline tags */}
+          {contractStartDate && (
+            <>
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-semibold"
+                style={{
+                  backgroundColor: colors.semantic.success + '12',
+                  color: colors.semantic.success,
+                  border: `1px solid ${colors.semantic.success}25`,
+                }}
+              >
+                <Calendar className="h-3 w-3" />
+                Start: {formatDate(contract.start_date)}
+              </span>
+
+              {contractEndDate && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-semibold"
+                  style={{
+                    backgroundColor: colors.semantic.error + '12',
+                    color: colors.semantic.error,
+                    border: `1px solid ${colors.semantic.error}25`,
+                  }}
+                >
+                  <Clock className="h-3 w-3" />
+                  End: {contractEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+
+              {contractProlongationDate && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-semibold"
+                  style={{
+                    backgroundColor: colors.semantic.warning + '12',
+                    color: colors.semantic.warning,
+                    border: `1px solid ${colors.semantic.warning}25`,
+                  }}
+                >
+                  <Activity className="h-3 w-3" />
+                  Prolongation: {contractProlongationDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              )}
+            </>
+          )}
         </div>
       )}
 

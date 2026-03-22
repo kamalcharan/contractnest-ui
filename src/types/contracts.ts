@@ -121,6 +121,9 @@ export interface Contract {
   tenant_id: string;
   // Dual-persona: who sells vs who buys this contract
   seller_id?: string;           // Tenant who created/owns/sells — equals tenant_id for existing data
+  seller_name?: string;          // Seller's name (resolved from t_contacts on buyer access)
+  seller_company?: string;       // Seller's company name (resolved from t_contacts on buyer access)
+  seller_contact_id?: string;    // Contact ID of seller in buyer's workspace
   buyer_tenant_id?: string | null; // Tenant who claimed/accepted as buyer — null until claimed
   record_type: ContractRecordType;
   contract_type: ContractType;

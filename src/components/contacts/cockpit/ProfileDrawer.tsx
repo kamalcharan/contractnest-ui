@@ -414,25 +414,25 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   };
 
   // Transform form data to API-expected format
+  // Only include fields being changed — sending unrelated empty arrays
+  // triggers validation errors (e.g. "At least one contact channel is required")
   const transformFormDataForAPI = (modalType: ModalType, data: any): any => {
-    const existingClassifications = transformClassificationsForAPI(contact.classifications);
-    const existingChannels = transformChannelsForAPI(contact.contact_channels);
-
-    const transformed: any = {
-      classifications: existingClassifications,
-      contact_channels: existingChannels
-    };
+    const transformed: any = {};
 
     switch (modalType) {
       case 'classification':
         if (data.classifications && Array.isArray(data.classifications)) {
           transformed.classifications = transformClassificationsForAPI(data.classifications);
+        } else {
+          transformed.classifications = transformClassificationsForAPI(contact.classifications);
         }
         break;
 
       case 'channels':
         if (data.contact_channels && Array.isArray(data.contact_channels)) {
           transformed.contact_channels = transformChannelsForAPI(data.contact_channels);
+        } else {
+          transformed.contact_channels = transformChannelsForAPI(contact.contact_channels);
         }
         break;
 
