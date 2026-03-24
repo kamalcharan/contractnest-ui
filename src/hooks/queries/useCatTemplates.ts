@@ -19,16 +19,32 @@ export interface TemplateBlock {
 
 export interface CatTemplate {
   id: string;
-  tenant_id?: string;
+  tenant_id?: string | null;
   name: string;
+  display_name?: string;
   description?: string;
+  category?: string;
+  tags?: string[];
+  cover_image?: string | null;
   blocks: TemplateBlock[];
+  currency?: string;
+  tax_rate?: number;
+  discount_config?: Record<string, any>;
+  subtotal?: number | null;
+  total?: number | null;
+  settings?: Record<string, any>;
   is_system: boolean;
   is_public: boolean;
   is_live: boolean;
+  is_active?: boolean;
   status_id: string;
-  copied_from_id?: string;
-  created_by?: string;
+  industry_tags?: string[];
+  copied_from_id?: string | null;
+  sequence_no?: number;
+  is_deletable?: boolean;
+  version?: number;
+  created_by?: string | null;
+  updated_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -77,6 +93,7 @@ export const catTemplateKeys = {
   publicList: (filters: CatTemplateFilters) => [...catTemplateKeys.public(), { filters }] as const,
   details: () => [...catTemplateKeys.all, 'detail'] as const,
   detail: (id: string) => [...catTemplateKeys.details(), id] as const,
+  coverage: () => [...catTemplateKeys.all, 'coverage'] as const,
 };
 
 // =================================================================
@@ -87,7 +104,7 @@ export const catTemplateKeys = {
  * Hook to fetch tenant templates
  */
 export const useCatTemplates = (filters?: CatTemplateFilters) => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catTemplateKeys.list(filters || {}),
@@ -98,11 +115,7 @@ export const useCatTemplates = (filters?: CatTemplateFilters) => {
 
       const url = API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.LIST_WITH_FILTERS(filters || {});
 
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
+      const response = await api.get(url);
 
       return response.data;
     },
@@ -116,7 +129,7 @@ export const useCatTemplates = (filters?: CatTemplateFilters) => {
  * Hook to fetch a single template by ID
  */
 export const useCatTemplate = (templateId: string | undefined) => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catTemplateKeys.detail(templateId || ''),
@@ -127,11 +140,7 @@ export const useCatTemplate = (templateId: string | undefined) => {
 
       const url = API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.GET(templateId);
 
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
+      const response = await api.get(url);
 
       return response.data;
     },
@@ -149,7 +158,7 @@ export const useCatTemplate = (templateId: string | undefined) => {
  * Hook to fetch system templates (global templates)
  */
 export const useCatSystemTemplates = (filters?: CatTemplateFilters) => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catTemplateKeys.systemList(filters || {}),
@@ -160,11 +169,7 @@ export const useCatSystemTemplates = (filters?: CatTemplateFilters) => {
 
       const url = API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.SYSTEM_WITH_FILTERS(filters || {});
 
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
+      const response = await api.get(url);
 
       return response.data;
     },
@@ -182,7 +187,7 @@ export const useCatSystemTemplates = (filters?: CatTemplateFilters) => {
  * Hook to fetch public templates (from other tenants)
  */
 export const useCatPublicTemplates = (filters?: CatTemplateFilters) => {
-  const { currentTenant, isAdmin } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: catTemplateKeys.publicList(filters || {}),
@@ -193,11 +198,7 @@ export const useCatPublicTemplates = (filters?: CatTemplateFilters) => {
 
       const url = API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.PUBLIC_WITH_FILTERS(filters || {});
 
-      const response = await api.get(url, {
-        headers: {
-          'x-is-admin': String(isAdmin || false),
-        },
-      });
+      const response = await api.get(url);
 
       return response.data;
     },

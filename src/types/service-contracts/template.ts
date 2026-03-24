@@ -209,10 +209,11 @@ export interface TemplateCardProps {
   onClick?: (template: Template) => void;
   onPreview?: (template: Template) => void;
   onSelect?: (template: Template) => void;
+  onEdit?: (template: Template) => void;
   isSelected?: boolean;
   showActions?: boolean;
   compact?: boolean;
-  
+
   // New: Context for dynamic behavior
   context?: TemplateCardContext;
 }

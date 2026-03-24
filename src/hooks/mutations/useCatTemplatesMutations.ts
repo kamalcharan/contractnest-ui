@@ -18,6 +18,21 @@ export interface CreateTemplateData {
   blocks: TemplateBlock[];
   is_public?: boolean;
   status_id?: string;
+  // Extended fields accepted by edge function
+  display_name?: string;
+  category?: string;
+  tags?: string[];
+  currency?: string;
+  tax_rate?: number;
+  settings?: Record<string, any>;
+  is_system?: boolean;
+  industry_tags?: string[];
+  cover_image?: string | null;
+  subtotal?: number | null;
+  total?: number | null;
+  discount_config?: Record<string, any>;
+  sequence_no?: number;
+  is_deletable?: boolean;
 }
 
 export interface UpdateTemplateData {
@@ -26,6 +41,21 @@ export interface UpdateTemplateData {
   blocks?: TemplateBlock[];
   is_public?: boolean;
   status_id?: string;
+  // Extended fields
+  display_name?: string;
+  category?: string;
+  tags?: string[];
+  currency?: string;
+  tax_rate?: number;
+  settings?: Record<string, any>;
+  is_system?: boolean;
+  industry_tags?: string[];
+  cover_image?: string | null;
+  subtotal?: number | null;
+  total?: number | null;
+  discount_config?: Record<string, any>;
+  sequence_no?: number;
+  is_deletable?: boolean;
 }
 
 export interface CopyTemplateData {
@@ -46,6 +76,13 @@ export interface MutationResponse<T = any> {
 // =================================================================
 // HELPER FUNCTIONS
 // =================================================================
+
+/**
+ * Generate a unique idempotency key for safe mutation retries
+ */
+const generateIdempotencyKey = (prefix: string = 'tpl'): string => {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+};
 
 /**
  * Handle mutation errors and show appropriate messages
@@ -89,8 +126,13 @@ export const useCreateCatTemplate = () => {
 
       const response = await api.post(
         API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.CREATE,
-        templateData
-        
+        templateData,
+        {
+          headers: {
+            'x-idempotency-key': generateIdempotencyKey('create'),
+            'x-is-admin': String(isAdmin || false),
+          },
+        }
       );
 
       if (!response.data?.success) {
@@ -142,6 +184,7 @@ export const useUpdateCatTemplate = () => {
         data,
         {
           headers: {
+            'x-idempotency-key': generateIdempotencyKey('update'),
             'x-is-admin': String(isAdmin || false),
           },
         }
@@ -197,6 +240,7 @@ export const useDeleteCatTemplate = () => {
         API_ENDPOINTS.CATALOG_STUDIO.TEMPLATES.DELETE(templateId),
         {
           headers: {
+            'x-idempotency-key': generateIdempotencyKey('delete'),
             'x-is-admin': String(isAdmin || false),
           },
         }
@@ -253,6 +297,7 @@ export const useCopyCatTemplate = () => {
         data || {},
         {
           headers: {
+            'x-idempotency-key': generateIdempotencyKey('copy'),
             'x-is-admin': String(isAdmin || false),
           },
         }

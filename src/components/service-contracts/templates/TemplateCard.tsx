@@ -1,11 +1,11 @@
 // src/components/service-contracts/templates/TemplateCard.tsx
 import React from 'react';
-import { 
-  Eye, 
-  Star, 
-  Users, 
-  Clock, 
-  FileText, 
+import {
+  Eye,
+  Star,
+  Users,
+  Clock,
+  FileText,
   TrendingUp,
   CheckCircle,
   ChevronRight,
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Template, TemplateCardProps, CONTRACT_TYPE_LABELS, TemplateCardContext } from '../../../types/service-contracts/template';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../ui/tooltip';
 import { TEMPLATE_COMPLEXITY_LABELS } from "../../../types/service-contracts/template";
 
 // EXPLANATION:
@@ -30,6 +31,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   onClick,
   onPreview,
   onSelect,
+  onEdit,
   isSelected = false,
   showActions = true,
   compact = false,
@@ -175,8 +177,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
         console.log('Clone template:', template.id);
         break;
       case 'edit':
-        // TODO: Implement edit template
-        console.log('Edit template:', template.id);
+        onEdit?.(template);
         break;
       case 'settings':
         // TODO: Implement template settings
@@ -443,25 +444,44 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
           </span>
         </div>
 
-        {/* Context-Based Actions */}
+        {/* Context-Based Actions — Icon bar with tooltips */}
         {showActions && actions.length > 0 && (
-          <div className="flex gap-2 pt-4 border-t border-border">
-            {actions.map((action, index) => (
-              <button
-                key={action.id}
-                onClick={(e) => handleActionClick(action.id, e)}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  action.primary
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'border border-border hover:bg-accent text-foreground'
-                } ${isSelected && action.id === 'select' ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                disabled={isSelected && action.id === 'select'}
-              >
-                <action.icon className="h-4 w-4" />
-                {action.label}
-              </button>
-            ))}
-          </div>
+          <TooltipProvider delayDuration={200}>
+            <div className="flex items-center justify-between pt-4 border-t border-border">
+              {/* Secondary actions: icon-only with tooltips */}
+              <div className="flex items-center gap-1">
+                {actions.filter(a => !a.primary).map((action) => (
+                  <Tooltip key={action.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => handleActionClick(action.id, e)}
+                        className="p-2 rounded-lg border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                      >
+                        <action.icon className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>{action.label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </div>
+              {/* Primary action: keeps text label */}
+              {actions.filter(a => a.primary).map((action) => (
+                <button
+                  key={action.id}
+                  onClick={(e) => handleActionClick(action.id, e)}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors
+                    bg-primary text-primary-foreground hover:bg-primary/90
+                    ${isSelected && action.id === 'select' ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                  disabled={isSelected && action.id === 'select'}
+                >
+                  <action.icon className="h-4 w-4" />
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </TooltipProvider>
         )}
       </div>
     </div>

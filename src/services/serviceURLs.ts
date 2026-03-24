@@ -17,6 +17,8 @@ export type CatTemplateFilters = {
   status_id?: string;
   is_public?: boolean;
   search?: string;
+  industry?: string;
+  category?: string;
   page?: number;
   limit?: number;
 };
@@ -704,6 +706,7 @@ export const API_ENDPOINTS = {
       DELETE: (id: string) => `/api/catalog-studio/templates/${id}`,
       SYSTEM: '/api/catalog-studio/templates/system',
       PUBLIC: '/api/catalog-studio/templates/public',
+      COVERAGE: '/api/catalog-studio/templates/coverage',
       COPY: (id: string) => `/api/catalog-studio/templates/${id}/copy`,
 
       LIST_WITH_FILTERS: (filters: CatTemplateFilters = {}) => {
@@ -711,6 +714,8 @@ export const API_ENDPOINTS = {
 
         if (filters.status_id) params.append('status_id', filters.status_id);
         if (filters.is_public !== undefined) params.append('is_public', filters.is_public.toString());
+        if (filters.industry) params.append('industry', filters.industry);
+        if (filters.category) params.append('category', filters.category);
         if (filters.search) params.append('search', filters.search);
         if (filters.page) params.append('page', filters.page.toString());
         if (filters.limit) params.append('limit', filters.limit.toString());
@@ -723,6 +728,8 @@ export const API_ENDPOINTS = {
         const params = new URLSearchParams();
 
         if (filters.status_id) params.append('status_id', filters.status_id);
+        if (filters.industry) params.append('industry', filters.industry);
+        if (filters.category) params.append('category', filters.category);
         if (filters.search) params.append('search', filters.search);
         if (filters.page) params.append('page', filters.page.toString());
         if (filters.limit) params.append('limit', filters.limit.toString());

@@ -179,6 +179,12 @@ api.interceptors.request.use(
         config.headers['x-session-id'] = sessionId;
       }
 
+      // Add admin flag from storage
+      const isAdmin = localStorage.getItem('is_admin') || sessionStorage.getItem('is_admin');
+      if (isAdmin) {
+        config.headers['x-is-admin'] = isAdmin;
+      }
+
       // Add environment header
       const currentEnvironment = getCurrentEnvironment();
       config.headers['x-environment'] = currentEnvironment;

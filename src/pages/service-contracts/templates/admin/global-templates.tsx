@@ -1,248 +1,166 @@
 // src/pages/service-contracts/templates/admin/global-templates.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { 
-  Search, 
-  Filter, 
-  Grid3X3, 
-  List, 
-  Star, 
-  TrendingUp, 
-  Users, 
-  Clock,
-  ChevronDown,
+import * as LucideIcons from 'lucide-react';
+import {
+  Search,
+  Grid3X3,
+  List,
   X,
   Loader2,
   AlertCircle,
-  FileText,
   HelpCircle,
   ArrowRight,
   Sparkles,
   Globe,
-  Building2
+  Building2,
+  Bot,
+  ChevronRight,
+  BarChart3,
+  Package,
+  FileText,
+  AlertTriangle,
+  TrendingUp,
+  Circle,
+  Plus,
 } from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 
-// Import our components and hooks
+// Components and hooks
 import TemplateCard from '@/components/service-contracts/templates/TemplateCard';
-import { useTemplates, useTemplateSelection } from '../../../../hooks/service-contracts/templates/useTemplates.ts';
+import { useTemplateSelection } from '../../../../hooks/service-contracts/templates/useTemplates.ts';
 import { Template, TemplateCardContext } from '../../../../types/service-contracts/template.ts';
-import { 
-  INDUSTRIES,
-  TEMPLATE_COMPLEXITY_LABELS,
-  CONTRACT_TYPE_LABELS,
-  ITEMS_PER_PAGE_OPTIONS 
-} from '../../../../utils/service-contracts/templates.ts';
+// Note: TEMPLATE_COMPLEXITY_LABELS, CONTRACT_TYPE_LABELS available from
+// '../../../../utils/service-contracts/templates.ts' if needed for card display
 
-type ViewType = 'grid' | 'list';
-type SortOption = 'popular' | 'rating' | 'usage' | 'name' | 'recent';
+// Real data hooks (TanStack Query)
+import { useCatSystemTemplates, CatTemplate } from '@/hooks/queries/useCatTemplates';
+import { CatTemplateFilters } from '@/services/serviceURLs';
+import { useTemplateCoverage, IndustryCoverage } from '@/hooks/queries/useTemplateCoverage';
+import { useResourceTypes, ResourceType as DBResourceType } from '@/hooks/queries/useResources';
+import { useNomenclatureTypes, NomenclatureGroup } from '@/hooks/queries/useNomenclatureTypes';
 
-interface FilterDropdownProps {
-  isOpen: boolean;
-  onClose: () => void;
-  filters: any;
-  onFiltersChange: (filters: any) => void;
+// Data constants (mock categories until APIs exist)
+import {
+  INDUSTRY_CATEGORIES,
+  getCategoriesForIndustry,
+} from '@/utils/constants/globalTemplateData';
+
+// =================================================================
+// ICON HELPER — render Lucide icons by name string (same pattern as IndustrySelector)
+// =================================================================
+
+const getLucideIcon = (iconName: string | null | undefined, size = 18, color?: string): React.ReactNode => {
+  if (!iconName) {
+    return <Circle size={size} style={color ? { color } : undefined} />;
+  }
+  const IconComponent = (LucideIcons as any)[iconName] || Circle;
+  return <IconComponent size={size} style={color ? { color } : undefined} />;
+};
+
+// =================================================================
+// HELPERS
+// =================================================================
+
+/** Maps a CatTemplate (from API) to the Template shape expected by TemplateCard. */
+function mapCatTemplateToTemplate(cat: CatTemplate): Template {
+  return {
+    id: cat.id,
+    name: cat.name,
+    description: cat.description || '',
+    industry: cat.industry_tags?.[0] || 'other',
+    contractType: 'service',
+    estimatedDuration: '15-20 min',
+    complexity: 'medium',
+    tags: cat.tags || cat.industry_tags || [],
+    blocks: (cat.blocks || []).map((b) => b.block_id),
+    usageCount: 0,
+    rating: 0,
+    isPopular: false,
+    status: cat.is_active !== false ? 'active' : 'archived',
+    createdAt: cat.created_at,
+    updatedAt: cat.updated_at,
+    globalTemplate: cat.is_system,
+    tenantId: cat.tenant_id || 'admin',
+  };
 }
 
-const FilterDropdown: React.FC<FilterDropdownProps> = ({ 
-  isOpen, 
-  onClose, 
-  filters, 
-  onFiltersChange 
-}) => {
-  const { isDarkMode, currentTheme } = useTheme();
-  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  const [localFilters, setLocalFilters] = useState(filters);
+type ViewType = 'grid' | 'list';
+type SortOption = 'popular' | 'name' | 'recent';
 
-  if (!isOpen) return null;
+// =================================================================
+// STAT CARD COMPONENT
+// =================================================================
 
-  const handleApply = () => {
-    onFiltersChange(localFilters);
-    onClose();
-  };
+interface StatCardProps {
+  icon: React.ReactNode;
+  value: string | number;
+  label: string;
+  detail: string;
+  dotColor: string;
+  accentColor: string;
+  colors: any;
+}
 
-  const handleReset = () => {
-    const resetFilters = {
-      industry: '',
-      contractType: '',
-      complexity: '',
-      isPopular: false,
-      tags: []
-    };
-    setLocalFilters(resetFilters);
-    onFiltersChange(resetFilters);
-    onClose();
-  };
-
-  const getInputStyles = () => ({
-    borderColor: colors.utility.secondaryText + '40',
-    backgroundColor: colors.utility.primaryBackground,
-    color: colors.utility.primaryText
-  });
-
-  return (
-    <div 
-      className="absolute right-0 top-full mt-2 w-80 rounded-lg shadow-lg border z-20 transition-colors"
+const StatCard: React.FC<StatCardProps> = ({ icon, value, label, detail, dotColor, accentColor, colors }) => (
+  <div
+    className="relative overflow-hidden rounded-xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+    style={{
+      backgroundColor: colors.utility.secondaryBackground,
+      borderColor: colors.utility.secondaryText + '15',
+    }}
+  >
+    {/* Decorative circle */}
+    <div
+      className="absolute -top-5 -right-5 w-20 h-20 rounded-full opacity-[0.04]"
+      style={{ backgroundColor: accentColor }}
+    />
+    {/* Icon badge */}
+    <div
+      className="w-9 h-9 rounded-lg flex items-center justify-center mb-3 text-sm"
       style={{
-        backgroundColor: colors.utility.secondaryBackground,
-        borderColor: colors.utility.secondaryText + '20'
+        backgroundColor: accentColor + '15',
+        color: accentColor,
       }}
     >
-      <div 
-        className="p-4 border-b transition-colors"
-        style={{ borderColor: colors.utility.secondaryText + '20' }}
-      >
-        <div className="flex items-center justify-between">
-          <h3 
-            className="font-medium transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Filter Templates
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded transition-colors hover:opacity-80"
-            style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-          >
-            <X 
-              className="h-4 w-4"
-              style={{ color: colors.utility.secondaryText }}
-            />
-          </button>
-        </div>
-      </div>
-
-      <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
-        {/* Industry Filter */}
-        <div>
-          <label 
-            className="text-sm font-medium mb-2 block transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Industry
-          </label>
-          <select
-            value={localFilters.industry}
-            onChange={(e) => setLocalFilters(prev => ({ ...prev, industry: e.target.value }))}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
-            style={{
-              ...getInputStyles(),
-              '--tw-ring-color': colors.brand.primary
-            } as React.CSSProperties}
-          >
-            <option value="">All Industries</option>
-            {INDUSTRIES.map(industry => (
-              <option key={industry.id} value={industry.id}>
-                {industry.icon} {industry.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Contract Type Filter */}
-        <div>
-          <label 
-            className="text-sm font-medium mb-2 block transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Contract Type
-          </label>
-          <select
-            value={localFilters.contractType}
-            onChange={(e) => setLocalFilters(prev => ({ ...prev, contractType: e.target.value }))}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
-            style={{
-              ...getInputStyles(),
-              '--tw-ring-color': colors.brand.primary
-            } as React.CSSProperties}
-          >
-            <option value="">All Types</option>
-            <option value="service">Service Contract</option>
-            <option value="partnership">Partnership Agreement</option>
-          </select>
-        </div>
-
-        {/* Complexity Filter */}
-        <div>
-          <label 
-            className="text-sm font-medium mb-2 block transition-colors"
-            style={{ color: colors.utility.primaryText }}
-          >
-            Complexity
-          </label>
-          <select
-            value={localFilters.complexity}
-            onChange={(e) => setLocalFilters(prev => ({ ...prev, complexity: e.target.value }))}
-            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
-            style={{
-              ...getInputStyles(),
-              '--tw-ring-color': colors.brand.primary
-            } as React.CSSProperties}
-          >
-            <option value="">All Levels</option>
-            <option value="simple">Simple</option>
-            <option value="medium">Medium</option>
-            <option value="complex">Complex</option>
-          </select>
-        </div>
-
-        {/* Popular Filter */}
-        <div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={localFilters.isPopular}
-              onChange={(e) => setLocalFilters(prev => ({ ...prev, isPopular: e.target.checked }))}
-              className="accent-primary"
-              style={{ accentColor: colors.brand.primary }}
-            />
-            <span 
-              className="text-sm flex items-center gap-1 transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              <TrendingUp className="h-4 w-4" />
-              Popular Templates Only
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div 
-        className="p-4 border-t flex gap-2 transition-colors"
-        style={{ borderColor: colors.utility.secondaryText + '20' }}
-      >
-        <button
-          onClick={handleReset}
-          className="flex-1 px-3 py-2 border rounded-md transition-colors text-sm hover:opacity-80"
-          style={{
-            borderColor: colors.utility.secondaryText + '40',
-            backgroundColor: 'transparent',
-            color: colors.utility.primaryText
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '10';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-        >
-          Reset
-        </button>
-        <button
-          onClick={handleApply}
-          className="flex-1 px-3 py-2 rounded-md transition-colors text-sm text-white hover:opacity-90"
-          style={{
-            background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`
-          }}
-        >
-          Apply Filters
-        </button>
-      </div>
+      {icon}
     </div>
-  );
-};
+    {/* Value */}
+    <div
+      className="text-3xl font-black tracking-tight leading-none mb-1 font-mono"
+      style={{ color: colors.utility.primaryText }}
+    >
+      {value}
+    </div>
+    {/* Label */}
+    <div
+      className="text-sm font-medium"
+      style={{ color: colors.utility.secondaryText }}
+    >
+      {label}
+    </div>
+    {/* Detail */}
+    <div
+      className="text-xs mt-2 pt-2 border-t flex items-center gap-2"
+      style={{
+        color: colors.utility.secondaryText + 'aa',
+        borderColor: colors.utility.secondaryText + '15',
+      }}
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+        style={{ backgroundColor: dotColor }}
+      />
+      {detail}
+    </div>
+  </div>
+);
+
+// =================================================================
+// MAIN PAGE COMPONENT
+// =================================================================
 
 const TemplateGalleryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -251,818 +169,924 @@ const TemplateGalleryPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { toast } = useToast();
 
-  // Local state
-  const [searchTerm, setSearchTerm] = useState<string>(searchParams.get('search') || '');
+  // ── State ──────────────────────────────────────────────────────
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [viewType, setViewType] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('popular');
-  const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [showHelp, setShowHelp] = useState<boolean>(false);
-  const [selectedIndustry, setSelectedIndustry] = useState<string>(searchParams.get('industry') || '');
-  
-  // Advanced filters
-  const [advancedFilters, setAdvancedFilters] = useState({
-    industry: searchParams.get('industry') || '',
-    contractType: searchParams.get('type') || '',
-    complexity: '',
-    isPopular: false,
-    tags: []
-  });
+  const [showHelp, setShowHelp] = useState(false);
 
-  // Template selection hook
+  // Sidebar selections
+  const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
+  const [selectedResourceType, setSelectedResourceType] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedNomenclature, setSelectedNomenclature] = useState<string>('all');
+
+  // ── Hooks ──────────────────────────────────────────────────────
   const { selectedTemplate, selectTemplate, clearSelection } = useTemplateSelection();
 
-  // NEW: Template context for global template marketplace
-  const templateContext = useMemo(() => ({
-    mode: 'marketplace' as const,
-    isGlobal: true,
-    tenantId: 'admin'
-  }), []);
+  // Build filters for API
+  const systemFilters: CatTemplateFilters = useMemo(() => {
+    const f: CatTemplateFilters = { page: 1, limit: 50 };
+    if (searchTerm.trim()) f.search = searchTerm.trim();
+    if (selectedIndustry !== 'all') f.industry = selectedIndustry;
+    if (selectedCategory !== 'all') f.category = selectedCategory;
+    return f;
+  }, [searchTerm, selectedIndustry, selectedCategory]);
 
-  // Build filters for the hook
-  const hookFilters = useMemo(() => {
-    const filters: any = {
-      page: 1,
-      limit: 12,
-      search: searchTerm.trim() || undefined,
-      // NEW: Filter for global templates only
-      globalTemplate: true,
-      tenantId: 'admin'
-    };
+  const {
+    data: systemData,
+    isLoading: loading,
+    error: systemError,
+  } = useCatSystemTemplates(systemFilters);
 
-    // Apply advanced filters
-    if (advancedFilters.industry) filters.industry = advancedFilters.industry;
-    if (advancedFilters.contractType) filters.contractType = advancedFilters.contractType;
-    if (advancedFilters.complexity) filters.complexity = advancedFilters.complexity;
-    if (advancedFilters.isPopular) filters.isPopular = true;
+  const {
+    data: coverage,
+    isLoading: coverageLoading,
+  } = useTemplateCoverage();
 
-    // Apply sorting
+  // Resource types from DB (replaces hardcoded RESOURCE_TYPES)
+  const {
+    data: dbResourceTypes,
+    isLoading: resourceTypesLoading,
+  } = useResourceTypes();
+
+  // Nomenclature types from DB (AMC, CMC, FMC, SLA, etc.)
+  const {
+    data: nomenclatureGroups,
+    isLoading: nomenclatureLoading,
+  } = useNomenclatureTypes();
+
+  // ── Derived data ───────────────────────────────────────────────
+  const rawTemplates: CatTemplate[] = systemData?.data?.templates || [];
+
+  const templates: Template[] = useMemo(() => {
+    const mapped = rawTemplates.map(mapCatTemplateToTemplate);
+    const sorted = [...mapped];
     switch (sortBy) {
-      case 'popular':
-        filters.sortBy = 'usageCount';
-        filters.sortOrder = 'desc';
-        break;
-      case 'rating':
-        filters.sortBy = 'rating';
-        filters.sortOrder = 'desc';
-        break;
-      case 'usage':
-        filters.sortBy = 'usageCount';
-        filters.sortOrder = 'desc';
-        break;
       case 'name':
-        filters.sortBy = 'name';
-        filters.sortOrder = 'asc';
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
         break;
       case 'recent':
-        filters.sortBy = 'updatedAt';
-        filters.sortOrder = 'desc';
+        sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        break;
+      default:
         break;
     }
+    return sorted;
+  }, [rawTemplates, sortBy]);
 
-    return filters;
-  }, [searchTerm, advancedFilters, sortBy]);
+  const error = systemError ? (systemError as Error).message : null;
+  const totalTemplates = systemData?.data?.total ?? templates.length;
+  const isEmpty = !loading && templates.length === 0;
 
-  // Use templates hook with global context
-  const {
-    templates,
-    loading,
-    error,
-    stats,
-    hasActiveFilters,
-    isEmpty,
-    isSearching,
-    totalTemplates,
-    updateFilters,
-    getIndustries,
-    getPopularTemplates
-  } = useTemplates(hookFilters, templateContext);
+  const stats = coverage?.summary ?? null;
+  const industries: IndustryCoverage[] = coverage?.industries || [];
 
-  // Popular and recommended templates (global only)
-  const popularTemplates = useMemo(() => getPopularTemplates().slice(0, 6), [getPopularTemplates]);
+  // Flat list of all nomenclature items across groups (for horizontal pills)
+  const allNomenclatureItems = useMemo(() => {
+    if (!nomenclatureGroups) return [];
+    return nomenclatureGroups.flatMap((group) =>
+      group.items.map((item) => ({ ...item, groupLabel: group.label }))
+    );
+  }, [nomenclatureGroups]);
 
-  // NEW: Template card context for marketplace mode
+  // Categories for selected industry (mock data until API)
+  const currentCategories = useMemo(
+    () => selectedIndustry !== 'all' ? getCategoriesForIndustry(selectedIndustry) : [],
+    [selectedIndustry]
+  );
+
+  // Template card context — management mode (admin can edit global templates)
   const templateCardContext: TemplateCardContext = useMemo(() => ({
-    mode: 'marketplace',
+    mode: 'management',
     isGlobal: true,
-    userRole: 'user', // Could be dynamic based on auth context
-    canEdit: false,
+    userRole: 'admin',
+    canEdit: true,
     canCopy: true,
-    canCreateContract: true
+    canCreateContract: true,
   }), []);
 
-  // Update URL params
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (searchTerm) params.set('search', searchTerm);
-    if (advancedFilters.industry) params.set('industry', advancedFilters.industry);
-    if (advancedFilters.contractType) params.set('type', advancedFilters.contractType);
-    setSearchParams(params);
-  }, [searchTerm, advancedFilters, setSearchParams]);
+  // ── Handlers ───────────────────────────────────────────────────
+  const handleIndustrySelect = (industryId: string) => {
+    setSelectedIndustry(industryId);
+    setSelectedCategory('all');
+    setSelectedResourceType('all');
+    setSelectedNomenclature('all');
+  };
 
-  // Handle template selection for contract creation
   const handleTemplateSelect = (template: Template) => {
     selectTemplate(template);
     toast({
-      title: "Template Selected",
-      description: `${template.name} is ready for contract creation.`
+      title: 'Template Selected',
+      description: `${template.name} is ready for contract creation.`,
     });
-    
-    // Navigate to next step in contract creation
     navigate(`/contracts?action=create&template=${template.id}`);
   };
 
-  // Handle template preview
   const handleTemplatePreview = (template: Template) => {
     navigate(`/templates/preview?id=${template.id}`);
   };
 
-  // Handle industry selection
-  const handleIndustrySelect = (industryId: string) => {
-    setAdvancedFilters(prev => ({ ...prev, industry: industryId }));
-    setSelectedIndustry(industryId);
+  const handleTemplateEdit = (template: Template) => {
+    navigate(`/service-contracts/templates/admin/global-designer?templateId=${template.id}`);
   };
 
-  // Handle search
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-  };
+  // ── Styles ─────────────────────────────────────────────────────
+  const sidebarBg = colors.utility.secondaryBackground;
+  const borderColor = colors.utility.secondaryText + '15';
+  const activeBg = colors.brand.primary + '12';
+  const activeColor = colors.brand.primary;
 
-  // Clear all filters
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setAdvancedFilters({
-      industry: '',
-      contractType: '',
-      complexity: '',
-      isPopular: false,
-      tags: []
-    });
-    setSelectedIndustry('');
-  };
-
-  // Common input styles
-  const getInputStyles = () => ({
-    borderColor: colors.utility.secondaryText + '40',
+  const getInputStyles = (): React.CSSProperties => ({
+    borderColor: colors.utility.secondaryText + '30',
     backgroundColor: colors.utility.primaryBackground,
     color: colors.utility.primaryText,
-    '--tw-ring-color': colors.brand.primary
-  } as React.CSSProperties);
+  });
 
-  // Loading skeleton
+  // ── Loading skeleton ───────────────────────────────────────────
   const LoadingSkeleton = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       {[...Array(6)].map((_, i) => (
         <div key={i} className="animate-pulse">
-          <div 
-            className="rounded-lg border p-6 transition-colors"
+          <div
+            className="rounded-lg border p-6"
             style={{
               backgroundColor: colors.utility.secondaryBackground,
-              borderColor: colors.utility.secondaryText + '20'
+              borderColor,
             }}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div 
-                className="w-10 h-10 rounded-lg"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
+              <div className="w-10 h-10 rounded-lg" style={{ backgroundColor: borderColor }} />
               <div className="flex-1">
-                <div 
-                  className="h-4 rounded mb-2"
-                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-                ></div>
-                <div 
-                  className="h-3 rounded w-2/3"
-                  style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-                ></div>
+                <div className="h-4 rounded mb-2" style={{ backgroundColor: borderColor }} />
+                <div className="h-3 rounded w-2/3" style={{ backgroundColor: borderColor }} />
               </div>
             </div>
             <div className="space-y-2 mb-4">
-              <div 
-                className="h-3 rounded"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div 
-                className="h-3 rounded w-3/4"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
+              <div className="h-3 rounded" style={{ backgroundColor: borderColor }} />
+              <div className="h-3 rounded w-3/4" style={{ backgroundColor: borderColor }} />
             </div>
-            <div className="flex gap-2 mb-4">
-              <div 
-                className="h-6 rounded-full w-16"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-              <div 
-                className="h-6 rounded-full w-20"
-                style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-              ></div>
-            </div>
-            <div 
-              className="h-10 rounded"
-              style={{ backgroundColor: colors.utility.secondaryText + '20' }}
-            ></div>
+            <div className="h-10 rounded" style={{ backgroundColor: borderColor }} />
           </div>
         </div>
       ))}
     </div>
   );
 
+  // =================================================================
+  // RENDER
+  // =================================================================
   return (
-    <div 
+    <div
       className="min-h-screen transition-colors"
       style={{ backgroundColor: colors.utility.primaryBackground }}
     >
-      {/* Header */}
-      <div 
-        className="border-b transition-colors"
+      {/* ═══════════ HEADER ═══════════ */}
+      <div
+        className="border-b"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
-          borderColor: colors.utility.secondaryText + '20'
+          borderColor,
         }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
-              <h1 
-                className="text-3xl font-bold flex items-center gap-3 transition-colors"
+              <h1
+                className="text-2xl font-bold flex items-center gap-3"
                 style={{ color: colors.utility.primaryText }}
               >
-                <Globe 
-                  className="h-8 w-8"
-                  style={{ color: colors.brand.primary }}
-                />
+                <Globe className="h-7 w-7" style={{ color: colors.brand.primary }} />
                 Global Contract Templates
                 <button
                   onClick={() => setShowHelp(true)}
-                  className="p-1 rounded-full transition-colors hover:opacity-80"
+                  className="p-1 rounded-full hover:opacity-80"
                   style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-                  title="Help & tutorials"
                 >
-                  <HelpCircle 
-                    className="h-5 w-5"
-                    style={{ color: colors.utility.secondaryText }}
-                  />
+                  <HelpCircle className="h-4 w-4" style={{ color: colors.utility.secondaryText }} />
                 </button>
               </h1>
-              <p 
-                className="mt-2 transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Choose from {stats?.global || 0} professionally designed global templates to start your contract creation
+              <p className="mt-1 text-sm" style={{ color: colors.utility.secondaryText }}>
+                Choose from {stats?.totalTemplates || 0} professionally designed global templates
               </p>
-              <div 
-                className="mt-2 flex items-center gap-2 text-sm px-3 py-1 rounded-full w-fit transition-colors"
+              <div
+                className="mt-2 flex items-center gap-2 text-xs px-3 py-1 rounded-full w-fit"
+                style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '10' }}
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                Platform Templates - Available to all tenants
+              </div>
+            </div>
+
+            {/* Create Template + Selected template */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/service-contracts/templates/admin/global-designer')}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl transition-all hover:opacity-90 hover:shadow-lg"
                 style={{
-                  color: colors.brand.primary,
-                  backgroundColor: colors.brand.primary + '10'
+                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary})`,
                 }}
               >
-                <Building2 className="h-4 w-4" />
-                Platform Templates • Available to all tenants
-              </div>
-              {selectedTemplate && (
-                <div 
-                  className="mt-3 p-3 border rounded-lg flex items-center justify-between transition-colors"
-                  style={{
-                    backgroundColor: colors.brand.primary + '10',
-                    borderColor: colors.brand.primary + '20'
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles 
-                      className="h-4 w-4"
-                      style={{ color: colors.brand.primary }}
-                    />
-                    <span 
-                      className="text-sm font-medium"
-                      style={{ color: colors.brand.primary }}
-                    >
-                      Selected: {selectedTemplate.name}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => navigate(`/contracts?action=create&template=${selectedTemplate.id}`)}
-                      className="text-sm flex items-center gap-1 transition-colors hover:opacity-80"
-                      style={{ color: colors.brand.primary }}
-                    >
-                      Continue <ArrowRight className="h-3 w-3" />
-                    </button>
-                    <button
-                      onClick={clearSelection}
-                      className="p-1 rounded transition-colors hover:opacity-80"
-                      style={{ backgroundColor: colors.brand.primary + '20' }}
-                    >
-                      <X 
-                        className="h-3 w-3"
-                        style={{ color: colors.brand.primary }}
-                      />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Enhanced stats display for global templates */}
-            {stats && (
-              <div 
-                className="flex items-center gap-6 text-sm transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4" />
-                  <span>{stats.global} global templates</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>{stats.popular} popular</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Star 
-                    className="h-4 w-4"
-                    style={{ 
-                      fill: colors.semantic.warning, 
-                      color: colors.semantic.warning 
-                    }}
-                  />
-                  <span>{(stats.averageRating || 0).toFixed(1)} avg rating</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  <span>{stats.totalUsage} total uses</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Industry Quick Filters */}
-        {!hasActiveFilters && !isSearching && (
-          <div className="mb-8">
-            <h2 
-              className="text-lg font-semibold mb-4 transition-colors"
-              style={{ color: colors.utility.primaryText }}
-            >
-              Browse by Industry
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {getIndustries().map((industry) => (
-                <button
-                  key={industry.id}
-                  onClick={() => handleIndustrySelect(industry.id)}
-                  className="p-4 rounded-lg border text-center transition-all hover:shadow-md"
-                  style={{
-                    borderColor: selectedIndustry === industry.id 
-                      ? colors.brand.primary 
-                      : colors.utility.secondaryText + '20',
-                    backgroundColor: selectedIndustry === industry.id 
-                      ? colors.brand.primary + '05' 
-                      : colors.utility.secondaryBackground,
-                    color: selectedIndustry === industry.id 
-                      ? colors.brand.primary 
-                      : colors.utility.primaryText
-                  }}
-                  onMouseEnter={(e) => {
-                    if (selectedIndustry !== industry.id) {
-                      e.currentTarget.style.borderColor = colors.brand.primary + '30';
-                      e.currentTarget.style.backgroundColor = colors.utility.secondaryText + '05';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedIndustry !== industry.id) {
-                      e.currentTarget.style.borderColor = colors.utility.secondaryText + '20';
-                      e.currentTarget.style.backgroundColor = colors.utility.secondaryBackground;
-                    }
-                  }}
-                >
-                  <div className="text-2xl mb-2">{industry.icon}</div>
-                  <div className="text-sm font-medium">{industry.name}</div>
-                  <div 
-                    className="text-xs mt-1 transition-colors"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    {industry.templateCount} templates
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Popular Templates Section */}
-        {!hasActiveFilters && !isSearching && popularTemplates.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 
-                className="text-lg font-semibold flex items-center gap-2 transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                <TrendingUp 
-                  className="h-5 w-5"
-                  style={{ color: colors.semantic.warning }}
-                />
-                Most Popular Global Templates
-              </h2>
-              <button
-                onClick={() => setAdvancedFilters(prev => ({ ...prev, isPopular: true }))}
-                className="text-sm transition-colors hover:opacity-80"
-                style={{ color: colors.brand.primary }}
-              >
-                View all popular →
+                <Plus className="h-4 w-4" />
+                Create Template
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {popularTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  template={template}
-                  onSelect={handleTemplateSelect}
-                  onPreview={handleTemplatePreview}
-                  isSelected={selectedTemplate?.id === template.id}
-                  context={templateCardContext}
-                />
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Search and Filter Bar */}
-        <div 
-          className="border rounded-lg p-4 mb-6 transition-colors"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: colors.utility.secondaryText + '20'
-          }}
-        >
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search 
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
-                style={{ color: colors.utility.secondaryText }}
-              />
-              <input
-                type="text"
-                placeholder="Search global templates by name, description, or tags..."
-                value={searchTerm}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
-                style={getInputStyles()}
-              />
-              {loading && searchTerm && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                  <Loader2 
-                    className="h-4 w-4 animate-spin"
-                    style={{ color: colors.utility.secondaryText }}
-                  />
+            {/* Selected template banner */}
+            {selectedTemplate && (
+              <div
+                className="p-3 border rounded-lg flex items-center justify-between"
+                style={{
+                  backgroundColor: colors.brand.primary + '10',
+                  borderColor: colors.brand.primary + '20',
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" style={{ color: colors.brand.primary }} />
+                  <span className="text-sm font-medium" style={{ color: colors.brand.primary }}>
+                    Selected: {selectedTemplate.name}
+                  </span>
                 </div>
-              )}
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-3">
-              {/* Sort Dropdown */}
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-colors"
-                style={getInputStyles()}
-              >
-                <option value="popular">Most Popular</option>
-                <option value="rating">Highest Rated</option>
-                <option value="usage">Most Used</option>
-                <option value="name">Name A-Z</option>
-                <option value="recent">Recently Updated</option>
-              </select>
-
-              {/* View Toggle */}
-              <div 
-                className="flex rounded-lg p-0.5 transition-colors"
-                style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-              >
-                <button 
-                  onClick={() => setViewType('grid')}
-                  className="p-1.5 rounded-md transition-colors"
-                  style={{
-                    backgroundColor: viewType === 'grid' 
-                      ? colors.utility.primaryBackground 
-                      : 'transparent',
-                    color: viewType === 'grid' 
-                      ? colors.utility.primaryText 
-                      : colors.utility.secondaryText
-                  }}
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </button>
-                <button 
-                  onClick={() => setViewType('list')}
-                  className="p-1.5 rounded-md transition-colors"
-                  style={{
-                    backgroundColor: viewType === 'list' 
-                      ? colors.utility.primaryBackground 
-                      : 'transparent',
-                    color: viewType === 'list' 
-                      ? colors.utility.primaryText 
-                      : colors.utility.secondaryText
-                  }}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
-              
-              {/* Filter Button with Dropdown */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="p-2 border rounded-lg transition-colors hover:opacity-80"
-                  style={{
-                    borderColor: hasActiveFilters 
-                      ? colors.brand.primary 
-                      : colors.utility.secondaryText + '20',
-                    backgroundColor: hasActiveFilters 
-                      ? colors.brand.primary + '10' 
-                      : 'transparent',
-                    color: colors.utility.primaryText
-                  }}
-                  title="More filters"
-                >
-                  <Filter className="h-4 w-4" />
-                </button>
-                
-                <FilterDropdown
-                  isOpen={showFilters}
-                  onClose={() => setShowFilters(false)}
-                  filters={advancedFilters}
-                  onFiltersChange={setAdvancedFilters}
-                />
-              </div>
-              
-              <span 
-                className="text-sm whitespace-nowrap transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                {totalTemplates} results
-              </span>
-            </div>
-          </div>
-
-          {/* Active Filters Display */}
-          {hasActiveFilters && (
-            <div 
-              className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t transition-colors"
-              style={{ borderColor: colors.utility.secondaryText + '20' }}
-            >
-              <span 
-                className="text-sm transition-colors"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Active filters:
-              </span>
-              {advancedFilters.industry && (
-                <span 
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border transition-colors"
-                  style={{
-                    backgroundColor: colors.brand.primary + '10',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '20'
-                  }}
-                >
-                  {getIndustries().find(i => i.id === advancedFilters.industry)?.name}
-                  <button onClick={() => setAdvancedFilters(prev => ({ ...prev, industry: '' }))}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {advancedFilters.contractType && (
-                <span 
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border transition-colors"
-                  style={{
-                    backgroundColor: colors.brand.primary + '10',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '20'
-                  }}
-                >
-                  {CONTRACT_TYPE_LABELS[advancedFilters.contractType as keyof typeof CONTRACT_TYPE_LABELS]}
-                  <button onClick={() => setAdvancedFilters(prev => ({ ...prev, contractType: '' }))}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {advancedFilters.complexity && (
-                <span 
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border transition-colors"
-                  style={{
-                    backgroundColor: colors.brand.primary + '10',
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary + '20'
-                  }}
-                >
-                  {TEMPLATE_COMPLEXITY_LABELS[advancedFilters.complexity as keyof typeof TEMPLATE_COMPLEXITY_LABELS]}
-                  <button onClick={() => setAdvancedFilters(prev => ({ ...prev, complexity: '' }))}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              <button
-                onClick={handleClearFilters}
-                className="text-xs transition-colors hover:opacity-80"
-                style={{ color: colors.utility.secondaryText }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = colors.utility.primaryText;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = colors.utility.secondaryText;
-                }}
-              >
-                Clear all
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Error State */}
-        {error && (
-          <div 
-            className="mb-6 p-4 rounded-lg border transition-colors"
-            style={{
-              backgroundColor: colors.semantic.error + '10',
-              borderColor: colors.semantic.error + '20'
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <AlertCircle 
-                className="h-5 w-5 flex-shrink-0"
-                style={{ color: colors.semantic.error }}
-              />
-              <div>
-                <h3 
-                  className="font-medium"
-                  style={{ color: colors.semantic.error }}
-                >
-                  Error loading templates
-                </h3>
-                <p 
-                  className="text-sm mt-1"
-                  style={{ color: colors.semantic.error + 'cc' }}
-                >
-                  {error}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Loading State */}
-        {loading && <LoadingSkeleton />}
-
-        {/* Templates Grid */}
-        {!loading && !error && (
-          <>
-            {isEmpty ? (
-              <div className="text-center py-12">
-                <Globe 
-                  className="h-16 w-16 mx-auto mb-4"
-                  style={{ color: colors.utility.secondaryText }}
-                />
-                <h3 
-                  className="text-lg font-medium mb-2 transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  No global templates found
-                </h3>
-                <p 
-                  className="mb-4 transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  {isSearching 
-                    ? "No global templates match your search criteria. Try adjusting your search terms or filters."
-                    : "No global templates are currently available."
-                  }
-                </p>
-                {hasActiveFilters && (
+                <div className="flex items-center gap-2 ml-4">
                   <button
-                    onClick={handleClearFilters}
-                    className="transition-colors hover:opacity-80"
+                    onClick={() => navigate(`/contracts?action=create&template=${selectedTemplate.id}`)}
+                    className="text-sm flex items-center gap-1 hover:opacity-80"
                     style={{ color: colors.brand.primary }}
                   >
-                    Clear all filters
+                    Continue <ArrowRight className="h-3 w-3" />
                   </button>
-                )}
-              </div>
-            ) : (
-              <div className={`
-                ${viewType === 'grid' 
-                  ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6' 
-                  : 'space-y-4'
-                }
-              `}>
-                {templates.map((template) => (
-                  <TemplateCard
-                    key={template.id}
-                    template={template}
-                    onSelect={handleTemplateSelect}
-                    onPreview={handleTemplatePreview}
-                    isSelected={selectedTemplate?.id === template.id}
-                    compact={viewType === 'list'}
-                    context={templateCardContext}
-                  />
-                ))}
+                  <button
+                    onClick={clearSelection}
+                    className="p-1 rounded hover:opacity-80"
+                    style={{ backgroundColor: colors.brand.primary + '20' }}
+                  >
+                    <X className="h-3 w-3" style={{ color: colors.brand.primary }} />
+                  </button>
+                </div>
               </div>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
 
-      {/* Help Modal */}
+      {/* ═══════════ STATS ROW ═══════════ */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {coverageLoading ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+            {[...Array(5)].map((_, i) => (
+              <div
+                key={i}
+                className="animate-pulse rounded-xl border p-5"
+                style={{ backgroundColor: sidebarBg, borderColor }}
+              >
+                <div className="w-9 h-9 rounded-lg mb-3" style={{ backgroundColor: borderColor }} />
+                <div className="h-8 rounded w-1/2 mb-1" style={{ backgroundColor: borderColor }} />
+                <div className="h-4 rounded w-3/4" style={{ backgroundColor: borderColor }} />
+              </div>
+            ))}
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+            <StatCard
+              icon={<Building2 className="h-4 w-4" />}
+              value={stats.totalIndustries}
+              label="Industries"
+              detail={`${stats.coveredIndustries} with resources`}
+              dotColor={colors.brand.primary}
+              accentColor={colors.brand.primary}
+              colors={colors}
+            />
+            <StatCard
+              icon={<Package className="h-4 w-4" />}
+              value={stats.totalResources ?? industries.length}
+              label="Resource Templates"
+              detail={`Across ${stats.coveredIndustries} industries`}
+              dotColor="#3B82F6"
+              accentColor="#3B82F6"
+              colors={colors}
+            />
+            <StatCard
+              icon={<FileText className="h-4 w-4" />}
+              value={stats.publishedTemplates ?? stats.publicTemplates ?? 0}
+              label="Published Templates"
+              detail={`${stats.totalTemplates} total (${(stats.totalTemplates - (stats.publishedTemplates ?? stats.publicTemplates ?? 0))} drafts)`}
+              dotColor="#10B981"
+              accentColor="#10B981"
+              colors={colors}
+            />
+            <StatCard
+              icon={<AlertTriangle className="h-4 w-4" />}
+              value={stats.totalGaps ?? stats.uncoveredIndustries}
+              label="Template Gaps"
+              detail={`${stats.uncoveredIndustries} industries fully uncovered`}
+              dotColor="#EF4444"
+              accentColor="#EF4444"
+              colors={colors}
+            />
+            <StatCard
+              icon={<BarChart3 className="h-4 w-4" />}
+              value={`${stats.avgCoverage ?? stats.coveragePercent}%`}
+              label="Avg Coverage"
+              detail={`${stats.totalSmartForms ?? 0} SmartForms created`}
+              dotColor="#F59E0B"
+              accentColor="#F59E0B"
+              colors={colors}
+            />
+          </div>
+        ) : null}
+
+        {/* ═══════════ MAIN LAYOUT: SIDEBAR + CONTENT ═══════════ */}
+        <div className="flex gap-6">
+          {/* ─── LEFT SIDEBAR ─── */}
+          <div
+            className="w-64 flex-shrink-0 rounded-xl border overflow-hidden"
+            style={{ backgroundColor: sidebarBg, borderColor }}
+          >
+            {/* Industries Section */}
+            <div className="p-3">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Industries
+              </div>
+
+              {/* All Industries */}
+              <button
+                onClick={() => handleIndustrySelect('all')}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all mb-0.5"
+                style={{
+                  backgroundColor: selectedIndustry === 'all' ? activeBg : 'transparent',
+                  color: selectedIndustry === 'all' ? activeColor : colors.utility.primaryText,
+                  borderLeft: selectedIndustry === 'all' ? `3px solid ${activeColor}` : '3px solid transparent',
+                }}
+              >
+                <Globe size={18} />
+                <span className="font-medium flex-1">All</span>
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full font-mono"
+                  style={{
+                    backgroundColor: colors.utility.secondaryText + '10',
+                    color: colors.utility.secondaryText,
+                  }}
+                >
+                  {totalTemplates}
+                </span>
+              </button>
+
+              {/* Industry List */}
+              <div className="max-h-[380px] overflow-y-auto space-y-0.5 pr-1">
+                {coverageLoading ? (
+                  [...Array(6)].map((_, i) => (
+                    <div key={i} className="animate-pulse flex items-center gap-3 px-3 py-2">
+                      <div className="w-6 h-6 rounded" style={{ backgroundColor: borderColor }} />
+                      <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                    </div>
+                  ))
+                ) : (
+                  industries.map((industry) => {
+                    const isActive = selectedIndustry === industry.id;
+                    return (
+                      <button
+                        key={industry.id}
+                        onClick={() => handleIndustrySelect(industry.id)}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all group"
+                        style={{
+                          backgroundColor: isActive ? activeBg : 'transparent',
+                          color: isActive ? activeColor : colors.utility.primaryText,
+                          borderLeft: isActive ? `3px solid ${activeColor}` : '3px solid transparent',
+                          opacity: industry.hasCoverage ? 1 : 0.6,
+                        }}
+                      >
+                        <span className="flex-shrink-0">{getLucideIcon(industry.icon, 18, isActive ? activeColor : colors.utility.secondaryText)}</span>
+                        <span className="font-medium flex-1 truncate">{industry.name}</span>
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded-full font-mono"
+                          style={{
+                            backgroundColor: isActive ? activeColor + '15' : colors.utility.secondaryText + '10',
+                            color: isActive ? activeColor : colors.utility.secondaryText,
+                          }}
+                        >
+                          {industry.templateCount}
+                        </span>
+                        <ChevronRight
+                          className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 transition-opacity"
+                          style={{ color: colors.utility.secondaryText }}
+                        />
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t mx-3" style={{ borderColor }} />
+
+            {/* Categories (when industry selected) */}
+            {selectedIndustry !== 'all' && currentCategories.length > 0 && (
+              <div className="p-3">
+                <div
+                  className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Categories
+                </div>
+                <div className="max-h-[200px] overflow-y-auto space-y-0.5 pr-1">
+                  <button
+                    onClick={() => setSelectedCategory('all')}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                    style={{
+                      backgroundColor: selectedCategory === 'all' ? activeBg : 'transparent',
+                      color: selectedCategory === 'all' ? activeColor : colors.utility.secondaryText,
+                    }}
+                  >
+                    All Categories
+                  </button>
+                  {currentCategories.map((cat) => {
+                    const isActive = selectedCategory === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all truncate"
+                        style={{
+                          backgroundColor: isActive ? activeBg : 'transparent',
+                          color: isActive ? activeColor : colors.utility.secondaryText,
+                        }}
+                      >
+                        <span className="truncate">{cat.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="border-t mx-3" style={{ borderColor }} />
+
+            {/* Resource Types (from DB) */}
+            <div className="p-3">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                Resource Types
+              </div>
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => setSelectedResourceType('all')}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                  style={{
+                    backgroundColor: selectedResourceType === 'all' ? activeBg : 'transparent',
+                    color: selectedResourceType === 'all' ? activeColor : colors.utility.secondaryText,
+                  }}
+                >
+                  <Package size={14} />
+                  All Types
+                </button>
+                {resourceTypesLoading ? (
+                  [...Array(3)].map((_, i) => (
+                    <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
+                      <div className="w-4 h-4 rounded" style={{ backgroundColor: borderColor }} />
+                      <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                    </div>
+                  ))
+                ) : (
+                  (dbResourceTypes || []).filter(rt => rt.is_active).map((rt) => {
+                    const isActive = selectedResourceType === rt.id;
+                    return (
+                      <button
+                        key={rt.id}
+                        onClick={() => setSelectedResourceType(rt.id)}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                        style={{
+                          backgroundColor: isActive ? activeBg : 'transparent',
+                          color: isActive ? activeColor : colors.utility.secondaryText,
+                        }}
+                      >
+                        {getLucideIcon(null, 14, isActive ? activeColor : colors.utility.secondaryText)}
+                        <span className="truncate">{rt.name}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t mx-3" style={{ borderColor }} />
+
+            {/* AI Agent Button */}
+            <div className="p-3">
+              <button
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all hover:opacity-90"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary + 'cc'})`,
+                  color: '#fff',
+                }}
+                onClick={() => {
+                  toast({
+                    title: 'AI Agent',
+                    description: `Generating templates for ${selectedIndustry === 'all' ? 'all industries' : industries.find(i => i.id === selectedIndustry)?.name || selectedIndustry}...`,
+                  });
+                }}
+              >
+                <Bot className="h-4 w-4" />
+                <div className="flex-1 text-left">
+                  <div>AI Agent</div>
+                  <div className="text-[10px] opacity-75 font-normal">Generate Templates</div>
+                </div>
+                <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">New</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ─── MAIN CONTENT ─── */}
+          <div className="flex-1 min-w-0">
+            {/* Search + Controls Bar */}
+            <div
+              className="border rounded-xl p-4 mb-5"
+              style={{ backgroundColor: sidebarBg, borderColor }}
+            >
+              <div className="flex flex-col lg:flex-row gap-3">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <Search
+                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                    style={{ color: colors.utility.secondaryText }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search templates by name, description, or tags..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm"
+                    style={getInputStyles()}
+                  />
+                  {loading && searchTerm && (
+                    <Loader2
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                  )}
+                </div>
+
+                {/* Sort + View Toggle + Count */}
+                <div className="flex items-center gap-3">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="px-3 py-2 border rounded-lg text-sm focus:outline-none"
+                    style={getInputStyles()}
+                  >
+                    <option value="popular">Most Popular</option>
+                    <option value="name">Name A-Z</option>
+                    <option value="recent">Recently Updated</option>
+                  </select>
+
+                  <div
+                    className="flex rounded-lg p-0.5"
+                    style={{ backgroundColor: colors.utility.secondaryText + '10' }}
+                  >
+                    <button
+                      onClick={() => setViewType('grid')}
+                      className="p-1.5 rounded-md transition-colors"
+                      style={{
+                        backgroundColor: viewType === 'grid' ? colors.utility.primaryBackground : 'transparent',
+                        color: viewType === 'grid' ? colors.utility.primaryText : colors.utility.secondaryText,
+                      }}
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setViewType('list')}
+                      className="p-1.5 rounded-md transition-colors"
+                      style={{
+                        backgroundColor: viewType === 'list' ? colors.utility.primaryBackground : 'transparent',
+                        color: viewType === 'list' ? colors.utility.primaryText : colors.utility.secondaryText,
+                      }}
+                    >
+                      <List className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <span className="text-sm whitespace-nowrap" style={{ color: colors.utility.secondaryText }}>
+                    {totalTemplates} results
+                  </span>
+                </div>
+              </div>
+
+              {/* Nomenclature Filter Pills */}
+              {(nomenclatureLoading || allNomenclatureItems.length > 0) && (
+                <div className="mt-3 pt-3 border-t" style={{ borderColor }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className="text-[10px] font-semibold uppercase tracking-wider mr-1 flex-shrink-0"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Nomenclature:
+                    </span>
+                    {nomenclatureLoading ? (
+                      [...Array(6)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="animate-pulse h-6 rounded-full"
+                          style={{ width: 48 + Math.random() * 24, backgroundColor: borderColor }}
+                        />
+                      ))
+                    ) : (
+                      <>
+                        {/* All pill */}
+                        <button
+                          onClick={() => setSelectedNomenclature('all')}
+                          className="px-2.5 py-1 rounded-full text-xs font-medium transition-all border"
+                          style={{
+                            backgroundColor: selectedNomenclature === 'all'
+                              ? colors.brand.primary + '15'
+                              : 'transparent',
+                            color: selectedNomenclature === 'all'
+                              ? colors.brand.primary
+                              : colors.utility.secondaryText,
+                            borderColor: selectedNomenclature === 'all'
+                              ? colors.brand.primary + '30'
+                              : colors.utility.secondaryText + '20',
+                          }}
+                        >
+                          All
+                        </button>
+                        {/* Group labels + items */}
+                        {(nomenclatureGroups || []).map((group, gIdx) => (
+                          <React.Fragment key={group.group}>
+                            {/* Group separator (subtle pipe) */}
+                            {gIdx > 0 && (
+                              <span
+                                className="text-xs mx-0.5 select-none"
+                                style={{ color: colors.utility.secondaryText + '30' }}
+                              >
+                                |
+                              </span>
+                            )}
+                            {/* Group label */}
+                            <span
+                              className="text-[9px] uppercase tracking-wider font-medium mr-0.5 flex-shrink-0"
+                              style={{ color: colors.utility.secondaryText + '80' }}
+                            >
+                              {group.label.replace(/\s*(Maintenance|Property|Delivery|Hybrid)\s*/i, '').trim() || group.label}:
+                            </span>
+                            {/* Items in this group */}
+                            {group.items.map((item) => {
+                              const isActive = selectedNomenclature === item.id;
+                              const pillColor = item.hexcolor || colors.brand.primary;
+                              return (
+                                <button
+                                  key={item.id}
+                                  onClick={() => setSelectedNomenclature(isActive ? 'all' : item.id)}
+                                  title={`${item.form_settings?.full_name || item.display_name}${item.form_settings?.typical_duration ? ' - ' + item.form_settings.typical_duration : ''}`}
+                                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5"
+                                  style={{
+                                    backgroundColor: isActive ? pillColor + '18' : 'transparent',
+                                    color: isActive ? pillColor : colors.utility.secondaryText,
+                                    borderColor: isActive ? pillColor + '40' : colors.utility.secondaryText + '20',
+                                  }}
+                                >
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: pillColor }}
+                                  />
+                                  {item.form_settings?.short_name || item.display_name}
+                                </button>
+                              );
+                            })}
+                          </React.Fragment>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Active filters display */}
+              {(selectedIndustry !== 'all' || selectedResourceType !== 'all' || selectedCategory !== 'all' || selectedNomenclature !== 'all') && (
+                <div
+                  className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t"
+                  style={{ borderColor }}
+                >
+                  <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                    Active filters:
+                  </span>
+                  {selectedIndustry !== 'all' && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                      style={{
+                        backgroundColor: activeColor + '10',
+                        color: activeColor,
+                        borderColor: activeColor + '20',
+                      }}
+                    >
+                      {getLucideIcon(industries.find(i => i.id === selectedIndustry)?.icon, 12, activeColor)}{' '}
+                      {industries.find(i => i.id === selectedIndustry)?.name}
+                      <button onClick={() => handleIndustrySelect('all')}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {selectedNomenclature !== 'all' && (() => {
+                    const nomItem = (nomenclatureGroups || []).flatMap(g => g.items).find(n => n.id === selectedNomenclature);
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                        style={{
+                          backgroundColor: (nomItem?.hexcolor || activeColor) + '15',
+                          color: nomItem?.hexcolor || activeColor,
+                          borderColor: (nomItem?.hexcolor || activeColor) + '30',
+                        }}
+                      >
+                        {nomItem?.form_settings?.short_name || nomItem?.display_name}
+                        <button onClick={() => setSelectedNomenclature('all')}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    );
+                  })()}
+                  {selectedCategory !== 'all' && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                      style={{
+                        backgroundColor: activeColor + '10',
+                        color: activeColor,
+                        borderColor: activeColor + '20',
+                      }}
+                    >
+                      {currentCategories.find(c => c.id === selectedCategory)?.name}
+                      <button onClick={() => setSelectedCategory('all')}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {selectedResourceType !== 'all' && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
+                      style={{
+                        backgroundColor: activeColor + '10',
+                        color: activeColor,
+                        borderColor: activeColor + '20',
+                      }}
+                    >
+                      {(dbResourceTypes || []).find(r => r.id === selectedResourceType)?.name}
+                      <button onClick={() => setSelectedResourceType('all')}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      handleIndustrySelect('all');
+                      setSelectedResourceType('all');
+                      setSelectedNomenclature('all');
+                    }}
+                    className="text-xs hover:opacity-80"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Error State */}
+            {error && (
+              <div
+                className="mb-5 p-4 rounded-lg border"
+                style={{
+                  backgroundColor: colors.semantic.error + '10',
+                  borderColor: colors.semantic.error + '20',
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 flex-shrink-0" style={{ color: colors.semantic.error }} />
+                  <div>
+                    <h3 className="font-medium" style={{ color: colors.semantic.error }}>
+                      Error loading templates
+                    </h3>
+                    <p className="text-sm mt-1" style={{ color: colors.semantic.error + 'cc' }}>
+                      {error}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading */}
+            {loading && <LoadingSkeleton />}
+
+            {/* Template Grid / List */}
+            {!loading && !error && (
+              <>
+                {isEmpty ? (
+                  <div className="text-center py-16">
+                    <Globe
+                      className="h-16 w-16 mx-auto mb-4"
+                      style={{ color: colors.utility.secondaryText + '40' }}
+                    />
+                    <h3
+                      className="text-lg font-medium mb-2"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      No templates found
+                    </h3>
+                    <p className="mb-4 text-sm" style={{ color: colors.utility.secondaryText }}>
+                      {searchTerm
+                        ? 'No templates match your search. Try different keywords.'
+                        : selectedIndustry !== 'all'
+                        ? `No templates available for ${industries.find(i => i.id === selectedIndustry)?.name || 'this industry'} yet.`
+                        : 'No global templates are currently available.'
+                      }
+                    </p>
+                    {(selectedIndustry !== 'all' || searchTerm) && (
+                      <button
+                        onClick={() => {
+                          setSearchTerm('');
+                          handleIndustrySelect('all');
+                        }}
+                        className="text-sm hover:opacity-80"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        Clear all filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    className={
+                      viewType === 'grid'
+                        ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5'
+                        : 'space-y-3'
+                    }
+                  >
+                    {templates.map((template) => (
+                      <TemplateCard
+                        key={template.id}
+                        template={template}
+                        onSelect={handleTemplateSelect}
+                        onPreview={handleTemplatePreview}
+                        onEdit={handleTemplateEdit}
+                        isSelected={selectedTemplate?.id === template.id}
+                        compact={viewType === 'list'}
+                        context={templateCardContext}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════ HELP MODAL ═══════════ */}
       {showHelp && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-          <div 
-            className="fixed inset-0 backdrop-blur-sm transition-opacity"
-            style={{
-              backgroundColor: isDarkMode ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)'
-            }}
+          <div
+            className="fixed inset-0 backdrop-blur-sm"
+            style={{ backgroundColor: isDarkMode ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)' }}
             onClick={() => setShowHelp(false)}
           />
-          <div 
-            className="rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden relative transition-colors"
+          <div
+            className="rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden relative"
             style={{ backgroundColor: colors.utility.secondaryBackground }}
           >
-            <div 
-              className="p-6 border-b transition-colors"
-              style={{ borderColor: colors.utility.secondaryText + '20' }}
-            >
+            <div className="p-6 border-b" style={{ borderColor }}>
               <div className="flex items-center justify-between">
-                <h2 
-                  className="text-xl font-semibold transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
+                <h2 className="text-xl font-semibold" style={{ color: colors.utility.primaryText }}>
                   Global Template Selection Help
                 </h2>
                 <button
                   onClick={() => setShowHelp(false)}
-                  className="p-2 rounded-md transition-colors hover:opacity-80"
-                  style={{
-                    backgroundColor: colors.utility.secondaryText + '10',
-                    color: colors.utility.secondaryText
-                  }}
+                  className="p-2 rounded-md hover:opacity-80"
+                  style={{ backgroundColor: colors.utility.secondaryText + '10', color: colors.utility.secondaryText }}
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div 
-                className="p-4 rounded-lg transition-colors"
-                style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-              >
-                <h3 
-                  className="font-medium mb-2 transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  🌍 Global Templates
-                </h3>
-                <p 
-                  className="text-sm transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  These are professionally designed templates created by our platform team and available to all tenants. They provide industry-standard contract structures.
-                </p>
-              </div>
-              <div 
-                className="p-4 rounded-lg transition-colors"
-                style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-              >
-                <h3 
-                  className="font-medium mb-2 transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  📋 Using Templates
-                </h3>
-                <p 
-                  className="text-sm transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Select a template to start contract creation. The template will be copied to your workspace where you can customize it for your specific needs.
-                </p>
-              </div>
-              <div 
-                className="p-4 rounded-lg transition-colors"
-                style={{ backgroundColor: colors.utility.secondaryText + '10' }}
-              >
-                <h3 
-                  className="font-medium mb-2 transition-colors"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  ⭐ Template Ratings
-                </h3>
-                <p 
-                  className="text-sm transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Higher ratings indicate templates that have been successfully used across multiple tenants and received positive feedback.
-                </p>
-              </div>
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh]">
+              {[
+                { title: 'Global Templates', icon: '🌍', text: 'Professionally designed templates created by the platform team, available to all tenants. They provide industry-standard contract structures.' },
+                { title: 'Using Templates', icon: '📋', text: 'Select a template to start contract creation. The template will be copied to your workspace where you can customize it.' },
+                { title: 'Industry Filters', icon: '🏢', text: 'Use the left sidebar to filter templates by industry, category, or resource type. Click an industry to see its templates.' },
+                { title: 'AI Agent', icon: '🤖', text: 'Use the AI Agent to automatically generate templates for industries with gaps in coverage.' },
+              ].map((item) => (
+                <div key={item.title} className="p-4 rounded-lg" style={{ backgroundColor: colors.utility.secondaryText + '08' }}>
+                  <h3 className="font-medium mb-1" style={{ color: colors.utility.primaryText }}>
+                    {item.icon} {item.title}
+                  </h3>
+                  <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                    {item.text}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
