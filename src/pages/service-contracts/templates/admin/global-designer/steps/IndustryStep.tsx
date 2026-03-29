@@ -39,7 +39,16 @@ const IndustryStep: React.FC<IndustryStepProps> = ({ state, onUpdate }) => {
 
   // All industries from master catalog
   const { data: industriesData, isLoading: industriesLoading } = useIndustries({ limit: 100 });
-  const allIndustries = industriesData?.data || [];
+  const allIndustriesRaw = industriesData?.data || [];
+
+  // For admin: show only parent industries (level === 0) since resource templates
+  // are mapped to parent industry IDs in m_catalog_resource_templates.
+  // For non-admin: show their served industries (which can be any level).
+  const hasHierarchy = allIndustriesRaw.some((i) => i.level !== undefined && i.level !== null);
+  const parentIndustries = hasHierarchy
+    ? allIndustriesRaw.filter((i) => i.level === 0)
+    : allIndustriesRaw;
+  const allIndustries = isAdmin ? parentIndustries : allIndustriesRaw;
 
   // Non-admin: tenant's own industry from profile
   const { profile, loading: profileLoading } = useTenantProfile();

@@ -199,11 +199,8 @@ export const useUpdateCatTemplate = () => {
     onSuccess: (data, variables) => {
       toast.success('Template updated successfully!');
 
-      // Update specific template in cache
-      queryClient.invalidateQueries({ queryKey: catTemplateKeys.detail(variables.id) });
-
-      // Invalidate list queries
-      queryClient.invalidateQueries({ queryKey: catTemplateKeys.lists() });
+      // Invalidate ALL template caches (list, system, public, detail)
+      queryClient.invalidateQueries({ queryKey: catTemplateKeys.all });
 
       console.log('✅ Template updated successfully:', variables.id);
     },

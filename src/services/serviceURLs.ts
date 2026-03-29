@@ -292,12 +292,13 @@ export const API_ENDPOINTS = {
 
     // Resource templates — browse catalog by served industries
     RESOURCE_TEMPLATES: '/api/resources/resource-templates',
-    RESOURCE_TEMPLATES_WITH_FILTERS: (filters: { search?: string; limit?: number; offset?: number; resource_type_id?: string } = {}) => {
+    RESOURCE_TEMPLATES_WITH_FILTERS: (filters: { search?: string; limit?: number; offset?: number; resource_type_id?: string; industry_ids?: string[] } = {}) => {
       const params = new URLSearchParams();
       if (filters.search) params.append('search', filters.search);
       if (filters.limit) params.append('limit', String(filters.limit));
       if (filters.offset !== undefined) params.append('offset', String(filters.offset));
       if (filters.resource_type_id) params.append('resource_type_id', filters.resource_type_id);
+      if (filters.industry_ids && filters.industry_ids.length > 0) params.append('industry_ids', filters.industry_ids.join(','));
       const qs = params.toString();
       return qs ? `/api/resources/resource-templates?${qs}` : '/api/resources/resource-templates';
     },

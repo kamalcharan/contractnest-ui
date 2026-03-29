@@ -64,20 +64,23 @@ const AssetNamesStep: React.FC<AssetNamesStepProps> = ({ state, onUpdate }) => {
     ? NOMENCLATURE_RESOURCE_TYPE_MAP[nomenclatureGroup] || 'equipment'
     : 'equipment';
 
-  // Fetch resource templates filtered by resource_type_id
-  // The API already filters by tenant's served industries server-side
+  // Fetch resource templates filtered by resource_type_id + selected industries
+  // Pass industry_ids directly to bypass tenant-scoped filtering (admin global designer)
   const templateFilters: ResourceTemplateFilters = useMemo(
-    () => ({ limit: 500, resource_type_id: resourceTypeId }),
-    [resourceTypeId]
+    () => ({
+      limit: 500,
+      resource_type_id: resourceTypeId,
+      industry_ids: targetIndustries.length > 0 ? targetIndustries : undefined,
+    }),
+    [resourceTypeId, targetIndustries]
   );
   const { templates, isLoading } = useResourceTemplatesBrowser(templateFilters);
 
-  // Further filter by selected industries from Step 3
+  // Templates are already filtered by industry_ids server-side, no client-side filter needed
   const filteredTemplates = useMemo(() => {
     if (!templates || templates.length === 0) return [];
-    if (targetIndustries.length === 0) return templates;
-    return templates.filter((t) => targetIndustries.includes(t.industry_id));
-  }, [templates, targetIndustries]);
+    return templates;
+  }, [templates]);
 
   // Search state
   const [search, setSearch] = React.useState('');

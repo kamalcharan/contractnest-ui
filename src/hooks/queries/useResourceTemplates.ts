@@ -25,6 +25,7 @@ export interface ResourceTemplateFilters {
   limit?: number;
   offset?: number;
   resource_type_id?: string;
+  industry_ids?: string[];  // Override tenant-scoped filtering (used by admin global designer)
 }
 
 // ════════════════════════════════════════════════════════════════════

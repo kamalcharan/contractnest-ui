@@ -9,6 +9,7 @@ export interface Template {
   name: string;
   description: string;
   industry: string;
+  industryTags?: string[];       // All industry tags from DB (multiple industries)
   contractType: ContractType;
   estimatedDuration: string;
   complexity: ComplexityLevel;
@@ -19,15 +20,23 @@ export interface Template {
   rating: number;
   isPopular: boolean;
   status: TemplateStatus;
+  isActive?: boolean;            // Maps to is_active in DB
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
-  
+
   // New: Global Template Fields
   globalTemplate: boolean;        // True for global templates, false for tenant templates
   globalTemplateId?: string;      // Reference to original global template (for copied templates)
   tenantId: string;              // Owner tenant ID ("admin" for global templates)
-  
+
+  // Equipment & Facility flags
+  isEquipmentBased?: boolean;   // Template involves shared equipment
+  isFacilityBased?: boolean;    // Template involves shared facility/entity
+
+  // Versioning
+  version?: string;             // Template version number from DB
+
   // Existing optional fields
   isLive?: boolean;
 }
@@ -210,6 +219,7 @@ export interface TemplateCardProps {
   onPreview?: (template: Template) => void;
   onSelect?: (template: Template) => void;
   onEdit?: (template: Template) => void;
+  onSettings?: (template: Template) => void;
   isSelected?: boolean;
   showActions?: boolean;
   compact?: boolean;

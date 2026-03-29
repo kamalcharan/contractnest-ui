@@ -24,6 +24,9 @@ import {
   TrendingUp,
   Circle,
   Plus,
+  Wrench,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -41,6 +44,7 @@ import { CatTemplateFilters } from '@/services/serviceURLs';
 import { useTemplateCoverage, IndustryCoverage } from '@/hooks/queries/useTemplateCoverage';
 import { useResourceTypes, ResourceType as DBResourceType } from '@/hooks/queries/useResources';
 import { useNomenclatureTypes, NomenclatureGroup } from '@/hooks/queries/useNomenclatureTypes';
+import { useResourceTemplatesBrowser, type ResourceTemplateFilters } from '@/hooks/queries/useResourceTemplates';
 
 // Data constants (mock categories until APIs exist)
 import {
@@ -175,11 +179,13 @@ const TemplateGalleryPage: React.FC = () => {
   const [sortBy, setSortBy] = useState<SortOption>('popular');
   const [showHelp, setShowHelp] = useState(false);
 
-  // Sidebar selections
+  // Sidebar selections (hierarchical: Industry → Contract Type → Equipment)
   const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
-  const [selectedResourceType, setSelectedResourceType] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedNomenclature, setSelectedNomenclature] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedEquipment, setSelectedEquipment] = useState<string>('all');
+  const [equipmentSectionCollapsed, setEquipmentSectionCollapsed] = useState(false);
+  const [facilitySectionCollapsed, setFacilitySectionCollapsed] = useState(false);
 
   // ── Hooks ──────────────────────────────────────────────────────
   const { selectedTemplate, selectTemplate, clearSelection } = useTemplateSelection();
@@ -215,6 +221,28 @@ const TemplateGalleryPage: React.FC = () => {
     data: nomenclatureGroups,
     isLoading: nomenclatureLoading,
   } = useNomenclatureTypes();
+
+  // Equipment catalog — filtered by selected industry (passes industry_ids to bypass tenant scope)
+  const equipmentFilters: ResourceTemplateFilters = useMemo(
+    () => ({
+      limit: 500,
+      resource_type_id: 'equipment',
+      industry_ids: selectedIndustry !== 'all' ? [selectedIndustry] : undefined,
+    }),
+    [selectedIndustry]
+  );
+  const { templates: equipmentList, isLoading: equipmentLoading } = useResourceTemplatesBrowser(equipmentFilters);
+
+  // Facilities catalog — filtered by selected industry
+  const facilityFilters: ResourceTemplateFilters = useMemo(
+    () => ({
+      limit: 500,
+      resource_type_id: 'asset',
+      industry_ids: selectedIndustry !== 'all' ? [selectedIndustry] : undefined,
+    }),
+    [selectedIndustry]
+  );
+  const { templates: facilityList, isLoading: facilityLoading } = useResourceTemplatesBrowser(facilityFilters);
 
   // ── Derived data ───────────────────────────────────────────────
   const rawTemplates: CatTemplate[] = systemData?.data?.templates || [];
@@ -256,6 +284,36 @@ const TemplateGalleryPage: React.FC = () => {
     [selectedIndustry]
   );
 
+  // Equipment grouped by sub_category for sidebar display
+  const equipmentGrouped = useMemo(() => {
+    const groups: { subCategory: string; items: typeof equipmentList }[] = [];
+    const map = new Map<string, typeof equipmentList>();
+    for (const item of equipmentList) {
+      const key = (item as any).sub_category || 'Other';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    for (const [subCategory, items] of map) {
+      groups.push({ subCategory, items });
+    }
+    return groups;
+  }, [equipmentList]);
+
+  // Facilities grouped by sub_category
+  const facilityGrouped = useMemo(() => {
+    const groups: { subCategory: string; items: typeof facilityList }[] = [];
+    const map = new Map<string, typeof facilityList>();
+    for (const item of facilityList) {
+      const key = (item as any).sub_category || 'Other';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+    for (const [subCategory, items] of map) {
+      groups.push({ subCategory, items });
+    }
+    return groups;
+  }, [facilityList]);
+
   // Template card context — management mode (admin can edit global templates)
   const templateCardContext: TemplateCardContext = useMemo(() => ({
     mode: 'management',
@@ -270,8 +328,8 @@ const TemplateGalleryPage: React.FC = () => {
   const handleIndustrySelect = (industryId: string) => {
     setSelectedIndustry(industryId);
     setSelectedCategory('all');
-    setSelectedResourceType('all');
     setSelectedNomenclature('all');
+    setSelectedEquipment('all');
   };
 
   const handleTemplateSelect = (template: Template) => {
@@ -457,10 +515,10 @@ const TemplateGalleryPage: React.FC = () => {
               colors={colors}
             />
             <StatCard
-              icon={<Package className="h-4 w-4" />}
-              value={stats.totalResources ?? industries.length}
-              label="Resource Templates"
-              detail={`Across ${stats.coveredIndustries} industries`}
+              icon={<Wrench className="h-4 w-4" />}
+              value={equipmentLoading ? '...' : equipmentList.length}
+              label="Equipment Types"
+              detail={`${facilityLoading ? '...' : facilityList.length} facility types`}
               dotColor="#3B82F6"
               accentColor="#3B82F6"
               colors={colors}
@@ -583,96 +641,209 @@ const TemplateGalleryPage: React.FC = () => {
             {/* Divider */}
             <div className="border-t mx-3" style={{ borderColor }} />
 
-            {/* Categories (when industry selected) */}
-            {selectedIndustry !== 'all' && currentCategories.length > 0 && (
-              <div className="p-3">
-                <div
-                  className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Categories
-                </div>
-                <div className="max-h-[200px] overflow-y-auto space-y-0.5 pr-1">
-                  <button
-                    onClick={() => setSelectedCategory('all')}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
-                    style={{
-                      backgroundColor: selectedCategory === 'all' ? activeBg : 'transparent',
-                      color: selectedCategory === 'all' ? activeColor : colors.utility.secondaryText,
-                    }}
-                  >
-                    All Categories
-                  </button>
-                  {currentCategories.map((cat) => {
-                    const isActive = selectedCategory === cat.id;
-                    return (
-                      <button
-                        key={cat.id}
-                        onClick={() => setSelectedCategory(cat.id)}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all truncate"
-                        style={{
-                          backgroundColor: isActive ? activeBg : 'transparent',
-                          color: isActive ? activeColor : colors.utility.secondaryText,
-                        }}
-                      >
-                        <span className="truncate">{cat.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Divider */}
-            <div className="border-t mx-3" style={{ borderColor }} />
-
-            {/* Resource Types (from DB) */}
+            {/* ── CONTRACT TYPE (Nomenclature) ── */}
             <div className="p-3">
               <div
                 className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
                 style={{ color: colors.utility.secondaryText }}
               >
-                Resource Types
+                Contract Type
               </div>
-              <div className="space-y-0.5">
+              <div className="max-h-[240px] overflow-y-auto space-y-0.5 pr-1">
                 <button
-                  onClick={() => setSelectedResourceType('all')}
+                  onClick={() => setSelectedNomenclature('all')}
                   className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
                   style={{
-                    backgroundColor: selectedResourceType === 'all' ? activeBg : 'transparent',
-                    color: selectedResourceType === 'all' ? activeColor : colors.utility.secondaryText,
+                    backgroundColor: selectedNomenclature === 'all' ? activeBg : 'transparent',
+                    color: selectedNomenclature === 'all' ? activeColor : colors.utility.secondaryText,
                   }}
                 >
-                  <Package size={14} />
-                  All Types
+                  <FileText size={14} />
+                  <span className="flex-1">All Types</span>
                 </button>
-                {resourceTypesLoading ? (
-                  [...Array(3)].map((_, i) => (
+                {nomenclatureLoading ? (
+                  [...Array(4)].map((_, i) => (
                     <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
-                      <div className="w-4 h-4 rounded" style={{ backgroundColor: borderColor }} />
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: borderColor }} />
                       <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
                     </div>
                   ))
                 ) : (
-                  (dbResourceTypes || []).filter(rt => rt.is_active).map((rt) => {
-                    const isActive = selectedResourceType === rt.id;
-                    return (
-                      <button
-                        key={rt.id}
-                        onClick={() => setSelectedResourceType(rt.id)}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
-                        style={{
-                          backgroundColor: isActive ? activeBg : 'transparent',
-                          color: isActive ? activeColor : colors.utility.secondaryText,
-                        }}
+                  (nomenclatureGroups || []).map((group) => (
+                    <React.Fragment key={group.group}>
+                      <div
+                        className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
+                        style={{ color: colors.utility.secondaryText + '80' }}
                       >
-                        {getLucideIcon(null, 14, isActive ? activeColor : colors.utility.secondaryText)}
-                        <span className="truncate">{rt.name}</span>
-                      </button>
-                    );
-                  })
+                        {group.label}
+                      </div>
+                      {group.items.map((item) => {
+                        const isActive = selectedNomenclature === item.id;
+                        const pillColor = item.hexcolor || colors.brand.primary;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => setSelectedNomenclature(isActive ? 'all' : item.id)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                            style={{
+                              backgroundColor: isActive ? pillColor + '15' : 'transparent',
+                              color: isActive ? pillColor : colors.utility.secondaryText,
+                              borderLeft: isActive ? `3px solid ${pillColor}` : '3px solid transparent',
+                            }}
+                          >
+                            <span
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: pillColor }}
+                            />
+                            <span className="flex-1 truncate font-medium">
+                              {item.form_settings?.short_name || item.display_name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))
                 )}
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t mx-3" style={{ borderColor }} />
+
+            {/* ── EQUIPMENT ── */}
+            <div className="p-3">
+              <button
+                onClick={() => setEquipmentSectionCollapsed(!equipmentSectionCollapsed)}
+                className="w-full flex items-center gap-2 mb-2 px-2"
+              >
+                <Wrench size={12} style={{ color: '#3B82F6' }} />
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-left"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Equipment ({equipmentList.length})
+                </span>
+                {equipmentSectionCollapsed
+                  ? <ChevronDown size={12} style={{ color: colors.utility.secondaryText }} />
+                  : <ChevronUp size={12} style={{ color: colors.utility.secondaryText }} />
+                }
+              </button>
+              {!equipmentSectionCollapsed && (
+                <div className="max-h-[220px] overflow-y-auto space-y-0.5 pr-1">
+                  {equipmentLoading ? (
+                    [...Array(4)].map((_, i) => (
+                      <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
+                        <div className="w-3 h-3 rounded" style={{ backgroundColor: borderColor }} />
+                        <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                      </div>
+                    ))
+                  ) : equipmentList.length === 0 ? (
+                    <div className="px-3 py-2 text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                      {selectedIndustry === 'all' ? 'Select an industry to see equipment' : 'No equipment for this industry'}
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setSelectedEquipment('all')}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                        style={{
+                          backgroundColor: selectedEquipment === 'all' ? activeBg : 'transparent',
+                          color: selectedEquipment === 'all' ? activeColor : colors.utility.secondaryText,
+                        }}
+                      >
+                        All Equipment
+                      </button>
+                      {equipmentGrouped.map(({ subCategory, items }) => (
+                        <React.Fragment key={subCategory}>
+                          <div
+                            className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
+                            style={{ color: colors.utility.secondaryText + '60' }}
+                          >
+                            {subCategory}
+                          </div>
+                          {items.map((item: any) => {
+                            const isActive = selectedEquipment === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => setSelectedEquipment(isActive ? 'all' : item.id)}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-[11px] transition-all"
+                                style={{
+                                  backgroundColor: isActive ? '#3B82F6' + '12' : 'transparent',
+                                  color: isActive ? '#3B82F6' : colors.utility.secondaryText,
+                                }}
+                              >
+                                <Wrench size={11} style={{ opacity: 0.5 }} />
+                                <span className="flex-1 truncate">{item.name}</span>
+                              </button>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t mx-3" style={{ borderColor }} />
+
+            {/* ── FACILITIES ── */}
+            <div className="p-3">
+              <button
+                onClick={() => setFacilitySectionCollapsed(!facilitySectionCollapsed)}
+                className="w-full flex items-center gap-2 mb-2 px-2"
+              >
+                <Building2 size={12} style={{ color: '#8B5CF6' }} />
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-left"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Facilities ({facilityList.length})
+                </span>
+                {facilitySectionCollapsed
+                  ? <ChevronDown size={12} style={{ color: colors.utility.secondaryText }} />
+                  : <ChevronUp size={12} style={{ color: colors.utility.secondaryText }} />
+                }
+              </button>
+              {!facilitySectionCollapsed && (
+                <div className="max-h-[180px] overflow-y-auto space-y-0.5 pr-1">
+                  {facilityLoading ? (
+                    [...Array(3)].map((_, i) => (
+                      <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
+                        <div className="w-3 h-3 rounded" style={{ backgroundColor: borderColor }} />
+                        <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                      </div>
+                    ))
+                  ) : facilityList.length === 0 ? (
+                    <div className="px-3 py-2 text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                      {selectedIndustry === 'all' ? 'Select an industry to see facilities' : 'No facilities for this industry'}
+                    </div>
+                  ) : (
+                    facilityGrouped.map(({ subCategory, items }) => (
+                      <React.Fragment key={subCategory}>
+                        <div
+                          className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
+                          style={{ color: colors.utility.secondaryText + '60' }}
+                        >
+                          {subCategory}
+                        </div>
+                        {items.map((item: any) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[11px]"
+                            style={{ color: colors.utility.secondaryText }}
+                          >
+                            <Building2 size={11} style={{ opacity: 0.5 }} />
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Divider */}
@@ -778,97 +949,8 @@ const TemplateGalleryPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Nomenclature Filter Pills */}
-              {(nomenclatureLoading || allNomenclatureItems.length > 0) && (
-                <div className="mt-3 pt-3 border-t" style={{ borderColor }}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className="text-[10px] font-semibold uppercase tracking-wider mr-1 flex-shrink-0"
-                      style={{ color: colors.utility.secondaryText }}
-                    >
-                      Nomenclature:
-                    </span>
-                    {nomenclatureLoading ? (
-                      [...Array(6)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="animate-pulse h-6 rounded-full"
-                          style={{ width: 48 + Math.random() * 24, backgroundColor: borderColor }}
-                        />
-                      ))
-                    ) : (
-                      <>
-                        {/* All pill */}
-                        <button
-                          onClick={() => setSelectedNomenclature('all')}
-                          className="px-2.5 py-1 rounded-full text-xs font-medium transition-all border"
-                          style={{
-                            backgroundColor: selectedNomenclature === 'all'
-                              ? colors.brand.primary + '15'
-                              : 'transparent',
-                            color: selectedNomenclature === 'all'
-                              ? colors.brand.primary
-                              : colors.utility.secondaryText,
-                            borderColor: selectedNomenclature === 'all'
-                              ? colors.brand.primary + '30'
-                              : colors.utility.secondaryText + '20',
-                          }}
-                        >
-                          All
-                        </button>
-                        {/* Group labels + items */}
-                        {(nomenclatureGroups || []).map((group, gIdx) => (
-                          <React.Fragment key={group.group}>
-                            {/* Group separator (subtle pipe) */}
-                            {gIdx > 0 && (
-                              <span
-                                className="text-xs mx-0.5 select-none"
-                                style={{ color: colors.utility.secondaryText + '30' }}
-                              >
-                                |
-                              </span>
-                            )}
-                            {/* Group label */}
-                            <span
-                              className="text-[9px] uppercase tracking-wider font-medium mr-0.5 flex-shrink-0"
-                              style={{ color: colors.utility.secondaryText + '80' }}
-                            >
-                              {group.label.replace(/\s*(Maintenance|Property|Delivery|Hybrid)\s*/i, '').trim() || group.label}:
-                            </span>
-                            {/* Items in this group */}
-                            {group.items.map((item) => {
-                              const isActive = selectedNomenclature === item.id;
-                              const pillColor = item.hexcolor || colors.brand.primary;
-                              return (
-                                <button
-                                  key={item.id}
-                                  onClick={() => setSelectedNomenclature(isActive ? 'all' : item.id)}
-                                  title={`${item.form_settings?.full_name || item.display_name}${item.form_settings?.typical_duration ? ' - ' + item.form_settings.typical_duration : ''}`}
-                                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all border flex items-center gap-1.5"
-                                  style={{
-                                    backgroundColor: isActive ? pillColor + '18' : 'transparent',
-                                    color: isActive ? pillColor : colors.utility.secondaryText,
-                                    borderColor: isActive ? pillColor + '40' : colors.utility.secondaryText + '20',
-                                  }}
-                                >
-                                  <span
-                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: pillColor }}
-                                  />
-                                  {item.form_settings?.short_name || item.display_name}
-                                </button>
-                              );
-                            })}
-                          </React.Fragment>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Active filters display */}
-              {(selectedIndustry !== 'all' || selectedResourceType !== 'all' || selectedCategory !== 'all' || selectedNomenclature !== 'all') && (
+              {(selectedIndustry !== 'all' || selectedNomenclature !== 'all' || selectedEquipment !== 'all') && (
                 <div
                   className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t"
                   style={{ borderColor }}
@@ -910,32 +992,18 @@ const TemplateGalleryPage: React.FC = () => {
                       </span>
                     );
                   })()}
-                  {selectedCategory !== 'all' && (
+                  {selectedEquipment !== 'all' && (
                     <span
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
                       style={{
-                        backgroundColor: activeColor + '10',
-                        color: activeColor,
-                        borderColor: activeColor + '20',
+                        backgroundColor: '#3B82F6' + '10',
+                        color: '#3B82F6',
+                        borderColor: '#3B82F6' + '20',
                       }}
                     >
-                      {currentCategories.find(c => c.id === selectedCategory)?.name}
-                      <button onClick={() => setSelectedCategory('all')}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  )}
-                  {selectedResourceType !== 'all' && (
-                    <span
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border"
-                      style={{
-                        backgroundColor: activeColor + '10',
-                        color: activeColor,
-                        borderColor: activeColor + '20',
-                      }}
-                    >
-                      {(dbResourceTypes || []).find(r => r.id === selectedResourceType)?.name}
-                      <button onClick={() => setSelectedResourceType('all')}>
+                      <Wrench className="h-3 w-3" />
+                      {equipmentList.find((e: any) => e.id === selectedEquipment)?.name}
+                      <button onClick={() => setSelectedEquipment('all')}>
                         <X className="h-3 w-3" />
                       </button>
                     </span>
@@ -943,8 +1011,8 @@ const TemplateGalleryPage: React.FC = () => {
                   <button
                     onClick={() => {
                       handleIndustrySelect('all');
-                      setSelectedResourceType('all');
                       setSelectedNomenclature('all');
+                      setSelectedEquipment('all');
                     }}
                     className="text-xs hover:opacity-80"
                     style={{ color: colors.utility.secondaryText }}

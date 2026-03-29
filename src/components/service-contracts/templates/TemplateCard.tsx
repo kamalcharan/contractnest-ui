@@ -1,161 +1,177 @@
 // src/components/service-contracts/templates/TemplateCard.tsx
-import React from 'react';
+// Redesigned to match Catalog Studio card UX with tenant-branded background
+
+import React, { useMemo } from 'react';
 import {
   Eye,
-  Star,
   Users,
   Clock,
   FileText,
-  TrendingUp,
-  CheckCircle,
-  ChevronRight,
-  Tag,
-  Building2,
-  User,
-  Calendar,
-  DollarSign,
+  FilePlus2,
+  Globe,
   Edit,
   Copy,
-  Download,
-  Settings
+  Star,
+  Settings,
+  Wrench,
+  Building2,
+  TrendingUp,
+  Tag,
+  // Industry icons – imported statically for mapping
+  Stethoscope,
+  DollarSign,
+  Factory,
+  ShoppingBag,
+  Cpu,
+  GraduationCap,
+  Landmark,
+  Heart,
+  Briefcase,
+  Phone,
+  Truck,
+  Zap,
+  Construction,
+  UtensilsCrossed,
+  Film,
+  Wheat,
+  Pill,
+  Car,
+  Plane,
+  MoreHorizontal,
+  type LucideIcon,
 } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { Template, TemplateCardProps, CONTRACT_TYPE_LABELS, TemplateCardContext } from '../../../types/service-contracts/template';
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../ui/tooltip';
-import { TEMPLATE_COMPLEXITY_LABELS } from "../../../types/service-contracts/template";
+import { useTenantProfile } from '../../../hooks/useTenantProfile';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import {
+  Template,
+  TemplateCardProps,
+  CONTRACT_TYPE_LABELS,
+  TEMPLATE_COMPLEXITY_LABELS,
+  TemplateCardContext,
+} from '../../../types/service-contracts/template';
+import { industries } from '../../../lib/constants/industries';
 
-// EXPLANATION:
+// =================================================================
+// ICON MAP — maps industry icon string → Lucide component
+// =================================================================
+const INDUSTRY_ICON_MAP: Record<string, LucideIcon> = {
+  Stethoscope,
+  DollarSign,
+  Factory,
+  ShoppingBag,
+  Cpu,
+  GraduationCap,
+  Landmark,
+  Heart,
+  Briefcase,
+  Phone,
+  Truck,
+  Zap,
+  Construction,
+  UtensilsCrossed,
+  Film,
+  Wheat,
+  Pill,
+  Car,
+  Plane,
+  MoreHorizontal,
+};
 
+// =================================================================
+// HELPER — opacity util (same pattern as catalog-studio reference)
+// =================================================================
+const withOpacity = (hex: string, opacity: number): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
+// =================================================================
+// MAIN COMPONENT
+// =================================================================
 const TemplateCard: React.FC<TemplateCardProps> = ({
   template,
   onClick,
   onPreview,
   onSelect,
   onEdit,
+  onSettings,
   isSelected = false,
   showActions = true,
   compact = false,
-  context
+  context,
 }) => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const { profile: tenantProfile } = useTenantProfile();
 
-  // Default context if not provided
+  // ── Tenant brand colors (same as catalog-studio reference) ──
+  const tenantPrimary = tenantProfile?.primary_color || '#667eea';
+
+  // Default context
   const cardContext: TemplateCardContext = context || {
     mode: 'selection',
     isGlobal: template.globalTemplate,
     userRole: 'user',
     canEdit: !template.globalTemplate,
     canCopy: true,
-    canCreateContract: true
+    canCreateContract: true,
   };
 
-  // Get contract type configuration
-  const getContractTypeConfig = (contractType: string) => {
-    switch (contractType) {
-      case 'service':
-        return {
-          name: CONTRACT_TYPE_LABELS.service,
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-100 dark:bg-blue-900/20'
-        };
-      case 'partnership':
-        return {
-          name: CONTRACT_TYPE_LABELS.partnership,
-          color: 'text-purple-600',
-          bgColor: 'bg-purple-100 dark:bg-purple-900/20'
-        };
+  // ── Resolve industry info (primary + all tags) ──
+  const industryInfo = useMemo(() => {
+    const match = industries.find((ind) => ind.id === template.industry);
+    if (!match) return { name: template.industry, Icon: MoreHorizontal };
+    const Icon = INDUSTRY_ICON_MAP[match.icon] || MoreHorizontal;
+    return { name: match.name, Icon };
+  }, [template.industry]);
+
+  // Resolve all industry tags to display names
+  const allIndustryNames = useMemo(() => {
+    const tags = template.industryTags || [template.industry];
+    return tags.map((tagId) => {
+      const match = industries.find((ind) => ind.id === tagId);
+      return match ? match.name : tagId;
+    });
+  }, [template.industryTags, template.industry]);
+
+  // ── Status color ──
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return colors.semantic?.success || '#10B981';
+      case 'draft':
+        return colors.semantic?.warning || '#F59E0B';
+      case 'archived':
+        return colors.utility.secondaryText;
       default:
-        return {
-          name: 'Unknown',
-          color: 'text-gray-600',
-          bgColor: 'bg-gray-100 dark:bg-gray-900/20'
-        };
+        return colors.utility.secondaryText;
     }
   };
 
-  // Get industry configuration
-  const getIndustryConfig = (industry: string) => {
-    const industryMap: Record<string, { name: string; icon: string }> = {
-      healthcare: { name: 'Healthcare', icon: '🏥' },
-      manufacturing: { name: 'Manufacturing', icon: '🏭' },
-      financial: { name: 'Financial Services', icon: '💰' },
-      technology: { name: 'Technology', icon: '💻' },
-      retail: { name: 'Retail', icon: '🛒' },
-      education: { name: 'Education', icon: '🎓' },
-      government: { name: 'Government', icon: '🏛️' },
-      nonprofit: { name: 'Non-Profit', icon: '🤝' },
-      consulting: { name: 'Consulting', icon: '💼' },
-      legal: { name: 'Legal', icon: '⚖️' }
-    };
-
-    return industryMap[industry] || { name: industry, icon: '📄' };
-  };
-
-  // Get actions based on context
-  const getContextActions = () => {
-    const { mode, isGlobal, userRole } = cardContext;
-
-    if (mode === 'marketplace' && isGlobal) {
-      // Global template marketplace (tenant view)
-      return [
-        { id: 'preview', label: 'Preview', icon: Eye, primary: false },
-        { id: 'copy-to-my-space', label: 'Copy to My Space', icon: Copy, primary: false },
-        { id: 'create-contract', label: 'Use Template', icon: CheckCircle, primary: true }
-      ];
-    }
-
-    if (mode === 'management' && !isGlobal) {
-      // Local template management
-      return [
-        { id: 'preview', label: 'Preview', icon: Eye, primary: false },
-        { id: 'clone', label: 'Clone', icon: Copy, primary: false },
-        { id: 'edit', label: 'Edit', icon: Edit, primary: false },
-        { id: 'create-contract', label: 'Create Contract', icon: CheckCircle, primary: true }
-      ];
-    }
-
-    if (mode === 'management' && isGlobal && userRole === 'admin') {
-      // Global template management (admin view)
-      return [
-        { id: 'preview', label: 'Preview', icon: Eye, primary: false },
-        { id: 'clone', label: 'Clone', icon: Copy, primary: false },
-        { id: 'edit', label: 'Edit', icon: Edit, primary: false },
-        { id: 'settings', label: 'Settings', icon: Settings, primary: true }
-      ];
-    }
-
-    if (mode === 'selection') {
-      // Template selection for contract creation
-      return [
-        { id: 'preview', label: 'Preview', icon: Eye, primary: false },
-        { id: 'select', label: isSelected ? 'Selected' : 'Use Template', icon: CheckCircle, primary: true }
-      ];
-    }
-
-    // Default actions
-    return [
-      { id: 'preview', label: 'Preview', icon: Eye, primary: false },
-      { id: 'select', label: 'Use Template', icon: CheckCircle, primary: true }
-    ];
-  };
-
-  // Get configurations
-  const contractTypeConfig = getContractTypeConfig(template.contractType);
-  const industryConfig = getIndustryConfig(template.industry);
-  const complexityLabel = TEMPLATE_COMPLEXITY_LABELS[template.complexity];
-  const actions = getContextActions();
-
-  // Handle card click
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (onClick) {
-      onClick(template);
+  // ── Complexity color ──
+  const getComplexityColor = (complexity: string) => {
+    switch (complexity) {
+      case 'simple':
+        return '#10B981';
+      case 'medium':
+        return '#F59E0B';
+      case 'complex':
+        return '#EF4444';
+      default:
+        return colors.utility.secondaryText;
     }
   };
 
-  // Handle action clicks
-  const handleActionClick = (actionId: string, e: React.MouseEvent) => {
+  // ── Action handler ──
+  const handleAction = (actionId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -165,326 +181,463 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
         break;
       case 'select':
       case 'create-contract':
-      case 'use-template':
         onSelect?.(template);
-        break;
-      case 'copy-to-my-space':
-        // TODO: Implement copy to local space
-        console.log('Copy to my space:', template.id);
-        break;
-      case 'clone':
-        // TODO: Implement clone template
-        console.log('Clone template:', template.id);
         break;
       case 'edit':
         onEdit?.(template);
         break;
       case 'settings':
-        // TODO: Implement template settings
-        console.log('Template settings:', template.id);
+        onSettings?.(template);
+        break;
+      case 'smart-form':
+        console.log('Smart Form for template:', template.id);
+        break;
+      case 'clone':
+        console.log('Clone template:', template.id);
         break;
       default:
-        console.log('Unknown action:', actionId);
+        break;
     }
   };
 
-  // Get complexity color
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'simple':
-        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-200 dark:border-green-800';
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-200 dark:border-yellow-800';
-      case 'complex':
-        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900/20 dark:text-gray-200 dark:border-gray-800';
-    }
+  const handleCardClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onClick) onClick(template);
   };
 
-  // Render rating stars
-  const renderRating = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
+  const statusColor = getStatusColor(template.status);
+  const complexityColor = getComplexityColor(template.complexity);
+  const contractTypeLabel = CONTRACT_TYPE_LABELS[template.contractType] || template.contractType;
+  const complexityLabel = TEMPLATE_COMPLEXITY_LABELS[template.complexity] || template.complexity;
+  const IndustryIcon = industryInfo.Icon;
 
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(
-        <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-      );
-    }
+  // ── Reusable tooltip icon button ──
+  // accentColor: use a distinct color for special actions (e.g. Create Contract)
+  const TooltipIconButton = ({
+    tooltip,
+    icon: Icon,
+    actionId,
+    disabled = false,
+    accentColor,
+  }: {
+    tooltip: string;
+    icon: LucideIcon;
+    actionId: string;
+    disabled?: boolean;
+    accentColor?: string; // distinct color for this button (default uses secondaryText → tenantPrimary hover)
+  }) => {
+    const baseColor = accentColor || colors.utility.secondaryText;
+    const hoverBg = accentColor ? withOpacity(accentColor, 0.15) : withOpacity(tenantPrimary, 0.1);
+    const hoverColor = accentColor || tenantPrimary;
+    const borderBase = accentColor ? withOpacity(accentColor, 0.4) : colors.utility.secondaryText + '30';
+    const hoverBorder = accentColor ? withOpacity(accentColor, 0.5) : withOpacity(tenantPrimary, 0.3);
 
-    if (hasHalfStar) {
-      stars.push(
-        <div key="half" className="relative">
-          <Star className="h-3 w-3 text-gray-300" />
-          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400 absolute top-0 left-0 overflow-hidden" style={{ width: '50%' }} />
-        </div>
-      );
-    }
-
-    const emptyStars = 5 - Math.ceil(rating);
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(
-        <Star key={`empty-${i}`} className="h-3 w-3 text-gray-300" />
-      );
-    }
-
-    return stars;
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={(e) => handleAction(actionId, e)}
+            disabled={disabled}
+            className="p-2 rounded-lg border transition-colors disabled:opacity-40"
+            style={{
+              borderColor: borderBase,
+              color: baseColor,
+            }}
+            onMouseEnter={(e) => {
+              if (!disabled) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = hoverBg;
+                (e.currentTarget as HTMLElement).style.color = hoverColor;
+                (e.currentTarget as HTMLElement).style.borderColor = hoverBorder;
+              }
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+              (e.currentTarget as HTMLElement).style.color = baseColor;
+              (e.currentTarget as HTMLElement).style.borderColor = borderBase;
+            }}
+          >
+            <Icon className="w-4 h-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    );
   };
 
-  // Compact version for embedded or list views
+  // =================================================================
+  // COMPACT / LIST VIEW
+  // =================================================================
   if (compact) {
     return (
-      <div 
-        onClick={handleCardClick}
-        className={`
-          relative p-3 rounded-lg border transition-all duration-200 cursor-pointer
-          hover:shadow-md hover:border-primary/30 group
-          ${isSelected 
-            ? 'ring-2 ring-primary border-primary bg-primary/5' 
-            : 'bg-card border-border hover:bg-accent/50'
-          }
-        `}
-      >
-        {/* Global Template Badge */}
-        {template.globalTemplate && (
-          <div className="absolute top-2 right-2">
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200">
-              Global
-            </span>
-          </div>
-        )}
+      <TooltipProvider delayDuration={200}>
+        <div
+          onClick={handleCardClick}
+          className="p-4 rounded-xl border transition-all hover:shadow-md cursor-pointer group"
+          style={{
+            backgroundColor: colors.utility.secondaryBackground,
+            borderColor: isSelected ? tenantPrimary : colors.utility.secondaryText + '20',
+            boxShadow: isSelected ? `0 0 0 2px ${withOpacity(tenantPrimary, 0.4)}` : undefined,
+          }}
+        >
+          <div className="flex items-center gap-4">
+            {/* Industry Icon */}
+            <div
+              className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: withOpacity(tenantPrimary, 0.12) }}
+            >
+              <IndustryIcon className="w-6 h-6" style={{ color: tenantPrimary }} />
+            </div>
 
-        {/* Header Row */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-lg">{industryConfig?.icon || '📄'}</span>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-sm truncate text-foreground">
-                {template.name}
-              </h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
-                  template.contractType === 'service' 
-                    ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-800'
-                    : 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-200 dark:border-purple-800'
-                }`}>
-                  {contractTypeConfig.name}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getComplexityColor(template.complexity)}`}>
-                  {complexityLabel}
+            {/* Title + Badges */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h3
+                  className="font-semibold text-sm truncate"
+                  style={{ color: colors.utility.primaryText }}
+                >
+                  {template.name}
+                </h3>
+                {template.globalTemplate && (
+                  <Globe className="w-4 h-4 flex-shrink-0" style={{ color: tenantPrimary }} />
+                )}
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full capitalize flex-shrink-0 font-medium"
+                  style={{
+                    backgroundColor: `${statusColor}20`,
+                    color: statusColor,
+                  }}
+                >
+                  {template.status}
                 </span>
               </div>
-            </div>
-          </div>
-          
-          {showActions && (
-            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-          )}
-        </div>
-
-        {/* Stats Row */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              {template.usageCount}
-            </span>
-            <span className="flex items-center gap-1">
-              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-              {template.rating.toFixed(1)}
-            </span>
-          </div>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {template.estimatedDuration}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  // Full card version for gallery view
-  return (
-    <div 
-      onClick={handleCardClick}
-      className={`
-        relative rounded-lg border transition-all duration-200 cursor-pointer group
-        hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:-translate-y-1
-        ${isSelected 
-          ? 'ring-2 ring-primary border-primary bg-primary/5' 
-          : 'bg-card border-border'
-        }
-      `}
-    >
-      {/* Popular Badge */}
-      {template.isPopular && (
-        <div className="absolute -top-2 -right-2 z-10">
-          <div className="bg-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
-            <TrendingUp className="h-3 w-3" />
-            Popular
-          </div>
-        </div>
-      )}
-
-      {/* Global Template Badge */}
-      {template.globalTemplate && (
-        <div className="absolute top-3 left-3 z-10">
-          <div className="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
-            <Building2 className="h-3 w-3" />
-            Global
-          </div>
-        </div>
-      )}
-
-      {/* Selected Badge */}
-      {isSelected && (
-        <div className="absolute top-3 right-3 z-10">
-          <div className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 shadow-lg">
-            <CheckCircle className="h-3 w-3" />
-            Selected
-          </div>
-        </div>
-      )}
-
-      <div className="p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-lg">
-              {industryConfig?.icon || '📄'}
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">
-                {template.name}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {industryConfig?.name || template.industry}
+              <p
+                className="text-xs truncate mt-0.5"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                {template.description}
               </p>
+              {/* Industry + resource badges */}
+              <div className="flex items-center gap-2 mt-1">
+                <span
+                  className="text-[10px] flex items-center gap-1"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  <IndustryIcon className="w-3 h-3" />
+                  {industryInfo.name}
+                </span>
+                {template.isEquipmentBased && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 font-medium"
+                    style={{ backgroundColor: '#F59E0B20', color: '#F59E0B' }}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    Equipment
+                  </span>
+                )}
+                {template.isFacilityBased && (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 font-medium"
+                    style={{ backgroundColor: '#8B5CF620', color: '#8B5CF6' }}
+                  >
+                    <Building2 className="w-3 h-3" />
+                    Facility
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-          
-          {/* Contract Type Icon */}
-          <div className={`p-2 rounded-lg ${contractTypeConfig.bgColor}`}>
-            {template.contractType === 'service' ? (
-              <FileText className={`h-4 w-4 ${contractTypeConfig.color}`} />
-            ) : (
-              <Building2 className={`h-4 w-4 ${contractTypeConfig.color}`} />
+
+            {/* Stats */}
+            <div
+              className="flex items-center gap-5 text-xs flex-shrink-0"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              {template.version && (
+                <span className="flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5" />
+                  v{template.version}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <Users className="w-3.5 h-3.5" />
+                {template.usageCount}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {template.estimatedDuration}
+              </span>
+            </div>
+
+            {/* Action Icons */}
+            {showActions && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <TooltipIconButton tooltip="Preview" icon={Eye} actionId="preview" />
+                <TooltipIconButton tooltip="Duplicate" icon={Copy} actionId="clone" disabled={!cardContext.canCopy} />
+                <TooltipIconButton tooltip="Edit" icon={Edit} actionId="edit" disabled={!cardContext.canEdit} />
+                <TooltipIconButton tooltip="Smart Form" icon={FileText} actionId="smart-form" />
+                <TooltipIconButton tooltip="Settings" icon={Settings} actionId="settings" disabled={!cardContext.canEdit} />
+                <TooltipIconButton
+                  tooltip="Create Contract"
+                  icon={FilePlus2}
+                  actionId="create-contract"
+                  accentColor={colors.semantic?.success || '#10B981'}
+                />
+              </div>
             )}
           </div>
         </div>
+      </TooltipProvider>
+    );
+  }
 
-        {/* Description */}
-        <p className="text-sm text-muted-foreground mb-4 line-clamp-2 leading-relaxed">
-          {template.description}
-        </p>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1 mb-4">
-          {template.tags.slice(0, 3).map((tag, index) => (
-            <span
-              key={index}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border"
-            >
-              <Tag className="h-2.5 w-2.5" />
-              {tag}
-            </span>
-          ))}
-          {template.tags.length > 3 && (
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-              +{template.tags.length - 3} more
-            </span>
-          )}
-        </div>
-
-        {/* Contract Type & Complexity */}
-        <div className="flex items-center gap-2 mb-4">
-          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-            template.contractType === 'service' 
-              ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-800'
-              : 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/20 dark:text-purple-200 dark:border-purple-800'
-          }`}>
-            {contractTypeConfig.name}
-          </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getComplexityColor(template.complexity)}`}>
-            {complexityLabel}
-          </span>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="text-lg font-semibold text-foreground">{template.usageCount}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Times used</p>
-          </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <div className="flex items-center gap-0.5">
-                {renderRating(template.rating)}
+  // =================================================================
+  // FULL / GRID VIEW CARD
+  // =================================================================
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div
+        onClick={handleCardClick}
+        className="rounded-2xl border cursor-pointer transition-all duration-300 hover:shadow-xl hover:border-transparent group overflow-hidden"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: isSelected ? tenantPrimary : colors.utility.secondaryText + '20',
+          boxShadow: isSelected ? `0 0 0 2px ${withOpacity(tenantPrimary, 0.4)}` : undefined,
+        }}
+      >
+        {/* ── Header with Tenant Gradient (matching catalog-studio reference) ── */}
+        <div
+          className="p-4 pb-3"
+          style={{
+            background: isDarkMode
+              ? `linear-gradient(135deg, ${withOpacity(tenantPrimary, 0.15)} 0%, transparent 100%)`
+              : `linear-gradient(135deg, ${withOpacity(tenantPrimary, 0.08)} 0%, transparent 100%)`,
+          }}
+        >
+          <div className="flex items-start justify-between mb-3">
+            {/* Industry Icon + Industry Tags */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: withOpacity(tenantPrimary, 0.15) }}
+              >
+                <IndustryIcon className="w-5 h-5" style={{ color: tenantPrimary }} />
               </div>
-              <span className="text-lg font-semibold text-foreground ml-1">{template.rating.toFixed(1)}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Rating</p>
-          </div>
-        </div>
-
-        {/* Duration */}
-        <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-          <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            Est. Duration: {template.estimatedDuration}
-          </span>
-          <span className="flex items-center gap-1">
-            <Calendar className="h-4 w-4" />
-            {template.blocks.length} blocks
-          </span>
-        </div>
-
-        {/* Context-Based Actions — Icon bar with tooltips */}
-        {showActions && actions.length > 0 && (
-          <TooltipProvider delayDuration={200}>
-            <div className="flex items-center justify-between pt-4 border-t border-border">
-              {/* Secondary actions: icon-only with tooltips */}
-              <div className="flex items-center gap-1">
-                {actions.filter(a => !a.primary).map((action) => (
-                  <Tooltip key={action.id}>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => handleActionClick(action.id, e)}
-                        className="p-2 rounded-lg border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                      >
-                        <action.icon className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      <p>{action.label}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                ))}
-              </div>
-              {/* Primary action: keeps text label */}
-              {actions.filter(a => a.primary).map((action) => (
-                <button
-                  key={action.id}
-                  onClick={(e) => handleActionClick(action.id, e)}
-                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors
-                    bg-primary text-primary-foreground hover:bg-primary/90
-                    ${isSelected && action.id === 'select' ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                  disabled={isSelected && action.id === 'select'}
+              {allIndustryNames.map((name, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  style={{ backgroundColor: withOpacity(tenantPrimary, 0.15), color: tenantPrimary }}
                 >
-                  <action.icon className="h-4 w-4" />
-                  {action.label}
-                </button>
+                  {name}
+                </span>
               ))}
             </div>
-          </TooltipProvider>
+
+            {/* Badges */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {template.globalTemplate && (
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
+                  style={{
+                    backgroundColor: withOpacity(tenantPrimary, 0.15),
+                    color: tenantPrimary,
+                  }}
+                >
+                  <Globe className="w-3 h-3" />
+                  Global
+                </span>
+              )}
+              {template.isPopular && (
+                <span
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  style={{ backgroundColor: '#F59E0B20', color: '#F59E0B' }}
+                >
+                  <TrendingUp className="w-3 h-3" />
+                  Popular
+                </span>
+              )}
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full capitalize font-medium"
+                style={{
+                  backgroundColor: `${statusColor}20`,
+                  color: statusColor,
+                }}
+              >
+                {template.status}
+              </span>
+            </div>
+          </div>
+
+          {/* Title + Description */}
+          <h3
+            className="font-bold text-lg mb-1.5 transition-colors line-clamp-1"
+            style={{ color: colors.utility.primaryText }}
+          >
+            {template.name}
+          </h3>
+          <p
+            className="text-sm line-clamp-2 leading-relaxed"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            {template.description}
+          </p>
+        </div>
+
+        {/* ── Card Body ── */}
+        <div className="px-4 pb-4">
+          {/* Badges Row: Contract Type + Complexity + Equipment/Facility */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium border"
+              style={{
+                backgroundColor: template.contractType === 'service' ? '#3B82F620' : '#8B5CF620',
+                color: template.contractType === 'service' ? '#3B82F6' : '#8B5CF6',
+                borderColor: template.contractType === 'service' ? '#3B82F630' : '#8B5CF630',
+              }}
+            >
+              {contractTypeLabel}
+            </span>
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium border"
+              style={{
+                backgroundColor: `${complexityColor}20`,
+                color: complexityColor,
+                borderColor: `${complexityColor}30`,
+              }}
+            >
+              {complexityLabel}
+            </span>
+            {template.isEquipmentBased && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5 font-medium border cursor-default"
+                    style={{ backgroundColor: '#F59E0B15', color: '#D97706', borderColor: '#F59E0B30' }}
+                  >
+                    <Wrench className="w-3 h-3" />
+                    Equipment
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Shared equipment included
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {template.isFacilityBased && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5 font-medium border cursor-default"
+                    style={{ backgroundColor: '#8B5CF615', color: '#7C3AED', borderColor: '#8B5CF630' }}
+                  >
+                    <Building2 className="w-3 h-3" />
+                    Facility
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Shared facility included
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+
+          {/* Tags */}
+          {template.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {template.tags.slice(0, 3).map((tag, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-full text-[10px]"
+                  style={{ backgroundColor: colors.utility.primaryBackground, color: colors.utility.secondaryText }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Stats Row */}
+          <div
+            className="flex items-end justify-between pt-3 border-t"
+            style={{ borderColor: colors.utility.secondaryText + '15' }}
+          >
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span style={{ color: colors.utility.primaryText }} className="font-semibold">
+                  {template.rating.toFixed(1)}
+                </span>
+              </div>
+              <div className="flex items-center gap-1" style={{ color: colors.utility.secondaryText }}>
+                <Users className="w-4 h-4" />
+                <span>{template.usageCount}</span>
+              </div>
+              {template.version && (
+                <div className="flex items-center gap-1" style={{ color: colors.utility.secondaryText }}>
+                  <Tag className="w-3.5 h-3.5" />
+                  <span className="text-xs">v{template.version}</span>
+                </div>
+              )}
+            </div>
+            <div
+              className="flex items-center gap-3 text-xs"
+              style={{ color: colors.utility.secondaryText }}
+            >
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {template.estimatedDuration}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Footer Actions — 6 icon buttons with tooltips (Create Contract in distinct color) ── */}
+        {showActions && (
+          <div
+            className="flex items-center justify-center px-4 py-3 border-t"
+            style={{
+              borderColor: colors.utility.secondaryText + '15',
+              backgroundColor: colors.utility.primaryBackground,
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <TooltipIconButton tooltip="Preview" icon={Eye} actionId="preview" />
+              <TooltipIconButton
+                tooltip="Duplicate"
+                icon={Copy}
+                actionId="clone"
+                disabled={!cardContext.canCopy}
+              />
+              <TooltipIconButton
+                tooltip="Edit"
+                icon={Edit}
+                actionId="edit"
+                disabled={!cardContext.canEdit}
+              />
+              <TooltipIconButton
+                tooltip="Smart Form"
+                icon={FileText}
+                actionId="smart-form"
+              />
+              <TooltipIconButton
+                tooltip="Settings"
+                icon={Settings}
+                actionId="settings"
+                disabled={!cardContext.canEdit}
+              />
+              <TooltipIconButton
+                tooltip="Create Contract"
+                icon={FilePlus2}
+                actionId="create-contract"
+                accentColor={colors.semantic?.success || '#10B981'}
+              />
+            </div>
+          </div>
         )}
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 

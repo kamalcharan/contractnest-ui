@@ -43,6 +43,8 @@ export interface CatTemplate {
   sequence_no?: number;
   is_deletable?: boolean;
   version?: number;
+  is_latest?: boolean;
+  parent_template_id?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
   created_at: string;

@@ -445,6 +445,7 @@ class ResourcesService {
     limit?: number;
     offset?: number;
     resource_type_id?: string;
+    industry_ids?: string[];
   } = {}): Promise<ResourceTemplatesResponse> {
     try {
       const url = API_ENDPOINTS.RESOURCES.RESOURCE_TEMPLATES_WITH_FILTERS(filters);

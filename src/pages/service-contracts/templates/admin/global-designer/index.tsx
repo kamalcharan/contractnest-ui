@@ -239,7 +239,7 @@ const GlobalDesignerPage: React.FC = () => {
         publishStatus: wizardState.publishStatus,
       });
 
-      // Map selectedBlocks → TemplateBlock[] for m_cat_templates.blocks column
+      // Map selectedBlocks → TemplateBlock[] for t_cat_templates.blocks column
       const templateBlocks = selectedBlocks.map((b, index) => ({
         block_id: b.id,
         order: index + 1,
