@@ -5,6 +5,8 @@ import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
 
+const UNIT_OPTIONS = ['PSI', '°C', '°F', 'V', 'Amps', 'kW', 'Hz', 'RPM', 'Pa', 'bar', 'kPa', 'pH', 'mm', 'L/min', 'CFM', 'dB', '%', 'cmH2O', 'mGy'];
+
 interface Props {
   summary: KnowledgeTreeSummary;
   checkpointsBySection: Record<string, any[]>;
@@ -38,7 +40,10 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
 
       {Object.entries(checkpointsBySection).map(([sectionName, checkpoints]) => (
         <div key={sectionName}>
-          <h4 style={{ fontSize: '12px', fontWeight: 700, color: colors.utility.secondaryText, textTransform: 'uppercase' as const, letterSpacing: '.5px', margin: '16px 0 8px', paddingLeft: '2px' }}>{sectionName}</h4>
+          <div style={{ margin: '20px 0 10px', padding: '10px 16px', borderRadius: '8px', background: colors.utility.primaryBackground, borderLeft: `4px solid ${brandPrimary}` }}>
+            <h4 style={{ fontSize: '14px', fontWeight: 800, color: colors.utility.primaryText, textTransform: 'uppercase' as const, letterSpacing: '.5px' }}>{sectionName}</h4>
+            <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>{checkpoints.length} checkpoints · {checkpoints.filter((c: any) => c.checkpoint_type === 'condition').length} condition · {checkpoints.filter((c: any) => c.checkpoint_type === 'reading').length} reading</span>
+          </div>
           {checkpoints.map((cp: any) => (
             <div key={cp.id} style={{ background: colors.utility.secondaryBackground, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '10px', boxShadow: '0 2px 12px rgba(0,0,0,.04)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -72,11 +77,15 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
 
               {cp.checkpoint_type === 'reading' && (
                 <>
-                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '6px', fontSize: '12px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: colors.utility.secondaryText }}>
-                      <span style={{ fontWeight: 600, color: colors.utility.primaryText }}>Unit:</span>
-                      <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: colors.semantic.info || '#2563eb', fontWeight: 600 }}>{cp.unit || '—'}</span>
-                    </div>
+                  {/* Unit dropdown */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: colors.utility.primaryText }}>Unit:</span>
+                    <select defaultValue={cp.unit || ''} style={{ padding: '4px 8px', border: `1px solid ${borderColor}`, borderRadius: '5px', fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', fontWeight: 600, background: colors.utility.primaryBackground, color: colors.semantic.info || '#2563eb', cursor: 'pointer' }}>
+                      {cp.unit && <option value={cp.unit}>{cp.unit}</option>}
+                      {UNIT_OPTIONS.filter((u) => u !== cp.unit).map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '12px' }}>
                     {cp.normal_min != null && cp.normal_max != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: colors.utility.secondaryText }}>
                         <span style={{ fontWeight: 600, color: colors.utility.primaryText }}>Normal:</span>
@@ -116,7 +125,9 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
             { key: 'checkpoint_type', label: 'Type', type: 'select', required: true, options: [{ label: 'Condition (qualitative)', value: 'condition' }, { label: 'Reading (quantitative)', value: 'reading' }] },
             { key: 'section_name', label: 'Section', type: 'text', placeholder: 'e.g. Mechanical Checks' },
             { key: 'service_activity', label: 'Service Activity', type: 'select', options: [{ label: 'PM', value: 'pm' }, { label: 'Repair', value: 'repair' }, { label: 'Inspection', value: 'inspection' }, { label: 'Install', value: 'install' }, { label: 'Decommission', value: 'decommission' }] },
-            { key: 'unit', label: 'Unit (readings only)', type: 'text', placeholder: 'e.g. °C, PSI, Amps' },
+            { key: 'unit', label: 'Unit', type: 'select', showWhen: { field: 'checkpoint_type', value: 'reading' }, required: true, options: UNIT_OPTIONS.map((u) => ({ label: u, value: u })) },
+            { key: 'normal_min', label: 'Normal Min', type: 'number', placeholder: 'e.g. 55', showWhen: { field: 'checkpoint_type', value: 'reading' } },
+            { key: 'normal_max', label: 'Normal Max', type: 'number', placeholder: 'e.g. 130', showWhen: { field: 'checkpoint_type', value: 'reading' } },
           ]}
           onClose={() => setShowAddCpModal(false)}
           onSave={(data) => { onAddCheckpoint(data); setShowAddCpModal(false); }}
