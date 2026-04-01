@@ -27,6 +27,9 @@ import {
   Wrench,
   ChevronDown,
   ChevronUp,
+  TreePine,
+  CheckCircle2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useTheme } from '../../../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -45,6 +48,11 @@ import { useTemplateCoverage, IndustryCoverage } from '@/hooks/queries/useTempla
 import { useResourceTypes, ResourceType as DBResourceType } from '@/hooks/queries/useResources';
 import { useNomenclatureTypes, NomenclatureGroup } from '@/hooks/queries/useNomenclatureTypes';
 import { useResourceTemplatesBrowser, type ResourceTemplateFilters } from '@/hooks/queries/useResourceTemplates';
+
+// Knowledge Tree
+import { useKnowledgeTreeCoverage } from '@/hooks/queries/useKnowledgeTree';
+import KnowledgeTreeCard from './knowledge-tree/KnowledgeTreeCard';
+import type { KnowledgeTreeCoverageMap } from './knowledge-tree/types';
 
 // Data constants (mock categories until APIs exist)
 import {
@@ -93,6 +101,7 @@ function mapCatTemplateToTemplate(cat: CatTemplate): Template {
 
 type ViewType = 'grid' | 'list';
 type SortOption = 'popular' | 'name' | 'recent';
+type ActiveTab = 'templates' | 'knowledge-trees';
 
 // =================================================================
 // STAT CARD COMPONENT
@@ -174,6 +183,9 @@ const TemplateGalleryPage: React.FC = () => {
   const { toast } = useToast();
 
   // ── State ──────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<ActiveTab>(
+    (searchParams.get('tab') as ActiveTab) || 'templates'
+  );
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [viewType, setViewType] = useState<ViewType>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('popular');
@@ -244,6 +256,12 @@ const TemplateGalleryPage: React.FC = () => {
   );
   const { templates: facilityList, isLoading: facilityLoading } = useResourceTemplatesBrowser(facilityFilters);
 
+  // Knowledge Tree coverage (which resource templates have KT data)
+  const {
+    data: ktCoverage,
+    isLoading: ktCoverageLoading,
+  } = useKnowledgeTreeCoverage();
+
   // ── Derived data ───────────────────────────────────────────────
   const rawTemplates: CatTemplate[] = systemData?.data?.templates || [];
 
@@ -313,6 +331,37 @@ const TemplateGalleryPage: React.FC = () => {
     }
     return groups;
   }, [facilityList]);
+
+  // Knowledge Tree stats
+  const ktStats = useMemo(() => {
+    if (!ktCoverage) return { built: 0, gaps: 0, totalVariants: 0, totalParts: 0, totalCheckpoints: 0 };
+    const entries = Object.values(ktCoverage);
+    const totalEquip = equipmentList.length + facilityList.length;
+    return {
+      built: entries.length,
+      gaps: Math.max(0, totalEquip - entries.length),
+      totalVariants: entries.reduce((s, e) => s + e.variants_count, 0),
+      totalParts: entries.reduce((s, e) => s + e.spare_parts_count, 0),
+      totalCheckpoints: entries.reduce((s, e) => s + e.checkpoints_count, 0),
+    };
+  }, [ktCoverage, equipmentList, facilityList]);
+
+  // Combined equipment + facility list for KT tab, filtered by selected industry
+  const ktResourceList = useMemo(() => {
+    const all = [
+      ...equipmentList.map((e: any) => ({ ...e, resourceType: 'equipment' })),
+      ...facilityList.map((f: any) => ({ ...f, resourceType: 'facility' })),
+    ];
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      return all.filter((r: any) =>
+        r.name?.toLowerCase().includes(term) ||
+        r.sub_category?.toLowerCase().includes(term)
+      );
+    }
+    return all;
+  }, [equipmentList, facilityList, searchTerm]);
 
   // Template card context — management mode (admin can edit global templates)
   const templateCardContext: TemplateCardContext = useMemo(() => ({
@@ -427,27 +476,67 @@ const TemplateGalleryPage: React.FC = () => {
               <p className="mt-1 text-sm" style={{ color: colors.utility.secondaryText }}>
                 Choose from {stats?.totalTemplates || 0} professionally designed global templates
               </p>
+              {/* Tab toggle */}
               <div
-                className="mt-2 flex items-center gap-2 text-xs px-3 py-1 rounded-full w-fit"
-                style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '10' }}
+                className="mt-3 flex items-center gap-1 p-1 rounded-lg w-fit"
+                style={{ backgroundColor: colors.utility.primaryBackground, border: `1px solid ${colors.utility.secondaryText}15` }}
               >
-                <Building2 className="h-3.5 w-3.5" />
-                Platform Templates - Available to all tenants
+                <button
+                  onClick={() => { setActiveTab('templates'); setSearchParams(prev => { prev.set('tab', 'templates'); return prev; }); }}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-semibold transition-all"
+                  style={{
+                    backgroundColor: activeTab === 'templates' ? colors.utility.secondaryBackground : 'transparent',
+                    color: activeTab === 'templates' ? colors.brand.primary : colors.utility.secondaryText,
+                    boxShadow: activeTab === 'templates' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Templates
+                </button>
+                <button
+                  onClick={() => { setActiveTab('knowledge-trees'); setSearchParams(prev => { prev.set('tab', 'knowledge-trees'); return prev; }); }}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-semibold transition-all"
+                  style={{
+                    backgroundColor: activeTab === 'knowledge-trees' ? colors.utility.secondaryBackground : 'transparent',
+                    color: activeTab === 'knowledge-trees' ? '#16a34a' : colors.utility.secondaryText,
+                    boxShadow: activeTab === 'knowledge-trees' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  }}
+                >
+                  <TreePine className="h-3.5 w-3.5" />
+                  Knowledge Trees
+                  {!ktCoverageLoading && ktStats.built > 0 && (
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{ backgroundColor: '#16a34a15', color: '#16a34a' }}
+                    >
+                      {ktStats.built}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
 
             {/* Create Template + Selected template */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => navigate('/service-contracts/templates/admin/global-designer')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl transition-all hover:opacity-90 hover:shadow-lg"
-                style={{
-                  background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary})`,
-                }}
-              >
-                <Plus className="h-4 w-4" />
-                Create Template
-              </button>
+              {activeTab === 'templates' ? (
+                <button
+                  onClick={() => navigate('/service-contracts/templates/admin/global-designer')}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white rounded-xl transition-all hover:opacity-90 hover:shadow-lg"
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.brand.primary}, ${colors.brand.secondary || colors.brand.primary})`,
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Template
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full"
+                  style={{ color: '#16a34a', backgroundColor: '#16a34a10' }}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {ktStats.built} built · {ktStats.gaps} gaps
+                </div>
+              )}
             </div>
 
             {/* Selected template banner */}
@@ -489,7 +578,75 @@ const TemplateGalleryPage: React.FC = () => {
 
       {/* ═══════════ STATS ROW ═══════════ */}
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {coverageLoading ? (
+        {/* KT Stats (shown when Knowledge Trees tab is active) */}
+        {activeTab === 'knowledge-trees' && (
+          (ktCoverageLoading || equipmentLoading) ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-xl border p-5"
+                  style={{ backgroundColor: sidebarBg, borderColor }}
+                >
+                  <div className="w-9 h-9 rounded-lg mb-3" style={{ backgroundColor: borderColor }} />
+                  <div className="h-8 rounded w-1/2 mb-1" style={{ backgroundColor: borderColor }} />
+                  <div className="h-4 rounded w-3/4" style={{ backgroundColor: borderColor }} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+              <StatCard
+                icon={<TreePine className="h-4 w-4" />}
+                value={ktStats.built}
+                label="Trees Built"
+                detail={`${ktStats.gaps} gaps remaining`}
+                dotColor="#16a34a"
+                accentColor="#16a34a"
+                colors={colors}
+              />
+              <StatCard
+                icon={<Wrench className="h-4 w-4" />}
+                value={ktStats.totalVariants}
+                label="Total Variants"
+                detail={`Across ${ktStats.built} equipment types`}
+                dotColor="#3B82F6"
+                accentColor="#3B82F6"
+                colors={colors}
+              />
+              <StatCard
+                icon={<Package className="h-4 w-4" />}
+                value={ktStats.totalParts}
+                label="Spare Parts"
+                detail="Mapped with variant matrix"
+                dotColor="#8B5CF6"
+                accentColor="#8B5CF6"
+                colors={colors}
+              />
+              <StatCard
+                icon={<ClipboardCheck className="h-4 w-4" />}
+                value={ktStats.totalCheckpoints}
+                label="Checkpoints"
+                detail="Condition + reading types"
+                dotColor="#F59E0B"
+                accentColor="#F59E0B"
+                colors={colors}
+              />
+              <StatCard
+                icon={<BarChart3 className="h-4 w-4" />}
+                value={`${ktStats.built + ktStats.gaps > 0 ? Math.round((ktStats.built / (ktStats.built + ktStats.gaps)) * 100) : 0}%`}
+                label="KT Coverage"
+                detail={`${equipmentList.length} equipment + ${facilityList.length} facilities`}
+                dotColor="#10B981"
+                accentColor="#10B981"
+                colors={colors}
+              />
+            </div>
+          )
+        )}
+
+        {/* Template Stats (shown when Templates tab is active) */}
+        {activeTab === 'templates' && (coverageLoading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             {[...Array(5)].map((_, i) => (
               <div
@@ -551,10 +708,179 @@ const TemplateGalleryPage: React.FC = () => {
               colors={colors}
             />
           </div>
-        ) : null}
+        ) : null)}
 
-        {/* ═══════════ MAIN LAYOUT: SIDEBAR + CONTENT ═══════════ */}
-        <div className="flex gap-6">
+        {/* ═══════════ KNOWLEDGE TREES CONTENT ═══════════ */}
+        {activeTab === 'knowledge-trees' && (
+          <div className="flex gap-6">
+            {/* ─── LEFT SIDEBAR (reused) ─── */}
+            <div
+              className="w-64 flex-shrink-0 rounded-xl border overflow-hidden"
+              style={{ backgroundColor: sidebarBg, borderColor }}
+            >
+              <div className="p-3">
+                <div
+                  className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Filter by Industry
+                </div>
+                <button
+                  onClick={() => handleIndustrySelect('all')}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+                  style={{
+                    backgroundColor: selectedIndustry === 'all' ? activeBg : 'transparent',
+                    color: selectedIndustry === 'all' ? activeColor : colors.utility.primaryText,
+                  }}
+                >
+                  <Globe className="h-4 w-4" />
+                  All Equipment
+                  <span
+                    className="ml-auto text-xs font-mono px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: colors.utility.primaryBackground }}
+                  >
+                    {equipmentList.length + facilityList.length}
+                  </span>
+                </button>
+
+                {/* Industry list */}
+                <div className="mt-2 max-h-[500px] overflow-y-auto space-y-0.5">
+                  {industries.map((ind) => (
+                    <button
+                      key={ind.id}
+                      onClick={() => handleIndustrySelect(ind.id)}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all group"
+                      style={{
+                        backgroundColor: selectedIndustry === ind.id ? activeBg : 'transparent',
+                        color: selectedIndustry === ind.id ? activeColor : colors.utility.primaryText,
+                      }}
+                    >
+                      {getLucideIcon(ind.icon, 16, selectedIndustry === ind.id ? activeColor : colors.utility.secondaryText)}
+                      <span className="truncate text-left flex-1">{ind.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ─── KT CONTENT ─── */}
+            <div className="flex-1 min-w-0">
+              {/* Search bar */}
+              <div
+                className="border rounded-xl p-4 mb-5"
+                style={{ backgroundColor: sidebarBg, borderColor }}
+              >
+                <div className="flex flex-col lg:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search
+                      className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+                      style={{ color: colors.utility.secondaryText }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search equipment or facility types..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm"
+                      style={getInputStyles()}
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* View toggle */}
+                    <div className="flex items-center rounded-lg border" style={{ borderColor }}>
+                      <button
+                        onClick={() => setViewType('grid')}
+                        className="p-2 rounded-l-lg transition-all"
+                        style={{
+                          backgroundColor: viewType === 'grid' ? activeBg : 'transparent',
+                          color: viewType === 'grid' ? activeColor : colors.utility.secondaryText,
+                        }}
+                      >
+                        <Grid3X3 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setViewType('list')}
+                        className="p-2 rounded-r-lg transition-all"
+                        style={{
+                          backgroundColor: viewType === 'list' ? activeBg : 'transparent',
+                          color: viewType === 'list' ? activeColor : colors.utility.secondaryText,
+                        }}
+                      >
+                        <List className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      {ktResourceList.length} results
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* KT Grid / List */}
+              {(equipmentLoading || facilityLoading || ktCoverageLoading) ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {[...Array(6)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="animate-pulse rounded-xl border p-5"
+                      style={{ backgroundColor: sidebarBg, borderColor }}
+                    >
+                      <div className="h-4 rounded w-full mb-3" style={{ backgroundColor: borderColor }} />
+                      <div className="h-8 rounded w-3/4 mb-2" style={{ backgroundColor: borderColor }} />
+                      <div className="h-4 rounded w-1/2" style={{ backgroundColor: borderColor }} />
+                    </div>
+                  ))}
+                </div>
+              ) : ktResourceList.length === 0 ? (
+                <div className="text-center py-16">
+                  <TreePine
+                    className="h-16 w-16 mx-auto mb-4"
+                    style={{ color: colors.utility.secondaryText + '40' }}
+                  />
+                  <h3 className="text-lg font-medium mb-2" style={{ color: colors.utility.primaryText }}>
+                    No equipment types found
+                  </h3>
+                  <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                    {searchTerm ? 'Try different search keywords.' : 'No equipment or facilities match the selected filters.'}
+                  </p>
+                </div>
+              ) : (
+                <div
+                  className={
+                    viewType === 'grid'
+                      ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5'
+                      : 'space-y-3'
+                  }
+                >
+                  {ktResourceList.map((resource: any) => (
+                    <KnowledgeTreeCard
+                      key={resource.id}
+                      id={resource.id}
+                      name={resource.name}
+                      subCategory={resource.sub_category || 'General'}
+                      scope={resource.scope || 'industry_specific'}
+                      coverage={ktCoverage?.[resource.id] || null}
+                      colors={colors}
+                      compact={viewType === 'list'}
+                      onView={(id) => {
+                        navigate(`/service-contracts/templates/admin/global-templates/tree/${id}`);
+                      }}
+                      onBuild={(id) => {
+                        toast({
+                          title: 'Build Knowledge Tree',
+                          description: `Builder wizard for ${resource.name} coming in Phase 2.`,
+                        });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════ TEMPLATES MAIN LAYOUT: SIDEBAR + CONTENT ═══════════ */}
+        {activeTab === 'templates' && <div className="flex gap-6">
           {/* ─── LEFT SIDEBAR ─── */}
           <div
             className="w-64 flex-shrink-0 rounded-xl border overflow-hidden"
@@ -1110,7 +1436,7 @@ const TemplateGalleryPage: React.FC = () => {
               </>
             )}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* ═══════════ HELP MODAL ═══════════ */}

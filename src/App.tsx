@@ -148,6 +148,7 @@ import MyTemplatesPage from './pages/service-contracts/templates';
 import TemplatePreviewPage from './pages/service-contracts/templates/preview';
 import GlobalTemplatesPage from './pages/service-contracts/templates/admin/global-templates';
 import GlobalDesignerPage from './pages/service-contracts/templates/admin/global-designer';
+import KnowledgeTreeDetailPage from './pages/service-contracts/templates/admin/knowledge-tree/KnowledgeTreeDetail';
 import TemplateDesignerPage from './pages/service-contracts/templates/designer';
 
 // Service Contracts - Contracts
@@ -465,6 +466,7 @@ const AppContent: React.FC = () => {
               {/* Admin routes */}
               <Route path="admin">
                 <Route path="global-templates" element={<GlobalTemplatesPage />} />
+                <Route path="global-templates/tree/:id" element={<KnowledgeTreeDetailPage />} />
                 <Route path="global-designer" element={<GlobalDesignerPage />} />
                 <Route path="analytics" element={<div>Analytics Coming Soon</div>} />
               </Route>
