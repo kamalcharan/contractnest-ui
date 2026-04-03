@@ -1,6 +1,6 @@
 // Checkpoints Tab — condition values with severity, reading thresholds, CRUD
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
@@ -12,12 +12,14 @@ interface Props {
   checkpointsBySection: Record<string, any[]>;
   onAddCheckpoint: (data: Record<string, string>) => void;
   onAddValue: (checkpointId: string, sectionName: string, data: Record<string, string>) => void;
+  onEditCheckpoint: (sectionName: string, checkpointId: string, data: Record<string, string>) => void;
   colors: any;
 }
 
-const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddCheckpoint, onAddValue, colors }) => {
+const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddCheckpoint, onAddValue, onEditCheckpoint, colors }) => {
   const [showAddCpModal, setShowAddCpModal] = useState(false);
   const [addValueTarget, setAddValueTarget] = useState<{ cpId: string; section: string; cpName: string } | null>(null);
+  const [editingCheckpoint, setEditingCheckpoint] = useState<{ section: string; cp: any } | null>(null);
 
   const allCheckpoints = Object.values(checkpointsBySection).flat();
   const brandPrimary = colors.brand.primary;
@@ -48,6 +50,9 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
             <div key={cp.id} style={{ background: colors.utility.secondaryBackground, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '10px', boxShadow: '0 2px 12px rgba(0,0,0,.04)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <span style={{ fontSize: '13px', fontWeight: 600, flex: 1, color: colors.utility.primaryText }}>{cp.name}</span>
+                <button onClick={() => setEditingCheckpoint({ section: sectionName, cp })} style={{ width: '24px', height: '24px', borderRadius: '6px', border: 'none', background: brandPrimary + '10', color: brandPrimary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Edit checkpoint">
+                  <Pencil className="h-3 w-3" />
+                </button>
                 <span style={{ fontSize: '9px', fontWeight: 700, padding: '3px 9px', borderRadius: '4px', fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase' as const, letterSpacing: '.5px', background: cp.checkpoint_type === 'condition' ? colors.semantic.warning + '15' : (colors.semantic.info || '#2563eb') + '15', color: cp.checkpoint_type === 'condition' ? colors.semantic.warning : (colors.semantic.info || '#2563eb') }}>
                   {cp.checkpoint_type}
                 </span>
@@ -77,31 +82,28 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
 
               {cp.checkpoint_type === 'reading' && (
                 <>
-                  {/* Unit dropdown */}
+                  {/* Unit — read-only after creation (set at creation time only) */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px', marginBottom: '6px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 600, color: colors.utility.primaryText }}>Unit:</span>
-                    <select defaultValue={cp.unit || ''} style={{ padding: '4px 8px', border: `1px solid ${borderColor}`, borderRadius: '5px', fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', fontWeight: 600, background: colors.utility.primaryBackground, color: colors.semantic.info || '#2563eb', cursor: 'pointer' }}>
-                      {cp.unit && <option value={cp.unit}>{cp.unit}</option>}
-                      {UNIT_OPTIONS.filter((u) => u !== cp.unit).map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
+                    <span style={{ padding: '4px 8px', border: `1px solid ${borderColor}`, borderRadius: '5px', fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', fontWeight: 700, background: colors.utility.primaryBackground, color: colors.utility.primaryText }}>{cp.unit || '—'}</span>
                   </div>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', fontSize: '12px' }}>
                     {cp.normal_min != null && cp.normal_max != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: colors.utility.secondaryText }}>
                         <span style={{ fontWeight: 600, color: colors.utility.primaryText }}>Normal:</span>
-                        <input defaultValue={cp.normal_min} style={inputStyle} /><span>–</span><input defaultValue={cp.normal_max} style={inputStyle} /><span style={unitStyle}>{cp.unit}</span>
+                        <input type="number" value={cp.normal_min} onChange={(e) => onEditCheckpoint(sectionName, cp.id, { normal_min: e.target.value })} style={inputStyle} /><span>–</span><input type="number" value={cp.normal_max} onChange={(e) => onEditCheckpoint(sectionName, cp.id, { normal_max: e.target.value })} style={inputStyle} /><span style={unitStyle}>{cp.unit}</span>
                       </div>
                     )}
                     {cp.amber_threshold != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontWeight: 600, color: colors.semantic.warning }}>⚠</span>
-                        <input defaultValue={cp.amber_threshold} style={{ ...inputStyle, borderColor: colors.semantic.warning }} /><span style={unitStyle}>{cp.unit}</span>
+                        <input type="number" value={cp.amber_threshold} onChange={(e) => onEditCheckpoint(sectionName, cp.id, { amber_threshold: e.target.value })} style={{ ...inputStyle, borderColor: colors.semantic.warning }} /><span style={unitStyle}>{cp.unit}</span>
                       </div>
                     )}
                     {cp.red_threshold != null && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                         <span style={{ fontWeight: 600, color: colors.semantic.error }}>🔴</span>
-                        <input defaultValue={cp.red_threshold} style={{ ...inputStyle, borderColor: colors.semantic.error }} /><span style={unitStyle}>{cp.unit}</span>
+                        <input type="number" value={cp.red_threshold} onChange={(e) => onEditCheckpoint(sectionName, cp.id, { red_threshold: e.target.value })} style={{ ...inputStyle, borderColor: colors.semantic.error }} /><span style={unitStyle}>{cp.unit}</span>
                       </div>
                     )}
                   </div>
@@ -144,6 +146,27 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
           ]}
           onClose={() => setAddValueTarget(null)}
           onSave={(data) => { onAddValue(addValueTarget.cpId, addValueTarget.section, data); setAddValueTarget(null); }}
+          colors={colors}
+        />
+      )}
+
+      {editingCheckpoint && (
+        <AddItemModal
+          title={`Edit "${editingCheckpoint.cp.name}"`}
+          fields={[
+            { key: 'name', label: 'Checkpoint Name', type: 'text', required: true },
+            { key: 'section_name', label: 'Section', type: 'text' },
+            { key: 'description', label: 'Description', type: 'textarea' },
+            { key: 'threshold_note', label: 'Threshold Note', type: 'textarea', placeholder: 'e.g. Compare with nameplate rating' },
+          ]}
+          initialData={{
+            name: editingCheckpoint.cp.name,
+            section_name: editingCheckpoint.section,
+            description: editingCheckpoint.cp.description || '',
+            threshold_note: editingCheckpoint.cp.threshold_note || '',
+          }}
+          onClose={() => setEditingCheckpoint(null)}
+          onSave={(data) => { onEditCheckpoint(editingCheckpoint.section, editingCheckpoint.cp.id, data); setEditingCheckpoint(null); }}
           colors={colors}
         />
       )}

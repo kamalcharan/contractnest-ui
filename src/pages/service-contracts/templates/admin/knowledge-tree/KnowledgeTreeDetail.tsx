@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TreePine, Wrench, Package, ClipboardCheck, RefreshCw,
-  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2,
+  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
@@ -17,8 +17,9 @@ import SparePartsTab from './components/SparePartsTab';
 import CheckpointsTab from './components/CheckpointsTab';
 import CyclesTab from './components/CyclesTab';
 import OverlaysTab from './components/OverlaysTab';
+import FormPreviewTab from './components/FormPreviewTab';
 
-type DetailTab = 'variants' | 'spare-parts' | 'checkpoints' | 'cycles' | 'overlays';
+type DetailTab = 'variants' | 'spare-parts' | 'checkpoints' | 'cycles' | 'overlays' | 'form-preview';
 
 const KnowledgeTreeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -114,6 +115,12 @@ const KnowledgeTreeDetail: React.FC = () => {
     vaniToast.success(`Variant "${variantName}" removed`);
   }, [markChanged]);
 
+  const editVariant = useCallback((variantId: string, data: Record<string, string>) => {
+    markChanged();
+    setLocalVariants((prev) => prev.map((v) => v.id === variantId ? { ...v, name: data.name, description: data.description || null, capacity_range: data.capacity_range || null } : v));
+    vaniToast.success(`Variant "${data.name}" updated`);
+  }, [markChanged]);
+
   // ── Spare Parts CRUD ──
   const addSparePart = useCallback((group: string, data: Record<string, string>) => {
     markChanged();
@@ -136,6 +143,15 @@ const KnowledgeTreeDetail: React.FC = () => {
     markChanged();
     setLocalParts((prev) => ({ ...prev, [group]: (prev[group] || []).filter((p: any) => p.id !== partId) }));
     vaniToast.success(`Part "${partName}" removed`);
+  }, [markChanged]);
+
+  const editSparePart = useCallback((group: string, partId: string, data: Record<string, string>) => {
+    markChanged();
+    setLocalParts((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).map((p: any) => p.id === partId ? { ...p, name: data.name, description: data.description || null } : p),
+    }));
+    vaniToast.success(`Part "${data.name}" updated`);
   }, [markChanged]);
 
   // Toggle variant mapping for a spare part
@@ -194,6 +210,42 @@ const KnowledgeTreeDetail: React.FC = () => {
     vaniToast.success(`Value "${data.label}" added (${data.severity})`);
   }, [markChanged]);
 
+  const editCheckpoint = useCallback((sectionName: string, checkpointId: string, data: Record<string, any>) => {
+    markChanged();
+    setLocalCheckpoints((prev) => {
+      const updated = { ...prev };
+      // If section_name changed, move the checkpoint
+      const oldSection = [...(updated[sectionName] || [])];
+      const cpIndex = oldSection.findIndex((cp: any) => cp.id === checkpointId);
+      if (cpIndex < 0) return prev;
+
+      const cp = { ...oldSection[cpIndex] };
+      // Apply all provided fields
+      if (data.name !== undefined) cp.name = data.name;
+      if (data.description !== undefined) cp.description = data.description || null;
+      if (data.threshold_note !== undefined) cp.threshold_note = data.threshold_note || null;
+      if (data.unit !== undefined) cp.unit = data.unit;
+      if (data.normal_min !== undefined) cp.normal_min = data.normal_min !== '' ? Number(data.normal_min) : null;
+      if (data.normal_max !== undefined) cp.normal_max = data.normal_max !== '' ? Number(data.normal_max) : null;
+      if (data.amber_threshold !== undefined) cp.amber_threshold = data.amber_threshold !== '' ? Number(data.amber_threshold) : null;
+      if (data.red_threshold !== undefined) cp.red_threshold = data.red_threshold !== '' ? Number(data.red_threshold) : null;
+
+      const newSectionName = data.section_name || sectionName;
+      if (newSectionName !== sectionName) {
+        // Move to new section
+        oldSection.splice(cpIndex, 1);
+        updated[sectionName] = oldSection;
+        if (oldSection.length === 0) delete updated[sectionName];
+        cp.section_name = newSectionName;
+        updated[newSectionName] = [...(updated[newSectionName] || []), cp];
+      } else {
+        oldSection[cpIndex] = cp;
+        updated[sectionName] = oldSection;
+      }
+      return updated;
+    });
+  }, [markChanged]);
+
   // ── Cycle CRUD ──
   const addCycle = useCallback((data: Record<string, string>) => {
     markChanged();
@@ -211,6 +263,18 @@ const KnowledgeTreeDetail: React.FC = () => {
     markChanged();
     setLocalCycles((prev) => prev.filter((c) => c.id !== cycleId));
     vaniToast.success(`Cycle "${cycleName}" removed`);
+  }, [markChanged]);
+
+  const editCycle = useCallback((cycleId: string, data: Record<string, any>) => {
+    markChanged();
+    setLocalCycles((prev) => prev.map((c) => {
+      if (c.id !== cycleId) return c;
+      const updated = { ...c };
+      if (data.frequency_value !== undefined) updated.frequency_value = Number(data.frequency_value);
+      if (data.frequency_unit !== undefined) updated.frequency_unit = data.frequency_unit;
+      if (data.alert_overdue_days !== undefined) updated.alert_overdue_days = data.alert_overdue_days;
+      return updated;
+    }));
   }, [markChanged]);
 
   // ── Save handler (full payload) ──
@@ -259,6 +323,7 @@ const KnowledgeTreeDetail: React.FC = () => {
     { key: 'checkpoints', label: 'Checkpoints', icon: <ClipboardCheck className="h-4 w-4" />, count: allCheckpointsFlat.length },
     { key: 'cycles', label: 'Service Cycles', icon: <RefreshCw className="h-4 w-4" />, count: localCycles.length },
     { key: 'overlays', label: 'Overlays', icon: <MapPin className="h-4 w-4" />, count: summary?.summary.overlays_count || 0 },
+    { key: 'form-preview', label: 'Form Preview', icon: <FileText className="h-4 w-4" />, count: allCheckpointsFlat.length },
   ], [localVariants, allPartsCount, allCheckpointsFlat, localCycles, summary]);
 
   if (isLoading) {
@@ -336,11 +401,12 @@ const KnowledgeTreeDetail: React.FC = () => {
             ))}
           </div>
 
-          {activeTab === 'variants' && <VariantsTab summary={summary} variants={localVariants} selectedIds={selectedVariantIds} onToggle={toggleVariant} onToggleAll={toggleAllVariants} onAdd={addVariant} onRemove={removeVariant} colors={colors} />}
-          {activeTab === 'spare-parts' && <SparePartsTab summary={summary} variants={localVariants} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} onAddPart={addSparePart} onRemovePart={removeSparePart} onToggleMapping={togglePartVariantMapping} colors={colors} expandedGroups={expandedGroups} toggleGroup={toggleGroup} />}
-          {activeTab === 'checkpoints' && <CheckpointsTab summary={summary} checkpointsBySection={localCheckpoints} onAddCheckpoint={addCheckpoint} onAddValue={addCheckpointValue} colors={colors} />}
-          {activeTab === 'cycles' && <CyclesTab summary={summary} cycles={localCycles} onAdd={addCycle} onRemove={removeCycle} colors={colors} />}
+          {activeTab === 'variants' && <VariantsTab summary={summary} variants={localVariants} selectedIds={selectedVariantIds} onToggle={toggleVariant} onToggleAll={toggleAllVariants} onAdd={addVariant} onRemove={removeVariant} onEdit={editVariant} colors={colors} />}
+          {activeTab === 'spare-parts' && <SparePartsTab summary={summary} variants={localVariants} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} onAddPart={addSparePart} onRemovePart={removeSparePart} onEditPart={editSparePart} onToggleMapping={togglePartVariantMapping} colors={colors} expandedGroups={expandedGroups} toggleGroup={toggleGroup} />}
+          {activeTab === 'checkpoints' && <CheckpointsTab summary={summary} checkpointsBySection={localCheckpoints} onAddCheckpoint={addCheckpoint} onAddValue={addCheckpointValue} onEditCheckpoint={editCheckpoint} colors={colors} />}
+          {activeTab === 'cycles' && <CyclesTab summary={summary} cycles={localCycles} onAdd={addCycle} onRemove={removeCycle} onEditCycle={editCycle} colors={colors} />}
           {activeTab === 'overlays' && <OverlaysTab summary={summary} colors={colors} />}
+          {activeTab === 'form-preview' && <FormPreviewTab summary={summary} variants={localVariants} checkpointsBySection={localCheckpoints} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} colors={colors} />}
         </div>
 
         {showBackupPanel && (

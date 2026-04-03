@@ -1,6 +1,6 @@
 // Spare Parts Tab — variant toggle matrix + CRUD
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2, Pencil } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
@@ -17,14 +17,16 @@ interface Props {
   selectedVariantIds: Set<string>;
   onAddPart: (group: string, data: Record<string, string>) => void;
   onRemovePart: (group: string, partId: string, partName: string) => void;
+  onEditPart: (group: string, partId: string, data: Record<string, string>) => void;
   onToggleMapping: (group: string, partId: string, variantId: string) => void;
   colors: any;
   expandedGroups: Set<string>;
   toggleGroup: (k: string) => void;
 }
 
-const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selectedVariantIds, onAddPart, onRemovePart, onToggleMapping, colors, expandedGroups, toggleGroup }) => {
+const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selectedVariantIds, onAddPart, onRemovePart, onEditPart, onToggleMapping, colors, expandedGroups, toggleGroup }) => {
   const [addModalGroup, setAddModalGroup] = useState<string | null>(null);
+  const [editingPart, setEditingPart] = useState<{ group: string; part: any } | null>(null);
   const groups = Object.entries(partsByGroup);
   // Use localVariants (not summary.variants) — includes custom-added variants
   const selectedVariants = variants.filter((v) => selectedVariantIds.has(v.id));
@@ -54,11 +56,11 @@ const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selec
               <div style={{ overflowX: 'auto' }}>
                 {/* Column headers */}
                 <div style={{
-                  display: 'grid', gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedVariants.length}, 30px) 28px`,
+                  display: 'grid', gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedVariants.length}, 30px) 60px`,
                   padding: '8px 16px', gap: '3px', alignItems: 'center',
                   borderBottom: `1px solid ${borderColor}`, background: colors.utility.primaryBackground,
                   fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.4px', color: colors.utility.secondaryText,
-                  minWidth: selectedVariants.length > 10 ? `${180 + selectedVariants.length * 33 + 28}px` : undefined,
+                  minWidth: selectedVariants.length > 10 ? `${180 + selectedVariants.length * 33 + 60}px` : undefined,
                 }}>
                   <span>Part Name</span>
                   {variantShortNames.map((name, i) => <span key={i} style={{ textAlign: 'center' }}>{name}</span>)}
@@ -70,10 +72,10 @@ const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selec
                   const isCustom = part.source === 'user_contributed';
                   return (
                     <div key={part.id} style={{
-                      display: 'grid', gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedVariants.length}, 30px) 28px`,
+                      display: 'grid', gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedVariants.length}, 30px) 60px`,
                       padding: '7px 16px', gap: '3px', alignItems: 'center',
                       borderBottom: `1px solid ${borderLt}`, fontSize: '12px',
-                      minWidth: selectedVariants.length > 10 ? `${180 + selectedVariants.length * 33 + 28}px` : undefined,
+                      minWidth: selectedVariants.length > 10 ? `${180 + selectedVariants.length * 33 + 60}px` : undefined,
                     }}>
                       <span style={{ color: colors.utility.primaryText }}>
                         {part.name}
@@ -98,11 +100,16 @@ const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selec
                           </button>
                         );
                       })}
-                      {isCustom ? (
-                        <button onClick={() => onRemovePart(groupName, part.id, part.name)} style={{ width: '28px', height: '28px', borderRadius: '5px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: colors.semantic.error + '10', color: colors.semantic.error }} title="Remove">
-                          <Trash2 className="h-3 w-3" />
+                      <div style={{ display: 'flex', gap: '2px' }}>
+                        <button onClick={() => setEditingPart({ group: groupName, part })} style={{ width: '28px', height: '28px', borderRadius: '5px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: brandPrimary + '10', color: brandPrimary }} title="Edit part">
+                          <Pencil className="h-3 w-3" />
                         </button>
-                      ) : <span />}
+                        {isCustom && (
+                          <button onClick={() => onRemovePart(groupName, part.id, part.name)} style={{ width: '28px', height: '28px', borderRadius: '5px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', background: colors.semantic.error + '10', color: colors.semantic.error }} title="Remove">
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -127,6 +134,20 @@ const SparePartsTab: React.FC<Props> = ({ summary, variants, partsByGroup, selec
           ]}
           onClose={() => setAddModalGroup(null)}
           onSave={(data) => { onAddPart(addModalGroup, data); setAddModalGroup(null); }}
+          colors={colors}
+        />
+      )}
+
+      {editingPart && (
+        <AddItemModal
+          title={`Edit "${editingPart.part.name}"`}
+          fields={[
+            { key: 'name', label: 'Part Name', type: 'text', placeholder: 'e.g. Capacitor (run/start)', required: true },
+            { key: 'description', label: 'Description', type: 'textarea', placeholder: 'Optional description or specifications' },
+          ]}
+          initialData={{ name: editingPart.part.name, description: editingPart.part.description || '' }}
+          onClose={() => setEditingPart(null)}
+          onSave={(data) => { onEditPart(editingPart.group, editingPart.part.id, data); setEditingPart(null); }}
           colors={colors}
         />
       )}

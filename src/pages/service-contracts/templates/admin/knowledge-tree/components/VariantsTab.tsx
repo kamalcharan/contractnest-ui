@@ -1,6 +1,6 @@
 // Variants Tab — toggle cards, add/remove variants
 import React, { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
@@ -13,11 +13,13 @@ interface Props {
   onToggleAll: () => void;
   onAdd: (data: Record<string, string>) => void;
   onRemove: (id: string, name: string) => void;
+  onEdit: (id: string, data: Record<string, string>) => void;
   colors: any;
 }
 
-const VariantsTab: React.FC<Props> = ({ summary, variants, selectedIds, onToggle, onToggleAll, onAdd, onRemove, colors }) => {
+const VariantsTab: React.FC<Props> = ({ summary, variants, selectedIds, onToggle, onToggleAll, onAdd, onRemove, onEdit, colors }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingVariant, setEditingVariant] = useState<any | null>(null);
   const selCount = selectedIds.size;
   const borderColor = colors.utility.secondaryText + '20';
   const brandPrimary = colors.brand.primary;
@@ -55,11 +57,16 @@ const VariantsTab: React.FC<Props> = ({ summary, variants, selectedIds, onToggle
                 {v.description && <div style={{ fontSize: '11px', color: colors.utility.secondaryText, lineHeight: 1.4 }}>{v.description}</div>}
                 {v.capacity_range && <div style={{ fontSize: '10px', fontFamily: "'IBM Plex Mono', monospace", color: colors.utility.secondaryText + '80', marginTop: '3px' }}>{v.capacity_range}</div>}
               </div>
-              {isCustom && (
-                <button onClick={(e) => { e.stopPropagation(); onRemove(v.id, v.name); }} style={{ position: 'absolute', top: '8px', right: '8px', width: '24px', height: '24px', borderRadius: '6px', border: 'none', background: colors.semantic.error + '10', color: colors.semantic.error, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove variant">
-                  <Trash2 className="h-3 w-3" />
+              <div style={{ position: 'absolute', top: '8px', right: '8px', display: 'flex', gap: '4px' }}>
+                <button onClick={(e) => { e.stopPropagation(); setEditingVariant(v); }} style={{ width: '24px', height: '24px', borderRadius: '6px', border: 'none', background: brandPrimary + '10', color: brandPrimary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Edit variant">
+                  <Pencil className="h-3 w-3" />
                 </button>
-              )}
+                {isCustom && (
+                  <button onClick={(e) => { e.stopPropagation(); onRemove(v.id, v.name); }} style={{ width: '24px', height: '24px', borderRadius: '6px', border: 'none', background: colors.semantic.error + '10', color: colors.semantic.error, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Remove variant">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -75,6 +82,21 @@ const VariantsTab: React.FC<Props> = ({ summary, variants, selectedIds, onToggle
           ]}
           onClose={() => setShowAddModal(false)}
           onSave={(data) => { onAdd(data); setShowAddModal(false); }}
+          colors={colors}
+        />
+      )}
+
+      {editingVariant && (
+        <AddItemModal
+          title={`Edit "${editingVariant.name}"`}
+          fields={[
+            { key: 'name', label: 'Variant Name', type: 'text', placeholder: 'e.g. Split AC / Room AC', required: true },
+            { key: 'description', label: 'Description', type: 'textarea', placeholder: 'Brief description of this variant' },
+            { key: 'capacity_range', label: 'Capacity Range', type: 'text', placeholder: 'e.g. 0.75–2.5 TR' },
+          ]}
+          initialData={{ name: editingVariant.name, description: editingVariant.description || '', capacity_range: editingVariant.capacity_range || '' }}
+          onClose={() => setEditingVariant(null)}
+          onSave={(data) => { onEdit(editingVariant.id, data); setEditingVariant(null); }}
           colors={colors}
         />
       )}
