@@ -120,6 +120,13 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       resource_pricing: catBlock.resource_pricing,
       variant_pricing: catBlock.variant_pricing,
 
+      // Knowledge Tree linkage
+      form_template_id: (catBlock as any).form_template_id || null,
+      knowledge_tree_ref: (catBlock as any).knowledge_tree_ref || null,
+
+      // Selected variants (from config, used by KT-seeded blocks)
+      selectedVariants: config.selectedVariants,
+
       // Selected resources
       selectedResources: config.selectedResources,
       resourceTypes: config.resourceTypes,
@@ -341,6 +348,10 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   const resourceTypes = getField(block, 'resourceTypes');
   if (selectedResources) config.selectedResources = selectedResources;
   if (resourceTypes) config.resourceTypes = resourceTypes;
+
+  // Selected variants (from KT variant picker in ResourceDependencyStep)
+  const selectedVariants = getField(block, 'selectedVariants');
+  if (selectedVariants) config.selectedVariants = selectedVariants;
 
   // Terms
   const terms = getField(block, 'terms');
@@ -756,6 +767,10 @@ export const blockToCreateData = (
 
     // Resource pricing (for resource_based mode)
     resource_pricing: buildResourcePricing(block),
+
+    // Knowledge Tree linkage (for KT-seeded blocks)
+    form_template_id: (block.meta as any)?.form_template_id || null,
+    knowledge_tree_ref: (block.meta as any)?.knowledge_tree_ref || null,
 
     // Visibility
     visible: visible !== 'false' && visible !== false,

@@ -1,7 +1,7 @@
 // src/pages/settings/business-profile/index.tsx - Business Profile with Sidebar Nav
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText, AlertTriangle, Trash2, Factory } from 'lucide-react';
+import { ArrowLeft, Building, Phone, Mail, Globe, MapPin, Palette, Pencil, ShoppingCart, Wrench, Info, MessageCircle, Calendar, FileText, AlertTriangle, Trash2, Factory, Package } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { analyticsService } from '@/services/analytics.service';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
 import ServedIndustriesSection from './ServedIndustriesSection';
+import ServiceCatalogSection from './ServiceCatalogSection';
 
 const BusinessProfilePage = () => {
   const navigate = useNavigate();
@@ -59,6 +60,7 @@ const BusinessProfilePage = () => {
   const sections = [
     { id: 'overview', label: 'Overview', icon: Building },
     { id: 'industries', label: 'Industries', icon: Factory },
+    { id: 'service-catalog', label: 'Service Catalog', icon: Package },
     { id: 'danger', label: 'Close Account', icon: AlertTriangle },
   ];
 
@@ -521,6 +523,14 @@ const BusinessProfilePage = () => {
               {/* ═══ INDUSTRIES SECTION (unified: your industry + served) ═══ */}
               {activeSection === 'industries' && (
                 <ServedIndustriesSection profileIndustryId={profile?.industry_id} onIndustryChanged={fetchProfile} />
+              )}
+
+              {/* ═══ SERVICE CATALOG SECTION ═══ */}
+              {activeSection === 'service-catalog' && (
+                <ServiceCatalogSection
+                  profileIndustryId={profile?.industry_id}
+                  businessTypeId={profile?.business_type_id}
+                />
               )}
 
               {/* ═══ DANGER ZONE / CLOSE ACCOUNT SECTION ═══ */}

@@ -114,6 +114,18 @@ export interface BlockBusinessRules {
 // BLOCK TYPES (Enhanced)
 // =================================================================
 
+export interface SelectedVariant {
+  variant_id: string;
+  variant_name: string;
+  capacity_range?: string | null;
+}
+
+export interface KnowledgeTreeRef {
+  resource_template_id: string;
+  service_activity?: string;
+  variant_id?: string;
+}
+
 export interface BlockMeta extends Partial<BlockPricing>, Partial<ResourceDependency>, Partial<BlockBusinessRules> {
   // Image
   image?: File;
@@ -128,6 +140,10 @@ export interface BlockMeta extends Partial<BlockPricing>, Partial<ResourceDepend
   // Billing-specific
   paymentType?: string;
   invoiceTrigger?: string;
+  // Knowledge Tree linkage
+  form_template_id?: string | null;
+  knowledge_tree_ref?: KnowledgeTreeRef | null;
+  selectedVariants?: SelectedVariant[];
   // Generic
   [key: string]: unknown;
 }
