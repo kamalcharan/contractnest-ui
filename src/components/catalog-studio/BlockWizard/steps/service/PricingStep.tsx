@@ -624,8 +624,8 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
               </div>
             </div>
 
-          {/* MULTI-CURRENCY PRICING RECORDS - Always shown regardless of pricingMode */}
-          {priceType !== 'custom' && (
+          {/* MULTI-CURRENCY PRICING RECORDS — hidden when Per Variant is active */}
+          {priceType !== 'custom' && !(selectedVariants.length > 0 && variantPricingMode === 'per_variant') && (
             <div className="p-6 rounded-xl border" style={cardStyle}>
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.utility.primaryText }}>

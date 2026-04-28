@@ -136,22 +136,42 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
       // Supports both independent pricing (pricingRecords) and resource-based pricing (resourcePricingRecords)
       if (step === 5) {
         const pricingMode = data.meta?.pricingMode as string | undefined;
-        let hasValidPrice = false;
+        const selectedVariants = data.meta?.selectedVariants as Array<{ variant_id: string }> | undefined;
+        const variantPricingMode = data.meta?.variantPricingMode as string | undefined;
+        const hasVariants = selectedVariants && selectedVariants.length > 0;
 
-        if (pricingMode === 'resource_based') {
-          // Check resourcePricingRecords for resource-based pricing
-          const resourcePricingRecords = data.meta?.resourcePricingRecords as Array<{ pricePerUnit: number }> | undefined;
-          hasValidPrice = resourcePricingRecords && resourcePricingRecords.length > 0 &&
-                          resourcePricingRecords.some(r => r.pricePerUnit > 0);
-        } else {
-          // Check pricingRecords for independent pricing (default)
+        if (hasVariants && variantPricingMode === 'per_variant') {
+          // Per Variant: each variant must have pricing
+          const variantPricingRecords = data.meta?.variantPricingRecords as Array<{ amount: number }> | undefined;
+          const valid = variantPricingRecords && variantPricingRecords.length > 0 &&
+                        variantPricingRecords.some(r => r.amount > 0);
+          if (!valid) {
+            errors.push('Enter price for at least one variant in Variant Pricing');
+          }
+        } else if (hasVariants) {
+          // Same for All with variants: base price applies to all variants
           const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
-          hasValidPrice = pricingRecords && pricingRecords.length > 0 &&
-                          pricingRecords.some(r => r.amount > 0);
-        }
-
-        if (!hasValidPrice) {
-          errors.push('Price is required');
+          const valid = pricingRecords && pricingRecords.length > 0 &&
+                        pricingRecords.some(r => r.amount > 0);
+          if (!valid) {
+            errors.push('Enter a base price — it will apply to all variants');
+          }
+        } else if (pricingMode === 'resource_based') {
+          // Resource-based without variants: need resource pricing
+          const resourcePricingRecords = data.meta?.resourcePricingRecords as Array<{ pricePerUnit: number }> | undefined;
+          const valid = resourcePricingRecords && resourcePricingRecords.length > 0 &&
+                        resourcePricingRecords.some(r => r.pricePerUnit > 0);
+          if (!valid) {
+            errors.push('Enter price per unit for at least one resource');
+          }
+        } else {
+          // Independent pricing
+          const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
+          const valid = pricingRecords && pricingRecords.length > 0 &&
+                        pricingRecords.some(r => r.amount > 0);
+          if (!valid) {
+            errors.push('Enter a price in Currency-Specific Pricing');
+          }
         }
       }
       // Step 6 - Business Rules: No mandatory fields

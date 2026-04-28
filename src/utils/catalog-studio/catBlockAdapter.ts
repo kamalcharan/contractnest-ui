@@ -126,6 +126,8 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
 
       // Selected variants (from config, used by KT-seeded blocks)
       selectedVariants: config.selectedVariants,
+      variantPricingMode: config.variantPricingMode,
+      variantPricingRecords: config.variantPricingRecords,
 
       // Selected resources
       selectedResources: config.selectedResources,
@@ -342,6 +344,12 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   if (pricingRecords) config.pricingRecords = pricingRecords;
   if (resourcePricingRecords) config.resourcePricingRecords = resourcePricingRecords;
   if (pricingTiers) config.pricingTiers = pricingTiers;
+
+  // Variant pricing (from KT variant picker)
+  const variantPricingMode = getField(block, 'variantPricingMode');
+  const variantPricingRecords = getField(block, 'variantPricingRecords');
+  if (variantPricingMode) config.variantPricingMode = variantPricingMode;
+  if (variantPricingRecords) config.variantPricingRecords = variantPricingRecords;
 
   // Selected resources (from ResourceDependencyStep) - wizard sets at top level
   const selectedResources = getField(block, 'selectedResources');
@@ -633,7 +641,18 @@ const buildConfig = (block: Partial<Block>, blockType: string): Record<string, u
  * Checks both top-level (wizard) and meta (existing blocks) fields
  */
 const extractPrimaryPrice = (block: Partial<Block>): { price?: number; currency?: string } => {
-  // First check pricingRecords - can be at top-level (wizard) or meta (existing)
+  // Per Variant mode: use first variant's price as base_price
+  const variantPricingMode = getField(block, 'variantPricingMode') as string | undefined;
+  const selectedVariants = getField(block, 'selectedVariants') as Array<{ variant_id: string }> | undefined;
+  if (variantPricingMode === 'per_variant' && selectedVariants && selectedVariants.length > 0) {
+    const variantRecords = getField(block, 'variantPricingRecords') as Array<{ amount: number; currency: string; is_active: boolean }> | undefined;
+    if (variantRecords && variantRecords.length > 0) {
+      const primary = variantRecords.find(r => r.is_active) || variantRecords[0];
+      return { price: primary.amount, currency: primary.currency };
+    }
+  }
+
+  // Standard: check pricingRecords
   const pricingRecords = getField(block, 'pricingRecords') as PricingRecord[] | undefined;
 
   if (pricingRecords && pricingRecords.length > 0) {
@@ -874,6 +893,8 @@ export const blockToUpdateData = (
     // Meta fields that go into config
     if (meta.pricingRecords !== undefined) configUpdates.pricingRecords = meta.pricingRecords;
     if (meta.resourcePricingRecords !== undefined) configUpdates.resourcePricingRecords = meta.resourcePricingRecords;
+    if (meta.variantPricingMode !== undefined) configUpdates.variantPricingMode = meta.variantPricingMode;
+    if (meta.variantPricingRecords !== undefined) configUpdates.variantPricingRecords = meta.variantPricingRecords;
     if (meta.priceType !== undefined) configUpdates.priceType = meta.priceType;
     if (meta.pricingMode !== undefined) configUpdates.pricingMode = meta.pricingMode;
     if (meta.status !== undefined) configUpdates.status = meta.status; // Store in config as string

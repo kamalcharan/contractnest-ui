@@ -269,7 +269,7 @@ const EditBlockPage: React.FC = () => {
       {/* Main Content - Full Page Wizard */}
       <div className="flex-1 overflow-hidden">
         <div
-          className="h-full max-w-4xl mx-auto"
+          className="h-full"
           style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF' }}
         >
           <BlockWizardContent
