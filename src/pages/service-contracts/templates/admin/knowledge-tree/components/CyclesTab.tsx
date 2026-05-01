@@ -1,11 +1,19 @@
 // Service Cycles Tab — frequency dropdown, varies-by tags, editable alert, CRUD
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
 
 const FREQ_OPTIONS = ['30 days', '45 days', '60 days', '90 days', '120 days', '180 days', '365 days', '500 hrs', '1000 hrs', '2000 hrs'];
+
+const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }> = {
+  pm:           { label: 'PM',      color: '#16a34a', bg: '#16a34a15' },
+  repair:       { label: 'Repair',  color: '#ea580c', bg: '#ea580c15' },
+  inspection:   { label: 'Inspect', color: '#2563eb', bg: '#2563eb15' },
+  install:      { label: 'Install', color: '#7c3aed', bg: '#7c3aed15' },
+  decommission: { label: 'Decomm',  color: '#dc2626', bg: '#dc262615' },
+};
 
 interface Props {
   summary: KnowledgeTreeSummary;
@@ -18,9 +26,20 @@ interface Props {
 
 const CyclesTab: React.FC<Props> = ({ summary, cycles, onAdd, onRemove, onEditCycle, colors }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<string>('all');
   const borderColor = colors.utility.secondaryText + '20';
   const borderLt = colors.utility.secondaryText + '12';
   const brandPrimary = colors.brand.primary;
+
+  const availableActivities = useMemo(() => {
+    const acts = [...new Set(cycles.map((cy: any) => cy.service_activity).filter(Boolean))];
+    return acts.sort();
+  }, [cycles]);
+
+  const filteredCycles = useMemo(() => {
+    if (activityFilter === 'all') return cycles;
+    return cycles.filter((cy: any) => cy.service_activity === activityFilter);
+  }, [cycles, activityFilter]);
 
   return (
     <div>
@@ -28,7 +47,32 @@ const CyclesTab: React.FC<Props> = ({ summary, cycles, onAdd, onRemove, onEditCy
         <p><strong style={{ color: colors.utility.primaryText }}>{cycles.length} service cycles</strong> for <span style={{ color: brandPrimary, fontWeight: 600 }}>{summary.resource_template.sub_category}</span>. Adjust frequencies and alert thresholds.</p>
       </VaNiBubble>
 
-      {cycles.length === 0 ? (
+      {/* Activity filter strip — only shown when multiple activities exist */}
+      {availableActivities.length > 1 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <button
+            onClick={() => setActivityFilter('all')}
+            style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${activityFilter === 'all' ? brandPrimary : borderColor}`, background: activityFilter === 'all' ? brandPrimary + '15' : 'transparent', color: activityFilter === 'all' ? brandPrimary : colors.utility.secondaryText, fontWeight: activityFilter === 'all' ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
+          >
+            All ({cycles.length})
+          </button>
+          {availableActivities.map((act) => {
+            const meta = ACTIVITY_META[act] || { label: act, color: brandPrimary, bg: brandPrimary + '15' };
+            const count = cycles.filter((cy: any) => cy.service_activity === act).length;
+            const isActive = activityFilter === act;
+            return (
+              <button key={act}
+                onClick={() => setActivityFilter(act)}
+                style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${isActive ? meta.color : borderColor}`, background: isActive ? meta.bg : 'transparent', color: isActive ? meta.color : colors.utility.secondaryText, fontWeight: isActive ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
+              >
+                {meta.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {filteredCycles.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: colors.utility.secondaryText, fontSize: '14px' }}>No service cycles defined</div>
       ) : (
         <>
@@ -40,14 +84,18 @@ const CyclesTab: React.FC<Props> = ({ summary, cycles, onAdd, onRemove, onEditCy
           <span>Alert (overdue)</span>
           <span />
         </div>
-        {cycles.map((cy) => {
+        {filteredCycles.map((cy) => {
           const isCustom = cy.source === 'user_contributed';
           return (
             <div key={cy.id} style={{ background: colors.utility.secondaryBackground, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '12px 18px', marginBottom: '8px', display: 'grid', gridTemplateColumns: '1fr 110px 150px 1fr 28px', gap: '14px', alignItems: 'center', boxShadow: '0 2px 12px rgba(0,0,0,.04)' }}>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: colors.utility.primaryText }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: colors.utility.primaryText, display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   {cy.checkpoint_name || 'Custom Cycle'}
-                  {isCustom && <span style={{ fontSize: '8px', marginLeft: '4px', color: colors.semantic.success, fontWeight: 700 }}>NEW</span>}
+                  {isCustom && <span style={{ fontSize: '8px', color: colors.semantic.success, fontWeight: 700 }}>NEW</span>}
+                  {availableActivities.length > 1 && cy.service_activity && (() => {
+                    const meta = ACTIVITY_META[cy.service_activity] || { label: cy.service_activity, color: brandPrimary, bg: brandPrimary + '15' };
+                    return <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '4px', fontFamily: "'IBM Plex Mono', monospace", background: meta.bg, color: meta.color }}>{meta.label}</span>;
+                  })()}
                 </div>
                 <div style={{ fontSize: '10px', color: colors.utility.secondaryText }}>{cy.section_name}</div>
               </div>

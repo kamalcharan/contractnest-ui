@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   RefreshCw,
   ChevronRight,
+  Trash2,
 } from 'lucide-react';
 import type { KnowledgeTreeCoverageItem } from './types';
 
@@ -24,6 +25,7 @@ export interface KnowledgeTreeCardProps {
   compact?: boolean;
   onView?: (id: string) => void;
   onBuild?: (id: string) => void;
+  onDelete?: (id: string, name: string) => void;
 }
 
 const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
@@ -36,6 +38,7 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
   compact = false,
   onView,
   onBuild,
+  onDelete,
 }) => {
   const isBuilt = coverage && coverage.variants_count > 0;
 
@@ -74,11 +77,19 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
           </div>
         </div>
         {isBuilt && coverage ? (
-          <div className="flex items-center gap-4 text-xs flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
+          <div className="flex items-center gap-3 text-xs flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
             <span>{coverage.variants_count} variants</span>
             <span>{coverage.spare_parts_count} parts</span>
             <span>{coverage.checkpoints_count} checkpoints</span>
             <ChevronRight className="h-4 w-4" />
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete?.(id, name); }}
+              className="p-1.5 rounded-lg transition-all hover:opacity-80 flex-shrink-0"
+              style={{ backgroundColor: colors.semantic.error + '12', color: colors.semantic.error }}
+              title="Delete Knowledge Tree"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </div>
         ) : (
           <span
@@ -180,18 +191,25 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
               />
             </div>
 
-            {/* Action */}
-            <button
-              onClick={() => onView?.(id)}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90"
-              style={{
-                backgroundColor: colors.semantic.success + '12',
-                color: colors.semantic.success,
-              }}
-            >
-              View Tree
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onView?.(id)}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90"
+                style={{ backgroundColor: colors.semantic.success + '12', color: colors.semantic.success }}
+              >
+                View Tree
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete?.(id, name); }}
+                className="flex items-center justify-center px-3 py-2 rounded-lg transition-all hover:opacity-80"
+                style={{ backgroundColor: colors.semantic.error + '10', color: colors.semantic.error }}
+                title="Delete Knowledge Tree"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </>
         ) : (
           <>

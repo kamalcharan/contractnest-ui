@@ -67,6 +67,8 @@ export interface KnowledgeTreeCheckpoint {
   amber_threshold: number | null;
   red_threshold: number | null;
   threshold_note: string | null;
+  compliance_standard: string | null;
+  is_mandatory: boolean;
   source: 'ai_researched' | 'user_contributed';
   sort_order: number;
   values: CheckpointValue[];
@@ -95,6 +97,24 @@ export interface KnowledgeTreeOverlay {
   priority: number;
 }
 
+// Equipment meta: admin-managed criticality and calibration interval
+export interface KTEquipmentMeta {
+  id: string;
+  resource_template_id?: string;
+  equipment_criticality: 'life_critical' | 'mission_critical' | 'standard';
+  calibration_interval_days: number | null;
+  notes: string | null;
+  updated_at?: string;
+}
+
+// Compliance default per sub-category (admin-managed)
+export interface KTComplianceDefault {
+  id: string;
+  sub_category: string;
+  compliance_standard: string;
+  description: string | null;
+}
+
 // Coverage: lightweight check for which resource templates have KT data
 export interface KnowledgeTreeCoverageItem {
   resource_template_id: string;
@@ -114,6 +134,7 @@ export interface KnowledgeTreeSummary {
     sub_category: string;
     scope: string;
   };
+  equipment_meta: KTEquipmentMeta | null;
   summary: {
     variants_count: number;
     spare_parts_count: number;
@@ -125,6 +146,8 @@ export interface KnowledgeTreeSummary {
     overlays_count: number;
     variant_part_mappings: number;
     variant_checkpoint_mappings: number;
+    compliance_standards: string[];
+    mandatory_count: number;
   };
   variants: KnowledgeTreeVariant[];
   spare_parts_by_group: Record<string, KnowledgeTreeSparePart[]>;

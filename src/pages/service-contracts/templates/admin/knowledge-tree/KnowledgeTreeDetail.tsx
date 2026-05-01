@@ -3,12 +3,17 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TreePine, Wrench, Package, ClipboardCheck, RefreshCw,
-  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText,
+  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText, Trash2, AlertTriangle, Plus, ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
-import { useKnowledgeTreeSummary, useKnowledgeTreeSave, useCreateSnapshot } from '@/hooks/queries/useKnowledgeTree';
+import {
+  useKnowledgeTreeSummary, useKnowledgeTreeSave, useCreateSnapshot,
+  useKnowledgeTreeDelete, useKnowledgeTreeGenerate,
+  useUpsertEquipmentMeta, useTagCompliance,
+} from '@/hooks/queries/useKnowledgeTree';
 import type { KnowledgeTreeSummary } from './types';
+import KTGenerationModal from './components/KTGenerationModal';
 
 import RightPanel from './components/RightPanel';
 import BackupHistoryPanel from './components/BackupHistoryPanel';
@@ -21,12 +26,25 @@ import FormPreviewTab from './components/FormPreviewTab';
 
 type DetailTab = 'variants' | 'spare-parts' | 'checkpoints' | 'cycles' | 'overlays' | 'form-preview';
 
+const ACTIVITY_CONFIG = [
+  { key: 'pm',           label: 'Preventive Maintenance', short: 'PM' },
+  { key: 'repair',       label: 'Breakdown / Repair',     short: 'Repair' },
+  { key: 'inspection',   label: 'Inspection',             short: 'Inspect' },
+  { key: 'install',      label: 'Installation',           short: 'Install' },
+  { key: 'decommission', label: 'Decommission',           short: 'Decomm' },
+] as const;
+
+const CRITICALITY_OPTIONS = [
+  { value: 'standard',         label: '🟢 Standard' },
+  { value: 'mission_critical', label: '🟠 Mission Critical' },
+  { value: 'life_critical',    label: '🔴 Life Critical' },
+] as const;
+
 const KnowledgeTreeDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-
 
   const [activeTab, setActiveTab] = useState<DetailTab>('variants');
   const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
@@ -44,6 +62,87 @@ const KnowledgeTreeDetail: React.FC = () => {
   const { data: summary, isLoading, error, refetch } = useKnowledgeTreeSummary(id);
   const saveMutation = useKnowledgeTreeSave();
   const snapshotMutation = useCreateSnapshot();
+  const deleteMutation = useKnowledgeTreeDelete();
+  const upsertMetaMutation = useUpsertEquipmentMeta();
+  const tagComplianceMutation = useTagCompliance();
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isTaggingCompliance, setIsTaggingCompliance] = useState(false);
+
+  const { generate: ktGenerate, phase: ktPhase, isActive: ktIsActive, errorMessage: ktError, reset: ktReset } = useKnowledgeTreeGenerate();
+  const [addingActivity, setAddingActivity] = useState<string | null>(null);
+
+  // Criticality — local state mirrors summary.equipment_meta, editable inline
+  const [localCriticality, setLocalCriticality] = useState<'life_critical' | 'mission_critical' | 'standard'>('standard');
+
+  useEffect(() => {
+    if (summary?.equipment_meta?.equipment_criticality) {
+      setLocalCriticality(summary.equipment_meta.equipment_criticality);
+    }
+  }, [summary?.equipment_meta]);
+
+  const handleCriticalityChange = useCallback(async (value: 'life_critical' | 'mission_critical' | 'standard') => {
+    if (!id) return;
+    setLocalCriticality(value);
+    try {
+      await upsertMetaMutation.mutateAsync({
+        resource_template_id: id,
+        equipment_criticality: value,
+        calibration_interval_days: summary?.equipment_meta?.calibration_interval_days ?? null,
+        notes: summary?.equipment_meta?.notes ?? null,
+      });
+      vaniToast.success(`Equipment criticality set to ${CRITICALITY_OPTIONS.find((o) => o.value === value)?.label || value}`);
+    } catch (err) {
+      vaniToast.error(`Failed to update criticality: ${(err as Error).message}`);
+      // Roll back on error
+      setLocalCriticality(summary?.equipment_meta?.equipment_criticality || 'standard');
+    }
+  }, [id, summary, upsertMetaMutation]);
+
+  const handleTagCompliance = useCallback(async () => {
+    if (!id || !summary) return;
+    const allCheckpoints = Object.values(localCheckpoints).flat();
+    if (allCheckpoints.length === 0) {
+      vaniToast.warning('No checkpoints to tag');
+      return;
+    }
+
+    setIsTaggingCompliance(true);
+    try {
+      // Phase 1: call API layer → LLM tags compliance
+      const { default: api } = await import('@/services/api');
+      const response = await api.post('/api/knowledge-tree/tag-compliance', {
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        checkpoints: allCheckpoints.map((cp: any) => ({
+          id: cp.id,
+          name: cp.name,
+          section_name: cp.section_name,
+          service_activity: cp.service_activity,
+        })),
+      }, { timeout: 120000 });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error?.message || 'Tagging failed');
+      }
+
+      // Phase 2: save tags to DB via edge function
+      await tagComplianceMutation.mutateAsync({
+        resource_template_id: id,
+        tags: response.data.data.tags,
+      });
+
+      const tagged = response.data.data.tags.filter((t: any) => t.compliance_standard).length;
+      const mandatory = response.data.data.tags.filter((t: any) => t.is_mandatory).length;
+      vaniToast.success(`Compliance tagged — ${tagged} standards applied, ${mandatory} mandatory checkpoints`);
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Compliance tagging failed: ${(err as Error).message}`);
+    } finally {
+      setIsTaggingCompliance(false);
+    }
+  }, [id, summary, localCheckpoints, tagComplianceMutation, refetch]);
 
   // Auto-create pre_edit snapshot on first change
   const ensurePreEditSnapshot = useCallback(() => {
@@ -154,7 +253,6 @@ const KnowledgeTreeDetail: React.FC = () => {
     vaniToast.success(`Part "${data.name}" updated`);
   }, [markChanged]);
 
-  // Toggle variant mapping for a spare part
   const togglePartVariantMapping = useCallback((group: string, partId: string, variantId: string) => {
     markChanged();
     setLocalParts((prev) => {
@@ -186,6 +284,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       unit: data.unit || null, normal_min: data.normal_min ? Number(data.normal_min) : null,
       normal_max: data.normal_max ? Number(data.normal_max) : null,
       amber_threshold: null, red_threshold: null, threshold_note: null,
+      compliance_standard: null, is_mandatory: false,
       source: 'user_contributed', sort_order: 0, values: [], variant_applicability: [],
     };
     setLocalCheckpoints((prev) => ({ ...prev, [section]: [...(prev[section] || []), newCp] }));
@@ -214,13 +313,11 @@ const KnowledgeTreeDetail: React.FC = () => {
     markChanged();
     setLocalCheckpoints((prev) => {
       const updated = { ...prev };
-      // If section_name changed, move the checkpoint
       const oldSection = [...(updated[sectionName] || [])];
       const cpIndex = oldSection.findIndex((cp: any) => cp.id === checkpointId);
       if (cpIndex < 0) return prev;
 
       const cp = { ...oldSection[cpIndex] };
-      // Apply all provided fields
       if (data.name !== undefined) cp.name = data.name;
       if (data.description !== undefined) cp.description = data.description || null;
       if (data.threshold_note !== undefined) cp.threshold_note = data.threshold_note || null;
@@ -232,7 +329,6 @@ const KnowledgeTreeDetail: React.FC = () => {
 
       const newSectionName = data.section_name || sectionName;
       if (newSectionName !== sectionName) {
-        // Move to new section
         oldSection.splice(cpIndex, 1);
         updated[sectionName] = oldSection;
         if (oldSection.length === 0) delete updated[sectionName];
@@ -296,13 +392,41 @@ const KnowledgeTreeDetail: React.FC = () => {
     }, {
       onSuccess: (data) => {
         const inserted = (data as any).inserted || {};
-        const summary = Object.entries(inserted).map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`).join(', ');
-        vaniToast.success(`Knowledge Tree saved — ${summary || 'all data saved'}`);
+        const summaryMsg = Object.entries(inserted).map(([k, v]) => `${v} ${k.replace(/_/g, ' ')}`).join(', ');
+        vaniToast.success(`Knowledge Tree saved — ${summaryMsg || 'all data saved'}`);
         setHasChanges(false);
       },
       onError: (err) => { vaniToast.error(`Save failed: ${(err as Error).message}`); },
     });
   }, [id, localVariants, localParts, localCheckpoints, localCycles, selectedVariantIds, saveMutation]);
+
+  const handleAddActivity = useCallback(async (activityKey: string, activityLabel: string) => {
+    if (!id || !summary) return;
+    setAddingActivity(activityLabel);
+    const result = await ktGenerate({
+      resourceTemplateId: id,
+      equipmentName: summary.resource_template.name,
+      subCategory: summary.resource_template.sub_category,
+      serviceActivity: activityKey,
+      existingKT: true,
+    });
+    if (result) {
+      vaniToast.success(`${activityLabel} activity added to Knowledge Tree`);
+      refetch();
+    }
+    setAddingActivity(null);
+  }, [id, summary, ktGenerate, refetch]);
+
+  const handleDelete = useCallback(async () => {
+    if (!id) return;
+    try {
+      await deleteMutation.mutateAsync(id);
+      vaniToast.success('Knowledge Tree deleted successfully');
+      navigate('/service-contracts/templates/admin/global-templates?tab=knowledge-trees');
+    } catch (err) {
+      vaniToast.error(`Delete failed: ${(err as Error).message}`);
+    }
+  }, [id, deleteMutation, navigate]);
 
   // ── Expand/collapse ──
   const toggleGroup = useCallback((key: string) => {
@@ -369,9 +493,69 @@ const KnowledgeTreeDetail: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>{rt.name}</h1>
                 <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>{rt.sub_category} · Knowledge Tree Builder</p>
+                {/* Activity badges + criticality row */}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {ACTIVITY_CONFIG.map((activity) => {
+                    const isBuilt = serviceActivities.includes(activity.key);
+                    return isBuilt ? (
+                      <span
+                        key={activity.key}
+                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium"
+                        style={{ backgroundColor: colors.semantic.success + '15', color: colors.semantic.success }}
+                      >
+                        <CheckCircle2 className="h-3 w-3" /> {activity.short}
+                      </span>
+                    ) : (
+                      <button
+                        key={activity.key}
+                        onClick={() => handleAddActivity(activity.key, activity.label)}
+                        disabled={ktIsActive}
+                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                        style={{ borderColor: colors.brand.primary + '40', color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+                      >
+                        <Plus className="h-3 w-3" /> {activity.short}
+                      </button>
+                    );
+                  })}
+
+                  {/* Separator */}
+                  <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
+
+                  {/* Equipment Criticality inline selector */}
+                  <select
+                    value={localCriticality}
+                    onChange={(e) => handleCriticalityChange(e.target.value as any)}
+                    disabled={upsertMetaMutation.isPending}
+                    style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '20px', border: `1px solid ${borderColor}`, background: colors.utility.primaryBackground, color: colors.utility.primaryText, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                    title="Equipment criticality level"
+                  >
+                    {CRITICALITY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Tag Compliance button */}
+              <button
+                onClick={handleTagCompliance}
+                disabled={isTaggingCompliance || allCheckpointsFlat.length === 0}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ background: '#0891b210', color: '#0891b2', border: '1px solid #0891b230' }}
+                title="Auto-tag compliance standards using VaNi AI"
+              >
+                {isTaggingCompliance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                {isTaggingCompliance ? 'Tagging...' : 'Tag Compliance'}
+              </button>
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all hover:opacity-80"
+                style={{ background: colors.utility.primaryBackground, color: colors.semantic.error, border: `1px solid ${colors.semantic.error}30` }}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Tree
+              </button>
               <button onClick={() => setShowBackupPanel(true)} className="flex items-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg transition-all hover:opacity-80" style={{ background: colors.utility.primaryBackground, color: colors.utility.secondaryText, border: `1px solid ${borderColor}` }}>
                 <History className="h-3.5 w-3.5" /> Backup History
               </button>
@@ -414,6 +598,47 @@ const KnowledgeTreeDetail: React.FC = () => {
         )}
         <RightPanel summary={summary} selectedVariantCount={selectedVariantIds.size} partsCount={allPartsCount} checkpointsCount={allCheckpointsFlat.length} cyclesCount={localCycles.length} serviceActivities={serviceActivities} colors={colors} />
       </div>
+
+      <KTGenerationModal
+        phase={ktPhase}
+        equipmentName={summary?.resource_template?.name || ''}
+        errorMessage={ktError}
+        onClose={ktReset}
+        serviceActivityLabel={addingActivity || undefined}
+      />
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}>
+          <div className="rounded-2xl shadow-2xl px-8 py-7 max-w-sm w-full mx-4" style={{ backgroundColor: colors.utility.primaryBackground, border: `1px solid ${colors.utility.secondaryText}20` }}>
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ backgroundColor: colors.semantic.error + '15', color: colors.semantic.error }}>
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <h3 className="text-[15px] font-bold mb-1" style={{ color: colors.utility.primaryText }}>Delete Knowledge Tree?</h3>
+            <p className="text-[13px] mb-1" style={{ color: '#ff6b2b' }}>{rt.name}</p>
+            <p className="text-[12px] mb-6" style={{ color: colors.utility.secondaryText }}>
+              This will permanently delete all variants, spare parts, checkpoints, service cycles, overlays, and backup history. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2 rounded-xl text-[13px] font-semibold border transition-all hover:opacity-80"
+                style={{ borderColor: colors.utility.secondaryText + '30', color: colors.utility.secondaryText, backgroundColor: 'transparent' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending}
+                className="flex-1 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+                style={{ backgroundColor: colors.semantic.error }}
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -10,6 +10,7 @@ import { Block, SelectedVariant } from '../../../../types/catalogStudio';
 import { useResourceTypes, useResources, ResourceType, Resource } from '../../../../hooks/useResources';
 import { useResourceTemplatesBrowser } from '../../../../hooks/queries/useResourceTemplates';
 import { useKnowledgeTreeVariants } from '../../../../hooks/queries/useKnowledgeTree';
+import { useTeamMemberContactsForResource } from '../../../../hooks/queries/useContactsResource';
 
 // =================================================================
 // TYPES
@@ -47,6 +48,14 @@ const getIconForResourceType = (resourceType: ResourceType) => {
   return RESOURCE_TYPE_ICONS[name] || RESOURCE_TYPE_ICONS[resourceType.id] || RESOURCE_TYPE_ICONS.default;
 };
 
+const getDisplayName = (resourceType: ResourceType): string => {
+  const id = resourceType.id.toLowerCase();
+  const name = resourceType.name.toLowerCase();
+  if (id === 'asset' || name.includes('facilit') || name.includes('entit')) return 'Facility';
+  if (id === 'team_staff' || name.includes('team') || name.includes('staff')) return 'Team Members';
+  return resourceType.name;
+};
+
 // =================================================================
 // VARIANT SLIDER — Only shows variants for the selected equipment
 // =================================================================
@@ -60,6 +69,15 @@ interface VariantSliderProps {
   onChange: (field: string, value: unknown) => void;
   colors: any;
   isDarkMode: boolean;
+  // External-data mode (Team Members — skips KT query):
+  items?: Array<{ id: string; name: string; subLabel?: string }>;
+  isLoadingItems?: boolean;
+  selectedExternalItems?: Array<{ id: string; name: string }>;
+  onSelectionChange?: (selected: Array<{ id: string; name: string }>) => void;
+  // Override which meta field stores selections (Facility uses 'selectedFacilityVariants'):
+  metaVariantField?: string;
+  // Label for footer/empty text (default: 'variant', Team Members: 'contact'):
+  itemLabel?: string;
 }
 
 const VariantSlider: React.FC<VariantSliderProps> = ({
@@ -71,33 +89,69 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
   onChange,
   colors,
   isDarkMode,
+  items: externalItems,
+  isLoadingItems = false,
+  selectedExternalItems,
+  onSelectionChange,
+  metaVariantField,
+  itemLabel = 'variant',
 }) => {
+  const isExternalMode = !!onSelectionChange;
+  const metaField = metaVariantField || 'selectedVariants';
+
   const {
     data: variantsData,
     isLoading: loadingVariants,
-  } = useKnowledgeTreeVariants(equipmentId || undefined);
+  } = useKnowledgeTreeVariants(!isExternalMode ? (equipmentId || undefined) : undefined);
 
-  const variants = variantsData?.variants || [];
-  const selectedVariants = (formData.meta?.selectedVariants as SelectedVariant[]) || [];
+  // Normalize to { id, name, capacity_range } for uniform rendering
+  const variants = isExternalMode
+    ? (externalItems || []).map(i => ({ id: i.id, name: i.name, capacity_range: i.subLabel || null, description: null as string | null }))
+    : (variantsData?.variants || []);
 
-  const handleVariantToggle = (variant: any) => {
-    const exists = selectedVariants.some(v => v.variant_id === variant.id);
-    const newVariants = exists
-      ? selectedVariants.filter(v => v.variant_id !== variant.id)
-      : [...selectedVariants, { variant_id: variant.id, variant_name: variant.name, capacity_range: variant.capacity_range || null }];
-    onChange('meta', { ...formData.meta, selectedVariants: newVariants });
+  const isLoading = isExternalMode ? isLoadingItems : loadingVariants;
+
+  const selectedMeta = (formData.meta?.[metaField] as SelectedVariant[]) || [];
+
+  const selectedCount = isExternalMode
+    ? (selectedExternalItems || []).length
+    : selectedMeta.length;
+
+  const handleVariantToggle = (variant: { id: string; name: string; capacity_range: string | null }) => {
+    if (isExternalMode) {
+      const exists = (selectedExternalItems || []).some(s => s.id === variant.id);
+      const next = exists
+        ? (selectedExternalItems || []).filter(s => s.id !== variant.id)
+        : [...(selectedExternalItems || []), { id: variant.id, name: variant.name }];
+      onSelectionChange!(next);
+    } else {
+      const exists = selectedMeta.some(v => v.variant_id === variant.id);
+      const next = exists
+        ? selectedMeta.filter(v => v.variant_id !== variant.id)
+        : [...selectedMeta, { variant_id: variant.id, variant_name: variant.name, capacity_range: variant.capacity_range || null }];
+      onChange('meta', { ...formData.meta, [metaField]: next });
+    }
   };
 
   const handleSelectAll = () => {
-    const newVariants = selectedVariants.length === variants.length
-      ? []
-      : variants.map((v: any) => ({ variant_id: v.id, variant_name: v.name, capacity_range: v.capacity_range || null }));
-    onChange('meta', { ...formData.meta, selectedVariants: newVariants });
+    if (isExternalMode) {
+      const allSelected = (selectedExternalItems || []).length === variants.length;
+      onSelectionChange!(allSelected ? [] : variants.map(v => ({ id: v.id, name: v.name })));
+    } else {
+      const allSelected = selectedMeta.length === variants.length;
+      const next = allSelected
+        ? []
+        : variants.map((v: any) => ({ variant_id: v.id, variant_name: v.name, capacity_range: v.capacity_range || null }));
+      onChange('meta', { ...formData.meta, [metaField]: next });
+    }
   };
 
-  const isVariantSelected = (variantId: string) => selectedVariants.some(v => v.variant_id === variantId);
+  const isVariantSelected = (variantId: string) => {
+    if (isExternalMode) return (selectedExternalItems || []).some(s => s.id === variantId);
+    return selectedMeta.some(v => v.variant_id === variantId);
+  };
 
-  if (!isOpen || !equipmentId) return null;
+  if (!isOpen || (!equipmentId && !isExternalMode)) return null;
 
   return createPortal(
     <>
@@ -125,7 +179,7 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
                 {equipmentName}
               </h3>
               <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                Select applicable variants for this service block
+                Select applicable {itemLabel}s for this service block
               </p>
             </div>
           </div>
@@ -138,11 +192,11 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
           </button>
         </div>
 
-        {/* Body — variants only */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="flex items-center justify-between mb-3">
             <label className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
-              Variants
+              {itemLabel === 'contact' ? 'Contacts' : 'Variants'}
             </label>
             {variants.length > 0 && (
               <button
@@ -151,15 +205,15 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
                 className="text-xs font-medium px-3 py-1 rounded-md"
                 style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '10' }}
               >
-                {selectedVariants.length === variants.length ? 'Deselect All' : 'Select All'}
+                {selectedCount === variants.length ? 'Deselect All' : 'Select All'}
               </button>
             )}
           </div>
 
-          {loadingVariants ? (
+          {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-5 h-5 animate-spin" style={{ color: colors.brand.primary }} />
-              <span className="ml-2 text-sm" style={{ color: colors.utility.secondaryText }}>Loading variants...</span>
+              <span className="ml-2 text-sm" style={{ color: colors.utility.secondaryText }}>Loading {itemLabel}s...</span>
             </div>
           ) : variants.length === 0 ? (
             <div
@@ -168,15 +222,17 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
             >
               <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: colors.semantic.warning }} />
               <div>
-                <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>No variants found</p>
+                <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>No {itemLabel}s found</p>
                 <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
-                  Add variants for {equipmentName} in the Knowledge Tree Builder first.
+                  {isExternalMode
+                    ? 'No team members are available for this tenant.'
+                    : `Add ${itemLabel}s for ${equipmentName} in the Knowledge Tree Builder first.`}
                 </p>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {variants.map((variant: any) => {
+              {variants.map((variant) => {
                 const isSelected = isVariantSelected(variant.id);
                 return (
                   <div
@@ -194,8 +250,8 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
                         {variant.capacity_range && (
                           <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>{variant.capacity_range}</p>
                         )}
-                        {variant.description && (
-                          <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>{variant.description}</p>
+                        {(variant as any).description && (
+                          <p className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>{(variant as any).description}</p>
                         )}
                       </div>
                       <div
@@ -218,7 +274,7 @@ const VariantSlider: React.FC<VariantSliderProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: colors.utility.primaryText + '15' }}>
           <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
-            {selectedVariants.length} of {variants.length} variant{variants.length !== 1 ? 's' : ''} selected
+            {selectedCount} of {variants.length} {itemLabel}{variants.length !== 1 ? 's' : ''} selected
           </div>
           <button
             onClick={onClose}
@@ -249,12 +305,14 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
 
   const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
   const [isEquipmentSliderOpen, setIsEquipmentSliderOpen] = useState(false);
+  const [isFacilitySliderOpen, setIsFacilitySliderOpen] = useState(false);
+  const [isTeamMemberSliderOpen, setIsTeamMemberSliderOpen] = useState(false);
 
   const { data: resources, loading: loadingResources } = useResources(expandedTypeId || undefined, {
     enabled: !!expandedTypeId,
   });
 
-  // Equipment templates for inline list
+  // Equipment + Facility templates (shared fetch, filtered separately)
   const {
     templates: equipmentTemplates,
     isLoading: loadingEquipment,
@@ -262,21 +320,66 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
 
   const equipmentList = useMemo(() => {
     return equipmentTemplates.filter(t =>
-      ['equipment', 'asset', 'consumable'].includes((t.resource_type_id || '').toLowerCase())
+      (t.resource_type_id || '').toLowerCase() === 'equipment'
     );
   }, [equipmentTemplates]);
+
+  const facilityList = useMemo(() => {
+    return equipmentTemplates.filter(t =>
+      (t.resource_type_id || '').toLowerCase() === 'asset'
+    );
+  }, [equipmentTemplates]);
+
+  // Team Members contacts
+  const { data: teamMembersData, isLoading: loadingTeamMembers } = useTeamMemberContactsForResource();
+
+  const teamMemberItems = useMemo(() => {
+    return (teamMembersData?.data || []).map((c: any) => ({
+      id: c.id,
+      name: c.displayName || c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
+      subLabel: c.email || c.contact_channels?.find((ch: any) => ch.channel_type === 'email')?.value,
+    }));
+  }, [teamMembersData]);
+
+  // Hide Consumables and Partners/Vehicle from the accordion
+  const visibleResourceTypes = useMemo(() => {
+    if (!resourceTypes) return [];
+    return resourceTypes.filter(type => {
+      const name = type.name.toLowerCase();
+      return !name.includes('consumable') && !name.includes('partner') && !name.includes('vehicle');
+    });
+  }, [resourceTypes]);
 
   const pricingMode = (formData.meta?.pricingMode as PricingMode) || 'independent';
   const selectedResources = (formData.meta?.selectedResources as SelectedResource[]) || [];
   const selectedResourceTypeIds = (formData.meta?.resourceTypes as string[]) || [];
   const selectedVariants = (formData.meta?.selectedVariants as SelectedVariant[]) || [];
   const selectedEquipmentId = (formData.meta?.knowledge_tree_ref as any)?.resource_template_id || null;
+  const selectedFacilityVariants = (formData.meta?.selectedFacilityVariants as SelectedVariant[]) || [];
+  const selectedFacilityId = (formData.meta?.facility_knowledge_tree_ref as any)?.resource_template_id || null;
+  const selectedTeamMembersRaw = (formData.meta?.selectedTeamMembers as Array<{ contact_id: string; contact_name: string }>) || [];
+  const selectedTeamMembersForSlider = selectedTeamMembersRaw.map(t => ({ id: t.contact_id, name: t.contact_name }));
 
   const handleEquipmentSelect = (templateId: string) => {
     onChange('meta', {
       ...formData.meta,
       knowledge_tree_ref: { resource_template_id: templateId },
       selectedVariants: [],
+    });
+  };
+
+  const handleFacilitySelect = (templateId: string) => {
+    onChange('meta', {
+      ...formData.meta,
+      facility_knowledge_tree_ref: { resource_template_id: templateId },
+      selectedFacilityVariants: [],
+    });
+  };
+
+  const handleTeamMemberSelectionChange = (selected: Array<{ id: string; name: string }>) => {
+    onChange('meta', {
+      ...formData.meta,
+      selectedTeamMembers: selected.map(s => ({ contact_id: s.id, contact_name: s.name })),
     });
   };
 
@@ -511,14 +614,24 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
             )}
 
             {/* Resource Types List */}
-            {!loadingTypes && resourceTypes && resourceTypes.length > 0 && (
+            {!loadingTypes && visibleResourceTypes.length > 0 && (
               <div className="space-y-3">
-                {resourceTypes.map((type) => {
+                {visibleResourceTypes.map((type) => {
                   const TypeIcon = getIconForResourceType(type);
                   const isExpanded = expandedTypeId === type.id;
                   const selectedCount = getSelectedCountForType(type.id);
-                  const hasSelections = selectedCount > 0;
-                  const isEquipmentType = type.name.toLowerCase().includes('equipment');
+                  const isEquipmentType = type.id.toLowerCase() === 'equipment' || type.name.toLowerCase().includes('equipment');
+                  const isFacilityType = type.id.toLowerCase() === 'asset' || type.name.toLowerCase().includes('facilit') || type.name.toLowerCase().includes('entit');
+                  const isTeamMemberType = type.id.toLowerCase() === 'team_staff' || type.name.toLowerCase().includes('team') || type.name.toLowerCase().includes('staff');
+                  const displayName = getDisplayName(type);
+
+                  const hasSelections = isEquipmentType
+                    ? (!!selectedEquipmentId || selectedVariants.length > 0)
+                    : isFacilityType
+                      ? (!!selectedFacilityId || selectedFacilityVariants.length > 0)
+                      : isTeamMemberType
+                        ? selectedTeamMembersRaw.length > 0
+                        : selectedCount > 0;
 
                   return (
                     <div
@@ -532,7 +645,7 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                       {/* Resource Type Header */}
                       <div
                         className="p-4 flex items-center justify-between cursor-pointer transition-colors"
-                        onClick={() => handleResourceTypeToggle(type.id)}
+                        onClick={() => isTeamMemberType ? setIsTeamMemberSliderOpen(true) : handleResourceTypeToggle(type.id)}
                         style={{ backgroundColor: hasSelections ? `${colors.brand.primary}05` : 'transparent' }}
                       >
                         <div className="flex items-center gap-3">
@@ -551,8 +664,8 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                           </div>
                           <div>
                             <h4 className="font-semibold text-sm" style={{ color: colors.utility.primaryText }}>
-                              {type.name}
-                              {isEquipmentType && (
+                              {displayName}
+                              {(isEquipmentType || isFacilityType) && (
                                 <span className="text-xs font-normal ml-2" style={{ color: colors.utility.secondaryText }}>
                                   (Knowledge Tree)
                                 </span>
@@ -572,7 +685,23 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                               {selectedVariants.length} variant{selectedVariants.length !== 1 ? 's' : ''}
                             </span>
                           )}
-                          {!isEquipmentType && selectedCount > 0 && (
+                          {isFacilityType && selectedFacilityVariants.length > 0 && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: colors.brand.primary, color: '#FFFFFF' }}
+                            >
+                              {selectedFacilityVariants.length} variant{selectedFacilityVariants.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {isTeamMemberType && selectedTeamMembersRaw.length > 0 && (
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: colors.brand.primary, color: '#FFFFFF' }}
+                            >
+                              {selectedTeamMembersRaw.length} contact{selectedTeamMembersRaw.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {!isEquipmentType && !isFacilityType && !isTeamMemberType && selectedCount > 0 && (
                             <span
                               className="text-xs px-2 py-0.5 rounded-full"
                               style={{ backgroundColor: colors.brand.primary, color: '#FFFFFF' }}
@@ -580,7 +709,9 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                               {selectedCount}
                             </span>
                           )}
-                          {isExpanded ? (
+                          {isTeamMemberType ? (
+                            <ChevronDown className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
+                          ) : isExpanded ? (
                             <ChevronUp className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
                           ) : (
                             <ChevronDown className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
@@ -675,8 +806,87 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                         </div>
                       )}
 
-                      {/* Expanded Resources List (non-equipment types) */}
-                      {isExpanded && !isEquipmentType && (
+                      {/* Expanded: Facility inline list (radio + auto-open slider) */}
+                      {isExpanded && isFacilityType && (
+                        <div
+                          className="p-4 pt-0 border-t"
+                          style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
+                        >
+                          {loadingEquipment ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Loader2 className="w-5 h-5 animate-spin" style={{ color: colors.brand.primary }} />
+                              <span className="ml-2 text-sm" style={{ color: colors.utility.secondaryText }}>Loading facilities...</span>
+                            </div>
+                          ) : facilityList.length > 0 ? (
+                            <div className="space-y-1.5 mt-3">
+                              {facilityList.map((template) => {
+                                const isSelected = selectedFacilityId === template.id;
+                                return (
+                                  <div
+                                    key={template.id}
+                                    className="p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm"
+                                    onClick={() => {
+                                      handleFacilitySelect(template.id);
+                                      setIsFacilitySliderOpen(true);
+                                    }}
+                                    style={{
+                                      backgroundColor: isSelected ? colors.brand.primary + '08' : isDarkMode ? colors.utility.secondaryBackground : '#FAFAFA',
+                                      borderColor: isSelected ? colors.brand.primary : isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                        style={{ borderColor: isSelected ? colors.brand.primary : isDarkMode ? colors.utility.secondaryText : '#D1D5DB' }}
+                                      >
+                                        {isSelected && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.brand.primary }} />}
+                                      </div>
+                                      <div
+                                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        style={{ backgroundColor: isSelected ? colors.brand.primary + '20' : isDarkMode ? colors.utility.secondaryBackground : '#F3F4F6' }}
+                                      >
+                                        <Building className="w-4 h-4" style={{ color: isSelected ? colors.brand.primary : colors.utility.secondaryText }} />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate" style={{ color: colors.utility.primaryText }}>{template.name}</p>
+                                        {template.sub_category && (
+                                          <p className="text-xs truncate" style={{ color: colors.utility.secondaryText }}>{template.sub_category}</p>
+                                        )}
+                                      </div>
+                                      {isSelected && selectedFacilityVariants.length > 0 && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: colors.semantic.success + '15', color: colors.semantic.success }}>
+                                          {selectedFacilityVariants.length}v
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isSelected && selectedFacilityVariants.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t" style={{ borderColor: colors.utility.primaryText + '10' }}>
+                                        {selectedFacilityVariants.slice(0, 4).map(v => (
+                                          <span key={v.variant_id} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}>
+                                            {v.variant_name}
+                                          </span>
+                                        ))}
+                                        {selectedFacilityVariants.length > 4 && (
+                                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: colors.utility.secondaryBackground, color: colors.utility.secondaryText }}>
+                                            +{selectedFacilityVariants.length - 4}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm py-4 text-center" style={{ color: colors.utility.secondaryText }}>
+                              No facilities available.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Expanded Resources List (non-equipment, non-facility, non-team types) */}
+                      {isExpanded && !isEquipmentType && !isFacilityType && !isTeamMemberType && (
                         <div
                           className="p-4 pt-0 border-t"
                           style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}
@@ -854,6 +1064,28 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
                 </ul>
               </>
             )}
+            {selectedFacilityVariants.length > 0 && (
+              <>
+                <p><strong>Facility Variants ({selectedFacilityVariants.length}):</strong></p>
+                <ul className="ml-4 list-disc">
+                  {selectedFacilityVariants.map(v => (
+                    <li key={v.variant_id}>
+                      {v.variant_name}{v.capacity_range ? ` (${v.capacity_range})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {selectedTeamMembersRaw.length > 0 && (
+              <>
+                <p><strong>Team Members ({selectedTeamMembersRaw.length}):</strong></p>
+                <ul className="ml-4 list-disc">
+                  {selectedTeamMembersRaw.map(t => (
+                    <li key={t.contact_id}>{t.contact_name}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -868,6 +1100,36 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
         onChange={onChange}
         colors={colors}
         isDarkMode={isDarkMode}
+      />
+
+      {/* ═══ Facility Slider (Portal) ═══ */}
+      <VariantSlider
+        isOpen={isFacilitySliderOpen}
+        onClose={() => setIsFacilitySliderOpen(false)}
+        equipmentId={selectedFacilityId}
+        equipmentName={facilityList.find(t => t.id === selectedFacilityId)?.name || 'Facility'}
+        formData={formData}
+        onChange={onChange}
+        colors={colors}
+        isDarkMode={isDarkMode}
+        metaVariantField="selectedFacilityVariants"
+      />
+
+      {/* ═══ Team Members Slider (Portal) ═══ */}
+      <VariantSlider
+        isOpen={isTeamMemberSliderOpen}
+        onClose={() => setIsTeamMemberSliderOpen(false)}
+        equipmentId={null}
+        equipmentName="Team Members"
+        formData={formData}
+        onChange={onChange}
+        colors={colors}
+        isDarkMode={isDarkMode}
+        items={teamMemberItems}
+        isLoadingItems={loadingTeamMembers}
+        selectedExternalItems={selectedTeamMembersForSlider}
+        onSelectionChange={handleTeamMemberSelectionChange}
+        itemLabel="contact"
       />
     </div>
   );
