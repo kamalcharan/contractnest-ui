@@ -146,6 +146,20 @@ export const useKnowledgeTreeVariants = (resourceTemplateId: string | undefined)
   });
 };
 
+// ── Hook: Context Overlays for a Resource Template ────────────────────────────────
+export const useKnowledgeTreeOverlays = (resourceTemplateId: string | undefined) => {
+  return useQuery({
+    queryKey: knowledgeTreeKeys.overlays(resourceTemplateId || ''),
+    queryFn: () =>
+      callKnowledgeTreeEdge<{ count: number; overlays: any[] }>('overlays', {
+        resource_template_id: resourceTemplateId!,
+      }),
+    enabled: !!resourceTemplateId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+};
+
 // ── Hook: Equipment Meta ───────────────────────────────────────────────────────────
 export const useKTEquipmentMeta = (resourceTemplateId: string | undefined) => {
   return useQuery({
@@ -225,6 +239,27 @@ export const useTagCompliance = () => {
       ),
 
     onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resource_template_id) });
+    },
+  });
+};
+
+// ── Mutation: Save Context Overlays (on-demand, separate from full KT save) ────────
+export const useSaveContextOverlays = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: {
+      resource_template_id: string;
+      context_overlays: any[];
+    }) =>
+      postKnowledgeTreeEdge<{ status: string; inserted: Record<string, number> }>(
+        'save',
+        payload
+      ),
+
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.overlays(variables.resource_template_id) });
       queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resource_template_id) });
     },
   });

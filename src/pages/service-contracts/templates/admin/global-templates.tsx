@@ -200,6 +200,11 @@ const TemplateGalleryPage: React.FC = () => {
   const [equipmentSectionCollapsed, setEquipmentSectionCollapsed] = useState(false);
   const [facilitySectionCollapsed, setFacilitySectionCollapsed] = useState(false);
 
+  // KT tab — spotlight resource filter (equipment or facility item clicked in sidebar)
+  const [selectedKTResource, setSelectedKTResource] = useState<{ id: string; type: 'equipment' | 'facility' } | null>(null);
+  const [ktEquipmentSectionCollapsed, setKtEquipmentSectionCollapsed] = useState(false);
+  const [ktFacilitySectionCollapsed, setKtFacilitySectionCollapsed] = useState(false);
+
   // ── Hooks ──────────────────────────────────────────────────────
   const { selectedTemplate, selectTemplate, clearSelection } = useTemplateSelection();
 
@@ -235,25 +240,43 @@ const TemplateGalleryPage: React.FC = () => {
     isLoading: nomenclatureLoading,
   } = useNomenclatureTypes();
 
-  // Equipment catalog — filtered by selected industry (passes industry_ids to bypass tenant scope)
+  // ── Derived: all known industry IDs (used to fetch full list when no filter) ──
+  const industries: IndustryCoverage[] = coverage?.industries || [];
+  const allIndustryIds = useMemo(
+    () => industries.map((i) => i.id).filter(Boolean),
+    [industries]
+  );
+
+  // Equipment catalog — filtered by selected industry; when "all" passes every known industry
+  // so the hook always has a populated industry_ids array (avoids returning 0 results)
   const equipmentFilters: ResourceTemplateFilters = useMemo(
     () => ({
       limit: 500,
       resource_type_id: 'equipment',
-      industry_ids: selectedIndustry !== 'all' ? [selectedIndustry] : undefined,
+      industry_ids:
+        selectedIndustry !== 'all'
+          ? [selectedIndustry]
+          : allIndustryIds.length > 0
+          ? allIndustryIds
+          : undefined,
     }),
-    [selectedIndustry]
+    [selectedIndustry, allIndustryIds]
   );
   const { templates: equipmentList, isLoading: equipmentLoading } = useResourceTemplatesBrowser(equipmentFilters);
 
-  // Facilities catalog — filtered by selected industry
+  // Facilities catalog — same strategy
   const facilityFilters: ResourceTemplateFilters = useMemo(
     () => ({
       limit: 500,
       resource_type_id: 'asset',
-      industry_ids: selectedIndustry !== 'all' ? [selectedIndustry] : undefined,
+      industry_ids:
+        selectedIndustry !== 'all'
+          ? [selectedIndustry]
+          : allIndustryIds.length > 0
+          ? allIndustryIds
+          : undefined,
     }),
-    [selectedIndustry]
+    [selectedIndustry, allIndustryIds]
   );
   const { templates: facilityList, isLoading: facilityLoading } = useResourceTemplatesBrowser(facilityFilters);
 
@@ -265,7 +288,7 @@ const TemplateGalleryPage: React.FC = () => {
 
   // KT generation — LLM build flow
   const { generate: ktGenerate, phase: ktPhase, errorMessage: ktError, reset: ktReset } = useKnowledgeTreeGenerate();
-  const [generatingResource, setGeneratingResource] = useState<{ id: string; name: string } | null>(null);
+  const [generatingResource, setGeneratingResource] = useState<{ id: string; name: string; resourceType?: 'equipment' | 'facility' } | null>(null);
 
   // KT delete
   const ktDeleteMutation = useKnowledgeTreeDelete();
@@ -295,7 +318,6 @@ const TemplateGalleryPage: React.FC = () => {
   const isEmpty = !loading && templates.length === 0;
 
   const stats = coverage?.summary ?? null;
-  const industries: IndustryCoverage[] = coverage?.industries || [];
 
   // Flat list of all nomenclature items across groups (for horizontal pills)
   const allNomenclatureItems = useMemo(() => {
@@ -355,22 +377,28 @@ const TemplateGalleryPage: React.FC = () => {
     };
   }, [ktCoverage, equipmentList, facilityList]);
 
-  // Combined equipment + facility list for KT tab, filtered by selected industry
+  // Combined equipment + facility list for KT tab, filtered by industry + optional spotlight
   const ktResourceList = useMemo(() => {
     const all = [
       ...equipmentList.map((e: any) => ({ ...e, resourceType: 'equipment' })),
       ...facilityList.map((f: any) => ({ ...f, resourceType: 'facility' })),
     ];
-    // Apply search filter
+
+    // Spotlight: clicking a sidebar item filters to that single resource
+    let filtered = selectedKTResource
+      ? all.filter((r: any) => r.id === selectedKTResource.id)
+      : all;
+
+    // Search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      return all.filter((r: any) =>
+      filtered = filtered.filter((r: any) =>
         r.name?.toLowerCase().includes(term) ||
         r.sub_category?.toLowerCase().includes(term)
       );
     }
-    return all;
-  }, [equipmentList, facilityList, searchTerm]);
+    return filtered;
+  }, [equipmentList, facilityList, searchTerm, selectedKTResource]);
 
   // Template card context — management mode (admin can edit global templates)
   const templateCardContext: TemplateCardContext = useMemo(() => ({
@@ -388,6 +416,7 @@ const TemplateGalleryPage: React.FC = () => {
     setSelectedCategory('all');
     setSelectedNomenclature('all');
     setSelectedEquipment('all');
+    setSelectedKTResource(null); // reset KT spotlight when industry changes
   };
 
   const handleTemplateSelect = (template: Template) => {
@@ -420,14 +449,15 @@ const TemplateGalleryPage: React.FC = () => {
   };
 
   const handleBuild = async (resource: any) => {
-    setGeneratingResource({ id: resource.id, name: resource.name });
+    setGeneratingResource({ id: resource.id, name: resource.name, resourceType: resource.resourceType });
     const result = await ktGenerate({
       resourceTemplateId: resource.id,
       equipmentName: resource.name,
       subCategory: resource.sub_category || 'General',
+      resourceType: resource.resourceType ?? 'equipment',
     });
     if (result) {
-      navigate(`/service-contracts/templates/admin/global-templates/tree/${result}`);
+      navigate(`/service-contracts/templates/admin/global-templates/tree/${result}?type=${resource.resourceType ?? 'equipment'}`);
     }
   };
 
@@ -462,11 +492,6 @@ const TemplateGalleryPage: React.FC = () => {
                 <div className="h-3 rounded w-2/3" style={{ backgroundColor: borderColor }} />
               </div>
             </div>
-            <div className="space-y-2 mb-4">
-              <div className="h-3 rounded" style={{ backgroundColor: borderColor }} />
-              <div className="h-3 rounded w-3/4" style={{ backgroundColor: borderColor }} />
-            </div>
-            <div className="h-10 rounded" style={{ backgroundColor: borderColor }} />
           </div>
         </div>
       ))}
@@ -746,11 +771,12 @@ const TemplateGalleryPage: React.FC = () => {
         {/* ═══════════ KNOWLEDGE TREES CONTENT ═══════════ */}
         {activeTab === 'knowledge-trees' && (
           <div className="flex gap-6">
-            {/* ─── LEFT SIDEBAR (reused) ─── */}
+            {/* ─── LEFT SIDEBAR ─── */}
             <div
-              className="w-64 flex-shrink-0 rounded-xl border overflow-hidden"
+              className="w-64 flex-shrink-0 rounded-xl border overflow-hidden self-start sticky top-4"
               style={{ backgroundColor: sidebarBg, borderColor }}
             >
+              {/* ── Industry filter ── */}
               <div className="p-3">
                 <div
                   className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
@@ -758,6 +784,8 @@ const TemplateGalleryPage: React.FC = () => {
                 >
                   Filter by Industry
                 </div>
+
+                {/* All Resources button — shows full count */}
                 <button
                   onClick={() => handleIndustrySelect('all')}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
@@ -767,17 +795,19 @@ const TemplateGalleryPage: React.FC = () => {
                   }}
                 >
                   <Globe className="h-4 w-4" />
-                  All Equipment
+                  All Resources
                   <span
                     className="ml-auto text-xs font-mono px-1.5 py-0.5 rounded"
                     style={{ backgroundColor: colors.utility.primaryBackground }}
                   >
-                    {equipmentList.length + facilityList.length}
+                    {(equipmentLoading || facilityLoading || coverageLoading)
+                      ? '...'
+                      : equipmentList.length + facilityList.length}
                   </span>
                 </button>
 
                 {/* Industry list */}
-                <div className="mt-2 max-h-[500px] overflow-y-auto space-y-0.5">
+                <div className="mt-2 max-h-[300px] overflow-y-auto space-y-0.5">
                   {industries.map((ind) => (
                     <button
                       key={ind.id}
@@ -794,6 +824,170 @@ const TemplateGalleryPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* ── Equipment filter ── */}
+              {(equipmentList.length > 0 || equipmentLoading) && (
+                <>
+                  <div className="border-t mx-3" style={{ borderColor }} />
+                  <div className="p-3">
+                    <button
+                      onClick={() => setKtEquipmentSectionCollapsed(!ktEquipmentSectionCollapsed)}
+                      className="w-full flex items-center gap-2 mb-2 px-2"
+                    >
+                      <Wrench size={12} style={{ color: '#3B82F6' }} />
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-left"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Equipment ({equipmentList.length})
+                      </span>
+                      {ktEquipmentSectionCollapsed
+                        ? <ChevronDown size={12} style={{ color: colors.utility.secondaryText }} />
+                        : <ChevronUp size={12} style={{ color: colors.utility.secondaryText }} />
+                      }
+                    </button>
+                    {!ktEquipmentSectionCollapsed && (
+                      <div className="max-h-[200px] overflow-y-auto space-y-0.5 pr-1">
+                        {equipmentLoading ? (
+                          [...Array(4)].map((_, i) => (
+                            <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
+                              <div className="w-3 h-3 rounded" style={{ backgroundColor: borderColor }} />
+                              <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                            </div>
+                          ))
+                        ) : (
+                          <>
+                            {/* Clear spotlight button */}
+                            {selectedKTResource?.type === 'equipment' && (
+                              <button
+                                onClick={() => setSelectedKTResource(null)}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                                style={{ color: '#3B82F6' }}
+                              >
+                                <X size={10} />
+                                Show all
+                              </button>
+                            )}
+                            {equipmentGrouped.map(({ subCategory, items }) => (
+                              <React.Fragment key={subCategory}>
+                                <div
+                                  className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
+                                  style={{ color: colors.utility.secondaryText + '60' }}
+                                >
+                                  {subCategory}
+                                </div>
+                                {items.map((item: any) => {
+                                  const isActive = selectedKTResource?.id === item.id;
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      onClick={() =>
+                                        setSelectedKTResource(
+                                          isActive ? null : { id: item.id, type: 'equipment' }
+                                        )
+                                      }
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-[11px] transition-all"
+                                      style={{
+                                        backgroundColor: isActive ? '#3B82F6' + '12' : 'transparent',
+                                        color: isActive ? '#3B82F6' : colors.utility.secondaryText,
+                                      }}
+                                    >
+                                      <Wrench size={11} style={{ opacity: isActive ? 1 : 0.5 }} />
+                                      <span className="flex-1 truncate">{item.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* ── Facilities filter ── */}
+              {(facilityList.length > 0 || facilityLoading) && (
+                <>
+                  <div className="border-t mx-3" style={{ borderColor }} />
+                  <div className="p-3">
+                    <button
+                      onClick={() => setKtFacilitySectionCollapsed(!ktFacilitySectionCollapsed)}
+                      className="w-full flex items-center gap-2 mb-2 px-2"
+                    >
+                      <Building2 size={12} style={{ color: '#8B5CF6' }} />
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-left"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        Facilities ({facilityList.length})
+                      </span>
+                      {ktFacilitySectionCollapsed
+                        ? <ChevronDown size={12} style={{ color: colors.utility.secondaryText }} />
+                        : <ChevronUp size={12} style={{ color: colors.utility.secondaryText }} />
+                      }
+                    </button>
+                    {!ktFacilitySectionCollapsed && (
+                      <div className="max-h-[180px] overflow-y-auto space-y-0.5 pr-1">
+                        {facilityLoading ? (
+                          [...Array(3)].map((_, i) => (
+                            <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
+                              <div className="w-3 h-3 rounded" style={{ backgroundColor: borderColor }} />
+                              <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
+                            </div>
+                          ))
+                        ) : (
+                          <>
+                            {/* Clear spotlight button */}
+                            {selectedKTResource?.type === 'facility' && (
+                              <button
+                                onClick={() => setSelectedKTResource(null)}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
+                                style={{ color: '#8B5CF6' }}
+                              >
+                                <X size={10} />
+                                Show all
+                              </button>
+                            )}
+                            {facilityGrouped.map(({ subCategory, items }) => (
+                              <React.Fragment key={subCategory}>
+                                <div
+                                  className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
+                                  style={{ color: colors.utility.secondaryText + '60' }}
+                                >
+                                  {subCategory}
+                                </div>
+                                {items.map((item: any) => {
+                                  const isActive = selectedKTResource?.id === item.id;
+                                  return (
+                                    <button
+                                      key={item.id}
+                                      onClick={() =>
+                                        setSelectedKTResource(
+                                          isActive ? null : { id: item.id, type: 'facility' }
+                                        )
+                                      }
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-[11px] transition-all"
+                                      style={{
+                                        backgroundColor: isActive ? '#8B5CF6' + '12' : 'transparent',
+                                        color: isActive ? '#8B5CF6' : colors.utility.secondaryText,
+                                      }}
+                                    >
+                                      <Building2 size={11} style={{ opacity: isActive ? 1 : 0.5 }} />
+                                      <span className="flex-1 truncate">{item.name}</span>
+                                    </button>
+                                  );
+                                })}
+                              </React.Fragment>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* ─── KT CONTENT ─── */}
@@ -847,6 +1041,32 @@ const TemplateGalleryPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {/* Active spotlight filter chip */}
+                {selectedKTResource && (
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t" style={{ borderColor }}>
+                    <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                      Spotlight:
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border"
+                      style={{
+                        backgroundColor: (selectedKTResource.type === 'equipment' ? '#3B82F6' : '#8B5CF6') + '10',
+                        color: selectedKTResource.type === 'equipment' ? '#3B82F6' : '#8B5CF6',
+                        borderColor: (selectedKTResource.type === 'equipment' ? '#3B82F6' : '#8B5CF6') + '30',
+                      }}
+                    >
+                      {selectedKTResource.type === 'equipment'
+                        ? <Wrench className="h-3 w-3" />
+                        : <Building2 className="h-3 w-3" />
+                      }
+                      {ktResourceList[0]?.name || selectedKTResource.id}
+                      <button onClick={() => setSelectedKTResource(null)}>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* KT Grid / List */}
@@ -874,7 +1094,11 @@ const TemplateGalleryPage: React.FC = () => {
                     No equipment types found
                   </h3>
                   <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                    {searchTerm ? 'Try different search keywords.' : 'No equipment or facilities match the selected filters.'}
+                    {searchTerm
+                      ? 'No results match your search.'
+                      : selectedIndustry !== 'all'
+                      ? `No equipment or facilities for ${industries.find(i => i.id === selectedIndustry)?.name || 'this industry'}.`
+                      : 'No equipment or facility types available yet.'}
                   </p>
                 </div>
               ) : (
@@ -892,11 +1116,12 @@ const TemplateGalleryPage: React.FC = () => {
                       name={resource.name}
                       subCategory={resource.sub_category || 'General'}
                       scope={resource.scope || 'industry_specific'}
+                      resourceType={resource.resourceType}
                       coverage={ktCoverage?.[resource.id] || null}
                       colors={colors}
                       compact={viewType === 'list'}
                       onView={(id) => {
-                        navigate(`/service-contracts/templates/admin/global-templates/tree/${id}`);
+                        navigate(`/service-contracts/templates/admin/global-templates/tree/${id}?type=${resource.resourceType ?? 'equipment'}`);
                       }}
                       onBuild={() => handleBuild(resource)}
                       onDelete={(id, name) => setDeleteConfirm({ id, name })}
@@ -957,106 +1182,31 @@ const TemplateGalleryPage: React.FC = () => {
                     </div>
                   ))
                 ) : (
-                  industries.map((industry) => {
-                    const isActive = selectedIndustry === industry.id;
-                    return (
-                      <button
-                        key={industry.id}
-                        onClick={() => handleIndustrySelect(industry.id)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all group"
-                        style={{
-                          backgroundColor: isActive ? activeBg : 'transparent',
-                          color: isActive ? activeColor : colors.utility.primaryText,
-                          borderLeft: isActive ? `3px solid ${activeColor}` : '3px solid transparent',
-                          opacity: industry.hasCoverage ? 1 : 0.6,
-                        }}
-                      >
-                        <span className="flex-shrink-0">{getLucideIcon(industry.icon, 18, isActive ? activeColor : colors.utility.secondaryText)}</span>
-                        <span className="font-medium flex-1 truncate">{industry.name}</span>
+                  industries.map((ind) => (
+                    <button
+                      key={ind.id}
+                      onClick={() => handleIndustrySelect(ind.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-sm transition-all group"
+                      style={{
+                        backgroundColor: selectedIndustry === ind.id ? activeBg : 'transparent',
+                        color: selectedIndustry === ind.id ? activeColor : colors.utility.primaryText,
+                        borderLeft: selectedIndustry === ind.id ? `3px solid ${activeColor}` : '3px solid transparent',
+                      }}
+                    >
+                      {getLucideIcon(ind.icon, 16, selectedIndustry === ind.id ? activeColor : colors.utility.secondaryText)}
+                      <span className="truncate flex-1">{ind.name}</span>
+                      {ind.templateCount !== undefined && (
                         <span
-                          className="text-xs px-1.5 py-0.5 rounded-full font-mono"
+                          className="text-[10px] px-1.5 py-0.5 rounded-full font-mono opacity-0 group-hover:opacity-100 transition-opacity"
                           style={{
-                            backgroundColor: isActive ? activeColor + '15' : colors.utility.secondaryText + '10',
-                            color: isActive ? activeColor : colors.utility.secondaryText,
+                            backgroundColor: colors.utility.secondaryText + '10',
+                            color: colors.utility.secondaryText,
                           }}
                         >
-                          {industry.templateCount}
+                          {ind.templateCount}
                         </span>
-                        <ChevronRight
-                          className="h-3.5 w-3.5 opacity-0 group-hover:opacity-60 transition-opacity"
-                          style={{ color: colors.utility.secondaryText }}
-                        />
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t mx-3" style={{ borderColor }} />
-
-            {/* ── CONTRACT TYPE (Nomenclature) ── */}
-            <div className="p-3">
-              <div
-                className="text-[10px] font-semibold uppercase tracking-wider mb-2 px-2"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Contract Type
-              </div>
-              <div className="max-h-[240px] overflow-y-auto space-y-0.5 pr-1">
-                <button
-                  onClick={() => setSelectedNomenclature('all')}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
-                  style={{
-                    backgroundColor: selectedNomenclature === 'all' ? activeBg : 'transparent',
-                    color: selectedNomenclature === 'all' ? activeColor : colors.utility.secondaryText,
-                  }}
-                >
-                  <FileText size={14} />
-                  <span className="flex-1">All Types</span>
-                </button>
-                {nomenclatureLoading ? (
-                  [...Array(4)].map((_, i) => (
-                    <div key={i} className="animate-pulse flex items-center gap-2 px-3 py-1.5">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: borderColor }} />
-                      <div className="h-3 rounded flex-1" style={{ backgroundColor: borderColor }} />
-                    </div>
-                  ))
-                ) : (
-                  (nomenclatureGroups || []).map((group) => (
-                    <React.Fragment key={group.group}>
-                      <div
-                        className="text-[9px] font-semibold uppercase tracking-wider mt-2 mb-0.5 px-3"
-                        style={{ color: colors.utility.secondaryText + '80' }}
-                      >
-                        {group.label}
-                      </div>
-                      {group.items.map((item) => {
-                        const isActive = selectedNomenclature === item.id;
-                        const pillColor = item.hexcolor || colors.brand.primary;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => setSelectedNomenclature(isActive ? 'all' : item.id)}
-                            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-left text-xs transition-all"
-                            style={{
-                              backgroundColor: isActive ? pillColor + '15' : 'transparent',
-                              color: isActive ? pillColor : colors.utility.secondaryText,
-                              borderLeft: isActive ? `3px solid ${pillColor}` : '3px solid transparent',
-                            }}
-                          >
-                            <span
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: pillColor }}
-                            />
-                            <span className="flex-1 truncate font-medium">
-                              {item.form_settings?.short_name || item.display_name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </React.Fragment>
+                      )}
+                    </button>
                   ))
                 )}
               </div>
@@ -1094,7 +1244,7 @@ const TemplateGalleryPage: React.FC = () => {
                     ))
                   ) : equipmentList.length === 0 ? (
                     <div className="px-3 py-2 text-[11px]" style={{ color: colors.utility.secondaryText }}>
-                      {selectedIndustry === 'all' ? 'Select an industry to see equipment' : 'No equipment for this industry'}
+                      {selectedIndustry === 'all' ? 'Select an industry to filter by equipment' : 'No equipment for this industry'}
                     </div>
                   ) : (
                     <>
@@ -1173,7 +1323,7 @@ const TemplateGalleryPage: React.FC = () => {
                     ))
                   ) : facilityList.length === 0 ? (
                     <div className="px-3 py-2 text-[11px]" style={{ color: colors.utility.secondaryText }}>
-                      {selectedIndustry === 'all' ? 'Select an industry to see facilities' : 'No facilities for this industry'}
+                      {selectedIndustry === 'all' ? 'Select an industry to filter by facility' : 'No facilities for this industry'}
                     </div>
                   ) : (
                     facilityGrouped.map(({ subCategory, items }) => (
@@ -1473,6 +1623,7 @@ const TemplateGalleryPage: React.FC = () => {
         phase={ktPhase}
         equipmentName={generatingResource?.name || ''}
         errorMessage={ktError}
+        resourceType={generatingResource?.resourceType}
         onClose={() => {
           ktReset();
           setGeneratingResource(null);

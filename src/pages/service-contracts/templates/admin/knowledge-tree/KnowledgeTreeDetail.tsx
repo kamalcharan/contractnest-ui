@@ -10,7 +10,7 @@ import { vaniToast } from '@/components/common/toast/VaNiToast';
 import {
   useKnowledgeTreeSummary, useKnowledgeTreeSave, useCreateSnapshot,
   useKnowledgeTreeDelete, useKnowledgeTreeGenerate,
-  useUpsertEquipmentMeta, useTagCompliance,
+  useUpsertEquipmentMeta, useTagCompliance, useSaveContextOverlays,
 } from '@/hooks/queries/useKnowledgeTree';
 import type { KnowledgeTreeSummary } from './types';
 import KTGenerationModal from './components/KTGenerationModal';
@@ -65,9 +65,11 @@ const KnowledgeTreeDetail: React.FC = () => {
   const deleteMutation = useKnowledgeTreeDelete();
   const upsertMetaMutation = useUpsertEquipmentMeta();
   const tagComplianceMutation = useTagCompliance();
+  const saveOverlaysMutation = useSaveContextOverlays();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isTaggingCompliance, setIsTaggingCompliance] = useState(false);
+  const [isGeneratingOverlays, setIsGeneratingOverlays] = useState(false);
 
   const { generate: ktGenerate, phase: ktPhase, isActive: ktIsActive, errorMessage: ktError, reset: ktReset } = useKnowledgeTreeGenerate();
   const [addingActivity, setAddingActivity] = useState<string | null>(null);
@@ -94,7 +96,6 @@ const KnowledgeTreeDetail: React.FC = () => {
       vaniToast.success(`Equipment criticality set to ${CRITICALITY_OPTIONS.find((o) => o.value === value)?.label || value}`);
     } catch (err) {
       vaniToast.error(`Failed to update criticality: ${(err as Error).message}`);
-      // Roll back on error
       setLocalCriticality(summary?.equipment_meta?.equipment_criticality || 'standard');
     }
   }, [id, summary, upsertMetaMutation]);
@@ -109,7 +110,6 @@ const KnowledgeTreeDetail: React.FC = () => {
 
     setIsTaggingCompliance(true);
     try {
-      // Phase 1: call API layer → LLM tags compliance
       const { default: api } = await import('@/services/api');
       const response = await api.post('/api/knowledge-tree/tag-compliance', {
         equipmentName: summary.resource_template.name,
@@ -127,7 +127,6 @@ const KnowledgeTreeDetail: React.FC = () => {
         throw new Error(response.data?.error?.message || 'Tagging failed');
       }
 
-      // Phase 2: save tags to DB via edge function
       await tagComplianceMutation.mutateAsync({
         resource_template_id: id,
         tags: response.data.data.tags,
@@ -143,6 +142,36 @@ const KnowledgeTreeDetail: React.FC = () => {
       setIsTaggingCompliance(false);
     }
   }, [id, summary, localCheckpoints, tagComplianceMutation, refetch]);
+
+  const handleGenerateOverlays = useCallback(async () => {
+    if (!id || !summary) return;
+    setIsGeneratingOverlays(true);
+    try {
+      const { default: api } = await import('@/services/api');
+      const response = await api.post('/api/knowledge-tree/generate-overlays', {
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+      }, { timeout: 120000 });
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.error?.message || 'Overlay generation failed');
+      }
+
+      await saveOverlaysMutation.mutateAsync({
+        resource_template_id: id,
+        context_overlays: response.data.data.context_overlays,
+      });
+
+      vaniToast.success(`${response.data.data.context_overlays.length} context overlays generated`);
+      refetch();
+      setActiveTab('overlays');
+    } catch (err) {
+      vaniToast.error(`Overlay generation failed: ${(err as Error).message}`);
+    } finally {
+      setIsGeneratingOverlays(false);
+    }
+  }, [id, summary, saveOverlaysMutation, refetch]);
 
   // Auto-create pre_edit snapshot on first change
   const ensurePreEditSnapshot = useCallback(() => {
@@ -437,6 +466,7 @@ const KnowledgeTreeDetail: React.FC = () => {
   const allPartsCount = useMemo(() => Object.values(localParts).flat().length, [localParts]);
   const allCheckpointsFlat = useMemo(() => Object.values(localCheckpoints).flat(), [localCheckpoints]);
   const serviceActivities = useMemo(() => [...new Set(allCheckpointsFlat.map((c: any) => c.service_activity))], [allCheckpointsFlat]);
+  const hasOverlays = (summary?.summary?.overlays_count ?? 0) > 0;
 
   const borderColor = colors.utility.secondaryText + '15';
   const cardBg = colors.utility.secondaryBackground;
@@ -493,7 +523,7 @@ const KnowledgeTreeDetail: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>{rt.name}</h1>
                 <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>{rt.sub_category} · Knowledge Tree Builder</p>
-                {/* Activity badges + criticality row */}
+                {/* Activity badges + overlays + criticality row */}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                   {ACTIVITY_CONFIG.map((activity) => {
                     const isBuilt = serviceActivities.includes(activity.key);
@@ -509,7 +539,7 @@ const KnowledgeTreeDetail: React.FC = () => {
                       <button
                         key={activity.key}
                         onClick={() => handleAddActivity(activity.key, activity.label)}
-                        disabled={ktIsActive}
+                        disabled={ktIsActive || isGeneratingOverlays}
                         className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
                         style={{ borderColor: colors.brand.primary + '40', color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
                       >
@@ -517,6 +547,31 @@ const KnowledgeTreeDetail: React.FC = () => {
                       </button>
                     );
                   })}
+
+                  {/* Context Overlays badge — generated on demand */}
+                  {hasOverlays ? (
+                    <span
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: '#8b5cf615', color: '#8b5cf6' }}
+                      onClick={() => setActiveTab('overlays')}
+                      title="View context overlays"
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Overlays
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleGenerateOverlays}
+                      disabled={ktIsActive || isGeneratingOverlays}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderColor: '#8b5cf640', color: '#8b5cf6', backgroundColor: '#8b5cf608' }}
+                      title="Generate context overlays (climate, geography, industry)"
+                    >
+                      {isGeneratingOverlays
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />}
+                      {isGeneratingOverlays ? 'Generating...' : 'Overlays'}
+                    </button>
+                  )}
 
                   {/* Separator */}
                   <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
@@ -589,7 +644,15 @@ const KnowledgeTreeDetail: React.FC = () => {
           {activeTab === 'spare-parts' && <SparePartsTab summary={summary} variants={localVariants} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} onAddPart={addSparePart} onRemovePart={removeSparePart} onEditPart={editSparePart} onToggleMapping={togglePartVariantMapping} colors={colors} expandedGroups={expandedGroups} toggleGroup={toggleGroup} />}
           {activeTab === 'checkpoints' && <CheckpointsTab summary={summary} checkpointsBySection={localCheckpoints} onAddCheckpoint={addCheckpoint} onAddValue={addCheckpointValue} onEditCheckpoint={editCheckpoint} colors={colors} />}
           {activeTab === 'cycles' && <CyclesTab summary={summary} cycles={localCycles} onAdd={addCycle} onRemove={removeCycle} onEditCycle={editCycle} colors={colors} />}
-          {activeTab === 'overlays' && <OverlaysTab summary={summary} colors={colors} />}
+          {activeTab === 'overlays' && (
+            <OverlaysTab
+              resourceTemplateId={id!}
+              summary={summary}
+              colors={colors}
+              onGenerate={handleGenerateOverlays}
+              isGenerating={isGeneratingOverlays}
+            />
+          )}
           {activeTab === 'form-preview' && <FormPreviewTab summary={summary} variants={localVariants} checkpointsBySection={localCheckpoints} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} colors={colors} />}
         </div>
 

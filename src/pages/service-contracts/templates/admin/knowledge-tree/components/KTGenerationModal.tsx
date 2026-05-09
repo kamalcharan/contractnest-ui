@@ -5,13 +5,23 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { KTGenerationPhase } from '@/hooks/queries/useKnowledgeTree';
 
-const FULL_KT_MESSAGES = [
+const EQUIPMENT_MESSAGES = [
   'Classifying equipment type...',
   'Researching variants and specifications...',
   'Generating spare parts catalogue...',
   'Building maintenance checkpoints...',
   'Calculating service cycles and frequencies...',
   'Applying context overlays...',
+  'Almost there — finalising output...',
+];
+
+const FACILITY_MESSAGES = [
+  'Classifying facility type and zones...',
+  'Mapping zones and spaces...',
+  'Generating consumables and materials list...',
+  'Building inspection checkpoints...',
+  'Calculating cleaning and service schedules...',
+  'Applying regulatory standards and overlays...',
   'Almost there — finalising output...',
 ];
 
@@ -30,6 +40,7 @@ interface KTGenerationModalProps {
   errorMessage: string | null;
   onClose: () => void; // only callable when phase === 'error'
   serviceActivityLabel?: string; // e.g. "Breakdown / Repair" — shown for activity-adds
+  resourceType?: 'equipment' | 'facility';
 }
 
 const KTGenerationModal: React.FC<KTGenerationModalProps> = ({
@@ -38,12 +49,17 @@ const KTGenerationModal: React.FC<KTGenerationModalProps> = ({
   errorMessage,
   onClose,
   serviceActivityLabel,
+  resourceType = 'equipment',
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [msgIndex, setMsgIndex] = useState(0);
 
-  const messages = serviceActivityLabel ? ACTIVITY_MESSAGES : FULL_KT_MESSAGES;
+  const messages = serviceActivityLabel
+    ? ACTIVITY_MESSAGES
+    : resourceType === 'facility'
+    ? FACILITY_MESSAGES
+    : EQUIPMENT_MESSAGES;
 
   // Cycle through status messages while generating
   useEffect(() => {
@@ -117,13 +133,19 @@ const KTGenerationModal: React.FC<KTGenerationModalProps> = ({
           {isError ? 'Generation Failed' : 'VaNi is Generating...'}
         </h3>
 
-        {/* Equipment name */}
+        {/* Resource name + type label */}
         <p
           className="text-[12px] font-medium"
           style={{ color: '#ff6b2b' }}
         >
           {equipmentName}
         </p>
+        {/* Type sub-label shown for facilities so the user knows the right model is running */}
+        {!serviceActivityLabel && resourceType === 'facility' && (
+          <p className="text-[11px] mt-0.5" style={{ color: '#8B5CF6' }}>
+            Facility Knowledge Tree
+          </p>
+        )}
         {serviceActivityLabel && (
           <p className="text-[11px] mb-6 mt-0.5" style={{ color: '#ff8f5a' }}>
             {serviceActivityLabel}
@@ -131,7 +153,7 @@ const KTGenerationModal: React.FC<KTGenerationModalProps> = ({
         )}
         {!serviceActivityLabel && <div className="mb-6" />}
 
-        {/* Spinner + pulsing dots */}
+        {/* Spinner + status message */}
         {!isError && (
           <div className="flex items-center gap-2 mb-5">
             <svg

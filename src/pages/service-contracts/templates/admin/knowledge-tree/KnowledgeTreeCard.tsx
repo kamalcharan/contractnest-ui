@@ -1,5 +1,5 @@
 // src/pages/service-contracts/templates/admin/knowledge-tree/KnowledgeTreeCard.tsx
-// Card component for the Knowledge Trees grid — shows built/gap status per equipment
+// Card component for the Knowledge Trees grid — shows built/gap status per equipment/facility
 
 import React from 'react';
 import {
@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Wrench,
+  Building2,
   Package,
   ClipboardCheck,
   RefreshCw,
@@ -20,6 +21,7 @@ export interface KnowledgeTreeCardProps {
   name: string;
   subCategory: string;
   scope: string;
+  resourceType?: 'equipment' | 'facility';
   coverage: KnowledgeTreeCoverageItem | null;
   colors: any;
   compact?: boolean;
@@ -28,11 +30,26 @@ export interface KnowledgeTreeCardProps {
   onDelete?: (id: string, name: string) => void;
 }
 
+// Color and icon config per resource type
+const RESOURCE_TYPE_CONFIG = {
+  equipment: {
+    color: '#3B82F6',
+    Icon: Wrench,
+    label: null, // equipment is the default; no badge needed
+  },
+  facility: {
+    color: '#8B5CF6',
+    Icon: Building2,
+    label: 'Facility',
+  },
+} as const;
+
 const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
   id,
   name,
   subCategory,
   scope,
+  resourceType = 'equipment',
   coverage,
   colors,
   compact = false,
@@ -41,6 +58,8 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
   onDelete,
 }) => {
   const isBuilt = coverage && coverage.variants_count > 0;
+  const typeConfig = RESOURCE_TYPE_CONFIG[resourceType] ?? RESOURCE_TYPE_CONFIG.equipment;
+  const { color: typeColor, Icon: TypeIcon, label: typeLabel } = typeConfig;
 
   if (compact) {
     // ── List view ──
@@ -56,20 +75,29 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
         onClick={() => isBuilt ? onView?.(id) : onBuild?.(id)}
       >
         <div className="flex items-center gap-3 min-w-0">
+          {/* Resource type icon */}
           <div
             className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{
-              backgroundColor: isBuilt
-                ? colors.semantic.success + '15'
-                : colors.utility.secondaryText + '10',
-              color: isBuilt ? colors.semantic.success : colors.utility.secondaryText,
+              backgroundColor: typeColor + '12',
+              color: typeColor,
             }}
           >
-            {isBuilt ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <TypeIcon className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-sm truncate" style={{ color: colors.utility.primaryText }}>
-              {name}
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm truncate" style={{ color: colors.utility.primaryText }}>
+                {name}
+              </span>
+              {typeLabel && (
+                <span
+                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: typeColor + '15', color: typeColor }}
+                >
+                  {typeLabel}
+                </span>
+              )}
             </div>
             <div className="text-xs truncate" style={{ color: colors.utility.secondaryText }}>
               {subCategory}
@@ -129,30 +157,45 @@ const KnowledgeTreeCard: React.FC<KnowledgeTreeCardProps> = ({
           {isBuilt ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
           {isBuilt ? 'Built' : 'Gap — No Knowledge Tree'}
         </div>
-        {scope === 'cross_industry' && (
-          <span
-            className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-            style={{
-              backgroundColor: colors.brand.primary + '15',
-              color: colors.brand.primary,
-            }}
-          >
-            Cross-Industry
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {/* Facility badge — equipment needs no badge (default expectation) */}
+          {typeLabel && (
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+              style={{
+                backgroundColor: typeColor + '15',
+                color: typeColor,
+              }}
+            >
+              {typeLabel}
+            </span>
+          )}
+          {scope === 'cross_industry' && (
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+              style={{
+                backgroundColor: colors.brand.primary + '15',
+                color: colors.brand.primary,
+              }}
+            >
+              Cross-Industry
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Body */}
       <div className="p-5">
         <div className="flex items-start gap-3 mb-4">
+          {/* Resource type icon replaces generic TreePine */}
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
             style={{
-              backgroundColor: isBuilt ? colors.semantic.success + '12' : colors.utility.secondaryText + '08',
-              color: isBuilt ? colors.semantic.success : colors.utility.secondaryText,
+              backgroundColor: typeColor + '12',
+              color: typeColor,
             }}
           >
-            <TreePine className="h-5 w-5" />
+            <TypeIcon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h3
