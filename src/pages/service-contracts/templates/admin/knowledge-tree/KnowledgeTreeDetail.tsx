@@ -11,6 +11,7 @@ import {
   useKnowledgeTreeSummary, useKnowledgeTreeSave, useCreateSnapshot,
   useKnowledgeTreeDelete, useKnowledgeTreeGenerate,
   useUpsertEquipmentMeta, useTagCompliance, useSaveContextOverlays,
+  useKTGenerateVariants, useKTGenerateSpareParts, useKTGenerateCheckpoints, useKTGenerateServiceCycles,
 } from '@/hooks/queries/useKnowledgeTree';
 import type { KnowledgeTreeSummary } from './types';
 import KTGenerationModal from './components/KTGenerationModal';
@@ -67,9 +68,19 @@ const KnowledgeTreeDetail: React.FC = () => {
   const tagComplianceMutation = useTagCompliance();
   const saveOverlaysMutation = useSaveContextOverlays();
 
+  // ── 4-step generation mutations ──
+  const generateVariantsMutation = useKTGenerateVariants();
+  const generateSparePartsMutation = useKTGenerateSpareParts();
+  const generateCheckpointsMutation = useKTGenerateCheckpoints();
+  const generateServiceCyclesMutation = useKTGenerateServiceCycles();
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isTaggingCompliance, setIsTaggingCompliance] = useState(false);
   const [isGeneratingOverlays, setIsGeneratingOverlays] = useState(false);
+
+  // Sequential "Generate All" — tracks which step (1-4) is running
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [generateAllStep, setGenerateAllStep] = useState<0 | 1 | 2 | 3 | 4>(0);
 
   const { generate: ktGenerate, phase: ktPhase, isActive: ktIsActive, errorMessage: ktError, reset: ktReset } = useKnowledgeTreeGenerate();
   const [addingActivity, setAddingActivity] = useState<string | null>(null);
@@ -172,6 +183,176 @@ const KnowledgeTreeDetail: React.FC = () => {
       setIsGeneratingOverlays(false);
     }
   }, [id, summary, saveOverlaysMutation, refetch]);
+
+  // ── Individual step handlers (manual retry) ────────────────────────────────
+
+  const handleGenerateVariants = useCallback(async () => {
+    if (!id || !summary) return;
+    try {
+      const result = await generateVariantsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+      });
+      vaniToast.success(`Step 1 — ${result.variants.length} variants generated and saved`);
+      refetch();
+      setActiveTab('variants');
+    } catch (err) {
+      vaniToast.error(`Step 1 (Variants) failed: ${(err as Error).message} — click "+ Variants" to retry`);
+    }
+  }, [id, summary, generateVariantsMutation, refetch]);
+
+  const handleGenerateSpareParts = useCallback(async () => {
+    if (!id || !summary) return;
+    const variants = summary.variants;
+    const variantsCount = summary.summary.variants_count;
+    try {
+      const result = await generateSparePartsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        variants: variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
+      });
+      vaniToast.success(`Variants ✓ (${variantsCount})  |  Step 2 — ${result.spare_parts.length} spare parts generated and saved`);
+      refetch();
+      setActiveTab('spare-parts');
+    } catch (err) {
+      vaniToast.error(`Variants ✓ (${variantsCount})  |  Step 2 (Parts) failed: ${(err as Error).message} — click "+ Parts" to retry`);
+    }
+  }, [id, summary, generateSparePartsMutation, refetch]);
+
+  const handleGenerateCheckpoints = useCallback(async () => {
+    if (!id || !summary) return;
+    const variants = summary.variants;
+    const variantsCount = summary.summary.variants_count;
+    const partsCount = summary.summary.spare_parts_count;
+    try {
+      const result = await generateCheckpointsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        serviceActivity: 'pm',
+        variants: variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
+      });
+      vaniToast.success(`Variants ✓ (${variantsCount})  |  Parts ✓ (${partsCount})  |  Step 3 — ${result.checkpoints.length} checkpoints saved`);
+      refetch();
+      setActiveTab('checkpoints');
+    } catch (err) {
+      vaniToast.error(`Variants ✓ (${variantsCount})  |  Parts ✓ (${partsCount})  |  Step 3 (Checkpoints) failed: ${(err as Error).message} — click "+ Checkpoints" to retry`);
+    }
+  }, [id, summary, generateCheckpointsMutation, refetch]);
+
+  const handleGenerateServiceCycles = useCallback(async () => {
+    if (!id || !summary) return;
+    const allCps = Object.values(localCheckpoints).flat();
+    const checkpointsCount = summary.summary.checkpoints_count;
+    if (allCps.length === 0) {
+      vaniToast.warning('No checkpoints in DB — generate checkpoints first (Step 3)');
+      return;
+    }
+    try {
+      const result = await generateServiceCyclesMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        serviceActivity: 'pm',
+        checkpoints: allCps.map((cp: any) => ({ id: cp.id, name: cp.name, section_name: cp.section_name, service_activity: cp.service_activity })),
+      });
+      vaniToast.success(`Checkpoints ✓ (${checkpointsCount})  |  Step 4 — ${result.service_cycles.length} service cycles generated and saved`);
+      refetch();
+      setActiveTab('cycles');
+    } catch (err) {
+      vaniToast.error(`Checkpoints ✓ (${checkpointsCount})  |  Step 4 (Cycles) failed: ${(err as Error).message} — click "+ Cycles" to retry`);
+    }
+  }, [id, summary, localCheckpoints, generateServiceCyclesMutation, refetch]);
+
+  // ── Sequential "Generate All" — runs Steps 1 → 2 → 3 → 4 in order ──────────
+  // Stops on failure; individual step buttons stay visible for manual retry.
+  const handleGenerateAll = useCallback(async () => {
+    if (!id || !summary) return;
+    setIsGeneratingAll(true);
+
+    // Step 1: Variants
+    setGenerateAllStep(1);
+    let variantsResult: { resource_template_id: string; variants: any[] } | null = null;
+    try {
+      variantsResult = await generateVariantsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+      });
+      vaniToast.success(`Step 1/4 ✓ — ${variantsResult.variants.length} variants generated`);
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Step 1/4 (Variants) failed: ${(err as Error).message} — click "+ Variants" to retry`);
+      setIsGeneratingAll(false);
+      setGenerateAllStep(0);
+      return;
+    }
+
+    // Step 2: Spare Parts — uses real variant UUIDs from step 1
+    setGenerateAllStep(2);
+    let partsResult: { resource_template_id: string; spare_parts: any[]; spare_part_variant_map: any[] } | null = null;
+    try {
+      partsResult = await generateSparePartsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        variants: variantsResult.variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
+      });
+      vaniToast.success(`Step 1 ✓  |  Step 2/4 ✓ — ${partsResult.spare_parts.length} spare parts generated`);
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Step 1 ✓ (${variantsResult.variants.length})  |  Step 2/4 (Parts) failed: ${(err as Error).message} — click "+ Parts" to retry`);
+      setIsGeneratingAll(false);
+      setGenerateAllStep(0);
+      return;
+    }
+
+    // Step 3: Checkpoints only (no service_cycles) — passes variants for context
+    setGenerateAllStep(3);
+    let checkpointsResult: { resource_template_id: string; checkpoints: any[]; checkpoint_values: any[] } | null = null;
+    try {
+      checkpointsResult = await generateCheckpointsMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        serviceActivity: 'pm',
+        variants: variantsResult.variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
+      });
+      vaniToast.success(`Step 1 ✓  |  Step 2 ✓  |  Step 3/4 ✓ — ${checkpointsResult.checkpoints.length} checkpoints saved`);
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Step 1 ✓  |  Step 2 ✓ (${partsResult.spare_parts.length})  |  Step 3/4 (Checkpoints) failed: ${(err as Error).message} — click "+ Checkpoints" to retry`);
+      setIsGeneratingAll(false);
+      setGenerateAllStep(0);
+      return;
+    }
+
+    // Step 4: Service Cycles — uses real checkpoint UUIDs from step 3
+    setGenerateAllStep(4);
+    try {
+      const cyclesResult = await generateServiceCyclesMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        serviceActivity: 'pm',
+        checkpoints: checkpointsResult.checkpoints.map((cp: any) => ({
+          id: cp.id, name: cp.name, section_name: cp.section_name, service_activity: cp.service_activity,
+        })),
+      });
+      vaniToast.success(
+        `Step 1 ✓  |  Step 2 ✓  |  Step 3 ✓  |  Step 4/4 ✓ — ${cyclesResult.service_cycles.length} service cycles saved. Knowledge Tree complete!`
+      );
+      refetch();
+      setActiveTab('variants');
+    } catch (err) {
+      vaniToast.error(`Steps 1-3 ✓  |  Step 4/4 (Cycles) failed: ${(err as Error).message} — click "+ Cycles" to retry`);
+    }
+
+    setIsGeneratingAll(false);
+    setGenerateAllStep(0);
+  }, [id, summary, generateVariantsMutation, generateSparePartsMutation, generateCheckpointsMutation, generateServiceCyclesMutation, refetch]);
 
   // Auto-create pre_edit snapshot on first change
   const ensurePreEditSnapshot = useCallback(() => {
@@ -466,7 +647,23 @@ const KnowledgeTreeDetail: React.FC = () => {
   const allPartsCount = useMemo(() => Object.values(localParts).flat().length, [localParts]);
   const allCheckpointsFlat = useMemo(() => Object.values(localCheckpoints).flat(), [localCheckpoints]);
   const serviceActivities = useMemo(() => [...new Set(allCheckpointsFlat.map((c: any) => c.service_activity))], [allCheckpointsFlat]);
+
   const hasOverlays = (summary?.summary?.overlays_count ?? 0) > 0;
+  const variantsCount = summary?.summary?.variants_count ?? 0;
+  const partsCount = summary?.summary?.spare_parts_count ?? 0;
+  const checkpointsCount = summary?.summary?.checkpoints_count ?? 0;
+  const cyclesCount = summary?.summary?.cycles_count ?? localCycles.length;
+
+  // True when KT is completely empty — clicking Variants button runs the full 4-step cascade
+  const isEmptyKT = variantsCount === 0 && partsCount === 0 && checkpointsCount === 0 && cyclesCount === 0;
+
+  // Any stepwise generation in progress
+  const isStepGenerating =
+    isGeneratingAll ||
+    generateVariantsMutation.isPending ||
+    generateSparePartsMutation.isPending ||
+    generateCheckpointsMutation.isPending ||
+    generateServiceCyclesMutation.isPending;
 
   const borderColor = colors.utility.secondaryText + '15';
   const cardBg = colors.utility.secondaryBackground;
@@ -507,6 +704,11 @@ const KnowledgeTreeDetail: React.FC = () => {
 
   const { resource_template: rt } = summary;
 
+  // Label shown on the cascade button while running
+  const generateAllLabel = generateAllStep > 0
+    ? `Step ${generateAllStep}/4…`
+    : '+ Generate KT';
+
   return (
     <div className="min-h-screen transition-colors" style={{ backgroundColor: colors.utility.primaryBackground }}>
       {/* Header */}
@@ -523,8 +725,114 @@ const KnowledgeTreeDetail: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>{rt.name}</h1>
                 <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>{rt.sub_category} · Knowledge Tree Builder</p>
-                {/* Activity badges + overlays + criticality row */}
+
+                {/* 4-step structure badges + activity badges + overlays + criticality */}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
+
+                  {/* Step 1: Variants — on empty KT runs full 4-step cascade */}
+                  {variantsCount > 0 ? (
+                    <span
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: '#10b98115', color: '#10b981' }}
+                      onClick={() => setActiveTab('variants')}
+                      title={`${variantsCount} variants`}
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Variants ({variantsCount})
+                    </span>
+                  ) : (
+                    <button
+                      onClick={isEmptyKT ? handleGenerateAll : handleGenerateVariants}
+                      disabled={isStepGenerating || ktIsActive}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderColor: '#10b98140', color: '#10b981', backgroundColor: '#10b98108' }}
+                      title={isEmptyKT ? 'Generate full Knowledge Tree (4 steps)' : 'Generate variants (Step 1 of 4)'}
+                    >
+                      {(isStepGenerating && isEmptyKT) || generateVariantsMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />}
+                      {isGeneratingAll ? generateAllLabel : (generateVariantsMutation.isPending ? 'Generating...' : (isEmptyKT ? '+ Generate KT' : '+ Variants'))}
+                    </button>
+                  )}
+
+                  {/* Step 2: Spare Parts */}
+                  {partsCount > 0 ? (
+                    <span
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: '#f59e0b15', color: '#f59e0b' }}
+                      onClick={() => setActiveTab('spare-parts')}
+                      title={`${partsCount} spare parts`}
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Parts ({partsCount})
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleGenerateSpareParts}
+                      disabled={isStepGenerating || ktIsActive || variantsCount === 0}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderColor: '#f59e0b40', color: '#f59e0b', backgroundColor: '#f59e0b08' }}
+                      title={variantsCount === 0 ? 'Generate variants first (Step 1)' : 'Generate spare parts (Step 2 of 4)'}
+                    >
+                      {generateSparePartsMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />}
+                      {generateSparePartsMutation.isPending ? 'Generating...' : '+ Parts'}
+                    </button>
+                  )}
+
+                  {/* Step 3: Checkpoints */}
+                  {checkpointsCount > 0 ? (
+                    <span
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: '#3b82f615', color: '#3b82f6' }}
+                      onClick={() => setActiveTab('checkpoints')}
+                      title={`${checkpointsCount} checkpoints`}
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Checkpoints ({checkpointsCount})
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleGenerateCheckpoints}
+                      disabled={isStepGenerating || ktIsActive || variantsCount === 0}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderColor: '#3b82f640', color: '#3b82f6', backgroundColor: '#3b82f608' }}
+                      title={variantsCount === 0 ? 'Generate variants first (Step 1)' : 'Generate checkpoints (Step 3 of 4)'}
+                    >
+                      {generateCheckpointsMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />}
+                      {generateCheckpointsMutation.isPending ? 'Generating...' : '+ Checkpoints'}
+                    </button>
+                  )}
+
+                  {/* Step 4: Service Cycles */}
+                  {cyclesCount > 0 ? (
+                    <span
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: '#ec489915', color: '#ec4899' }}
+                      onClick={() => setActiveTab('cycles')}
+                      title={`${cyclesCount} service cycles`}
+                    >
+                      <CheckCircle2 className="h-3 w-3" /> Cycles ({cyclesCount})
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleGenerateServiceCycles}
+                      disabled={isStepGenerating || ktIsActive || checkpointsCount === 0}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderColor: '#ec489940', color: '#ec4899', backgroundColor: '#ec489908' }}
+                      title={checkpointsCount === 0 ? 'Generate checkpoints first (Step 3)' : 'Generate service cycles (Step 4 of 4)'}
+                    >
+                      {generateServiceCyclesMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Plus className="h-3 w-3" />}
+                      {generateServiceCyclesMutation.isPending ? 'Generating...' : '+ Cycles'}
+                    </button>
+                  )}
+
+                  {/* Separator between structure steps and activity badges */}
+                  <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
+
+                  {/* Service Activity badges (+ Install, + Decomm, etc.) */}
                   {ACTIVITY_CONFIG.map((activity) => {
                     const isBuilt = serviceActivities.includes(activity.key);
                     return isBuilt ? (
@@ -539,16 +847,17 @@ const KnowledgeTreeDetail: React.FC = () => {
                       <button
                         key={activity.key}
                         onClick={() => handleAddActivity(activity.key, activity.label)}
-                        disabled={ktIsActive || isGeneratingOverlays}
+                        disabled={ktIsActive || isStepGenerating || checkpointsCount === 0}
                         className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
                         style={{ borderColor: colors.brand.primary + '40', color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+                        title={checkpointsCount === 0 ? 'Generate checkpoints first (Step 3)' : `Add ${activity.label}`}
                       >
                         <Plus className="h-3 w-3" /> {activity.short}
                       </button>
                     );
                   })}
 
-                  {/* Context Overlays badge — generated on demand */}
+                  {/* Context Overlays */}
                   {hasOverlays ? (
                     <span
                       className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
@@ -561,7 +870,7 @@ const KnowledgeTreeDetail: React.FC = () => {
                   ) : (
                     <button
                       onClick={handleGenerateOverlays}
-                      disabled={ktIsActive || isGeneratingOverlays}
+                      disabled={ktIsActive || isStepGenerating || isGeneratingOverlays}
                       className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
                       style={{ borderColor: '#8b5cf640', color: '#8b5cf6', backgroundColor: '#8b5cf608' }}
                       title="Generate context overlays (climate, geography, industry)"
@@ -569,7 +878,7 @@ const KnowledgeTreeDetail: React.FC = () => {
                       {isGeneratingOverlays
                         ? <Loader2 className="h-3 w-3 animate-spin" />
                         : <Plus className="h-3 w-3" />}
-                      {isGeneratingOverlays ? 'Generating...' : 'Overlays'}
+                      {isGeneratingOverlays ? 'Generating...' : '+ Overlays'}
                     </button>
                   )}
 

@@ -60,7 +60,7 @@ export interface KnowledgeTreeCheckpoint {
   section_name: string;
   name: string;
   description: string | null;
-  layer: 'base' | 'equipment';
+  layer: 'base' | 'equipment' | 'facility';
   unit: string | null;
   normal_min: number | null;
   normal_max: number | null;
@@ -133,6 +133,7 @@ export interface KnowledgeTreeSummary {
     description: string | null;
     sub_category: string;
     scope: string;
+    resource_type_id?: string;
   };
   equipment_meta: KTEquipmentMeta | null;
   summary: {
