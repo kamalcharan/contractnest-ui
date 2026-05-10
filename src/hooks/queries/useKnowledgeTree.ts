@@ -191,7 +191,7 @@ export const useKTGenerateVariants = () => {
 export const useKTGenerateSpareParts = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { equipmentName: string; subCategory: string; resourceTemplateId: string; variants: Array<{ id: string; name: string; capacity_range?: string | null }> }) => {
+    mutationFn: async (payload: { equipmentName: string; subCategory: string; resourceTemplateId: string; layer?: string; variants: Array<{ id: string; name: string; capacity_range?: string | null }> }) => {
       const { default: api } = await import('@/services/api');
       const response = await api.post('/api/knowledge-tree/generate-spare-parts', payload, { timeout: 120000 });
       if (!response.data?.success) throw new Error(response.data?.error?.message || 'Spare parts generation failed');
@@ -209,7 +209,7 @@ export const useKTGenerateSpareParts = () => {
 export const useKTGenerateCheckpoints = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { equipmentName: string; subCategory: string; resourceTemplateId: string; serviceActivity?: string; variants: Array<{ id: string; name: string; capacity_range?: string | null }> }) => {
+    mutationFn: async (payload: { equipmentName: string; subCategory: string; resourceTemplateId: string; serviceActivity?: string; layer?: string; variants: Array<{ id: string; name: string; capacity_range?: string | null }> }) => {
       const { default: api } = await import('@/services/api');
       const response = await api.post('/api/knowledge-tree/generate-checkpoints', payload, { timeout: 120000 });
       if (!response.data?.success) throw new Error(response.data?.error?.message || 'Checkpoint generation failed');
@@ -237,6 +237,69 @@ export const useKTGenerateServiceCycles = () => {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resourceTemplateId) });
       queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.cycles(variables.resourceTemplateId) });
+    },
+  });
+};
+
+// Step 5: Pricing — UI passes spareParts[] + serviceCycles[] read from DB (real UUIDs)
+export const useKTGeneratePricing = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      equipmentName: string;
+      subCategory: string;
+      resourceTemplateId: string;
+      currency?: string;
+      geo?: string;
+      spareParts: Array<{ id: string; name: string; component_group: string }>;
+      serviceCycles: Array<{ id: string; catalog_name?: string | null; frequency_value: number; frequency_unit: string; checkpoint_name?: string }>;
+    }) => {
+      const { default: api } = await import('@/services/api');
+      const response = await api.post('/api/knowledge-tree/generate-pricing', payload, { timeout: 120000 });
+      if (!response.data?.success) throw new Error(response.data?.error?.message || 'Pricing generation failed');
+      await postKnowledgeTreeEdge('save-pricing', {
+        resource_template_id: payload.resourceTemplateId,
+        currency: payload.currency || 'INR',
+        geo: payload.geo || 'IN',
+        spare_parts: response.data.data.spare_parts,
+        service_cycles: response.data.data.service_cycles,
+      });
+      return response.data.data as {
+        resource_template_id: string;
+        currency: string;
+        geo: string;
+        spare_parts: Array<{ id: string; price_min: number; price_median: number; price_max: number; price_unit: string }>;
+        service_cycles: Array<{ id: string; price_min: number; price_median: number; price_max: number }>;
+      };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resourceTemplateId) });
+    },
+  });
+};
+
+// Option A: Generate service_name per section from existing checkpoints → patch-service-names edge
+export const useKTGenerateServiceNames = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      equipmentName: string;
+      subCategory: string;
+      resourceTemplateId: string;
+      checkpoints: Array<{ id: string; name: string; section_name: string }>;
+    }) => {
+      const { default: api } = await import('@/services/api');
+      const response = await api.post('/api/knowledge-tree/generate-service-names', payload, { timeout: 60000 });
+      if (!response.data?.success) throw new Error(response.data?.error?.message || 'Service name generation failed');
+      await postKnowledgeTreeEdge('patch-service-names', {
+        resource_template_id: payload.resourceTemplateId,
+        service_names: response.data.data.service_names,
+      });
+      return response.data.data as { resource_template_id: string; service_names: Array<{ section_name: string; service_name: string }> };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resourceTemplateId) });
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.checkpoints(variables.resourceTemplateId) });
     },
   });
 };

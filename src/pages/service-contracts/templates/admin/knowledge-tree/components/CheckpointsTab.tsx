@@ -1,6 +1,6 @@
-// Checkpoints Tab — condition values with severity, reading thresholds, compliance badges, CRUD
+// Checkpoints Tab — condition values with severity, reading thresholds, service_name badge, CRUD
 import React, { useState, useMemo } from 'react';
-import { Plus, Pencil, Lock } from 'lucide-react';
+import { Plus, Pencil, Tag } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import AddItemModal from './AddItemModal';
 import type { KnowledgeTreeSummary } from '../types';
@@ -14,31 +14,6 @@ const ACTIVITY_META: Record<string, { label: string; color: string; bg: string }
 };
 
 const UNIT_OPTIONS = ['PSI', '°C', '°F', 'V', 'Amps', 'kW', 'Hz', 'RPM', 'Pa', 'bar', 'kPa', 'pH', 'mm', 'L/min', 'CFM', 'dB', '%', 'cmH2O', 'mGy'];
-
-const COMPLIANCE_COLORS: Record<string, { color: string; bg: string }> = {
-  NABH:      { color: '#0891b2', bg: '#0891b215' },
-  NABL:      { color: '#0891b2', bg: '#0891b215' },
-  AERB:      { color: '#7c3aed', bg: '#7c3aed15' },
-  'IEC 60601': { color: '#7c3aed', bg: '#7c3aed15' },
-  PESO:      { color: '#b45309', bg: '#b4530915' },
-  OISD:      { color: '#b45309', bg: '#b4530915' },
-  CEA:       { color: '#1d4ed8', bg: '#1d4ed815' },
-  BIS:       { color: '#374151', bg: '#37415115' },
-  CPCB:      { color: '#047857', bg: '#04785715' },
-  BEE:       { color: '#047857', bg: '#04785715' },
-  ISHRAE:    { color: '#0369a1', bg: '#0369a115' },
-  NBC:       { color: '#92400e', bg: '#92400e15' },
-  FSSAI:     { color: '#166534', bg: '#16653415' },
-  GMP:       { color: '#166534', bg: '#16653415' },
-  CDSCO:     { color: '#6d28d9', bg: '#6d28d915' },
-  IEC:       { color: '#1d4ed8', bg: '#1d4ed815' },
-};
-
-function complianceColor(standard: string | null): { color: string; bg: string } {
-  if (!standard) return { color: '#6b7280', bg: '#6b728015' };
-  const key = Object.keys(COMPLIANCE_COLORS).find((k) => standard.startsWith(k));
-  return key ? COMPLIANCE_COLORS[key] : { color: '#6b7280', bg: '#6b728015' };
-}
 
 interface Props {
   summary: KnowledgeTreeSummary;
@@ -54,7 +29,6 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
   const [addValueTarget, setAddValueTarget] = useState<{ cpId: string; section: string; cpName: string } | null>(null);
   const [editingCheckpoint, setEditingCheckpoint] = useState<{ section: string; cp: any } | null>(null);
   const [activityFilter, setActivityFilter] = useState<string>('all');
-  const [complianceOnly, setComplianceOnly] = useState(false);
 
   const allCheckpoints = Object.values(checkpointsBySection).flat();
   const brandPrimary = colors.brand.primary;
@@ -66,28 +40,14 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
   }, [allCheckpoints]);
 
   const filteredBySection = useMemo(() => {
+    if (activityFilter === 'all') return checkpointsBySection;
     const result: Record<string, any[]> = {};
     Object.entries(checkpointsBySection).forEach(([section, cps]) => {
-      let filtered = cps;
-      if (activityFilter !== 'all') {
-        filtered = filtered.filter((cp: any) => cp.service_activity === activityFilter);
-      }
-      if (complianceOnly) {
-        filtered = filtered.filter((cp: any) => cp.compliance_standard);
-      }
+      const filtered = cps.filter((cp: any) => cp.service_activity === activityFilter);
       if (filtered.length > 0) result[section] = filtered;
     });
     return result;
-  }, [checkpointsBySection, activityFilter, complianceOnly]);
-
-  const mandatoryCount = useMemo(
-    () => allCheckpoints.filter((cp: any) => cp.is_mandatory).length,
-    [allCheckpoints]
-  );
-  const complianceTaggedCount = useMemo(
-    () => allCheckpoints.filter((cp: any) => cp.compliance_standard).length,
-    [allCheckpoints]
-  );
+  }, [checkpointsBySection, activityFilter]);
 
   const inputStyle: React.CSSProperties = {
     width: '60px', padding: '3px 6px', border: `1px solid ${borderColor}`, borderRadius: '4px',
@@ -99,80 +59,64 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
   return (
     <div>
       <VaNiBubble colors={colors}>
-        <p>
-          <strong style={{ color: colors.utility.primaryText }}>{allCheckpoints.length} checkpoints</strong> — two types:{' '}
+        <p><strong style={{ color: colors.utility.primaryText }}>{allCheckpoints.length} checkpoints</strong> — two types:{' '}
           <span style={{ background: colors.semantic.warning + '15', color: colors.semantic.warning, padding: '1px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 600 }}>CONDITION</span> and{' '}
-          <span style={{ background: (colors.semantic.info || '#2563eb') + '15', color: colors.semantic.info || '#2563eb', padding: '1px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 600 }}>READING</span>.
-          {complianceTaggedCount > 0 && (
-            <> <span style={{ color: '#0891b2', fontWeight: 600 }}>{complianceTaggedCount} tagged</span> with compliance standards{mandatoryCount > 0 && <>, <Lock className="inline h-2.5 w-2.5 mx-0.5" style={{ verticalAlign: 'middle' }} /><span style={{ color: colors.semantic.error, fontWeight: 600 }}>{mandatoryCount} mandatory</span></>}.</>
-          )}
-        </p>
+          <span style={{ background: (colors.semantic.info || '#2563eb') + '15', color: colors.semantic.info || '#2563eb', padding: '1px 6px', borderRadius: '3px', fontSize: '11px', fontWeight: 600 }}>READING</span>. Use "Generate Service Names" in the header to assign catalog-facing names per section.</p>
       </VaNiBubble>
 
-      {/* Filter strip */}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
-        {availableActivities.length > 1 && (
-          <>
-            <button
-              onClick={() => setActivityFilter('all')}
-              style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${activityFilter === 'all' ? brandPrimary : borderColor}`, background: activityFilter === 'all' ? brandPrimary + '15' : 'transparent', color: activityFilter === 'all' ? brandPrimary : colors.utility.secondaryText, fontWeight: activityFilter === 'all' ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
-            >
-              All ({allCheckpoints.length})
-            </button>
-            {availableActivities.map((act) => {
-              const meta = ACTIVITY_META[act] || { label: act, color: brandPrimary, bg: brandPrimary + '15' };
-              const count = allCheckpoints.filter((cp: any) => cp.service_activity === act).length;
-              const isActive = activityFilter === act;
-              return (
-                <button key={act}
-                  onClick={() => setActivityFilter(act)}
-                  style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${isActive ? meta.color : borderColor}`, background: isActive ? meta.bg : 'transparent', color: isActive ? meta.color : colors.utility.secondaryText, fontWeight: isActive ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
-                >
-                  {meta.label} ({count})
-                </button>
-              );
-            })}
-            <span style={{ width: '1px', height: '20px', background: borderColor, flexShrink: 0 }} />
-          </>
-        )}
-        {/* Compliance filter toggle */}
-        {complianceTaggedCount > 0 && (
+      {/* Activity filter strip — only shown when multiple activities exist */}
+      {availableActivities.length > 1 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
           <button
-            onClick={() => setComplianceOnly((p) => !p)}
-            style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${complianceOnly ? '#0891b2' : borderColor}`, background: complianceOnly ? '#0891b215' : 'transparent', color: complianceOnly ? '#0891b2' : colors.utility.secondaryText, fontWeight: complianceOnly ? 700 : 500, cursor: 'pointer', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: '4px' }}
+            onClick={() => setActivityFilter('all')}
+            style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${activityFilter === 'all' ? brandPrimary : borderColor}`, background: activityFilter === 'all' ? brandPrimary + '15' : 'transparent', color: activityFilter === 'all' ? brandPrimary : colors.utility.secondaryText, fontWeight: activityFilter === 'all' ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
           >
-            🔒 Compliance only ({complianceTaggedCount})
+            All ({allCheckpoints.length})
           </button>
-        )}
-      </div>
-
-      {Object.entries(filteredBySection).map(([sectionName, checkpoints]) => (
-        <div key={sectionName}>
-          <div style={{ margin: '20px 0 10px', padding: '10px 16px', borderRadius: '8px', background: colors.utility.primaryBackground, borderLeft: `4px solid ${brandPrimary}` }}>
-            <h4 style={{ fontSize: '14px', fontWeight: 800, color: colors.utility.primaryText, textTransform: 'uppercase' as const, letterSpacing: '.5px' }}>{sectionName}</h4>
-            <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>{checkpoints.length} checkpoints · {checkpoints.filter((c: any) => c.checkpoint_type === 'condition').length} condition · {checkpoints.filter((c: any) => c.checkpoint_type === 'reading').length} reading</span>
-          </div>
-          {checkpoints.map((cp: any) => {
-            const cpColors = complianceColor(cp.compliance_standard);
+          {availableActivities.map((act) => {
+            const meta = ACTIVITY_META[act] || { label: act, color: brandPrimary, bg: brandPrimary + '15' };
+            const count = allCheckpoints.filter((cp: any) => cp.service_activity === act).length;
+            const isActive = activityFilter === act;
             return (
-              <div key={cp.id} style={{ background: colors.utility.secondaryBackground, border: `1px solid ${cp.is_mandatory ? colors.semantic.error + '30' : borderColor}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '10px', boxShadow: '0 2px 12px rgba(0,0,0,.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, flex: 1, color: colors.utility.primaryText, minWidth: 0 }}>{cp.name}</span>
+              <button key={act}
+                onClick={() => setActivityFilter(act)}
+                style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${isActive ? meta.color : borderColor}`, background: isActive ? meta.bg : 'transparent', color: isActive ? meta.color : colors.utility.secondaryText, fontWeight: isActive ? 700 : 500, cursor: 'pointer', transition: 'all .15s' }}
+              >
+                {meta.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {Object.entries(filteredBySection).map(([sectionName, checkpoints]) => {
+        // service_name is the same for all checkpoints in a section — take from first
+        const sectionServiceName = (checkpoints[0] as any)?.service_name;
+
+        return (
+          <div key={sectionName}>
+            <div style={{ margin: '20px 0 10px', padding: '10px 16px', borderRadius: '8px', background: colors.utility.primaryBackground, borderLeft: `4px solid ${brandPrimary}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 800, color: colors.utility.primaryText, textTransform: 'uppercase' as const, letterSpacing: '.5px', margin: 0 }}>{sectionName}</h4>
+                {sectionServiceName && (
+                  <span
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '10px', background: '#f59e0b15', color: '#f59e0b', border: '1px solid #f59e0b30' }}
+                    title="Catalog service name for this section"
+                  >
+                    <Tag style={{ width: '9px', height: '9px' }} />
+                    {sectionServiceName}
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: '11px', color: colors.utility.secondaryText }}>{checkpoints.length} checkpoints · {checkpoints.filter((c: any) => c.checkpoint_type === 'condition').length} condition · {checkpoints.filter((c: any) => c.checkpoint_type === 'reading').length} reading</span>
+            </div>
+            {checkpoints.map((cp: any) => (
+              <div key={cp.id} style={{ background: colors.utility.secondaryBackground, border: `1px solid ${borderColor}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '10px', boxShadow: '0 2px 12px rgba(0,0,0,.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, flex: 1, color: colors.utility.primaryText }}>{cp.name}</span>
                   <button onClick={() => setEditingCheckpoint({ section: sectionName, cp })} style={{ width: '24px', height: '24px', borderRadius: '6px', border: 'none', background: brandPrimary + '10', color: brandPrimary, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title="Edit checkpoint">
                     <Pencil className="h-3 w-3" />
                   </button>
-                  {/* Mandatory lock icon */}
-                  {cp.is_mandatory && (
-                    <span title="Mandatory — regulatory compliance required" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '4px', background: colors.semantic.error + '15', color: colors.semantic.error, flexShrink: 0 }}>
-                      <Lock className="h-3 w-3" />
-                    </span>
-                  )}
-                  {/* Compliance standard badge */}
-                  {cp.compliance_standard && (
-                    <span style={{ fontSize: '9px', fontWeight: 700, padding: '3px 8px', borderRadius: '4px', fontFamily: "'IBM Plex Mono', monospace", background: cpColors.bg, color: cpColors.color, border: `1px solid ${cpColors.color}30`, flexShrink: 0 }}>
-                      {cp.compliance_standard}
-                    </span>
-                  )}
                   {/* Activity badge — only shown when multiple activities exist */}
                   {availableActivities.length > 1 && cp.service_activity && (() => {
                     const meta = ACTIVITY_META[cp.service_activity] || { label: cp.service_activity, color: brandPrimary, bg: brandPrimary + '15' };
@@ -235,10 +179,10 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
                   </>
                 )}
               </div>
-            );
-          })}
-        </div>
-      ))}
+            ))}
+          </div>
+        );
+      })}
 
       <button onClick={() => setShowAddCpModal(true)} style={{ background: brandPrimary + '08', color: brandPrimary, border: `1px dashed ${brandPrimary}30`, fontSize: '12px', padding: '7px 16px', borderRadius: '8px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px', marginTop: '4px' }}>
         <Plus className="h-3.5 w-3.5" /> Add Checkpoint
@@ -281,12 +225,14 @@ const CheckpointsTab: React.FC<Props> = ({ summary, checkpointsBySection, onAddC
           fields={[
             { key: 'name', label: 'Checkpoint Name', type: 'text', required: true },
             { key: 'section_name', label: 'Section', type: 'text' },
+            { key: 'service_name', label: 'Service Name (catalog)', type: 'text', placeholder: 'e.g. Filter & Coil Servicing' },
             { key: 'description', label: 'Description', type: 'textarea' },
             { key: 'threshold_note', label: 'Threshold Note', type: 'textarea', placeholder: 'e.g. Compare with nameplate rating' },
           ]}
           initialData={{
             name: editingCheckpoint.cp.name,
             section_name: editingCheckpoint.section,
+            service_name: editingCheckpoint.cp.service_name || '',
             description: editingCheckpoint.cp.description || '',
             threshold_note: editingCheckpoint.cp.threshold_note || '',
           }}

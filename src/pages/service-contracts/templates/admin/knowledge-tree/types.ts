@@ -22,6 +22,12 @@ export interface KnowledgeTreeSparePart {
   sort_order: number;
   source: 'ai_researched' | 'user_contributed';
   variant_applicability: SparePartVariantMap[];
+  price_min: number | null;
+  price_median: number | null;
+  price_max: number | null;
+  price_unit: string | null;
+  price_currency: string | null;
+  price_geo: string | null;
 }
 
 export interface SparePartVariantMap {
@@ -61,6 +67,7 @@ export interface KnowledgeTreeCheckpoint {
   name: string;
   description: string | null;
   layer: 'base' | 'equipment' | 'facility';
+  service_name: string | null;
   unit: string | null;
   normal_min: number | null;
   normal_max: number | null;
@@ -83,6 +90,12 @@ export interface KnowledgeTreeCycle {
   varies_by: string[];
   alert_overdue_days: number | null;
   source: 'ai_researched' | 'user_contributed';
+  catalog_name: string | null;
+  price_min: number | null;
+  price_median: number | null;
+  price_max: number | null;
+  price_currency: string | null;
+  price_geo: string | null;
   checkpoint_name?: string;
   section_name?: string;
   service_activity?: string;

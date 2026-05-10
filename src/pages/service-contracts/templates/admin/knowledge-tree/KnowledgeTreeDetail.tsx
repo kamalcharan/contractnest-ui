@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TreePine, Wrench, Package, ClipboardCheck, RefreshCw,
-  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText, Trash2, AlertTriangle, Plus, ShieldCheck,
+  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText, Trash2, AlertTriangle, Plus, ShieldCheck, DollarSign, Tag,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
@@ -12,6 +12,7 @@ import {
   useKnowledgeTreeDelete, useKnowledgeTreeGenerate,
   useUpsertEquipmentMeta, useTagCompliance, useSaveContextOverlays,
   useKTGenerateVariants, useKTGenerateSpareParts, useKTGenerateCheckpoints, useKTGenerateServiceCycles,
+  useKTGeneratePricing, useKTGenerateServiceNames,
 } from '@/hooks/queries/useKnowledgeTree';
 import type { KnowledgeTreeSummary } from './types';
 import KTGenerationModal from './components/KTGenerationModal';
@@ -39,6 +40,16 @@ const CRITICALITY_OPTIONS = [
   { value: 'standard',         label: '🟢 Standard' },
   { value: 'mission_critical', label: '🟠 Mission Critical' },
   { value: 'life_critical',    label: '🔴 Life Critical' },
+] as const;
+
+// Common currencies with ISO codes
+const CURRENCY_OPTIONS = [
+  { value: 'INR', label: '₹ INR', geo: 'IN' },
+  { value: 'USD', label: '$ USD', geo: 'US' },
+  { value: 'AED', label: 'AED',   geo: 'AE' },
+  { value: 'EUR', label: '€ EUR', geo: 'EU' },
+  { value: 'GBP', label: '£ GBP', geo: 'GB' },
+  { value: 'SGD', label: 'SGD',   geo: 'SG' },
 ] as const;
 
 const KnowledgeTreeDetail: React.FC = () => {
@@ -74,6 +85,10 @@ const KnowledgeTreeDetail: React.FC = () => {
   const generateCheckpointsMutation = useKTGenerateCheckpoints();
   const generateServiceCyclesMutation = useKTGenerateServiceCycles();
 
+  // ── Step 5 + Option A mutations ──
+  const generatePricingMutation = useKTGeneratePricing();
+  const generateServiceNamesMutation = useKTGenerateServiceNames();
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isTaggingCompliance, setIsTaggingCompliance] = useState(false);
   const [isGeneratingOverlays, setIsGeneratingOverlays] = useState(false);
@@ -87,6 +102,9 @@ const KnowledgeTreeDetail: React.FC = () => {
 
   // Criticality — local state mirrors summary.equipment_meta, editable inline
   const [localCriticality, setLocalCriticality] = useState<'life_critical' | 'mission_critical' | 'standard'>('standard');
+
+  // Currency + geo for pricing generation
+  const [selectedCurrency, setSelectedCurrency] = useState<string>('INR');
 
   useEffect(() => {
     if (summary?.equipment_meta?.equipment_criticality) {
@@ -184,6 +202,55 @@ const KnowledgeTreeDetail: React.FC = () => {
     }
   }, [id, summary, saveOverlaysMutation, refetch]);
 
+  // ── Option A: Generate service names for existing checkpoints ─────────────────
+  const handleGenerateServiceNames = useCallback(async () => {
+    if (!id || !summary) return;
+    const allCheckpointsFlat = Object.values(localCheckpoints).flat();
+    if (allCheckpointsFlat.length === 0) {
+      vaniToast.warning('No checkpoints — generate checkpoints first (Step 3)');
+      return;
+    }
+    try {
+      const result = await generateServiceNamesMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        checkpoints: allCheckpointsFlat.map((cp: any) => ({ id: cp.id, name: cp.name, section_name: cp.section_name })),
+      });
+      vaniToast.success(`Service names generated — ${result.service_names.length} sections named`);
+      refetch();
+      setActiveTab('checkpoints');
+    } catch (err) {
+      vaniToast.error(`Service name generation failed: ${(err as Error).message}`);
+    }
+  }, [id, summary, localCheckpoints, generateServiceNamesMutation, refetch]);
+
+  // ── Step 5: Generate pricing for spare parts + service cycles ─────────────────
+  const handleGeneratePricing = useCallback(async () => {
+    if (!id || !summary) return;
+    const allPartsFlat = Object.values(localParts).flat();
+    if (allPartsFlat.length === 0 && localCycles.length === 0) {
+      vaniToast.warning('No spare parts or service cycles to price');
+      return;
+    }
+    const currencyOption = CURRENCY_OPTIONS.find(c => c.value === selectedCurrency) || CURRENCY_OPTIONS[0];
+    try {
+      const result = await generatePricingMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        currency: currencyOption.value,
+        geo: currencyOption.geo,
+        spareParts: allPartsFlat.map((p: any) => ({ id: p.id, name: p.name, component_group: p.component_group })),
+        serviceCycles: localCycles.map((cy: any) => ({ id: cy.id, catalog_name: cy.catalog_name, frequency_value: cy.frequency_value, frequency_unit: cy.frequency_unit, checkpoint_name: cy.checkpoint_name })),
+      });
+      vaniToast.success(`Pricing generated [${currencyOption.value}] — ${result.spare_parts.length} parts, ${result.service_cycles.length} cycles priced`);
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Pricing generation failed: ${(err as Error).message}`);
+    }
+  }, [id, summary, localParts, localCycles, selectedCurrency, generatePricingMutation, refetch]);
+
   // ── Individual step handlers (manual retry) ────────────────────────────────
 
   const handleGenerateVariants = useCallback(async () => {
@@ -206,14 +273,16 @@ const KnowledgeTreeDetail: React.FC = () => {
     if (!id || !summary) return;
     const variants = summary.variants;
     const variantsCount = summary.summary.variants_count;
+    const partsLabel = ktLayer === 'facility' ? 'consumables' : 'spare parts';
     try {
       const result = await generateSparePartsMutation.mutateAsync({
         equipmentName: summary.resource_template.name,
         subCategory: summary.resource_template.sub_category,
         resourceTemplateId: id,
+        layer: ktLayer,
         variants: variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
       });
-      vaniToast.success(`Variants ✓ (${variantsCount})  |  Step 2 — ${result.spare_parts.length} spare parts generated and saved`);
+      vaniToast.success(`Variants ✓ (${variantsCount})  |  Step 2 — ${result.spare_parts.length} ${partsLabel} generated and saved`);
       refetch();
       setActiveTab('spare-parts');
     } catch (err) {
@@ -232,6 +301,7 @@ const KnowledgeTreeDetail: React.FC = () => {
         subCategory: summary.resource_template.sub_category,
         resourceTemplateId: id,
         serviceActivity: 'pm',
+        layer: ktLayer,
         variants: variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
       });
       vaniToast.success(`Variants ✓ (${variantsCount})  |  Parts ✓ (${partsCount})  |  Step 3 — ${result.checkpoints.length} checkpoints saved`);
@@ -267,7 +337,6 @@ const KnowledgeTreeDetail: React.FC = () => {
   }, [id, summary, localCheckpoints, generateServiceCyclesMutation, refetch]);
 
   // ── Sequential "Generate All" — runs Steps 1 → 2 → 3 → 4 in order ──────────
-  // Stops on failure; individual step buttons stay visible for manual retry.
   const handleGenerateAll = useCallback(async () => {
     if (!id || !summary) return;
     setIsGeneratingAll(true);
@@ -298,9 +367,11 @@ const KnowledgeTreeDetail: React.FC = () => {
         equipmentName: summary.resource_template.name,
         subCategory: summary.resource_template.sub_category,
         resourceTemplateId: id,
+        layer: ktLayer,
         variants: variantsResult.variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
       });
-      vaniToast.success(`Step 1 ✓  |  Step 2/4 ✓ — ${partsResult.spare_parts.length} spare parts generated`);
+      const partsLabel = ktLayer === 'facility' ? 'consumables' : 'spare parts';
+      vaniToast.success(`Step 1 ✓  |  Step 2/4 ✓ — ${partsResult.spare_parts.length} ${partsLabel} generated`);
       refetch();
     } catch (err) {
       vaniToast.error(`Step 1 ✓ (${variantsResult.variants.length})  |  Step 2/4 (Parts) failed: ${(err as Error).message} — click "+ Parts" to retry`);
@@ -309,7 +380,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       return;
     }
 
-    // Step 3: Checkpoints only (no service_cycles) — passes variants for context
+    // Step 3: Checkpoints only — passes variants for context
     setGenerateAllStep(3);
     let checkpointsResult: { resource_template_id: string; checkpoints: any[]; checkpoint_values: any[] } | null = null;
     try {
@@ -318,6 +389,7 @@ const KnowledgeTreeDetail: React.FC = () => {
         subCategory: summary.resource_template.sub_category,
         resourceTemplateId: id,
         serviceActivity: 'pm',
+        layer: ktLayer,
         variants: variantsResult.variants.map(v => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
       });
       vaniToast.success(`Step 1 ✓  |  Step 2 ✓  |  Step 3/4 ✓ — ${checkpointsResult.checkpoints.length} checkpoints saved`);
@@ -374,6 +446,8 @@ const KnowledgeTreeDetail: React.FC = () => {
     setLocalParts({ ...summary.spare_parts_by_group });
     setLocalCheckpoints({ ...summary.checkpoints_by_section });
     setLocalCycles(summary.cycles.map((c) => ({ ...c })));
+    // Auto-expand all groups on load
+    setExpandedGroups(new Set(Object.keys(summary.spare_parts_by_group)));
   }, [summary]);
 
   // ── Mark changed helper ──
@@ -445,6 +519,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       variant_applicability: [],
     };
     setLocalParts((prev) => ({ ...prev, [group]: [...(prev[group] || []), newPart] }));
+    setExpandedGroups((prev) => { const next = new Set(prev); next.add(group); return next; });
     vaniToast.success(`Part "${data.name}" added to ${group.replace(/_/g, ' ')}`);
   }, [id, markChanged]);
 
@@ -491,6 +566,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       id: crypto.randomUUID(), resource_template_id: id,
       checkpoint_type: data.checkpoint_type || 'condition', service_activity: data.service_activity || 'pm',
       section_name: section, name: data.name, description: null, layer: 'equipment',
+      service_name: null,
       unit: data.unit || null, normal_min: data.normal_min ? Number(data.normal_min) : null,
       normal_max: data.normal_max ? Number(data.normal_max) : null,
       amber_threshold: null, red_threshold: null, threshold_note: null,
@@ -530,6 +606,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       const cp = { ...oldSection[cpIndex] };
       if (data.name !== undefined) cp.name = data.name;
       if (data.description !== undefined) cp.description = data.description || null;
+      if (data.service_name !== undefined) cp.service_name = data.service_name || null;
       if (data.threshold_note !== undefined) cp.threshold_note = data.threshold_note || null;
       if (data.unit !== undefined) cp.unit = data.unit;
       if (data.normal_min !== undefined) cp.normal_min = data.normal_min !== '' ? Number(data.normal_min) : null;
@@ -560,6 +637,7 @@ const KnowledgeTreeDetail: React.FC = () => {
       frequency_value: Number(data.frequency_value) || 90, frequency_unit: data.frequency_unit || 'days',
       varies_by: [], alert_overdue_days: data.alert_overdue_days ? Number(data.alert_overdue_days) : null,
       source: 'user_contributed', checkpoint_name: data.checkpoint_name || 'Custom Cycle', section_name: data.section_name || '',
+      catalog_name: null, price_min: null, price_median: null, price_max: null, price_currency: null, price_geo: null,
     };
     setLocalCycles((prev) => [...prev, newCycle]);
     vaniToast.success(`Cycle "${data.checkpoint_name}" added (${data.frequency_value} ${data.frequency_unit})`);
@@ -648,29 +726,33 @@ const KnowledgeTreeDetail: React.FC = () => {
   const allCheckpointsFlat = useMemo(() => Object.values(localCheckpoints).flat(), [localCheckpoints]);
   const serviceActivities = useMemo(() => [...new Set(allCheckpointsFlat.map((c: any) => c.service_activity))], [allCheckpointsFlat]);
 
+  // 'asset' resource_type_id = facility; anything else = equipment
+  const ktLayer = summary?.resource_template?.resource_type_id === 'asset' ? 'facility' : 'equipment';
+  const partsTabLabel = ktLayer === 'facility' ? 'Consumables' : 'Spare Parts';
+
   const hasOverlays = (summary?.summary?.overlays_count ?? 0) > 0;
   const variantsCount = summary?.summary?.variants_count ?? 0;
   const partsCount = summary?.summary?.spare_parts_count ?? 0;
   const checkpointsCount = summary?.summary?.checkpoints_count ?? 0;
   const cyclesCount = summary?.summary?.cycles_count ?? localCycles.length;
 
-  // True when KT is completely empty — clicking Variants button runs the full 4-step cascade
   const isEmptyKT = variantsCount === 0 && partsCount === 0 && checkpointsCount === 0 && cyclesCount === 0;
 
-  // Any stepwise generation in progress
   const isStepGenerating =
     isGeneratingAll ||
     generateVariantsMutation.isPending ||
     generateSparePartsMutation.isPending ||
     generateCheckpointsMutation.isPending ||
-    generateServiceCyclesMutation.isPending;
+    generateServiceCyclesMutation.isPending ||
+    generatePricingMutation.isPending ||
+    generateServiceNamesMutation.isPending;
 
   const borderColor = colors.utility.secondaryText + '15';
   const cardBg = colors.utility.secondaryBackground;
 
   const tabConfig: { key: DetailTab; label: string; icon: React.ReactNode; count: number }[] = useMemo(() => [
     { key: 'variants', label: 'Variants', icon: <Wrench className="h-4 w-4" />, count: localVariants.length },
-    { key: 'spare-parts', label: 'Spare Parts', icon: <Package className="h-4 w-4" />, count: allPartsCount },
+    { key: 'spare-parts', label: partsTabLabel, icon: <Package className="h-4 w-4" />, count: allPartsCount },
     { key: 'checkpoints', label: 'Checkpoints', icon: <ClipboardCheck className="h-4 w-4" />, count: allCheckpointsFlat.length },
     { key: 'cycles', label: 'Service Cycles', icon: <RefreshCw className="h-4 w-4" />, count: localCycles.length },
     { key: 'overlays', label: 'Overlays', icon: <MapPin className="h-4 w-4" />, count: summary?.summary.overlays_count || 0 },
@@ -704,7 +786,6 @@ const KnowledgeTreeDetail: React.FC = () => {
 
   const { resource_template: rt } = summary;
 
-  // Label shown on the cascade button while running
   const generateAllLabel = generateAllStep > 0
     ? `Step ${generateAllStep}/4…`
     : '+ Generate KT';
@@ -726,10 +807,10 @@ const KnowledgeTreeDetail: React.FC = () => {
                 <h1 className="text-2xl font-bold" style={{ color: colors.utility.primaryText }}>{rt.name}</h1>
                 <p className="text-sm mt-0.5" style={{ color: colors.utility.secondaryText }}>{rt.sub_category} · Knowledge Tree Builder</p>
 
-                {/* 4-step structure badges + activity badges + overlays + criticality */}
+                {/* Badge row */}
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
 
-                  {/* Step 1: Variants — on empty KT runs full 4-step cascade */}
+                  {/* Step 1: Variants */}
                   {variantsCount > 0 ? (
                     <span
                       className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
@@ -754,15 +835,15 @@ const KnowledgeTreeDetail: React.FC = () => {
                     </button>
                   )}
 
-                  {/* Step 2: Spare Parts */}
+                  {/* Step 2: Spare Parts / Consumables */}
                   {partsCount > 0 ? (
                     <span
                       className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium cursor-pointer hover:opacity-80"
                       style={{ backgroundColor: '#f59e0b15', color: '#f59e0b' }}
                       onClick={() => setActiveTab('spare-parts')}
-                      title={`${partsCount} spare parts`}
+                      title={`${partsCount} ${partsTabLabel.toLowerCase()}`}
                     >
-                      <CheckCircle2 className="h-3 w-3" /> Parts ({partsCount})
+                      <CheckCircle2 className="h-3 w-3" /> {partsTabLabel} ({partsCount})
                     </span>
                   ) : (
                     <button
@@ -770,12 +851,12 @@ const KnowledgeTreeDetail: React.FC = () => {
                       disabled={isStepGenerating || ktIsActive || variantsCount === 0}
                       className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
                       style={{ borderColor: '#f59e0b40', color: '#f59e0b', backgroundColor: '#f59e0b08' }}
-                      title={variantsCount === 0 ? 'Generate variants first (Step 1)' : 'Generate spare parts (Step 2 of 4)'}
+                      title={variantsCount === 0 ? 'Generate variants first (Step 1)' : `Generate ${partsTabLabel.toLowerCase()} (Step 2 of 4)`}
                     >
                       {generateSparePartsMutation.isPending
                         ? <Loader2 className="h-3 w-3 animate-spin" />
                         : <Plus className="h-3 w-3" />}
-                      {generateSparePartsMutation.isPending ? 'Generating...' : '+ Parts'}
+                      {generateSparePartsMutation.isPending ? 'Generating...' : `+ ${partsTabLabel}`}
                     </button>
                   )}
 
@@ -829,10 +910,54 @@ const KnowledgeTreeDetail: React.FC = () => {
                     </button>
                   )}
 
-                  {/* Separator between structure steps and activity badges */}
+                  {/* Separator */}
                   <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
 
-                  {/* Service Activity badges (+ Install, + Decomm, etc.) */}
+                  {/* Option A: Generate Service Names (patches existing checkpoints) */}
+                  <button
+                    onClick={handleGenerateServiceNames}
+                    disabled={isStepGenerating || ktIsActive || checkpointsCount === 0}
+                    className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                    style={{ borderColor: '#f59e0b40', color: '#f59e0b', backgroundColor: '#f59e0b08' }}
+                    title={checkpointsCount === 0 ? 'Generate checkpoints first (Step 3)' : 'Generate catalog service names per section'}
+                  >
+                    {generateServiceNamesMutation.isPending
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Tag className="h-3 w-3" />}
+                    {generateServiceNamesMutation.isPending ? 'Naming...' : 'Service Names'}
+                  </button>
+
+                  {/* Step 5: Generate Pricing with currency selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
+                    <select
+                      value={selectedCurrency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      disabled={isStepGenerating || generatePricingMutation.isPending}
+                      style={{ fontSize: '11px', padding: '3px 6px', borderRadius: '20px 0 0 20px', border: `1px solid #0891b240`, borderRight: 'none', background: '#0891b208', color: '#0891b2', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, outline: 'none' }}
+                      title="Select currency for pricing"
+                    >
+                      {CURRENCY_OPTIONS.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleGeneratePricing}
+                      disabled={isStepGenerating || ktIsActive || (partsCount === 0 && cyclesCount === 0)}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                      style={{ borderRadius: '0 20px 20px 0', borderColor: '#0891b240', color: '#0891b2', backgroundColor: '#0891b208', borderLeft: 'none' }}
+                      title={partsCount === 0 && cyclesCount === 0 ? 'Generate parts and cycles first' : `Generate pricing in ${selectedCurrency}`}
+                    >
+                      {generatePricingMutation.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <DollarSign className="h-3 w-3" />}
+                      {generatePricingMutation.isPending ? 'Pricing...' : 'Generate Pricing'}
+                    </button>
+                  </div>
+
+                  {/* Separator */}
+                  <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
+
+                  {/* Service Activity badges */}
                   {ACTIVITY_CONFIG.map((activity) => {
                     const isBuilt = serviceActivities.includes(activity.key);
                     return isBuilt ? (
