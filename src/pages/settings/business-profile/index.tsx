@@ -257,7 +257,22 @@ const BusinessProfilePage = () => {
                           How This Customizes Your ContractNest Experience:
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          {businessType.id === 'buyer' ? (
+                          {businessType.id === 'both' ? (
+                            <>
+                              <div className="text-sm">
+                                <div className="font-medium mb-1" style={{ color: businessType.color }}>Dashboard Focus</div>
+                                <div style={{ color: colors.utility.secondaryText }}>Revenue view: client relationships and service delivery. Expense view: vendor performance and SLA compliance.</div>
+                              </div>
+                              <div className="text-sm">
+                                <div className="font-medium mb-1" style={{ color: businessType.color }}>Key Workflows</div>
+                                <div style={{ color: colors.utility.secondaryText }}>Service delivery and billing (seller side) · Invoice approval and vendor evaluation (buyer side)</div>
+                              </div>
+                              <div className="text-sm">
+                                <div className="font-medium mb-1" style={{ color: businessType.color }}>Priority Tools</div>
+                                <div style={{ color: colors.utility.secondaryText }}>Switch between Revenue and Expense perspectives from the header to access seller or buyer tools.</div>
+                              </div>
+                            </>
+                          ) : businessType.id === 'buyer' ? (
                             <>
                               <div className="text-sm">
                                 <div className="font-medium mb-1" style={{ color: businessType.color }}>Dashboard Focus</div>

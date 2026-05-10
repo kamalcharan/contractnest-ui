@@ -850,6 +850,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ── Initialize perspective from tenant profile (no modal, called once) ──
   const initializePerspective = (businessTypeId: string) => {
     if (perspectiveInitialized) return;
+    // 'buyer' → expense view. 'seller' or 'both' → revenue view.
+    // 'both' defaults to revenue: seller side is the major persona entry point.
     const defaultPerspective: Perspective = businessTypeId.toLowerCase() === 'buyer' ? 'expense' : 'revenue';
     setPerspective(defaultPerspective);
     setPerspectiveInitialized(true);
