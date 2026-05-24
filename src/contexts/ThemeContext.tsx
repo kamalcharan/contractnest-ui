@@ -14,6 +14,9 @@ import { TechAITheme } from '../config/theme/themes/techAI';
 import { TechFutureTheme } from '../config/theme/themes/techFuture';
 import { TechySimpleTheme } from '../config/theme/themes/techySimple';
 import { VikunaBlackTheme } from '../config/theme/themes/vikunaBlack';
+// VaNi onboarding skin — registered here so setTheme('vani') works during onboarding.
+// NOT in utils/theme.ts, so it never appears in the user-facing theme picker.
+import { VaniTheme } from '../config/theme/themes/vaniTheme';
 
 // ✅ FIXED: Create themes object and types locally
 const themes = {
@@ -29,6 +32,7 @@ const themes = {
   [TechFutureTheme.id]: TechFutureTheme,
   [TechySimpleTheme.id]: TechySimpleTheme,
   [VikunaBlackTheme.id]: VikunaBlackTheme,
+  [VaniTheme.id]: VaniTheme,
 };
 
 // ✅ FIXED: Use BharathaVarshaTheme as default
@@ -279,6 +283,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       'theme-tech-future',
       'theme-techy-simple',
       'theme-vikuna-black',
+      'theme-vani',
       'dark',
       'light'
     );
@@ -304,6 +309,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
       'tech-future': 'theme-tech-future',
       'techy-simple': 'theme-techy-simple',
       'vikuna-black': 'theme-vikuna-black',
+      'vani': 'theme-vani',
     };
     
     const legacyClass = legacyThemeMap[themeId];

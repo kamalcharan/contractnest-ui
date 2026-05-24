@@ -65,8 +65,14 @@ import OnboardingIndexPage from './pages/onboarding/index';
 import OnboardingLayout from './components/onboarding/OnboardingLayout';
 import OnboardingPendingPage from './pages/onboarding/OnboardingPendingPage';
 import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
-import UserProfileStep from '@/pages/onboarding/steps/userProfileStep';
+import VaniIntroStep from '@/pages/onboarding/steps/VaniIntroStep';
+import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
+import BusinessDetailsStep from '@/pages/onboarding/steps/BusinessDetailsStep';
+import PersonaSelectionStep from '@/pages/onboarding/steps/PersonaSelectionStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
+import VaniConsentStep from '@/pages/onboarding/steps/VaniConsentStep';
+import VaniWorkingStep from '@/pages/onboarding/steps/VaniWorkingStep';
+import IndustrySelectionStep from '@/pages/onboarding/steps/IndustrySelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
 import ServedIndustriesStep from '@/pages/onboarding/steps/ServedIndustriesStep';
@@ -396,17 +402,25 @@ const AppContent: React.FC = () => {
   }
 >
   <Route index element={<OnboardingIndexPage />} />
+  {/* Legacy onboarding routes — kept for backwards compat */}
   <Route path="welcome" element={<WelcomeStep />} />
   <Route path="storage-setup" element={<StorageSetupStep />} />
-  <Route path="user-profile" element={<UserProfileStep />} />
-  <Route path="theme-selection" element={<ThemeSelectionStep />} />
   <Route path="business-basic" element={<BusinessBasicStep />} />
   <Route path="business-branding" element={<BusinessBrandingStep />} />
   <Route path="served-industries" element={<ServedIndustriesStep />} />
   <Route path="business-preferences" element={<BusinessPreferencesStep />} />
-<Route path="sequence-numbers" element={<SequenceNumbersStep />} />
+  <Route path="sequence-numbers" element={<SequenceNumbersStep />} />
   <Route path="master-data" element={<MasterDataStep />} />
   <Route path="complete" element={<CompleteStep />} />
+  {/* New VaNi onboarding — 9-step redesign */}
+  <Route path="vani-intro" element={<VaniIntroStep />} />
+  <Route path="user-profile" element={<UserProfileStep />} />
+  <Route path="business-details" element={<BusinessDetailsStep />} />
+  <Route path="persona-selection" element={<PersonaSelectionStep />} />
+  <Route path="theme-selection" element={<ThemeSelectionStep />} />
+  <Route path="industry-selection" element={<IndustrySelectionStep />} />
+  <Route path="vani-consent" element={<VaniConsentStep />} />
+  <Route path="vani-working" element={<VaniWorkingStep />} />
 </Route>
           {/* Protected Routes with MainLayout - Your Original Structure */}
           <Route

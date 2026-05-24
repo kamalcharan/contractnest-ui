@@ -80,6 +80,11 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
   // Steps that have their own submit buttons (hide header Continue)
   const stepsWithOwnButtons = [
+    'business-details',
+    'persona-selection',
+    'theme-selection',
+    'industry-selection',
+    'vani-consent',
     'business-basic',
     'business-branding',
     'served-industries',

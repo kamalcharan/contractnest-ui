@@ -40,6 +40,9 @@ export interface TenantProfile {
   // Branding
   primary_color?: string | null;
   secondary_color?: string | null;
+  // India Tax
+  gst_number?: string | null;
+  pan_number?: string | null;
   // Timestamps
   created_at?: string;
   updated_at?: string;

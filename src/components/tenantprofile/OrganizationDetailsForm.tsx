@@ -1,5 +1,7 @@
 // src/components/tenantprofile/OrganizationDetailsForm.tsx
 // Card-based layout: Card 1 (Identity), Card 2 (Contact), Card 3 (Address)
+// hideBranding prop: hides logo + brand colors for onboarding Screen 2 where
+// storage is not yet set up. Logo/colors live in the dedicated Branding screen (Screen 9).
 import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Building2, Phone, MapPin, User, Mail, Globe, MessageCircle, Calendar } from 'lucide-react';
@@ -11,15 +13,17 @@ import BrandColorPicker from '@/components/tenantprofile/shared/BrandColorPicker
 interface OrganizationDetailsFormProps {
   formData: TenantProfile;
   onUpdate: (field: keyof TenantProfile, value: any) => void;
-  onLogoChange: (file: File | null) => void;
+  onLogoChange?: (file: File | null) => void;
   disabled?: boolean;
+  hideBranding?: boolean; // hides logo + brand colors (used before storage is set up)
 }
 
 const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
   formData,
   onUpdate,
   onLogoChange,
-  disabled = false
+  disabled = false,
+  hideBranding = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -72,55 +76,80 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Left: Logo */}
-          <div className="flex justify-center md:justify-start">
-            <LogoUploadField
-              logoUrl={formData.logo_url}
-              onLogoChange={onLogoChange}
+        {hideBranding ? (
+          /* No logo/colors — org name spans full width */
+          <div className="space-y-2">
+            <label
+              htmlFor="business_name"
+              className="block text-sm font-medium transition-colors"
+              style={{ color: colors.utility.primaryText }}
+            >
+              Organization Name <span style={{ color: colors.semantic.error }}>*</span>
+            </label>
+            <input
+              id="business_name"
+              type="text"
+              value={formData.business_name || ''}
+              onChange={(e) => onUpdate('business_name', e.target.value)}
+              placeholder="Enter your organization name"
+              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+              style={getInputStyles()}
               disabled={disabled}
-              showLabel={false}
+              required
             />
           </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Left: Logo */}
+              <div className="flex justify-center md:justify-start">
+                <LogoUploadField
+                  logoUrl={formData.logo_url}
+                  onLogoChange={onLogoChange!}
+                  disabled={disabled}
+                  showLabel={false}
+                />
+              </div>
 
-          {/* Right: Name */}
-          <div className="space-y-4">
-            {/* Organization Name */}
-            <div className="space-y-2">
-              <label
-                htmlFor="business_name"
-                className="block text-sm font-medium transition-colors"
-                style={{ color: colors.utility.primaryText }}
-              >
-                Organization Name <span style={{ color: colors.semantic.error }}>*</span>
-              </label>
-              <input
-                id="business_name"
-                type="text"
-                value={formData.business_name || ''}
-                onChange={(e) => onUpdate('business_name', e.target.value)}
-                placeholder="Enter your organization name"
-                className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
-                style={getInputStyles()}
+              {/* Right: Name */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="business_name"
+                    className="block text-sm font-medium transition-colors"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    Organization Name <span style={{ color: colors.semantic.error }}>*</span>
+                  </label>
+                  <input
+                    id="business_name"
+                    type="text"
+                    value={formData.business_name || ''}
+                    onChange={(e) => onUpdate('business_name', e.target.value)}
+                    placeholder="Enter your organization name"
+                    className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
+                    style={getInputStyles()}
+                    disabled={disabled}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Brand Colors - Full picker inside Card 1 */}
+            <div className="mt-5 pt-5 border-t" style={{ borderColor: colors.utility.secondaryText + '20' }}>
+              <BrandColorPicker
+                primaryColor={formData.primary_color || '#4F46E5'}
+                secondaryColor={formData.secondary_color || '#10B981'}
+                onPrimaryColorChange={(value) => onUpdate('primary_color', value)}
+                onSecondaryColorChange={(value) => onUpdate('secondary_color', value)}
                 disabled={disabled}
-                required
+                showLabel={true}
+                labelText="Brand Colors"
               />
             </div>
-          </div>
-        </div>
-
-        {/* Brand Colors - Full picker inside Card 1 */}
-        <div className="mt-5 pt-5 border-t" style={{ borderColor: colors.utility.secondaryText + '20' }}>
-          <BrandColorPicker
-            primaryColor={formData.primary_color || '#4F46E5'}
-            secondaryColor={formData.secondary_color || '#10B981'}
-            onPrimaryColorChange={(value) => onUpdate('primary_color', value)}
-            onSecondaryColorChange={(value) => onUpdate('secondary_color', value)}
-            disabled={disabled}
-            showLabel={true}
-            labelText="Brand Colors"
-          />
-        </div>
+          </>
+        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════ */}
