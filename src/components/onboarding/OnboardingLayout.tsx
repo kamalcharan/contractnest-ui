@@ -61,7 +61,10 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const allSteps = OnboardingUtils.getAllSteps();
-  const isCompletePage = location.pathname === '/onboarding/complete';
+  const isCompletePage = location.pathname === '/onboarding/complete' ||
+                         location.pathname === '/onboarding/done' ||
+                         location.pathname === '/onboarding/pricing-review' ||
+                         location.pathname === '/onboarding/equipment-confirm';
 
   // Track local UI step from URL
   const [uiStepId, setUiStepId] = useState<string>('');
@@ -85,11 +88,15 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     'theme-selection',
     'industry-selection',
     'vani-consent',
+    'resource-pick',
     'business-basic',
     'business-branding',
     'served-industries',
     'business-preferences',
     'storage-setup',
+    'vani-working',
+    'pricing-review',
+    'equipment-confirm',
   ];
 
   useEffect(() => {

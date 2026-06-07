@@ -1205,6 +1205,13 @@ export const API_ENDPOINTS = {
   },
 
   // =================================================================
+  // SEEDS ENDPOINTS
+  // =================================================================
+  SEEDS: {
+    INDUSTRY_CONFIRMED: '/api/seeds/tenant/industry-confirmed',
+  },
+
+  // =================================================================
   // SMART FORMS — Tenant-facing Selections + Submissions (Cycle 3)
   // =================================================================
   SMART_FORMS: {

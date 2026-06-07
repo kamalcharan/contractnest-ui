@@ -468,8 +468,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const response = await api.get(API_ENDPOINTS.ONBOARDING.STATUS);
 
-      if (response.data && response.data.data) {
-        const isComplete = response.data.data.is_complete || false;
+      // API returns { needs_onboarding: bool, onboarding: { is_completed: bool } | null, ... }
+      // needs_onboarding=true means NOT complete; onboarding.is_completed=true means complete.
+      if (response.data) {
+        const isComplete =
+          response.data.onboarding?.is_completed === true ||
+          response.data.needs_onboarding === false;
         setHasCompletedOnboarding(isComplete);
 
         // Store in session to avoid repeated checks (tenant-scoped)
@@ -759,6 +763,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           resetIdleTimer();
 
           // Check onboarding status after successful auth
+          // If incomplete and at root, SmartHomePage handles redirect.
+          // If the user is deep-linking to a protected route we leave them there —
+          // OnboardingLayout will redirect to /ops/cockpit if they're already done.
           await checkOnboardingStatus();
         } catch (err: any) {
           console.error('Error initializing auth:', err.message);

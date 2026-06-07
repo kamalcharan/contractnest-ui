@@ -130,7 +130,7 @@ const IndustrySelectionStep: React.FC = () => {
     setIsSaving(true);
     try {
       await addIndustries(Array.from(selectedIds));
-      navigate('/onboarding/vani-consent');
+      navigate('/onboarding/resource-pick');
     } catch (err: any) {
       vaniToast.error(err?.message || 'Failed to save industries — please try again');
     } finally {

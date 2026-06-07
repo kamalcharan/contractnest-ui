@@ -32,6 +32,7 @@ const OnboardingIndexPage: React.FC = () => {
 
 const getStepPath = (stepId: string): string => {
   const stepPaths: Record<string, string> = {
+    // Legacy onboarding steps
     'welcome': '/onboarding/welcome',
     'storage-setup': '/onboarding/storage-setup',
     'user-profile': '/onboarding/user-profile',
@@ -41,10 +42,19 @@ const getStepPath = (stepId: string): string => {
     'business-preferences': '/onboarding/business-preferences',
     'sequence-numbers': '/onboarding/sequence-numbers',
     'master-data': '/onboarding/master-data',
-    'complete': '/onboarding/complete'
+    'complete': '/onboarding/complete',
+    // VaNi onboarding steps
+    'vani-intro': '/onboarding/vani-intro',
+    'business-details': '/onboarding/business-details',
+    'persona-selection': '/onboarding/persona-selection',
+    'industry-selection': '/onboarding/industry-selection',
+    'served-industries': '/onboarding/served-industries',
+    'vani-consent': '/onboarding/vani-consent',
+    'vani-working': '/onboarding/vani-working',
   };
 
-  return stepPaths[stepId] || '/onboarding/welcome';
+  // Any unrecognised step → restart VaNi intro (safe fallback)
+  return stepPaths[stepId] || '/onboarding/vani-intro';
 };
 
 export default OnboardingIndexPage;

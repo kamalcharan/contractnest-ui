@@ -72,10 +72,14 @@ import PersonaSelectionStep from '@/pages/onboarding/steps/PersonaSelectionStep'
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import VaniConsentStep from '@/pages/onboarding/steps/VaniConsentStep';
 import VaniWorkingStep from '@/pages/onboarding/steps/VaniWorkingStep';
+import VaniDoneStep from '@/pages/onboarding/steps/VaniDoneStep';
 import IndustrySelectionStep from '@/pages/onboarding/steps/IndustrySelectionStep';
 import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
 import ServedIndustriesStep from '@/pages/onboarding/steps/ServedIndustriesStep';
+import Screen8APricingStep from '@/pages/onboarding/steps/Screen8APricingStep';
+import Screen8BEquipmentStep from '@/pages/onboarding/steps/Screen8BEquipmentStep';
+import ResourcePickStep from '@/pages/onboarding/steps/ResourcePickStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
 import MasterDataStep from '@/pages/onboarding/steps/MasterDataStep';
@@ -263,7 +267,7 @@ const TeamEditPage = () => <div className="p-8">Edit Team Member Page (Coming So
 
 // Smart Home Page Component - Shows landing page OR redirects based on auth
 const SmartHomePage: React.FC = () => {
-  const { isAuthenticated, isLoading, currentTenant } = useAuth();
+  const { isAuthenticated, isLoading, currentTenant, hasCompletedOnboarding } = useAuth();
   const location = useLocation();
 
   // Don't redirect if user is on auth pages or welcome page
@@ -279,6 +283,10 @@ const SmartHomePage: React.FC = () => {
   }
 
   if (isAuthenticated && currentTenant) {
+    // Send to onboarding if not yet complete, otherwise to the main app
+    if (!hasCompletedOnboarding) {
+      return <Navigate to="/onboarding" replace />;
+    }
     return <Navigate to="/ops/cockpit" replace />;
   }
 
@@ -419,8 +427,16 @@ const AppContent: React.FC = () => {
   <Route path="persona-selection" element={<PersonaSelectionStep />} />
   <Route path="theme-selection" element={<ThemeSelectionStep />} />
   <Route path="industry-selection" element={<IndustrySelectionStep />} />
+  <Route path="resource-pick" element={<ResourcePickStep />} />
   <Route path="vani-consent" element={<VaniConsentStep />} />
   <Route path="vani-working" element={<VaniWorkingStep />} />
+  <Route path="pricing-review" element={<Screen8APricingStep />} />
+  <Route path="equipment-confirm" element={<Screen8BEquipmentStep />} />
+  <Route path="done" element={
+    <ProtectedRoute requireTenant={true}>
+      <VaniDoneStep />
+    </ProtectedRoute>
+  } />
 </Route>
           {/* Protected Routes with MainLayout - Your Original Structure */}
           <Route
