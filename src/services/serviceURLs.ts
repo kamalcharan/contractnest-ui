@@ -1209,6 +1209,7 @@ export const API_ENDPOINTS = {
   // =================================================================
   SEEDS: {
     INDUSTRY_CONFIRMED: '/api/seeds/tenant/industry-confirmed',
+    TEMPLATES:          '/api/seeds/tenant/templates',
   },
 
   // =================================================================

@@ -27,6 +27,7 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import type { Industry } from '@/services/serviceURLs';
 import { useTenantContext } from '@/contexts/TenantContext';
+import { useAuth } from '@/context/AuthContext';
 
 // ════════════════════════════════════════════════════════════════════
 // PROPS
@@ -57,6 +58,7 @@ const ChangeIndustryModal: React.FC<ChangeIndustryModalProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { profile } = useTenantContext();
+  const { currentTenant } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -138,8 +140,15 @@ const ChangeIndustryModal: React.FC<ChangeIndustryModalProps> = ({
     savingRef.current = true;
     setSaving(true);
     try {
+      // profile from TenantContext may still be loading when the modal opens;
+      // fall back to the auth tenant name so business_name is never undefined.
+      const businessName = profile?.business_name || currentTenant?.name || '';
+      if (!businessName) {
+        vaniToast.error('Cannot save industry', { message: 'Business name is missing. Please set your business name first.', duration: 5000 });
+        return;
+      }
       await api.put(API_ENDPOINTS.TENANTS.PROFILE, {
-        business_name: profile?.business_name,
+        business_name: businessName,
         industry_id: selectedId,
       });
       vaniToast.success('Industry Updated', {

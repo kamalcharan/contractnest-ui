@@ -1,153 +1,210 @@
 // src/pages/onboarding/steps/Screen8BEquipmentStep.tsx
-// Screen 8B — Equipment Confirm (Buyer / Both)
-// User confirms VaNi-seeded equipment placeholders and edits names to match actual site
-// Mock data: Healthcare — 8 equipment types, facility hierarchy, compliance tags
+// Screen 8B — Facility / Asset Registry Confirm (Buyer / Both)
+// Fetches real seeded placeholder assets (ownership_type=self, is_live=false).
+// User confirms and optionally renames each asset.
+// On confirm: PATCH all assets with updated name + is_live=true.
 // Navigation: /onboarding/done
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import api from '@/services/api';
 
-// ── Color tokens ──────────────────────────────────────────────────────────────
-const VANI = '#ff6b2b';
-const TEXT = '#1a1816';
-const TEXT_DIM = '#8a847a';
-const TEXT_MUTED = '#bab4a8';
-const BORDER = '#e5e1db';
-const WHITE = '#ffffff';
-const BG = '#f7f5f2';
-const GREEN = '#16a34a';
-const GREEN_BG = '#f0fdf4';
-const GREEN_BORDER = '#bbf7d0';
-const SURFACE = '#f0ece6';
-const DARK_CARD = 'linear-gradient(145deg, #1a1816, #2a2520)';
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-
-interface EquipmentItem {
+interface TenantAsset {
   id: string;
   name: string;
-  meta: string;
-  confirmed: boolean;
-  editName: string;
+  code?: string;
+  resource_type_id?: string;
+  asset_type_id?: string;
+  parent_asset_id?: string | null;
+  ownership_type?: string;
+  is_live?: boolean;
+  specifications?: Record<string, any>;
 }
 
-const INITIAL_EQUIPMENT: EquipmentItem[] = [
-  { id: '1', name: 'MRI Scanner',      meta: '1.5T · Radiology dept',          confirmed: false, editName: '' },
-  { id: '2', name: 'CT Scanner',       meta: '64-slice · Emergency wing',       confirmed: false, editName: '' },
-  { id: '3', name: 'X-Ray Machine',    meta: 'Digital · OPD',                   confirmed: false, editName: '' },
-  { id: '4', name: 'Ventilator',       meta: 'ICU grade · 8 units',             confirmed: false, editName: '' },
-  { id: '5', name: 'Patient Monitor',  meta: 'Bedside · Ward A',                confirmed: false, editName: '' },
-  { id: '6', name: 'Defibrillator',    meta: 'AED + manual · Emergency',        confirmed: false, editName: '' },
-  { id: '7', name: 'Infusion Pump',    meta: 'Volumetric · Oncology',           confirmed: false, editName: '' },
-  { id: '8', name: 'Autoclave',        meta: '134°C · CSSD',                    confirmed: false, editName: '' },
-];
+// ── Color tokens ──────────────────────────────────────────────────────────────
 
-const FACILITY_HIERARCHY = [
-  { level: 'L1', label: 'Campus' },
-  { level: 'L2', label: 'Building' },
-  { level: 'L3', label: 'Floor' },
-  { level: 'L4', label: 'Ward' },
-  { level: 'L5', label: 'Bed / Station' },
-];
-
-const COMPLIANCE_TAGS = [
-  { label: 'NABH',      desc: 'National Accreditation Board' },
-  { label: 'AERB',      desc: 'Atomic Energy Regulatory Board' },
-  { label: 'IEC 60601', desc: 'Medical electrical safety' },
-  { label: 'NABL',      desc: 'Lab accreditation' },
-];
+const VANI        = '#ff6b2b';
+const TEXT        = '#1a1816';
+const TEXT_DIM    = '#8a847a';
+const TEXT_MUTED  = '#bab4a8';
+const BORDER      = '#e5e1db';
+const BORDER_LT   = '#edeae4';
+const WHITE       = '#ffffff';
+const BG          = '#f7f5f2';
+const SURFACE     = '#faf9f7';
+const GREEN       = '#16a34a';
+const GREEN_BG    = '#f0fdf4';
+const GREEN_BORDER = '#bbf7d0';
+const DARK_BG     = 'linear-gradient(145deg, #1a1816, #2a2520)';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const Screen8BEquipmentStep: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate   = useNavigate();
+  const location   = useLocation();
   const routeState = (location.state || {}) as Record<string, any>;
 
-  const persona       = (routeState.persona       || 'buyer') as string;
-  const companyName   = (routeState.companyName   || 'City General Hospital') as string;
-  const industryNames = (routeState.industryNames  || ['Healthcare']) as string[];
+  const persona                  = (routeState.persona       || 'buyer') as string;
+  const companyName              = (routeState.companyName   || '') as string;
+  const industryNames            = (routeState.industryNames || []) as string[];
+  const selectedFacilityTemplates: any[] = routeState.selectedFacilityTemplates || [];
+
   const industryLabel = industryNames[0] || 'your industry';
 
-  const [items, setItems]         = useState<EquipmentItem[]>(INITIAL_EQUIPMENT);
+  // ── Data loading ──────────────────────────────────────────────────────────
+
+  const [assets, setAssets]       = useState<TenantAsset[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saving, setSaving]       = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Edits: id → display name
+  const [editNames, setEditNames] = useState<Record<string, string>>({});
+  // Active inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [newItemName, setNewItemName] = useState('');
-  const [showAddRow, setShowAddRow]   = useState(false);
 
-  const confirmedCount = items.filter(i => i.confirmed).length;
-  const total          = items.length;
-  const progressPct    = total > 0 ? Math.round((confirmedCount / total) * 100) : 0;
-
-  const toggleConfirm = (id: string) => {
-    setItems(prev => prev.map(item =>
-      item.id === id ? { ...item, confirmed: !item.confirmed } : item
-    ));
-  };
-
-  const startEdit = (id: string, currentName: string) => {
-    setEditingId(id);
-    setItems(prev => prev.map(item =>
-      item.id === id ? { ...item, editName: currentName } : item
-    ));
-  };
-
-  const saveEdit = (id: string) => {
-    setItems(prev => prev.map(item =>
-      item.id === id
-        ? { ...item, name: item.editName || item.name, editName: '' }
-        : item
-    ));
-    setEditingId(null);
-  };
-
-  const handleEditNameChange = (id: string, val: string) => {
-    setItems(prev => prev.map(item =>
-      item.id === id ? { ...item, editName: val } : item
-    ));
-  };
-
-  const removeSelected = () => {
-    setItems(prev => prev.filter(i => !i.confirmed));
-  };
-
-  const addItem = () => {
-    if (!newItemName.trim()) return;
-    const newItem: EquipmentItem = {
-      id: Date.now().toString(),
-      name: newItemName.trim(),
-      meta: 'New · not confirmed',
-      confirmed: false,
-      editName: '',
+  useEffect(() => {
+    const fetchAssets = async () => {
+      try {
+        const resp = await api.get('/api/client-asset-registry', {
+          params: { ownership_type: 'self', is_live: false, limit: 200 },
+        });
+        const raw: TenantAsset[] = resp.data?.assets || resp.data?.data || (Array.isArray(resp.data) ? resp.data : []);
+        // Filter to placeholder nodes seeded during onboarding
+        const placeholders = raw.filter(a => a.specifications?.is_placeholder === true || a.ownership_type === 'self');
+        setAssets(placeholders);
+        const names: Record<string, string> = {};
+        placeholders.forEach(a => { names[a.id] = a.name; });
+        setEditNames(names);
+      } catch {
+        setLoadError('Could not load facility assets. You can update them later in the registry.');
+        setAssets([]);
+      } finally {
+        setLoading(false);
+      }
     };
-    setItems(prev => [...prev, newItem]);
-    setNewItemName('');
-    setShowAddRow(false);
-  };
+    fetchAssets();
+  }, []);
 
-  const handleConfirm = () => {
-    navigate('/onboarding/done', {
-      state: { ...routeState, equipmentConfirmed: true, confirmedCount },
+  // ── Grouping by facility template ─────────────────────────────────────────
+
+  interface AssetGroup {
+    templateId: string;
+    templateName: string;
+    assets: TenantAsset[];
+  }
+
+  const groups = useMemo((): AssetGroup[] => {
+    if (selectedFacilityTemplates.length === 0) {
+      return assets.length > 0 ? [{ templateId: 'all', templateName: `${industryLabel} Assets`, assets }] : [];
+    }
+    const map: Record<string, TenantAsset[]> = {};
+    assets.forEach(a => {
+      const key = a.resource_type_id || a.asset_type_id || 'other';
+      (map[key] = map[key] || []).push(a);
     });
+    const result: AssetGroup[] = [];
+    selectedFacilityTemplates.forEach((t: any) => {
+      const grouped = map[t.id];
+      if (grouped?.length) {
+        result.push({ templateId: t.id, templateName: t.name, assets: grouped });
+        delete map[t.id];
+      }
+    });
+    // Any leftover assets not matched to a template
+    Object.entries(map).forEach(([key, ungrouped]) => {
+      if (ungrouped.length) result.push({ templateId: key, templateName: 'Other', assets: ungrouped });
+    });
+    return result;
+  }, [assets, selectedFacilityTemplates, industryLabel]);
+
+  const totalAssets     = assets.length;
+  const progressPct     = totalAssets > 0 ? 100 : 0;
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const startEdit = (id: string) => setEditingId(id);
+  const saveEdit  = (id: string) => setEditingId(null);
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await Promise.all(
+        assets.map(a =>
+          api.patch(
+            '/api/client-asset-registry',
+            { name: editNames[a.id] || a.name, is_live: true },
+            { params: { id: a.id } },
+          )
+        )
+      );
+      navigate('/onboarding/done', { state: { ...routeState, facilityConfirmed: true, assetsConfirmed: totalAssets } });
+    } catch (err: any) {
+      setSaveError(err?.response?.data?.error || 'Failed to save registry. Please try again.');
+      setSaving(false);
+    }
   };
 
-  const handleSkip = () => {
-    navigate('/onboarding/done', { state: routeState });
-  };
+  const handleSkip = () => navigate('/onboarding/done', { state: routeState });
 
   const handleBack = () => {
-    const prevRoute = persona === 'both'
-      ? '/onboarding/pricing-review'
-      : '/onboarding/vani-working';
+    const prevRoute = persona === 'both' ? '/onboarding/pricing-review' : '/onboarding/vani-working';
     navigate(prevRoute, { state: routeState });
   };
 
-  const islandLabel = confirmedCount === 0
-    ? 'Confirm your equipment list'
-    : `${confirmedCount} of ${total} confirmed`;
+  const islandLabel = saving ? 'Saving registry…' : `${totalAssets} asset${totalAssets !== 1 ? 's' : ''} ready to confirm`;
+
+  // ── Loading state ─────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
+        <div style={{ background: BG, minHeight: '100vh', paddingTop: 64, fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ width: 36, height: 36, border: `3px solid ${BORDER}`, borderTopColor: VANI, borderRadius: '50%', animation: 'spin .7s linear infinite', margin: '0 auto 16px' }} />
+            <p style={{ color: TEXT_DIM, fontSize: 14 }}>Loading your facility registry…</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Empty state ───────────────────────────────────────────────────────────
+
+  if (!loading && assets.length === 0) {
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: '@keyframes spin { to { transform: rotate(360deg); } }' }} />
+        <div style={{ background: BG, minHeight: '100vh', paddingTop: 64, fontFamily: "'Outfit', sans-serif" }}>
+          <div style={{ maxWidth: 600, margin: '80px auto', padding: '0 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🏥</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, color: TEXT, marginBottom: 8 }}>No facility assets found</h2>
+            <p style={{ color: TEXT_DIM, marginBottom: 8, lineHeight: 1.6 }}>
+              {loadError || 'No placeholder assets were seeded for your industries.'}
+            </p>
+            <p style={{ color: TEXT_MUTED, fontSize: 13, marginBottom: 28 }}>
+              You can add assets directly in the facility registry after onboarding.
+            </p>
+            <button onClick={handleSkip} style={{ padding: '12px 32px', borderRadius: 100, border: 'none', background: `linear-gradient(135deg, ${VANI}, #ff8f5a)`, color: '#fff', fontFamily: "'Outfit', sans-serif", fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 3px 10px rgba(255,107,43,.3)' }}>
+              Continue →
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Full UI ───────────────────────────────────────────────────────────────
 
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(8px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -157,18 +214,15 @@ const Screen8BEquipmentStep: React.FC = () => {
           to   { opacity: 1; transform: translateX(0); }
         }
         .eq-row:hover { background: ${SURFACE} !important; }
-        .edit-btn:hover { border-color: ${VANI} !important; color: ${VANI} !important; background: #fff4ee !important; }
-        .action-btn:hover { border-color: #6b7280 !important; color: ${TEXT} !important; background: ${SURFACE} !important; }
-        .skip-link:hover { text-decoration: underline; }
+        .s8b-edit-btn:hover { border-color: ${VANI} !important; color: ${VANI} !important; background: #fff4ee !important; }
+        .s8b-skip:hover { text-decoration: underline; }
       `}} />
 
       <div style={{ background: BG, minHeight: '100vh', paddingTop: 64, fontFamily: "'Outfit', sans-serif" }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 300px',
-          gap: 0,
-          maxWidth: 1100,
-          margin: '0 auto',
+          maxWidth: 1100, margin: '0 auto',
           padding: '40px 24px 160px',
           alignItems: 'start',
         }}>
@@ -177,10 +231,7 @@ const Screen8BEquipmentStep: React.FC = () => {
           <div>
 
             {/* VaNi bubble */}
-            <div style={{
-              display: 'flex', gap: 12, marginBottom: 28,
-              animation: 'fadeIn .5s ease both',
-            }}>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 28, animation: 'fadeIn .5s ease both' }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 9, flexShrink: 0,
                 background: `linear-gradient(135deg, ${VANI}, #ff8f5a)`,
@@ -194,292 +245,171 @@ const Screen8BEquipmentStep: React.FC = () => {
                 color: TEXT, lineHeight: 1.55, flex: 1,
                 boxShadow: '0 2px 8px rgba(0,0,0,.05)',
               }}>
-                I've created placeholders for common <strong>{industryLabel} equipment</strong>.
-                Edit names to match what <strong>{companyName}</strong> actually has.
+                I've created placeholder entries for common <strong>{industryLabel} facilities</strong>.
+                {companyName && <> Edit the names to match what <strong>{companyName}</strong> actually has.</>}
+                {!companyName && <> Rename anything that doesn't match your setup.</>}
               </div>
             </div>
 
-            {/* Equipment registry card */}
-            <div style={{
-              background: WHITE, border: `1px solid ${BORDER}`,
-              borderRadius: 12, overflow: 'hidden',
-              boxShadow: '0 2px 12px rgba(0,0,0,.06)',
-              marginBottom: 14,
-              animation: 'fadeIn .4s ease .1s both',
-            }}>
-              {/* Card header */}
-              <div style={{
-                padding: '14px 20px',
-                background: SURFACE,
-                borderBottom: `1px solid ${BORDER}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>Equipment Registry</span>
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 100,
-                  background: confirmedCount > 0 ? GREEN_BG : '#fff8f4',
-                  color: confirmedCount > 0 ? GREEN : VANI,
-                  border: `1px solid ${confirmedCount > 0 ? GREEN_BORDER : 'rgba(255,107,43,.2)'}`,
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  transition: 'all .3s ease',
-                }}>
-                  {confirmedCount} of {total} confirmed
-                </span>
+            {saveError && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#dc2626', fontSize: 13 }}>
+                {saveError}
               </div>
+            )}
 
-              {/* Equipment rows */}
-              {items.map((item, idx) => {
-                const isEditing = editingId === item.id;
-                return (
-                  <div
-                    key={item.id}
-                    className="eq-row"
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '36px 1fr auto auto',
-                      alignItems: 'center', gap: 14,
-                      padding: '13px 20px',
-                      borderBottom: `1px solid ${BORDER}`,
-                      background: item.confirmed ? GREEN_BG : WHITE,
-                      transition: 'background .2s ease',
-                      animation: `rowIn .35s ease ${idx * 0.05}s both`,
-                    }}
-                  >
-                    {/* Checkbox */}
+            {/* Asset groups — one card per facility type */}
+            {groups.map((group, gIdx) => (
+              <div key={group.templateId} style={{
+                background: WHITE, border: `1px solid ${BORDER}`,
+                borderRadius: 12, overflow: 'hidden',
+                boxShadow: '0 2px 12px rgba(0,0,0,.06)',
+                marginBottom: 16,
+                animation: `fadeIn .4s ease ${gIdx * 0.1}s both`,
+              }}>
+                {/* Card header */}
+                <div style={{
+                  padding: '14px 20px',
+                  background: SURFACE,
+                  borderBottom: `1px solid ${BORDER}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: TEXT }}>{group.templateName}</span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 100,
+                    background: GREEN_BG, color: GREEN,
+                    border: `1px solid ${GREEN_BORDER}`,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                  }}>
+                    {group.assets.length} placeholder{group.assets.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Asset rows */}
+                {group.assets.map((asset, aIdx) => {
+                  const isEditing  = editingId === asset.id;
+                  const displayName = editNames[asset.id] ?? asset.name;
+
+                  return (
                     <div
-                      onClick={() => toggleConfirm(item.id)}
+                      key={asset.id}
+                      className="eq-row"
                       style={{
-                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                        border: `2px solid ${item.confirmed ? GREEN : BORDER}`,
-                        background: item.confirmed ? GREEN : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', transition: 'all .2s ease',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto',
+                        alignItems: 'center', gap: 12,
+                        padding: '13px 20px',
+                        borderBottom: aIdx < group.assets.length - 1 ? `1px solid ${BORDER_LT}` : 'none',
+                        transition: 'background .2s ease',
+                        animation: `rowIn .35s ease ${(gIdx * 0.1 + aIdx * 0.04)}s both`,
                       }}
                     >
-                      {item.confirmed && (
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>✓</span>
-                      )}
-                    </div>
-
-                    {/* Name + meta */}
-                    <div>
-                      {isEditing ? (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <input
-                            autoFocus
-                            value={item.editName}
-                            onChange={e => handleEditNameChange(item.id, e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                            style={{
-                              padding: '5px 10px', borderRadius: 6,
-                              border: `1.5px solid ${VANI}`, fontSize: 13,
-                              fontFamily: "'Outfit', sans-serif",
-                              fontWeight: 600, outline: 'none', flex: 1,
-                            }}
-                          />
-                          <button
-                            onClick={() => saveEdit(item.id)}
-                            style={{
-                              padding: '5px 12px', borderRadius: 6, border: 'none',
-                              background: VANI, color: '#fff',
-                              fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >save</button>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: item.confirmed ? GREEN : TEXT, marginBottom: 2 }}>
-                            {item.name}
+                      {/* Name */}
+                      <div>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <input
+                              autoFocus
+                              value={editNames[asset.id] ?? asset.name}
+                              onChange={e => setEditNames(prev => ({ ...prev, [asset.id]: e.target.value }))}
+                              onKeyDown={e => e.key === 'Enter' && saveEdit(asset.id)}
+                              style={{
+                                padding: '5px 10px', borderRadius: 6,
+                                border: `1.5px solid ${VANI}`, fontSize: 13,
+                                fontFamily: "'Outfit', sans-serif",
+                                fontWeight: 600, outline: 'none', flex: 1,
+                              }}
+                            />
+                            <button onClick={() => saveEdit(asset.id)} style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: VANI, color: '#fff', fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>save</button>
                           </div>
-                          <div style={{ fontSize: 11, color: TEXT_MUTED }}>{item.meta}</div>
-                        </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>
+                              {displayName}
+                            </div>
+                            {asset.code && (
+                              <div style={{ fontSize: 11, color: TEXT_MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
+                                {asset.code}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Edit button */}
+                      {!isEditing && (
+                        <button
+                          className="s8b-edit-btn"
+                          onClick={() => startEdit(asset.id)}
+                          style={{
+                            padding: '5px 12px', borderRadius: 6,
+                            border: `1.5px solid ${BORDER}`, background: 'transparent',
+                            fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600,
+                            color: TEXT_DIM, cursor: 'pointer', transition: 'all .15s',
+                          }}
+                        >rename</button>
                       )}
                     </div>
-
-                    {/* Edit button */}
-                    {!isEditing && (
-                      <button
-                        className="edit-btn"
-                        onClick={() => startEdit(item.id, item.name)}
-                        style={{
-                          padding: '5px 12px', borderRadius: 6,
-                          border: `1.5px solid ${BORDER}`, background: 'transparent',
-                          fontFamily: "'Outfit', sans-serif", fontSize: 11, fontWeight: 600,
-                          color: TEXT_DIM, cursor: 'pointer', transition: 'all .15s',
-                        }}
-                      >edit</button>
-                    )}
-
-                    {/* Status badge */}
-                    <span style={{
-                      fontSize: 10, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
-                      color: item.confirmed ? GREEN : TEXT_MUTED,
-                      minWidth: 60, textAlign: 'right',
-                    }}>
-                      {item.confirmed ? 'confirmed' : 'pending'}
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Add new row */}
-              {showAddRow && (
-                <div style={{ padding: '12px 20px', borderBottom: `1px solid ${BORDER}`, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input
-                    autoFocus
-                    placeholder="Equipment name…"
-                    value={newItemName}
-                    onChange={e => setNewItemName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addItem()}
-                    style={{
-                      flex: 1, padding: '8px 12px', borderRadius: 6,
-                      border: `1.5px solid ${VANI}`, fontSize: 13,
-                      fontFamily: "'Outfit', sans-serif", outline: 'none',
-                    }}
-                  />
-                  <button onClick={addItem} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: VANI, color: '#fff', fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Add</button>
-                  <button onClick={() => setShowAddRow(false)} style={{ padding: '8px 12px', borderRadius: 6, border: `1.5px solid ${BORDER}`, background: 'transparent', fontFamily: "'Outfit', sans-serif", fontSize: 12, color: TEXT_DIM, cursor: 'pointer' }}>Cancel</button>
-                </div>
-              )}
-
-              {/* Add / Remove row */}
-              <div style={{ padding: '12px 20px', display: 'flex', gap: 10 }}>
-                <button
-                  className="action-btn"
-                  onClick={() => setShowAddRow(true)}
-                  style={{
-                    padding: '7px 16px', borderRadius: 8,
-                    border: `1.5px solid rgba(255,107,43,.3)`,
-                    background: '#fff8f4', color: VANI,
-                    fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                    transition: 'all .15s',
-                  }}
-                >+ Add equipment</button>
-                <button
-                  className="action-btn"
-                  onClick={removeSelected}
-                  disabled={confirmedCount === 0}
-                  style={{
-                    padding: '7px 16px', borderRadius: 8,
-                    border: `1.5px solid ${BORDER}`,
-                    background: 'transparent', color: TEXT_DIM,
-                    fontFamily: "'Outfit', sans-serif", fontSize: 12, fontWeight: 700,
-                    cursor: confirmedCount > 0 ? 'pointer' : 'not-allowed',
-                    opacity: confirmedCount > 0 ? 1 : 0.4,
-                    transition: 'all .15s',
-                  }}
-                >− Remove confirmed</button>
+                  );
+                })}
               </div>
-            </div>
+            ))}
 
-            <div
-              className="skip-link"
-              onClick={handleSkip}
-              style={{ fontSize: 13, color: TEXT_MUTED, cursor: 'pointer', display: 'inline-block' }}
-            >
-              Skip for now — I'll confirm equipment later
+            <div className="s8b-skip" onClick={handleSkip} style={{ fontSize: 13, color: TEXT_MUTED, cursor: 'pointer', display: 'inline-block' }}>
+              Skip for now — I'll confirm facilities later
             </div>
           </div>
 
           {/* ── Right panel ── */}
           <div style={{ position: 'sticky', top: 84, paddingLeft: 24 }}>
 
-            {/* Registry progress */}
-            <div style={{
-              background: DARK_CARD,
-              border: '1px solid rgba(255,107,43,.12)',
-              borderRadius: 14, padding: '20px 22px', marginBottom: 12,
-            }}>
+            {/* Registry summary — dark card */}
+            <div style={{ background: DARK_BG, border: '1px solid rgba(255,107,43,.12)', borderRadius: 14, padding: '20px 22px', marginBottom: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: "'IBM Plex Mono', monospace", color: 'rgba(255,255,255,.3)', marginBottom: 12 }}>
-                Registry Progress
+                Registry Summary
               </div>
               {[
-                { k: 'Confirmed', v: String(confirmedCount), accent: confirmedCount > 0 },
-                { k: 'Pending',   v: `${total - confirmedCount} remaining`, warn: confirmedCount < total },
-                { k: 'Industry',  v: industryLabel, accent: true },
+                { k: 'Total assets',  v: String(totalAssets), accent: true },
+                { k: 'Facility types', v: String(groups.length) },
+                { k: 'Industry',      v: industryLabel, accent: true },
+                { k: 'Status',        v: 'Placeholder', muted: true },
               ].map(row => (
                 <div key={row.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, marginBottom: 8, borderBottom: '1px solid rgba(255,255,255,.05)' }}>
                   <span style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', fontFamily: "'IBM Plex Mono', monospace" }}>{row.k}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: row.accent ? VANI : row.warn ? '#fbbf24' : 'rgba(255,255,255,.65)' }}>{row.v}</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                    color: (row as any).accent ? VANI : (row as any).muted ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.65)',
+                    fontStyle: (row as any).muted ? 'italic' : 'normal',
+                  }}>{row.v}</span>
                 </div>
               ))}
-              {/* Progress bar */}
               <div style={{ height: 6, background: 'rgba(255,255,255,.1)', borderRadius: 100, overflow: 'hidden', marginTop: 4 }}>
                 <div style={{
                   height: '100%',
-                  background: confirmedCount === total
-                    ? `linear-gradient(90deg, ${GREEN}, #22c55e)`
-                    : `linear-gradient(90deg, ${VANI}, #ff8f5a)`,
+                  background: `linear-gradient(90deg, ${VANI}, #ff8f5a)`,
                   borderRadius: 100,
-                  width: `${progressPct}%`,
+                  width: '100%',
                   transition: 'width .4s ease',
                 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <span style={{ fontSize: 10, color: confirmedCount === total ? '#22c55e' : VANI, fontFamily: "'IBM Plex Mono', monospace" }}>
-                  {progressPct}%
-                </span>
-                <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', fontFamily: "'IBM Plex Mono', monospace" }}>
-                  of {total} assets
-                </span>
+                <span style={{ fontSize: 10, color: VANI, fontFamily: "'IBM Plex Mono', monospace" }}>Ready</span>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', fontFamily: "'IBM Plex Mono', monospace" }}>{totalAssets} assets</span>
               </div>
             </div>
 
-            {/* Facility hierarchy */}
-            <div style={{
-              background: WHITE, border: `1px solid ${BORDER}`,
-              borderRadius: 14, padding: '16px 18px', marginBottom: 12,
-              boxShadow: '0 2px 12px rgba(0,0,0,.05)',
-            }}>
+            {/* What happens next — light card */}
+            <div style={{ background: WHITE, border: `1px solid ${BORDER}`, borderRadius: 14, padding: '16px 18px', boxShadow: '0 2px 12px rgba(0,0,0,.05)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: "'IBM Plex Mono', monospace", color: TEXT_MUTED, marginBottom: 12 }}>
-                Facility Hierarchy
+                What happens next
               </div>
-              {FACILITY_HIERARCHY.map((h, i) => (
-                <div key={h.level} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  paddingBottom: 8, marginBottom: 8,
-                  borderBottom: i < FACILITY_HIERARCHY.length - 1 ? `1px solid ${BORDER}` : 'none',
-                }}>
-                  <span style={{
-                    fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                    background: SURFACE, color: TEXT_MUTED,
-                    fontFamily: "'IBM Plex Mono', monospace", minWidth: 24, textAlign: 'center',
-                  }}>{h.level}</span>
-                  <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{h.label}</span>
-                  {/* Tree connector */}
-                  {i < FACILITY_HIERARCHY.length - 1 && (
-                    <span style={{ marginLeft: 'auto', fontSize: 11, color: TEXT_MUTED }}>↓</span>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Compliance active */}
-            <div style={{
-              background: WHITE, border: `1px solid ${BORDER}`,
-              borderRadius: 14, padding: '16px 18px',
-              boxShadow: '0 2px 12px rgba(0,0,0,.05)',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: "'IBM Plex Mono', monospace", color: TEXT_MUTED, marginBottom: 12 }}>
-                Compliance Active
-              </div>
-              {COMPLIANCE_TAGS.map((c, i) => (
-                <div key={c.label} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  paddingBottom: 8, marginBottom: 8,
-                  borderBottom: i < COMPLIANCE_TAGS.length - 1 ? `1px solid ${BORDER}` : 'none',
-                }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{c.label}</div>
-                    <div style={{ fontSize: 10, color: TEXT_MUTED }}>{c.desc}</div>
-                  </div>
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 100,
-                    background: GREEN_BG, color: GREEN, border: `1px solid ${GREEN_BORDER}`,
-                    fontFamily: "'IBM Plex Mono', monospace",
-                  }}>Active</span>
+              {[
+                { label: 'Assets go live', desc: 'Marked active in your registry' },
+                { label: 'Assign contacts', desc: 'Link equipment to clients' },
+                { label: 'Log maintenance', desc: 'Start tracking service history' },
+              ].map((item, i, arr) => (
+                <div key={item.label} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: i < arr.length - 1 ? `1px solid ${BORDER_LT}` : 'none' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: TEXT, marginBottom: 2 }}>{item.label}</div>
+                  <div style={{ fontSize: 11, color: TEXT_MUTED }}>{item.desc}</div>
                 </div>
               ))}
             </div>
@@ -501,27 +431,24 @@ const Screen8BEquipmentStep: React.FC = () => {
           {islandLabel}
         </span>
         <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,.12)' }} />
-        <button
-          onClick={handleBack}
-          style={{
-            padding: '10px 18px', borderRadius: 100, border: '1px solid rgba(255,255,255,.15)',
-            background: 'transparent', color: 'rgba(255,255,255,.65)',
-            fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >← Back</button>
+        <button onClick={handleBack} style={{ padding: '10px 18px', borderRadius: 100, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: 'rgba(255,255,255,.65)', fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          ← Back
+        </button>
         <button
           onClick={handleConfirm}
+          disabled={saving}
           style={{
             padding: '10px 24px', borderRadius: 100, border: 'none',
-            background: `linear-gradient(135deg, ${VANI}, #ff8f5a)`,
-            color: '#fff',
+            background: saving ? 'rgba(255,255,255,.1)' : `linear-gradient(135deg, ${VANI}, #ff8f5a)`,
+            color: saving ? 'rgba(255,255,255,.35)' : '#fff',
             fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: `0 3px 10px ${VANI}50`,
+            cursor: saving ? 'not-allowed' : 'pointer',
+            boxShadow: saving ? 'none' : `0 3px 10px rgba(255,107,43,.5)`,
+            display: 'flex', alignItems: 'center', gap: 8,
           }}
         >
-          Confirm & continue →
+          {saving && <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />}
+          {saving ? 'Saving…' : 'Confirm & go live →'}
         </button>
       </div>
     </>

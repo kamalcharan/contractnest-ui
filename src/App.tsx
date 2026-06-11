@@ -71,6 +71,7 @@ import BusinessDetailsStep from '@/pages/onboarding/steps/BusinessDetailsStep';
 import PersonaSelectionStep from '@/pages/onboarding/steps/PersonaSelectionStep';
 import ThemeSelectionStep from '@/pages/onboarding/steps/ThemeSelectionStep';
 import VaniConsentStep from '@/pages/onboarding/steps/VaniConsentStep';
+import VaniIntelligenceStep from '@/pages/onboarding/steps/VaniIntelligenceStep';
 import VaniWorkingStep from '@/pages/onboarding/steps/VaniWorkingStep';
 import VaniDoneStep from '@/pages/onboarding/steps/VaniDoneStep';
 import IndustrySelectionStep from '@/pages/onboarding/steps/IndustrySelectionStep';
@@ -429,6 +430,7 @@ const AppContent: React.FC = () => {
   <Route path="industry-selection" element={<IndustrySelectionStep />} />
   <Route path="resource-pick" element={<ResourcePickStep />} />
   <Route path="vani-consent" element={<VaniConsentStep />} />
+  <Route path="vani-intelligence" element={<VaniIntelligenceStep />} />
   <Route path="vani-working" element={<VaniWorkingStep />} />
   <Route path="pricing-review" element={<Screen8APricingStep />} />
   <Route path="equipment-confirm" element={<Screen8BEquipmentStep />} />

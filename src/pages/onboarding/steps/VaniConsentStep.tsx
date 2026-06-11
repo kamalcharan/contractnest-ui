@@ -2,7 +2,7 @@
 // Screen 7 — VaNi Consent (6A = Seller, 6B = Buyer, 6C = Both)
 // Receives selectedEquipmentTemplates + selectedFacilityTemplates from ResourcePickStep via routeState.
 // Shows a dynamic preview of exactly what VaNi will build.
-// CTA "Set up my workspace →" navigates to /onboarding/vani-working, passing templates forward.
+// CTA "Set up my workspace →" navigates to /onboarding/vani-intelligence, passing templates forward.
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -69,6 +69,7 @@ const VaniConsentStep: React.FC = () => {
   const routeState = (location.state || {}) as {
     selectedEquipmentTemplates?: ResourceTemplate[];
     selectedFacilityTemplates?: ResourceTemplate[];
+    workIntent?: string | null;
   };
 
   const { setTheme, currentTheme } = useTheme();
@@ -94,8 +95,12 @@ const VaniConsentStep: React.FC = () => {
   const firstName = user?.first_name?.trim() || null;
   const fullName  = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || null;
   const company   = formData.business_name?.trim() || currentTenant?.name || 'your company';
-  const personaId = (formData.business_type_id as PersonaId) || null;
-  const persona   = personaId ? PERSONA_META[personaId] : null;
+  const rawPersona = formData.business_type_id || '';
+  const personaId: PersonaId | null = rawPersona === 'service_provider' ? 'seller'
+    : rawPersona === 'merchant' ? 'buyer'
+    : (rawPersona === 'seller' || rawPersona === 'buyer' || rawPersona === 'both') ? rawPersona as PersonaId
+    : null;
+  const persona = personaId ? PERSONA_META[personaId] : null;
 
   // Selected templates from ResourcePickStep
   const selEquipment = routeState.selectedEquipmentTemplates || [];
@@ -103,10 +108,22 @@ const VaniConsentStep: React.FC = () => {
   const blockCount   = selEquipment.length * 3;
 
   const handleStart = () => {
-    navigate('/onboarding/vani-working', {
+    navigate('/onboarding/vani-intelligence', {
       state: {
         selectedEquipmentTemplates: selEquipment,
         selectedFacilityTemplates:  selFacility,
+        workIntent: routeState.workIntent || null,
+      },
+    });
+  };
+
+  const handleBack = () => {
+    // Pass selections back so ResourcePickStep can restore them
+    navigate('/onboarding/resource-pick', {
+      state: {
+        selectedEquipmentTemplates: selEquipment,
+        selectedFacilityTemplates:  selFacility,
+        workIntent: routeState.workIntent || null,
       },
     });
   };
@@ -287,7 +304,7 @@ const VaniConsentStep: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 3, height: 16, borderRadius: 2, background: BLUE }} />
                       <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.6, color: BLUE }}>
-                        Service catalog
+                        Equipment types
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -311,7 +328,7 @@ const VaniConsentStep: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                     <div style={{ width: 3, height: 16, borderRadius: 2, background: PURPLE }} />
                     <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.6, color: PURPLE }}>
-                      Asset registry
+                      Facility types
                     </span>
                     <span style={{ fontSize: 10, color: colors.utility.secondaryText, fontFamily: "'IBM Plex Mono', monospace", background: PURPLE_BG, border: `1px solid ${PURPLE}20`, borderRadius: 100, padding: '1px 8px', marginLeft: 6 }}>
                       {selFacility.length} types
@@ -381,7 +398,7 @@ const VaniConsentStep: React.FC = () => {
         <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,.12)' }} />
         <button
           type="button"
-          onClick={() => navigate('/onboarding/resource-pick')}
+          onClick={handleBack}
           style={{ padding: '10px 20px', borderRadius: 100, border: 'none', background: 'rgba(255,255,255,.08)', color: 'rgba(255,255,255,.6)', fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .2s' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,.14)'; e.currentTarget.style.color = 'rgba(255,255,255,.85)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,.08)'; e.currentTarget.style.color = 'rgba(255,255,255,.6)'; }}
