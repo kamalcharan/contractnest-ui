@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, TreePine, Wrench, Package, ClipboardCheck, RefreshCw,
-  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText, Trash2, AlertTriangle, Plus, ShieldCheck, DollarSign, Tag,
+  MapPin, CheckCircle2, AlertCircle, Save, History, Loader2, FileText, Trash2, AlertTriangle, Plus, ShieldCheck, DollarSign, Tag, Network,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
@@ -12,7 +12,7 @@ import {
   useKnowledgeTreeDelete, useKnowledgeTreeGenerate,
   useUpsertEquipmentMeta, useTagCompliance, useSaveContextOverlays,
   useKTGenerateVariants, useKTGenerateSpareParts, useKTGenerateCheckpoints, useKTGenerateServiceCycles,
-  useKTGeneratePricing, useKTGenerateServiceNames,
+  useKTGeneratePricing, useKTGenerateServiceNames, useKTGenerateVariantApplicability,
 } from '@/hooks/queries/useKnowledgeTree';
 import type { KnowledgeTreeSummary } from './types';
 import KTGenerationModal from './components/KTGenerationModal';
@@ -26,7 +26,7 @@ import CyclesTab from './components/CyclesTab';
 import OverlaysTab from './components/OverlaysTab';
 import FormPreviewTab from './components/FormPreviewTab';
 
-type DetailTab = 'variants' | 'spare-parts' | 'checkpoints' | 'cycles' | 'overlays' | 'form-preview';
+type DetailTab = 'variants' | 'spare-parts' | 'checkpoints' | 'cycles' | 'services' | 'overlays' | 'form-preview';
 
 const ACTIVITY_CONFIG = [
   { key: 'pm',           label: 'Preventive Maintenance', short: 'PM' },
@@ -88,6 +88,7 @@ const KnowledgeTreeDetail: React.FC = () => {
   // ── Step 5 + Option A mutations ──
   const generatePricingMutation = useKTGeneratePricing();
   const generateServiceNamesMutation = useKTGenerateServiceNames();
+  const generateVariantMapMutation = useKTGenerateVariantApplicability();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isTaggingCompliance, setIsTaggingCompliance] = useState(false);
@@ -218,12 +219,44 @@ const KnowledgeTreeDetail: React.FC = () => {
         checkpoints: allCheckpointsFlat.map((cp: any) => ({ id: cp.id, name: cp.name, section_name: cp.section_name })),
       });
       vaniToast.success(`Service names generated — ${result.service_names.length} sections named`);
+      setActiveTab('services');
       refetch();
-      setActiveTab('checkpoints');
     } catch (err) {
       vaniToast.error(`Service name generation failed: ${(err as Error).message}`);
     }
   }, [id, summary, localCheckpoints, generateServiceNamesMutation, refetch]);
+
+  // ── Patch: Generate variant applicability for existing checkpoints ────────────
+  const handleGenerateVariantMap = useCallback(async () => {
+    if (!id || !summary) return;
+    const allCheckpointsFlat = Object.values(localCheckpoints).flat();
+    if (summary.variants.length === 0) {
+      vaniToast.warning('No variants — generate variants first (Step 1)');
+      return;
+    }
+    if (allCheckpointsFlat.length === 0) {
+      vaniToast.warning('No checkpoints — generate checkpoints first (Step 3)');
+      return;
+    }
+    try {
+      const result = await generateVariantMapMutation.mutateAsync({
+        equipmentName: summary.resource_template.name,
+        subCategory: summary.resource_template.sub_category,
+        resourceTemplateId: id,
+        variants: summary.variants.map((v: any) => ({ id: v.id, name: v.name, capacity_range: v.capacity_range })),
+        checkpoints: allCheckpointsFlat.map((cp: any) => ({ id: cp.id, name: cp.name, section_name: cp.section_name, service_activity: cp.service_activity })),
+      });
+      const { mappings, variant_specific_checkpoints, universal_checkpoints } = result.stats;
+      vaniToast.success(
+        mappings === 0
+          ? `Variant applicability done — all ${universal_checkpoints} checkpoints are universal (apply to every variant)`
+          : `Variant applicability done — ${mappings} mappings on ${variant_specific_checkpoints} variant-specific checkpoints (${universal_checkpoints} universal)`
+      );
+      refetch();
+    } catch (err) {
+      vaniToast.error(`Variant applicability generation failed: ${(err as Error).message}`);
+    }
+  }, [id, summary, localCheckpoints, generateVariantMapMutation, refetch]);
 
   // ── Step 5: Generate pricing for spare parts + service cycles ─────────────────
   const handleGeneratePricing = useCallback(async () => {
@@ -234,6 +267,20 @@ const KnowledgeTreeDetail: React.FC = () => {
       return;
     }
     const currencyOption = CURRENCY_OPTIONS.find(c => c.value === selectedCurrency) || CURRENCY_OPTIONS[0];
+
+    // Layer 2: each cycle carries its applicable variants (from the variant map;
+    // no map rows = applies to ALL variants) so the LLM can return currency-neutral
+    // per-variant multipliers alongside min/median/max.
+    const allVariants = (summary.variants || []).map((v: any) => ({ id: v.id, name: v.name, capacity_range: v.capacity_range }));
+    const applicabilityByCp = new Map<string, string[]>();
+    for (const cp of Object.values(localCheckpoints).flat() as any[]) {
+      applicabilityByCp.set(cp.id, (cp.variant_applicability || []).map((m: any) => m.variant_id));
+    }
+    const variantsForCycle = (cy: any) => {
+      const mapped = applicabilityByCp.get(cy.checkpoint_id) || [];
+      return mapped.length ? allVariants.filter(v => mapped.includes(v.id)) : allVariants;
+    };
+
     try {
       const result = await generatePricingMutation.mutateAsync({
         equipmentName: summary.resource_template.name,
@@ -242,14 +289,22 @@ const KnowledgeTreeDetail: React.FC = () => {
         currency: currencyOption.value,
         geo: currencyOption.geo,
         spareParts: allPartsFlat.map((p: any) => ({ id: p.id, name: p.name, component_group: p.component_group })),
-        serviceCycles: localCycles.map((cy: any) => ({ id: cy.id, catalog_name: cy.catalog_name, frequency_value: cy.frequency_value, frequency_unit: cy.frequency_unit, checkpoint_name: cy.checkpoint_name })),
+        serviceCycles: localCycles.map((cy: any) => ({
+          id: cy.id,
+          catalog_name: cy.catalog_name,
+          frequency_value: cy.frequency_value,
+          frequency_unit: cy.frequency_unit,
+          checkpoint_name: cy.checkpoint_name,
+          variants: variantsForCycle(cy),
+        })),
       });
-      vaniToast.success(`Pricing generated [${currencyOption.value}] — ${result.spare_parts.length} parts, ${result.service_cycles.length} cycles priced`);
+      const multCount = (result.service_cycles || []).reduce((n: number, sc: any) => n + (sc.variant_multipliers?.length || 0), 0);
+      vaniToast.success(`Pricing generated [${currencyOption.value}] — ${result.spare_parts.length} parts, ${result.service_cycles.length} cycles priced${multCount ? `, ${multCount} variant multipliers` : ''}`);
       refetch();
     } catch (err) {
       vaniToast.error(`Pricing generation failed: ${(err as Error).message}`);
     }
-  }, [id, summary, localParts, localCycles, selectedCurrency, generatePricingMutation, refetch]);
+  }, [id, summary, localParts, localCycles, localCheckpoints, selectedCurrency, generatePricingMutation, refetch]);
 
   // ── Individual step handlers (manual retry) ────────────────────────────────
 
@@ -745,7 +800,8 @@ const KnowledgeTreeDetail: React.FC = () => {
     generateCheckpointsMutation.isPending ||
     generateServiceCyclesMutation.isPending ||
     generatePricingMutation.isPending ||
-    generateServiceNamesMutation.isPending;
+    generateServiceNamesMutation.isPending ||
+    generateVariantMapMutation.isPending;
 
   const borderColor = colors.utility.secondaryText + '15';
   const cardBg = colors.utility.secondaryBackground;
@@ -755,6 +811,11 @@ const KnowledgeTreeDetail: React.FC = () => {
     { key: 'spare-parts', label: partsTabLabel, icon: <Package className="h-4 w-4" />, count: allPartsCount },
     { key: 'checkpoints', label: 'Checkpoints', icon: <ClipboardCheck className="h-4 w-4" />, count: allCheckpointsFlat.length },
     { key: 'cycles', label: 'Service Cycles', icon: <RefreshCw className="h-4 w-4" />, count: localCycles.length },
+    { key: 'services', label: 'Services', icon: <Tag className="h-4 w-4" />, count: (() => {
+        const defs = ((summary as any)?.service_definitions || []).map((d: any) => d.service_name);
+        const offerings = [...new Set((((summary as any)?.cycles) || []).map((cy: any) => cy.catalog_name).filter(Boolean))];
+        return new Set([...defs, ...offerings]).size;
+      })() },
     { key: 'overlays', label: 'Overlays', icon: <MapPin className="h-4 w-4" />, count: summary?.summary.overlays_count || 0 },
     { key: 'form-preview', label: 'Form Preview', icon: <FileText className="h-4 w-4" />, count: allCheckpointsFlat.length },
   ], [localVariants, allPartsCount, allCheckpointsFlat, localCycles, summary]);
@@ -927,6 +988,24 @@ const KnowledgeTreeDetail: React.FC = () => {
                     {generateServiceNamesMutation.isPending ? 'Naming...' : 'Service Names'}
                   </button>
 
+                  {/* Patch: Generate Variant Applicability (checkpoint→variant map, no wipe) */}
+                  <button
+                    onClick={handleGenerateVariantMap}
+                    disabled={isStepGenerating || ktIsActive || checkpointsCount === 0 || variantsCount === 0}
+                    className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium border transition-all hover:opacity-80 disabled:opacity-40"
+                    style={{ borderColor: '#8b5cf640', color: '#8b5cf6', backgroundColor: '#8b5cf608' }}
+                    title={
+                      variantsCount === 0 ? 'Generate variants first (Step 1)'
+                      : checkpointsCount === 0 ? 'Generate checkpoints first (Step 3)'
+                      : 'Map which variants each checkpoint applies to (enables variant-aware seeding + per-variant pricing)'
+                    }
+                  >
+                    {generateVariantMapMutation.isPending
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <Network className="h-3 w-3" />}
+                    {generateVariantMapMutation.isPending ? 'Mapping...' : 'Variant Map'}
+                  </button>
+
                   {/* Step 5: Generate Pricing with currency selector */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
                     <select
@@ -953,6 +1032,19 @@ const KnowledgeTreeDetail: React.FC = () => {
                       {generatePricingMutation.isPending ? 'Pricing...' : 'Generate Pricing'}
                     </button>
                   </div>
+
+                  {/* Active pricings (m_kt_prices) — which geo/currency sets this KT holds.
+                      Multi-pricing fix: generating a new currency ADDS a chip, never replaces. */}
+                  {((summary as any)?.pricing_coverage || []).map((pc: any) => (
+                    <span
+                      key={`${pc.currency}-${pc.geo}`}
+                      className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full font-medium"
+                      style={{ backgroundColor: '#0891b215', color: '#0891b2', border: '1px solid #0891b230' }}
+                      title={`${pc.currency} / ${pc.geo}: ${pc.cycles} cycles, ${pc.spare_parts} spare parts priced`}
+                    >
+                      <DollarSign className="h-3 w-3" /> {pc.currency} · {pc.geo} ({(pc.cycles || 0) + (pc.spare_parts || 0)})
+                    </span>
+                  ))}
 
                   {/* Separator */}
                   <span style={{ width: '1px', height: '16px', background: colors.utility.secondaryText + '30', flexShrink: 0 }} />
@@ -1025,6 +1117,45 @@ const KnowledgeTreeDetail: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Generation Sequence card — the canonical order for a COMPLETE Knowledge Tree.
+                Steps 1–4 are created automatically by the "+ Generate KT" prompt (grey =
+                auto); 5–6 are MANUAL admin runs (amber until done) — founder request. */}
+            <div className="hidden xl:block px-4 py-2.5 rounded-xl border self-start" style={{ borderColor, background: colors.utility.primaryBackground }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: colors.utility.secondaryText }}>
+                Generation Sequence · <span style={{ background: colors.utility.secondaryText + '14', padding: '0 4px', borderRadius: '3px' }}>auto via + Generate KT</span> · <span style={{ color: '#f59e0b' }}>amber = run manually</span> · steps 3–5 per activity · pricing per currency
+              </p>
+              <div className="flex items-center gap-1 flex-wrap">
+                {[
+                  { n: 1, label: 'Variants', auto: true, done: variantsCount > 0 },
+                  { n: 2, label: 'Spare Parts', auto: true, done: partsCount > 0 },
+                  { n: 3, label: 'Checkpoints + Variant Map', auto: true, done: checkpointsCount > 0 },
+                  { n: 4, label: 'Cycles', auto: true, done: cyclesCount > 0 },
+                  { n: 5, label: 'Service Names', auto: false, done: (((summary as any)?.service_definitions || []).length) > 0 },
+                  { n: 6, label: 'Pricing', auto: false, done: (((summary as any)?.pricing_coverage || []).length) > 0 },
+                ].map((s, i, arr) => (
+                  <React.Fragment key={s.n}>
+                    <span
+                      className="flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded"
+                      style={{
+                        color: s.done ? colors.semantic.success : (s.auto ? colors.utility.secondaryText : '#f59e0b'),
+                        background: s.done
+                          ? colors.semantic.success + '10'
+                          : (s.auto ? colors.utility.secondaryText + '14' : '#f59e0b15'),
+                      }}
+                      title={`${s.n}. ${s.label} — ${s.done ? 'done' : 'pending'} · ${s.auto ? 'created automatically by + Generate KT' : 'MANUAL: run from the buttons below'}`}
+                    >
+                      {s.done
+                        ? <CheckCircle2 className="h-3 w-3" />
+                        : <span className="w-3.5 h-3.5 rounded-full border text-[9px] font-bold flex items-center justify-center" style={{ borderColor: (s.auto ? colors.utility.secondaryText : '#f59e0b') + '60' }}>{s.n}</span>}
+                      {s.label}
+                    </span>
+                    {i < arr.length - 1 && <span className="text-[11px]" style={{ color: colors.utility.secondaryText + '60' }}>→</span>}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center gap-3">
               {/* Tag Compliance button */}
               <button
@@ -1078,6 +1209,93 @@ const KnowledgeTreeDetail: React.FC = () => {
           {activeTab === 'spare-parts' && <SparePartsTab summary={summary} variants={localVariants} partsByGroup={localParts} selectedVariantIds={selectedVariantIds} onAddPart={addSparePart} onRemovePart={removeSparePart} onEditPart={editSparePart} onToggleMapping={togglePartVariantMapping} colors={colors} expandedGroups={expandedGroups} toggleGroup={toggleGroup} />}
           {activeTab === 'checkpoints' && <CheckpointsTab summary={summary} checkpointsBySection={localCheckpoints} onAddCheckpoint={addCheckpoint} onAddValue={addCheckpointValue} onEditCheckpoint={editCheckpoint} colors={colors} />}
           {activeTab === 'cycles' && <CyclesTab summary={summary} cycles={localCycles} onAdd={addCycle} onRemove={removeCycle} onEditCycle={editCycle} colors={colors} />}
+          {activeTab === 'services' && (() => {
+            const defs: any[] = (summary as any)?.service_definitions || [];
+            const cps: any[] = Object.values(summary?.checkpoints_by_section || {}).flat() as any[];
+            const cycles: any[] = (summary as any)?.cycles || [];
+            const cpsByService = new Map<string, any[]>();
+            cps.forEach((c: any) => {
+              if (!c.service_name) return;
+              const arr = cpsByService.get(c.service_name) || [];
+              arr.push(c); cpsByService.set(c.service_name, arr);
+            });
+            const cpIds = (name: string) => new Set((cpsByService.get(name) || []).map((c: any) => c.id));
+            // Founder taxonomy: chargeable Services = named work packages
+            // (cycle.catalog_name) ∪ section jobs (checkpoint.service_name).
+            const cpById = new Map(cps.map((c: any) => [c.id, c]));
+            const defNames = new Set(defs.map((d: any) => d.service_name));
+            const offeringNames = [...new Set(cycles.filter((cy: any) => cy.catalog_name).map((cy: any) => cy.catalog_name))]
+              .filter((n: any) => !defNames.has(n));
+            const allServices = [
+              ...defs.map((d: any) => ({ ...d, kind: 'job' as const })),
+              ...offeringNames.map((n: any) => ({ service_name: n, description: null, kind: 'offering' as const })),
+            ];
+            const actsFor = (svc: any): string[] => {
+              if (svc.kind === 'offering') {
+                const set = new Set<string>();
+                cycles.filter((cy: any) => cy.catalog_name === svc.service_name)
+                  .forEach((cy: any) => { const c = cpById.get(cy.checkpoint_id); if (c?.service_activity) set.add(c.service_activity); });
+                return [...set];
+              }
+              return [...new Set((cpsByService.get(svc.service_name) || []).map((c: any) => c.service_activity).filter(Boolean))] as string[];
+            };
+            return (
+              <div className="space-y-3">
+                {allServices.length === 0 && (
+                  <div className="text-sm py-10 text-center" style={{ color: colors.utility.secondaryText }}>
+                    No services defined yet — run <b>Service Names</b> above to group checkpoints into sellable services.
+                  </div>
+                )}
+                {allServices.map((d: any) => {
+                  const ids = d.kind === 'offering'
+                    ? new Set(cycles.filter((cy: any) => cy.catalog_name === d.service_name).map((cy: any) => cy.checkpoint_id))
+                    : cpIds(d.service_name);
+                  const svcCycles = d.kind === 'offering'
+                    ? cycles.filter((cy: any) => cy.catalog_name === d.service_name)
+                    : cycles.filter((cy: any) => ids.has(cy.checkpoint_id));
+                  const acts = actsFor(d);
+                  const cadences = [...new Set(svcCycles.filter((cy: any) => cy.frequency_unit === 'days' && cy.frequency_value)
+                    .map((cy: any) => `every ${cy.frequency_value}d`))];
+                  const prices = svcCycles.flatMap((cy: any) => cy.prices || []);
+                  const byCur: Record<string, number[]> = {};
+                  prices.forEach((p: any) => { if (p.price_median != null) (byCur[p.currency] = byCur[p.currency] || []).push(Number(p.price_median)); });
+                  return (
+                    <div key={d.service_name} className="rounded-xl border p-4" style={{ borderColor, backgroundColor: colors.utility.primaryBackground }}>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-sm" style={{ color: colors.utility.primaryText }}>{d.service_name}</div>
+                          {d.description ? (
+                            <p className="text-xs mt-1 leading-relaxed max-w-2xl" style={{ color: colors.utility.secondaryText }}>{d.description}</p>
+                          ) : (
+                            <p className="text-xs mt-1 italic" style={{ color: colors.utility.secondaryText + '99' }}>
+                              No description yet — re-run Service Names to generate one.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                          {acts.map((a: string) => (
+                            <span key={a} className="text-[10px] font-mono px-2 py-0.5 rounded-full uppercase" style={{ backgroundColor: '#8b5cf615', color: '#8b5cf6' }}>{a}</span>
+                          ))}
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}>
+                            {ids.size} checkpoints
+                          </span>
+                          {cadences.slice(0, 3).map(c => (
+                            <span key={c} className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: '#2563eb15', color: '#2563eb' }}>{c}</span>
+                          ))}
+                          {Object.entries(byCur).map(([cur, vals]) => (
+                            <span key={cur} className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ backgroundColor: '#10b98115', color: '#10b981' }}>
+                              {cur} {Math.min(...vals).toLocaleString()}–{Math.max(...vals).toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {activeTab === 'overlays' && (
             <OverlaysTab
               resourceTemplateId={id!}

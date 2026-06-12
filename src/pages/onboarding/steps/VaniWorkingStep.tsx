@@ -16,13 +16,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
+import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
 import { useServedIndustriesManager } from '@/hooks/queries/useServedIndustries';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type StepStatus = 'idle' | 'running' | 'done' | 'skipped' | 'error';
+type StepStatus = 'idle' | 'running' | 'done' | 'skipped' | 'error' | 'nocoverage';
 type PersonaId = 'seller' | 'buyer' | 'both';
 
 interface TaskDef {
@@ -149,7 +150,7 @@ const VaniWorkingStep: React.FC = () => {
   const { formData, fetchProfile } = useTenantProfile({ isOnboarding: true });
   const { servedIndustries, isLoading: industriesLoading } = useServedIndustriesManager();
 
-  const personaId = normalizePersona(formData.business_type_id || '');
+  const personaId = normalizePersona((formData as any).persona || formData.business_type_id || '');
   const industryNames = servedIndustries.map(si => si.industry?.name || '').filter(Boolean);
   const industryIds = servedIndustries.map(si => si.industry_id);
   const companyName = formData.business_name?.trim() || currentTenant?.name || 'your company';
@@ -176,6 +177,7 @@ const VaniWorkingStep: React.FC = () => {
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({});
 
   const [catalogBlocksSeeded, setCatalogBlocksSeeded] = useState(0);
+  const [noCoverage, setNoCoverage] = useState(false);
   const [facilityNodesSeeded, setFacilityNodesSeeded] = useState(0);
   const [sampleContactsSeeded, setSampleContactsSeeded] = useState(0);
   const [liveOp, setLiveOp] = useState('Initialising…');
@@ -208,6 +210,12 @@ const VaniWorkingStep: React.FC = () => {
   const runAll = async () => {
     setErrorMessages({});
     let doneCount = 0;
+    // Local copies of seed outcomes — React state set during this run is stale
+    // inside this closure, so the completion block reads these instead.
+    let localNoCoverage = false;
+    let localBlocks = 0;
+    let localNodes = 0;
+    let localContacts = 0;
 
     // ── Storage ──────────────────────────────────────────────────────────────
     setStatus('storage', 'running');
@@ -239,11 +247,10 @@ const VaniWorkingStep: React.FC = () => {
     doneCount++;
     updateProgress(doneCount);
 
-    // ── Industry knowledge (instant) ─────────────────────────────────────────
-    setStatus('industry', 'running');
-    setLiveOp(`Loading ${industryNames.join(', ') || 'industry'} knowledge tree…`);
-    await new Promise(r => setTimeout(r, 600));
+    // ── Industry context (no fake work — the real KT lookup happens inside the
+    // seed call below; this task only reflects which industries drive it) ─────
     setStatus('industry', 'done');
+    setDetail('industry', `${industryNames.join(', ') || 'Industry'} · context applied`);
     doneCount++;
     updateProgress(doneCount);
 
@@ -272,28 +279,48 @@ const VaniWorkingStep: React.FC = () => {
           facilityTemplateIds:  selectedFacilityTemplates.map((t: any) => t.id),
           businessType: personaId,
           industryId,
+          industryIds: industryIdsRef.current,
         });
 
         const data     = resp.data?.data || {};
         const blocks   = data.equipmentBlocksSeeded ?? 0;
-        const nodes    = data.facilityNodesSeeded   ?? 0;
+        const nodes    = data.registryAssetsSeeded ?? data.facilityNodesSeeded ?? 0;
         const contacts = data.sampleContactsSeeded  ?? 0;
+        const seedStatus: string = resp.data?.status || data.status || 'success';
 
         setCatalogBlocksSeeded(blocks);
         setFacilityNodesSeeded(nodes);
         setSampleContactsSeeded(contacts);
+        localBlocks = blocks;
+        localNodes = nodes;
+        localContacts = contacts;
 
-        if (hasCatalogTask) {
-          setStatus('catalog', 'done');
-          setDetail('catalog', blocks > 0 ? `${blocks} blocks created · test + live` : 'Already configured');
-          doneCount++;
-          updateProgress(doneCount);
-        }
-        if (hasFacilityTask) {
-          setStatus('facility', 'done');
-          setDetail('facility', nodes > 0 ? `${nodes} nodes created` : 'Already configured');
-          doneCount++;
-          updateProgress(doneCount);
+        if (seedStatus === 'no_coverage') {
+          // Honest no-coverage state: no fake green checkmarks (probe B0.5 kill-switch).
+          setNoCoverage(true);
+          localNoCoverage = true;
+          const msg = `No knowledge-tree coverage for ${industryNames.join(', ') || 'your industry'} yet — nothing was seeded. You can build your ${hasCatalogTask ? 'catalog' : 'registry'} manually, and VaNi will flag this industry for coverage.`;
+          if (hasCatalogTask)  { setStatus('catalog',  'nocoverage'); setDetail('catalog',  msg); doneCount++; updateProgress(doneCount); }
+          if (hasFacilityTask) { setStatus('facility', 'nocoverage'); setDetail('facility', msg); doneCount++; updateProgress(doneCount); }
+        } else {
+          if (hasCatalogTask) {
+            const failed = seedStatus === 'error' || (seedStatus === 'partial' && blocks === 0);
+            if (failed) {
+              setStatus('catalog', 'error');
+              setErrorMessages(prev => ({ ...prev, catalog: data.statusDetail || (data.errors || []).join('; ') || 'Catalog seed failed' }));
+            } else {
+              setStatus('catalog', 'done');
+              setDetail('catalog', blocks > 0 ? `${blocks} blocks created · test + live` : 'Already configured');
+            }
+            doneCount++;
+            updateProgress(doneCount);
+          }
+          if (hasFacilityTask) {
+            setStatus('facility', 'done');
+            setDetail('facility', nodes > 0 ? `${nodes} registry entries created` : 'Already configured');
+            doneCount++;
+            updateProgress(doneCount);
+          }
         }
       } catch (err: any) {
         if (err?.response?.status === 409) {
@@ -340,7 +367,19 @@ const VaniWorkingStep: React.FC = () => {
     // ── All done ─────────────────────────────────────────────────────────────
     setAllDone(true);
     setProgressPct(100);
-    setLiveOp('Done! Your workspace is ready.');
+    setLiveOp(localNoCoverage
+      ? 'Setup finished — your industry has no knowledge-tree coverage yet, so nothing was auto-seeded.'
+      : 'Done! Your workspace is ready.');
+
+    // S13: persist the real outcome of this step (no fake success in step_data either)
+    completeVaniStep('vani-working', {
+      persona: personaId,
+      no_coverage: localNoCoverage,
+      catalog_blocks_seeded: localBlocks,
+      registry_assets_seeded: localNodes,
+      sample_contacts_seeded: localContacts,
+      industry_ids: industryIdsRef.current,
+    });
 
     const nextRoute = personaId === 'buyer'
       ? '/onboarding/equipment-confirm'
@@ -356,9 +395,10 @@ const VaniWorkingStep: React.FC = () => {
       navigate(nextRoute, {
         state: {
           persona: personaId,
-          catalogBlocksSeeded,
-          facilityNodesSeeded,
-          sampleContactsSeeded,
+          noCoverage: localNoCoverage,
+          catalogBlocksSeeded: localBlocks,
+          facilityNodesSeeded: localNodes,
+          sampleContactsSeeded: localContacts,
           companyName,
           industryNames: finalIndustryNames.length > 0 ? finalIndustryNames : industryNames,
           industryIds: finalIndustryIds,
@@ -380,7 +420,7 @@ const VaniWorkingStep: React.FC = () => {
   };
 
   const hasError = Object.values(statuses).some(s => s === 'error');
-  const doneCount = Object.values(statuses).filter(s => s === 'done' || s === 'skipped').length;
+  const doneCount = Object.values(statuses).filter(s => s === 'done' || s === 'skipped' || s === 'nocoverage').length;
   const etaSeconds = allDone ? 0 : Math.max(0, (totalTasks - doneCount) * 18);
 
   const workingTitle = personaId === 'buyer'
@@ -442,6 +482,7 @@ const VaniWorkingStep: React.FC = () => {
                 const isSkipped = status === 'skipped';
                 const isActive  = status === 'running';
                 const isError   = status === 'error';
+                const isNoCov   = status === 'nocoverage';
 
                 return (
                   <div
@@ -449,8 +490,8 @@ const VaniWorkingStep: React.FC = () => {
                     style={{
                       display: 'flex', alignItems: 'center', gap: 14,
                       padding: '14px 18px',
-                      background: isDone ? GREEN_BG : isSkipped ? SKIP_BG : isActive ? '#fff8f4' : isError ? '#fef2f2' : WHITE,
-                      border: `1px solid ${isDone ? GREEN_BORDER : isSkipped ? SKIP_BORDER : isActive ? 'rgba(255,107,43,.2)' : isError ? '#fecaca' : BORDER}`,
+                      background: isDone ? GREEN_BG : isSkipped ? SKIP_BG : isActive ? '#fff8f4' : isError ? '#fef2f2' : isNoCov ? '#fffbeb' : WHITE,
+                      border: `1px solid ${isDone ? GREEN_BORDER : isSkipped ? SKIP_BORDER : isActive ? 'rgba(255,107,43,.2)' : isError ? '#fecaca' : isNoCov ? '#fde68a' : BORDER}`,
                       borderRadius: 8,
                       transition: 'all .3s ease',
                       animation: `taskIn .4s ease ${idx * 0.08}s both`,
@@ -460,11 +501,14 @@ const VaniWorkingStep: React.FC = () => {
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: isDone ? GREEN : isSkipped ? SKIP_BORDER : isActive ? VANI : isError ? '#ef4444' : '#ede8e2',
+                      background: isDone ? GREEN : isSkipped ? SKIP_BORDER : isActive ? VANI : isError ? '#ef4444' : isNoCov ? '#f59e0b' : '#ede8e2',
                       transition: 'all .3s ease',
                     }}>
                       {(isDone || isSkipped) && (
                         <span style={{ fontSize: 13, color: isDone ? '#fff' : SKIP_TEXT, fontWeight: 800 }}>✓</span>
+                      )}
+                      {isNoCov && (
+                        <span style={{ fontSize: 13, color: '#fff', fontWeight: 800 }}>!</span>
                       )}
                       {isActive && (
                         <div style={{
@@ -484,13 +528,13 @@ const VaniWorkingStep: React.FC = () => {
                     <div style={{ flex: 1 }}>
                       <div style={{
                         fontSize: 14, fontWeight: 700, marginBottom: 2,
-                        color: isDone ? '#15803d' : isSkipped ? SKIP_TEXT : isError ? '#dc2626' : isActive ? VANI : TEXT,
+                        color: isDone ? '#15803d' : isSkipped ? SKIP_TEXT : isError ? '#dc2626' : isNoCov ? '#b45309' : isActive ? VANI : TEXT,
                       }}>
                         {task.label}
                       </div>
                       <div style={{
                         fontSize: 11, lineHeight: 1.4,
-                        color: isDone ? GREEN : isSkipped ? SKIP_TEXT : isError ? '#ef4444' : isActive ? VANI : TEXT_MUTED,
+                        color: isDone ? GREEN : isSkipped ? SKIP_TEXT : isError ? '#ef4444' : isNoCov ? '#b45309' : isActive ? VANI : TEXT_MUTED,
                       }}>
                         {isError && errMsg ? errMsg : detail}
                       </div>

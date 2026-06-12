@@ -149,18 +149,30 @@ const CyclesTab: React.FC<Props> = ({ summary, cycles, onAdd, onRemove, onEditCy
                   ))}
                 </div>
 
-                {/* Pricing (only shown when any cycle has pricing) */}
+                {/* Pricing — all active geo/currency pricings (m_kt_prices),
+                    legacy single slot as fallback. INR shown first. */}
                 {hasPricingOnAny && (
                   <div style={{ fontSize: '10px' }}>
-                    {hasPricing ? (
-                      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '1px' }}>
-                        <span><span style={{ color: colors.utility.secondaryText }}>Min: </span><strong style={{ color: colors.semantic.success, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(cy.price_min, currency)}</strong></span>
-                        <span><span style={{ color: colors.utility.secondaryText }}>Med: </span><strong style={{ color: colors.utility.primaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(cy.price_median, currency)}</strong></span>
-                        <span><span style={{ color: colors.utility.secondaryText }}>Max: </span><strong style={{ color: colors.semantic.error, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(cy.price_max, currency)}</strong></span>
-                      </div>
-                    ) : (
-                      <span style={{ color: colors.utility.secondaryText + '60' }}>—</span>
-                    )}
+                    {(() => {
+                      const multi: any[] = (cy as any).prices?.length
+                        ? [...(cy as any).prices].sort((a: any, b: any) => (a.currency === 'INR' ? -1 : b.currency === 'INR' ? 1 : 0))
+                        : (hasPricing ? [{ currency, price_min: cy.price_min, price_median: cy.price_median, price_max: cy.price_max }] : []);
+                      if (!multi.length) return <span style={{ color: colors.utility.secondaryText + '60' }}>—</span>;
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+                          {multi.map((pr: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', flexDirection: 'column' as const, gap: '1px' }}>
+                              {multi.length > 1 && (
+                                <span style={{ fontSize: '8px', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#0891b2', letterSpacing: '0.4px' }}>{pr.currency}{pr.geo ? ` · ${pr.geo}` : ''}</span>
+                              )}
+                              <span><span style={{ color: colors.utility.secondaryText }}>Min: </span><strong style={{ color: colors.semantic.success, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_min, pr.currency)}</strong></span>
+                              <span><span style={{ color: colors.utility.secondaryText }}>Med: </span><strong style={{ color: colors.utility.primaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_median, pr.currency)}</strong></span>
+                              <span><span style={{ color: colors.utility.secondaryText }}>Max: </span><strong style={{ color: colors.semantic.error, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_max, pr.currency)}</strong></span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

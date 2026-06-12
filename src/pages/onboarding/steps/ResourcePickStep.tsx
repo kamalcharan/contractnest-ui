@@ -12,6 +12,8 @@ import { useTenantProfile } from '@/hooks/useTenantProfile';
 import useResourceTemplatesBrowser from '@/hooks/queries/useResourceTemplates';
 import { useKnowledgeTreeCoverage } from '@/hooks/queries/useKnowledgeTree';
 import { getSubCategoryConfig } from '@/constants/subCategoryConfig';
+import api from '@/services/api';
+import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
 import { ArrowRight, Package, RefreshCw } from 'lucide-react';
 import type { ResourceTemplate } from '@/services/resourcesService';
 import type { KnowledgeTreeCoverageMap } from '@/pages/service-contracts/templates/admin/knowledge-tree/types';
@@ -78,7 +80,7 @@ const ResourcePickStep: React.FC = () => {
   const { data: ktCoverage, isLoading: ktLoading } = useKnowledgeTreeCoverage();
 
   const isLoading = templatesLoading || ktLoading;
-  const personaId = normalizePersona(formData.business_type_id || '');
+  const personaId = normalizePersona((formData as any).persona || formData.business_type_id || '');
   const firstName = user?.first_name?.trim() || null;
 
   const equipmentTemplates = useMemo(
@@ -145,7 +147,38 @@ const ResourcePickStep: React.FC = () => {
     return null;
   };
 
-  const handleContinue = () => {
+  // S8: persist picks durably (t_tenant_selected_resources) before navigating.
+  // Purpose rule mirrors the backend seeder:
+  //   seller → equipment picks are 'sell'
+  //   buyer  → equipment + facility picks are 'own'
+  //   both   → equipment picks are 'sell' AND 'own'; facility picks are 'own'
+  // Best-effort: the seed endpoint re-persists from its payload as a backstop,
+  // so a transient failure here must not block onboarding.
+  const handleContinue = async () => {
+    const selections: Array<{ resource_template_id: string; purpose: 'sell' | 'own' }> = [];
+    const isSeller = personaId === 'seller' || personaId === 'both';
+    const isBuyer  = personaId === 'buyer'  || personaId === 'both';
+    if (isSeller) selEq.forEach(t => selections.push({ resource_template_id: t.id, purpose: 'sell' }));
+    if (isBuyer) {
+      selEq.forEach(t => selections.push({ resource_template_id: t.id, purpose: 'own' }));
+      selFac.forEach(t => selections.push({ resource_template_id: t.id, purpose: 'own' }));
+    }
+    if (!isBuyer) selFac.forEach(t => selections.push({ resource_template_id: t.id, purpose: 'sell' }));
+
+    if (selections.length > 0) {
+      try {
+        await api.post('/api/onboarding/selected-resources', { selections, source: 'onboarding' });
+      } catch (err: any) {
+        console.error('[ResourcePick] Failed to persist selections (seed will retry):', err?.message);
+      }
+    }
+    completeVaniStep('resource-pick', {
+      equipment_template_ids: selEq.map(t => t.id),
+      facility_template_ids:  selFac.map(t => t.id),
+      persona: personaId,
+      work_intent: deriveWorkIntent(),
+    });
+
     navigate('/onboarding/vani-consent', {
       state: {
         selectedEquipmentTemplates: selEq,

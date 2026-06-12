@@ -14,6 +14,8 @@ export type WizardStep = 'business-type' | 'industry' | 'organization-details';
 export interface TenantProfile {
   id?: string;
   tenant_id?: string;
+  /** S7 canonical persona (seller | buyer | both); business_type_id is deprecated for persona use */
+  persona?: 'seller' | 'buyer' | 'both' | null;
   business_type_id: string;
   industry_id: string;
   business_name: string;

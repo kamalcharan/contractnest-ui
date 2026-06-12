@@ -11,6 +11,7 @@ import { useTenantProfile } from '@/hooks/useTenantProfile';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { vaniToast } from '@/components/common/toast';
+import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
 import { Loader2 } from 'lucide-react';
 
 type PersonaId = 'seller' | 'buyer' | 'both';
@@ -77,14 +78,15 @@ const PersonaSelectionStep: React.FC = () => {
 
   // Pre-select once profile data arrives from fetchProfile()
   useEffect(() => {
-    if (formData.business_type_id && !selected) {
-      const saved = PERSONAS.find(p => p.id === formData.business_type_id);
+    const savedPersona = (formData as any).persona || formData.business_type_id;
+    if (savedPersona && !selected) {
+      const saved = PERSONAS.find(p => p.id === savedPersona);
       if (saved) {
-        setSelected(formData.business_type_id as PersonaId);
+        setSelected(savedPersona as PersonaId);
         setVaniVisible(true);
       }
     }
-  }, [formData.business_type_id]);
+  }, [formData.business_type_id, (formData as any).persona]);
 
   const handleSelect = (id: PersonaId) => {
     setSelected(id);
@@ -98,10 +100,15 @@ const PersonaSelectionStep: React.FC = () => {
     try {
       // POST = UPSERT (onConflict: tenant_id). Sends actual saved business_name
       // so the business name the user entered in Screen 2 is never overwritten.
+      // S7 dual-write: persona is the constrained agent-readable column;
+      // business_type_id stays written because /settings/business-profile and
+      // AuthContext.initializePerspective consume it (buyer/seller/both LOV).
       await api.post(API_ENDPOINTS.TENANTS.PROFILE, {
         business_name: formData.business_name || currentTenant?.name || '',
+        persona: selected,
         business_type_id: selected,
       });
+      completeVaniStep('persona-selection', { persona: selected });
       vaniToast.success('Persona saved');
       navigate('/onboarding/theme-selection');
     } catch (err: any) {

@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '@/services/api';
+import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ interface TenantAsset {
   code?: string;
   resource_type_id?: string;
   asset_type_id?: string;
+  template_id?: string | null;
   parent_asset_id?: string | null;
   ownership_type?: string;
   is_live?: boolean;
@@ -103,7 +105,9 @@ const Screen8BEquipmentStep: React.FC = () => {
     }
     const map: Record<string, TenantAsset[]> = {};
     assets.forEach(a => {
-      const key = a.resource_type_id || a.asset_type_id || 'other';
+      // Seeded entries carry template_id = m_catalog_resource_templates.id,
+      // which is what selectedFacilityTemplates ids actually are.
+      const key = a.template_id || a.resource_type_id || a.asset_type_id || 'other';
       (map[key] = map[key] || []).push(a);
     });
     const result: AssetGroup[] = [];
@@ -142,6 +146,11 @@ const Screen8BEquipmentStep: React.FC = () => {
           )
         )
       );
+      completeVaniStep('equipment-confirm', {
+        confirmed: true,
+        assets_confirmed: totalAssets,
+        renamed: assets.filter(a => (editNames[a.id] || a.name) !== a.name).length,
+      });
       navigate('/onboarding/done', { state: { ...routeState, facilityConfirmed: true, assetsConfirmed: totalAssets } });
     } catch (err: any) {
       setSaveError(err?.response?.data?.error || 'Failed to save registry. Please try again.');

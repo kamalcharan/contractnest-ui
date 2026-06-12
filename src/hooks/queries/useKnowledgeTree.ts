@@ -252,7 +252,11 @@ export const useKTGeneratePricing = () => {
       currency?: string;
       geo?: string;
       spareParts: Array<{ id: string; name: string; component_group: string }>;
-      serviceCycles: Array<{ id: string; catalog_name?: string | null; frequency_value: number; frequency_unit: string; checkpoint_name?: string }>;
+      serviceCycles: Array<{
+        id: string; catalog_name?: string | null; frequency_value: number; frequency_unit: string; checkpoint_name?: string;
+        // Layer 2: applicable variants → LLM returns currency-neutral variant_multipliers
+        variants?: Array<{ id: string; name: string; capacity_range?: string | null }>;
+      }>;
     }) => {
       const { default: api } = await import('@/services/api');
       const response = await api.post('/api/knowledge-tree/generate-pricing', payload, { timeout: 120000 });
@@ -300,6 +304,38 @@ export const useKTGenerateServiceNames = () => {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resourceTemplateId) });
       queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.checkpoints(variables.resourceTemplateId) });
+    },
+  });
+};
+
+// Patch: Generate variant applicability for existing checkpoints → patch-variant-map edge
+export const useKTGenerateVariantApplicability = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      equipmentName: string;
+      subCategory: string;
+      resourceTemplateId: string;
+      variants: Array<{ id: string; name: string; capacity_range?: string | null }>;
+      checkpoints: Array<{ id: string; name: string; section_name: string; service_activity: string }>;
+    }) => {
+      const { default: api } = await import('@/services/api');
+      const response = await api.post('/api/knowledge-tree/generate-variant-map', payload, { timeout: 120000 });
+      if (!response.data?.success) throw new Error(response.data?.error?.message || 'Variant applicability generation failed');
+      await postKnowledgeTreeEdge('patch-variant-map', {
+        resource_template_id: payload.resourceTemplateId,
+        checkpoint_variant_map: response.data.data.checkpoint_variant_map,
+      });
+      return response.data.data as {
+        resource_template_id: string;
+        checkpoint_variant_map: Array<{ id: string; checkpoint_id: string; variant_id: string; override_min: number | null; override_max: number | null }>;
+        stats: { mappings: number; variant_specific_checkpoints: number; universal_checkpoints: number; dropped: number };
+      };
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.summary(variables.resourceTemplateId) });
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.checkpoints(variables.resourceTemplateId) });
+      queryClient.invalidateQueries({ queryKey: knowledgeTreeKeys.variants(variables.resourceTemplateId) });
     },
   });
 };

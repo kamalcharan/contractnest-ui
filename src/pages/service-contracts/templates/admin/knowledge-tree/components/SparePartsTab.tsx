@@ -96,23 +96,32 @@ const SparePartsTab: React.FC<Props> = ({
                               <div style={{ fontSize: '11px', color: colors.utility.secondaryText, marginBottom: '6px' }}>{part.description}</div>
                             )}
 
-                            {/* Pricing row */}
-                            {hasPricingData && (
-                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                                <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                                  Min: <strong style={{ color: colors.semantic.success, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(part.price_min, currency)}</strong>
-                                </span>
-                                <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                                  Median: <strong style={{ color: colors.utility.primaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(part.price_median, currency)}</strong>
-                                </span>
-                                <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
-                                  Max: <strong style={{ color: colors.semantic.error, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(part.price_max, currency)}</strong>
-                                </span>
-                                {part.price_geo && (
-                                  <span style={{ fontSize: '9px', padding: '1px 5px', borderRadius: '3px', background: borderColor, color: colors.utility.secondaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{part.price_geo}</span>
-                                )}
-                              </div>
-                            )}
+                            {/* Pricing rows — all active geo/currency pricings (m_kt_prices),
+                                legacy slot as fallback. INR first. */}
+                            {(() => {
+                              const multi: any[] = (part as any).prices?.length
+                                ? [...(part as any).prices].sort((a: any, b: any) => (a.currency === 'INR' ? -1 : b.currency === 'INR' ? 1 : 0))
+                                : (hasPricingData ? [{ currency, geo: part.price_geo, price_min: part.price_min, price_median: part.price_median, price_max: part.price_max }] : []);
+                              return multi.map((pr: any, i: number) => (
+                                <div key={i} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px', alignItems: 'center' }}>
+                                  {multi.length > 1 && (
+                                    <span style={{ fontSize: '8px', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: '#0891b2', letterSpacing: '0.4px' }}>{pr.currency}</span>
+                                  )}
+                                  <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                                    Min: <strong style={{ color: colors.semantic.success, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_min, pr.currency)}</strong>
+                                  </span>
+                                  <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                                    Median: <strong style={{ color: colors.utility.primaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_median, pr.currency)}</strong>
+                                  </span>
+                                  <span style={{ fontSize: '10px', color: colors.utility.secondaryText }}>
+                                    Max: <strong style={{ color: colors.semantic.error, fontFamily: "'IBM Plex Mono', monospace" }}>{formatPrice(pr.price_max, pr.currency)}</strong>
+                                  </span>
+                                  {pr.geo && (
+                                    <span style={{ fontSize: '9px', padding: '1px 5px', borderRadius: '3px', background: borderColor, color: colors.utility.secondaryText, fontFamily: "'IBM Plex Mono', monospace" }}>{pr.geo}</span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
 
                             {/* Variant applicability chips */}
                             {variants.length > 0 && (

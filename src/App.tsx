@@ -137,6 +137,8 @@ import {
   BrowserNotSupportedPage
 } from './pages/misc';
 import TaxSettingsPage from './pages/settings/TaxSettings';
+import SeedDataPage from './pages/settings/seed-data';
+import CatalogEquipmentPage from './pages/catalog-studio/equipment';
 import SequencingSettingsPage from './pages/settings/sequencing';
 
 // Main pages
@@ -607,6 +609,8 @@ const AppContent: React.FC = () => {
 <Route path="/catalog-studio" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
   <Route index element={<Navigate to="configure" replace />} />
   <Route path="configure" element={<CatalogStudioConfigurePage />} />
+  {/* Equipment & Facilities view (Sprint 1, founder design) */}
+  <Route path="equipment" element={<CatalogEquipmentPage />} />
   <Route path="blocks" element={<CatalogStudioBlocksPage />} />
   <Route path="blocks/new" element={<CatalogStudioNewBlockPage />} />
   <Route path="blocks/:id/edit" element={<CatalogStudioEditBlockPage />} />
@@ -664,6 +668,9 @@ const AppContent: React.FC = () => {
 
             {/* tax-settings route */}
             <Route path="tax-settings" element={<TaxSettingsPage />} />
+
+            {/* Seed Data management (Sprint 1) */}
+            <Route path="seed-data" element={<SeedDataPage />} />
 
             {/* sequence-numbers settings route */}
             <Route path="sequencing" element={<SequencingSettingsPage />} />
