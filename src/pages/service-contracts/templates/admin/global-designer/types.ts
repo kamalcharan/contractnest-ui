@@ -6,6 +6,26 @@ import type { BillingCycleType } from '@/components/contracts/ContractWizard/ste
 import type { EvidencePolicyType, SelectedForm } from '@/components/contracts/ContractWizard/steps/EvidencePolicyStep';
 import type { ContractDetailsData } from '@/components/contracts/ContractWizard/steps/ContractDetailsStep';
 
+// ─── Recipe Slots (slot-hydration model) ───────────────────────────
+// A global recipe references SLOTS (activity + asset + cadence + compliance),
+// NOT tenant block_ids. At tenant time these slots are hydrated against the
+// tenant's own seeded catalog blocks. See VaNiDesignerPanel / useGenerateRecipe.
+
+export interface RecipeSlot {
+  id: string;                       // stable client-side id
+  activity: string;                 // 'pm' | 'inspection' | 'repair' | 'install' | 'decommission' | 'spare_pool'
+  label: string;                    // human label, e.g. "Quarterly Preventive Maintenance"
+  assetTypeName: string;            // resolved from wizard context ('Any' if unscoped)
+  assetTypeId: string | null;
+  cadenceDays: number | null;       // null = on-demand (spares / breakdown)
+  checkpointCount: number;          // expected checklist size (drives the smartform)
+  complianceStandards: string[];    // KG-derived standards (empty if none)
+  priceHintMin: number | null;      // KT reference band (tenant sets the real price)
+  priceHintMax: number | null;
+  currency: string;
+  accepted: boolean;                // per-slot accept/reject in the review UI
+}
+
 // ─── Wizard State ───────────────────────────────────────────────────
 
 export interface GlobalDesignerWizardState {
@@ -40,6 +60,9 @@ export interface GlobalDesignerWizardState {
 
   // Step 8: Publish
   publishStatus: 'draft' | 'active' | 'featured';
+
+  // AI (VaNi Designer) — accepted recipe slots (slot-hydration model)
+  recipeSlots: RecipeSlot[];
 }
 
 // ─── Step Configuration ─────────────────────────────────────────────
@@ -164,6 +187,9 @@ export const INITIAL_WIZARD_STATE: GlobalDesignerWizardState = {
 
   // Step 8: Publish
   publishStatus: 'draft',
+
+  // AI (VaNi Designer)
+  recipeSlots: [],
 };
 
 // ─── Nomenclature group constants (determines equipment vs facility) ─

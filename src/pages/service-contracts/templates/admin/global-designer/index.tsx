@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Shield, X } from 'lucide-react';
+import { Shield, X, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
 import { captureException } from '@/utils/sentry';
@@ -31,7 +31,12 @@ import {
   WIZARD_STEPS,
   INITIAL_WIZARD_STATE,
   type GlobalDesignerWizardState,
+  type RecipeSlot,
 } from './types';
+
+// VaNi Designer AI panel (UX-A2)
+import VaNiDesignerPanel from './ai/VaNiDesignerPanel';
+import type { FieldSuggestion } from './ai/useGenerateRecipe';
 
 // Step 1: Nomenclature — reused from contract wizard
 import NomenclatureStep from '@/components/contracts/ContractWizard/steps/NomenclatureStep';
@@ -77,6 +82,45 @@ const GlobalDesignerPage: React.FC = () => {
 
   // Service blocks — separate state (ConfigurableBlock[] from catalog-studio)
   const [selectedBlocks, setSelectedBlocks] = useState<ConfigurableBlock[]>([]);
+
+  // VaNi Designer AI panel (UX-A2)
+  const [showVaNi, setShowVaNi] = useState(false);
+
+  // Human labels for the AI context strip — prettify industry slugs
+  // (e.g. 'food_processing' -> 'Food Processing') without an extra fetch.
+  const industryLabels = wizardState.targetIndustries.map((id) =>
+    id.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+
+  // Apply accepted recipe slots into wizard state (dedupe by activity+label+asset).
+  const handleApplySlots = useCallback((slots: RecipeSlot[]) => {
+    setWizardState((prev) => {
+      const key = (s: RecipeSlot) => `${s.activity}|${s.label}|${s.assetTypeId ?? ''}`;
+      const seen = new Set(prev.recipeSlots.map(key));
+      const merged = [...prev.recipeSlots, ...slots.filter((s) => !seen.has(key(s)))];
+      return { ...prev, recipeSlots: merged };
+    });
+    toast({ title: 'Recipe slots applied', description: `${slots.length} slot${slots.length === 1 ? '' : 's'} added. Review them in the final step.` });
+  }, [toast]);
+
+  // Apply AI field suggestions to wizard defaults (type-safe subset).
+  const handleApplyFields = useCallback((fields: FieldSuggestion[]) => {
+    setWizardState((prev) => {
+      const next = { ...prev, contractDetails: { ...prev.contractDetails } };
+      for (const f of fields) {
+        if (f.key === 'currency') next.contractDetails.currency = f.value;
+        else if (f.key === 'paymentTermsDays') {
+          const n = parseInt(f.value.replace(/\D+/g, ''), 10);
+          if (!Number.isNaN(n)) next.defaultPaymentTermsDays = n;
+        } else if (f.key === 'compliance' && f.value && f.value !== 'None') {
+          next.complianceTags = Array.from(new Set([...prev.complianceTags, ...f.value.split(',').map((s) => s.trim()).filter(Boolean)]));
+        }
+        // billingCycle intentionally left to the manual Billing step (typed enum).
+      }
+      return next;
+    });
+    toast({ title: 'Defaults applied', description: 'Currency, payment terms and compliance updated.' });
+  }, [toast]);
 
   // Track whether we've already populated from the fetched template (prevent re-population)
   const hasPopulatedRef = useRef(false);
@@ -128,6 +172,9 @@ const GlobalDesignerPage: React.FC = () => {
 
       // Step 8: Publish
       publishStatus: existingTemplate.is_public ? 'active' : 'draft',
+
+      // AI recipe slots (slot-hydration model)
+      recipeSlots: settings.recipeSlots || [],
     });
 
     // Populate service blocks from existing template blocks
@@ -280,6 +327,9 @@ const GlobalDesignerPage: React.FC = () => {
         defaultEvidenceForms: wizardState.defaultEvidenceForms,
         defaultAcceptanceMethod: wizardState.defaultAcceptanceMethod,
         complianceTags: wizardState.complianceTags,
+
+        // AI recipe slots (slot-hydration source of truth; additive to `blocks`)
+        recipeSlots: wizardState.recipeSlots,
       };
 
       // Resolve publish status
@@ -446,17 +496,33 @@ const GlobalDesignerPage: React.FC = () => {
           </span>
         </div>
 
-        <button
-          onClick={handleExit}
-          className="p-2 rounded-lg transition-colors hover:opacity-80"
-          style={{
-            backgroundColor: `${colors.utility.secondaryText}10`,
-            color: colors.utility.secondaryText,
-          }}
-          title="Close wizard"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* VaNi Designer launch (UX-A2) */}
+          <button
+            onClick={() => setShowVaNi(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white transition hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #ff6b2b, #ff8f5a)' }}
+            title="Generate this recipe with VaNi"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Design with VaNi
+            {wizardState.recipeSlots.length > 0 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/25">{wizardState.recipeSlots.length}</span>
+            )}
+          </button>
+
+          <button
+            onClick={handleExit}
+            className="p-2 rounded-lg transition-colors hover:opacity-80"
+            style={{
+              backgroundColor: `${colors.utility.secondaryText}10`,
+              color: colors.utility.secondaryText,
+            }}
+            title="Close wizard"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* ─── Step Content ────────────────────────────────────────── */}
@@ -490,6 +556,16 @@ const GlobalDesignerPage: React.FC = () => {
         showTotal={false}
         isSavingDraft={isSaving}
         draftSaveStatus={draftSaveStatus}
+      />
+
+      {/* ─── VaNi Designer AI panel (UX-A2) ─────────────────────── */}
+      <VaNiDesignerPanel
+        isOpen={showVaNi}
+        onClose={() => setShowVaNi(false)}
+        state={wizardState}
+        industryLabels={industryLabels}
+        onApplySlots={handleApplySlots}
+        onApplyFields={handleApplyFields}
       />
     </div>
   );

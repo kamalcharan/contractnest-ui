@@ -14,6 +14,9 @@ import {
   Globe,
   Star,
   Eye,
+  Sparkles,
+  CalendarClock,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { GlobalDesignerWizardState } from '../types';
@@ -178,6 +181,59 @@ const ReviewPublishStep: React.FC<ReviewPublishStepProps> = ({ state, onUpdate, 
             </div>
           )}
         </div>
+
+        {/* ─── Recipe Slots (VaNi) ─────────────────────────────── */}
+        {state.recipeSlots.length > 0 && (
+          <div
+            className="rounded-xl border p-5"
+            style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: `${colors.brand.primary}20` }}
+          >
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#ff6b2b18' }}>
+                <Sparkles className="w-4 h-4" style={{ color: '#ff6b2b' }} />
+              </div>
+              <h4 className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                Recipe Slots
+                <span className="ml-2 text-xs font-normal" style={{ color: colors.utility.secondaryText }}>
+                  {state.recipeSlots.length} · hydrated to tenant blocks at seed time
+                </span>
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {state.recipeSlots.map((slot) => (
+                <div
+                  key={slot.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg"
+                  style={{ border: `1px solid ${colors.utility.primaryText}10` }}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>{slot.label}</span>
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary }}>{slot.activity}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                      <span>{slot.assetTypeName}</span>
+                      {slot.cadenceDays != null
+                        ? <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> every {slot.cadenceDays}d</span>
+                        : <span>on-demand</span>}
+                      {slot.checkpointCount > 0 && <span>{slot.checkpointCount} checkpoints</span>}
+                      {slot.complianceStandards.length > 0 && (
+                        <span className="flex items-center gap-1" style={{ color: '#7c3aed' }}>
+                          <ShieldCheck className="w-3 h-3" /> {slot.complianceStandards.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {slot.priceHintMin != null && slot.priceHintMax != null && (
+                    <span className="text-[10px] whitespace-nowrap" style={{ color: colors.utility.secondaryText }}>
+                      {slot.currency} {slot.priceHintMin.toLocaleString()}–{slot.priceHintMax.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ─── Summary Grid ────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
