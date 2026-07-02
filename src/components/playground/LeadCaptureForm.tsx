@@ -1,5 +1,7 @@
 // src/components/playground/LeadCaptureForm.tsx
 import React, { useState } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import api from '../../services/api';
 import { User, Mail, Phone, ArrowRight, ArrowLeft, Loader2, Wrench, ShoppingCart } from 'lucide-react';
 import { PersonaType, PlaygroundLead } from './types';
 import { supabase } from '../../utils/supabase';
@@ -59,20 +61,15 @@ const LeadCaptureForm: React.FC<LeadCaptureFormProps> = ({ persona, onBack, onSu
         completed_demo: false,
       };
 
-      // Save to Supabase directly
-      const { data, error } = await supabase
-        .from('leads_contractnest')
-        .insert([leadData])
-        .select()
-        .single();
-
-      if (error) {
+      // Save via API (service_role) instead of the public Data API
+      let saved: any = null;
+      try {
+        const resp = await api.post(API_ENDPOINTS.PUBLIC.LEAD_CREATE, leadData);
+        saved = resp.data?.lead || null;
+      } catch (error) {
         console.error('Error saving lead:', error);
-        // Continue anyway - don't block the demo if DB fails
       }
-
-      // Pass the lead data (with ID if saved) to parent
-      onSubmit(data || leadData);
+      onSubmit(saved || leadData);
     } catch (err) {
       console.error('Error:', err);
       // Continue anyway

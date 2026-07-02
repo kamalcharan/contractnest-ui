@@ -65,13 +65,14 @@ const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
       if (user?.id) {
         try {
           // Get ALL auth methods for the user to see what's available
-          const { data: authMethods, error } = await supabase
-            .from('t_user_auth_methods')
-            .select('auth_type, is_primary, is_deleted')
-            .eq('user_id', user.id)
-            .eq('is_deleted', false)
-            .order('is_primary', { ascending: false })
-            .order('last_used_at', { ascending: false });
+          let authMethods: Array<{ auth_type: string; is_primary: boolean }> = [];
+          let error: any = null;
+          try {
+            const resp = await api.get(API_ENDPOINTS.PUBLIC.AUTH_METHODS);
+            authMethods = resp.data?.methods || [];
+          } catch (e) {
+            error = e;
+          }
           
           console.log('Auth methods from DB:', authMethods);
           

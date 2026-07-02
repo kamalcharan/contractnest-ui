@@ -1,6 +1,8 @@
 // src/pages/public/PlaygroundPage.tsx
 // Playground - Interactive Demo for ContractNest
 import React, { useState, useCallback } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import api from '../../services/api';
 import { Helmet } from 'react-helmet-async';
 import PlaygroundWelcome from '../../components/playground/PlaygroundWelcome';
 import LeadCaptureForm from '../../components/playground/LeadCaptureForm';
@@ -84,13 +86,10 @@ const PlaygroundPage: React.FC = () => {
     // Mark demo as completed in Supabase
     if (lead?.id) {
       try {
-        await supabase
-          .from('leads_contractnest')
-          .update({
-            completed_demo: true,
-            contract_data: persona === 'seller' ? contractData : { rfpData, selectedVendor },
-          })
-          .eq('id', lead.id);
+        await api.patch(API_ENDPOINTS.PUBLIC.LEAD_UPDATE(lead.id), {
+          completed_demo: true,
+          contract_data: persona === 'seller' ? contractData : { rfpData, selectedVendor },
+        });
       } catch (err) {
         console.error('Error updating lead:', err);
       }

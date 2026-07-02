@@ -1,6 +1,8 @@
 // src/components/landing/LandingPlayground.tsx
 // Playground section for Landing Page - Interactive Contract Builder Demo
 import React, { useState, useCallback } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import api from '../../services/api';
 import {
   Play,
   User,
@@ -126,15 +128,15 @@ const LandingPlayground: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // Save lead to Supabase
-      await supabase.from('leads_contractnest').insert([{
+      // Save lead via API (service_role)
+      await api.post(API_ENDPOINTS.PUBLIC.LEAD_CREATE, {
         name: leadData.name.trim(),
         email: `${leadData.mobile}@playground.demo`,
         phone: leadData.mobile.trim(),
         industry: 'equipment_amc',
         persona: 'seller',
         completed_demo: false,
-      }]);
+      });
     } catch (err) {
       console.error('Error saving lead:', err);
     }

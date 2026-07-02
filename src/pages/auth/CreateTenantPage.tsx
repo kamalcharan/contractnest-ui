@@ -1,5 +1,6 @@
 // src/pages/auth/CreateTenantPage.tsx
 import React, { useState, useEffect, useRef } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -76,13 +77,9 @@ const CreateTenantPage: React.FC = () => {
       setIsCheckingAvailability(true);
       try {
         const workspaceCode = generateWorkspaceCode(name);
-        const { data: existing } = await supabase
-          .from('t_tenants')
-          .select('id')
-          .eq('workspace_code', workspaceCode)
-          .maybeSingle();
+        const resp = await api.get(API_ENDPOINTS.TENANTS.CHECK_AVAILABILITY, { params: { name } });
         
-        setNameAvailable(!existing);
+        setNameAvailable(resp.data?.available ?? null);
       } catch (error) {
         setNameAvailable(null);
       } finally {

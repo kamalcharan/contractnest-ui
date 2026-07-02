@@ -69,7 +69,9 @@ const VaniConsentStep: React.FC = () => {
   const routeState = (location.state || {}) as {
     selectedEquipmentTemplates?: ResourceTemplate[];
     selectedFacilityTemplates?: ResourceTemplate[];
+    selectedServiceTemplates?: ResourceTemplate[];
     workIntent?: string | null;
+    personaId?: string | null;
   };
 
   const { setTheme, currentTheme } = useTheme();
@@ -95,7 +97,10 @@ const VaniConsentStep: React.FC = () => {
   const firstName = user?.first_name?.trim() || null;
   const fullName  = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || null;
   const company   = formData.business_name?.trim() || currentTenant?.name || 'your company';
-  const rawPersona = formData.business_type_id || '';
+  // formData (DB truth) takes priority; route state only used as fast initial value
+  // Check both .persona and .business_type_id since different steps may save to either field
+  const profilePersona = (formData as any).persona || formData.business_type_id || '';
+  const rawPersona = profilePersona || (routeState.personaId as string | undefined) || '';
   const personaId: PersonaId | null = rawPersona === 'service_provider' ? 'seller'
     : rawPersona === 'merchant' ? 'buyer'
     : (rawPersona === 'seller' || rawPersona === 'buyer' || rawPersona === 'both') ? rawPersona as PersonaId
@@ -105,25 +110,31 @@ const VaniConsentStep: React.FC = () => {
   // Selected templates from ResourcePickStep
   const selEquipment = routeState.selectedEquipmentTemplates || [];
   const selFacility  = routeState.selectedFacilityTemplates  || [];
-  const blockCount   = selEquipment.length * 3;
+  const selService   = routeState.selectedServiceTemplates   || [];
+  const isBuyer    = personaId === 'buyer';
+  const isSeller   = personaId === 'seller' || personaId === 'both'; // only show KT content when explicitly seller/both
+  const blockCount = isSeller ? selEquipment.length * 3 : 0;
 
   const handleStart = () => {
     navigate('/onboarding/vani-intelligence', {
       state: {
         selectedEquipmentTemplates: selEquipment,
         selectedFacilityTemplates:  selFacility,
+        selectedServiceTemplates:   selService,
         workIntent: routeState.workIntent || null,
+        personaId: personaId || null,
       },
     });
   };
 
   const handleBack = () => {
-    // Pass selections back so ResourcePickStep can restore them
     navigate('/onboarding/resource-pick', {
       state: {
         selectedEquipmentTemplates: selEquipment,
         selectedFacilityTemplates:  selFacility,
+        selectedServiceTemplates:   selService,
         workIntent: routeState.workIntent || null,
+        personaId: personaId || null,
       },
     });
   };
@@ -271,7 +282,7 @@ const VaniConsentStep: React.FC = () => {
             </div>
           </div>
 
-          {/* ── What VaNi will build — dynamic from ResourcePickStep ── */}
+          {/* ── What VaNi will build / register — dynamic from ResourcePickStep ── */}
           {(selEquipment.length > 0 || selFacility.length > 0) && (
             <div style={{
               background: colors.utility.secondaryBackground,
@@ -284,7 +295,7 @@ const VaniConsentStep: React.FC = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}>
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.6px', color: colors.brand.primary, fontFamily: "'IBM Plex Mono', monospace" }}>
-                  What VaNi will build
+                  {isBuyer ? 'What will be registered' : 'What VaNi will build'}
                 </span>
                 {blockCount > 0 && (
                   <span style={{
@@ -295,40 +306,56 @@ const VaniConsentStep: React.FC = () => {
                     {blockCount} blocks
                   </span>
                 )}
+                {isBuyer && (selEquipment.length > 0 || selFacility.length > 0) && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+                    color: BLUE, background: BLUE_BG, border: `1px solid ${BLUE}20`,
+                    borderRadius: 100, padding: '2px 10px',
+                  }}>
+                    {selEquipment.length + selFacility.length} assets → registry
+                  </span>
+                )}
               </div>
 
-              {/* Equipment section (seller / both) */}
+              {/* Equipment section */}
               {selEquipment.length > 0 && (
                 <div style={{ padding: '14px 16px', borderBottom: selFacility.length > 0 ? `1px solid ${colors.utility.primaryText}08` : undefined }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 3, height: 16, borderRadius: 2, background: BLUE }} />
                       <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.6, color: BLUE }}>
-                        Equipment types
+                        {isBuyer ? 'Equipment registry' : 'Equipment types'}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    {isSeller && (
                       <span style={{ fontSize: 10, color: colors.utility.secondaryText, fontFamily: "'IBM Plex Mono', monospace", background: BLUE_BG, border: `1px solid ${BLUE}20`, borderRadius: 100, padding: '1px 8px' }}>
                         {selEquipment.length} types × 3 tiers = {blockCount} blocks
                       </span>
-                    </div>
+                    )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     {selEquipment.map(t => <TemplateChip key={t.id} t={t} accent={BLUE} />)}
                   </div>
-                  <div style={{ marginTop: 10, fontSize: 11, color: colors.utility.secondaryText }}>
-                    Each type → <strong>Basic AMC</strong> · <strong>Comprehensive AMC</strong> · <strong>Premium CMC</strong>
-                  </div>
+                  {isSeller && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: colors.utility.secondaryText }}>
+                      Each type → <strong>Basic AMC</strong> · <strong>Comprehensive AMC</strong> · <strong>Premium CMC</strong>
+                    </div>
+                  )}
+                  {isBuyer && (
+                    <div style={{ marginTop: 10, fontSize: 11, color: colors.utility.secondaryText }}>
+                      Each type → added to your <strong>equipment registry</strong> for vendor and maintenance tracking
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Facility section (buyer / both) */}
+              {/* Facility section */}
               {selFacility.length > 0 && (
                 <div style={{ padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                     <div style={{ width: 3, height: 16, borderRadius: 2, background: PURPLE }} />
                     <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: 0.6, color: PURPLE }}>
-                      Facility types
+                      Facility {isBuyer ? 'registry' : 'types'}
                     </span>
                     <span style={{ fontSize: 10, color: colors.utility.secondaryText, fontFamily: "'IBM Plex Mono', monospace", background: PURPLE_BG, border: `1px solid ${PURPLE}20`, borderRadius: 100, padding: '1px 8px', marginLeft: 6 }}>
                       {selFacility.length} types
@@ -338,7 +365,10 @@ const VaniConsentStep: React.FC = () => {
                     {selFacility.map(t => <TemplateChip key={t.id} t={t} accent={PURPLE} />)}
                   </div>
                   <div style={{ marginTop: 10, fontSize: 11, color: colors.utility.secondaryText }}>
-                    Each type → <strong>placeholder instances</strong> for you to confirm in the next step
+                    {isBuyer
+                      ? <>Each type → added to your <strong>facility registry</strong></>
+                      : <>Each type → <strong>placeholder instances</strong> for you to confirm in the next step</>
+                    }
                   </div>
                 </div>
               )}
@@ -391,9 +421,12 @@ const VaniConsentStep: React.FC = () => {
         zIndex: 200, whiteSpace: 'nowrap' as const, fontFamily: "'Outfit', sans-serif",
       }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,.65)' }}>
-          {blockCount > 0
-            ? `${blockCount} blocks · ${selEquipment.length} types · ${selFacility.length > 0 ? `${selFacility.length} assets · ` : ''}ready`
-            : 'VaNi is ready to build your workspace'}
+          {isBuyer
+            ? `${selEquipment.length + selFacility.length} assets selected · registry setup`
+            : blockCount > 0
+              ? `${blockCount} blocks · ${selEquipment.length} types · ${selFacility.length > 0 ? `${selFacility.length} assets · ` : ''}ready`
+              : 'VaNi is ready to build your workspace'
+          }
         </span>
         <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,.12)' }} />
         <button

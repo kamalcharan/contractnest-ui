@@ -1,5 +1,7 @@
 // src/pages/auth/ForgotPasswordPage.tsx
 import React, { useState, useEffect } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import api from '../../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -53,13 +55,11 @@ const ForgotPasswordPage: React.FC = () => {
       setIsCheckingAuth(true);
       try {
         // Check if this email exists and what auth methods it has
-        const { data, error } = await supabase
-          .from('t_user_auth_methods')
-          .select('auth_type, is_primary')
-          .eq('auth_identifier', email.toLowerCase())
-          .eq('is_deleted', false);
-
-        if (error) {
+        let data: Array<{ auth_type: string; is_primary: boolean }> = [];
+        try {
+          const resp = await api.get(API_ENDPOINTS.PUBLIC.AUTH_METHODS, { params: { identifier: email.toLowerCase() } });
+          data = resp.data?.methods || [];
+        } catch (error) {
           console.error('Error checking auth methods:', error);
           setUserAuthType('unknown');
           return;

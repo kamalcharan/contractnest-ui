@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../utils/supabase';
 import api from '../../services/api';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
 import toast from 'react-hot-toast';
 import { analyticsService, AUTH_EVENTS } from '../../services/analytics';
 
@@ -236,135 +237,19 @@ const GoogleCallbackPage: React.FC = () => {
         setAuthToken(session.access_token);
       }
       
-      // Check/create user profile with better error handling
-      let profile = null;
-      let isNewUser = true;
-      let hasIncompleteRegistration = false;
-      
-      console.log('🔍 Checking user profile...');
-      
-      // Use maybeSingle to avoid errors when profile doesn't exist
-      const { data: existingProfile, error: profileError } = await supabase
-        .from('t_user_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
-        
-      if (existingProfile) {
-        profile = existingProfile;
-        isNewUser = false;
-        console.log('✅ Found existing profile');
-        
-        // Check if user has incomplete registration
-        if (user.user_metadata?.registration_status === 'pending_workspace') {
-          hasIncompleteRegistration = true;
-          console.log('⚠️ User has incomplete registration');
-        }
-      } else if (!profileError || profileError.code === 'PGRST116') {
-        // No profile exists - this is expected for new users
-        isNewUser = true;
-        console.log('🆕 New user detected, creating profile...');
-        
-        // Try to create profile using upsert to prevent duplicates
-        const googleProfile = user.user_metadata || {};
-        
-        // Extract name from Google metadata
-        let firstName = '';
-        let lastName = '';
-        
-        if (googleProfile.full_name) {
-          const nameParts = googleProfile.full_name.trim().split(/\s+/);
-          firstName = nameParts[0] || '';
-          lastName = nameParts.slice(1).join(' ') || '';
-        }
-        
-        firstName = googleProfile.given_name || 
-                   googleProfile.first_name || 
-                   firstName || 
-                   '';
-                   
-        lastName = googleProfile.family_name || 
-                  googleProfile.last_name || 
-                  lastName || 
-                  '';
-        
-        if (!firstName && !lastName && googleProfile.name) {
-          const nameParts = googleProfile.name.trim().split(/\s+/);
-          firstName = nameParts[0] || '';
-          lastName = nameParts.slice(1).join(' ') || '';
-        }
-        
-        if (!firstName && user.email) {
-          firstName = user.email.split('@')[0] || '';
-        }
-        
-        // Generate unique user code
-        const timestamp = Date.now().toString(36).slice(-2);
-        const random = Math.random().toString(36).substring(2, 4);
-        const firstPart = (firstName || 'USR').substring(0, 3).toUpperCase();
-        const lastPart = (lastName || 'XXX').substring(0, 3).toUpperCase();
-        const userCode = `${firstPart}${lastPart}${timestamp}${random}`.padEnd(8, '0');
-        
-        const { data: newProfile, error: createError } = await supabase
-          .from('t_user_profiles')
-          .upsert({
-            user_id: user.id,
-            email: user.email!,
-            first_name: firstName,
-            last_name: lastName,
-            is_active: true,
-            user_code: userCode
-          }, {
-            onConflict: 'user_id',
-            ignoreDuplicates: false
-          })
-          .select()
-          .single();
+      // Resolve profile + tenants server-side (service_role) via the API.
+      // The edge auth/user handler creates the profile for new users and returns
+      // { ...profile, registration_status, isNewUser, tenants } so the browser
+      // never queries t_user_profiles / t_user_tenants directly.
+      console.log('🔍 Resolving user profile + tenants via API...');
 
-        if (newProfile) {
-          profile = newProfile;
-          console.log('✅ Profile created successfully');
-        } else if (createError && !createError.message.includes('duplicate')) {
-          console.error('⚠️ Profile creation failed:', createError.message);
-        }
-      }
+      const { data: authUser } = await api.get(API_ENDPOINTS.AUTH.USER);
 
-      // Get user's tenants
-      console.log('🔍 Fetching user tenants...');
-      const { data: userTenants } = await supabase
-        .from('t_user_tenants')
-        .select(`
-          id,
-          tenant_id,
-          is_default,
-          status,
-          t_tenants!inner (
-            id,
-            name,
-            workspace_code,
-            domain,
-            status,
-            is_admin,
-            created_by,
-            storage_setup_complete
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-
-      const tenants = (userTenants || []).map(ut => ({
-        id: ut.t_tenants.id,
-        name: ut.t_tenants.name,
-        workspace_code: ut.t_tenants.workspace_code,
-        domain: ut.t_tenants.domain,
-        status: ut.t_tenants.status,
-        is_admin: ut.t_tenants.is_admin || false,
-        storage_setup_complete: ut.t_tenants.storage_setup_complete || false,
-        is_default: ut.is_default || false,
-        is_owner: ut.t_tenants.created_by === user.id,
-        user_is_profile_admin: profile?.is_admin || false,
-        is_explicitly_assigned: true
-      }));
+      const profile = authUser || null;
+      const isNewUser = authUser?.isNewUser ?? false;
+      const hasIncompleteRegistration =
+        authUser?.registration_status === 'pending_workspace';
+      const tenants = authUser?.tenants || [];
 
       console.log('📊 Found', tenants.length, 'tenants for user');
 

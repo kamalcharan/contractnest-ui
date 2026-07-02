@@ -1,5 +1,7 @@
 // src/components/CRO/UrgencyElements.tsx
 import React, { useState, useEffect } from 'react';
+import { API_ENDPOINTS } from '../../services/serviceURLs';
+import api from '../../services/api';
 import {
   Clock,
   Users,
@@ -199,7 +201,7 @@ const UrgencyElements = ({
     setIsSubmitting(true);
 
     try {
-      await supabase.from('leads_contractnest').insert([{
+      await api.post(API_ENDPOINTS.PUBLIC.LEAD_CREATE, {
         name: formData.name.trim(),
         email: `${formData.mobile}@earlyaccess.contractnest.com`,
         phone: formData.mobile.trim(),
@@ -207,7 +209,7 @@ const UrgencyElements = ({
         persona: 'founder',
         completed_demo: false,
         source: 'early_access_countdown'
-      }]);
+      });
 
       // Track conversion
       if (typeof gtag !== 'undefined') {

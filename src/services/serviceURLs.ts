@@ -260,11 +260,18 @@ export const API_ENDPOINTS = {
     GOOGLE_UNLINK: '/api/auth/google-unlink'
   },
   
+  PUBLIC: {
+    LEAD_CREATE: '/api/public/leads',
+    LEAD_UPDATE: (id: string) => `/api/public/leads/${id}`,
+    AUTH_METHODS: '/api/public/auth-methods',
+  },
+
   TENANTS: {
     LIST: '/api/tenants',
     CREATE: '/api/tenants',
     UPDATE: '/api/tenants',
     GET: '/api/tenants',
+    CHECK_AVAILABILITY: '/api/tenants/check-availability',
     PROFILE: '/api/tenant-profile',
     UPLOAD_LOGO: '/api/tenant-profile/logo',
     SERVED_INDUSTRIES: {
