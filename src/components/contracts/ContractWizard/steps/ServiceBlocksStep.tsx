@@ -4,7 +4,7 @@
 // Blocks are grouped per coverage type from AssetSelectionStep
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { ShoppingCart, Layers, Zap, ChevronDown, Wrench, Package, FileText, File } from 'lucide-react';
+import { ShoppingCart, Layers, Zap, ChevronDown, Wrench, Package, FileText, File, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
@@ -21,6 +21,9 @@ import { getCategoryById as getCatById } from '@/utils/catalog-studio/categories
 
 // Import contract preview panel
 import ContractPreviewPanel from '../components/ContractPreviewPanel';
+
+// VaNi block recommender (tenant agent — picks the tenant's own blocks)
+import VaNiBlockRecommender from '../vani/VaNiBlockRecommender';
 
 // Coverage type from AssetSelectionStep
 import type { CoverageTypeItem } from './AssetSelectionStep';
@@ -74,6 +77,63 @@ const formatCurrency = (amount: number, currency: string = 'INR') => {
   return `${symbol}${amount.toLocaleString()}`;
 };
 
+// Build a ConfigurableBlock from a library Block (pure — no state).
+// Extracted so both single-add and bulk-add (VaNi recommender) share the exact
+// same pricing/tax/cycle/instance-id logic.
+const buildConfigurableBlock = (
+  block: Block,
+  ctx: { currency: string; activeCoverageType: CoverageTypeItem | null; activeCoverageTabId: string | null; hasCoverageTypes: boolean }
+): ConfigurableBlock => {
+  const { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes } = ctx;
+  const category = getCategoryById(block.categoryId);
+
+  const blockServiceCycles = (block.meta as any)?.serviceCycles;
+  const hasCustomCycle = blockServiceCycles?.enabled && blockServiceCycles?.days;
+  const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
+  const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
+  const serviceCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
+
+  const pricingRecords = ((block.meta as any)?.pricingRecords || (block.config as any)?.pricingRecords || []) as Array<{
+    currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
+    taxes: Array<{ name: string; rate: number }>; is_active: boolean;
+  }>;
+  const matchingRecord = pricingRecords.find(r => r.currency === currency && r.is_active !== false)
+    || pricingRecords.find(r => r.is_active !== false)
+    || pricingRecords[0];
+  const taxes = matchingRecord?.taxes || [];
+  const totalTaxRate = taxes.reduce((sum, t) => sum + t.rate, 0);
+  const taxInclusion = matchingRecord?.tax_inclusion || 'exclusive';
+  const blockPrice = matchingRecord?.amount ?? block.price ?? 0;
+  const unitPriceWithTax = taxInclusion === 'inclusive' ? blockPrice : blockPrice + (blockPrice * totalTaxRate / 100);
+  const instanceId = hasCoverageTypes ? `${block.id}__${activeCoverageTabId}` : block.id;
+
+  return {
+    id: instanceId,
+    name: block.name,
+    description: block.description || '',
+    icon: block.icon || 'Package',
+    quantity: 1,
+    cycle: defaultCycle,
+    customCycleDays,
+    serviceCycleDays,
+    unlimited: false,
+    price: blockPrice,
+    currency: matchingRecord?.currency || currency,
+    totalPrice: Math.round(unitPriceWithTax * 100) / 100,
+    categoryName: category?.name || block.categoryId,
+    categoryColor: category?.color || '#6B7280',
+    categoryBgColor: category?.bgColor,
+    categoryId: block.categoryId,
+    isFlyBy: false,
+    coverageTypeId: activeCoverageType?.id,
+    coverageTypeName: activeCoverageType?.resource_name,
+    taxRate: totalTaxRate,
+    taxInclusion,
+    taxes: taxes.map(t => ({ name: t.name, rate: t.rate })),
+    config: { showDescription: false },
+  } as ConfigurableBlock;
+};
+
 const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   selectedBlocks,
   currency,
@@ -124,6 +184,9 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
   // Local state
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
+
+  // VaNi block recommender (tenant agent)
+  const [showRecommender, setShowRecommender] = useState(false);
 
   // FlyBy dropdown state
   const [showFlyByMenu, setShowFlyByMenu] = useState(false);
@@ -215,66 +278,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         return;
       }
 
-      const category = getCategoryById(block.categoryId);
-
-      // Check if block has service cycles defined (from block creation)
-      const blockServiceCycles = (block.meta as any)?.serviceCycles;
-      const hasCustomCycle = blockServiceCycles?.enabled && blockServiceCycles?.days;
-      const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
-      const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
-      const serviceCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
-
-      // Extract tax info from pricing records matching contract currency
-      const pricingRecords = ((block.meta as any)?.pricingRecords || (block.config as any)?.pricingRecords || []) as Array<{
-        currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
-        taxes: Array<{ name: string; rate: number }>; is_active: boolean;
-      }>;
-      const matchingRecord = pricingRecords.find(r => r.currency === currency && r.is_active !== false)
-        || pricingRecords.find(r => r.is_active !== false)
-        || pricingRecords[0];
-      const taxes = matchingRecord?.taxes || [];
-      const totalTaxRate = taxes.reduce((sum, t) => sum + t.rate, 0);
-      const taxInclusion = matchingRecord?.tax_inclusion || 'exclusive';
-
-      const blockPrice = matchingRecord?.amount ?? block.price ?? 0;
-
-      const unitPriceWithTax = taxInclusion === 'inclusive'
-        ? blockPrice
-        : blockPrice + (blockPrice * totalTaxRate / 100);
-
-      // Generate a unique instance ID when coverage types exist
-      // so the same catalog block can appear in multiple tabs
-      const instanceId = hasCoverageTypes
-        ? `${block.id}__${activeCoverageTabId}`
-        : block.id;
-
-      const newBlock: ConfigurableBlock = {
-        id: instanceId,
-        name: block.name,
-        description: block.description || '',
-        icon: block.icon || 'Package',
-        quantity: 1,
-        cycle: defaultCycle,
-        customCycleDays: customCycleDays,
-        serviceCycleDays: serviceCycleDays,
-        unlimited: false,
-        price: blockPrice,
-        currency: matchingRecord?.currency || currency,
-        totalPrice: Math.round(unitPriceWithTax * 100) / 100,
-        categoryName: category?.name || block.categoryId,
-        categoryColor: category?.color || '#6B7280',
-        categoryBgColor: category?.bgColor,
-        categoryId: block.categoryId,
-        isFlyBy: false,
-        coverageTypeId: activeCoverageType?.id,
-        coverageTypeName: activeCoverageType?.resource_name,
-        taxRate: totalTaxRate,
-        taxInclusion: taxInclusion,
-        taxes: taxes.map(t => ({ name: t.name, rate: t.rate })),
-        config: {
-          showDescription: false,
-        },
-      };
+      const newBlock = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes });
 
       onBlocksChange([...selectedBlocks, newBlock]);
       addToast({
@@ -285,7 +289,34 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
           : `${block.name} added to contract`,
       });
 
-      setExpandedBlockId(instanceId);
+      setExpandedBlockId(newBlock.id);
+    },
+    [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes]
+  );
+
+  // ── Bulk add (VaNi recommender) ───────────────────────────────────
+  // Adds many library blocks in ONE onBlocksChange, deduped against the
+  // active tab. Single onBlocksChange avoids the stale-closure loop bug.
+  const handleAddBlocks = useCallback(
+    (blocks: Block[]) => {
+      const existingIds = new Set(blocksForActiveTab.filter((b) => !b.isFlyBy).map((b) => b.id));
+      const toAdd: ConfigurableBlock[] = [];
+      for (const block of blocks) {
+        const built = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes });
+        if (existingIds.has(built.id)) continue;
+        existingIds.add(built.id);
+        toAdd.push(built);
+      }
+      if (toAdd.length === 0) {
+        addToast({ type: 'info', title: 'Nothing new', message: 'Those blocks are already added.' });
+        return;
+      }
+      onBlocksChange([...selectedBlocks, ...toAdd]);
+      addToast({
+        type: 'success',
+        title: 'Blocks added',
+        message: `${toAdd.length} block${toAdd.length === 1 ? '' : 's'} added${hasCoverageTypes && activeCoverageType ? ` to ${activeCoverageType.resource_name}` : ''}`,
+      });
     },
     [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes]
   );
@@ -549,7 +580,25 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
               : 'Select services and configure them for your contract'
           }
         </p>
+        {/* VaNi suggest — recommends the tenant's own blocks for these assets */}
+        <button
+          onClick={() => setShowRecommender(true)}
+          className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[12.5px] font-semibold text-white transition hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, #ff6b2b, #ff8f5a)' }}
+        >
+          <Sparkles className="w-3.5 h-3.5" /> Suggest blocks with VaNi
+        </button>
       </div>
+
+      {/* VaNi block recommender (tenant agent) */}
+      <VaNiBlockRecommender
+        isOpen={showRecommender}
+        onClose={() => setShowRecommender(false)}
+        currency={currency}
+        assetNames={coverageTypes.map((ct) => ct.resource_name).filter(Boolean) as string[]}
+        addedBaseIds={allSelectedBlockIds.map((id) => id.split('__')[0])}
+        onAddBlocks={handleAddBlocks}
+      />
 
       {/* 3-Column Layout - fills remaining height */}
       <div className="flex-1 flex gap-4 px-4 pb-6 min-h-0 overflow-hidden">
