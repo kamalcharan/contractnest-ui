@@ -16,6 +16,8 @@ export type CatBlockFilters = {
 export type CatTemplateFilters = {
   status_id?: string;
   is_public?: boolean;
+  // 'true' (default) | 'false' | 'all' — 'all' returns inactive too
+  is_active?: boolean | 'all';
   search?: string;
   industry?: string;
   category?: string;
@@ -722,6 +724,7 @@ export const API_ENDPOINTS = {
 
         if (filters.status_id) params.append('status_id', filters.status_id);
         if (filters.is_public !== undefined) params.append('is_public', filters.is_public.toString());
+        if (filters.is_active !== undefined) params.append('is_active', filters.is_active.toString());
         if (filters.industry) params.append('industry', filters.industry);
         if (filters.category) params.append('category', filters.category);
         if (filters.search) params.append('search', filters.search);

@@ -38,7 +38,6 @@ import CatalogStudioConfigurePage from './pages/catalog-studio/configure';
 import CatalogStudioBlocksPage from './pages/catalog-studio/blocks';
 import CatalogStudioNewBlockPage from './pages/catalog-studio/blocks/new';
 import CatalogStudioEditBlockPage from './pages/catalog-studio/blocks/[id]/edit';
-import CatalogStudioTemplatePage from './pages/catalog-studio/template';
 import CatalogStudioTemplatesListPage from './pages/catalog-studio/templates-list';
 
 
@@ -616,7 +615,6 @@ const AppContent: React.FC = () => {
   <Route path="blocks" element={<CatalogStudioBlocksPage />} />
   <Route path="blocks/new" element={<CatalogStudioNewBlockPage />} />
   <Route path="blocks/:id/edit" element={<CatalogStudioEditBlockPage />} />
-  <Route path="template" element={<CatalogStudioTemplatePage />} />
   <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
 </Route>
 

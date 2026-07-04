@@ -1,6 +1,6 @@
 // src/components/contracts/ContractWizard/index.tsx
 // Contract Wizard - Main component with Floating Action Island
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { X, CheckCircle2, ArrowRight, Loader2, Copy, Check, Key, Mail, CreditCard, PenTool, Zap, Receipt, Building2, WifiOff, Globe, Monitor, Save } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContractOperations } from '@/hooks/queries/useContractQueries';
@@ -25,7 +25,10 @@ import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } f
 import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import vaniComposerService from '@/services/vaniComposerService';
 import { computeContractEvents, type ContractEvent } from '@/utils/service-contracts/contractEvents';
+import { useSaveTemplate, type CreateTemplateData, type UpdateTemplateData } from '@/hooks/mutations/useCatTemplatesMutations';
+import { useCatTemplates, type CatTemplate } from '@/hooks/queries/useCatTemplates';
 
 // Keep ContractRole type export for backwards compatibility
 export type ContractRole = 'client' | 'vendor' | null;
@@ -102,6 +105,23 @@ interface ContractWizardProps {
   // Draft resume props
   draftContractId?: string | null;
   draftContractData?: Record<string, any> | null;
+  // VaNi composer pre-fill (partial wizard state built server-side)
+  vaniPrefill?: Record<string, any> | null;
+  // Interaction ids from the composer LLM calls — for was_edited/was_accepted feedback
+  vaniInteractionIds?: string[];
+  // Jump straight to a step when opening a VaNi draft for editing
+  // (e.g. 'assetSelection' when coverage is the gap) — no re-walking
+  vaniInitialStepId?: string | null;
+  // Template mode: same wizard, buyer/date/asset steps removed, final
+  // action saves a reusable template (t_cat_templates) instead of a contract
+  mode?: 'contract' | 'template';
+  // Existing template being edited (from templates-list). Hydrates from
+  // settings.wizard_state when present.
+  editTemplate?: CatTemplate | null;
+  onTemplateSaved?: () => void;
+  // Lower-cased names already used by OTHER templates (uniqueness check;
+  // provided by templates-list, excludes the edited template's own lineage)
+  takenTemplateNames?: string[];
 }
 
 // Step ID type for step-based routing
@@ -127,6 +147,20 @@ const CONTRACT_STEPS: StepConfig[] = [
   { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
   { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
   { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
+];
+
+// Template flow: a contract minus the counterparty — no path, no buyer,
+// no buyer assets, no events (no real dates yet). Same step components.
+const TEMPLATE_STEPS: StepConfig[] = [
+  { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this template for?', subtitle: 'Select the nomenclature that best describes it' } },
+  { id: 'acceptance', label: 'Acceptance', heading: { title: 'Default acceptance method', subtitle: 'Contracts created from this template will start with this — changeable per contract' } },
+  { id: 'details', label: 'Details', heading: { title: 'Template Details', subtitle: 'Name this template and set the default duration' } },
+  { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed by default?' } },
+  { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for this template' } },
+  { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and default tax' } },
+  { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Default evidence capture for contracts from this template' } },
+  { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview (illustrative)', subtitle: 'Assumes a start today — real dates are set when a contract is created from this template' } },
+  { id: 'review', label: 'Review & Save', heading: { title: 'Review & Save Template', subtitle: 'Review the template before saving — publish it from the Templates page' } },
 ];
 
 // RFQ flow: 5 steps (no acceptance, no billing cycle, no billing view)
@@ -226,7 +260,8 @@ function computeEventsForApi(state: ContractWizardState): any[] | undefined {
 }
 
 // Map wizard state to API request payload (matches deployed DB RPC schema)
-function mapWizardToRequest(
+// Exported: the VaNi canvas finalize path uses the SAME mapper (single write path)
+export function mapWizardToRequest(
   state: ContractWizardState,
   contractType: ContractType
 ): Record<string, any> {
@@ -343,7 +378,7 @@ function mapWizardToRequest(
 }
 
 // Initial wizard state factory (needs fresh Date each time)
-const createInitialWizardState = (): ContractWizardState => ({
+export const createInitialWizardState = (): ContractWizardState => ({
   path: null,
   templateId: null,
   role: null,
@@ -422,6 +457,28 @@ function deserializeWizardState(raw: Record<string, any>): ContractWizardState {
   };
 }
 
+// Strip contract-instance data (buyer, assets, event overrides) before a
+// wizard state is persisted inside a template — templates are counterparty-free
+function sanitizeStateForTemplate(state: ContractWizardState): ContractWizardState {
+  return {
+    ...state,
+    path: null,
+    templateId: null,
+    buyerId: null,
+    buyerName: '',
+    buyerContactPersonId: null,
+    buyerContactPersonName: null,
+    useCompanyContact: false,
+    vendorIds: [],
+    vendorNames: [],
+    status: 'draft',
+    equipmentDetails: [],
+    coverageTypes: [],
+    allowBuyerToAdd: false,
+    eventOverrides: {},
+  };
+}
+
 // Minimum step index to trigger auto-save (Details step = index 4 in CONTRACT_STEPS)
 const DRAFT_SAVE_MIN_STEP_ID = 'details';
 
@@ -432,7 +489,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   onComplete,
   draftContractId = null,
   draftContractData = null,
+  vaniPrefill = null,
+  vaniInteractionIds = [],
+  vaniInitialStepId = null,
+  mode = 'contract',
+  editTemplate = null,
+  onTemplateSaved,
+  takenTemplateNames = [],
 }) => {
+  const isTemplateMode = mode === 'template';
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -479,6 +544,51 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Wizard data state
   const [wizardState, setWizardState] = useState<ContractWizardState>(createInitialWizardState);
 
+  // ===== START FROM TEMPLATE (contract mode): published templates only =====
+  const { data: templatesResponse, isLoading: isLoadingTemplates } = useCatTemplates();
+  const publishedTemplates = React.useMemo(() => {
+    const list: CatTemplate[] = templatesResponse?.data?.templates || [];
+    return list.filter((t) => {
+      const st = t.settings as any;
+      return (
+        t.is_active !== false &&
+        st?.lifecycle === 'signed_off' &&
+        Array.isArray(st?.wizard_state?.selectedBlocks) &&
+        st.wizard_state.selectedBlocks.length > 0
+      );
+    });
+  }, [templatesResponse]);
+
+  // ===== TEMPLATE MODE: save mutation + record tracking =====
+  const saveTemplateMutation = useSaveTemplate();
+  const [templateRecordId, setTemplateRecordId] = useState<string | null>(editTemplate?.id || null);
+
+  // Template edit hydration: restore wizard state saved inside the template.
+  // Templates without settings.wizard_state (made elsewhere) open with
+  // name/description/currency prefilled — the rest is re-picked.
+  useEffect(() => {
+    if (isTemplateMode && isOpen) {
+      setTemplateRecordId(editTemplate?.id || null);
+      if (editTemplate) {
+        const savedState = (editTemplate.settings as any)?.wizard_state;
+        if (savedState) {
+          setWizardState(sanitizeStateForTemplate(deserializeWizardState(savedState)));
+        } else {
+          setWizardState({
+            ...createInitialWizardState(),
+            contractName: editTemplate.display_name || editTemplate.name || '',
+            description: editTemplate.description || '',
+            currency: editTemplate.currency || 'INR',
+          });
+        }
+      } else {
+        setWizardState(createInitialWizardState());
+      }
+      setCurrentStep(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTemplateMode, editTemplate, isOpen]);
+
   // Resume from draft: restore wizard state from metadata on mount
   useEffect(() => {
     if (draftContractData?.metadata?.wizard_state && isOpen) {
@@ -493,8 +603,156 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     }
   }, [draftContractData, draftContractId, isOpen]);
 
+  // VaNi composer pre-fill: hydrate wizard state from the composed draft.
+  // Snapshot the block selection so was_edited can be reported honestly.
+  const vaniBlocksSnapshotRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (vaniPrefill && isOpen && !draftContractData) {
+      const prefillBlocks: SelectedBlock[] = vaniPrefill.selectedBlocks || [];
+      // startDate arrives as ISO only when the intent named one ("from 1st Aug")
+      const prefillStart = vaniPrefill.startDate ? new Date(vaniPrefill.startDate) : new Date();
+      setWizardState({
+        ...createInitialWizardState(),
+        ...vaniPrefill,
+        path: 'scratch',
+        startDate: isNaN(prefillStart.getTime()) ? new Date() : prefillStart,
+        selectedBlocks: prefillBlocks,
+        totalValue: prefillBlocks.reduce((sum, b) => sum + (b.totalPrice || 0), 0),
+      });
+      vaniBlocksSnapshotRef.current = JSON.stringify(
+        prefillBlocks.map((b) => [b.id, b.quantity])
+      );
+      setCurrentStep(0);
+      setVaniJumpStepId(vaniInitialStepId || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaniPrefill, draftContractData, isOpen]);
+
+  // Jump to the requested step once the prefilled state (and therefore the
+  // active step list, incl. asset-step visibility) has settled.
+  const [vaniJumpStepId, setVaniJumpStepId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!vaniJumpStepId) return;
+    const idx = activeSteps.findIndex((s) => s.id === vaniJumpStepId);
+    if (idx >= 0) setCurrentStep(idx);
+    setVaniJumpStepId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaniJumpStepId, wizardState.nomenclatureGroup]);
+
+  // VaNi feedback: when a VaNi-drafted contract is actually sent, report
+  // was_accepted (+ was_edited if the user changed the block selection).
+  // These signals are the fine-tuning gold — fire-and-forget, never blocking.
+  const vaniFeedbackSentRef = useRef(false);
+  useEffect(() => {
+    if (isContractSent && vaniInteractionIds.length > 0 && !vaniFeedbackSentRef.current) {
+      vaniFeedbackSentRef.current = true;
+      const currentBlocks = JSON.stringify(
+        wizardState.selectedBlocks.map((b) => [b.id, b.quantity])
+      );
+      const wasEdited =
+        vaniBlocksSnapshotRef.current !== null &&
+        currentBlocks !== vaniBlocksSnapshotRef.current;
+      vaniComposerService.sendFeedback(vaniInteractionIds, {
+        was_accepted: true,
+        was_edited: wasEdited,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isContractSent]);
+
   // Derived: contract ID from creation response (for payment dialog)
   const createdContractId = createdContractData?.id;
+
+  // ===== TEMPLATE MODE: save the wizard state as a reusable template =====
+  // blocks[] carries the standard {block_id, order, config_overrides} shape
+  // for external consumers (composer match tier, coverage); the full wizard
+  // state lives in settings.wizard_state so editing round-trips exactly.
+  const handleSaveTemplate = useCallback(async (): Promise<boolean> => {
+    const state = wizardState;
+    if (!state.contractName.trim() || state.selectedBlocks.length === 0) return false;
+
+    // Template names must be unique per tenant (case-insensitive)
+    if (takenTemplateNames.includes(state.contractName.trim().toLowerCase())) {
+      addToast({
+        type: 'error',
+        title: 'Name already in use',
+        message: `A template named "${state.contractName.trim()}" already exists. Pick a different name.`,
+      });
+      return false;
+    }
+
+    const templateBlocks = state.selectedBlocks.map((b, idx) => ({
+      block_id: b.id,
+      order: idx,
+      config_overrides: {
+        name: b.name,
+        category_id: b.categoryId || undefined,
+        category_name: b.categoryName,
+        unit_price: b.price,
+        quantity: b.quantity,
+        billing_cycle: b.cycle,
+        total_price: b.totalPrice,
+        currency: b.currency,
+        unlimited: b.unlimited,
+        is_flyby: !isValidUUID(b.id) || undefined,
+        flyby_type: !isValidUUID(b.id) ? (b.flyByType || 'text') : undefined,
+        config: b.config || {},
+      },
+    }));
+
+    const data: CreateTemplateData | UpdateTemplateData = {
+      name: state.contractName.trim(),
+      // display_name kept in sync — a stale display_name made renames
+      // invisible on the templates list
+      display_name: state.contractName.trim(),
+      description: state.description || undefined,
+      blocks: templateBlocks,
+      currency: state.currency,
+      category: state.nomenclatureGroup || undefined,
+      tags: state.nomenclatureName ? [state.nomenclatureName] : undefined,
+      subtotal: state.baseSubtotal || state.totalValue || null,
+      total: state.grandTotal || state.totalValue || null,
+      settings: {
+        template_source: 'contract-wizard',
+        // Lifecycle lives in settings (status_id is an unused uuid column in
+        // t_cat_templates). New templates start as draft; edits preserve it.
+        lifecycle: ((editTemplate?.settings as any)?.lifecycle) || 'draft',
+        wizard_state: serializeWizardState(sanitizeStateForTemplate(state)),
+        defaults: {
+          nomenclature_id: state.nomenclatureId,
+          nomenclature_name: state.nomenclatureName,
+          nomenclature_group: state.nomenclatureGroup,
+          duration_value: state.durationValue,
+          duration_unit: state.durationUnit,
+          grace_period_value: state.gracePeriodValue,
+          grace_period_unit: state.gracePeriodUnit,
+          acceptance_method: state.acceptanceMethod,
+          billing_cycle_type: state.billingCycleType,
+          payment_mode: state.paymentMode,
+          emi_months: state.paymentMode === 'emi' ? state.emiMonths : undefined,
+          selected_tax_rate_ids: state.selectedTaxRateIds,
+          evidence_policy_type: state.evidencePolicyType,
+          evidence_selected_forms: state.evidenceSelectedForms,
+        },
+      },
+    };
+
+    try {
+      const result = await saveTemplateMutation.mutateAsync({
+        templateId: templateRecordId || undefined,
+        data,
+      });
+      // Edge wraps the row as data.template; versioned updates return a NEW id
+      const saved = (result as any)?.data;
+      const savedId = saved?.template?.id || saved?.id;
+      if (savedId) setTemplateRecordId(savedId);
+      onTemplateSaved?.();
+      return true;
+    } catch {
+      // Error toast handled by the mutation's onError
+      return false;
+    }
+  }, [wizardState, templateRecordId, saveTemplateMutation, onTemplateSaved, editTemplate, takenTemplateNames, addToast]);
 
   // Reset entire wizard to fresh state
   const resetWizard = useCallback(() => {
@@ -510,6 +768,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     setIsSavingDraft(false);
     setDraftSaveStatus('idle');
     setShowCloseConfirm(false);
+    // Template mode resets
+    setTemplateRecordId(null);
     // Pre-payment dialog resets
     setShowPrePaymentDialog(false);
     setIsProcessingPayment(false);
@@ -524,10 +784,10 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   }, []);
 
   // Determine if RFQ mode is active
-  const isRfqMode = wizardState.wizardMode === 'rfq';
+  const isRfqMode = !isTemplateMode && wizardState.wizardMode === 'rfq';
 
   // Dynamic step array based on wizard mode
-  const activeSteps = isRfqMode ? RFQ_STEPS : CONTRACT_STEPS;
+  const activeSteps = isTemplateMode ? TEMPLATE_STEPS : (isRfqMode ? RFQ_STEPS : CONTRACT_STEPS);
 
   // Check if current step is past the counterparty step (step 4 = details)
   const detailsStepIdx = activeSteps.findIndex(s => s.id === DRAFT_SAVE_MIN_STEP_ID);
@@ -535,6 +795,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Close handler — shows confirmation if past step 4, else discards
   const handleClose = useCallback(() => {
+    if (isTemplateMode) {
+      // Offer to save only when the template is actually saveable
+      if (isPastSaveThreshold && wizardState.contractName.trim() && wizardState.selectedBlocks.length > 0) {
+        setShowCloseConfirm(true);
+        return;
+      }
+      resetWizard();
+      onClose();
+      return;
+    }
     if (isPastSaveThreshold && !draftId) {
       // Past step 4 with unsaved data — prompt save
       setShowCloseConfirm(true);
@@ -542,7 +812,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     }
     resetWizard();
     onClose();
-  }, [resetWizard, onClose, isPastSaveThreshold, draftId]);
+  }, [resetWizard, onClose, isPastSaveThreshold, draftId, isTemplateMode, wizardState.contractName, wizardState.selectedBlocks.length]);
 
   // Save draft to API (create or update)
   const saveDraftToApi = useCallback(async (stepIndex: number): Promise<boolean> => {
@@ -621,6 +891,13 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Close with save — used by confirmation dialog
   const handleCloseWithSave = useCallback(async () => {
     setShowCloseConfirm(false);
+    if (isTemplateMode) {
+      // Save as a draft template (success/error toasts come from the mutation)
+      await handleSaveTemplate();
+      resetWizard();
+      onClose();
+      return;
+    }
     const success = await saveDraftToApi(currentStep);
     if (success) {
       addToast({
@@ -631,7 +908,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     }
     resetWizard();
     onClose();
-  }, [saveDraftToApi, currentStep, addToast, resetWizard, onClose]);
+  }, [saveDraftToApi, currentStep, addToast, resetWizard, onClose, isTemplateMode, handleSaveTemplate]);
 
   // Close without save — used by confirmation dialog
   const handleCloseDiscard = useCallback(() => {
@@ -655,7 +932,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const stepLabels = activeSteps.map(s => s.label);
 
   // Skip asset selection step when nomenclature group has no resource mapping
-  const shouldSkipAssetStep = !isRfqMode && !ASSET_STEP_GROUPS.has(wizardState.nomenclatureGroup || '');
+  // (template mode has no asset step at all — flag must stay false)
+  const shouldSkipAssetStep = !isRfqMode && !isTemplateMode && !ASSET_STEP_GROUPS.has(wizardState.nomenclatureGroup || '');
 
   // Find the index of the assetSelection step (for skip logic)
   const assetStepIndex = activeSteps.findIndex(s => s.id === 'assetSelection');
@@ -717,6 +995,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Navigation handlers
   const handleNext = useCallback(async () => {
     if (isLastStep) {
+      // Template mode: final action saves the template — no contract is created
+      if (isTemplateMode) {
+        const saved = await handleSaveTemplate();
+        if (saved) {
+          resetWizard();
+          onClose();
+        }
+        return;
+      }
+
       // Auto-accept: show pre-payment dialog instead of creating immediately
       if (wizardState.acceptanceMethod === 'auto') {
         const total = wizardState.grandTotal || wizardState.totalValue;
@@ -790,7 +1078,30 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         // Error toast is handled by the mutation's onError
       }
     } else if (showTemplateSelection) {
-      // From template selection, go to acceptance step (index 1 in contract flow)
+      // Hydrate the wizard from the chosen PUBLISHED template's saved state:
+      // blocks, billing, acceptance, evidence, duration — you add buyer,
+      // dates and assets. Then continue to the acceptance step.
+      const tpl = publishedTemplates.find((t) => t.id === wizardState.templateId);
+      const savedState = (tpl?.settings as any)?.wizard_state;
+      if (tpl && savedState) {
+        const restored = deserializeWizardState(savedState);
+        setWizardState({
+          ...restored,
+          path: 'template',
+          templateId: tpl.id,
+          status: 'draft',
+          startDate: new Date(),
+          // Template name is the starting contract title — edit in Details
+          contractName: restored.contractName || tpl.name,
+          buyerId: null,
+          buyerName: '',
+          buyerContactPersonId: null,
+          buyerContactPersonName: null,
+          equipmentDetails: [],
+          coverageTypes: [],
+          eventOverrides: {},
+        });
+      }
       setShowTemplateSelection(false);
       setCurrentStep(1);
     } else if (canGoNext()) {
@@ -828,7 +1139,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       const nextStepIndex = Math.min(currentStep + 1, totalSteps - 1);
       const isAtOrPastDetails = currentStep >= detailsStepIdx && detailsStepIdx >= 0;
 
-      if (isAtOrPastDetails && wizardState.contractName.trim()) {
+      // Contract drafts only — template mode never creates contract records
+      if (isAtOrPastDetails && wizardState.contractName.trim() && !isTemplateMode) {
         await saveDraftToApi(nextStepIndex);
       }
 
@@ -841,7 +1153,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         return next;
       });
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateContract, updateStatus, sendNotification, addToast, shouldSkipAssetStep, assetStepIndex, draftId, draftVersion, saveDraftToApi, currentStep, detailsStepIdx]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateContract, updateStatus, sendNotification, addToast, shouldSkipAssetStep, assetStepIndex, draftId, draftVersion, saveDraftToApi, currentStep, detailsStepIdx, isTemplateMode, handleSaveTemplate, resetWizard, onClose, publishedTemplates]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -1333,11 +1645,17 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     if (showTemplateSelection) {
       return (
         <TemplateSelectionStep
-          templates={[]} // Empty for now - will be populated from API
+          templates={publishedTemplates.map((t) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description || '',
+            blocksCount: ((t.settings as any)?.wizard_state?.selectedBlocks || t.blocks || []).length,
+            category: t.category ? t.category.replace(/_/g, ' ') : 'template',
+          }))}
           selectedTemplateId={wizardState.templateId}
           onSelectTemplate={handleTemplateSelect}
           onSwitchToScratch={handleSwitchToScratch}
-          isLoading={false}
+          isLoading={isLoadingTemplates}
         />
       );
     }
@@ -1406,8 +1724,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               gracePeriodUnit: wizardState.gracePeriodUnit,
             }}
             onChange={handleDetailsChange}
-            title={isRfqMode ? 'Request Details' : undefined}
-            subtitle={isRfqMode ? 'Define the basic information for your RFQ' : undefined}
+            title={isTemplateMode ? 'Template Details' : (isRfqMode ? 'Request Details' : undefined)}
+            subtitle={isTemplateMode
+              ? 'Name this template and set the default duration for contracts created from it'
+              : (isRfqMode ? 'Define the basic information for your RFQ' : undefined)}
+            templateMode={isTemplateMode}
           />
         );
       case 'billingCycle':
@@ -1547,6 +1868,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             rfqMode={isRfqMode}
             vendorNames={wizardState.vendorNames}
             nomenclatureName={wizardState.nomenclatureName}
+            forcedViewMode={isTemplateMode ? 'self' : undefined}
           />
         );
       default:
@@ -2338,18 +2660,22 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                 </div>
               </div>
               <p className="text-xs" style={{ color: colors.utility.secondaryText, lineHeight: 1.6 }}>
-                Your contract details will be saved as a draft. You can resume from the <strong style={{ color: colors.utility.primaryText }}>Drafts</strong> tab anytime.
+                {isTemplateMode ? (
+                  <>Your template will be saved as a draft. You can continue editing it from the <strong style={{ color: colors.utility.primaryText }}>Templates List</strong> anytime.</>
+                ) : (
+                  <>Your contract details will be saved as a draft. You can resume from the <strong style={{ color: colors.utility.primaryText }}>Drafts</strong> tab anytime.</>
+                )}
               </p>
             </div>
             {/* Actions */}
             <div className="p-4 pt-2 flex flex-col gap-2">
               <button
                 onClick={handleCloseWithSave}
-                disabled={isSavingDraft}
+                disabled={isSavingDraft || saveTemplateMutation.isPending}
                 className="w-full py-2.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 flex items-center justify-center gap-1.5"
                 style={{ backgroundColor: colors.brand.primary }}
               >
-                {isSavingDraft ? (
+                {(isSavingDraft || saveTemplateMutation.isPending) ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
                 ) : (
                   <><Save className="w-3.5 h-3.5" /> Save Draft & Close</>
@@ -2517,19 +2843,21 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
-          canGoNext={canGoNext() && !isCreating && !isSavingDraft}
+          canGoNext={canGoNext() && !isCreating && !isSavingDraft && !saveTemplateMutation.isPending}
           isLastStep={isLastStep}
           onBack={handleBack}
           onNext={handleNext}
           onClose={handleClose}
           sendButtonText={
-            isCreating || isUpdating
-              ? 'Creating...'
-              : isRfqMode
-                ? 'Send RFQ'
-                : wizardState.acceptanceMethod === 'auto'
-                  ? 'Create Contract'
-                  : 'Send Contract'
+            isTemplateMode
+              ? (saveTemplateMutation.isPending ? 'Saving…' : 'Save Template')
+              : isCreating || isUpdating
+                ? 'Creating...'
+                : isRfqMode
+                  ? 'Send RFQ'
+                  : wizardState.acceptanceMethod === 'auto'
+                    ? 'Create Contract'
+                    : 'Send Contract'
           }
           showTotal={!isRfqMode}
           isSavingDraft={isSavingDraft}

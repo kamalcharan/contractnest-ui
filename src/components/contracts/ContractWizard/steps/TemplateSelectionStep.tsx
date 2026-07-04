@@ -247,8 +247,8 @@ const TemplateSelectionStep: React.FC<TemplateSelectionStepProps> = ({
           className="text-sm text-center max-w-md mb-8"
           style={{ color: colors.utility.secondaryText }}
         >
-          You haven't created any contract templates yet. Templates help you quickly create
-          contracts with pre-configured service blocks.
+          Only PUBLISHED templates can start a contract. Create one on the Templates page
+          (manually or with VaNi) and publish it — then it appears here.
         </p>
 
         {/* Action Cards */}
@@ -301,9 +301,9 @@ const TemplateSelectionStep: React.FC<TemplateSelectionStepProps> = ({
         >
           💡 Tip: Visit{' '}
           <span style={{ color: colors.brand.primary }} className="font-medium">
-            Catalog Studio → Templates
+            Catalog Studio → Templates List
           </span>{' '}
-          to create reusable contract templates.
+          to create and publish reusable contract templates.
         </p>
       </div>
     );
@@ -342,7 +342,7 @@ const TemplateSelectionStep: React.FC<TemplateSelectionStepProps> = ({
           className="text-sm"
           style={{ color: colors.utility.secondaryText }}
         >
-          Select a template to pre-fill your contract with service blocks
+          Published templates pre-fill blocks, billing, acceptance and evidence — you add buyer and dates
         </p>
       </div>
 

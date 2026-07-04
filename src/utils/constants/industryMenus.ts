@@ -143,8 +143,7 @@ export const defaultMenuItems: MenuItem[] = [
     submenuItems: [
       { id: 'catalog-studio-configure', label: 'Configure', icon: 'Settings', path: '/catalog-studio/configure' },
       { id: 'catalog-studio-equipment', label: 'VaNi Seeding', icon: 'Sprout', path: '/catalog-studio/equipment' },
-      { id: 'catalog-studio-template', label: 'Template Builder', icon: 'FileTemplate', path: '/catalog-studio/template' },
-      { id: 'catalog-studio-templates-list', label: 'Templates List', icon: 'List', path: '/catalog-studio/templates-list' }
+      { id: 'catalog-studio-templates-list', label: 'Templates', icon: 'List', path: '/catalog-studio/templates-list' }
     ]
   },
 
@@ -202,18 +201,6 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: true,
     defaultOpen: true, // Implementation Toolkit should be open by default
     submenuItems: [
-      {
-        id: 'global-templates',
-        label: 'Global Templates',
-        icon: 'FileText',
-        path: '/service-contracts/templates/admin/global-templates'
-      },
-      {
-        id: 'global-template-designer',
-        label: 'Global Template Designer',
-        icon: 'Edit',
-        path: '/service-contracts/templates/admin/global-designer'
-      },
       {
         id: 'template-analytics',
         label: 'Template Analytics',

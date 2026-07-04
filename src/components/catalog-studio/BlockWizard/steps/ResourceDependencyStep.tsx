@@ -318,17 +318,35 @@ const ResourceDependencyStep: React.FC<ResourceDependencyStepProps> = ({
     isLoading: loadingEquipment,
   } = useResourceTemplatesBrowser({ limit: 100 });
 
+  // Owner decision (2026-07-02): dependencies are picked from the tenant's
+  // RESOURCES (their onboarding picks, materialized into
+  // t_category_resources_master) — NOT the whole Business Profile industry
+  // menu. Templates are narrowed to the tenant's working set by name+type
+  // (materialization copies names verbatim, so equality is reliable); the
+  // template id is kept because the Knowledge Tree is keyed on it.
+  const { data: tenantEquipmentRes } = useResources('equipment', { enabled: true });
+  const { data: tenantFacilityRes } = useResources('asset', { enabled: true });
+
+  const tenantResourceNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of tenantEquipmentRes || []) set.add(`equipment|${(r.name || '').toLowerCase()}`);
+    for (const r of tenantFacilityRes || []) set.add(`asset|${(r.name || '').toLowerCase()}`);
+    return set;
+  }, [tenantEquipmentRes, tenantFacilityRes]);
+
   const equipmentList = useMemo(() => {
     return equipmentTemplates.filter(t =>
-      (t.resource_type_id || '').toLowerCase() === 'equipment'
+      (t.resource_type_id || '').toLowerCase() === 'equipment' &&
+      tenantResourceNames.has(`equipment|${(t.name || '').toLowerCase()}`)
     );
-  }, [equipmentTemplates]);
+  }, [equipmentTemplates, tenantResourceNames]);
 
   const facilityList = useMemo(() => {
     return equipmentTemplates.filter(t =>
-      (t.resource_type_id || '').toLowerCase() === 'asset'
+      (t.resource_type_id || '').toLowerCase() === 'asset' &&
+      tenantResourceNames.has(`asset|${(t.name || '').toLowerCase()}`)
     );
-  }, [equipmentTemplates]);
+  }, [equipmentTemplates, tenantResourceNames]);
 
   // Team Members contacts
   const { data: teamMembersData, isLoading: loadingTeamMembers } = useTeamMemberContactsForResource();

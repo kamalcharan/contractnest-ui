@@ -4,18 +4,22 @@ import {
   ArrowLeft, Plus, Check, Trash2, Search, PackagePlus, X,
   Wrench, Building, Package, ChevronLeft, ChevronRight,
   Eye, EyeOff, ShieldAlert, Info, Headset,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Users, ExternalLink,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useResourceTemplatesBrowser, ResourceTemplateFilters } from '@/hooks/queries/useResourceTemplates';
 import { useResources, useCreateResource, useDeleteResource } from '@/hooks/queries/useResources';
+import { useTeamMemberContactsForResource } from '@/hooks/queries/useContactsResource';
 import { VaNiLoader } from '@/components/common/loaders';
 import { vaniToast } from '@/components/common/toast';
 import { SUB_CATEGORY_CONFIG, getSubCategoryConfig } from '@/constants/subCategoryConfig';
 
 // ─── Constants ───────────────────────────────────────────────
 const ITEMS_PER_PAGE = 10;
-const TABS = ['All', 'Equipment', 'Facilities'] as const;
+// Team Members are CONTACTS tagged as team members (owner decision 2026-07-02):
+// the person is the resource; their master data lives in Contacts. The tab here
+// is a read-only view so Resources shows the complete working set in one place.
+const TABS = ['All', 'Equipment', 'Facilities', 'Team Members'] as const;
 type Tab = typeof TABS[number];
 type ViewMode = 'my-resources' | 'browse-catalog';
 
@@ -35,6 +39,7 @@ const isFacilityType = (t: string) => t.toLowerCase() === 'asset';
 
 const filterByTab = <T extends { resource_type_id: string }>(items: T[], tab: Tab): T[] => {
   if (tab === 'All') return items;
+  if (tab === 'Team Members') return []; // TM tab renders its own contacts-backed panel
   return items.filter(i => {
     const t = (i.resource_type_id || '').toLowerCase();
     return tab === 'Equipment' ? isEquipmentType(t) : isFacilityType(t);
@@ -51,6 +56,7 @@ const countByTab = <T extends { resource_type_id: string }>(items: T[]) => ({
   All: items.length,
   Equipment: items.filter(i => isEquipmentType(i.resource_type_id || '')).length,
   Facilities: items.filter(i => isFacilityType(i.resource_type_id || '')).length,
+  'Team Members': 0, // overwritten with the contacts-backed count in the component
 });
 
 // ─── Industry display helper ─────────────────────────────────
@@ -130,9 +136,28 @@ const ResourcesPage: React.FC = () => {
     [templates, activeTab, search],
   );
 
+  // Team Members = contacts tagged as team members (read-only view; managed in Contacts)
+  const { data: teamMembersData, isLoading: loadingTeamMembers } = useTeamMemberContactsForResource();
+  const teamMembers = useMemo(() => {
+    return ((teamMembersData?.data || []) as any[]).map((c) => ({
+      id: c.id,
+      name: c.displayName || c.name || `${c.firstName || ''} ${c.lastName || ''}`.trim() || 'Unknown',
+      subLabel: c.email || c.contact_channels?.find((ch: any) => ch.channel_type === 'email')?.value || '',
+    }));
+  }, [teamMembersData]);
+
+  const filteredTeamMembers = useMemo(() => {
+    if (!search.trim()) return teamMembers;
+    const q = search.toLowerCase();
+    return teamMembers.filter(m => m.name.toLowerCase().includes(q) || m.subLabel.toLowerCase().includes(q));
+  }, [teamMembers, search]);
+
   const savedCounts = useMemo(() => countByTab(showDeleted ? deletedOnly : activeOnly), [deletedOnly, activeOnly, showDeleted]);
   const templateCounts = useMemo(() => countByTab(templates), [templates]);
-  const counts = view === 'my-resources' ? savedCounts : templateCounts;
+  const counts = {
+    ...(view === 'my-resources' ? savedCounts : templateCounts),
+    'Team Members': teamMembers.length,
+  };
 
   const addedCount = useMemo(
     () => templates.filter(t => t.already_added || localSaved.has(t.id)).length,
@@ -343,10 +368,10 @@ const ResourcesPage: React.FC = () => {
 
         {/* ── Filter pills ── */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {TABS.map(tab => {
+          {TABS.filter(tab => tab !== 'Team Members' || view === 'my-resources').map(tab => {
             const isActive = activeTab === tab;
             const count = counts[tab] ?? 0;
-            const tabColor = tab === 'Equipment' ? '#3B82F6' : tab === 'Facilities' ? '#8B5CF6' : colors.brand.primary;
+            const tabColor = tab === 'Equipment' ? '#3B82F6' : tab === 'Facilities' ? '#8B5CF6' : tab === 'Team Members' ? '#10B981' : colors.brand.primary;
             return (
               <button
                 key={tab}
@@ -402,8 +427,83 @@ const ResourcesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ═══ CONTENT ═══ */}
-      {isLoading ? (
+      {/* ═══ TEAM MEMBERS (contacts tagged as team members — read-only) ═══ */}
+      {activeTab === 'Team Members' ? (
+        loadingTeamMembers ? (
+          <VaNiLoader size="md" message="Loading team members..." showSkeleton skeletonVariant="card" skeletonCount={4} />
+        ) : (
+          <div style={{ ...glassCard, padding: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Users size={16} style={{ color: '#10B981' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: colors.utility.primaryText }}>
+                  Team Members ({filteredTeamMembers.length})
+                </span>
+              </div>
+              <button
+                onClick={() => navigate('/contacts')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  border: `1px solid #10B98150`, color: '#10B981',
+                  backgroundColor: '#10B98110', cursor: 'pointer',
+                }}
+              >
+                Manage in Contacts <ExternalLink size={12} />
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: colors.utility.secondaryText, margin: '0 0 14px' }}>
+              Team members are contacts tagged as team members — the person is the resource.
+              Add or edit them in Contacts; they appear here and in catalog-studio dependencies automatically.
+            </p>
+            {filteredTeamMembers.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: colors.utility.secondaryText, fontSize: 13 }}>
+                {search ? 'No team members match your search.' : 'No contacts are tagged as team members yet.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {filteredTeamMembers.map(member => (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 14px', borderRadius: 10,
+                      border: `1px solid ${colors.utility.primaryText}12`,
+                      backgroundColor: colors.utility.primaryBackground,
+                    }}
+                  >
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: '#10B98115', color: '#10B981',
+                    }}>
+                      <Users size={15} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: colors.utility.primaryText, margin: 0 }}>
+                        {member.name}
+                      </p>
+                      {member.subLabel && (
+                        <p style={{ fontSize: 11.5, color: colors.utility.secondaryText, margin: 0 }}>
+                          {member.subLabel}
+                        </p>
+                      )}
+                    </div>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: 0.4,
+                      padding: '3px 8px', borderRadius: 999,
+                      backgroundColor: '#10B98112', color: '#10B981', flexShrink: 0,
+                    }}>
+                      From Contacts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      ) : isLoading ? ( /* ═══ CONTENT (physical resources) ═══ */
         <VaNiLoader
           size="md"
           message={view === 'my-resources' ? 'Loading your resources...' : 'Loading catalog...'}

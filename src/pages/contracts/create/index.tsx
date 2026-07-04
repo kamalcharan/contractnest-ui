@@ -1,10 +1,12 @@
 // src/pages/contracts/create/index.tsx
 // Contract Type Pages - Client, Vendor, Partner Contracts
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, FileText, Search, Filter } from 'lucide-react';
+import { Plus, FileText, Search, Filter, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import ContractWizard from '@/components/contracts/ContractWizard';
+import VaNiComposerLauncher from '@/components/contracts/vani/VaNiComposerLauncher';
+import vaniComposerService, { type VaniComposeResult } from '@/services/vaniComposerService';
 
 // Contract type definition
 export type ContractType = 'client' | 'vendor' | 'partner';
@@ -34,10 +36,34 @@ const ContractCreatePage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [showWizard, setShowWizard] = useState(false);
 
+  // VaNi composer state: draft flows from the launcher into the wizard
+  const [showVaniComposer, setShowVaniComposer] = useState(false);
+  const [vaniPrefill, setVaniPrefill] = useState<Record<string, any> | null>(null);
+  const [vaniInteractionIds, setVaniInteractionIds] = useState<string[]>([]);
+  const [vaniEntitled, setVaniEntitled] = useState(false);
+  const [vaniInitialStep, setVaniInitialStep] = useState<string | null>(null);
+
+  const handleVaniDraftReady = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
+    setVaniPrefill(result.draft);
+    setVaniInteractionIds(interactionIds);
+    setVaniInitialStep(initialStepId || null);
+    setShowVaniComposer(false);
+    setShowWizard(true);
+  };
+
   // Get config for current contract type (default to 'client' if invalid)
   const validContractType = (contractType && ['client', 'vendor', 'partner'].includes(contractType))
     ? contractType as ContractType
     : 'client';
+
+  // VaNi is a subscription feature AND seller-side (Revenue) only:
+  // the agent drafts contracts you issue to clients, never vendor/partner (Expense) paperwork.
+  const isRevenueMode = validContractType === 'client';
+  useEffect(() => {
+    if (!isRevenueMode) return;
+    vaniComposerService.checkEntitlement().then((e) => setVaniEntitled(e.entitled && e.llm_enabled));
+  }, [isRevenueMode]);
+  const showVaniEntry = isRevenueMode && vaniEntitled;
   const config = CONTRACT_TYPE_CONFIG[validContractType];
 
   // Placeholder contracts data - will be replaced with API data
@@ -64,14 +90,30 @@ const ContractCreatePage: React.FC = () => {
             {config.subtitle}
           </p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white font-medium transition-all hover:opacity-90 hover:shadow-lg"
-          style={{ backgroundColor: colors.brand.primary }}
-        >
-          <Plus className="h-5 w-5" />
-          {config.buttonText}
-        </button>
+        <div className="flex items-center gap-3">
+          {showVaniEntry && (
+            <button
+              onClick={() => setShowVaniComposer(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all hover:opacity-90 hover:shadow-lg border"
+              style={{
+                borderColor: colors.brand.primary,
+                color: colors.brand.primary,
+                backgroundColor: `${colors.brand.primary}08`,
+              }}
+            >
+              <Sparkles className="h-5 w-5" />
+              Draft with VaNi
+            </button>
+          )}
+          <button
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-white font-medium transition-all hover:opacity-90 hover:shadow-lg"
+            style={{ backgroundColor: colors.brand.primary }}
+          >
+            <Plus className="h-5 w-5" />
+            {config.buttonText}
+          </button>
+        </div>
       </div>
 
       {/* Search and Filter Bar */}
@@ -186,11 +228,26 @@ const ContractCreatePage: React.FC = () => {
         </div>
       )}
 
+      {/* VaNi Composer — intent → drafted contract */}
+      <VaNiComposerLauncher
+        isOpen={showVaniComposer}
+        onClose={() => setShowVaniComposer(false)}
+        onDraftReady={handleVaniDraftReady}
+      />
+
       {/* Contract Wizard */}
       <ContractWizard
         isOpen={showWizard}
-        onClose={() => setShowWizard(false)}
+        onClose={() => {
+          setShowWizard(false);
+          setVaniPrefill(null);
+          setVaniInteractionIds([]);
+          setVaniInitialStep(null);
+        }}
         contractType={validContractType}
+        vaniPrefill={vaniPrefill}
+        vaniInteractionIds={vaniInteractionIds}
+        vaniInitialStepId={vaniInitialStep}
         onComplete={(contractData) => {
           console.log('Contract created:', contractData);
           // TODO: Send to API

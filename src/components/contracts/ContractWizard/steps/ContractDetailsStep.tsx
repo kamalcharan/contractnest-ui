@@ -48,6 +48,9 @@ interface ContractDetailsStepProps {
   errors?: Partial<Record<keyof ContractDetailsData, string>>;
   title?: string;
   subtitle?: string;
+  // Template mode: this step names a reusable template, so the contract
+  // status card is hidden and the title field is relabelled
+  templateMode?: boolean;
 }
 
 // Helper to get Lucide icon component by name
@@ -77,6 +80,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
   errors = {},
   title,
   subtitle,
+  templateMode = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -237,14 +241,16 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 style={{ color: colors.utility.primaryText }}
               >
                 <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                Contract Title
+                {templateMode ? 'Template Title' : 'Contract Title'}
                 <span style={{ color: colors.semantic.error }}>*</span>
               </label>
               <input
                 type="text"
                 value={data.contractName}
                 onChange={handleTitleChange}
-                placeholder="Enter a descriptive title for this contract"
+                placeholder={templateMode
+                  ? 'e.g. 1-Year HVAC AMC — Quarterly visits'
+                  : 'Enter a descriptive title for this contract'}
                 className="w-full px-4 py-3 rounded-xl border-2 transition-all text-base"
                 style={{
                   ...inputBaseStyle,
@@ -271,7 +277,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                     style={{ color: colors.semantic.error }}
                   >
                     <AlertCircle className="w-3 h-3" />
-                    Contract title is required
+                    {templateMode ? 'Template title is required' : 'Contract title is required'}
                   </span>
                 ) : (
                   <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
@@ -316,7 +322,8 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
 
           {/* RIGHT COLUMN - Settings Cards (42%) */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Status Card with Flow Hint */}
+            {/* Status Card with Flow Hint — hidden for templates (lifecycle lives on the templates list) */}
+            {!templateMode && (
             <div
               className="rounded-2xl border p-4 relative"
               style={{
@@ -436,6 +443,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 </div>
               )}
             </div>
+            )}
 
             {/* Currency Card */}
             <div

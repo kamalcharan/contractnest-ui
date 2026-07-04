@@ -15,6 +15,7 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useContracts, useGroupedContracts, useContractStats, contractKeys, useContract } from '@/hooks/queries/useContractQueries';
@@ -28,6 +29,8 @@ import type {
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import ContractWizard from '@/components/contracts/ContractWizard';
 import type { ContractType } from '@/components/contracts/ContractWizard';
+import VaNiComposerLauncher from '@/components/contracts/vani/VaNiComposerLauncher';
+import vaniComposerService, { type VaniComposeResult } from '@/services/vaniComposerService';
 
 // Portfolio list components
 import ContractPortfolioRow from '@/components/contracts/list/ContractPortfolioRow';
@@ -438,6 +441,29 @@ const ContractsHubPage: React.FC = () => {
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const { data: resumeDraftData, isLoading: isLoadingDraft } = useContract(resumeDraftId);
 
+  // ── VaNi composer state (Revenue mode + subscription only) ──
+  const [showVaniComposer, setShowVaniComposer] = useState(false);
+  const [vaniPrefill, setVaniPrefill] = useState<Record<string, any> | null>(null);
+  const [vaniInteractionIds, setVaniInteractionIds] = useState<string[]>([]);
+  const [vaniEntitled, setVaniEntitled] = useState(false);
+  const [vaniInitialStep, setVaniInitialStep] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activePerspective !== 'revenue') return;
+    vaniComposerService.checkEntitlement().then((e) => setVaniEntitled(e.entitled && e.llm_enabled));
+  }, [activePerspective]);
+  const showVaniEntry = activePerspective === 'revenue' && vaniEntitled;
+
+  const handleVaniDraftReady = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
+    setVaniPrefill(result.draft);
+    setVaniInteractionIds(interactionIds);
+    setVaniInitialStep(initialStepId || null);
+    setShowVaniComposer(false);
+    setResumeDraftId(null);
+    setWizardContractType('client'); // VaNi drafts are seller→client contracts
+    setShowWizard(true);
+  };
+
   // ── Reset page + invalidate stats when perspective changes ──
   const prevPerspective = useRef(activePerspective);
   useEffect(() => {
@@ -699,6 +725,29 @@ const ContractsHubPage: React.FC = () => {
               <RefreshCw size={14} />
             </button>
 
+            {/* VaNi entry — Revenue mode + VaNi subscribers only */}
+            {showVaniEntry && (
+              <button
+                onClick={() => setShowVaniComposer(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 14px',
+                  borderRadius: 10,
+                  border: `1px solid ${colors.brand.primary}`,
+                  background: `${colors.brand.primary}0D`,
+                  color: colors.brand.primary,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Sparkles size={14} />
+                Draft with VaNi
+              </button>
+            )}
+
             {/* Create button */}
             <button
               onClick={handleCreateClick}
@@ -858,22 +907,38 @@ const ContractsHubPage: React.FC = () => {
         )}
       </div>
 
+      {/* VaNi Composer — intent → drafted contract (Revenue mode) */}
+      <VaNiComposerLauncher
+        isOpen={showVaniComposer}
+        onClose={() => setShowVaniComposer(false)}
+        onDraftReady={handleVaniDraftReady}
+      />
+
       {/* Contract Creation Wizard Modal */}
       <ContractWizard
         isOpen={showWizard}
         onClose={() => {
           setShowWizard(false);
           setResumeDraftId(null);
+          setVaniPrefill(null);
+          setVaniInteractionIds([]);
+          setVaniInitialStep(null);
           refetch();
         }}
         contractType={wizardContractType}
         onComplete={() => {
           setShowWizard(false);
           setResumeDraftId(null);
+          setVaniPrefill(null);
+          setVaniInteractionIds([]);
+          setVaniInitialStep(null);
           refetch();
         }}
         draftContractId={resumeDraftId}
         draftContractData={resumeDraftId && resumeDraftData ? resumeDraftData as Record<string, any> : null}
+        vaniPrefill={vaniPrefill}
+        vaniInteractionIds={vaniInteractionIds}
+        vaniInitialStepId={vaniInitialStep}
       />
     </div>
   );

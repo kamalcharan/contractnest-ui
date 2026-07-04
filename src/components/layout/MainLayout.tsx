@@ -7,7 +7,6 @@ import Header from './Header';
 // Routes that should auto-collapse the sidebar for more workspace
 const AUTO_COLLAPSE_ROUTES = [
   '/catalog-studio/configure',
-  '/catalog-studio/template',
   '/catalog-studio/templates-list',
   '/catalog-studio/blocks'
 ];
