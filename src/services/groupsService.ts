@@ -669,9 +669,12 @@ class GroupsService {
         throw new Error(response.data.error || 'Failed to load SmartProfile');
       }
 
+      // Edge returns { success, exists, smartprofile: { ...row, clusters } }.
+      // Read the row from `smartprofile` (clusters are nested inside it).
+      const sp = response.data?.smartprofile || null;
       return {
-        profile: response.data.data?.profile || null,
-        clusters: response.data.data?.clusters || []
+        profile: sp,
+        clusters: sp?.clusters || []
       };
 
     } catch (error: any) {

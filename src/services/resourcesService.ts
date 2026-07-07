@@ -458,6 +458,26 @@ class ResourcesService {
       this.handleError(error, 'Failed to load resource templates');
     }
   }
+
+  /**
+   * Get the tenant's ICP relevance ranking for resource templates (onboarding
+   * seeding). Returns { [template_id]: { score, forYou } }. Empty {} when the
+   * tenant has no ICP signal — callers keep their existing static order.
+   * Never throws: any failure degrades to an empty ranking (pure enhancement).
+   */
+  async getResourceRanking(): Promise<ResourceRankingResponse> {
+    try {
+      const response = await api.get<ResourceRankingResponse>(
+        '/api/onboarding/resource-ranking',
+        { headers: this.getHeaders() },
+      );
+      return response.data;
+    } catch (error) {
+      // Ranking is optional — never break the seeding step over it.
+      console.warn('ResourcesService: resource ranking unavailable, using static order');
+      return { success: true, data: {} };
+    }
+  }
 }
 
 // Template-related types (co-located with service for simplicity)
@@ -491,6 +511,17 @@ export interface ResourceTemplatesResponse {
   served_industries: string[];
   message?: string;
   timestamp: string;
+}
+
+// ICP relevance ranking for the onboarding resource picker (Piece 2).
+// forYou = an actual ICP keyword matched → drives the "★ For you" badge.
+export interface TemplateRank {
+  score: number;
+  forYou: boolean;
+}
+export interface ResourceRankingResponse {
+  success: boolean;
+  data: Record<string, TemplateRank>;
 }
 
 // Create and export a singleton instance

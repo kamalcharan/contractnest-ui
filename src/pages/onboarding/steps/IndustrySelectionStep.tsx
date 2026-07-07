@@ -364,7 +364,7 @@ const IndustrySelectionStep: React.FC = () => {
               color: colors.utility.primaryText, marginBottom: 6,
             }}
           >
-            Which industries do you serve?
+            Which industries do you serve? <span style={{ color: colors.semantic.error }}>*</span>
           </h2>
           <p
             style={{

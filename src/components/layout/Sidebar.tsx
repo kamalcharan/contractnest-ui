@@ -164,14 +164,35 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
 };
 
 // Special highlighted nav item for VaNi
+// NOTE: previously a single hardcoded NavLink with no submenu support at all —
+// item.hasSubmenu/submenuItems were silently ignored here even when set on the
+// menu data, since this component (not the generic NavItem) renders id==='vani'.
+// Now mirrors NavItem's toggle/chevron/submenu-list pattern while keeping the
+// distinctive gradient + "AI" badge header.
 const VaNiNavItem: React.FC<{ item: MenuItem; collapsed: boolean }> = ({ item, collapsed }) => {
   const location = useLocation();
+  const { isDarkMode, currentTheme } = useTheme();
+  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const hasSubmenu = !!(item.hasSubmenu && item.submenuItems && item.submenuItems.length > 0);
+  const [isSubmenuOpen, setIsSubmenuOpen] = useState(item.defaultOpen !== false);
   const isActive = location.pathname.startsWith('/vani');
+
+  const getIconComponent = (iconName: string) => {
+    const iconsMap = LucideIcons as unknown as Record<string, React.ComponentType<{ size?: number }>>;
+    return iconsMap[iconName] || LucideIcons.Circle;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (hasSubmenu) {
+      e.preventDefault();
+      setIsSubmenuOpen(!isSubmenuOpen);
+    }
+  };
 
   return (
     <div className="mb-1 mx-1">
       <NavLink
-        to={item.path}
+        to={hasSubmenu ? '#' : item.path}
         className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group"
         style={{
           background: isActive
@@ -199,6 +220,7 @@ const VaNiNavItem: React.FC<{ item: MenuItem; collapsed: boolean }> = ({ item, c
             e.currentTarget.style.boxShadow = 'none';
           }
         }}
+        onClick={handleClick}
       >
         <div className="relative">
           <LucideIcons.Sparkles size={20} />
@@ -214,18 +236,70 @@ const VaNiNavItem: React.FC<{ item: MenuItem; collapsed: boolean }> = ({ item, c
         {!collapsed && (
           <div className="flex items-center justify-between w-full">
             <span className="font-semibold text-sm tracking-wide">VaNi</span>
-            <span
-              className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded"
-              style={{
-                background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(139,92,246,0.2)',
-                color: isActive ? '#ffffff' : '#a78bfa',
-              }}
-            >
-              AI
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded"
+                style={{
+                  background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(139,92,246,0.2)',
+                  color: isActive ? '#ffffff' : '#a78bfa',
+                }}
+              >
+                AI
+              </span>
+              {hasSubmenu && (
+                <LucideIcons.ChevronRight
+                  size={14}
+                  className={`transition-transform ${isSubmenuOpen ? 'rotate-90' : ''}`}
+                />
+              )}
+            </div>
           </div>
         )}
       </NavLink>
+
+      {!collapsed && hasSubmenu && isSubmenuOpen && (
+        <div
+          className="ml-5 pl-4 border-l space-y-1 mt-1 transition-colors"
+          style={{ borderColor: `${colors.utility.primaryText}20` }}
+        >
+          {item.submenuItems!.map((subItem) => {
+            const SubIconComponent = getIconComponent(subItem.icon);
+            return (
+              <NavLink
+                key={subItem.id}
+                to={subItem.path}
+                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all"
+                style={({ isActive }) => ({
+                  backgroundColor: isActive ? `${colors.brand.primary}20` : 'transparent',
+                  color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+                  fontWeight: isActive ? '500' : 'normal'
+                })}
+                onMouseEnter={(e) => {
+                  const target = e.currentTarget;
+                  const active = target.getAttribute('aria-current') === 'page';
+                  if (!active) {
+                    target.style.backgroundColor = `${colors.utility.primaryText}10`;
+                    target.style.color = colors.utility.primaryText;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const target = e.currentTarget;
+                  const active = target.getAttribute('aria-current') === 'page';
+                  if (!active) {
+                    target.style.backgroundColor = 'transparent';
+                    target.style.color = colors.utility.secondaryText;
+                  }
+                }}
+              >
+                <div className="relative">
+                  <SubIconComponent size={16} />
+                </div>
+                <span>{subItem.label}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

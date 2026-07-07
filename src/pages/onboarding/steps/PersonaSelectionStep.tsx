@@ -310,7 +310,7 @@ const PersonaSelectionStep: React.FC = () => {
               color: colors.utility.primaryText, marginBottom: 6,
             }}
           >
-            How will you use ContractNest?
+            How will you use ContractNest? <span style={{ color: colors.semantic.error }}>*</span>
           </h2>
           <p
             style={{

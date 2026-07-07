@@ -399,7 +399,7 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
 
             {/* ── Scheduled Date Groups ── */}
             {dateGroups.map((group, gIdx) => {
-              const dateKey = group.date.toISOString().split('T')[0];
+              const dateKey = `${group.date.getFullYear()}-${group.date.getMonth()}-${group.date.getDate()}`;
               const serviceEvts = group.events.filter(e => e.event_type === 'service' || e.event_type === 'spare_part');
               const billingEvts = group.events.filter(e => e.event_type === 'billing');
               const dayNum = Math.max(1, Math.round(

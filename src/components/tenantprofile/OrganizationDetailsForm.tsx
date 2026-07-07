@@ -227,7 +227,7 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
                 style={{ color: colors.utility.primaryText }}
               >
                 <Mail className="mr-1.5 h-4 w-4" style={{ color: colors.utility.secondaryText }} />
-                Email
+                Email <span style={{ color: colors.semantic.error }}>*</span>
               </label>
               <input
                 id="business_email"
@@ -249,7 +249,7 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
                 style={{ color: colors.utility.primaryText }}
               >
                 <Phone className="mr-1.5 h-4 w-4" style={{ color: colors.utility.secondaryText }} />
-                Phone
+                Phone <span style={{ color: colors.semantic.error }}>*</span>
               </label>
               <div className="flex space-x-2">
                 <select
@@ -333,6 +333,10 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
                 type="url"
                 value={formData.website_url || ''}
                 onChange={(e) => onUpdate('website_url', e.target.value)}
+                onBlur={(e) => {
+                  const v = (e.target.value || '').trim();
+                  if (v && !/^https?:\/\//i.test(v)) onUpdate('website_url', `https://${v}`);
+                }}
                 placeholder="https://example.com"
                 className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
                 style={getInputStyles()}
@@ -356,6 +360,10 @@ const OrganizationDetailsForm: React.FC<OrganizationDetailsFormProps> = ({
               type="url"
               value={formData.booking_url || ''}
               onChange={(e) => onUpdate('booking_url', e.target.value)}
+              onBlur={(e) => {
+                const v = (e.target.value || '').trim();
+                if (v && !/^https?:\/\//i.test(v)) onUpdate('booking_url', `https://${v}`);
+              }}
               placeholder="https://calendly.com/your-link"
               className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 transition-colors"
               style={getInputStyles()}

@@ -32,8 +32,12 @@ interface ContactFieldsProps {
   onWebsiteChange: (website: string) => void;
   /** Whether the fields are disabled */
   disabled?: boolean;
-  /** Whether fields are required */
+  /** Whether fields are required (block-level default for all fields) */
   required?: boolean;
+  /** Per-field required overrides — fall back to `required` when undefined */
+  emailRequired?: boolean;
+  phoneRequired?: boolean;
+  websiteRequired?: boolean;
   /** Optional custom class name */
   className?: string;
   /** Show label */
@@ -59,6 +63,9 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
   onWebsiteChange,
   disabled = false,
   required = false,
+  emailRequired,
+  phoneRequired,
+  websiteRequired,
   className = '',
   showLabel = true,
   labelText = 'Contact Information',
@@ -66,7 +73,12 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
+
+  // Per-field required flags (default to the block-level `required`)
+  const emailReq   = emailRequired   ?? required;
+  const phoneReq   = phoneRequired   ?? required;
+  const websiteReq = websiteRequired ?? required;
+
   // Local state for validation
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -82,7 +94,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
    * Validate email format
    */
   const validateEmail = (value: string): string | null => {
-    if (!value && required) {
+    if (!value && emailReq) {
       return 'Email is required';
     }
     
@@ -97,7 +109,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
    * Validate phone format
    */
   const validatePhone = (value: string): string | null => {
-    if (!value && required) {
+    if (!value && phoneReq) {
       return 'Phone number is required';
     }
     
@@ -135,7 +147,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
    * Validate website URL
    */
   const validateWebsite = (value: string): string | null => {
-    if (!value && required) {
+    if (!value && websiteReq) {
       return 'Website is required';
     }
     
@@ -223,22 +235,21 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
   };
   
   /**
-   * Handle website blur
+   * Handle website blur — normalize the URL (add https:// if missing) BEFORE
+   * validating, so a user who types "www.acme.io" gets it corrected to
+   * "https://www.acme.io" transparently (with a toast) instead of it being
+   * silently accepted and failing downstream. Validation runs on the
+   * normalized value.
    */
   const handleWebsiteBlur = () => {
     setWebsiteTouched(true);
-    setWebsiteError(validateWebsite(website));
-  };
-  
-  /**
-   * Format website URL (add https:// if missing)
-   */
-  const formatWebsiteUrl = () => {
-    if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
-      const formatted = `https://${website}`;
-      onWebsiteChange(formatted);
+    let value = (website || '').trim();
+    if (value && !/^https?:\/\//i.test(value)) {
+      value = `https://${value}`;
+      onWebsiteChange(value);
       toast.success('Website URL formatted');
     }
+    setWebsiteError(validateWebsite(value));
   };
   
   /**
@@ -284,8 +295,8 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
             style={{ color: colors.utility.primaryText }}
           >
             {labelText}
-            {!required && (
-              <span 
+            {!(emailReq || phoneReq || websiteReq) && (
+              <span
                 className="text-sm font-normal ml-2"
                 style={{ color: colors.utility.secondaryText }}
               >
@@ -319,7 +330,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 style={{ color: colors.utility.secondaryText }}
               />
               Email Address
-              {required && (
+              {emailReq && (
                 <span style={{ color: colors.semantic.error }} className="ml-1">*</span>
               )}
             </div>
@@ -382,7 +393,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 style={{ color: colors.utility.secondaryText }}
               />
               Phone Number
-              {required && (
+              {phoneReq && (
                 <span style={{ color: colors.semantic.error }} className="ml-1">*</span>
               )}
             </div>
@@ -546,7 +557,7 @@ const ContactFields: React.FC<ContactFieldsProps> = ({
                 style={{ color: colors.utility.secondaryText }}
               />
               Website
-              {required && (
+              {websiteReq && (
                 <span style={{ color: colors.semantic.error }} className="ml-1">*</span>
               )}
             </div>

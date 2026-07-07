@@ -238,8 +238,6 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Hash',
     adminOnly: false
   },
-  // HIDDEN: Smart Profile - commented out for now
-  /*
   {
     id: 'smart-profile',
     settings_type: 'Smart Profile',
@@ -250,7 +248,6 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'Sparkles',
     adminOnly: false
   },
-  */
 
 
   // Subscription section - Unified Dashboard (Credits merged into My Subscription)

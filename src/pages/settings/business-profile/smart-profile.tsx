@@ -182,26 +182,16 @@ const SmartProfilePage: React.FC = () => {
     }
   };
 
-  // Helper: Extract keywords from text (fallback when AI unavailable)
-  const extractKeywordsFromText = (text: string): string[] => {
-    if (!text) return [];
-    const stopWords = new Set([
-      'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
-      'by', 'from', 'as', 'is', 'was', 'are', 'were', 'been', 'be', 'have', 'has', 'had',
-      'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must',
-      'it', 'its', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'we', 'they',
-      'what', 'which', 'who', 'when', 'where', 'why', 'how', 'all', 'each', 'every',
-      'our', 'your', 'their', 'my', 'into', 'onto', 'upon'
-    ]);
-    const words = text.toLowerCase().replace(/[^a-zA-Z\s]/g, ' ').split(/\s+/)
-      .filter(word => word.length >= 3 && !stopWords.has(word));
-    const unique = [...new Set(words)];
-    return unique.slice(0, 8).map(w => w.charAt(0).toUpperCase() + w.slice(1));
-  };
-
-  // Helper: Generate basic enhanced description (fallback when AI unavailable)
-  const generateFallbackDescription = (text: string): string => {
-    return `${text}\n\nWe are a professional organization committed to delivering high-quality services and solutions to our clients. Our team brings expertise, innovation, and dedication to every project we undertake.`;
+  // Honesty rule: NO fabricated fallbacks. A profile only ever holds real
+  // AI output or the user's own typed input — never invented text/keywords,
+  // which would poison ICP keywords/clusters downstream.
+  // Manual path: proceed with the user's OWN description verbatim (no AI).
+  const handleContinueManually = () => {
+    if (!shortDescription.trim()) return;
+    setEnhancedDescription(shortDescription);
+    setKeywords([]); // user adds keywords/clusters manually in the next steps
+    setGenerationMethod('manual');
+    setWizardStep('enhanced');
   };
 
   // Handle AI enhancement
@@ -214,28 +204,22 @@ const SmartProfilePage: React.FC = () => {
         short_description: shortDescription
       });
 
-      // Use returned values or fallback if null/empty
-      const enhanced = result.ai_enhanced_description || generateFallbackDescription(shortDescription);
-      const kws = (result.suggested_keywords && result.suggested_keywords.length > 0)
-        ? result.suggested_keywords
-        : extractKeywordsFromText(shortDescription);
+      // Only accept a REAL AI result. Empty content is treated as a failure,
+      // never patched over with fabricated text.
+      if (!result.ai_enhanced_description?.trim()) {
+        throw new Error('AI returned an empty result.');
+      }
 
-      setEnhancedDescription(enhanced);
-      setKeywords(kws);
+      setEnhancedDescription(result.ai_enhanced_description);
+      setKeywords(result.suggested_keywords || []);
       setWizardStep('enhanced');
 
       vaniToast.success('AI enhancement complete!');
     } catch (error: any) {
-      // Fallback: Use basic enhancement when AI is unavailable
-      console.warn('AI enhancement failed, using fallback:', error.message);
-      const fallbackDesc = generateFallbackDescription(shortDescription);
-      const fallbackKeywords = extractKeywordsFromText(shortDescription);
-
-      setEnhancedDescription(fallbackDesc);
-      setKeywords(fallbackKeywords);
-      setWizardStep('enhanced');
-
-      vaniToast.success('Profile prepared (AI temporarily unavailable)');
+      // No fabrication. Surface the real error and keep the user on manual
+      // entry — they can retry, or use "Continue without AI" with their own text.
+      console.error('AI enhancement failed:', error?.message);
+      vaniToast.error(error?.message || 'AI enhancement failed. Please try again or continue without AI.');
     }
   };
 
@@ -249,28 +233,22 @@ const SmartProfilePage: React.FC = () => {
         website_url: websiteUrl
       });
 
-      // Use returned values or fallback if null/empty
-      const enhanced = result.ai_enhanced_description || generateFallbackDescription(`Business with online presence at ${websiteUrl}`);
-      const kws = (result.suggested_keywords && result.suggested_keywords.length > 0)
-        ? result.suggested_keywords
-        : ['Professional', 'Services', 'Quality', 'Solutions'];
+      // Only accept REAL scraped content. Empty is a failure, never fabricated.
+      if (!result.ai_enhanced_description?.trim()) {
+        throw new Error('No readable content was returned for this website.');
+      }
 
-      setEnhancedDescription(enhanced);
-      setKeywords(kws);
+      setEnhancedDescription(result.ai_enhanced_description);
+      setKeywords(result.suggested_keywords || []);
       setWizardStep('enhanced');
 
       vaniToast.success('Website analyzed successfully!');
     } catch (error: any) {
-      // Fallback: Use basic enhancement when website scraping is unavailable
-      console.warn('Website scraping failed, using fallback:', error.message);
-      const fallbackDesc = generateFallbackDescription(`Business with online presence at ${websiteUrl}`);
-      const fallbackKeywords = ['Professional', 'Services', 'Quality', 'Solutions'];
-
-      setEnhancedDescription(fallbackDesc);
-      setKeywords(fallbackKeywords);
-      setWizardStep('enhanced');
-
-      vaniToast.success('Profile prepared (website analysis temporarily unavailable)');
+      // No fabrication. Drop the user into MANUAL entry so they can type real
+      // text (their own words), instead of inventing a placeholder profile.
+      console.error('Website scraping failed:', error?.message);
+      setGenerationMethod('manual');
+      vaniToast.error(error?.message || 'Website analysis failed. Please add your description manually.');
     }
   };
 
@@ -289,15 +267,35 @@ const SmartProfilePage: React.FC = () => {
         profile_type: 'business'
       });
 
+      // Seed the cache from what we just saved so the 65:35 view page renders
+      // immediately (no blank-wizard flash while the refetch is in flight),
+      // then invalidate to reconcile with the canonical server row.
+      const savedProfile = {
+        tenant_id: currentTenant.id,
+        short_description: shortDescription,
+        ai_enhanced_description: enhancedDescription,
+        approved_keywords: keywords,
+        website_url: websiteUrl || null,
+        generation_method: generationMethod,
+        profile_type: existingProfile?.profile_type || 'seller',
+        status: 'active',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      };
+      queryClient.setQueryData(
+        smartProfileQueryKeys.profile(currentTenant.id),
+        (old: any) => ({ profile: savedProfile, clusters: old?.clusters ?? clusters ?? [] })
+      );
+
+      // Leave the wizard and land on the view page (clusters section ready)
+      setIsEditMode(false);
+      setShowCreateWizard(false);
+
       queryClient.invalidateQueries({
         queryKey: smartProfileQueryKeys.profile(currentTenant.id)
       });
 
-      setIsEditMode(false);
-      setShowCreateWizard(false);
-      setWizardStep('entry');
-
-      vaniToast.success('Profile saved successfully!');
+      vaniToast.success('Profile saved! Add semantic clusters below.');
     } catch (error: any) {
       vaniToast.error(error.message || 'Failed to save profile');
     }
@@ -586,6 +584,19 @@ const SmartProfilePage: React.FC = () => {
                           <span>Enhance with AI</span>
                         </>
                       )}
+                    </button>
+
+                    <button
+                      onClick={handleContinueManually}
+                      disabled={!shortDescription.trim() || enhanceSmartProfileMutation.isPending}
+                      className="w-full mt-2 flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        color: colors.utility.primaryText,
+                        border: `1px solid ${colors.utility.secondaryText}40`
+                      }}
+                    >
+                      <span>Continue without AI</span>
                     </button>
                   </div>
                 ) : (

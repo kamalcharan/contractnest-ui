@@ -11,6 +11,7 @@ import BrandColorPicker from '@/components/tenantprofile/shared/BrandColorPicker
 import ContactFields from '@/components/tenantprofile/shared/ContactFields';
 import { Paintbrush, CheckCircle, Loader2, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '@/services/api';
 
 interface OnboardingStepContext {
   onComplete: (data?: Record<string, any>) => void;
@@ -161,6 +162,30 @@ const BusinessPreferencesStep: React.FC = () => {
       return false;
     }
 
+    // Business email — required
+    if (!businessEmail || businessEmail.trim().length === 0) {
+      setValidationError('Business email is required');
+      toast.error('Business email is required');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(businessEmail.trim())) {
+      setValidationError('Please enter a valid business email');
+      toast.error('Please enter a valid business email');
+      return false;
+    }
+
+    // Business phone — required (at least 10 digits)
+    if (!businessPhone || businessPhone.trim().length === 0) {
+      setValidationError('Business phone is required');
+      toast.error('Business phone is required');
+      return false;
+    }
+    if (businessPhone.replace(/\D/g, '').length < 10) {
+      setValidationError('Please enter a valid phone number (at least 10 digits)');
+      toast.error('Please enter a valid phone number (at least 10 digits)');
+      return false;
+    }
+
     return true;
   };
 
@@ -205,6 +230,17 @@ const BusinessPreferencesStep: React.FC = () => {
       await onComplete(dataToSend);
 
       console.log('✅ BusinessPreferencesStep (Branding) - Step completion triggered');
+
+      // ICP Smart Profile — Piece 1: kick off a BACKGROUND build from the website
+      // URL. Fire-and-forget: we never await it and never surface its outcome
+      // here, so onboarding is not blocked and a scrape failure is silent (the
+      // server persists nothing on failure and skips if a profile already
+      // exists). By the time the tenant reaches resource seeding, the ICP is
+      // usually ready; if not, seeding/chips degrade to archetype ranking.
+      if (websiteUrl && websiteUrl.trim()) {
+        api.post('/api/onboarding/build-smart-profile', { website_url: websiteUrl.trim() })
+          .catch((err: any) => console.warn('Smart Profile background build not started:', err?.message));
+      }
     } catch (error: any) {
       console.error('❌ Error in BusinessPreferencesStep (Branding):', error);
 
@@ -370,7 +406,7 @@ const BusinessPreferencesStep: React.FC = () => {
               labelText="Brand Colors"
             />
 
-            {/* Contact Information - Optional */}
+            {/* Contact Information — email + phone required; website optional */}
             <ContactFields
               email={businessEmail}
               phone={businessPhone}
@@ -385,9 +421,11 @@ const BusinessPreferencesStep: React.FC = () => {
               onWhatsAppCountryCodeChange={handleWhatsAppCountryCodeChange}
               onWebsiteChange={handleWebsiteChange}
               disabled={isSubmitting || isLoading}
-              required={false}
+              emailRequired={true}
+              phoneRequired={true}
+              websiteRequired={false}
               showLabel={true}
-              labelText="Contact Information (Optional)"
+              labelText="Contact Information"
               showHelpText={true}
             />
 

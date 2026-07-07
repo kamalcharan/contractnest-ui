@@ -19,6 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
 import EventsPreviewStep from '@/components/contracts/ContractWizard/steps/EventsPreviewStep';
+import { createInitialWizardState, serializeWizardState, sanitizeStateForTemplate } from '@/components/contracts/ContractWizard';
 import useContractSubmission, { SubmissionResult } from '@/hooks/useContractSubmission';
 import vaniComposerService, { VaniComposeResult } from '@/services/vaniComposerService';
 import { useSaveTemplate } from '@/hooks/mutations/useCatTemplatesMutations';
@@ -36,6 +37,8 @@ export interface VaNiReviewFinalizeProps {
    *  no buyer required, final action = Save Template (draft lifecycle) */
   mode?: 'contract' | 'template';
   onTemplateSaved?: () => void;
+  /** Which review tab to open on ('contract' default, or jump straight to 'events') */
+  initialView?: 'contract' | 'events';
 }
 
 const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
@@ -46,6 +49,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
   onDone,
   mode = 'contract',
   onTemplateSaved,
+  initialView = 'contract',
 }) => {
   const isTemplateMode = mode === 'template';
   const { isDarkMode, currentTheme } = useTheme();
@@ -58,7 +62,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
 
   // Contract | Events view switch. Event-date overrides made on the Events
   // view flow into the same computed_events pipeline the wizard uses.
-  const [reviewView, setReviewView] = useState<'contract' | 'events'>('contract');
+  const [reviewView, setReviewView] = useState<'contract' | 'events'>(initialView);
   const [eventOverrides, setEventOverrides] = useState<Record<string, Date>>({});
 
   // Save-as-template: the door that makes the template tier self-feeding —
@@ -123,28 +127,20 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
         config: b.config || {},
       },
     }));
-    // Counterparty-free wizard state so editing the template round-trips
-    const wizardState = {
-      ...draft,
-      contractName: name,
-      path: null,
-      templateId: null,
-      role: null,
-      wizardMode: 'contract',
-      buyerId: null,
-      buyerName: '',
-      buyerContactPersonId: null,
-      buyerContactPersonName: null,
-      useCompanyContact: false,
-      vendorIds: [],
-      vendorNames: [],
-      status: 'draft',
-      equipmentDetails: [],
-      coverageTypes: [],
-      allowBuyerToAdd: false,
-      eventOverrides: {},
-      startDate: draft.startDate || new Date().toISOString(),
-    };
+    // Counterparty-free wizard state built + serialized THE SAME WAY the wizard
+    // does: createInitialWizardState() fills every field, sanitizeStateForTemplate
+    // strips buyer/assets/overrides, serializeWizardState normalises dates. This
+    // makes a VaNi-saved template hydrate cleanly when later opened in the wizard
+    // (both save paths now produce an identical wizard_state shape).
+    const wizardState = serializeWizardState(
+      sanitizeStateForTemplate({
+        ...createInitialWizardState(),
+        ...(draft as any),
+        contractName: name,
+        wizardMode: 'contract',
+        startDate: draft.startDate ? new Date(draft.startDate) : new Date(),
+      } as any)
+    );
     try {
       await saveTemplateMutation.mutateAsync({
         data: {
@@ -402,6 +398,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
                   currency={draft.currency}
                   eventOverrides={eventOverrides}
                   onEventOverridesChange={setEventOverrides}
+                  readOnly={isTemplateMode}
                 />
               </div>
             ) : (

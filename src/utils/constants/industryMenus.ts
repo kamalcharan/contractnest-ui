@@ -98,12 +98,29 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
   },
+  // VaNi — full module surface enabled for reference/testing (cleanup pass later)
   {
     id: 'vani',
     label: 'VaNi',
     icon: 'Sparkles',
     path: '/vani/landing',
-    hasSubmenu: false
+    hasSubmenu: true,
+    defaultOpen: false, // 13 items — must not auto-expand and crowd the rest of the sidebar
+    submenuItems: [
+      { id: 'vani-landing', label: 'Overview', icon: 'Home', path: '/vani/landing' },
+      { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
+      { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
+      { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },
+      { id: 'vani-templates', label: 'Templates', icon: 'FileText', path: '/vani/templates' },
+      { id: 'vani-channels', label: 'Channels', icon: 'MessageSquare', path: '/vani/channels' },
+      { id: 'vani-bbb-chat', label: 'BBB Chat', icon: 'MessageCircle', path: '/vani/channels/bbb/chat' },
+      { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
+      { id: 'vani-webhooks', label: 'Webhooks', icon: 'Webhook', path: '/vani/webhooks' },
+      { id: 'vani-receivables', label: 'Accounts Receivable', icon: 'Wallet', path: '/vani/finance/receivables' },
+      { id: 'vani-service-schedule', label: 'Service Schedule', icon: 'CalendarCheck', path: '/vani/operations/services' },
+      { id: 'vani-rules', label: 'Process Rules', icon: 'ListChecks', path: '/vani/rules' },
+      { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
+    ]
   },
   // HIDDEN: Templates, Tasks - commented out for now
   /*

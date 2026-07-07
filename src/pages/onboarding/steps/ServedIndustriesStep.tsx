@@ -246,7 +246,7 @@ const ServedIndustriesStep: React.FC = () => {
               <Globe className="w-8 h-8" />
             </div>
             <h2 className="text-2xl font-bold mb-2" style={{ color: colors.utility.primaryText }}>
-              Industries You Serve
+              Industries You Serve <span style={{ color: colors.semantic.error }}>*</span>
             </h2>
             <p className="text-sm max-w-2xl mx-auto" style={{ color: colors.utility.secondaryText }}>
               Select the industries your clients or customers come from. This helps us tailor

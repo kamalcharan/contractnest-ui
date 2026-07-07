@@ -99,6 +99,8 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   const { addToast } = useVaNiToast();
 
   const [stage, setStage] = useState<Stage>('input');
+  // Which tab the review opens on — set by the Ready-card buttons.
+  const [reviewInitialView, setReviewInitialView] = useState<'contract' | 'events'>('contract');
   const [text, setText] = useState('');
   const [runningStep, setRunningStep] = useState<StepId | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -627,6 +629,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
         onDone={handleClose}
         mode={mode}
         onTemplateSaved={onTemplateSaved}
+        initialView={reviewInitialView}
       />
     );
   }
@@ -758,12 +761,21 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
               {stage === 'ready' && result && (
                 <div className="mt-4 space-y-2">
                   <button
-                    onClick={() => setStage('review')}
+                    onClick={() => { setReviewInitialView('contract'); setStage('review'); }}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
                     style={{ backgroundColor: colors.semantic.success }}
                   >
                     Review & Finalize
                     <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => { setReviewInitialView('events'); setStage('review'); }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium hover:opacity-80"
+                    style={{ borderColor: `${colors.brand.secondary}40`, color: colors.brand.secondary }}
+                    title="See the service & billing schedule"
+                  >
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {isTemplateMode ? 'Events Schedule (illustrative)' : 'Events Schedule'}
                   </button>
                   <button
                     onClick={() => editInWizard()}

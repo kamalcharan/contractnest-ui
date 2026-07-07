@@ -250,7 +250,7 @@ const EngagementModelStep: React.FC = () => {
             fontSize: 28, fontWeight: 800, letterSpacing: '-0.8px',
             color: colors.utility.primaryText, marginBottom: 6,
           }}>
-            What kind of services do you provide?
+            What kind of services do you provide? <span style={{ color: colors.semantic.error }}>*</span>
           </h2>
           <p style={{
             fontSize: 14, color: colors.utility.secondaryText,

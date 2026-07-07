@@ -83,7 +83,9 @@ function addMonths(date: Date, months: number): Date {
 
 /** Deterministic event ID */
 function makeEventId(blockId: string, eventType: EventType, seq: number): string {
-  return `evt_${eventType}_${blockId.slice(0, 8)}_${seq}`;
+  // Full blockId (not a slice) so distinct blocks can't collide on an id prefix,
+  // which would misapply date overrides and clash React keys.
+  return `evt_${eventType}_${blockId}_${seq}`;
 }
 
 /** How many recurring periods fit in the contract duration */
@@ -200,8 +202,10 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
       status: 'scheduled',
     });
   } else if (paymentMode === 'emi') {
-    // EMI: N monthly installments
+    // EMI: N monthly installments. The final installment absorbs rounding so the
+    // installments sum EXACTLY to grandTotal (no ±cents drift).
     const installment = Math.round((grandTotal / emiMonths) * 100) / 100;
+    const lastInstallment = Math.round((grandTotal - installment * (emiMonths - 1)) * 100) / 100;
     for (let i = 0; i < emiMonths; i++) {
       const date = i === 0 ? new Date(startDate) : addMonths(startDate, i);
       events.push({
@@ -216,7 +220,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         total_occurrences: emiMonths,
         scheduled_date: date,
         original_date: new Date(date),
-        amount: installment,
+        amount: i === emiMonths - 1 ? lastInstallment : installment,
         currency,
         status: 'scheduled',
       });
@@ -273,6 +277,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         const count = countRecurringPeriods(totalDays, periodDays);
         const perPeriodAmount = Math.round((blockTotal / count) * 100) / 100;
 
+        const startIdx = events.length;
         for (let i = 0; i < count; i++) {
           const date = addDays(startDate, i * periodDays);
           // Don't generate events past the contract end
@@ -294,6 +299,13 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
             currency: block.currency || currency,
             status: 'scheduled',
           });
+        }
+        // When every period fit, the last installment absorbs rounding so the
+        // block's recurring billing sums EXACTLY to its total (no ±cents drift).
+        const emitted = events.length - startIdx;
+        if (emitted === count && emitted > 0) {
+          events[events.length - 1].amount =
+            Math.round((blockTotal - perPeriodAmount * (count - 1)) * 100) / 100;
         }
       }
     }
@@ -373,7 +385,10 @@ export function groupEventsByDate(
   const map = new Map<string, { date: Date; events: ContractEvent[] }>();
 
   for (const event of events) {
-    const key = event.scheduled_date.toISOString().split('T')[0];
+    // Key on the LOCAL calendar day (matching the local display), not UTC —
+    // otherwise an event near local midnight groups under the wrong day.
+    const d = event.scheduled_date;
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     if (!map.has(key)) {
       map.set(key, { date: event.scheduled_date, events: [] });
     }

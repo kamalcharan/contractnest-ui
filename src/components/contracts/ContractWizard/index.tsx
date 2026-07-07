@@ -234,7 +234,7 @@ function computeEventsForApi(state: ContractWizardState): any[] | undefined {
   if (!rawEvents || rawEvents.length === 0) return undefined;
 
   // Apply eventOverrides and convert to API format
-  return rawEvents.map((event: ContractEvent) => {
+  const mapped = rawEvents.map((event: ContractEvent) => {
     // Apply user override if exists
     const overriddenDate = state.eventOverrides[event.id];
     const scheduledDate = overriddenDate || event.scheduled_date;
@@ -257,6 +257,10 @@ function computeEventsForApi(state: ContractWizardState): any[] | undefined {
       assigned_to_name: event.assigned_to_name || undefined,
     };
   });
+  // Re-sort by scheduled date so persisted order matches the (re-sorted) preview
+  // after any user date overrides.
+  mapped.sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
+  return mapped;
 }
 
 // Map wizard state to API request payload (matches deployed DB RPC schema)
@@ -433,7 +437,7 @@ export const createInitialWizardState = (): ContractWizardState => ({
 });
 
 // Serialize wizard state for storage in metadata (Dates → ISO strings)
-function serializeWizardState(state: ContractWizardState): Record<string, any> {
+export function serializeWizardState(state: ContractWizardState): Record<string, any> {
   return {
     ...state,
     startDate: state.startDate instanceof Date ? state.startDate.toISOString() : state.startDate,
@@ -459,7 +463,7 @@ function deserializeWizardState(raw: Record<string, any>): ContractWizardState {
 
 // Strip contract-instance data (buyer, assets, event overrides) before a
 // wizard state is persisted inside a template — templates are counterparty-free
-function sanitizeStateForTemplate(state: ContractWizardState): ContractWizardState {
+export function sanitizeStateForTemplate(state: ContractWizardState): ContractWizardState {
   return {
     ...state,
     path: null,

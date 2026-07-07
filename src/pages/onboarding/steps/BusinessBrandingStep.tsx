@@ -153,7 +153,7 @@ const BusinessBrandingStep: React.FC = () => {
               className="text-2xl font-bold mb-2 transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
-              Select Your Industry
+              Select Your Industry <span style={{ color: colors.semantic.error }}>*</span>
             </h2>
             <p 
               className="text-sm max-w-2xl mx-auto transition-colors"
