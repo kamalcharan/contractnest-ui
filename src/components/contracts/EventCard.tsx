@@ -20,6 +20,7 @@ import {
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
+import { useCreateAppointment } from '@/hooks/queries/useAppointmentQueries';
 
 // ─── Helpers ───
 
@@ -135,6 +136,14 @@ export const EventCard: React.FC<EventCardProps> = ({
   onViewContract,
 }) => {
   const [showActions, setShowActions] = useState(false);
+  // Stage 3: appointment context (fields arrive via get_contract_events_list v3)
+  const createAppointment = useCreateAppointment();
+  const appointmentStatus = (event as any).appointment_status as string | undefined;
+  const appointmentAt = (event as any).appointment_scheduled_at as string | undefined;
+  const canBookAppointment =
+    event.event_type === 'service' &&
+    !appointmentStatus &&
+    !['completed', 'cancelled'].includes(event.status);
   const isService = event.event_type === 'service';
   const isSparePart = event.event_type === 'spare_part';
   const isCompact = variant === 'compact';
@@ -385,6 +394,59 @@ export const EventCard: React.FC<EventCardProps> = ({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Stage 3: Appointment (scheduling layer on service events) */}
+        {event.event_type === 'service' && (appointmentStatus || canBookAppointment) && (
+          <div
+            className="mt-3 pt-3 border-t flex items-center gap-2"
+            style={{ borderColor: `${colors.utility.primaryText}10` }}
+          >
+            <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+              Appointment:
+            </span>
+            {appointmentStatus ? (
+              <span
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                style={{
+                  backgroundColor:
+                    appointmentStatus === 'accepted' ? `${colors.semantic?.success || '#10B981'}15`
+                    : appointmentStatus === 'no_response' ? `${colors.semantic?.error || '#EF4444'}15`
+                    : appointmentStatus === 'rescheduled' ? `${colors.semantic?.warning || '#F59E0B'}15`
+                    : `${colors.brand?.primary || '#4F46E5'}12`,
+                  color:
+                    appointmentStatus === 'accepted' ? (colors.semantic?.success || '#10B981')
+                    : appointmentStatus === 'no_response' ? (colors.semantic?.error || '#EF4444')
+                    : appointmentStatus === 'rescheduled' ? (colors.semantic?.warning || '#F59E0B')
+                    : (colors.brand?.primary || '#4F46E5'),
+                }}
+              >
+                {appointmentStatus.replace(/_/g, ' ')}
+                {appointmentStatus === 'accepted' && appointmentAt
+                  ? ` · ${formatEventDate(appointmentAt)}`
+                  : ''}
+              </span>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!createAppointment.isPending) {
+                    createAppointment.mutate({ event_id: event.id });
+                  }
+                }}
+                disabled={createAppointment.isPending}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-80"
+                style={{ backgroundColor: colors.brand?.primary || '#4F46E5', color: '#fff' }}
+              >
+                {createAppointment.isPending ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <CalendarDays className="w-3 h-3" />
+                )}
+                Book appointment
+              </button>
+            )}
           </div>
         )}
 

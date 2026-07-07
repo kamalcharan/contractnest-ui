@@ -32,6 +32,8 @@ import {
   useTicketEvidence,
 } from '@/hooks/queries/useServiceExecution';
 import type { ServiceEvidence } from '@/hooks/queries/useServiceExecution';
+import TicketEvidencePanel from '@/components/contracts/TicketEvidencePanel';
+import type { EvidencePolicyType, EvidenceSelectedForm } from '@/components/contracts/ServiceExecutionDrawer';
 
 // ═══════════════════════════════════════════════════
 // TYPES
@@ -44,6 +46,9 @@ export interface TicketDetailState {
   assignedTo: string;
   completedAt: string;
   events: ContractEvent[];
+  // Stage 2: evidence capture context (optional — passed by OperationsTab)
+  evidencePolicyType?: EvidencePolicyType;
+  evidenceSelectedForms?: EvidenceSelectedForm[];
 }
 
 interface ServiceTicketDetailProps {
@@ -317,6 +322,19 @@ const ServiceTicketDetail: React.FC<ServiceTicketDetailProps> = ({
                 </div>
               )}
             </div>
+
+            {/* ─── Stage 2: Add evidence (upload + smart forms) ─── */}
+            {state.ticketId && ticketDetail?.contract_id && (
+              <TicketEvidencePanel
+                ticketId={state.ticketId}
+                contractId={ticketDetail.contract_id}
+                ticketStatus={status}
+                evidencePolicyType={state.evidencePolicyType}
+                evidenceSelectedForms={state.evidenceSelectedForms}
+                events={linkedEvents as any}
+                colors={colors}
+              />
+            )}
 
             {/* ─── Linked Events (collapsible) ─── */}
             <div>

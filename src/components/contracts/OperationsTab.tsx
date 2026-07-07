@@ -657,7 +657,11 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
   }, []);
 
   const handleViewTicket = useCallback((ticketId: string, ticketNumber: string, assignedTo: string, completedAt: string, events: ContractEvent[]) => {
-    setTicketDetail({ isOpen: true, ticketId, ticketNumber, assignedTo, completedAt, events });
+    setTicketDetail({
+      isOpen: true, ticketId, ticketNumber, assignedTo, completedAt, events,
+      evidencePolicyType: contractData?.evidence_policy_type || contractData?.metadata?.evidence_policy_type || 'none',
+      evidenceSelectedForms: contractData?.evidence_selected_forms || contractData?.metadata?.evidence_selected_forms || [],
+    });
   }, []);
 
   // ─── Loading ───

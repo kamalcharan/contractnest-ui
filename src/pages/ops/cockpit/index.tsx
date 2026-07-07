@@ -34,6 +34,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
 import { useAuth, type Perspective } from '@/context/AuthContext';
+import FinanceActionChips from '@/components/ops/FinanceActionChips';
 import { useContractStats, useContracts, useContractOperations } from '@/hooks/queries/useContractQueries';
 import {
   useContractEvents,
@@ -1343,6 +1344,9 @@ const OpsCockpitPage: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {/* ═══ Stage 2: Finance action items (revenue) — drafts + overdue AR ═══ */}
+          {activePerspective === 'revenue' && <FinanceActionChips colors={colors} />}
 
           {/* ═══ ROW 2: Awaiting Acceptance (revenue) — per v3 HTML ═══ */}
           {activePerspective === 'revenue' && (

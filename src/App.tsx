@@ -174,6 +174,9 @@ import ContractCreatePage from './pages/contracts/create';
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
+import FinancePage from './pages/operations/finance';
+import OpsServiceSchedulePage from './pages/operations/services';
+import OpsAppointmentsPage from './pages/operations/appointments';
 import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
 
@@ -556,6 +559,42 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* Operations → Finance (AR/AP) — Stage 1 */}
+          <Route
+            path="/ops/finance"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<FinancePage />} />
+          </Route>
+
+          {/* Operations → Service Schedule — Stage 2 */}
+          <Route
+            path="/ops/services"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OpsServiceSchedulePage />} />
+          </Route>
+
+          {/* Operations → Appointments — Stage 3 */}
+          <Route
+            path="/ops/appointments"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OpsAppointmentsPage />} />
           </Route>
 
           {/* Equipment Registry — standalone page under Operations */}
