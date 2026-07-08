@@ -132,6 +132,10 @@ export interface ContractEvent {
   scheduled_date: string;
   original_date: string;
   amount: number | null;
+  /** Amount already settled against this billing event (event-level receipts). */
+  amount_settled?: number | null;
+  /** Invoice this billing event is linked to (single-invoice model). */
+  invoice_id?: string | null;
   currency: string | null;
   status: ContractEventStatus;
   assigned_to: string | null;

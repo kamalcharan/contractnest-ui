@@ -244,6 +244,21 @@ const ResourcePickStep: React.FC = () => {
     });
   };
 
+  // Skip: nothing to seed (e.g. a business the catalog doesn't model yet) —
+  // the consent/working/pricing steps only process picked resources, so jump
+  // straight to LOV setup. The tenant builds their catalog in Catalog Studio.
+  const handleSkip = () => {
+    completeVaniStep('resource-pick', { skipped: true, persona: personaId });
+    navigate('/onboarding/lov-setup', {
+      state: {
+        selectedEquipmentTemplates: [],
+        selectedFacilityTemplates: [],
+        selectedServiceTemplates: [],
+        personaId,
+      },
+    });
+  };
+
   const islandLabel = useMemo(() => {
     const parts: string[] = [];
     if (selEq.length  > 0) parts.push(`${selEq.length} equipment`);
@@ -821,7 +836,7 @@ const ResourcePickStep: React.FC = () => {
               background: '#fffbeb', border: '1px solid #fde68a',
               fontSize: 12, color: '#92400e',
             }}>
-              ⚠️ Select at least one item across any tab to continue
+              ⚠️ Select at least one item across any tab to continue — or skip and build your catalog yourself later
             </div>
           )}
         </div>
@@ -850,6 +865,15 @@ const ResourcePickStep: React.FC = () => {
             fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer',
           }}
         >← Back</button>
+        <button
+          type="button"
+          onClick={handleSkip}
+          style={{
+            padding: '10px 20px', borderRadius: 100, border: 'none',
+            background: 'rgba(255,255,255,.08)', color: 'rgba(255,255,255,.6)',
+            fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          }}
+        >Skip</button>
         <button
           type="button"
           onClick={handleContinue}

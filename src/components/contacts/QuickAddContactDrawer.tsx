@@ -19,11 +19,13 @@ import {
   Package,
   Handshake,
   Users,
+  Tag,
   LucideIcon
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCreateContact } from '../../hooks/useContacts';
+import { useMasterDataOptions } from '../../hooks/useMasterData';
 import {
   SALUTATIONS,
   CONTACT_CLASSIFICATION_CONFIG,
@@ -73,6 +75,7 @@ interface QuickFormData {
   name: string;
   company_name: string;
   contact_channels: ChannelInput[];
+  tags: string[];
 }
 
 // ============================================================================
@@ -120,6 +123,18 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
   const [duplicateContacts, setDuplicateContacts] = useState<any[]>([]);
   const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false);
 
+  // Tags loaded from the tenant's Tags LOV (same source as the full form)
+  const {
+    options: tagOptions,
+    loading: tagsLoading
+  } = useMasterDataOptions('Tags', {
+    valueField: 'SubCatName',
+    labelField: 'DisplayName',
+    includeInactive: false,
+    sortBy: 'Sequence_no',
+    sortOrder: 'asc'
+  });
+
   // Form state
   const [formData, setFormData] = useState<QuickFormData>({
     classifications: [],
@@ -127,7 +142,8 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
     salutation: '',
     name: '',
     company_name: '',
-    contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }]
+    contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }],
+    tags: []
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -142,7 +158,8 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         salutation: '',
         name: '',
         company_name: '',
-        contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }]
+        contact_channels: [{ id: 'channel_1', channel_type: 'mobile', value: '', country_code: 'IN' }],
+        tags: []
       });
       setErrors({});
       setIsSaving(false);
@@ -213,6 +230,16 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         return newErrors;
       });
     }
+  };
+
+  // Toggle tag
+  const toggleTag = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.includes(value)
+        ? prev.tags.filter(t => t !== value)
+        : [...prev.tags, value]
+    }));
   };
 
   // Add channel
@@ -361,7 +388,14 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
         addresses: [],
         compliance_numbers: [],
         contact_persons: [],
-        tags: [],
+        tags: formData.tags.map(tagValue => {
+          const option = tagOptions.find(opt => opt.value === tagValue);
+          return {
+            tag_value: tagValue,
+            tag_label: option?.label || tagValue,
+            tag_color: option?.color || undefined
+          };
+        }),
         tenant_id: currentTenant?.id,
         is_live: isLive,
         created_by: user?.id || null,
@@ -447,7 +481,15 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
           salutation: formData.salutation,
           name: formData.name,
           company_name: formData.company_name,
-          contact_channels: formData.contact_channels.filter(c => c.value.trim())
+          contact_channels: formData.contact_channels.filter(c => c.value.trim()),
+          tags: formData.tags.map(tagValue => {
+            const option = tagOptions.find(opt => opt.value === tagValue);
+            return {
+              tag_value: tagValue,
+              tag_label: option?.label || tagValue,
+              tag_color: option?.color || undefined
+            };
+          })
         }
       }
     });
@@ -902,6 +944,67 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
               <Plus className="h-4 w-4" />
               Add another channel
             </button>
+          </div>
+
+          {/* Section 5: Tags (optional) */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-black uppercase tracking-widest"
+              style={{ color: colors.brand.primary }}
+            >
+              5. Tags
+              <span
+                className="ml-2 font-semibold normal-case tracking-normal"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                (optional)
+              </span>
+            </h3>
+            {tagsLoading ? (
+              <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading tags...
+              </div>
+            ) : tagOptions.length === 0 ? (
+              <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                No tags configured yet. Manage them in Settings → Configure → List of Values.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {tagOptions.map(option => {
+                  const isSelected = formData.tags.includes(option.value);
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => toggleTag(option.value)}
+                      disabled={isSaving}
+                      className="px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all disabled:opacity-50 flex items-center gap-2"
+                      style={{
+                        backgroundColor: isSelected
+                          ? (option.color ? `${option.color}20` : colors.brand.primary + '15')
+                          : 'transparent',
+                        borderColor: isSelected
+                          ? (option.color || colors.brand.primary)
+                          : colors.utility.primaryText + '20',
+                        color: isSelected
+                          ? colors.utility.primaryText
+                          : colors.utility.secondaryText,
+                      }}
+                    >
+                      {option.color ? (
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: option.color }}
+                        />
+                      ) : (
+                        <Tag className="h-3 w-3" />
+                      )}
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Submit Error */}

@@ -140,6 +140,7 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       // Service-specific
       deliveryMode: config.deliveryMode || config.location?.type,
       serviceCycles: config.serviceCycles,
+      billingOnly: config.billingOnly,
       bufferTime: config.buffer || config.bufferTime,
       location: config.location,
       assignment: config.assignment,
@@ -299,6 +300,10 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
       gracePeriod: getField(block, 'cycleGracePeriod'),
     };
   }
+
+  // Billing-only flag — block bills on its cycle but generates no service events
+  const billingOnly = getField(block, 'billingOnly');
+  if (billingOnly !== undefined) config.billingOnly = billingOnly;
 
   // Assignment
   const assignment = getField(block, 'assignment');
@@ -902,6 +907,7 @@ export const blockToUpdateData = (
     if (meta.resourceTypes !== undefined) configUpdates.resourceTypes = meta.resourceTypes;
     if (meta.deliveryMode !== undefined) configUpdates.deliveryMode = meta.deliveryMode;
     if (meta.serviceCycles !== undefined) configUpdates.serviceCycles = meta.serviceCycles;
+    if (meta.billingOnly !== undefined) configUpdates.billingOnly = meta.billingOnly;
     if (meta.bufferTime !== undefined) configUpdates.buffer = meta.bufferTime;
     if (meta.terms !== undefined) configUpdates.terms = meta.terms;
 

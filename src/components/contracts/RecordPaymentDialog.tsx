@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContractInvoices, useRecordPayment } from '@/hooks/queries/useInvoiceQueries';
+import { useContractEventsForContract } from '@/hooks/queries/useContractEventQueries';
 import { useCreateOrder, useCreateLink } from '@/hooks/queries/usePaymentGatewayQueries';
 import type { CreateOrderResponse, CreateLinkResponse } from '@/hooks/queries/usePaymentGatewayQueries';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
@@ -99,6 +100,24 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
   const emiTotal = invoice?.emi_total ?? (paymentMode === 'emi' ? emiMonths : null);
   const receiptsCount = invoice?.receipts_count ?? 0;
 
+  // ─── Billing events for this contract (event-level settlement) ─
+  const { data: eventsData } = useContractEventsForContract(contractId, {
+    enabled: isOpen && !!contractId,
+    per_page: 100,
+  });
+  const billingEvents = React.useMemo(() => {
+    const items = eventsData?.items || [];
+    return items
+      .filter((e) => e.event_type === 'billing')
+      // Only events linked to THIS invoice (single-invoice model); if the
+      // event has no invoice_id yet, still show it (falls under this contract).
+      .filter((e) => !invoiceId || !e.invoice_id || e.invoice_id === invoiceId);
+  }, [eventsData, invoiceId]);
+
+  // Open (unsettled) amount for an event
+  const eventOpenAmount = (e: { amount?: number | null; amount_settled?: number | null }) =>
+    Math.max(0, Math.round(((e.amount || 0) - (e.amount_settled || 0)) * 100) / 100);
+
   // ─── Mutations ─────────────────────────────────────────────
   const { mutateAsync: recordPayment, isPending: isRecordingPayment } = useRecordPayment(contractId);
   const { mutateAsync: createOrder, isPending: isCreatingOrder } = useCreateOrder(contractId);
@@ -117,6 +136,8 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
   const [referenceNumber, setReferenceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [emiSequence, setEmiSequence] = useState(1);
+  // Event-level settlement: which billing events this receipt covers
+  const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
 
   // ─── Online-specific state ─────────────────────────────────
   const [customerName, setCustomerName] = useState('');
@@ -151,8 +172,24 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
       setCustomerName('');
       setCustomerEmail('');
       setCustomerPhone('');
+      setSelectedEventIds(new Set());
     }
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Toggle a billing event in the settlement selection and sync the amount to
+  // the sum of the selected events' open balances.
+  const toggleEvent = (eventId: string) => {
+    setSelectedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(eventId)) next.delete(eventId);
+      else next.add(eventId);
+      const sum = billingEvents
+        .filter((e) => next.has(e.id))
+        .reduce((acc, e) => acc + eventOpenAmount(e), 0);
+      setAmount(next.size > 0 ? (Math.round(sum * 100) / 100).toString() : '');
+      return next;
+    });
+  };
 
   // Pre-fill amount for EMI once invoice loads
   useEffect(() => {
@@ -188,15 +225,27 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
       return;
     }
 
+    // Event-level settlement: if the chair selected specific dues, allocate the
+    // receipt to those events (amount = sum of their open balances).
+    const event_allocations = selectedEventIds.size > 0
+      ? billingEvents
+          .filter((e) => selectedEventIds.has(e.id))
+          .map((e) => ({ event_id: e.id, amount: eventOpenAmount(e) }))
+      : undefined;
+    const effectiveAmount = event_allocations
+      ? Math.round(event_allocations.reduce((a, x) => a + x.amount, 0) * 100) / 100
+      : numAmount;
+
     try {
       const result = await recordPayment({
         invoice_id: invoiceId,
-        amount: numAmount,
+        amount: effectiveAmount,
         payment_method: paymentMethod,
         payment_date: paymentDate,
         reference_number: referenceNumber || undefined,
         notes: notes || undefined,
         emi_sequence: isEmi ? emiSequence : undefined,
+        event_allocations,
       });
 
       setReceiptData(result);
@@ -645,6 +694,72 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
                   );
                 })}
               </select>
+            </div>
+          )}
+
+          {/* ─── Settle specific billing events (offline) ─────── */}
+          {!isOnline && billingEvents.length > 0 && (
+            <div>
+              <label style={labelStyle}>Settle specific dues (optional)</label>
+              <div
+                className="rounded-lg border max-h-44 overflow-y-auto"
+                style={{ borderColor: colors.utility.border }}
+              >
+                {billingEvents.map((e) => {
+                  const open = eventOpenAmount(e);
+                  const settled = open <= 0.001 && (e.amount || 0) > 0;
+                  const checked = selectedEventIds.has(e.id);
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      disabled={settled}
+                      onClick={() => toggleEvent(e.id)}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-left border-b last:border-b-0 transition-colors"
+                      style={{
+                        borderColor: colors.utility.border,
+                        backgroundColor: checked ? `${colors.brand.primary}0c` : 'transparent',
+                        opacity: settled ? 0.55 : 1,
+                        cursor: settled ? 'default' : 'pointer',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                          style={{
+                            border: `1.5px solid ${checked || settled ? colors.brand.primary : colors.utility.border}`,
+                            backgroundColor: checked || settled ? colors.brand.primary : 'transparent',
+                          }}
+                        >
+                          {(checked || settled) && <CheckCircle2 className="w-3 h-3 text-white" />}
+                        </span>
+                        <span className="text-[11px] font-medium truncate" style={{ color: colors.utility.primaryText }}>
+                          {e.billing_cycle_label || `Event ${e.sequence_number}`}
+                        </span>
+                        <span className="text-[9px] flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
+                          {new Date(e.scheduled_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {settled && (
+                          <span
+                            className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: `${colors.semantic.success}18`, color: colors.semantic.success }}
+                          >
+                            Settled
+                          </span>
+                        )}
+                        <span className="text-[11px] font-semibold" style={{ color: colors.utility.primaryText }}>
+                          {fmt(e.amount || 0)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] mt-1" style={{ color: colors.utility.secondaryText }}>
+                Tick the dues this receipt covers — the amount fills automatically. Leave all unticked to record a plain payment against the invoice.
+              </p>
             </div>
           )}
 

@@ -505,17 +505,30 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 Duration & Timeline
               </label>
 
-              {/* Start Date Picker */}
-              <div className="mb-4">
-                <DatePicker
-                  value={data.startDate}
-                  onChange={(date) => onChange({ startDate: date })}
-                  label="Start Date"
-                  required
-                  minDate={new Date()}
-                  placeholder="Select start date"
-                />
-              </div>
+              {/* Start Date — contracts only. A template captures DURATION only;
+                  the actual start/end dates are chosen on each contract created
+                  from it (and may be backdated — e.g. a fiscal year that already
+                  started). No minDate: past start dates are allowed. */}
+              {templateMode ? (
+                <div
+                  className="mb-4 p-3 rounded-xl text-xs leading-relaxed"
+                  style={{ backgroundColor: `${colors.brand.primary}08`, color: colors.utility.secondaryText }}
+                >
+                  Templates define <strong>duration</strong> only. The start date and end
+                  date are set on each contract created from this template — the template
+                  never fixes a contract's dates.
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <DatePicker
+                    value={data.startDate}
+                    onChange={(date) => onChange({ startDate: date })}
+                    label="Start Date"
+                    required
+                    placeholder="Select start date"
+                  />
+                </div>
+              )}
 
               {/* Duration Presets */}
               <div className="flex flex-wrap gap-2 mb-4">
@@ -593,8 +606,8 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                 </div>
               </div>
 
-              {/* 3-Node Timeline */}
-              {data.durationValue > 0 && (
+              {/* 3-Node Timeline — contracts only (needs a real start date) */}
+              {!templateMode && data.durationValue > 0 && (
                 <div
                   className="p-3 rounded-xl"
                   style={{ backgroundColor: `${colors.brand.primary}06` }}

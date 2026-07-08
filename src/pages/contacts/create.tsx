@@ -46,6 +46,7 @@ import AddressesSection from '../../components/contacts/forms/AddressesSection';
 import ComplianceNumbersSection from '../../components/contacts/forms/ComplianceNumbersSection';
 import ContactPersonsSection from '../../components/contacts/forms/ContactPersonsSection';
 import ContactTagsSection from '../../components/contacts/forms/ContactTagsSection';
+import ContactIndustriesSection from '../../components/contacts/forms/ContactIndustriesSection';
 
 // Import RichTextEditor for Notes field
 import { RichTextEditor } from '@/components/ui/RichTextEditor';
@@ -90,6 +91,7 @@ interface ContactFormData {
  contact_persons: any[];
  notes?: string;
  tags: any[];
+ industries: string[];
 }
 
 interface ContactFormProps {
@@ -511,6 +513,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
    compliance_numbers: [],
    contact_persons: [],
    tags: [],
+   industries: [],
    ...initialData
  });
 
@@ -556,7 +559,8 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        compliance_numbers: existingContact.compliance_numbers || [],
        contact_persons: existingContact.contact_persons || [],
        notes: existingContact.notes,
-       tags: existingContact.tags || []
+       tags: existingContact.tags || [],
+       industries: existingContact.industries || []
      };
 
      setFormData(loadedData);
@@ -594,7 +598,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
      }
    }
    
-   const arrayFields = ['classifications', 'contact_channels', 'addresses', 'compliance_numbers', 'contact_persons', 'tags'];
+   const arrayFields = ['classifications', 'contact_channels', 'addresses', 'compliance_numbers', 'contact_persons', 'tags', 'industries'];
    for (const field of arrayFields) {
      const current = currentData[field as keyof ContactFormData] as any[];
      const initial = initialData[field as keyof ContactFormData] as any[];
@@ -931,6 +935,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
          contact_channels: [],
          addresses: [],
          tags: [],
+         industries: [],
          notes: '',
          classifications: prev.classifications,
          status: prev.status
@@ -1322,6 +1327,13 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                onChange={(tags) => updateFormData({ tags })}
                disabled={isSaving}
              />
+
+             {/* Industries Section */}
+             <ContactIndustriesSection
+               value={formData.industries || []}
+               onChange={(industries) => updateFormData({ industries })}
+               disabled={isSaving}
+             />
            </div>
 
            {/* Right Column: Contact Channels */}
@@ -1344,22 +1356,23 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
 
          {/* Corporate-specific sections */}
          {formData.type === CONTACT_FORM_TYPES.CORPORATE && (
-           <>
-             <ComplianceNumbersSection
-               value={formData.compliance_numbers}
-               onChange={(compliance_numbers) => updateFormData({ compliance_numbers })}
-               disabled={isSaving}
-               contactType={formData.type}
-             />
-
-             <ContactPersonsSection
-               value={formData.contact_persons}
-               onChange={(contact_persons) => updateFormData({ contact_persons })}
-               disabled={isSaving}
-               contactType={formData.type}
-             />
-           </>
+           <ComplianceNumbersSection
+             value={formData.compliance_numbers}
+             onChange={(compliance_numbers) => updateFormData({ compliance_numbers })}
+             disabled={isSaving}
+             contactType={formData.type}
+           />
          )}
+
+         {/* Contact persons — corporate keeps "Contact Persons"; individuals
+             get the same section as "Alternative Contact Person" (used for
+             replacement attendance and stand-in communication) */}
+         <ContactPersonsSection
+           value={formData.contact_persons}
+           onChange={(contact_persons) => updateFormData({ contact_persons })}
+           disabled={isSaving}
+           contactType={formData.type}
+         />
 
          {/* Notes */}
          <div 

@@ -68,11 +68,6 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
     }
   }, [value.length, contactType]);
 
-  // Don't render if individual contact
-  if (contactType === 'individual') {
-    return null;
-  }
-
   // Glass morphism styles
   const glassStyle: React.CSSProperties = {
     background: isDarkMode
@@ -203,12 +198,16 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
     setShowDeleteDialog(true);
   };
 
+  const isCorporate = contactType === 'corporate';
+  const sectionTitle = isCorporate ? 'Contact Persons' : 'Alternative Contact Person';
+  const sectionBadge = isCorporate ? 'Corporate' : 'Stand-in';
+
   return (
     <>
       <div className="rounded-2xl shadow-sm border p-6" style={glassStyle}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>Contact Persons</h2>
+            <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>{sectionTitle}</h2>
             <div
               className="px-2 py-1 text-xs rounded-full"
               style={{
@@ -216,7 +215,7 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
                 color: colors.brand.primary
               }}
             >
-              Corporate Only
+              {sectionBadge}
             </div>
           </div>
           {value.length < 10 && (
@@ -244,7 +243,9 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
         >
           <p className="text-sm" style={{ color: colors.brand.primary }}>
             <Building2 className="inline h-4 w-4 mr-1" />
-            Add individual contact persons who work for this corporate entity.
+            {isCorporate
+              ? 'Add individual contact persons who work for this corporate entity.'
+              : 'Add an alternative contact who can stand in for this person — e.g. for replacement attendance or when they are unreachable.'}
           </p>
         </div>
 
@@ -257,9 +258,13 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
             }}
           >
             <Users className="h-12 w-12 mx-auto mb-3" style={{ color: colors.utility.secondaryText }} />
-            <p className="mb-4" style={{ color: colors.utility.secondaryText }}>No contact persons added yet</p>
+            <p className="mb-4" style={{ color: colors.utility.secondaryText }}>
+              {isCorporate ? 'No contact persons added yet' : 'No alternative contact added yet'}
+            </p>
             <p className="text-sm mb-4" style={{ color: colors.utility.secondaryText }}>
-              Add employees, managers, or other individuals who represent this company
+              {isCorporate
+                ? 'Add employees, managers, or other individuals who represent this company'
+                : 'Add someone who can act on behalf of this contact'}
             </p>
             <button
               onClick={() => setIsAddModalOpen(true)}

@@ -251,7 +251,7 @@ const Screen8APricingStep: React.FC = () => {
         edited: deltas.length,
         currency,
       });
-      const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/done';
+      const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/lov-setup';
       navigate(dest, { state: { ...routeState, pricingConfirmed: true } });
     } catch (err: any) {
       setSaveError(err?.response?.data?.error || 'Failed to save pricing. Please try again.');
@@ -261,7 +261,7 @@ const Screen8APricingStep: React.FC = () => {
 
   const handleSkip = () => {
     completeVaniStep('pricing-review', { accepted: false, skipped: true, total_blocks: totalBlocks });
-    const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/done';
+    const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/lov-setup';
     navigate(dest, { state: routeState });
   };
 

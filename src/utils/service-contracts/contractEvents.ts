@@ -128,7 +128,6 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     selectedBlocks,
     paymentMode,
     emiMonths,
-    perBlockPaymentType,
     grandTotal,
     currency,
   } = input;
@@ -142,6 +141,10 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
   for (const block of selectedBlocks) {
     const hasPricing = categoryHasPricing(block.categoryId || '');
     if (!hasPricing || block.unlimited) continue;
+
+    // Billing-only blocks (fees/dues like memberships) bill on their cycle
+    // but never generate service events/visits
+    if (block.config?.billingOnly) continue;
 
     const qty = block.quantity || 1;
 
@@ -232,10 +235,14 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
       if (!hasPricing || block.unlimited) continue;
 
       const blockCycle = block.cycle || 'prepaid';
-      const blockPayType = perBlockPaymentType[block.id] || 'prepaid';
       const blockTotal = block.totalPrice || 0;
 
-      if (blockCycle === 'prepaid' || blockPayType === 'prepaid') {
+      // The block's CYCLE (frequency) drives billing — NOT the prepaid/postpaid
+      // payment type. A Monthly block bills every month even when its payment
+      // type is 'prepaid' (that only means "invoice at the start of the period").
+      // Only a genuine one-shot 'prepaid'/'postpaid' cycle collapses to 1 event;
+      // monthly/fortnightly/quarterly/custom fall through to the recurring branch.
+      if (blockCycle === 'prepaid') {
         // On acceptance — 1 event
         events.push({
           id: makeEventId(block.id, 'billing', 1),
@@ -272,9 +279,16 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
           status: 'scheduled',
         });
       } else {
-        // Recurring: monthly, fortnightly, quarterly, custom
+        // Recurring: monthly, fortnightly, quarterly, custom.
+        // The block's quantity is the user-intended number of billing
+        // occurrences (BAU "×12 Monthly" = 12 invoices), so honor it directly.
+        // Otherwise the count drifts to ceil(days/periodDays) — e.g. a 1-year
+        // monthly block would bill ceil(365/30)=13× at ₹1,384.62 instead of
+        // 12× ₹1,500. Fall back to the date-derived count only when quantity
+        // isn't a meaningful multi-count (qty ≤ 1).
         const periodDays = cycleToPeriodDays(blockCycle, block.customCycleDays);
-        const count = countRecurringPeriods(totalDays, periodDays);
+        const qty = block.quantity || 0;
+        const count = qty > 1 ? qty : countRecurringPeriods(totalDays, periodDays);
         const perPeriodAmount = Math.round((blockTotal / count) * 100) / 100;
 
         const startIdx = events.length;

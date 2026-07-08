@@ -130,7 +130,12 @@ const buildConfigurableBlock = (
     taxRate: totalTaxRate,
     taxInclusion,
     taxes: taxes.map(t => ({ name: t.name, rate: t.rate })),
-    config: { showDescription: false },
+    config: {
+      showDescription: false,
+      // Inherit billing-only from the catalog block (fees/dues blocks never
+      // generate service events); still toggleable per-contract on the card
+      billingOnly: (block.meta as any)?.billingOnly === true || (block.config as any)?.billingOnly === true,
+    },
   } as ConfigurableBlock;
 };
 
@@ -796,8 +801,10 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
           )}
         </div>
 
-        {/* Column 3: Live Contract Preview (Sticky) */}
-        <div className="w-[360px] flex-shrink-0 sticky top-0 self-start">
+        {/* Column 3: Live Contract Preview — stretch to row height so the
+            panel's internal overflow-y-auto scrolls (self-start collapsed it to
+            content height, clipping Contract Details below the fold) */}
+        <div className="w-[360px] flex-shrink-0 min-h-0">
           <ContractPreviewPanel
             tenantProfile={tenantProfile}
             selectedBuyer={selectedBuyer}

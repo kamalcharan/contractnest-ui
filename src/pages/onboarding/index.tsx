@@ -51,6 +51,7 @@ const getStepPath = (stepId: string): string => {
     'served-industries': '/onboarding/served-industries',
     'vani-consent': '/onboarding/vani-consent',
     'vani-working': '/onboarding/vani-working',
+    'lov-setup': '/onboarding/lov-setup',
   };
 
   // Any unrecognised step → restart VaNi intro (safe fallback)

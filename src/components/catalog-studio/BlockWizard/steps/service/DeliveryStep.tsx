@@ -15,6 +15,8 @@ interface DeliveryStepProps {
     requiresCycles?: boolean;
     cycleDays?: number;
     cycleGracePeriod?: number;
+    // Billing-only: bills on its cycle, generates no service events/visits
+    billingOnly?: boolean;
   };
   onChange: (field: string, value: unknown) => void;
 }
@@ -24,6 +26,15 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [deliveryMode, setDeliveryMode] = useState(formData.deliveryMode || 'on-site');
   const [requiresCycles, setRequiresCycles] = useState(formData.requiresCycles || false);
+  const [billingOnly, setBillingOnly] = useState(
+    // top-level (wizard edits) with meta fallback (editing an existing block)
+    formData.billingOnly ?? (formData as { meta?: { billingOnly?: boolean } }).meta?.billingOnly ?? false
+  );
+
+  const handleBillingOnlyToggle = (enabled: boolean) => {
+    setBillingOnly(enabled);
+    onChange('billingOnly', enabled);
+  };
 
   const handleModeChange = (mode: 'on-site' | 'virtual' | 'hybrid') => {
     setDeliveryMode(mode);
@@ -72,6 +83,33 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
       </p>
 
       <div className="space-y-6">
+        {/* Billing-only toggle — fees/dues blocks that never create service visits */}
+        <div className="p-6 rounded-xl border" style={cardStyle}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-1" style={labelStyle}>
+                Billing only (fees / dues)
+              </label>
+              <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                This block bills on its cycle — e.g. a membership fee or maintenance dues —
+                but creates <strong>no service visits or service events</strong> on contracts.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+              <input
+                type="checkbox"
+                checked={billingOnly}
+                onChange={(e) => handleBillingOnlyToggle(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div
+                className="w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all transition-colors"
+                style={{ backgroundColor: billingOnly ? colors.brand.primary : (isDarkMode ? colors.utility.primaryBackground : '#D1D5DB') }}
+              />
+            </label>
+          </div>
+        </div>
+
         {/* Delivery Mode Selection */}
         <div
           className="p-6 rounded-xl border"

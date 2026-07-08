@@ -128,7 +128,8 @@ export interface Contact {
   compliance_numbers: ComplianceNumber[];
   notes?: string;
   tags: ContactTag[];
-  
+  industries?: string[];             // m_catalog_industries ids (sub-industry multi-select)
+
   // Computed/UI fields
   displayName?: string;
   primaryEmail?: ContactChannel | null;
@@ -195,9 +196,10 @@ export interface CreateContactRequest {
   compliance_numbers: Omit<ComplianceNumber, 'id'>[];
   notes?: string;
   tags: ContactTag[];
-  
+  industries?: string[];             // m_catalog_industries ids (sub-industry multi-select)
+
   // REMOVED: contact_persons (now handled as separate contact records)
-  
+
   // System fields (added by service layer)
   tenant_id?: string;
   created_by?: string;
@@ -234,6 +236,7 @@ export interface UpdateContactRequest {
   compliance_numbers?: ComplianceNumber[];
   notes?: string;
   tags?: ContactTag[];
+  industries?: string[];             // m_catalog_industries ids (sub-industry multi-select)
   
   // REMOVED: contact_persons (now handled as separate contact records)
   

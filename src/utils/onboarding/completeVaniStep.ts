@@ -18,6 +18,7 @@ export type VaniStepId =
   | 'vani-working'
   | 'pricing-review'
   | 'equipment-confirm'
+  | 'lov-setup'
   | 'vani-intelligence'
   | 'done';
 

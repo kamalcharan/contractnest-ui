@@ -1506,6 +1506,18 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const handleBillingCycleTypeSelect = useCallback(
     (cycleType: BillingCycleType) => {
       updateWizardState('billingCycleType', cycleType);
+      // Mixed cycles ⇒ per-block billing (each block bills on its own cycle).
+      // The Billing View step shows no lump-sum/EMI selector in mixed mode, so
+      // the payment mode must be 'defined' — otherwise it stays at the default
+      // 'prepaid' and the Events page collapses everything into ONE upfront
+      // invoice (e.g. ₹25,500) instead of breaking out per-block recurring
+      // billing. Unified resets to 'prepaid' so the Upfront/EMI/As-Defined
+      // cards drive it as before.
+      if (cycleType === 'mixed') {
+        updateWizardState('paymentMode', 'defined');
+      } else if (cycleType === 'unified') {
+        updateWizardState('paymentMode', 'prepaid');
+      }
     },
     [updateWizardState]
   );
@@ -1861,6 +1873,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             durationUnit={wizardState.durationUnit}
             buyerId={wizardState.buyerId}
             buyerName={wizardState.buyerName}
+            contractType={contractType}
+            isTemplate={isTemplateMode}
             acceptanceMethod={wizardState.acceptanceMethod}
             billingCycleType={wizardState.billingCycleType}
             currency={wizardState.currency}

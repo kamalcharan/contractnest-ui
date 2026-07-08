@@ -152,6 +152,7 @@ export interface ContactFilters {
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   classifications?: string[];
+  tags?: string[]; // filter by tag values (tags[].tag_value)
   user_status?: 'all' | 'user' | 'not_user';
   show_duplicates?: boolean;
   includeInactive?: boolean;
@@ -243,6 +244,7 @@ export interface ContactStats {
     corporate: number;
   };
   by_classification?: Record<string, number>;
+  by_tag?: Record<string, number>;
   duplicates?: number;
 }
 
@@ -481,9 +483,11 @@ export const useContactStats = (filters?: Partial<ContactFilters>) => {
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
-            if (key === 'classifications' && Array.isArray(value) && value.length > 0) {
-              params.append(key, value.join(','));
-            } else if (!Array.isArray(value)) {
+            if (Array.isArray(value)) {
+              if (value.length > 0) {
+                params.append(key, value.join(','));
+              }
+            } else {
               params.append(key, String(value));
             }
           }

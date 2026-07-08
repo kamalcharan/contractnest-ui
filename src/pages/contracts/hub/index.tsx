@@ -436,6 +436,9 @@ const ContractsHubPage: React.FC = () => {
   // ── Wizard state ──
   const [showWizard, setShowWizard] = useState(false);
   const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
+  // Revenue relationship chosen for a NEW contract: client (I serve them) or
+  // partner (chapter members, associates — dues receivable). Expense is always vendor.
+  const [createRelationship, setCreateRelationship] = useState<'client' | 'partner'>('client');
 
   // ── Draft resume state ──
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
@@ -478,20 +481,21 @@ const ContractsHubPage: React.FC = () => {
   const sortOrder = sortBy === 'health_score' || sortBy === 'completion' ? 'asc' : 'desc';
 
   // ── Build API filters ──
-  // Revenue mode: contract_type='client' (I sell to clients)
-  // Expense mode: contract_type='vendor' (I buy from vendors)
+  // Revenue mode: client + partner (both receivable — dues owed TO the tenant)
+  // Expense mode: vendor (payable)
+  const perspectiveTypeFilter = activePerspective === 'revenue' ? 'client,partner' : 'vendor';
   const filters: ContractListFilters = useMemo(() => {
     const f: ContractListFilters = {
       limit: ITEMS_PER_PAGE,
       page: currentPage,
-      contract_type: (activePerspective === 'revenue' ? 'client' : 'vendor') as any,
+      contract_type: perspectiveTypeFilter as any,
       sort_by: sortBy as any,
       sort_direction: sortOrder,
     };
     if (activeStatus) f.status = activeStatus as any;
     if (searchQuery.trim()) f.search = searchQuery.trim();
     return f;
-  }, [activePerspective, activeStatus, searchQuery, sortBy, sortOrder, currentPage]);
+  }, [activePerspective, activeStatus, searchQuery, sortBy, sortOrder, currentPage, perspectiveTypeFilter]);
 
   // ── Data hooks ──
   const { data: contractsData, isLoading: isLoadingFlat, isError: isErrorFlat, refetch: refetchFlat } = useContracts(
@@ -502,7 +506,7 @@ const ContractsHubPage: React.FC = () => {
     filters,
     { enabled: viewMode === 'grouped' }
   );
-  const { data: statsData } = useContractStats(perspectiveType);
+  const { data: statsData } = useContractStats(perspectiveTypeFilter);
 
   const isLoading = viewMode === 'flat' ? isLoadingFlat : isLoadingGrouped;
   const isError = viewMode === 'flat' ? isErrorFlat : isErrorGrouped;
@@ -576,7 +580,9 @@ const ContractsHubPage: React.FC = () => {
   };
 
   const handleCreateClick = () => {
-    openWizard(perspectiveType as ContractType);
+    // Revenue → use the chosen relationship (client/partner); Expense → vendor
+    const type = activePerspective === 'revenue' ? createRelationship : 'vendor';
+    openWizard(type as ContractType);
   };
 
   // ── Draft resume handler ──
@@ -748,7 +754,49 @@ const ContractsHubPage: React.FC = () => {
               </button>
             )}
 
-            {/* Create button */}
+            {/* Relationship radio — Revenue only (client vs partner) */}
+            {activePerspective === 'revenue' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  padding: 2,
+                  borderRadius: 9,
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  background: `${colors.utility.primaryText}06`,
+                }}
+                role="radiogroup"
+                aria-label="Contract relationship"
+              >
+                {(['client', 'partner'] as const).map((rel) => {
+                  const on = createRelationship === rel;
+                  return (
+                    <button
+                      key={rel}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => setCreateRelationship(rel)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 7,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        background: on ? colors.brand.primary : 'transparent',
+                        color: on ? '#fff' : colors.utility.secondaryText,
+                        transition: 'all .15s',
+                      }}
+                    >
+                      {rel === 'client' ? 'Client' : 'Partner'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Create button — label reflects the chosen relationship */}
             <button
               onClick={handleCreateClick}
               style={{
@@ -766,7 +814,9 @@ const ContractsHubPage: React.FC = () => {
               }}
             >
               <Plus size={14} />
-              New Contract
+              {activePerspective === 'revenue'
+                ? `New ${createRelationship === 'client' ? 'Client' : 'Partner'} Contract`
+                : 'New Contract'}
             </button>
           </div>
         </div>
@@ -836,7 +886,7 @@ const ContractsHubPage: React.FC = () => {
             <EmptyState
               perspective={activePerspective}
               colors={colors}
-              onCreateType={openWizard}
+              onCreateType={() => handleCreateClick()}
             />
           </div>
         ) : viewMode === 'grouped' ? (

@@ -353,6 +353,9 @@ export interface RecordPaymentPayload {
   reference_number?: string;
   notes?: string;
   emi_sequence?: number;
+  /** Optional event-level allocation — settle specific billing events with this
+   *  receipt (must sum to `amount`). Omit for a plain whole-invoice receipt. */
+  event_allocations?: Array<{ event_id: string; amount: number }>;
 }
 
 export interface RecordPaymentResponse {

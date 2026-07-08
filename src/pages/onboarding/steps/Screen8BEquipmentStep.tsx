@@ -151,14 +151,14 @@ const Screen8BEquipmentStep: React.FC = () => {
         assets_confirmed: totalAssets,
         renamed: assets.filter(a => (editNames[a.id] || a.name) !== a.name).length,
       });
-      navigate('/onboarding/done', { state: { ...routeState, facilityConfirmed: true, assetsConfirmed: totalAssets } });
+      navigate('/onboarding/lov-setup', { state: { ...routeState, facilityConfirmed: true, assetsConfirmed: totalAssets } });
     } catch (err: any) {
       setSaveError(err?.response?.data?.error || 'Failed to save registry. Please try again.');
       setSaving(false);
     }
   };
 
-  const handleSkip = () => navigate('/onboarding/done', { state: routeState });
+  const handleSkip = () => navigate('/onboarding/lov-setup', { state: routeState });
 
   const handleBack = () => {
     const prevRoute = persona === 'both' ? '/onboarding/pricing-review' : '/onboarding/vani-working';

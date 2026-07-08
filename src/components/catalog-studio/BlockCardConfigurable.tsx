@@ -69,6 +69,7 @@ export interface ConfigurableBlock {
   // Additional config options
   config?: {
     showDescription?: boolean; // Show description in contract
+    billingOnly?: boolean; // Billing-only block — bills on its cycle but generates NO service events/visits
     customPrice?: number; // Selling price (editable, defaults to defined price)
     notes?: string;
     content?: string; // Text block content
@@ -578,6 +579,29 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                     Show description in contract
                   </span>
                 </button>
+              </div>
+
+              {/* Billing-only toggle — bills on its cycle, no service events */}
+              <div className="mb-3">
+                <button
+                  onClick={() => handleConfigChange('billingOnly', !block.config?.billingOnly)}
+                  className="flex items-center gap-2 w-full"
+                >
+                  {block.config?.billingOnly ? (
+                    <ToggleRight className="w-5 h-5" style={{ color: colors.brand.primary }} />
+                  ) : (
+                    <ToggleLeft className="w-5 h-5" style={{ color: colors.utility.secondaryText }} />
+                  )}
+                  <Receipt className="w-3.5 h-3.5" style={{ color: colors.utility.secondaryText }} />
+                  <span className="text-xs" style={{ color: colors.utility.primaryText }}>
+                    Billing only — no service visits
+                  </span>
+                </button>
+                {block.config?.billingOnly && (
+                  <p className="text-[10px] mt-1 ml-7" style={{ color: colors.utility.secondaryText }}>
+                    This block bills on its cycle (fees/dues) but creates no service events.
+                  </p>
+                )}
               </div>
 
               {/* Pricing Section */}

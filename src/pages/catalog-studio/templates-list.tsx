@@ -97,9 +97,14 @@ const TemplatesList: React.FC = () => {
 
   const allTemplates: CatTemplate[] = useMemo(() => {
     const list = templatesResponse?.data?.templates || [];
-    return [...list].sort(
-      (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    );
+    return [...list]
+      // Tenant hub shows TENANT templates only — the edge merges global/system
+      // rows (tenant_id null) into every tenant's list; exclude them here
+      // (global demo gallery removed — owner decision)
+      .filter((t) => !(t.is_system && !t.tenant_id))
+      .sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
   }, [templatesResponse]);
 
   // ── Filter state ──
