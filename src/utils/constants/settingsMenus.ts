@@ -28,6 +28,7 @@ export const GROUP_CUSTOMER_CHANNELS = 'Customer Channels';
 export const GROUP_BUSINESS_PROFILE = 'Business Profile';
 export const GROUP_SUBSCRIPTION = 'Subscription';
 export const GROUP_TEAM = 'Team'; // Renamed from User Management
+export const GROUP_VANI = 'VaNi';
 
 // Constants for Settings menu structure - grouped by categories from the images
 export const settingsMenuItems: SettingsItem[] = [
@@ -62,6 +63,28 @@ export const settingsMenuItems: SettingsItem[] = [
   card_icon_name: 'Users',
   adminOnly: false
 },
+
+  // VaNi — the virtual employee's working instructions
+  {
+    id: 'vani-group',
+    settings_type: GROUP_VANI,
+    parent_type: null,
+    description_short: 'Rules for your automation',
+    description_long: 'Standing instructions for the automation that runs your contracts — reminders, invoice drafts and appointment requests. Defaults run for everyone; editing them is part of VaNi.',
+    route_path: '/settings/configure/automation-rules',
+    card_icon_name: 'Sparkles',
+    adminOnly: false
+  },
+  {
+    id: 'vani-automation-rules',
+    settings_type: 'Automation Rules',
+    parent_type: GROUP_VANI,
+    description_short: 'Reminders, invoicing & appointments',
+    description_long: 'Set how many days ahead reminders go out, when appointment requests open, and whether invoices auto-draft',
+    route_path: '/settings/configure/automation-rules',
+    card_icon_name: 'SlidersHorizontal',
+    adminOnly: false
+  },
 
   // List of Value (LOVs)
   {
@@ -292,7 +315,7 @@ export const getGroupedSettingsMetadata = (isProfile: boolean = false): GroupedS
   // GROUP_SUBSCRIPTION enabled for Business Model Phase 4
   const groupNames = isProfile
     ? [] // For profile page - Subscription not shown
-    : [GROUP_TEAM, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - includes Subscription
+    : [GROUP_TEAM, GROUP_VANI, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - includes Subscription + VaNi
 
   // Create group entries for each category
   groupNames.forEach(groupName => {

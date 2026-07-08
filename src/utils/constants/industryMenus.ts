@@ -101,16 +101,29 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
   },
-  // VaNi — full module surface enabled for reference/testing (cleanup pass later)
+  // VaNi — the real agent surface: Overview (landing + trial) and Briefing.
+  // Autonomy & Credits joins when built (agreed end-state: 3 items).
   {
     id: 'vani',
     label: 'VaNi',
     icon: 'Sparkles',
     path: '/vani/landing',
     hasSubmenu: true,
-    defaultOpen: false, // 13 items — must not auto-expand and crowd the rest of the sidebar
+    defaultOpen: false,
     submenuItems: [
       { id: 'vani-landing', label: 'Overview', icon: 'Home', path: '/vani/landing' },
+      { id: 'vani-briefing', label: 'Briefing', icon: 'Sunrise', path: '/vani/briefing' }
+    ]
+  },
+  // VaNi (old) — mock/reference pages parked here until the cleanup pass removes them
+  {
+    id: 'vani-old',
+    label: 'VaNi (old)',
+    icon: 'Archive',
+    path: '/vani/dashboard',
+    hasSubmenu: true,
+    defaultOpen: false, // reference only — must not auto-expand and crowd the sidebar
+    submenuItems: [
       { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
       { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
       { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },

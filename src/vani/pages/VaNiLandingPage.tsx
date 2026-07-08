@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useVaniEntitlement, useStartVaniTrial } from "@/hooks/queries/useVaniDeskQueries";
 
 // ═══════════════════════════════════════════════════════
 //  VaNi Landing Page — Coming Soon
@@ -99,6 +101,45 @@ function AnimatedCounter({ target, suffix = "", prefix = "", duration = 2000 }: 
 
 export default function VaNiLandingPage() {
   const [scrollY, setScrollY] = useState(0);
+  const navigate = useNavigate();
+
+  // ── 1-week trial (real entitlement over /api/vani) ──
+  const entitlementQuery = useVaniEntitlement();
+  const startTrial = useStartVaniTrial();
+  const ent = entitlementQuery.data;
+  const subscribed = ent?.status === "active";
+  const trialActive = ent?.trial_active === true;
+  const trialUsed = ent?.has_subscription === true && !trialActive && !subscribed;
+  const trialDaysLeft = trialActive && ent?.trial_ends
+    ? Math.max(0, Math.ceil((new Date(ent.trial_ends).getTime() - Date.now()) / 86_400_000))
+    : 0;
+
+  const handleTrialClick = async () => {
+    if (trialActive || subscribed) {
+      navigate("/vani/briefing");
+      return;
+    }
+    if (trialUsed || startTrial.isPending || entitlementQuery.isLoading) return;
+    try {
+      const data = await startTrial.mutateAsync();
+      if (data?.started_now || data?.trial_active) navigate("/vani/briefing");
+    } catch {
+      // error toast raised by the mutation hook
+    }
+  };
+
+  const trialCtaLabel = entitlementQuery.isLoading
+    ? "Checking your access…"
+    : startTrial.isPending
+      ? "Starting your trial…"
+      : subscribed
+        ? "Open your Briefing →"
+        : trialActive
+          ? `Open your Briefing → · ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left`
+          : trialUsed
+            ? "Trial ended — write to connect@vikuna.io"
+            : "Start your 1-week free trial";
+  const trialCtaDisabled = entitlementQuery.isLoading || startTrial.isPending || trialUsed;
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -133,7 +174,9 @@ export default function VaNiLandingPage() {
           {/* Coming Soon badge */}
           <div className="vani-fade-up" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 20px", borderRadius: 40, background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", marginBottom: 32, animationDelay: "0.1s" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8b5cf6", animation: "pulse 2s infinite" }} />
-            <span style={{ fontSize: 13, color: "#a78bfa", fontWeight: 500 }}>Coming Soon</span>
+            <span style={{ fontSize: 13, color: "#a78bfa", fontWeight: 500 }}>
+              {trialActive ? `Trial active · ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left` : subscribed ? "Active" : trialUsed ? "Trial ended" : "1-week free trial"}
+            </span>
             <span style={{ fontSize: 13, color: "#6d28d9" }}>·</span>
             <span style={{ fontFamily: "'Noto Sans Devanagari', sans-serif", fontSize: 14, color: "#c4b5fd" }}>वाणी</span>
           </div>
@@ -149,7 +192,20 @@ export default function VaNiLandingPage() {
             VaNi is an AI agent that observes your contract portfolio, acts on routine decisions, and learns patterns that make every contract healthier than the last. Not a replacement — a <strong style={{ color: "#e4e4e7" }}>force multiplier</strong>.
           </p>
 
-          <div className="vani-fade-up" style={{ display: "flex", justifyContent: "center", gap: 16, animationDelay: "0.4s" }}>
+          <div className="vani-fade-up" style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap", animationDelay: "0.4s" }}>
+            <button onClick={handleTrialClick} disabled={trialCtaDisabled}
+              style={{ padding: "14px 36px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 16, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: entitlementQuery.isLoading || startTrial.isPending ? 0.7 : 1, fontFamily: "inherit" }}
+            >
+              {(entitlementQuery.isLoading || startTrial.isPending) && (
+                <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "spinSlow 0.8s linear infinite" }} />
+              )}
+              {trialCtaLabel}
+            </button>
+            <button onClick={() => navigate("/settings/configure/automation-rules")}
+              style={{ padding: "14px 28px", borderRadius: 14, border: "1px solid rgba(139,92,246,0.35)", background: "rgba(139,92,246,0.08)", color: "#c4b5fd", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Set your own rules →
+            </button>
             <a href="#how" style={{ padding: "14px 36px", borderRadius: 14, background: "linear-gradient(135deg, #8b5cf6, #7c3aed)", color: "#fff", fontSize: 16, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: "0 8px 30px rgba(139,92,246,0.3)", transition: "transform 0.2s, box-shadow 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 12px 40px rgba(139,92,246,0.4)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 30px rgba(139,92,246,0.3)"; }}
@@ -327,15 +383,21 @@ export default function VaNiLandingPage() {
             <div style={{ position: "absolute", bottom: -40, left: -40, width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)" }} />
             <div style={{ position: "relative", zIndex: 1 }}>
               <div style={{ fontSize: 56, marginBottom: 20 }}>🚀</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: 3, marginBottom: 12 }}>Coming Soon</div>
-              <h2 style={{ fontSize: 36, fontWeight: 900, letterSpacing: -1, margin: "0 0 12px" }}>VaNi is on its way</h2>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: 3, marginBottom: 12 }}>{trialActive || subscribed ? "VaNi is with you" : "1-week free trial"}</div>
+              <h2 style={{ fontSize: 36, fontWeight: 900, letterSpacing: -1, margin: "0 0 12px" }}>{trialActive || subscribed ? "VaNi is reporting for work" : "Meet your virtual employee"}</h2>
               <p style={{ fontSize: 16, color: "#a1a1aa", lineHeight: 1.7, maxWidth: 420, margin: "0 auto 28px" }}>
-                We're building something extraordinary. VaNi — your AI-powered contract intelligence agent — is currently in development and will be available soon.
+                {trialActive || subscribed
+                  ? "Your daily Briefing shows what VaNi handled automatically and what needs your decision."
+                  : "Try VaNi free for one week — see your daily Briefing of what it handles automatically and what needs your eye."}
               </p>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 28px", borderRadius: 14, background: "linear-gradient(135deg, rgba(139,92,246,0.15), rgba(124,58,237,0.1))", border: "1px solid rgba(139,92,246,0.25)" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6", animation: "pulse 2s infinite" }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#c4b5fd" }}>Stay tuned for updates</span>
-              </div>
+              <button onClick={handleTrialClick} disabled={trialCtaDisabled}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: entitlementQuery.isLoading || startTrial.isPending ? 0.7 : 1, fontFamily: "inherit" }}
+              >
+                {(entitlementQuery.isLoading || startTrial.isPending) && (
+                  <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "spinSlow 0.8s linear infinite" }} />
+                )}
+                {trialCtaLabel}
+              </button>
               <div style={{ marginTop: 24, fontSize: 12, color: "#52525b" }}>
                 In the meantime, explore <strong style={{ color: "#71717a" }}>ContractNest</strong> to manage your contracts today.
               </div>

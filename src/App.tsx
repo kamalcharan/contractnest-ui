@@ -104,6 +104,8 @@ import ServiceSchedulePage from './vani/pages/ServiceSchedulePage';
 import ProcessRulesPage from './vani/pages/ProcessRulesPage';
 import ChatPage from './vani/pages/ChatPage';
 import VaNiLandingPage from './vani/pages/VaNiLandingPage';
+import BriefingPage from './pages/VaNi/BriefingPage';
+import AutomationRulesPage from './pages/settings/automation-rules';
 import { ChatConversation, ChatMessage } from './vani/types/chat.types';
 
 // VaNi Channels Sub-pages
@@ -689,6 +691,7 @@ const AppContent: React.FC = () => {
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
             <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
+            <Route path="configure/automation-rules" element={<AutomationRulesPage />} />
 
             {/* Team Management Routes */}
             <Route path="users" element={<UsersPage />} />
@@ -773,6 +776,7 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<Navigate to="/vani/landing" replace />} />
             <Route path="landing" element={<VaNiLandingPage />} />
+            <Route path="briefing" element={<BriefingPage />} />
             <Route path="dashboard" element={<VaNiDashboard />} />
             <Route path="jobs" element={<JobsListPage />} />
             <Route path="jobs/create" element={<JobCreatePage />} />

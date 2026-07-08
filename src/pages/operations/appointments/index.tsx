@@ -31,6 +31,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   useAppointments,
   useUpdateAppointment,
@@ -70,6 +71,9 @@ const AppointmentsPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  // Appointments are seller-side service visits — follow the global
+  // Revenue/Expense perspective like /ops/finance does (owner feedback).
+  const { perspective } = useAuth();
 
   const appointmentsQuery = useAppointments();
   const updateMutation = useUpdateAppointment();
@@ -289,6 +293,23 @@ const AppointmentsPage: React.FC = () => {
       </div>
     );
   };
+
+  // ── Expense perspective: seller-side board doesn't apply ──
+  if (perspective === 'expense') {
+    return (
+      <div className="max-w-xl mx-auto py-20 px-4 text-center">
+        <CalendarClock size={28} style={{ color: colors.utility.secondaryText, margin: '0 auto 12px' }} />
+        <h2 style={{ fontSize: 17, fontWeight: 700, color: colors.utility.primaryText, marginBottom: 8 }}>
+          Appointments follow your Revenue side
+        </h2>
+        <p style={{ fontSize: 13.5, color: colors.utility.secondaryText, lineHeight: 1.6 }}>
+          This board shows the service visits you deliver as a seller. A buyer-side
+          "Upcoming visits" view is on the roadmap — switch the header perspective to
+          Revenue to manage your appointment requests.
+        </p>
+      </div>
+    );
+  }
 
   // ── Loading / error ──
   if (appointmentsQuery.isLoading) {
