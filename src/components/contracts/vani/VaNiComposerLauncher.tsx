@@ -43,6 +43,58 @@ export interface VaNiComposerLauncherProps {
    *  review saves a draft template instead of sending a contract */
   mode?: 'contract' | 'template';
   onTemplateSaved?: () => void;
+  /** Single-party assignment: seed the composer from a chosen template so it
+   *  skips the free-text intent + LLM steps, animates the template, and pauses
+   *  only for the buyer. Build with buildTemplateSeed(template). */
+  seedTemplate?: TemplateSeed | null;
+}
+
+export interface TemplateSeed {
+  match: VaniTemplateMatch;
+  intent: VaniParsedIntent;
+}
+
+/** Construct a composer seed (template match + synthetic intent) from a
+ *  published template record, so "Assign to member" can launch the composer
+ *  straight into the deterministic assemble-from-template path. Defensive about
+ *  the template shape (settings.wizard_state may be absent). */
+export function buildTemplateSeed(t: any): TemplateSeed {
+  const ws = t?.settings?.wizard_state || {};
+  const durationUnitRaw = ws.durationUnit ?? 'years';
+  const durationUnit: 'days' | 'months' | 'years' =
+    (['days', 'months', 'years'].includes(durationUnitRaw) ? durationUnitRaw : 'years');
+  const payModeRaw = ws.paymentMode ?? 'prepaid';
+  const billingMode: 'prepaid' | 'emi' | 'per_block' =
+    (['prepaid', 'emi', 'per_block'].includes(payModeRaw) ? payModeRaw : 'prepaid');
+  const currency = t?.currency ?? ws.currency ?? 'INR';
+  const match: VaniTemplateMatch = {
+    template_id: t?.id,
+    name: t?.display_name || t?.name || 'Template',
+    score: 1,
+    reasons: ['Selected from your templates'],
+    category: t?.category ?? null,
+    total: Number(t?.total ?? ws.grandTotal ?? 0) || null,
+    currency,
+    blocks_count: (ws.selectedBlocks?.length ?? t?.blocks?.length ?? 0),
+  };
+  const intent: VaniParsedIntent = {
+    contract_kind: t?.name || 'contract',
+    nomenclature: ws.nomenclatureId || '',
+    buyer_text: '',
+    duration: { value: Number(ws.durationValue ?? t?.duration_value ?? 1) || 1, unit: durationUnit },
+    start_date: '',
+    grace_period_days: Number(ws.gracePeriodValue ?? 0) || 0,
+    acceptance: '',
+    billing: {
+      mode: billingMode,
+      emi_months: Number(ws.emiMonths ?? 0) || 0,
+      cycle: ws.billingCycleType ?? 'monthly',
+    },
+    equipment_hint: '',
+    activities: [],
+    special_asks: [],
+  };
+  return { match, intent };
 }
 
 type StepId = 'parse' | 'template' | 'buyer' | 'shortlist' | 'select' | 'assemble';
@@ -92,13 +144,14 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   onDraftReady,
   mode = 'contract',
   onTemplateSaved,
+  seedTemplate = null,
 }) => {
   const isTemplateMode = mode === 'template';
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
 
-  const [stage, setStage] = useState<Stage>('input');
+  const [stage, setStage] = useState<Stage>(() => (seedTemplate ? 'running' : 'input'));
   // Which tab the review opens on — set by the Ready-card buttons.
   const [reviewInitialView, setReviewInitialView] = useState<'contract' | 'events'>('contract');
   const [text, setText] = useState('');
@@ -174,8 +227,18 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     setCards((prev) => [...prev.filter((c) => c.id !== card.id), card]);
   }, []);
 
-  const fail = useCallback((step: StepId, title: string, err: any, retry: () => void) => {
+  const fail = useCallback((
+    step: StepId,
+    title: string,
+    err: any,
+    retry: () => void,
+    opts?: { retryable?: boolean; hint?: React.ReactNode },
+  ) => {
     setRunningStep(null);
+    // Prefer the API's own message (err.response.data.message) over axios's
+    // generic "Request failed with status code 500".
+    const message = err?.response?.data?.message || err?.message || 'Failed';
+    const retryable = opts?.retryable !== false;
     setCards((prev) => [...prev.filter((c) => c.id !== step), {
       id: step,
       title,
@@ -183,13 +246,16 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
       status: 'error' as const,
       body: (
         <div>
-          <p className="text-xs mb-2">{err?.message || 'Failed'}</p>
-          <button
-            onClick={retry}
-            className="flex items-center gap-1.5 text-xs font-semibold hover:opacity-80"
-          >
-            <RotateCcw className="w-3 h-3" /> Retry this step
-          </button>
+          <p className="text-xs mb-2">{message}</p>
+          {opts?.hint && <p className="text-xs mb-2 opacity-80">{opts.hint}</p>}
+          {retryable && (
+            <button
+              onClick={retry}
+              className="flex items-center gap-1.5 text-xs font-semibold hover:opacity-80"
+            >
+              <RotateCcw className="w-3 h-3" /> Retry this step
+            </button>
+          )}
         </div>
       ),
     }]);
@@ -366,7 +432,19 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
       });
       runSelect();
     } catch (err: any) {
-      fail('shortlist', 'Catalog scan failed', err, runShortlist);
+      // Empty/insufficient catalog is a user-actionable condition (422), not a
+      // server fault — steer to the template path instead of a scary retry.
+      const status = err?.response?.status;
+      const serverMsg = err?.response?.data?.message || '';
+      const noCatalog = status === 422 || /no matching service blocks|catalog/i.test(serverMsg);
+      if (noCatalog) {
+        fail('shortlist', 'No matching catalog blocks', err, runShortlist, {
+          retryable: false,
+          hint: 'Nothing in your catalog matches this request. Start from a template instead — New Contract → From Template, or the Assign button on the Templates page.',
+        });
+      } else {
+        fail('shortlist', 'Catalog scan failed', err, runShortlist);
+      }
     }
   }, [pushCard, fail, runSelect]);
 
@@ -599,6 +677,49 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     runParse(inputText);
   }, [pushCard, templateMatchedCard, runBuyer, runParse, isTemplateMode]);
 
+  // ── Single-party seeding: launch straight into the template fast-path ──
+  // Mirrors startPipeline's zero-LLM branch, but the template is pre-chosen so
+  // there is no matchTemplate() call. Lands on the buyer pause.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!isOpen) { seededRef.current = false; return; }
+    if (!seedTemplate || seededRef.current) return;
+    seededRef.current = true;
+    rawTextRef.current = '';
+    parseRef.current = { intent: seedTemplate.intent, nomenclatureMatch: null, interactionId: '' } as VaniParseStepResult;
+    templateMatchRef.current = seedTemplate.match;
+    setStage('running');
+    setContractCurrency(seedTemplate.match.currency || getDefaultCurrency().code);
+    pushCard({
+      id: 'template',
+      title: 'Using your template',
+      icon: <Zap className="w-4 h-4" />,
+      status: 'done',
+      body: (
+        <div className="text-xs space-y-1">
+          <p>
+            <LayoutTemplate className="w-3 h-3 inline mr-1" />
+            <strong>{seedTemplate.match.name}</strong> · {seedTemplate.match.blocks_count} blocks
+            {seedTemplate.match.total ? <> · {getCurrencySymbol(seedTemplate.match.currency)}{Number(seedTemplate.match.total).toLocaleString()}</> : null}
+          </p>
+          <p className="opacity-80">No AI needed — instant and deterministic.</p>
+        </div>
+      ),
+    });
+    // Pause for the buyer without a network call (buyer_text is empty here).
+    setBuyerSearch('');
+    setBuyerAction({ status: 'not_found', candidates: [] } as VaniBuyerResolution);
+    setRunningStep(null);
+    pushCard({
+      id: 'buyer',
+      title: 'Who is this contract for?',
+      icon: <User className="w-4 h-4" />,
+      status: 'action',
+      body: null, // interactive body rendered live from buyerAction
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, seedTemplate]);
+
   const interactionIds = [
     parseRef.current?.interactionId,
     selectRef.current?.interactionId,
@@ -630,6 +751,9 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
         mode={mode}
         onTemplateSaved={onTemplateSaved}
         initialView={reviewInitialView}
+        // Draft came from a template (Assign / From Template / matched tier):
+        // no point offering "Save as template" — it already is one.
+        fromTemplate={!!seedTemplate || !!templateMatchRef.current}
       />
     );
   }

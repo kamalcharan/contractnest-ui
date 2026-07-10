@@ -24,6 +24,7 @@ import {
   useContractEventOperations,
 } from '@/hooks/queries/useContractEventQueries';
 import { useContract } from '@/hooks/queries/useContractQueries';
+import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
 import {
   useEventStatuses,
   useEventTransitions,
@@ -31,6 +32,7 @@ import {
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 import { EventCard } from '@/components/contracts/EventCard';
+import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
 import ServiceExecutionDrawer from '@/components/contracts/ServiceExecutionDrawer';
 
 // ═══════════════════════════════════════════════════
@@ -78,8 +80,15 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
     events: ContractEvent[];
   }>({ isOpen: false, date: '', events: [] });
 
+  // Per-event payment: which billing due the Record Payment dialog opens against
+  const [payEvent, setPayEvent] = useState<ContractEvent | null>(null);
+
   // ── Data hooks ──
   const { data: contractData } = useContract(contractId);
+  const { data: invoiceData } = useContractInvoices(contractId);
+  // Once an invoice exists, dues are settled via Record Payment (not re-invoiced),
+  // so the contract-level "Generate Invoice" button is hidden.
+  const hasInvoice = (invoiceData?.invoices?.length || 0) > 0;
   const {
     data: eventsData,
     isLoading,
@@ -443,24 +452,29 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
                             allowedTransitions={
                               transitionsByType[evt.event_type]?.[evt.status] || []
                             }
+                            onRecordPayment={isSeller ? setPayEvent : undefined}
                           />
                         </div>
                       ))}
 
-                      {/* Action button: Generate Invoice (seller) / Make Payment (buyer) */}
+                      {/* Action button: Generate Invoice (seller, only before an invoice
+                          exists) / Make Payment (buyer). Once invoiced, seller records
+                          receipts per-due via the card's Record Payment action. */}
                       {hasIncompleteBilling &&
                         (isSeller ? (
-                          <button
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold border transition-all hover:shadow-md hover:opacity-90"
-                            style={{
-                              borderColor: `${warningColor}30`,
-                              color: warningColor,
-                              backgroundColor: `${warningColor}08`,
-                            }}
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                            Generate Invoice
-                          </button>
+                          !hasInvoice && (
+                            <button
+                              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold border transition-all hover:shadow-md hover:opacity-90"
+                              style={{
+                                borderColor: `${warningColor}30`,
+                                color: warningColor,
+                                backgroundColor: `${warningColor}08`,
+                              }}
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              Generate Invoice
+                            </button>
+                          )
                         ) : (
                           <button
                             className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold border transition-all hover:shadow-md hover:opacity-90"
@@ -535,6 +549,21 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
           statusDefsByType={statusDefsByType}
           transitionsByType={transitionsByType}
           onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}
+        />
+      )}
+
+      {/* Per-due Record Payment (seller records a receipt against the tapped due) */}
+      {payEvent && (
+        <RecordPaymentDialog
+          isOpen={!!payEvent}
+          onClose={() => setPayEvent(null)}
+          contractId={contractId}
+          currency={currency}
+          preselectedEventIds={[payEvent.id]}
+          onSuccess={() => {
+            setPayEvent(null);
+            refetch();
+          }}
         />
       )}
     </div>

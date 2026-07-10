@@ -40,7 +40,7 @@ export const defaultMenuItems: MenuItem[] = [
     submenuItems: [
       { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
       { id: 'ops-finance', label: 'Finance (AR/AP)', icon: 'Wallet', path: '/ops/finance' },
-      { id: 'ops-services', label: 'Service Schedule', icon: 'CalendarClock', path: '/ops/services' },
+      { id: 'ops-services', label: 'Event Schedule', icon: 'CalendarClock', path: '/ops/services' },
       { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
       { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
       { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },

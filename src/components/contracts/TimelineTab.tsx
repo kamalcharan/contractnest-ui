@@ -32,6 +32,7 @@ import type {
 } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 import { EventCard } from '@/components/contracts/EventCard';
+import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
 
 export interface TimelineTabProps {
   contractId: string;
@@ -103,6 +104,9 @@ const BucketCard: React.FC<BucketCardProps> = ({ title, bucket, color, colors, i
 
 const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors }) => {
   const { isDarkMode } = useTheme();
+
+  // Per-event payment: which billing event the Record Payment dialog opens against
+  const [payEvent, setPayEvent] = React.useState<ContractEvent | null>(null);
 
   // Fetch events for this contract
   const {
@@ -359,6 +363,7 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
                     updatingEventId={changingStatusEventId}
                     statusDefs={statusDefsByType[event.event_type]}
                     allowedTransitions={transitionsByType[event.event_type]?.[event.status] || []}
+                    onRecordPayment={setPayEvent}
                   />
                 ))}
               </div>
@@ -378,6 +383,21 @@ const TimelineTab: React.FC<TimelineTabProps> = ({ contractId, currency, colors 
             {eventsData.page_info.has_next_page && ' • More events available'}
           </span>
         </div>
+      )}
+
+      {/* Per-event Record Payment (opens preselected on the tapped billing due) */}
+      {payEvent && (
+        <RecordPaymentDialog
+          isOpen={!!payEvent}
+          onClose={() => setPayEvent(null)}
+          contractId={contractId}
+          currency={currency}
+          preselectedEventIds={[payEvent.id]}
+          onSuccess={() => {
+            setPayEvent(null);
+            refetchEvents();
+          }}
+        />
       )}
     </div>
   );

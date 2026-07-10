@@ -16,6 +16,11 @@ import {
   ChevronDown,
   ChevronUp,
   Package,
+  Wallet,
+  BellRing,
+  CircleDot,
+  MinusCircle,
+  Ban,
 } from 'lucide-react';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
@@ -46,8 +51,14 @@ const STATUS_ICON_MAP: Record<string, any> = {
   PauseCircle: Clock,
   Eye: Clock,
   CheckCircle2,
+  CheckCircle: CheckCircle2,
   XCircle,
   AlertTriangle,
+  // Billing status icons
+  BellRing,
+  CircleDot,
+  MinusCircle,
+  Ban,
 };
 
 // Fallback transitions when DB data hasn't loaded yet
@@ -118,6 +129,8 @@ export interface EventCardProps {
   variant?: 'full' | 'compact';
   /** Click handler for navigating to the contract (compact variant) */
   onViewContract?: (contractId: string) => void;
+  /** Record a payment against this billing event (opens the Record Payment dialog preselected). */
+  onRecordPayment?: (event: ContractEvent) => void;
 }
 
 // ─── Component ───
@@ -134,6 +147,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   allowedTransitions,
   variant = 'full',
   onViewContract,
+  onRecordPayment,
 }) => {
   const [showActions, setShowActions] = useState(false);
   // Stage 3: appointment context (fields arrive via get_contract_events_list v3)
@@ -146,7 +160,19 @@ export const EventCard: React.FC<EventCardProps> = ({
     !['completed', 'cancelled'].includes(event.status);
   const isService = event.event_type === 'service';
   const isSparePart = event.event_type === 'spare_part';
+  const isBilling = event.event_type === 'billing';
   const isCompact = variant === 'compact';
+
+  // Billing events keep their manual status dropdown (config-driven transitions)
+  // AND, when still open, offer a "Record Payment" action. Receipts also
+  // auto-advance the status to Paid / Partial in the background.
+  const eventAmount = event.amount || 0;
+  const eventSettled = (event as any).amount_settled || 0;
+  const openAmount = Math.max(0, Math.round((eventAmount - eventSettled) * 100) / 100);
+  const isOpenBilling =
+    isBilling && eventAmount > 0 && openAmount > 0.005 &&
+    !['cancelled', 'waived'].includes(event.status);
+  const canRecordPayment = isOpenBilling && !hideActions && !!onRecordPayment;
 
   // Per-card updating: only THIS card shows spinner
   const isThisUpdating = updatingEventId
@@ -345,6 +371,21 @@ export const EventCard: React.FC<EventCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Record Payment (open billing events — money-driven, no manual status) */}
+            {canRecordPayment && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRecordPayment!(event); }}
+                className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full transition-all hover:opacity-80"
+                style={{
+                  backgroundColor: `${colors.semantic?.success || '#10B981'}12`,
+                  color: colors.semantic?.success || '#10B981',
+                }}
+                title="Record a payment against this due"
+              >
+                <Wallet className="w-3 h-3" />
+                {eventSettled > 0 ? 'Pay Balance' : 'Record Payment'}
+              </button>
+            )}
             {/* Status badge with dropdown trigger */}
             <button
               onClick={() => hasActions && setShowActions(!showActions)}

@@ -7,8 +7,10 @@
 // view) and finalizes through useContractSubmission — the SAME write path
 // as the wizard (mapWizardToRequest → createContract → status transition).
 //
-// Auto-accept drafts route to the wizard: they need the pre-payment dialog,
-// which lives there.
+// Auto-accept drafts are finalized here too — no wizard detour. They create
+// directly and activate (which generates the invoices + billing events);
+// payment is recorded afterwards via the Record Payment flow. Only the button
+// label changes ("Approve & Create" vs "Approve & Send").
 
 import React, { useMemo, useState } from 'react';
 import {
@@ -39,6 +41,10 @@ export interface VaNiReviewFinalizeProps {
   onTemplateSaved?: () => void;
   /** Which review tab to open on ('contract' default, or jump straight to 'events') */
   initialView?: 'contract' | 'events';
+  /** Draft originated from a template (Assign / From Template / matched tier).
+   *  Suppresses the "Save as template" offer on the success screen — the
+   *  pattern is already a template. */
+  fromTemplate?: boolean;
 }
 
 const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
@@ -50,6 +56,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
   mode = 'contract',
   onTemplateSaved,
   initialView = 'contract',
+  fromTemplate = false,
 }) => {
   const isTemplateMode = mode === 'template';
   const { isDarkMode, currentTheme } = useTheme();
@@ -103,8 +110,10 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
       vaniComposerService.sendFeedback(interactionIds, { was_accepted: true, was_edited: false });
       addToast({
         type: 'success',
-        title: 'Contract sent',
-        message: `${draft.contractName} is now awaiting acceptance.`,
+        title: isAutoAccept ? 'Contract created' : 'Contract sent',
+        message: isAutoAccept
+          ? `${draft.contractName} is active — record payment when it comes in.`
+          : `${draft.contractName} is now awaiting acceptance.`,
       });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Sending failed', message: err?.message || 'Please try again.' });
@@ -284,7 +293,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
               <CheckCircle2 className="w-8 h-8" style={{ color: colors.semantic.success }} />
             </div>
             <h3 className="text-lg font-bold mb-1" style={{ color: colors.utility.primaryText }}>
-              Contract sent
+              {isAutoAccept ? 'Contract created' : 'Contract sent'}
             </h3>
             <p className="text-sm mb-1" style={{ color: colors.utility.secondaryText }}>
               {draft.contractName}
@@ -303,7 +312,9 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
                 {sent.global_access_id}
               </button>
             )}
-            {/* Save this pick as a template — next time VaNi answers instantly */}
+            {/* Save this pick as a template — next time VaNi answers instantly.
+                Hidden when the draft already came from a template. */}
+            {!fromTemplate && (
             <div
               className="w-full max-w-md rounded-xl border p-4 mb-6 text-left"
               style={{ borderColor: `${colors.brand.primary}30`, backgroundColor: `${colors.brand.primary}06` }}
@@ -347,6 +358,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
                 </>
               )}
             </div>
+            )}
             <button
               onClick={onDone}
               className="px-8 py-3 rounded-xl text-white text-sm font-semibold hover:opacity-90"
@@ -480,33 +492,30 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
                   Edit in wizard
                 </button>
                 <div className="flex-1" />
-                {isAutoAccept ? (
-                  <button
-                    onClick={onEdit}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90"
-                    style={{ backgroundColor: colors.brand.primary }}
-                    title="Auto-accept contracts collect payment at creation — the wizard handles that"
-                  >
-                    Continue in wizard (payment on acceptance)
-                    <PencilLine className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleSend}
-                    disabled={isSubmitting || blockers.length > 0}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40"
-                    style={{ backgroundColor: colors.semantic.success }}
-                  >
-                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    {isSubmitting ? 'Sending…' : 'Approve & Send'}
-                  </button>
-                )}
+                <button
+                  onClick={handleSend}
+                  disabled={isSubmitting || blockers.length > 0}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 disabled:opacity-40"
+                  style={{ backgroundColor: colors.semantic.success }}
+                  title={isAutoAccept
+                    ? 'Creates and activates the contract now — record payment afterwards'
+                    : 'Creates the contract and notifies the buyer to accept'}
+                >
+                  {isSubmitting
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : (isAutoAccept ? <CheckCircle2 className="w-4 h-4" /> : <Send className="w-4 h-4" />)}
+                  {isSubmitting
+                    ? (isAutoAccept ? 'Creating…' : 'Sending…')
+                    : (isAutoAccept ? 'Approve & Create' : 'Approve & Send')}
+                </button>
               </div>
               )}
               <p className="mt-2 text-[10px] text-right" style={{ color: colors.utility.secondaryText }}>
                 {isTemplateMode
                   ? 'Saves a draft template — publish it on the Templates page to activate it.'
-                  : 'Sending creates the contract and notifies the buyer — same pipeline as the wizard.'}
+                  : isAutoAccept
+                    ? 'Creates and activates the contract now (invoices + billing events generated) — record payment when it arrives.'
+                    : 'Sending creates the contract and notifies the buyer — same pipeline as the wizard.'}
               </p>
             </div>
           </>
