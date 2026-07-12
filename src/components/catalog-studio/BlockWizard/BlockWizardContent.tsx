@@ -128,6 +128,11 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
       return errors;
     }
 
+    // Complimentary blocks are free — never ask for a price on any step.
+    if ((data as { complimentary?: boolean }).complimentary) {
+      return errors;
+    }
+
     // Block-specific step validations
     if (type === 'service') {
       // Step 3 - Resources: No mandatory fields (independent is default)
@@ -286,6 +291,23 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
 
   const handleTypeChange = (type: string) => {
     onBlockTypeChange(type);
+    // Group Session preset: it's a service block with audience=group that is
+    // inherently recurring, so seed audience=group AND turn Service Cycles on by
+    // default (the cycle is what generates the session's occurrences). Both stay
+    // editable on the Delivery step.
+    if (type === 'session') {
+      setFormData((prev) => {
+        const p = prev as { audience?: string; requiresCycles?: boolean; complimentary?: boolean };
+        return {
+          ...prev,
+          audience: p.audience || 'group',
+          requiresCycles: p.requiresCycles ?? true,
+          // Group Sessions are complimentary by nature (attendance, not money):
+          // no price, no billing — just occurrences.
+          complimentary: p.complimentary ?? true,
+        };
+      });
+    }
     // Don't reset step when changing type in full page mode
     // The parent component controls navigation
   };
@@ -331,6 +353,8 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
 
     // Block-specific steps (step 3+)
     switch (blockType) {
+      // Group Session reuses the Service step components verbatim.
+      case 'session':
       case 'service':
         switch (currentStep) {
           case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;

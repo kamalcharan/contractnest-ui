@@ -75,6 +75,10 @@ export interface ConfigurableBlock {
     content?: string; // Text block content
     sku?: string; // Spare part SKU
     fileType?: string; // Document file type
+    audience?: 'individual' | 'group'; // Group Session marker (1:N attendance)
+    complimentary?: boolean; // Complimentary block — delivers occurrences but no price/billing
+    serviceCycles?: { anchorWeekday?: number; days?: number; enabled?: boolean }; // Cadence config
+    autoCount?: boolean; // Group Session: occurrence count auto-derives from contract duration until user edits it
   };
 }
 
@@ -121,6 +125,20 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const IconComponent = getIconComponent(block.icon);
   const hasPricing = categoryHasPricing(block.categoryId || '');
+  // Group Sessions / complimentary blocks deliver occurrences (Quantity + Service Cycle)
+  // even when they carry no price. Gate delivery config on that, not on pricing alone.
+  const deliversOccurrences =
+    hasPricing || block.config?.audience === 'group' || !!block.serviceCycleDays;
+  // Price sections stay gated on real pricing AND not-complimentary.
+  const showPrice = hasPricing && block.config?.complimentary !== true;
+  // Group Session cadence: the named weekday the occurrences anchor to, and a
+  // holiday note. Actual N+1/N-1 shift is resolved at the Events Preview step.
+  const isGroupSession = block.config?.audience === 'group' || block.categoryId === 'session';
+  const anchorWeekday = block.config?.serviceCycles?.anchorWeekday;
+  const anchorLabel =
+    typeof anchorWeekday === 'number' && anchorWeekday >= 0 && anchorWeekday <= 6
+      ? ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][anchorWeekday]
+      : null;
 
   // Tax master data
   const { options: taxRateOptions } = useTaxRatesDropdown();
@@ -164,9 +182,10 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
   const handleQuantityChange = useCallback(
     (delta: number) => {
       const newQty = Math.max(1, block.quantity + delta);
-      onUpdate(block.id, { quantity: newQty });
+      // A manual edit pins the count — stop auto-deriving it from the duration.
+      onUpdate(block.id, { quantity: newQty, config: { ...block.config, autoCount: false } });
     },
-    [block.id, block.quantity, onUpdate]
+    [block.id, block.quantity, block.config, onUpdate]
   );
 
   const handleCycleChange = useCallback(
@@ -188,8 +207,10 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
       unlimited: !block.unlimited,
       // Clear service cycle when switching to unlimited
       ...(!block.unlimited ? { serviceCycleDays: undefined } : {}),
+      // Switching mode is a manual choice — stop auto-deriving the count.
+      config: { ...block.config, autoCount: false },
     });
-  }, [block.id, block.unlimited, onUpdate]);
+  }, [block.id, block.unlimited, block.config, onUpdate]);
 
   const handleServiceCycleDaysChange = useCallback(
     (days: number | undefined) => {
@@ -285,7 +306,7 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                   {block.coverageTypeName}
                 </span>
               )}
-              {hasPricing && (
+              {deliversOccurrences && (
                 <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
                   {block.unlimited ? '∞' : `×${block.quantity}`} • {currentCycle.shortLabel}
                 </span>
@@ -293,8 +314,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
             </div>
           </div>
 
-          {/* Price - only for pricing categories */}
-          {hasPricing && (
+          {/* Price - only for pricing categories (hidden for complimentary) */}
+          {showPrice && (
             <div className="text-right">
               <span className="text-sm font-bold" style={{ color: colors.brand.primary }}>
                 {formatCurrency(Math.round(block.totalPrice), block.currency)}
@@ -337,8 +358,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
           style={{ borderColor: `${colors.utility.primaryText}10` }}
         >
           <div className="pt-3 space-y-4">
-            {/* Description for non-pricing blocks */}
-            {!hasPricing && block.description && (
+            {/* Description for pure non-delivering blocks (text/document) */}
+            {!deliversOccurrences && block.description && (
               <div
                 className="text-xs prose prose-xs max-w-none"
                 style={{ color: colors.utility.secondaryText }}
@@ -346,8 +367,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               />
             )}
 
-            {/* Quantity Section - Limited/Unlimited Switch (pricing blocks only) */}
-            {hasPricing && <div>
+            {/* Quantity Section - Limited/Unlimited Switch (delivering blocks) */}
+            {deliversOccurrences && <div>
               <label
                 className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
                 style={{ color: colors.utility.secondaryText }}
@@ -409,8 +430,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               </div>
             </div>}
 
-            {/* Service Cycle Interval Card (pricing blocks, not unlimited) */}
-            {hasPricing && !block.unlimited && (
+            {/* Service Cycle Interval Card (delivering blocks, not unlimited) */}
+            {deliversOccurrences && !block.unlimited && (
               <div
                 className="p-3 rounded-xl border-2 border-dashed"
                 style={{
@@ -456,7 +477,7 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                     }}
                   />
                   <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                    days from start of contract
+                    {anchorLabel ? `days · on ${anchorLabel}` : 'days from start of contract'}
                   </span>
                 </div>
 
@@ -467,14 +488,23 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
                       className="text-xs leading-relaxed"
                       style={{ color: colors.utility.primaryText }}
                     >
-                      This service will be performed every <strong>{block.serviceCycleDays} days</strong>,{' '}
+                      {isGroupSession ? 'This session runs' : 'This service will be performed'} every{' '}
+                      <strong>{block.serviceCycleDays} days</strong>
+                      {anchorLabel && <> on <strong>{anchorLabel}</strong></>},{' '}
                       <strong>{block.quantity} time{block.quantity > 1 ? 's' : ''}</strong>
-                      {block.quantity > 1 && (
+                      {block.quantity > 1 && !anchorLabel && (
                         <span style={{ color: colors.utility.secondaryText }}>
                           {' '}(Day 1 to Day {(block.quantity - 1) * block.serviceCycleDays})
                         </span>
                       )}
                     </p>
+
+                    {/* Holiday handling note for Group Sessions (resolved at Events Preview) */}
+                    {isGroupSession && (
+                      <p className="text-[11px] mt-1" style={{ color: colors.utility.secondaryText }}>
+                        Holidays shift per Cadence Settings — you'll confirm each clash at the schedule preview.
+                      </p>
+                    )}
 
                     {/* Validation warning */}
                     {serviceCycleExceedsDuration && contractDurationDays && (
@@ -494,8 +524,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               </div>
             )}
 
-            {/* Billing Cycle Section (pricing blocks only) */}
-            {hasPricing && <div>
+            {/* Billing Cycle Section (billing blocks only) */}
+            {showPrice && <div>
               <label
                 className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
                 style={{ color: colors.utility.secondaryText }}
@@ -547,8 +577,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
               )}
             </div>}
 
-            {/* Advanced Settings (pricing blocks only) */}
-            {hasPricing && <>
+            {/* Advanced Settings (billing blocks only) */}
+            {showPrice && <>
             <div
               className="p-3 rounded-lg"
               style={{ backgroundColor: `${colors.utility.primaryText}05` }}
@@ -860,8 +890,8 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
             )}
             </>}
 
-            {/* Show Description toggle - always available for all block types */}
-            {!hasPricing && (
+            {/* Show Description toggle - shown when the priced Advanced Settings block is hidden */}
+            {!showPrice && (
               <div>
                 <button
                   onClick={() => handleConfigChange('showDescription', !block.config?.showDescription)}

@@ -10,6 +10,17 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
     { id: 5, label: 'Pricing' },
     { id: 6, label: 'Business Rules' },
   ],
+  // Group Session — a service preset (audience=group). Same steps as service;
+  // the wizard reuses the service step components and the engine branches on
+  // config.audience, not the category.
+  session: [
+    { id: 1, label: 'Type' },
+    { id: 2, label: 'Basic Info' },
+    { id: 3, label: 'Resources' },
+    { id: 4, label: 'Delivery' },
+    { id: 5, label: 'Pricing' },
+    { id: 6, label: 'Business Rules' },
+  ],
   spare: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },

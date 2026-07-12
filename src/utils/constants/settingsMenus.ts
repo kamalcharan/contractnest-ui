@@ -117,6 +117,16 @@ export const settingsMenuItems: SettingsItem[] = [
     card_icon_name: 'FileText',
     adminOnly: false
   },
+  {
+    id: 'cadence-settings',
+    settings_type: 'Cadence Settings',
+    parent_type: GROUP_LIST_OF_VALUE,
+    description_short: 'Holidays & cycle scheduling',
+    description_long: 'Set weekly holidays and specific holiday dates so recurring service cycles skip or shift around them',
+    route_path: '/settings/configure/cadence',
+    card_icon_name: 'CalendarClock',
+    adminOnly: false
+  },
 
   // Integrations
   {
@@ -159,6 +169,16 @@ export const settingsMenuItems: SettingsItem[] = [
     description_long: 'Manage files, upload documents, and monitor storage usage',
     route_path: '/settings/storage/storagemanagement',
     card_icon_name: 'HardDrive',
+    adminOnly: false
+  },
+  {
+    id: 'sandbox',
+    settings_type: 'Sandbox',
+    parent_type: GROUP_STORAGE_SPACE,
+    description_short: 'Clear test data',
+    description_long: 'Delete transactional records (contracts, billing, check-ins) — keeps catalog, settings & numbering',
+    route_path: '/settings/storage/sandbox',
+    card_icon_name: 'Trash2',
     adminOnly: false
   },
 

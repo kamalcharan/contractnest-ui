@@ -23,6 +23,7 @@ export interface ContractEvent {
   event_type: EventType;
   billing_sub_type?: BillingSubType;
   billing_cycle_label?: string;  // 'Monthly', 'EMI 3/5', 'Prepaid', etc.
+  audience?: 'individual' | 'group'; // 'group' => a Group Session occurrence (1:N attendance)
 
   // Schedule
   sequence_number: number;       // 1-based: 1 of 5, 2 of 5...
@@ -72,6 +73,14 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+/** First date on/after `date` that falls on weekday `wd` (0=Sun..6=Sat). */
+function firstWeekdayOnOrAfter(date: Date, wd: number): Date {
+  const d = new Date(date);
+  const diff = ((wd - d.getDay()) % 7 + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  return d;
 }
 
 /** Add months to a date */
@@ -140,7 +149,12 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
   // For each priced, non-unlimited block
   for (const block of selectedBlocks) {
     const hasPricing = categoryHasPricing(block.categoryId || '');
-    if (!hasPricing || block.unlimited) continue;
+    // Group Sessions deliver roster occurrences (attendance) even when they are
+    // free (complimentary) or live under a non-pricing category, so they must
+    // not be filtered out by the pricing gate. Everything else still requires
+    // pricing to produce a service visit.
+    const isGroupSession = block.config?.audience === 'group' || block.categoryId === 'session';
+    if ((!hasPricing && !isGroupSession) || block.unlimited) continue;
 
     // Billing-only blocks (fees/dues like memberships) bill on their cycle
     // but never generate service events/visits
@@ -148,11 +162,23 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
 
     const qty = block.quantity || 1;
 
-    if (block.serviceCycleDays && block.serviceCycleDays > 0 && qty > 1) {
-      // Recurring service: qty events, each serviceCycleDays apart
+    // Group Sessions always follow their cadence (anchor to the named weekday),
+    // even for a single occurrence, so the session lands on e.g. the first
+    // Saturday rather than Day 1.
+    if (block.serviceCycleDays && block.serviceCycleDays > 0 && (qty > 1 || isGroupSession)) {
+      // Day-of-week anchor: when the cycle names a weekday (e.g. "alternate
+      // Saturdays"), occurrences snap to that weekday at a whole-week interval
+      // so they never drift. Otherwise fall back to the raw day interval.
+      const anchorWeekday = (block.config?.serviceCycles as { anchorWeekday?: number } | undefined)?.anchorWeekday;
+      const anchored = typeof anchorWeekday === 'number' && anchorWeekday >= 0 && anchorWeekday <= 6;
+      const everyNWeeks = Math.max(1, Math.round(block.serviceCycleDays / 7));
+      const anchorStart = anchored ? firstWeekdayOnOrAfter(startDate, anchorWeekday as number) : startDate;
+
+      // Recurring service: qty events, snapped to the weekday (or raw interval)
       for (let i = 0; i < qty; i++) {
-        const dayOffset = i * block.serviceCycleDays;
-        const date = addDays(startDate, dayOffset);
+        const date = anchored
+          ? addDays(anchorStart, i * everyNWeeks * 7)
+          : addDays(startDate, i * block.serviceCycleDays);
 
         events.push({
           id: makeEventId(block.id, 'service', i + 1),
@@ -160,6 +186,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
           block_name: block.name,
           category_id: block.categoryId || '',
           event_type: 'service',
+          audience: isGroupSession ? 'group' : undefined,
           sequence_number: i + 1,
           total_occurrences: qty,
           scheduled_date: date,
@@ -175,6 +202,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         block_name: block.name,
         category_id: block.categoryId || '',
         event_type: 'service',
+        audience: isGroupSession ? 'group' : undefined,
         sequence_number: 1,
         total_occurrences: 1,
         scheduled_date: new Date(startDate),
@@ -233,6 +261,9 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     for (const block of selectedBlocks) {
       const hasPricing = categoryHasPricing(block.categoryId || '');
       if (!hasPricing || block.unlimited) continue;
+
+      // Complimentary blocks are free — they deliver occurrences but never bill.
+      if (block.config?.complimentary) continue;
 
       const blockCycle = block.cycle || 'prepaid';
       const blockTotal = block.totalPrice || 0;

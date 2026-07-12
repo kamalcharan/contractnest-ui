@@ -29,6 +29,8 @@ initSentry();
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
+import SessionCheckinPage from './pages/checkin/SessionCheckinPage'; // [batch3-checkin]
+import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [batch3-checkin]
 
 // Catalog Pages
 import CatalogPage from './pages/catalog/index';
@@ -80,7 +82,6 @@ import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep'
 import ServedIndustriesStep from '@/pages/onboarding/steps/ServedIndustriesStep';
 import Screen8APricingStep from '@/pages/onboarding/steps/Screen8APricingStep';
 import Screen8BEquipmentStep from '@/pages/onboarding/steps/Screen8BEquipmentStep';
-import LovSetupStep from '@/pages/onboarding/steps/LovSetupStep';
 import ResourcePickStep from '@/pages/onboarding/steps/ResourcePickStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
@@ -208,6 +209,7 @@ import IntegrationsPage from './pages/settings/integrations';
 import StorageSetupPage from './pages/settings/storage/storagesetup';
 import StorageCompletePage from './pages/settings/storage/storagecomplete';
 import StorageManagementPage from './pages/settings/storage/storagemanagement';
+import SandboxPage from './pages/settings/storage/sandbox'; // [sandbox-route]
 import CategoryFilesPage from './pages/settings/storage/categoryfiles';
 
 // Business Model - Admin Pages
@@ -236,7 +238,6 @@ import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscriptio
 import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
-import ContactsImportPage from './pages/contacts/import';
 
 // Admin - Subscription Management
 import SubscriptionManagementPage from './pages/admin/subscription-management';
@@ -253,6 +254,7 @@ import FormEditorPage from './pages/admin/smart-forms/FormEditorPage';
 
 // Tenant - Smart Forms Selection (Cycle 3)
 import SmartFormsSelectionPage from './pages/settings/smart-forms/SmartFormsSelectionPage';
+import CadenceSettingsPage from './pages/settings/cadence/CadenceSettingsPage';
 
 
 // Temporary API test
@@ -353,6 +355,11 @@ const AppContent: React.FC = () => {
       {/* <Toaster position="bottom-right" /> */}
       <MiscPageWrapper>
         <Routes>
+          {/* [batch3-checkin] Group Session check-in */}
+          <Route path="/checkin/:token" element={<SessionCheckinPage />} />
+          <Route path="/session-checkin" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            <Route index element={<ChairCheckinPage />} />
+          </Route>
           {/* MISC Routes - Outside of MainLayout */}
           <Route path="/misc/maintenance" element={<MaintenancePage />} />
           <Route path="/misc/unauthorized" element={<UnauthorizedPage />} />
@@ -444,7 +451,6 @@ const AppContent: React.FC = () => {
   <Route path="vani-working" element={<VaniWorkingStep />} />
   <Route path="pricing-review" element={<Screen8APricingStep />} />
   <Route path="equipment-confirm" element={<Screen8BEquipmentStep />} />
-  <Route path="lov-setup" element={<LovSetupStep />} />
   <Route path="done" element={
     <ProtectedRoute requireTenant={true}>
       <VaniDoneStep />
@@ -694,6 +700,7 @@ const AppContent: React.FC = () => {
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
             <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
+            <Route path="configure/cadence" element={<CadenceSettingsPage />} />
             <Route path="configure/automation-rules" element={<AutomationRulesPage />} />
 
             {/* Team Management Routes */}
@@ -724,6 +731,7 @@ const AppContent: React.FC = () => {
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />
             <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
             <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
+            <Route path="storage/sandbox" element={<SandboxPage />} /> {/* [sandbox-route] */}
             <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
 
             {/* Integration Settings */}
@@ -764,7 +772,6 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ContactsPage />} />
             <Route path="create" element={<ContactCreateForm />} />
-            <Route path="import" element={<ContactsImportPage />} />
             <Route path=":id" element={<ContactViewPage />} />
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
           </Route>

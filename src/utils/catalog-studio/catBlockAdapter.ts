@@ -141,6 +141,8 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       deliveryMode: config.deliveryMode || config.location?.type,
       serviceCycles: config.serviceCycles,
       billingOnly: config.billingOnly,
+      complimentary: config.complimentary,
+      audience: config.audience,
       bufferTime: config.buffer || config.bufferTime,
       location: config.location,
       assignment: config.assignment,
@@ -289,21 +291,36 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
     config.deliveryMode = deliveryMode;
   }
 
-  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod
+  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod,
+  // and optionally cycleAnchorWeekday (0=Sun..6=Sat) so occurrences snap to a
+  // fixed weekday instead of drifting.
   const requiresCycles = getField(block, 'requiresCycles');
   const cycleDays = getField(block, 'cycleDays');
+  const cycleAnchorWeekday = getField(block, 'cycleAnchorWeekday');
   const serviceCycles = getField(block, 'serviceCycles');
   if (requiresCycles || serviceCycles) {
     config.serviceCycles = serviceCycles || {
       enabled: requiresCycles,
       days: cycleDays,
       gracePeriod: getField(block, 'cycleGracePeriod'),
+      ...(cycleAnchorWeekday !== undefined && cycleAnchorWeekday !== null
+        ? { anchorWeekday: cycleAnchorWeekday }
+        : {}),
     };
   }
 
   // Billing-only flag — block bills on its cycle but generates no service events
   const billingOnly = getField(block, 'billingOnly');
   if (billingOnly !== undefined) config.billingOnly = billingOnly;
+
+  // Complimentary — free block: no price, no billing events, still delivered.
+  const complimentary = getField(block, 'complimentary');
+  if (complimentary !== undefined) config.complimentary = complimentary;
+
+  // Audience — 'individual' (1:1, the buyer) or 'group' (1:N roster). The engine
+  // branches on this; a Group Session block persists 'group' here.
+  const audience = getField(block, 'audience');
+  if (audience !== undefined) config.audience = audience;
 
   // Assignment
   const assignment = getField(block, 'assignment');
@@ -735,7 +752,14 @@ export const blockToCreateData = (
   block: Partial<Block> & { name: string },
   options: BlockOperationOptions = {}
 ) => {
-  const blockType = block.categoryId || 'service';
+  // Group Session is a service preset: persist as a SERVICE block (type AND
+  // category) so it shows up everywhere a service block does — the Catalog
+  // list, the contract's Service Blocks picker, billing config, etc. The engine
+  // tells a Group Session apart via config.audience === 'group', never the
+  // category name.
+  const rawCategory = block.categoryId || 'service';
+  const isSession = rawCategory === 'session';
+  const blockType = isSession ? 'service' : rawCategory;
   const { price, currency } = extractPrimaryPrice(block);
 
   // Get pricing mode - check both top-level and meta
@@ -770,7 +794,7 @@ export const blockToCreateData = (
     name: block.name,
     type: blockType,  // Correct field name for DB
     // Note: block_type_id expects UUID - let API/edge resolve it from 'type'
-    category: blockType, // Category field (same as block type)
+    category: blockType, // Group Session stores as 'service' so it lists/pickers like one
 
     // Optional top-level fields
     display_name: block.name,
@@ -908,6 +932,8 @@ export const blockToUpdateData = (
     if (meta.deliveryMode !== undefined) configUpdates.deliveryMode = meta.deliveryMode;
     if (meta.serviceCycles !== undefined) configUpdates.serviceCycles = meta.serviceCycles;
     if (meta.billingOnly !== undefined) configUpdates.billingOnly = meta.billingOnly;
+    if (meta.complimentary !== undefined) configUpdates.complimentary = meta.complimentary;
+    if (meta.audience !== undefined) configUpdates.audience = meta.audience;
     if (meta.bufferTime !== undefined) configUpdates.buffer = meta.bufferTime;
     if (meta.terms !== undefined) configUpdates.terms = meta.terms;
 

@@ -954,6 +954,7 @@ export const API_ENDPOINTS = {
     // Main CRUD operations
     LIST: '/api/contracts',
     CREATE: '/api/contracts',
+    BULK_CREATE: '/api/contracts/bulk-create',
     GET: (id: string) => `/api/contracts/${id}`,
     UPDATE: (id: string) => `/api/contracts/${id}`,
     DELETE: (id: string) => `/api/contracts/${id}`,
@@ -1225,6 +1226,25 @@ export const API_ENDPOINTS = {
   // =================================================================
   // SMART FORMS — Tenant-facing Selections + Submissions (Cycle 3)
   // =================================================================
+  // Cadence Settings — tenant holiday calendar + shift policy (smart Service Cycles)
+  CADENCE_SETTINGS: {
+    GET: '/api/settings/cadence',
+    UPDATE: '/api/settings/cadence',
+    ADD_HOLIDAY: '/api/settings/cadence/holidays',
+    REMOVE_HOLIDAY: (date: string) => `/api/settings/cadence/holidays?date=${date}`,
+  },
+  // Group Session check-in — chair (authenticated) side. The member-facing
+  // public endpoints (/api/checkin/...) are called by a bare axios client.
+  SESSION_CHECKIN: {
+    ENSURE_TOKEN: '/api/session-checkin/token',
+    DECLARATIONS: '/api/session-checkin/declarations',
+    CONFIRM_DECLARATION: (id: string) => `/api/session-checkin/declarations/${id}/confirm`,
+  },
+  // Sandbox — clear the tenant's transactional data (keeps masterdata).
+  SANDBOX: {
+    PREVIEW: '/api/sandbox/preview',
+    RESET: '/api/sandbox/reset',
+  },
   SMART_FORMS: {
     // Convenience: admin template endpoints (same as ADMIN.SMART_FORMS)
     ADMIN: {

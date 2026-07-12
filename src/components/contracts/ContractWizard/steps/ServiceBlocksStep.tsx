@@ -82,13 +82,22 @@ const formatCurrency = (amount: number, currency: string = 'INR') => {
 // same pricing/tax/cycle/instance-id logic.
 const buildConfigurableBlock = (
   block: Block,
-  ctx: { currency: string; activeCoverageType: CoverageTypeItem | null; activeCoverageTabId: string | null; hasCoverageTypes: boolean }
+  ctx: { currency: string; activeCoverageType: CoverageTypeItem | null; activeCoverageTabId: string | null; hasCoverageTypes: boolean; durationDays?: number }
 ): ConfigurableBlock => {
-  const { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes } = ctx;
+  const { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, durationDays } = ctx;
   const category = getCategoryById(block.categoryId);
 
-  const blockServiceCycles = (block.meta as any)?.serviceCycles;
-  const hasCustomCycle = blockServiceCycles?.enabled && blockServiceCycles?.days;
+  const blockServiceCycles = (block.meta as any)?.serviceCycles || (block.config as any)?.serviceCycles;
+  const blockAudience = (block.meta as any)?.audience || (block.config as any)?.audience;
+  // A block is a Group Session if it carries audience=group OR it still lives under
+  // the legacy 'session' category (older blocks whose meta.audience never mapped).
+  const isGroupSession = blockAudience === 'group' || block.categoryId === 'session';
+  // Group Sessions are cadence-first: their cycle drives the roster occurrences,
+  // so honor the days even when `enabled` was never stamped on the config.
+  const hasCustomCycle = Boolean(
+    (blockServiceCycles?.enabled && blockServiceCycles?.days) ||
+    (isGroupSession && blockServiceCycles?.days)
+  );
   const defaultCycle = hasCustomCycle ? 'custom' : 'prepaid';
   const customCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
   const serviceCycleDays = hasCustomCycle ? blockServiceCycles.days : undefined;
@@ -107,12 +116,21 @@ const buildConfigurableBlock = (
   const unitPriceWithTax = taxInclusion === 'inclusive' ? blockPrice : blockPrice + (blockPrice * totalTaxRate / 100);
   const instanceId = hasCoverageTypes ? `${block.id}__${activeCoverageTabId}` : block.id;
 
+  // Group Sessions are cadence-first: default the occurrence count to however
+  // many cycles fit the contract duration (e.g. 14-day cadence over 12 months
+  // → ~26 sessions), so the timeline reflects the real schedule. Still fully
+  // editable on the card (manual quantity preserved).
+  const defaultQuantity =
+    isGroupSession && serviceCycleDays && serviceCycleDays > 0 && durationDays
+      ? Math.max(1, Math.floor(durationDays / serviceCycleDays))
+      : 1;
+
   return {
     id: instanceId,
     name: block.name,
     description: block.description || '',
     icon: block.icon || 'Package',
-    quantity: 1,
+    quantity: defaultQuantity,
     cycle: defaultCycle,
     customCycleDays,
     serviceCycleDays,
@@ -135,6 +153,18 @@ const buildConfigurableBlock = (
       // Inherit billing-only from the catalog block (fees/dues blocks never
       // generate service events); still toggleable per-contract on the card
       billingOnly: (block.meta as any)?.billingOnly === true || (block.config as any)?.billingOnly === true,
+      // Inherit audience (group => a session with a roster) and complimentary
+      // (free => no price, no billing) so the card shows the right options and
+      // generation branches correctly. Fall back to 'group' for legacy session
+      // blocks whose meta.audience never mapped.
+      audience: (block.meta as any)?.audience || (block.config as any)?.audience || (isGroupSession ? 'group' : undefined),
+      complimentary: (block.meta as any)?.complimentary === true || (block.config as any)?.complimentary === true,
+      // Carry the full service-cycle config (incl. anchorWeekday) so occurrence
+      // generation can snap to the weekday.
+      serviceCycles: (block.meta as any)?.serviceCycles || (block.config as any)?.serviceCycles,
+      // Group Sessions fill the contract: keep the count auto-derived from the
+      // duration until the user pins it manually on the card.
+      autoCount: isGroupSession && serviceCycleDays && serviceCycleDays > 0 ? true : undefined,
     },
   } as ConfigurableBlock;
 };
@@ -265,6 +295,35 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
     };
   }, [selectedBlocks, blocksForActiveTab, hasCoverageTypes]);
 
+  // ── Group Session auto-count ──────────────────────────────────────
+  // A Group Session runs on its cadence for the whole contract, so its
+  // occurrence count must track the duration — otherwise a session added while
+  // the duration was still the default (e.g. 1 month) keeps a stale count after
+  // the user extends the contract to a year. Recompute the count whenever the
+  // duration changes, but only while the session is still on auto-count; a
+  // manual edit on the card pins it (autoCount=false) and we leave it alone.
+  useEffect(() => {
+    if (!contractDuration) return;
+    const durationDays = contractDuration * 30;
+    let changed = false;
+    const next = selectedBlocks.map((b) => {
+      const isGroup = (b.config as any)?.audience === 'group' || b.categoryId === 'session';
+      const auto = (b.config as any)?.autoCount === true;
+      const cycle = b.serviceCycleDays;
+      if (isGroup && auto && cycle && cycle > 0) {
+        const derived = Math.max(1, Math.floor(durationDays / cycle));
+        if (b.quantity !== derived) {
+          changed = true;
+          const unitWithTax =
+            b.taxInclusion === 'inclusive' ? b.price : b.price + (b.price * (b.taxRate || 0)) / 100;
+          return { ...b, quantity: derived, totalPrice: Math.round(unitWithTax * derived * 100) / 100 };
+        }
+      }
+      return b;
+    });
+    if (changed) onBlocksChange(next);
+  }, [contractDuration, selectedBlocks, onBlocksChange]);
+
   const grandTotal = useMemo(() => {
     return selectedBlocks.reduce((sum, b) => sum + b.totalPrice, 0);
   }, [selectedBlocks]);
@@ -283,7 +342,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         return;
       }
 
-      const newBlock = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes });
+      const newBlock = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, durationDays: contractDuration ? contractDuration * 30 : undefined });
 
       onBlocksChange([...selectedBlocks, newBlock]);
       addToast({
@@ -296,7 +355,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
       setExpandedBlockId(newBlock.id);
     },
-    [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes]
+    [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, contractDuration]
   );
 
   // ── Bulk add (VaNi recommender) ───────────────────────────────────
@@ -307,7 +366,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       const existingIds = new Set(blocksForActiveTab.filter((b) => !b.isFlyBy).map((b) => b.id));
       const toAdd: ConfigurableBlock[] = [];
       for (const block of blocks) {
-        const built = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes });
+        const built = buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, durationDays: contractDuration ? contractDuration * 30 : undefined });
         if (existingIds.has(built.id)) continue;
         existingIds.add(built.id);
         toAdd.push(built);
@@ -323,7 +382,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         message: `${toAdd.length} block${toAdd.length === 1 ? '' : 's'} added${hasCoverageTypes && activeCoverageType ? ` to ${activeCoverageType.resource_name}` : ''}`,
       });
     },
-    [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes]
+    [selectedBlocks, blocksForActiveTab, onBlocksChange, addToast, currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, contractDuration]
   );
 
   // Add FlyBy block (inline empty block)

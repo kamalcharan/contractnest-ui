@@ -15,8 +15,17 @@ interface DeliveryStepProps {
     requiresCycles?: boolean;
     cycleDays?: number;
     cycleGracePeriod?: number;
+    // Optional day-of-week anchor: occurrences snap to this weekday (0=Sun..6=Sat)
+    // at a whole-week interval instead of drifting off a raw day count.
+    cycleAnchorWeekday?: number;
     // Billing-only: bills on its cycle, generates no service events/visits
     billingOnly?: boolean;
+    // Complimentary: free — no price, no billing events; still delivers its
+    // service/session occurrences. Opposite of billing-only.
+    complimentary?: boolean;
+    // Audience: who receives each cycle — the contract's buyer (individual/1:1)
+    // or a group that checks in (group/1:N). The engine branches on this field.
+    audience?: 'individual' | 'group';
   };
   onChange: (field: string, value: unknown) => void;
 }
@@ -30,10 +39,29 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
     // top-level (wizard edits) with meta fallback (editing an existing block)
     formData.billingOnly ?? (formData as { meta?: { billingOnly?: boolean } }).meta?.billingOnly ?? false
   );
+  const [complimentary, setComplimentary] = useState(
+    formData.complimentary ?? (formData as { meta?: { complimentary?: boolean } }).meta?.complimentary ?? false
+  );
+  const [audience, setAudience] = useState<'individual' | 'group'>(
+    formData.audience ?? (formData as { meta?: { audience?: 'individual' | 'group' } }).meta?.audience ?? 'individual'
+  );
 
   const handleBillingOnlyToggle = (enabled: boolean) => {
     setBillingOnly(enabled);
     onChange('billingOnly', enabled);
+    // Billing-only and Complimentary are opposites — never both on.
+    if (enabled && complimentary) { setComplimentary(false); onChange('complimentary', false); }
+  };
+
+  const handleComplimentaryToggle = (enabled: boolean) => {
+    setComplimentary(enabled);
+    onChange('complimentary', enabled);
+    if (enabled && billingOnly) { setBillingOnly(false); onChange('billingOnly', false); }
+  };
+
+  const handleAudienceChange = (value: 'individual' | 'group') => {
+    setAudience(value);
+    onChange('audience', value);
   };
 
   const handleModeChange = (mode: 'on-site' | 'virtual' | 'hybrid') => {
@@ -73,6 +101,29 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
     { id: 'hybrid', icon: Users, label: 'Hybrid', description: 'Both options available' },
   ];
 
+  // Sample timeline — the first few occurrences from *today*, using the same
+  // anchor logic as real generation, so users can see how the cadence lands.
+  const anchorForSample =
+    formData.cycleAnchorWeekday ??
+    (formData as { meta?: { serviceCycles?: { anchorWeekday?: number } } }).meta?.serviceCycles?.anchorWeekday;
+  const sampleDates = React.useMemo(() => {
+    const days = formData.cycleDays;
+    if (!requiresCycles || !days || days < 1) return [] as Date[];
+    const hasAnchor = typeof anchorForSample === 'number' && anchorForSample >= 0 && anchorForSample <= 6;
+    const addD = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    let first = start;
+    if (hasAnchor) {
+      const diff = (((anchorForSample as number) - start.getDay()) % 7 + 7) % 7;
+      first = addD(start, diff);
+    }
+    const everyNWeeks = Math.max(1, Math.round(days / 7));
+    const out: Date[] = [];
+    for (let i = 0; i < 6; i++) out.push(hasAnchor ? addD(first, i * everyNWeeks * 7) : addD(start, i * days));
+    return out;
+  }, [requiresCycles, formData.cycleDays, anchorForSample]);
+  const fmtSample = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-200">
       <h2 className="text-lg font-bold mb-1" style={{ color: colors.utility.primaryText }}>
@@ -83,6 +134,50 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
       </p>
 
       <div className="space-y-6">
+        {/* Audience — who receives each cycle. Individual (1:1, the buyer) or
+            Group (1:N, a roster that checks in). Group Session presets this. */}
+        <div className="p-6 rounded-xl border" style={cardStyle}>
+          <label className="block text-sm font-semibold mb-1" style={labelStyle}>
+            Who attends each cycle?
+          </label>
+          <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
+            <strong>Individual</strong> — delivered to the one buyer on the contract (a visit).{' '}
+            <strong>Group</strong> — one shared occurrence that many people check into (a meeting, class or session).
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              { id: 'individual', icon: MapPin, label: 'Individual', desc: '1:1 — the buyer' },
+              { id: 'group', icon: Users, label: 'Group', desc: '1:N — a roster checks in' },
+            ] as const).map((opt) => {
+              const IconComp = opt.icon;
+              const isSelected = audience === opt.id;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => handleAudienceChange(opt.id)}
+                  className="p-4 border-2 rounded-xl cursor-pointer text-center transition-all hover:shadow-md"
+                  style={{
+                    backgroundColor: isSelected ? `${colors.brand.primary}08` : (isDarkMode ? colors.utility.primaryBackground : '#FFFFFF'),
+                    borderColor: isSelected ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
+                  }}
+                >
+                  <div
+                    className="w-11 h-11 mx-auto mb-2 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: isSelected ? colors.brand.primary : `${colors.brand.primary}15` }}
+                  >
+                    <IconComp className="w-5 h-5" style={{ color: isSelected ? '#FFFFFF' : colors.brand.primary }} />
+                  </div>
+                  <div className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>{opt.label}</div>
+                  <div className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>{opt.desc}</div>
+                  {isSelected && (
+                    <CheckCircle2 className="w-4 h-4 mx-auto mt-2" style={{ color: colors.brand.primary }} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Billing-only toggle — fees/dues blocks that never create service visits */}
         <div className="p-6 rounded-xl border" style={cardStyle}>
           <div className="flex items-start justify-between gap-4">
@@ -105,6 +200,33 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
               <div
                 className="w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all transition-colors"
                 style={{ backgroundColor: billingOnly ? colors.brand.primary : (isDarkMode ? colors.utility.primaryBackground : '#D1D5DB') }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Complimentary toggle — free blocks: no price, no billing, still delivered */}
+        <div className="p-6 rounded-xl border" style={cardStyle}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-1" style={labelStyle}>
+                Complimentary (free)
+              </label>
+              <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                This block is free — <strong>no price is asked and it never bills</strong>. It still delivers
+                its service/session occurrences (e.g. a group meeting, a free consultation, an included part).
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 mt-1">
+              <input
+                type="checkbox"
+                checked={complimentary}
+                onChange={(e) => handleComplimentaryToggle(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div
+                className="w-11 h-6 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all transition-colors"
+                style={{ backgroundColor: complimentary ? colors.brand.primary : (isDarkMode ? colors.utility.primaryBackground : '#D1D5DB') }}
               />
             </label>
           </div>
@@ -391,6 +513,38 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
                       </p>
                     </div>
 
+                    {/* Day-of-week anchor — keeps occurrences on a fixed weekday */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2" style={labelStyle}>
+                        Repeat on a fixed weekday?
+                      </label>
+                      <select
+                        value={
+                          formData.cycleAnchorWeekday ??
+                          (formData as { meta?: { serviceCycles?: { anchorWeekday?: number } } }).meta?.serviceCycles?.anchorWeekday ??
+                          ''
+                        }
+                        onChange={(e) =>
+                          onChange('cycleAnchorWeekday', e.target.value === '' ? undefined : parseInt(e.target.value))
+                        }
+                        className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                        style={{ ...inputStyle, borderRadius: '0.75rem' }}
+                      >
+                        <option value="">No — space by the interval above</option>
+                        <option value="0">Every Sunday</option>
+                        <option value="1">Every Monday</option>
+                        <option value="2">Every Tuesday</option>
+                        <option value="3">Every Wednesday</option>
+                        <option value="4">Every Thursday</option>
+                        <option value="5">Every Friday</option>
+                        <option value="6">Every Saturday</option>
+                      </select>
+                      <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+                        When set, occurrences snap to this weekday (e.g. a 14-day cycle → alternate Saturdays)
+                        instead of drifting.
+                      </p>
+                    </div>
+
                     {/* Grace Period */}
                     <div>
                       <label className="block text-sm font-medium mb-2" style={labelStyle}>
@@ -422,6 +576,49 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
                       <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
                         Buffer time before marking as overdue
                       </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sample timeline — how the cadence lands (from today) */}
+              {requiresCycles && sampleDates.length > 0 && (
+                <div className="p-6 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-200" style={cardStyle}>
+                  <h4 className="text-base font-semibold mb-1 flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
+                    <CheckCircle2 className="w-5 h-5" style={{ color: colors.brand.primary }} />
+                    Sample schedule
+                  </h4>
+                  <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
+                    First {sampleDates.length} occurrences from today
+                    {typeof anchorForSample === 'number'
+                      ? ` — snapped to every ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][anchorForSample]}`
+                      : ` — every ${formData.cycleDays} days`}.
+                    Real dates use the contract's start date.
+                  </p>
+                  <div className="flex flex-col gap-0">
+                    {sampleDates.map((d, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: colors.brand.primary }} />
+                          {i < sampleDates.length - 1 && (
+                            <div className="w-px h-6" style={{ backgroundColor: `${colors.brand.primary}40` }} />
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-2 pb-1">
+                          <span className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                            {fmtSample(d)}
+                          </span>
+                          <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                            occurrence {i + 1}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3">
+                      <div className="w-2.5 flex justify-center">
+                        <span className="text-xs" style={{ color: colors.utility.secondaryText }}>⋯</span>
+                      </div>
+                      <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>continues for the full duration</span>
                     </div>
                   </div>
                 </div>

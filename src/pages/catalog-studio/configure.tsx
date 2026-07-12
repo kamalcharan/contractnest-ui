@@ -107,7 +107,14 @@ const CatalogStudioConfigurePage: React.FC = () => {
   const { categories: apiCategories, isLoading: categoriesLoading } = useBlockCategories();
 
   // Use API-driven categories (only active from master data), fallback to hardcoded if API empty
-  const blockCategories = apiCategories.length > 0 ? apiCategories : BLOCK_CATEGORIES;
+  const blockCategories = React.useMemo(() => {
+    const base = apiCategories.length > 0 ? apiCategories : BLOCK_CATEGORIES;
+    // Ensure the Group Session card is offered even before its master-data row
+    // is seeded live. Idempotent: once the DB has 'session', this is a no-op.
+    if (base.some((c) => c.id === 'session')) return base;
+    const sessionCard = BLOCK_CATEGORIES.find((c) => c.id === 'session');
+    return sessionCard ? [...base, sessionCard] : base;
+  }, [apiCategories]);
 
   // Version conflict state
   const [conflictState, setConflictState] = useState<{

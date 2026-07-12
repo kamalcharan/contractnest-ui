@@ -20,6 +20,15 @@ export const BLOCK_CATEGORIES: BlockCategory[] = [
     description: 'Deliverable work items with SLA',
   },
   {
+    id: 'session',
+    name: 'Group Session',
+    icon: 'Users',
+    count: 0,
+    color: '#DA6410',
+    bgColor: '#FBEEE1',
+    description: 'Recurring group meetings with attendance',
+  },
+  {
     id: 'spare',
     name: 'Spare Part',
     icon: 'Package',
