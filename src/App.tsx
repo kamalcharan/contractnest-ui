@@ -209,7 +209,6 @@ import IntegrationsPage from './pages/settings/integrations';
 import StorageSetupPage from './pages/settings/storage/storagesetup';
 import StorageCompletePage from './pages/settings/storage/storagecomplete';
 import StorageManagementPage from './pages/settings/storage/storagemanagement';
-import SandboxPage from './pages/settings/storage/sandbox'; // [sandbox-route]
 import CategoryFilesPage from './pages/settings/storage/categoryfiles';
 
 // Business Model - Admin Pages
@@ -731,7 +730,7 @@ const AppContent: React.FC = () => {
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />
             <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
             <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
-            <Route path="storage/sandbox" element={<SandboxPage />} /> {/* [sandbox-route] */}
+       
             <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
 
             {/* Integration Settings */}

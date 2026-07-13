@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/contexts/ThemeContext';
-import SandboxResetCard from '@/components/settings/SandboxResetCard';
 
 const StorageManagementPage: React.FC = () => {
   const navigate = useNavigate();
