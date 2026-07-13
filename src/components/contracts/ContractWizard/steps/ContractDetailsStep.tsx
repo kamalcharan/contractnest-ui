@@ -62,6 +62,59 @@ const getIconComponent = (iconName: string) => {
   return iconsMap[iconName] || LucideIcons.Circle;
 };
 
+// ── End-date <-> duration helpers ────────────────────────────────────────
+// The contract's end_date is derived server-side from start_date + duration
+// (DB trigger trg_compute_contract_dates), so duration stays the single source
+// of truth. The End Date picker just translates an exact date back into a
+// duration that reproduces that same date: whole years/months when the date
+// lands cleanly on one, otherwise an exact day count (always Postgres-exact).
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const atMidnight = (d: Date): Date => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+};
+
+const addDuration = (start: Date, value: number, unit: string): Date => {
+  const d = new Date(start);
+  if (unit === 'days') d.setDate(d.getDate() + value);
+  else if (unit === 'months') d.setMonth(d.getMonth() + value);
+  else if (unit === 'years') d.setFullYear(d.getFullYear() + value);
+  return d;
+};
+
+const sameYMD = (a: Date, b: Date): boolean =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+// Given a start date and a chosen end date, return the duration that
+// reproduces that end date exactly. Prefers years, then months, else days.
+// Returns null if end is not strictly after start.
+const deriveDurationFromEnd = (
+  start: Date,
+  end: Date
+): { value: number; unit: string } | null => {
+  const s = atMidnight(start);
+  const e = atMidnight(end);
+  const days = Math.round((e.getTime() - s.getTime()) / MS_PER_DAY);
+  if (days <= 0) return null;
+
+  // A clean month/year interval keeps the day-of-month. Requiring that (and an
+  // exact JS match) rules out month-end overflow, which Postgres clamps
+  // differently — those cases fall through to an exact day count instead.
+  if (s.getDate() === e.getDate()) {
+    const monthDiff =
+      (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
+    if (monthDiff > 0 && sameYMD(addDuration(s, monthDiff, 'months'), e)) {
+      if (monthDiff % 12 === 0) return { value: monthDiff / 12, unit: 'years' };
+      return { value: monthDiff, unit: 'months' };
+    }
+  }
+  return { value: days, unit: 'days' };
+};
+
 // Status flow mapping - what comes after each status
 const STATUS_FLOW: Record<string, string | null> = {
   draft: 'submitted',
@@ -174,6 +227,20 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
 
   const handleDurationPreset = (preset: { value: number; unit: string }) => {
     onChange({ durationValue: preset.value, durationUnit: preset.unit });
+  };
+
+  // Derived end date (from start + duration) shown in the End Date picker.
+  const endDateValue = useMemo(() => {
+    if (!data.startDate || !data.durationValue || data.durationValue <= 0) return null;
+    return addDuration(new Date(data.startDate), data.durationValue, data.durationUnit);
+  }, [data.startDate, data.durationValue, data.durationUnit]);
+
+  // Picking an exact end date back-computes the duration (source of truth).
+  const handleEndDateChange = (end: Date) => {
+    if (!data.startDate) return;
+    const derived = deriveDurationFromEnd(new Date(data.startDate), end);
+    if (!derived) return; // end on/before start — minDate should prevent this
+    onChange({ durationValue: derived.value, durationUnit: derived.unit });
   };
 
   const handleGracePeriodValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -519,7 +586,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                   never fixes a contract's dates.
                 </div>
               ) : (
-                <div className="mb-4">
+                <div className="mb-4 space-y-4">
                   <DatePicker
                     value={data.startDate}
                     onChange={(date) => onChange({ startDate: date })}
@@ -527,6 +594,23 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                     required
                     placeholder="Select start date"
                   />
+                  <DatePicker
+                    value={endDateValue}
+                    onChange={handleEndDateChange}
+                    label="End Date"
+                    minDate={
+                      data.startDate
+                        ? addDuration(new Date(data.startDate), 1, 'days')
+                        : undefined
+                    }
+                    placeholder="Select end date"
+                  />
+                  <p
+                    className="text-[11px] -mt-1"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Pick an exact end date, or use the duration presets below — they stay in sync.
+                  </p>
                 </div>
               )}
 
