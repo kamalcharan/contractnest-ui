@@ -15,11 +15,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  sessionCheckinApi, CHECKIN_PHONE_KEY,
+  sessionCheckinApi,
   type CheckinResolve, type CheckinMember, type CheckinHistory, type BillingRow,
   type CheckinForm, type CheckinField, type CheckinFormSchema, type CheckinPaymentConfig,
 } from './useSessionCheckin';
 import { QrCode } from '@/utils/qrcodegen';
+import { countries } from '@/utils/constants/countries';
+import { validatePhoneByCountry, getFullPhoneNumber, getPhonePlaceholder } from '@/utils/validation/contactValidation';
 
 // ── brand tokens (Option A: the configurable skeleton) ──────────────────────
 const BRAND = {
@@ -115,6 +117,43 @@ const Shell: React.FC<{ chapterName: string; children: React.ReactNode }> = ({ c
   </div>
 );
 
+// Shared input styles (module scope so PhoneField stays stable across renders).
+const INPUT_STYLE: React.CSSProperties = {
+  width: '100%', padding: '12px 13px', border: `1px solid ${BRAND.field}`, borderRadius: 11,
+  marginTop: 6, fontSize: 15, color: BRAND.ink, boxSizing: 'border-box', outline: 'none', background: '#fff',
+};
+const LABEL_STYLE: React.CSSProperties = { fontSize: 12.5, fontWeight: 700, color: BRAND.sub };
+
+// Store phones the product way: +{phoneCode}{localDigits}, country as ISO ('IN').
+const fullPhone = (num: string, ccIso: string) => getFullPhoneNumber(num, ccIso);
+// Sorted country list, India first (default market).
+const PHONE_COUNTRIES = [...countries].sort((a, b) =>
+  a.code === 'IN' ? -1 : b.code === 'IN' ? 1 : a.name.localeCompare(b.name));
+
+// Country-code selector + local number, validated with the product utility.
+const PhoneField: React.FC<{
+  label: string; cc: string; num: string; onCc: (v: string) => void; onNum: (v: string) => void;
+  error?: string; onEnter?: () => void; required?: boolean;
+}> = ({ label, cc, num, onCc, onNum, error, onEnter, required }) => (
+  <div>
+    <label style={LABEL_STYLE}>{label}{required && <span style={{ color: BRAND.err }}> *</span>}</label>
+    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+      <select value={cc} onChange={(e) => onCc(e.target.value)}
+        style={{ ...INPUT_STYLE, marginTop: 0, width: 116, flexShrink: 0, paddingLeft: 8, paddingRight: 4 }}
+        aria-label="Country code">
+        {PHONE_COUNTRIES.map((c) => (
+          <option key={c.code} value={c.code}>{c.code} +{c.phoneCode}</option>
+        ))}
+      </select>
+      <input value={num} onChange={(e) => onNum(e.target.value.replace(/\D/g, ''))}
+        inputMode="numeric" placeholder={getPhonePlaceholder(cc)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && onEnter) onEnter(); }}
+        style={{ ...INPUT_STYLE, marginTop: 0, flex: 1 }} />
+    </div>
+    {error && <div style={{ color: BRAND.err, fontSize: 12, marginTop: 5 }}>{error}</div>}
+  </div>
+);
+
 const SessionCheckinPage: React.FC = () => {
   const { token = '' } = useParams<{ token: string }>();
 
@@ -124,9 +163,12 @@ const SessionCheckinPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const [phone, setPhone] = useState('');
+  // Phone entry: country (ISO) + local digits, stored as +{code}{digits}.
+  const [p1Cc, setP1Cc] = useState('IN');   // scanning member's own number
+  const [p1Num, setP1Num] = useState('');
   const [checking, setChecking] = useState(false);
   const [member, setMember] = useState<CheckinMember | null>(null);
+  const [alreadyChecked, setAlreadyChecked] = useState(false);
   const [firstTimerName, setFirstTimerName] = useState('');
   const [guestConfirmed, setGuestConfirmed] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -136,10 +178,15 @@ const SessionCheckinPage: React.FC = () => {
   const [notFoundKind, setNotFoundKind] = useState<'choose' | 'guest' | 'substitute'>('choose');
   const [guestCompany, setGuestCompany] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
-  const [subMemberPhone, setSubMemberPhone] = useState('');
+  const [pmCc, setPmCc] = useState('IN');   // member being stood in for
+  const [pmNum, setPmNum] = useState('');
+  const [poCc, setPoCc] = useState('IN');   // substitute's own number
+  const [poNum, setPoNum] = useState('');
   const [subLookupLoading, setSubLookupLoading] = useState(false);
   const [subForMember, setSubForMember] = useState<CheckinMember | null>(null);
   const [subName, setSubName] = useState('');
+
+  const phone = fullPhone(p1Num, p1Cc);
 
   const [status, setStatus] = useState<'present' | 'apologies'>('present');
   const [responses, setResponses] = useState<Record<string, unknown>>({});
@@ -182,7 +229,7 @@ const SessionCheckinPage: React.FC = () => {
       try { const pc = await sessionCheckinApi.paymentConfig(token); if (alive && pc?.ok) setPayCfg(pc); }
       catch { /* payment config is optional — dues still declare without it */ }
     })();
-    try { const p = localStorage.getItem(CHECKIN_PHONE_KEY); if (p) setPhone(p); } catch { /* ignore */ }
+    // (#3) No pre-fill — each open starts blank.
     return () => { alive = false; };
   }, [token]);
 
@@ -202,16 +249,19 @@ const SessionCheckinPage: React.FC = () => {
   const atStep2 = !!member || (notFound && guestConfirmed);
 
   const identify = async () => {
-    if (phone.replace(/\D/g, '').length < 6) { setErr('Enter a valid phone number.'); return; }
+    const v = validatePhoneByCountry(p1Num, p1Cc);
+    if (!v.isValid) { setErr(v.error || 'Enter a valid mobile number.'); return; }
     setErr(null); setChecking(true);
-    setNotFound(false); setNotFoundKind('choose'); setGuestConfirmed(false); setSubForMember(null);
+    setNotFound(false); setNotFoundKind('choose'); setGuestConfirmed(false); setSubForMember(null); setAlreadyChecked(false);
     try {
       const r = await sessionCheckinApi.lookup(token, phone);
-      try { localStorage.setItem(CHECKIN_PHONE_KEY, phone); } catch { /* ignore */ }
       if (r.found && r.member) {
         setMember(r.member);
         const h = await sessionCheckinApi.history(token, r.member.contact_id);
         setHistory(h);
+        // (#6) Already attended today's session? -> show it + payment options.
+        const today = resolve?.occurrence?.date;
+        if (today && (h?.attendance || []).some((a) => a.date === today)) setAlreadyChecked(true);
       } else {
         setNotFound(true);
       }
@@ -221,10 +271,11 @@ const SessionCheckinPage: React.FC = () => {
 
   // Substitute: look up the member being stood in for by their mobile number.
   const lookupSubMember = async () => {
-    if (subMemberPhone.replace(/\D/g, '').length < 6) { setErr("Enter the member's mobile number."); return; }
+    const v = validatePhoneByCountry(pmNum, pmCc);
+    if (!v.isValid) { setErr(v.error || "Enter the member's mobile number."); return; }
     setErr(null); setSubLookupLoading(true);
     try {
-      const r = await sessionCheckinApi.lookup(token, subMemberPhone);
+      const r = await sessionCheckinApi.lookup(token, fullPhone(pmNum, pmCc));
       if (r.found && r.member) setSubForMember(r.member);
       else setErr("That number isn't on the member roster. Check with the chair.");
     } catch { setErr('Lookup failed. Try again.'); }
@@ -232,9 +283,10 @@ const SessionCheckinPage: React.FC = () => {
   };
 
   const resetIdentity = () => {
-    setMember(null); setNotFound(false); setNotFoundKind('choose'); setGuestConfirmed(false);
-    setHistory(null); setSubForMember(null); setSubName(''); setSubMemberPhone('');
+    setMember(null); setAlreadyChecked(false); setNotFound(false); setNotFoundKind('choose'); setGuestConfirmed(false);
+    setHistory(null); setSubForMember(null); setSubName(''); setPmNum(''); setPoNum('');
     setFirstTimerName(''); setGuestCompany(''); setGuestEmail(''); setErr(null);
+    setP1Num(''); setPayEventId(''); setUpiRef(''); setStatus('present');
   };
 
   const setResponse = (id: string, value: unknown) => {
@@ -256,7 +308,10 @@ const SessionCheckinPage: React.FC = () => {
 
   const submit = async () => {
     setErr(null);
-    if (!validateForm()) { setErr('Please answer the required questions.'); return; }
+    // Already checked in: nothing to record unless they're paying a due.
+    if (member && alreadyChecked && !payEventId) { setDone(true); return; }
+    // Smart-form questions only apply to a fresh check-in (hidden once checked in).
+    if (!alreadyChecked && !validateForm()) { setErr('Please answer the required questions.'); return; }
     setSubmitting(true);
     try {
       const payment = payEventId
@@ -285,7 +340,7 @@ const SessionCheckinPage: React.FC = () => {
         await sessionCheckinApi.substitute(token, {
           member_id: subForMember.contact_id,
           sub_name: subName,
-          sub_phone: phone,
+          sub_phone: fullPhone(poNum, poCc),
           status, responses: fullResponses, ...formIds,
         });
       } else {
@@ -309,11 +364,8 @@ const SessionCheckinPage: React.FC = () => {
   const chapterName = resolve?.contract_name || 'Session Check-in';
   const occ = resolve?.occurrence;
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '12px 13px', border: `1px solid ${BRAND.field}`, borderRadius: 11,
-    marginTop: 6, fontSize: 15, color: BRAND.ink, boxSizing: 'border-box', outline: 'none', background: '#fff',
-  };
-  const labelStyle: React.CSSProperties = { fontSize: 12.5, fontWeight: 700, color: BRAND.sub };
+  const inputStyle = INPUT_STYLE;
+  const labelStyle = LABEL_STYLE;
 
   // ── Smart Form field renderer (mobile-styled) ──
   const renderField = (f: CheckinField) => {
@@ -434,9 +486,13 @@ const SessionCheckinPage: React.FC = () => {
         <Card pad={24}>
           <div style={{ width: 68, height: 68, margin: '4px auto 10px', borderRadius: '50%', background: '#ECFDF3',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 }}>✅</div>
-          <h2 style={{ textAlign: 'center', margin: '4px 0', color: BRAND.ink }}>You're checked in</h2>
+          <h2 style={{ textAlign: 'center', margin: '4px 0', color: BRAND.ink }}>
+            {alreadyChecked && !payEventId ? "You're all set" : "You're checked in"}
+          </h2>
           <p style={{ textAlign: 'center', color: BRAND.sub, marginTop: 4, fontSize: 14 }}>
-            {status === 'present' ? 'Marked present' : 'Marked apologies'} for {fmtDate(occ?.date)}.
+            {alreadyChecked
+              ? `Attendance already recorded for ${fmtDate(occ?.date)}.`
+              : `${status === 'present' ? 'Marked present' : 'Marked apologies'} for ${fmtDate(occ?.date)}.`}
           </p>
           {payEventId && (
             <div style={{ marginTop: 14, background: BRAND.accentSoft, borderRadius: 12, padding: 12, textAlign: 'center' }}>
@@ -444,6 +500,18 @@ const SessionCheckinPage: React.FC = () => {
               <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>The chair will confirm it offline.</div>
             </div>
           )}
+          <button onClick={() => { try { window.close(); } catch { /* ignore */ } }}
+            style={{ width: '100%', marginTop: 18, padding: 14, border: 'none', borderRadius: 12,
+              background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, cursor: 'pointer' }}>
+            Close
+          </button>
+          <button onClick={() => { setDone(false); resetIdentity(); }}
+            style={{ width: '100%', marginTop: 10, background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+            Check in someone else
+          </button>
+          <p style={{ textAlign: 'center', color: BRAND.sub, fontSize: 11.5, marginTop: 10, marginBottom: 0 }}>
+            You can now close this tab.
+          </p>
         </Card>
       </Shell>
     );
@@ -465,6 +533,9 @@ const SessionCheckinPage: React.FC = () => {
             {resolve?.next_occurrence && (
               <div style={{ fontSize: 13, color: BRAND.sub, marginTop: 2 }}>Next session: {fmtDate(resolve.next_occurrence.date)}</div>
             )}
+            <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 8 }}>
+              Check-in opens on the session day. For a past session, please ask the chapter to mark you.
+            </div>
           </>
         )}
       </Card>
@@ -472,10 +543,8 @@ const SessionCheckinPage: React.FC = () => {
       {/* Step 1 · identify */}
       {!atStep2 && !notFound && (
         <Card>
-          <label style={labelStyle}>Your mobile number</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="+91 …" style={inputStyle}
-            onKeyDown={(e) => { if (e.key === 'Enter') identify(); }} />
-          {err && <p style={{ color: BRAND.err, fontSize: 13, marginBottom: 0 }}>{err}</p>}
+          <PhoneField label="Your mobile number" cc={p1Cc} num={p1Num} onCc={setP1Cc} onNum={setP1Num} onEnter={identify} />
+          {err && <p style={{ color: BRAND.err, fontSize: 13, marginBottom: 0, marginTop: 8 }}>{err}</p>}
           <button onClick={identify} disabled={checking}
             style={{ width: '100%', marginTop: 14, padding: 14, border: 'none', borderRadius: 12,
               background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, cursor: 'pointer',
@@ -502,7 +571,7 @@ const SessionCheckinPage: React.FC = () => {
                   <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm a guest 👋</div>
                   <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>Visiting this session for the first time.</div>
                 </button>
-                <button onClick={() => setNotFoundKind('substitute')}
+                <button onClick={() => { setNotFoundKind('substitute'); setPoCc(p1Cc); setPoNum(p1Num); }}
                   style={{ textAlign: 'left', padding: 14, borderRadius: 12, border: `1px solid ${BRAND.field}`, background: '#fff', cursor: 'pointer' }}>
                   <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm standing in for a member 🔁</div>
                   <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>Attending on behalf of a member who can't make it.</div>
@@ -541,9 +610,7 @@ const SessionCheckinPage: React.FC = () => {
               {!subForMember ? (
                 <>
                   <p style={{ marginTop: 6, color: BRAND.sub, fontSize: 13.5 }}>Who are you standing in for? Enter the member's mobile number.</p>
-                  <label style={labelStyle}>Member's mobile number</label>
-                  <input value={subMemberPhone} onChange={(e) => setSubMemberPhone(e.target.value)} inputMode="tel" placeholder="+91 …" style={inputStyle}
-                    onKeyDown={(e) => { if (e.key === 'Enter') lookupSubMember(); }} />
+                  <PhoneField label="Member's mobile number" cc={pmCc} num={pmNum} onCc={setPmCc} onNum={setPmNum} onEnter={lookupSubMember} />
                   <button onClick={lookupSubMember} disabled={subLookupLoading}
                     style={{ width: '100%', marginTop: 14, padding: 13, border: 'none', borderRadius: 12,
                       background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', opacity: subLookupLoading ? 0.7 : 1 }}>
@@ -560,7 +627,10 @@ const SessionCheckinPage: React.FC = () => {
                     <label style={labelStyle}>Your name <span style={{ color: BRAND.err }}>*</span></label>
                     <input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder="Full name" style={inputStyle} />
                   </div>
-                  <button onClick={() => { if (subName.trim()) setGuestConfirmed(true); }} disabled={!subName.trim()}
+                  <div style={{ marginTop: 12 }}>
+                    <PhoneField label="Your mobile number" cc={poCc} num={poNum} onCc={setPoCc} onNum={setPoNum} required />
+                  </div>
+                  <button onClick={() => { if (subName.trim() && validatePhoneByCountry(poNum, poCc).isValid) setGuestConfirmed(true); else setErr('Enter your name and a valid mobile number.'); }} disabled={!subName.trim()}
                     style={{ width: '100%', marginTop: 16, padding: 13, border: 'none', borderRadius: 12,
                       background: subName.trim() ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
                     Continue
@@ -610,21 +680,32 @@ const SessionCheckinPage: React.FC = () => {
               </div>
             )}
 
-            <div style={{ marginTop: 14, fontSize: 12.5, fontWeight: 700, color: BRAND.sub }}>Are you attending today?</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              {(['present', 'apologies'] as const).map((s) => (
-                <button key={s} onClick={() => setStatus(s)}
-                  style={{ flex: 1, padding: 12, borderRadius: 11, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
-                    border: status === s ? `2px solid ${BRAND.accent}` : `1px solid ${BRAND.field}`,
-                    background: status === s ? BRAND.accentSoft : '#fff', color: status === s ? BRAND.accentInk : BRAND.ink }}>
-                  {s === 'present' ? 'Present' : 'Apologies'}
-                </button>
-              ))}
-            </div>
+            {alreadyChecked ? (
+              <div style={{ marginTop: 14, background: '#ECFDF3', border: '1px solid #A7F3D0', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontWeight: 700, color: '#047857', fontSize: 14 }}>✓ You've already checked in{occ ? ` for ${fmtDate(occ.date)}` : ''}</div>
+                <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>
+                  {openDues.length > 0 ? 'You can still settle your dues below.' : 'Nothing else to do — you’re all set.'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginTop: 14, fontSize: 12.5, fontWeight: 700, color: BRAND.sub }}>Are you attending today?</div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  {(['present', 'apologies'] as const).map((s) => (
+                    <button key={s} onClick={() => setStatus(s)}
+                      style={{ flex: 1, padding: 12, borderRadius: 11, fontWeight: 700, fontSize: 14.5, cursor: 'pointer',
+                        border: status === s ? `2px solid ${BRAND.accent}` : `1px solid ${BRAND.field}`,
+                        background: status === s ? BRAND.accentSoft : '#fff', color: status === s ? BRAND.accentInk : BRAND.ink }}>
+                      {s === 'present' ? 'Present' : 'Apologies'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </Card>
 
-          {/* Smart Form questions (tenant-configurable) */}
-          {formFields.length > 0 && (
+          {/* Smart Form questions (tenant-configurable) — only on a fresh check-in */}
+          {!alreadyChecked && formFields.length > 0 && (
             <Card>
               <div style={{ fontWeight: 800, color: BRAND.ink, marginBottom: 4 }}>
                 {form?.schema?.title && form.schema.title !== 'Session Check-in' ? form.schema.title : 'A few quick questions'}
@@ -703,7 +784,10 @@ const SessionCheckinPage: React.FC = () => {
             style={{ width: '100%', padding: 15, border: 'none', borderRadius: 13,
               background: occ ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 16.5, cursor: occ ? 'pointer' : 'not-allowed',
               boxShadow: occ ? '0 6px 16px -4px rgba(218,100,16,0.5)' : 'none', opacity: submitting ? 0.75 : 1 }}>
-            {submitting ? 'Submitting…' : occ ? 'Check in' : 'No session today'}
+            {submitting ? 'Submitting…'
+              : !occ ? 'No session today'
+              : alreadyChecked ? (payEventId ? 'Record payment' : 'Done')
+              : 'Check in'}
           </button>
           <button onClick={resetIdentity}
             style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>

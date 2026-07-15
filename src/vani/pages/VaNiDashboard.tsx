@@ -18,7 +18,7 @@ import {
   type BusinessEvent,
   type EventDrivenJob
 } from '../utils/fakeData';
-import type { MetricData } from '../components/shared/VaNiMetricCard';
+import type { MetricData } from '../components/shared/VaniMetricCard';
 import { 
   Activity, 
   Send, 

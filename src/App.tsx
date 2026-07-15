@@ -67,7 +67,7 @@ import OnboardingLayout from './components/onboarding/OnboardingLayout';
 import OnboardingPendingPage from './pages/onboarding/OnboardingPendingPage';
 import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
 import VaniIntroStep from '@/pages/onboarding/steps/VaniIntroStep';
-import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
+import UserProfileStep from '@/pages/onboarding/steps/userProfileStep';
 import BusinessDetailsStep from '@/pages/onboarding/steps/BusinessDetailsStep';
 import PersonaSelectionStep from '@/pages/onboarding/steps/PersonaSelectionStep';
 import EngagementModelStep from '@/pages/onboarding/steps/EngagementModelStep';

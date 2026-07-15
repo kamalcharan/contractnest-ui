@@ -5,7 +5,7 @@
 // ============================================================================
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Download, ExternalLink, RefreshCw, QrCode as QrIcon } from 'lucide-react';
+import { Download, ExternalLink, RefreshCw, QrCode as QrIcon, Copy, Check } from 'lucide-react';
 import { useEnsureBlockToken } from '@/hooks/queries/useGroupSessionsDashboard';
 import { QrCode } from '@/utils/qrcodegen';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -20,6 +20,7 @@ const QRCard: React.FC<QRCardProps> = ({ blockId, title }) => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const ensureToken = useEnsureBlockToken();
   const [token, setToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +94,20 @@ const QRCard: React.FC<QRCardProps> = ({ blockId, title }) => {
       >
         ● {token ? 'QR ready' : (ensureToken.isPending ? 'Generating…' : 'Not generated')}
       </div>
+
+      {url && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: colors.utility.primaryBackground, border: `1px solid ${colors.utility.primaryText}14`, borderRadius: 9, padding: '7px 9px', marginBottom: 10 }}>
+          <span style={{ flex: 1, fontSize: 11, color: colors.utility.secondaryText, wordBreak: 'break-all', textAlign: 'left' }}>{url}</span>
+          <button
+            onClick={async () => { try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } }}
+            title="Copy check-in link"
+            style={{ border: 'none', background: 'none', cursor: 'pointer', color: copied ? colors.semantic.success : colors.utility.secondaryText, flex: 'none' }}
+          >
+            {copied ? <Check size={15} /> : <Copy size={15} />}
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8 }}>
         <button style={{ ...btn, background: colors.brand.primary, color: '#fff', borderColor: colors.brand.primary }} disabled={!svg} onClick={() => download('png')}>
           <Download size={14} /> Download
@@ -104,6 +119,15 @@ const QRCard: React.FC<QRCardProps> = ({ blockId, title }) => {
           </a>
         )}
       </div>
+      {url && (
+        <button
+          style={{ ...btn, width: '100%', marginTop: 8, justifyContent: 'center',
+            ...(copied ? { background: colors.semantic.success + '15', borderColor: colors.semantic.success, color: colors.semantic.success } : {}) }}
+          onClick={async () => { try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ } }}
+        >
+          {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Link copied' : 'Copy link'}
+        </button>
+      )}
       <button
         style={{ ...btn, width: '100%', marginTop: 8, justifyContent: 'center' }}
         disabled={ensureToken.isPending}

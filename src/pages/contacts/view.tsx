@@ -16,6 +16,7 @@ import {
   Calendar,
   DollarSign,
   HelpCircle,
+  UserRound,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -36,6 +37,7 @@ import AssetsTab from '@/components/contacts/dashboard/AssetsTab';
 import FinancialsTab from '@/components/contacts/dashboard/FinancialsTab';
 import TimelineTab from '@/components/contacts/dashboard/TimelineTab';
 import ExplainerDrawer from '@/components/common/ExplainerDrawer';
+import ContactProfileTab from '@/components/contacts/view/ContactProfileTab';
 import type { ExplainerTab } from '@/utils/explainerRegistry';
 
 // Constants
@@ -77,20 +79,22 @@ interface Contact {
 }
 
 // Tab configuration
-type TabKey = 'overview' | 'contracts' | 'assets' | 'financials' | 'timeline';
+type TabKey = 'profile' | 'overview' | 'contracts' | 'assets' | 'financials' | 'timeline';
 
 interface TabConfig {
   key: TabKey;
   label: string;
   icon: React.ElementType;
+  insight?: boolean; // analytics tabs — only shown when the contact has activity
 }
 
 const TABS: TabConfig[] = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { key: 'contracts', label: 'Contracts', icon: FileText },
-  { key: 'assets', label: 'Assets', icon: Wrench },
-  { key: 'financials', label: 'Financials', icon: DollarSign },
-  { key: 'timeline', label: 'Timeline', icon: Calendar },
+  { key: 'profile', label: 'Profile', icon: UserRound },
+  { key: 'overview', label: 'Overview', icon: LayoutDashboard, insight: true },
+  { key: 'contracts', label: 'Contracts', icon: FileText, insight: true },
+  { key: 'assets', label: 'Assets', icon: Wrench, insight: true },
+  { key: 'financials', label: 'Financials', icon: DollarSign, insight: true },
+  { key: 'timeline', label: 'Timeline', icon: Calendar, insight: true },
 ];
 
 const ContactViewPage: React.FC = () => {
@@ -101,7 +105,7 @@ const ContactViewPage: React.FC = () => {
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // State
-  const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [activeTab, setActiveTab] = useState<TabKey>('profile');
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [daysAhead, setDaysAhead] = useState(7);
@@ -117,6 +121,17 @@ const ContactViewPage: React.FC = () => {
   const classifications = contact?.classifications?.map(c =>
     typeof c === 'string' ? c : c.classification_value
   ) || [];
+
+  // Analytics (Insights) tabs only appear when the contact actually has activity —
+  // a bare contact never shows an empty dashboard.
+  const hasActivity = !!cockpitData && (
+    (cockpitData.contracts?.contracts?.length || 0) > 0 ||
+    (cockpitData.invoices?.length || 0) > 0 ||
+    (cockpitData.events?.total || 0) > 0 ||
+    (cockpitData.ltv || 0) > 0 ||
+    (cockpitData.outstanding || 0) > 0
+  );
+  const visibleTabs = TABS.filter(t => !t.insight || hasActivity);
 
   // Track page view
   useEffect(() => {
@@ -295,7 +310,7 @@ const ContactViewPage: React.FC = () => {
         {/* Right: Edit */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => setIsProfileDrawerOpen(true)}
+            onClick={() => setActiveTab('profile')}
             className="px-4 py-2 rounded-lg flex items-center gap-2 transition-colors hover:opacity-80"
             style={{ backgroundColor: colors.utility.primaryBackground, border: `1px solid ${colors.utility.primaryText}20`, color: colors.utility.primaryText }}
           >
@@ -336,7 +351,7 @@ const ContactViewPage: React.FC = () => {
           borderColor: colors.utility.primaryText + '10',
         }}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.key;
           const Icon = tab.icon;
           return (
@@ -361,8 +376,8 @@ const ContactViewPage: React.FC = () => {
           );
         })}
 
-        {/* Explainer (?) Button — right-aligned */}
-        <div className="ml-auto flex items-center">
+        {/* Explainer (?) Button — right-aligned, analytics tabs only */}
+        <div className="ml-auto flex items-center" style={{ visibility: activeTab === 'profile' ? 'hidden' : 'visible' }}>
           <button
             onClick={() => setIsExplainerOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:opacity-80"
@@ -383,8 +398,13 @@ const ContactViewPage: React.FC = () => {
       {/* TAB CONTENT */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 overflow-y-auto">
-        {/* Cockpit loading skeleton */}
-        {cockpitLoading && (
+        {/* Profile Tab — identity-first, inline section edit (no cockpit needed) */}
+        {activeTab === 'profile' && (
+          <ContactProfileTab contact={contact as any} colors={colors} onSaved={refetch} />
+        )}
+
+        {/* Cockpit loading skeleton (analytics tabs only) */}
+        {activeTab !== 'profile' && cockpitLoading && (
           <div className="p-6 space-y-4 max-w-6xl mx-auto">
             {[1, 2, 3].map(i => (
               <div

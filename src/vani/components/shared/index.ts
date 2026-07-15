@@ -8,9 +8,9 @@ export type {
   VaNiListProps,
   VaNiListItemProps, 
   VaNiListHeaderProps
-} from './VaNiList';
-export type { VaNiStatusBadgeProps } from './VaNiStatusBadge';
-export type { VaNiMetricCardProps, MetricData, TrendData } from './VaNiMetricCard';
+} from './VaniList';
+export type { VaNiStatusBadgeProps } from './VaniStatusBadge';
+export type { VaNiMetricCardProps, MetricData, TrendData } from './VaniMetricCard';
 
 // Export new business event types
 export type {
@@ -18,7 +18,7 @@ export type {
   ModuleHealthStatus,
   BusinessContext,
   BusinessMetrics
-} from './VaNiStatusBadge';
+} from './VaniStatusBadge';
 
 // Business context interfaces for components
 export interface BusinessContext {

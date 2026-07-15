@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../components/ui/dialog';
 import { Button } from '../../../components/ui/Button';
-import { Input } from '../../../components/ui/input';
+import { Input } from '../../../components/ui/Input';
 import { Label } from '../../../components/ui/label';
 import { Textarea } from '../../../components/ui/textarea';
 import { useTheme } from '../../../contexts/ThemeContext';
