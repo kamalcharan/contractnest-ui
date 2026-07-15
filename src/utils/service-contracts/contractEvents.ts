@@ -160,6 +160,15 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     // but never generate service events/visits
     if (block.config?.billingOnly) continue;
 
+    // Group Sessions are 1:N and SHARED — the same session is attended by many
+    // members. Materialising them on each individual member's contract would
+    // duplicate the whole schedule per member (24 members × 26 sessions = 600
+    // rows for the same meetings). A member's contract carries only billing +
+    // check-in eligibility; the session schedule is owned at the group/chapter
+    // level (the Group Session dashboard). So a group session generates ZERO
+    // service occurrences on a member contract.
+    if (isGroupSession) continue;
+
     const qty = block.quantity || 1;
 
     // Group Sessions always follow their cadence (anchor to the named weekday),

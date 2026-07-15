@@ -180,6 +180,7 @@ import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
 import FinancePage from './pages/operations/finance';
 import OpsServiceSchedulePage from './pages/operations/services';
+import GroupSessionsPage from './pages/operations/group-sessions';
 import OpsAppointmentsPage from './pages/operations/appointments';
 import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
@@ -237,7 +238,6 @@ import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscriptio
 import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
-import ContactsImportPage from './pages/contacts/import';
 
 // Admin - Subscription Management
 import SubscriptionManagementPage from './pages/admin/subscription-management';
@@ -596,6 +596,18 @@ const AppContent: React.FC = () => {
             <Route index element={<OpsServiceSchedulePage />} />
           </Route>
 
+          {/* Operations → Group Sessions dashboard (generic per tenant) */}
+          <Route
+            path="/group-sessions"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<GroupSessionsPage />} />
+          </Route>
+
           {/* Operations → Appointments — Stage 3 */}
           <Route
             path="/ops/appointments"
@@ -772,7 +784,6 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ContactsPage />} />
             <Route path="create" element={<ContactCreateForm />} />
-            <Route path="import" element={<ContactsImportPage />} />
             <Route path=":id" element={<ContactViewPage />} />
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
           </Route>

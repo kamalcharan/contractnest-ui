@@ -371,6 +371,31 @@ export const useIntegrations = () => {
     }
   };
   
+  // Delete (remove) a tenant integration's stored config
+  const deleteIntegration = async (integrationId: string) => {
+    try {
+      await api.delete(`${API_ENDPOINTS.INTEGRATIONS.DELETE(integrationId)}`);
+
+      setIntegrations(prev => prev.filter(int => int.id !== integrationId));
+      if (currentIntegration && currentIntegration.id === integrationId) {
+        setCurrentIntegration(null);
+      }
+
+      // Clear fetched types to force refresh of counts + configured state
+      fetchedTypesRef.current.clear();
+      fetchIntegrationTypes();
+
+      vaniToast.success('Integration removed');
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting integration:', err);
+      if (err.response?.status !== 401) {
+        vaniToast.error(err.response?.data?.error || 'Failed to remove integration');
+      }
+      throw err;
+    }
+  };
+
   // Update form fields for current integration
   const updateIntegrationField = (field: keyof Integration, value: any) => {
     setCurrentIntegration(prev => {
@@ -420,6 +445,7 @@ export const useIntegrations = () => {
     testConnection,
     saveIntegration,
     toggleIntegrationStatus,
+    deleteIntegration,
     updateIntegrationField,
     setCurrentIntegration
   };

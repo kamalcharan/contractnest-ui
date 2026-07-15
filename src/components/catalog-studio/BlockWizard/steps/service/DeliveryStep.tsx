@@ -34,7 +34,13 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const [deliveryMode, setDeliveryMode] = useState(formData.deliveryMode || 'on-site');
-  const [requiresCycles, setRequiresCycles] = useState(formData.requiresCycles || false);
+  const [requiresCycles, setRequiresCycles] = useState<boolean>(
+    // top-level (wizard edits) with meta fallback (editing an existing block
+    // whose cadence lives under meta.serviceCycles)
+    formData.requiresCycles ??
+      ((formData as { meta?: { serviceCycles?: { enabled?: boolean; days?: number } } }).meta?.serviceCycles?.enabled
+        ?? Boolean((formData as { meta?: { serviceCycles?: { days?: number } } }).meta?.serviceCycles?.days))
+  );
   const [billingOnly, setBillingOnly] = useState(
     // top-level (wizard edits) with meta fallback (editing an existing block)
     formData.billingOnly ?? (formData as { meta?: { billingOnly?: boolean } }).meta?.billingOnly ?? false
@@ -106,8 +112,14 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   const anchorForSample =
     formData.cycleAnchorWeekday ??
     (formData as { meta?: { serviceCycles?: { anchorWeekday?: number } } }).meta?.serviceCycles?.anchorWeekday;
+  // Cycle Period hydrates from the top-level wizard field, falling back to an
+  // existing block's meta.serviceCycles.days (edit mode) — same pattern as the
+  // anchor above, so a saved cadence shows instead of a blank field.
+  const cycleDaysForDisplay =
+    formData.cycleDays ??
+    (formData as { meta?: { serviceCycles?: { days?: number } } }).meta?.serviceCycles?.days;
   const sampleDates = React.useMemo(() => {
-    const days = formData.cycleDays;
+    const days = cycleDaysForDisplay;
     if (!requiresCycles || !days || days < 1) return [] as Date[];
     const hasAnchor = typeof anchorForSample === 'number' && anchorForSample >= 0 && anchorForSample <= 6;
     const addD = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
@@ -121,7 +133,7 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
     const out: Date[] = [];
     for (let i = 0; i < 6; i++) out.push(hasAnchor ? addD(first, i * everyNWeeks * 7) : addD(start, i * days));
     return out;
-  }, [requiresCycles, formData.cycleDays, anchorForSample]);
+  }, [requiresCycles, cycleDaysForDisplay, anchorForSample]);
   const fmtSample = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
@@ -490,7 +502,7 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
                           type="number"
                           min="1"
                           placeholder="e.g., 180"
-                          value={formData.cycleDays || ''}
+                          value={cycleDaysForDisplay ?? ''}
                           onChange={(e) => onChange('cycleDays', parseInt(e.target.value) || undefined)}
                           className="flex-1 px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
                           style={{

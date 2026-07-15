@@ -16,6 +16,7 @@ interface IntegrationProviderCardProps {
   onUpdate: (params: UpdateIntegrationParams) => Promise<any>;
   onTestConnection: (params: TestConnectionParams) => Promise<any>;
   onToggleStatus: (integrationId: string, isActive: boolean) => Promise<any>;
+  onDelete?: (id: string) => Promise<any>;
 }
 
 const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
@@ -24,7 +25,8 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
   onConnect,
   onUpdate,
   onTestConnection,
-  onToggleStatus
+  onToggleStatus,
+  onDelete
 }) => {
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -299,6 +301,7 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
           onConnect={onConnect}
           onUpdate={onUpdate}
           onTestConnection={onTestConnection}
+          onDelete={onDelete}
         />
       )}
     </>

@@ -549,7 +549,8 @@ export const API_ENDPOINTS = {
     BY_TYPE: (type: string) => `/api/integrations/${type}`,
     DETAIL: (type: string, providerId: string) => `/api/integrations/${type}/${providerId}`,
     TEST: '/api/integrations/test',
-    TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`
+    TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`,
+    DELETE: (id: string) => `/api/integrations/${id}`
   },
   
   // BUSINESS MODEL ENDPOINTS - PRESERVED
@@ -1239,6 +1240,23 @@ export const API_ENDPOINTS = {
     ENSURE_TOKEN: '/api/session-checkin/token',
     DECLARATIONS: '/api/session-checkin/declarations',
     CONFIRM_DECLARATION: (id: string) => `/api/session-checkin/declarations/${id}/confirm`,
+  },
+  // Group Sessions dashboard — chair-side read model (generic, tenant-agnostic).
+  // tenant_id / is_live are injected by the api request interceptor as headers.
+  GROUP_SESSIONS: {
+    SESSIONS: '/api/group-sessions/sessions',
+    OCCURRENCES: (blockId: string) => `/api/group-sessions/occurrences/${blockId}`,
+    GENERATE: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/generate`,
+    OCC_ADD: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/add`,
+    OCC_MOVE: (id: string) => `/api/group-sessions/occurrence/${id}/move`,
+    OCC_STATUS: (id: string) => `/api/group-sessions/occurrence/${id}/status`,
+    ROSTER: (blockId: string) => `/api/group-sessions/roster/${blockId}`,
+    MEMBER: (memberId: string) => `/api/group-sessions/member/${memberId}`,
+    TOKEN: (blockId: string) => `/api/group-sessions/token/${blockId}`,
+    OCC_ATTENDANCE: (id: string) => `/api/group-sessions/occurrence/${id}/attendance`,
+    OCC_MARK: (id: string) => `/api/group-sessions/occurrence/${id}/mark`,
+    MEMBER_BLOCK: (memberId: string, blockId: string) => `/api/group-sessions/member/${memberId}/block/${blockId}`,
+    DUE_PAID: (billingEventId: string) => `/api/group-sessions/due/${billingEventId}/paid`,
   },
   SMART_FORMS: {
     // Convenience: admin template endpoints (same as ADMIN.SMART_FORMS)

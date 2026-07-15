@@ -15,6 +15,7 @@ interface IntegrationSetupModalProps {
   onConnect: (params: ConnectIntegrationParams) => Promise<any>;
   onUpdate: (params: UpdateIntegrationParams) => Promise<any>;
   onTestConnection: (params: TestConnectionParams) => Promise<any>;
+  onDelete?: (id: string) => Promise<any>;
 }
 
 const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
@@ -23,13 +24,19 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
   onClose,
   onConnect,
   onUpdate,
-  onTestConnection
+  onTestConnection,
+  onDelete
 }) => {
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const { isDarkMode, currentTheme } = useTheme();
+
+  // Config-only providers (e.g. Offline UPI) have nothing to test/connect —
+  // the modal becomes plain add / edit / delete of the stored values.
+  const configOnly = !!(provider.metadata as any)?.config_only;
   
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -195,13 +202,14 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
         }
       }
       
-      // Test connection first
-      const testPassed = await handleTestConnection();
-      
-      if (!testPassed) {
-        return;
+      // Config-only providers have nothing to verify — skip the connection test.
+      if (!configOnly) {
+        const testPassed = await handleTestConnection();
+        if (!testPassed) {
+          return;
+        }
       }
-      
+
       // Create new integration or update existing one
       if (tenantIntegration) {
         // For updates, only send changed fields
@@ -260,6 +268,23 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
     }
   };
   
+  // Remove (delete) a config-only integration's stored values
+  const handleDelete = async () => {
+    if (!tenantIntegration || !onDelete) return;
+    // eslint-disable-next-line no-alert
+    if (!window.confirm(`Remove the ${provider.display_name} configuration?`)) return;
+    try {
+      setIsDeleting(true);
+      await onDelete(tenantIntegration.id);
+      onClose();
+    } catch (error) {
+      captureException(error, { tags: { component: 'IntegrationSetupModal', action: 'handleDelete' } });
+      setTestResult({ success: false, message: 'Could not remove the configuration.' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Check if test connection button should be disabled
   const isTestDisabled = (): boolean => {
     if (isTestingConnection || isSubmitting) return true;
@@ -392,29 +417,46 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
           className="px-6 py-4 border-t flex justify-between transition-colors"
           style={{ borderColor: `${colors.utility.primaryText}20` }}
         >
-          <button
-            onClick={handleTestConnection}
-            disabled={isTestDisabled()}
-            className={cn(
-              "px-4 py-2 rounded-md text-sm border transition-all duration-200",
-              isTestDisabled() && "opacity-50 cursor-not-allowed"
-            )}
-            style={{
-              borderColor: `${colors.utility.primaryText}40`,
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText
-            }}
-          >
-            {isTestingConnection ? (
-              <>
-                <Loader2 size={14} className="inline mr-2 animate-spin" />
-                Testing...
-              </>
-            ) : (
-              'Test Connection'
-            )}
-          </button>
-          
+          {configOnly ? (
+            // config-only: no test; offer Remove when a config already exists
+            (tenantIntegration && onDelete) ? (
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting || isSubmitting}
+                className={cn(
+                  "px-4 py-2 rounded-md text-sm border transition-all duration-200",
+                  (isDeleting || isSubmitting) && "opacity-50 cursor-not-allowed"
+                )}
+                style={{ borderColor: `${colors.semantic.error}55`, backgroundColor: `${colors.semantic.error}0d`, color: colors.semantic.error }}
+              >
+                {isDeleting ? (<><Loader2 size={14} className="inline mr-2 animate-spin" />Removing...</>) : 'Remove'}
+              </button>
+            ) : <span />
+          ) : (
+            <button
+              onClick={handleTestConnection}
+              disabled={isTestDisabled()}
+              className={cn(
+                "px-4 py-2 rounded-md text-sm border transition-all duration-200",
+                isTestDisabled() && "opacity-50 cursor-not-allowed"
+              )}
+              style={{
+                borderColor: `${colors.utility.primaryText}40`,
+                backgroundColor: colors.utility.primaryBackground,
+                color: colors.utility.primaryText
+              }}
+            >
+              {isTestingConnection ? (
+                <>
+                  <Loader2 size={14} className="inline mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                'Test Connection'
+              )}
+            </button>
+          )}
+
           <div className="flex space-x-3">
             <button
               onClick={onClose}
@@ -445,7 +487,9 @@ const IntegrationSetupModal: React.FC<IntegrationSetupModalProps> = ({
                   Saving...
                 </>
               ) : (
-                tenantIntegration ? 'Update Integration' : 'Connect Integration'
+                configOnly
+                  ? (tenantIntegration ? 'Save changes' : 'Save')
+                  : (tenantIntegration ? 'Update Integration' : 'Connect Integration')
               )}
             </button>
           </div>

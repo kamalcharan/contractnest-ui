@@ -16,6 +16,7 @@ interface IntegrationTypeSectionProps {
   onUpdate: (params: UpdateIntegrationParams) => Promise<any>;
   onTestConnection: (params: TestConnectionParams) => Promise<any>;
   onToggleStatus: (integrationId: string, isActive: boolean) => Promise<any>;
+  onDelete?: (id: string) => Promise<any>;
 }
 
 const IntegrationTypeSection: React.FC<IntegrationTypeSectionProps> = ({
@@ -24,7 +25,8 @@ const IntegrationTypeSection: React.FC<IntegrationTypeSectionProps> = ({
   onConnect,
   onUpdate,
   onTestConnection,
-  onToggleStatus
+  onToggleStatus,
+  onDelete
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   
@@ -145,6 +147,7 @@ const IntegrationTypeSection: React.FC<IntegrationTypeSectionProps> = ({
             onUpdate={onUpdate}
             onTestConnection={onTestConnection}
             onToggleStatus={onToggleStatus}
+            onDelete={onDelete}
           />
         ))}
       </div>

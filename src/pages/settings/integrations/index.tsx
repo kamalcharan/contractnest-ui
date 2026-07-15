@@ -31,7 +31,8 @@ const IntegrationsPage = () => {
     fetchIntegrationsByType,
     saveIntegration,
     testConnection,
-    toggleIntegrationStatus
+    toggleIntegrationStatus,
+    deleteIntegration
   } = useIntegrations();
   
   // Get theme colors
@@ -391,6 +392,7 @@ const IntegrationsPage = () => {
                 onUpdate={handleUpdate}
                 onTestConnection={handleTestConnection}
                 onToggleStatus={handleToggleStatus}
+                onDelete={async (id: string) => deleteIntegration(id)}
               />
             );
           })

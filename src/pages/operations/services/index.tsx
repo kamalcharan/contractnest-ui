@@ -63,7 +63,7 @@ const relationshipConfig = (relType?: string | null) => {
   return { label: (cfg as any).label as string, color: themeColor, Icon };
 };
 
-type LaneFilter = 'all' | 'service' | 'billing';
+type LaneFilter = 'all' | 'service' | 'billing' | 'group';
 type DatePreset = 'overdue' | 'today' | 'this_week' | 'next_30' | 'upcoming' | 'all';
 type ViewMode = 'grouped' | 'flat';
 
@@ -145,7 +145,9 @@ const ServiceSchedulePage: React.FC = () => {
   const summaryQuery = useContractEventDateSummary({});
   const range = presetRange(datePreset);
   const eventsQuery = useContractEvents({
-    event_type: lane === 'all' ? undefined : lane,
+    // Group Sessions are service events flagged audience='group' — fetch the
+    // service lane, then narrow to group occurrences client-side below.
+    event_type: lane === 'all' ? undefined : lane === 'group' ? 'service' : lane,
     status: statusFilter === 'all' ? undefined : statusFilter,
     date_from: range.date_from,
     date_to: range.date_to,
@@ -173,12 +175,13 @@ const ServiceSchedulePage: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     return events.filter((e) => {
       if (typeFilter !== 'all' && (e.contract_type || '') !== typeFilter) return false;
+      if (lane === 'group' && (e as any).audience !== 'group') return false;
       if (!term) return true;
       return [e.block_name, e.contract_name, e.contract_number, e.task_id, e.buyer_name, e.buyer_email, e.buyer_phone]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term));
     });
-  }, [events, searchTerm, typeFilter]);
+  }, [events, searchTerm, typeFilter, lane]);
 
   // ── Grouped view: by customer (contracts-hub pattern) ──
   const groups = useMemo(() => {
@@ -282,6 +285,21 @@ const ServiceSchedulePage: React.FC = () => {
     if (event.event_type !== 'service') {
       return <span className="text-[11px]" style={{ color: colors.utility.secondaryText + '80' }}>—</span>;
     }
+    // Group Session occurrences are 1:N (a roster checks in) — never a 1:1
+    // appointment. Route to the session check-in instead of offering "Book".
+    if ((event as any).audience === 'group') {
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); navigate('/session-checkin'); }}
+          title="Open the group session check-in"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold"
+          style={{ backgroundColor: colors.semantic.success, color: '#fff' }}
+        >
+          <Users className="h-3 w-3" />
+          Check-in
+        </button>
+      );
+    }
     if (event.appointment_status) {
       const s = event.appointment_status;
       const color =
@@ -324,6 +342,7 @@ const ServiceSchedulePage: React.FC = () => {
     const sInfo = statusInfo(event);
     const transitions = allowedTransitions(event);
     const isBilling = event.event_type === 'billing';
+    const isGroup = (event as any).audience === 'group';
     const isUpdatingThis = isChangingStatus && changingStatusEventId === event.id;
     const isExpanded = openStatusMenu === event.id;
 
@@ -342,21 +361,25 @@ const ServiceSchedulePage: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: (isBilling ? colors.semantic.warning : colors.brand.primary) + '15' }}
+              style={{ backgroundColor: (isBilling ? colors.semantic.warning : isGroup ? colors.semantic.success : colors.brand.primary) + '15' }}
             >
               {isBilling ? (
                 <DollarSign className="h-3.5 w-3.5" style={{ color: colors.semantic.warning }} />
+              ) : isGroup ? (
+                <Users className="h-3.5 w-3.5" style={{ color: colors.semantic.success }} />
               ) : (
                 <Wrench className="h-3.5 w-3.5" style={{ color: colors.brand.primary }} />
               )}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                {event.block_name || (isBilling ? 'Billing milestone' : 'Service visit')}
+                {event.block_name || (isBilling ? 'Billing milestone' : isGroup ? 'Group session' : 'Service visit')}
               </p>
-              <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
+              <p className="text-[10px] truncate" style={{ color: isGroup ? colors.semantic.success : colors.utility.secondaryText }}>
+                {isGroup ? 'Group Session' : ''}
+                {isGroup && event.task_id ? ' · ' : ''}
                 {event.task_id || ''}
-                {event.billing_cycle_label ? `${event.task_id ? ' · ' : ''}${event.billing_cycle_label}` : ''}
+                {event.billing_cycle_label ? `${event.task_id || isGroup ? ' · ' : ''}${event.billing_cycle_label}` : ''}
               </p>
             </div>
           </div>
@@ -577,7 +600,7 @@ const ServiceSchedulePage: React.FC = () => {
           className="inline-flex rounded-lg border p-1"
           style={{ borderColor: colors.utility.secondaryText + '30', backgroundColor: colors.utility.secondaryBackground }}
         >
-          {(['all', 'service', 'billing'] as LaneFilter[]).map((l) => (
+          {(['all', 'service', 'billing', 'group'] as LaneFilter[]).map((l) => (
             <button
               key={l}
               onClick={(e) => { e.stopPropagation(); setLane(l); setPage(1); }}
@@ -589,7 +612,8 @@ const ServiceSchedulePage: React.FC = () => {
             >
               {l === 'service' && <Wrench className="h-3.5 w-3.5" />}
               {l === 'billing' && <DollarSign className="h-3.5 w-3.5" />}
-              {l === 'all' ? 'All events' : l}
+              {l === 'group' && <Users className="h-3.5 w-3.5" />}
+              {l === 'all' ? 'All events' : l === 'group' ? 'Group sessions' : l}
             </button>
           ))}
         </div>

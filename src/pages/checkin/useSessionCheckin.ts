@@ -29,20 +29,64 @@ export interface CheckinHistory {
   attendance: AttendanceRow[]; billing: BillingRow[]; declarations: DeclarationRow[];
 }
 
+// ---- Smart Form schema (subset rendered by the check-in page) ----
+export interface CheckinFieldOption { label: string; value: string }
+export interface CheckinField {
+  id: string; type: string; label: string;
+  placeholder?: string; help_text?: string; default_value?: unknown;
+  options?: CheckinFieldOption[];
+  validation?: { required?: boolean; min?: number; max?: number; minLength?: number; maxLength?: number; pattern?: string; custom_message?: string };
+  conditional?: { field_id: string; operator: string; value: unknown };
+}
+export interface CheckinSection { id: string; title?: string; description?: string; fields: CheckinField[] }
+export interface CheckinFormSchema { id: string; title?: string; version?: number; sections: CheckinSection[] }
+export interface CheckinForm {
+  ok: boolean; reason?: string; source?: 'default' | 'template';
+  form_template_id?: string | null; form_template_version?: number | null;
+  schema?: CheckinFormSchema;
+}
+
+export interface CheckinPaymentConfig {
+  ok: boolean; configured: boolean; upi_id?: string; payee_name?: string;
+}
+
 export interface SubmitPayload {
   member_id?: string | null;
   member_name?: string | null;
   member_phone?: string | null;
   status: 'present' | 'apologies';
   payment?: { billing_event_id: string; upi_reference?: string; amount?: number; currency?: string } | null;
+  responses?: Record<string, unknown> | null;
+  form_template_id?: string | null;
+  form_template_version?: number | null;
 }
 
 export const sessionCheckinApi = {
   async resolve(token: string): Promise<CheckinResolve> {
     return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}`));
   },
+  async form(token: string): Promise<CheckinForm> {
+    return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}/form`));
+  },
+  async paymentConfig(token: string): Promise<CheckinPaymentConfig> {
+    return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}/payment-config`));
+  },
   async lookup(token: string, phone: string): Promise<{ ok: boolean; found: boolean; member?: CheckinMember }> {
     return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/lookup`, { phone }));
+  },
+  async guest(token: string, payload: {
+    name: string; phone?: string; company?: string; email?: string;
+    status: 'present' | 'apologies'; responses?: Record<string, unknown> | null;
+    form_template_id?: string | null; form_template_version?: number | null;
+  }): Promise<{ ok: boolean; kind?: string; contact_id?: string; reason?: string }> {
+    return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/guest`, payload));
+  },
+  async substitute(token: string, payload: {
+    member_id: string; sub_name: string; sub_phone?: string;
+    status: 'present' | 'apologies'; responses?: Record<string, unknown> | null;
+    form_template_id?: string | null; form_template_version?: number | null;
+  }): Promise<CheckinHistory> {
+    return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/substitute`, payload));
   },
   async history(token: string, memberId: string): Promise<CheckinHistory> {
     return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}/member/${memberId}/history`));

@@ -261,6 +261,9 @@ function computeEventsForApi(state: ContractWizardState): any[] | undefined {
       currency: event.currency || state.currency,
       assigned_to: event.assigned_to || undefined,
       assigned_to_name: event.assigned_to_name || undefined,
+      // Group-session marker: persists so the ops calendars label it a "Group
+      // Session" and route to check-in instead of a 1:1 appointment.
+      audience: (event as any).audience || undefined,
     };
   });
   // Re-sort by scheduled date so persisted order matches the (re-sorted) preview
