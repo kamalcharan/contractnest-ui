@@ -223,7 +223,8 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
   };
 
   return {
-    contractName: contract.title || '',
+    contractName: contract.title || contract.name || '',
+    contractNumber: contract.contract_number || '',
     contractStatus: contract.status || 'draft',
     description: contract.description || '',
     durationValue: contract.duration_value || 0,
@@ -238,6 +239,9 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
     emiMonths: contract.emi_months || 0,
     perBlockPaymentType: {},
     selectedTaxRateIds: contract.selected_tax_rate_ids || [],
+    nomenclatureName: contract.nomenclature_name || null,
+    startDate: contract.start_date || null,
+    createdDate: contract.created_at || null,
   };
 };
 
@@ -2116,9 +2120,25 @@ const ContractDetailPage: React.FC = () => {
     return 'Equipment';
   })();
   const baseTabs = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
-  const tabDefinitions = baseTabs.map(t =>
-    t.id === 'equipment' ? { ...t, label: equipmentTabLabel } : t
-  );
+
+  // Show the Equipment/Facility tab only when it's meaningful for this contract:
+  // the contract type (nomenclature) is equipment/entity-based, OR the contract
+  // already has equipment/facility rows attached. Pure-service contracts hide it.
+  const contractSupportsEquipment = (() => {
+    if (contract?.equipment_details?.length) return true;
+    if (contract?.nomenclature_id && nomenclatureItems.length > 0) {
+      const nType = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
+      if (nType?.form_settings) {
+        const fs = typeof nType.form_settings === 'string' ? JSON.parse(nType.form_settings) : nType.form_settings;
+        if (fs.is_equipment_based || fs.is_entity_based) return true;
+      }
+    }
+    return false;
+  })();
+
+  const tabDefinitions = baseTabs
+    .filter(t => t.id !== 'equipment' || contractSupportsEquipment)
+    .map(t => (t.id === 'equipment' ? { ...t, label: equipmentTabLabel } : t));
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.utility.mainBackground }}>

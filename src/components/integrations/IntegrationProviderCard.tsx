@@ -112,14 +112,21 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
   // Determine if the integration is configured
   const isConfigured = !!tenantIntegration;
   const connectionStatus = tenantIntegration?.connection_status || 'Not Configured';
-  
+
+  // Built-in ("Powered by ContractNest") vs not-yet-available (bring-your-own)
+  // providers — both driven purely by provider.metadata, so no per-provider
+  // behaviour is hardcoded here.
+  const isPlatformManaged = provider.metadata?.platform_managed === true;
+  const isComingSoon = provider.metadata?.coming_soon === true;
+
   return (
     <>
-      <div 
+      <div
         className="rounded-lg border shadow-sm p-4 transition-colors"
         style={{
           backgroundColor: colors.utility.secondaryBackground,
-          borderColor: `${colors.utility.primaryText}20`
+          borderColor: `${colors.utility.primaryText}20`,
+          opacity: isComingSoon ? 0.7 : 1
         }}
       >
         <div className="flex items-start justify-between">
@@ -172,10 +179,26 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
               
               {/* Show status badge inline for better visibility */}
               <div className="mt-1">
-                <StatusBadge 
-                  status={connectionStatus} 
-                  isActive={tenantIntegration?.is_active ?? true} 
-                />
+                {isPlatformManaged ? (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{ backgroundColor: `${colors.semantic.success}15`, color: colors.semantic.success }}
+                  >
+                    Active · Powered by ContractNest
+                  </span>
+                ) : isComingSoon ? (
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{ backgroundColor: `${colors.utility.secondaryText}20`, color: colors.utility.secondaryText }}
+                  >
+                    Coming soon
+                  </span>
+                ) : (
+                  <StatusBadge
+                    status={connectionStatus}
+                    isActive={tenantIntegration?.is_active ?? true}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -258,37 +281,59 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
             </a>
           )}
           
-          {/* Setup/Configure Button */}
-          <button
-            onClick={handleSetupClick}
-            className={cn(
-              "px-4 py-2 rounded-md text-sm ml-auto transition-all duration-200",
-              isConfigured
-                ? "border hover:opacity-80"
-                : "text-white hover:opacity-90"
-            )}
-            style={
-              isConfigured
-                ? {
-                    color: colors.brand.primary,
-                    borderColor: colors.brand.primary,
-                    backgroundColor: `${colors.brand.primary}05`
-                  }
-                : {
-                    background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
-                    color: 'white'
-                  }
-            }
-          >
-            {isConfigured ? (
-              <>
-                <Settings size={14} className="inline mr-2" />
-                Settings
-              </>
-            ) : (
-              'Set Up'
-            )}
-          </button>
+          {/* Setup/Configure Button — built-in providers are managed by us
+              (informational only); coming-soon providers are locked. */}
+          {isPlatformManaged ? (
+            <span
+              className="text-sm ml-auto font-medium"
+              style={{ color: colors.semantic.success }}
+            >
+              ✓ Enabled for your workspace
+            </span>
+          ) : isComingSoon ? (
+            <button
+              disabled
+              aria-disabled="true"
+              className="px-4 py-2 rounded-md text-sm ml-auto cursor-not-allowed"
+              style={{
+                color: colors.utility.secondaryText,
+                backgroundColor: `${colors.utility.secondaryText}15`
+              }}
+            >
+              Coming soon
+            </button>
+          ) : (
+            <button
+              onClick={handleSetupClick}
+              className={cn(
+                "px-4 py-2 rounded-md text-sm ml-auto transition-all duration-200",
+                isConfigured
+                  ? "border hover:opacity-80"
+                  : "text-white hover:opacity-90"
+              )}
+              style={
+                isConfigured
+                  ? {
+                      color: colors.brand.primary,
+                      borderColor: colors.brand.primary,
+                      backgroundColor: `${colors.brand.primary}05`
+                    }
+                  : {
+                      background: `linear-gradient(to right, ${colors.brand.primary}, ${colors.brand.secondary})`,
+                      color: 'white'
+                    }
+              }
+            >
+              {isConfigured ? (
+                <>
+                  <Settings size={14} className="inline mr-2" />
+                  Settings
+                </>
+              ) : (
+                'Set Up'
+              )}
+            </button>
+          )}
         </div>
       </div>
 

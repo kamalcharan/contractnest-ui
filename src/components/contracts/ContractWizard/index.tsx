@@ -22,80 +22,38 @@ import ReviewSendStep from './steps/ReviewSendStep';
 import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
 import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } from './steps/AssetSelectionStep';
-import { ConfigurableBlock } from '@/components/catalog-studio';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 import vaniComposerService from '@/services/vaniComposerService';
-import { computeContractEvents, type ContractEvent } from '@/utils/service-contracts/contractEvents';
 import { useSaveTemplate, type CreateTemplateData, type UpdateTemplateData } from '@/hooks/mutations/useCatTemplatesMutations';
 import { useCatTemplates, type CatTemplate } from '@/hooks/queries/useCatTemplates';
 
-// Keep ContractRole type export for backwards compatibility
-export type ContractRole = 'client' | 'vendor' | null;
+// ── Phase 1.5 logic extraction ─────────────────────────────────────────────
+// State types, step registries, the API payload mapper and gating rules live
+// in ./logic (verbatim moves — see logic/__parity__ for the behavioral lock).
+// Re-exported so existing imports from '@/components/contracts/ContractWizard'
+// keep working unchanged.
+export type { ContractRole, SelectedBlock, ContractType, ContractWizardState } from './logic/state';
+export { createInitialWizardState, serializeWizardState, sanitizeStateForTemplate } from './logic/state';
+export { mapWizardToRequest } from './logic/mapper';
 
-// Re-export ConfigurableBlock as SelectedBlock for backwards compatibility
-export type SelectedBlock = ConfigurableBlock;
-
-// Contract type definition
-export type ContractType = 'client' | 'vendor' | 'partner';
-
-// Wizard State Types
-export interface ContractWizardState {
-  path: ContractPath;
-  templateId: string | null;
-  // Role (kept for API compatibility, auto-set based on contractType)
-  role: ContractRole;
-  // Wizard mode: contract or rfq (vendor contracts only)
-  wizardMode: WizardMode;
-  // Step 1: Counterparty (single-select for contracts)
-  buyerId: string | null;
-  buyerName: string;
-  buyerContactPersonId: string | null;
-  buyerContactPersonName: string | null;
-  useCompanyContact: boolean;
-  // RFQ multi-vendor selection
-  vendorIds: string[];
-  vendorNames: string[];
-  // Nomenclature (optional contract type classification)
-  nomenclatureId: string | null;
-  nomenclatureName: string | null;
-  nomenclatureGroup: string | null;
-  // Acceptance
-  acceptanceMethod: 'payment' | 'signoff' | 'auto' | null;
-  // Contract Details
-  contractName: string;
-  status: string;
-  currency: string;
-  description: string;
-  startDate: Date;
-  durationValue: number;
-  durationUnit: string;
-  gracePeriodValue: number;
-  gracePeriodUnit: string;
-  // Step 4: Billing Cycle
-  billingCycleType: BillingCycleType;
-  // Step 5: Blocks & Total
-  selectedBlocks: SelectedBlock[];
-  totalValue: number;
-  // Step 6: Billing View - Tax & Payment
-  selectedTaxRateIds: string[];
-  baseSubtotal: number;
-  taxTotal: number;
-  grandTotal: number;
-  taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
-  paymentMode: 'prepaid' | 'emi' | 'defined';
-  emiMonths: number;
-  perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
-  // Asset Selection
-  equipmentDetails: EquipmentDetailItem[];
-  allowBuyerToAdd: boolean;
-  coverageTypes: CoverageTypeItem[];
-  // Evidence Policy
-  evidencePolicyType: EvidencePolicyType;
-  evidenceSelectedForms: SelectedForm[];
-  // Events Preview: user-adjusted dates
-  eventOverrides: Record<string, Date>;
-}
+import {
+  createInitialWizardState,
+  serializeWizardState,
+  deserializeWizardState,
+  sanitizeStateForTemplate,
+} from './logic/state';
+import type { ContractWizardState, ContractType, SelectedBlock } from './logic/state';
+import { mapWizardToRequest, isValidUUID } from './logic/mapper';
+import {
+  CONTRACT_STEPS,
+  TEMPLATE_STEPS,
+  RFQ_STEPS,
+  COUNTERPARTY_HEADINGS,
+  COUNTERPARTY_LABEL,
+  DRAFT_SAVE_MIN_STEP_ID,
+} from './logic/stepConfig';
+import { canGoNextForStep, shouldSkipAssetStepFor } from './logic/gating';
 
 interface ContractWizardProps {
   isOpen: boolean;
@@ -130,76 +88,6 @@ interface ContractWizardProps {
   takenTemplateNames?: string[];
 }
 
-// Step ID type for step-based routing
-type StepId = 'path' | 'nomenclature' | 'counterparty' | 'acceptance' | 'details' | 'billingCycle' | 'blocks' | 'billingView' | 'assetSelection' | 'evidencePolicy' | 'events' | 'review';
-
-interface StepConfig {
-  id: StepId;
-  label: string;
-  heading: { title: string; subtitle: string };
-}
-
-// Contract flow: 8 steps (full flow) — acceptance before counterparty
-const CONTRACT_STEPS: StepConfig[] = [
-  { id: 'path', label: 'Choose Path', heading: { title: 'How would you like to create your contract?', subtitle: 'Choose your starting point' } },
-  { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this?', subtitle: 'Select the nomenclature that best describes this contract' } },
-  { id: 'acceptance', label: 'Acceptance', heading: { title: 'How should this contract be accepted?', subtitle: 'Choose how your buyer will confirm acceptance' } },
-  { id: 'counterparty', label: 'Counterparty', heading: { title: '', subtitle: '' } }, // Dynamic based on contractType
-  { id: 'details', label: 'Details', heading: { title: 'Contract Details', subtitle: 'Define the basic information for your contract' } },
-  { id: 'assetSelection', label: 'Assets', heading: { title: 'Select Client Assets', subtitle: 'Choose which of your client\'s assets this contract covers' } },
-  { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed?' } },
-  { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for your contract' } },
-  { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and apply tax' } },
-  { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Choose how evidence is captured during service execution' } },
-  { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview', subtitle: 'Review service delivery and billing schedule' } },
-  { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send', subtitle: 'Review your contract before sending' } },
-];
-
-// Template flow: a contract minus the counterparty — no path, no buyer,
-// no buyer assets, no events (no real dates yet). Same step components.
-const TEMPLATE_STEPS: StepConfig[] = [
-  { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this template for?', subtitle: 'Select the nomenclature that best describes it' } },
-  { id: 'acceptance', label: 'Acceptance', heading: { title: 'Default acceptance method', subtitle: 'Contracts created from this template will start with this — changeable per contract' } },
-  { id: 'details', label: 'Details', heading: { title: 'Template Details', subtitle: 'Name this template and set the default duration' } },
-  { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed by default?' } },
-  { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for this template' } },
-  { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and default tax' } },
-  { id: 'evidencePolicy', label: 'Evidence Policy', heading: { title: 'Evidence Policy', subtitle: 'Default evidence capture for contracts from this template' } },
-  { id: 'events', label: 'Events Preview', heading: { title: 'Events Preview (illustrative)', subtitle: 'Assumes a start today — real dates are set when a contract is created from this template' } },
-  { id: 'review', label: 'Review & Save', heading: { title: 'Review & Save Template', subtitle: 'Review the template before saving — publish it from the Templates page' } },
-];
-
-// RFQ flow: 5 steps (no acceptance, no billing cycle, no billing view)
-const RFQ_STEPS: StepConfig[] = [
-  { id: 'path', label: 'Choose Path', heading: { title: 'What would you like to create?', subtitle: 'Choose your starting point' } },
-  { id: 'nomenclature', label: 'Request Type', heading: { title: 'What type of request is this?', subtitle: 'Select the nomenclature that best describes this RFQ' } },
-  { id: 'counterparty', label: 'Select Vendors', heading: { title: 'Select Vendors for RFQ', subtitle: 'Choose one or more vendors to send this RFQ to' } },
-  { id: 'details', label: 'Request Details', heading: { title: 'Request Details', subtitle: 'Define the basic information for your RFQ' } },
-  { id: 'blocks', label: 'Define Services', heading: { title: 'Define Required Services', subtitle: 'Add the service blocks you need quotations for' } },
-  { id: 'review', label: 'Review & Send', heading: { title: 'Review & Send RFQ', subtitle: 'Review your RFQ before sending to vendors' } },
-];
-
-// Dynamic headings for counterparty step based on contract type
-const COUNTERPARTY_HEADINGS: Record<string, { title: string; subtitle: string }> = {
-  client: { title: 'Select your Client', subtitle: 'Choose which client this contract is for' },
-  vendor: { title: 'Select your Vendor', subtitle: 'Choose which vendor this contract is with' },
-  partner: { title: 'Select your Partner', subtitle: 'Choose which partner this contract is with' },
-};
-
-// Counterparty labels for success screen
-const COUNTERPARTY_LABEL: Record<string, string> = {
-  client: 'client',
-  vendor: 'vendor',
-  partner: 'partner',
-};
-
-// Map wizard acceptance_method to API-accepted values
-// API accepts: 'manual' | 'auto' | 'digital_signature'
-const ACCEPTANCE_METHOD_API_MAP: Record<string, string> = {
-  payment: 'manual',
-  signoff: 'digital_signature',
-  auto: 'auto',
-};
 
 // Payment method options for pre-payment dialog
 const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
@@ -211,289 +99,7 @@ const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
-// UUID check for fly-by block detection
-const isValidUUID = (id: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-// Nomenclature groups that require the asset selection step
-const ASSET_STEP_GROUPS = new Set(['equipment_maintenance', 'facility_property']);
-
-// Compute and format events for API (matches t_contracts.computed_events JSONB schema)
-function computeEventsForApi(state: ContractWizardState): any[] | undefined {
-  // Skip for RFQ mode
-  if (state.wizardMode === 'rfq') return undefined;
-
-  // Compute events using the same logic as EventsPreviewStep
-  const rawEvents = computeContractEvents({
-    startDate: state.startDate,
-    durationValue: state.durationValue,
-    durationUnit: state.durationUnit,
-    selectedBlocks: state.selectedBlocks,
-    paymentMode: state.paymentMode,
-    emiMonths: state.emiMonths,
-    perBlockPaymentType: state.perBlockPaymentType,
-    billingCycleType: state.billingCycleType,
-    grandTotal: state.grandTotal || state.totalValue,
-    currency: state.currency,
-  });
-
-  if (!rawEvents || rawEvents.length === 0) return undefined;
-
-  // Apply eventOverrides and convert to API format
-  const mapped = rawEvents.map((event: ContractEvent) => {
-    // Apply user override if exists
-    const overriddenDate = state.eventOverrides[event.id];
-    const scheduledDate = overriddenDate || event.scheduled_date;
-
-    return {
-      block_id: event.block_id,
-      block_name: event.block_name,
-      category_id: event.category_id || undefined,
-      event_type: event.event_type,
-      billing_sub_type: event.billing_sub_type || undefined,
-      billing_cycle_label: event.billing_cycle_label || undefined,
-      sequence_number: event.sequence_number,
-      total_occurrences: event.total_occurrences,
-      scheduled_date: scheduledDate instanceof Date
-        ? scheduledDate.toISOString()
-        : new Date(scheduledDate).toISOString(),
-      amount: event.amount || undefined,
-      currency: event.currency || state.currency,
-      assigned_to: event.assigned_to || undefined,
-      assigned_to_name: event.assigned_to_name || undefined,
-      // Group-session marker: persists so the ops calendars label it a "Group
-      // Session" and route to check-in instead of a 1:1 appointment.
-      audience: (event as any).audience || undefined,
-    };
-  });
-  // Re-sort by scheduled date so persisted order matches the (re-sorted) preview
-  // after any user date overrides.
-  mapped.sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime());
-  return mapped;
-}
-
-// Map wizard state to API request payload (matches deployed DB RPC schema)
-// Exported: the VaNi canvas finalize path uses the SAME mapper (single write path)
-export function mapWizardToRequest(
-  state: ContractWizardState,
-  contractType: ContractType
-): Record<string, any> {
-  // Map acceptance method to API-compatible value
-  const apiAcceptanceMethod = state.acceptanceMethod
-    ? ACCEPTANCE_METHOD_API_MAP[state.acceptanceMethod] || state.acceptanceMethod
-    : undefined;
-
-  // Compute events for contract (not RFQ)
-  const computedEvents = computeEventsForApi(state);
-
-  // Build blocks array — flattened to match t_contract_blocks columns
-  const blocks = state.selectedBlocks.map((block, idx) => {
-    const isFlyBy = !isValidUUID(block.id);
-    return {
-      position: idx,
-      source_type: isFlyBy ? 'flyby' : 'catalog',
-      source_block_id: isFlyBy ? undefined : block.id,
-      block_name: block.name,
-      block_description: block.description || '',
-      category_id: block.categoryId || undefined,
-      category_name: block.categoryName,
-      unit_price: block.price,
-      quantity: block.quantity,
-      billing_cycle: block.cycle,
-      total_price: block.totalPrice,
-      flyby_type: isFlyBy ? (block.flyByType || 'text') : undefined,
-      custom_fields: {
-        currency: block.currency,
-        unlimited: block.unlimited,
-        config: block.config || {},
-        originalId: isFlyBy ? block.id : undefined,
-      },
-    };
-  });
-
-  // Build vendors array (RFQ only) — matches t_contract_vendors columns
-  const vendors = state.wizardMode === 'rfq'
-    ? state.vendorIds.map((id, idx) => ({
-        vendor_id: id,
-        contact_id: id,
-        contact_classification: 'vendor',
-        vendor_name: state.vendorNames[idx] || '',
-      }))
-    : [];
-
-  return {
-    // Core fields
-    record_type: state.wizardMode === 'rfq' ? 'rfq' : 'contract',
-    // Note: contract_type omitted — API validates against pricing types
-    // (fixed_price, etc.) which the wizard doesn't set. The relationship
-    // type (client/vendor/partner) is carried by contact_classification.
-    name: state.contractName,
-    title: state.contractName,
-    description: state.description || undefined,
-    acceptance_method: apiAcceptanceMethod,
-    path: state.path,
-    template_id: state.templateId || undefined,
-
-    // Nomenclature (optional contract type classification)
-    nomenclature_id: state.nomenclatureId || undefined,
-
-    // Buyer / counterparty (contact_id + classification)
-    buyer_id: state.buyerId || undefined,
-    contact_id: state.buyerId || undefined,
-    contact_classification: contractType,
-    buyer_name: state.buyerName || undefined,
-    buyer_contact_person_id: state.buyerContactPersonId || undefined,
-    buyer_contact_person_name: state.buyerContactPersonName || undefined,
-
-    // Duration & timeline
-    start_date: state.startDate.toISOString(),
-    duration_value: state.durationValue,
-    duration_unit: state.durationUnit,
-    grace_period_value: state.gracePeriodValue,
-    grace_period_unit: state.gracePeriodUnit,
-
-    // Billing
-    currency: state.currency,
-    billing_cycle_type: state.billingCycleType || undefined,
-    payment_mode: state.paymentMode,
-    emi_months: state.paymentMode === 'emi' ? state.emiMonths : undefined,
-    per_block_payment_type: JSON.stringify(state.perBlockPaymentType),
-    total_value: state.baseSubtotal || state.totalValue,
-    tax_total: state.taxTotal,
-    grand_total: state.grandTotal,
-    selected_tax_rate_ids: state.selectedTaxRateIds,
-    tax_breakdown: state.taxBreakdown,
-
-    // Related entities
-    blocks,
-    vendors,
-
-    // Evidence policy
-    evidence_policy_type: state.evidencePolicyType,
-    evidence_selected_forms: state.evidencePolicyType === 'smart_form'
-      ? state.evidenceSelectedForms.map((f) => ({
-          form_template_id: f.form_template_id,
-          name: f.name,
-          version: f.version,
-          category: f.category,
-          sort_order: f.sort_order,
-        }))
-      : [],
-
-    // Computed events (for PGMQ trigger when contract becomes active)
-    computed_events: computedEvents,
-
-    // Equipment / Entity details (JSONB — matches t_contracts.equipment_details)
-    equipment_details: state.equipmentDetails.length > 0 ? state.equipmentDetails : undefined,
-    allow_buyer_to_add_equipment: state.allowBuyerToAdd || undefined,
-    coverage_types: state.coverageTypes.length > 0 ? state.coverageTypes : undefined,
-  };
-}
-
-// Initial wizard state factory (needs fresh Date each time)
-export const createInitialWizardState = (): ContractWizardState => ({
-  path: null,
-  templateId: null,
-  role: null,
-  wizardMode: 'contract',
-  // Counterparty
-  buyerId: null,
-  buyerName: '',
-  buyerContactPersonId: null,
-  buyerContactPersonName: null,
-  useCompanyContact: false,
-  vendorIds: [],
-  vendorNames: [],
-  // Nomenclature
-  nomenclatureId: null,
-  nomenclatureName: null,
-  nomenclatureGroup: null,
-  // Acceptance
-  acceptanceMethod: null,
-  // Contract Details
-  contractName: '',
-  status: 'draft',
-  currency: 'INR',
-  description: '',
-  startDate: new Date(),
-  durationValue: 1,
-  durationUnit: 'months',
-  gracePeriodValue: 0,
-  gracePeriodUnit: 'days',
-  // Billing Cycle
-  billingCycleType: null,
-  // Blocks & Total
-  selectedBlocks: [],
-  totalValue: 0,
-  // Billing View - Tax & Payment
-  selectedTaxRateIds: [],
-  baseSubtotal: 0,
-  taxTotal: 0,
-  grandTotal: 0,
-  taxBreakdown: [],
-  paymentMode: 'prepaid',
-  emiMonths: 6,
-  perBlockPaymentType: {},
-  // Asset Selection
-  equipmentDetails: [],
-  allowBuyerToAdd: false,
-  coverageTypes: [],
-  // Evidence Policy
-  evidencePolicyType: 'none',
-  evidenceSelectedForms: [],
-  // Events Preview
-  eventOverrides: {},
-});
-
-// Serialize wizard state for storage in metadata (Dates → ISO strings)
-export function serializeWizardState(state: ContractWizardState): Record<string, any> {
-  return {
-    ...state,
-    startDate: state.startDate instanceof Date ? state.startDate.toISOString() : state.startDate,
-    eventOverrides: Object.fromEntries(
-      Object.entries(state.eventOverrides).map(([k, v]) => [k, v instanceof Date ? v.toISOString() : v])
-    ),
-  };
-}
-
-// Deserialize wizard state from metadata (ISO strings → Dates)
-function deserializeWizardState(raw: Record<string, any>): ContractWizardState {
-  return {
-    ...createInitialWizardState(),
-    ...raw,
-    startDate: raw.startDate ? new Date(raw.startDate) : new Date(),
-    eventOverrides: raw.eventOverrides
-      ? Object.fromEntries(
-          Object.entries(raw.eventOverrides).map(([k, v]) => [k, new Date(v as string)])
-        )
-      : {},
-  };
-}
-
-// Strip contract-instance data (buyer, assets, event overrides) before a
-// wizard state is persisted inside a template — templates are counterparty-free
-export function sanitizeStateForTemplate(state: ContractWizardState): ContractWizardState {
-  return {
-    ...state,
-    path: null,
-    templateId: null,
-    buyerId: null,
-    buyerName: '',
-    buyerContactPersonId: null,
-    buyerContactPersonName: null,
-    useCompanyContact: false,
-    vendorIds: [],
-    vendorNames: [],
-    status: 'draft',
-    equipmentDetails: [],
-    coverageTypes: [],
-    allowBuyerToAdd: false,
-    eventOverrides: {},
-  };
-}
-
-// Minimum step index to trigger auto-save (Details step = index 4 in CONTRACT_STEPS)
-const DRAFT_SAVE_MIN_STEP_ID = 'details';
 
 const ContractWizard: React.FC<ContractWizardProps> = ({
   isOpen,
@@ -947,7 +553,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Skip asset selection step when nomenclature group has no resource mapping
   // (template mode has no asset step at all — flag must stay false)
-  const shouldSkipAssetStep = !isRfqMode && !isTemplateMode && !ASSET_STEP_GROUPS.has(wizardState.nomenclatureGroup || '');
+  const shouldSkipAssetStep = shouldSkipAssetStepFor(wizardState, { isRfqMode, isTemplateMode });
 
   // Find the index of the assetSelection step (for skip logic)
   const assetStepIndex = activeSteps.findIndex(s => s.id === 'assetSelection');
@@ -963,45 +569,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     );
   }, [wizardState.selectedBlocks]);
 
-  // Navigation validation (step ID-based)
-  const canGoNext = useCallback((): boolean => {
-    // If showing template selection sub-step
-    if (showTemplateSelection) {
-      return wizardState.templateId !== null;
-    }
-
-    switch (currentStepId) {
-      case 'path':
-        return wizardState.path !== null;
-      case 'nomenclature':
-        return true; // Optional step — can always proceed
-      case 'counterparty':
-        return isRfqMode
-          ? wizardState.vendorIds.length > 0
-          : wizardState.buyerId !== null;
-      case 'acceptance':
-        return wizardState.acceptanceMethod !== null;
-      case 'details':
-        return wizardState.contractName.trim() !== '' && wizardState.durationValue > 0;
-      case 'billingCycle':
-        return wizardState.billingCycleType !== null;
-      case 'blocks':
-        return wizardState.selectedBlocks.length > 0;
-      case 'billingView':
-        return true;
-      case 'assetSelection':
-        // Coverage types are mandatory — user must pick at least one type
-        return wizardState.coverageTypes.length > 0;
-      case 'evidencePolicy':
-        return true; // Evidence policy always has a default (none)
-      case 'events':
-        return true; // Events preview is informational, always valid
-      case 'review':
-        return true;
-      default:
-        return false;
-    }
-  }, [currentStepId, wizardState, showTemplateSelection, isRfqMode]);
+  // Navigation validation (step ID-based) — pure rules in ./logic/gating
+  const canGoNext = useCallback(
+    (): boolean => canGoNextForStep(currentStepId, wizardState, { showTemplateSelection, isRfqMode }),
+    [currentStepId, wizardState, showTemplateSelection, isRfqMode]
+  );
 
   const canGoBack = currentStep > 0 || showTemplateSelection;
   const isLastStep = currentStep === totalSteps - 1;
