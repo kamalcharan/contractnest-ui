@@ -99,10 +99,12 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
 
         // In edit mode, auto-advance wizard to the last completed step
         // so user sees their saved data instead of starting from scratch.
-        // Industry is now managed separately (Industries sidebar tab), so an
-        // existing profile's industry_id is no longer a reliable completeness
-        // gate here — any saved profile should land straight on org details.
-        if (profileData.business_type_id) {
+        // business_type_id is deprecated (persona replaced it — see TenantProfile
+        // type) and is null for every tenant now, so it can never gate this.
+        // Industry is also managed separately (Industries sidebar tab) and can
+        // be blank on a fully profiled tenant. persona is the field that's
+        // actually populated once a profile exists, so gate on that.
+        if (profileData.persona || profileData.business_type_id) {
           setCurrentStep('organization-details');
         } else if (profileData.industry_id) {
           setCurrentStep('industry');
