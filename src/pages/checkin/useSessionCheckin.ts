@@ -14,7 +14,7 @@ const unwrap = (res: any) => res?.data?.data ?? res?.data;
 export interface CheckinOccurrence { event_id: string; date: string; name?: string }
 export interface CheckinResolve {
   ok: boolean; reason?: string;
-  tenant_id?: string; contract_id?: string; contract_name?: string; today?: string;
+  tenant_id?: string; contract_id?: string; contract_name?: string; business_name?: string; today?: string;
   occurrence?: CheckinOccurrence | null; next_occurrence?: { event_id: string; date: string } | null;
 }
 export interface CheckinMember { contact_id: string; name: string; membership_contract_id: string | null }

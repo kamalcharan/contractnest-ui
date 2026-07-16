@@ -99,7 +99,7 @@ const Card: React.FC<{ children: React.ReactNode; pad?: number }> = ({ children,
     marginBottom: 14, boxShadow: '0 1px 2px rgba(16,24,40,0.04)' }}>{children}</div>
 );
 
-const Shell: React.FC<{ chapterName: string; children: React.ReactNode }> = ({ chapterName, children }) => (
+const Shell: React.FC<{ chapterName: string; tenantName?: string; children: React.ReactNode }> = ({ chapterName, tenantName, children }) => (
   <div style={{ minHeight: '100vh', background: BRAND.bg, padding: '20px 16px 40px' }}>
     <div style={{ maxWidth: 460, margin: '0 auto' }}>
       {/* Branded header */}
@@ -108,6 +108,11 @@ const Shell: React.FC<{ chapterName: string; children: React.ReactNode }> = ({ c
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18,
           boxShadow: '0 4px 12px -2px rgba(218,100,16,0.45)' }}>{initialOf(chapterName)}</div>
         <div style={{ lineHeight: 1.2 }}>
+          {tenantName && (
+            <div style={{ fontSize: 11, color: BRAND.sub, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              {tenantName}
+            </div>
+          )}
           <div style={{ fontWeight: 800, color: BRAND.ink, fontSize: 16 }}>{chapterName}</div>
           <div style={{ fontSize: 12, color: BRAND.sub }}>Session check-in</div>
         </div>
@@ -362,6 +367,7 @@ const SessionCheckinPage: React.FC = () => {
 
   // ── shared UI atoms ──
   const chapterName = resolve?.contract_name || 'Session Check-in';
+  const tenantName = resolve?.business_name;
   const occ = resolve?.occurrence;
 
   const inputStyle = INPUT_STYLE;
@@ -477,12 +483,12 @@ const SessionCheckinPage: React.FC = () => {
   };
 
   // ── screens ──
-  if (loading) return <Shell chapterName={chapterName}><Card>Loading…</Card></Shell>;
-  if (err && !resolve) return <Shell chapterName={chapterName}><Card><p style={{ color: BRAND.err, margin: 0 }}>{err}</p></Card></Shell>;
+  if (loading) return <Shell chapterName={chapterName} tenantName={tenantName}><Card>Loading…</Card></Shell>;
+  if (err && !resolve) return <Shell chapterName={chapterName} tenantName={tenantName}><Card><p style={{ color: BRAND.err, margin: 0 }}>{err}</p></Card></Shell>;
 
   if (done) {
     return (
-      <Shell chapterName={chapterName}>
+      <Shell chapterName={chapterName} tenantName={tenantName}>
         <Card pad={24}>
           <div style={{ width: 68, height: 68, margin: '4px auto 10px', borderRadius: '50%', background: '#ECFDF3',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 }}>✅</div>
@@ -518,7 +524,7 @@ const SessionCheckinPage: React.FC = () => {
   }
 
   return (
-    <Shell chapterName={chapterName}>
+    <Shell chapterName={chapterName} tenantName={tenantName}>
       {/* Session hero */}
       <Card>
         {occ ? (

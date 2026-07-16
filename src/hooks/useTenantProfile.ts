@@ -98,10 +98,13 @@ export const useTenantProfile = (options: UseTenantProfileOptions = {}) => {
         });
 
         // In edit mode, auto-advance wizard to the last completed step
-        // so user sees their saved data instead of starting from scratch
-        if (profileData.business_type_id && profileData.industry_id) {
+        // so user sees their saved data instead of starting from scratch.
+        // Industry is now managed separately (Industries sidebar tab), so an
+        // existing profile's industry_id is no longer a reliable completeness
+        // gate here — any saved profile should land straight on org details.
+        if (profileData.business_type_id) {
           setCurrentStep('organization-details');
-        } else if (profileData.business_type_id) {
+        } else if (profileData.industry_id) {
           setCurrentStep('industry');
         }
       } else {
