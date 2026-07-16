@@ -130,6 +130,16 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
     [selectedBlocks]
   );
 
+  // EMI and cadence pricing are competing answers to "how is this amount
+  // spread over time": EMI is an equal split of the grand total, a cadence
+  // rate card is the seller's own priced installment offer (with buyer choice
+  // at acceptance). Mixing them breaks money — a buyer's cadence switch
+  // reprices totals but contract-level EMI events would not regenerate.
+  const hasCadenceBlocks = useMemo(
+    () => selectedBlocks.some((b) => Boolean((b.config as any)?.cadencePricing)),
+    [selectedBlocks]
+  );
+
   const isMixed = billingCycleType === 'mixed';
 
   // Conditional availability for payment schedule options
@@ -298,6 +308,14 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       onPaymentModeChange('defined');
     }
   }, [isMixed, paymentMode, onPaymentModeChange]);
+
+  // Drafts/templates that picked EMI before a cadence block was added fall
+  // back to per-block billing — the cadence IS the installment plan.
+  useEffect(() => {
+    if (hasCadenceBlocks && paymentMode === 'emi') {
+      onPaymentModeChange('defined');
+    }
+  }, [hasCadenceBlocks, paymentMode, onPaymentModeChange]);
 
   // Handle per-block payment type change
   const handleBlockPaymentTypeChange = useCallback(
@@ -894,18 +912,19 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                       </div>
                     </button>
 
-                    {/* EMI Card */}
+                    {/* EMI Card — blocked when a block carries a cadence rate
+                        card (the cadence IS the installment plan) */}
                     <button
-                      onClick={() => allPostpaid && onPaymentModeChange('emi')}
+                      onClick={() => allPostpaid && !hasCadenceBlocks && onPaymentModeChange('emi')}
                       className="flex-1 p-3 rounded-xl border-2 transition-all text-left relative"
                       style={{
                         borderColor: paymentMode === 'emi' ? colors.brand.primary : `${colors.utility.primaryText}15`,
                         backgroundColor: paymentMode === 'emi' ? `${colors.brand.primary}08` : 'transparent',
-                        opacity: allPostpaid ? 1 : 0.45,
-                        cursor: allPostpaid ? 'pointer' : 'not-allowed',
+                        opacity: allPostpaid && !hasCadenceBlocks ? 1 : 0.45,
+                        cursor: allPostpaid && !hasCadenceBlocks ? 'pointer' : 'not-allowed',
                       }}
                     >
-                      {!allPostpaid && (
+                      {(!allPostpaid || hasCadenceBlocks) && (
                         <Lock className="w-3 h-3 absolute top-2 right-2" style={{ color: colors.utility.secondaryText }} />
                       )}
                       <CalendarRange
@@ -922,7 +941,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                         className="text-[10px] mt-0.5"
                         style={{ color: colors.utility.secondaryText }}
                       >
-                        Equal installments
+                        {hasCadenceBlocks ? 'Blocks with payment plans set their own schedule' : 'Equal installments'}
                       </div>
                     </button>
 
@@ -1221,19 +1240,24 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onPaymentModeChange('emi')}
-                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left"
+                      onClick={() => !hasCadenceBlocks && onPaymentModeChange('emi')}
+                      className="flex-1 p-3 rounded-xl border-2 transition-all text-left relative"
                       style={{
                         borderColor: paymentMode === 'emi' ? colors.brand.primary : `${colors.utility.primaryText}15`,
                         backgroundColor: paymentMode === 'emi' ? `${colors.brand.primary}08` : 'transparent',
+                        opacity: hasCadenceBlocks ? 0.45 : 1,
+                        cursor: hasCadenceBlocks ? 'not-allowed' : 'pointer',
                       }}
                     >
+                      {hasCadenceBlocks && (
+                        <Lock className="w-3 h-3 absolute top-2 right-2" style={{ color: colors.utility.secondaryText }} />
+                      )}
                       <CalendarRange className="w-5 h-5 mb-2" style={{ color: paymentMode === 'emi' ? colors.brand.primary : colors.utility.secondaryText }} />
                       <div className="text-xs font-bold" style={{ color: paymentMode === 'emi' ? colors.brand.primary : colors.utility.primaryText }}>
                         EMI
                       </div>
                       <div className="text-[10px] mt-0.5" style={{ color: colors.utility.secondaryText }}>
-                        Equal installments of total
+                        {hasCadenceBlocks ? 'Blocks with payment plans set their own schedule' : 'Equal installments of total'}
                       </div>
                     </button>
                   </div>

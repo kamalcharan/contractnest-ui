@@ -53,11 +53,25 @@ const EditBlockPage: React.FC = () => {
     return blocks.find(b => b.id === id) || null;
   }, [blocksResponse, id]);
 
-  // Initialize state when block is loaded
+  // Initialize state when block is loaded.
+  // The wizard steps read TOP-LEVEL fields (requiresCycles, cycleDays,
+  // audience…) while a loaded block keeps them in meta — hydrate them up
+  // so the Delivery step shows the saved cycle instead of defaults.
   useEffect(() => {
     if (editingBlock) {
       setBlockType(editingBlock.categoryId);
-      setFormData(editingBlock);
+      const meta = (editingBlock.meta || {}) as Record<string, any>;
+      const cycles = meta.serviceCycles as { enabled?: boolean; days?: number; gracePeriod?: number } | undefined;
+      setFormData({
+        ...editingBlock,
+        ...(cycles !== undefined ? {
+          requiresCycles: cycles?.enabled === true,
+          cycleDays: cycles?.days,
+          cycleGracePeriod: cycles?.gracePeriod,
+        } : {}),
+        ...(meta.audience !== undefined ? { audience: meta.audience } : {}),
+        ...(meta.complimentary !== undefined ? { complimentary: meta.complimentary } : {}),
+      } as Partial<Block>);
     }
   }, [editingBlock]);
 

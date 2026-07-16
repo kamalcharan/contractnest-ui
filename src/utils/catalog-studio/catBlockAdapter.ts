@@ -146,6 +146,8 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       // Service-specific
       deliveryMode: config.deliveryMode || config.location?.type,
       serviceCycles: config.serviceCycles,
+      audience: config.audience,
+      complimentary: config.complimentary,
       billingOnly: config.billingOnly,
       bufferTime: config.buffer || config.bufferTime,
       location: config.location,
@@ -295,17 +297,29 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
     config.deliveryMode = deliveryMode;
   }
 
-  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod
+  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod.
+  // An explicit requiresCycles WINS over a stale meta.serviceCycles (else
+  // toggling cycles OFF on edit silently kept the old enabled config).
   const requiresCycles = getField(block, 'requiresCycles');
   const cycleDays = getField(block, 'cycleDays');
-  const serviceCycles = getField(block, 'serviceCycles');
-  if (requiresCycles || serviceCycles) {
-    config.serviceCycles = serviceCycles || {
-      enabled: requiresCycles,
-      days: cycleDays,
-      gracePeriod: getField(block, 'cycleGracePeriod'),
+  const serviceCycles = getField(block, 'serviceCycles') as
+    { enabled?: boolean; days?: number; gracePeriod?: number; anchorWeekday?: number } | undefined;
+  if (requiresCycles === true || (requiresCycles === undefined && serviceCycles?.enabled)) {
+    config.serviceCycles = {
+      enabled: true,
+      days: (cycleDays as number | undefined) ?? serviceCycles?.days,
+      gracePeriod: getField(block, 'cycleGracePeriod') ?? serviceCycles?.gracePeriod,
+      // Weekday anchor (e.g. "every Saturday") rides through untouched
+      ...(serviceCycles?.anchorWeekday !== undefined ? { anchorWeekday: serviceCycles.anchorWeekday } : {}),
     };
   }
+
+  // Audience (group => Group Session with a roster) and complimentary
+  // (free => occurrences, no billing) — the Group Session identity flags
+  const audience = getField(block, 'audience');
+  if (audience) config.audience = audience;
+  const complimentary = getField(block, 'complimentary');
+  if (complimentary !== undefined) config.complimentary = complimentary;
 
   // Billing-only flag — block bills on its cycle but generates no service events
   const billingOnly = getField(block, 'billingOnly');
@@ -629,6 +643,18 @@ const buildConfig = (block: Partial<Block>, blockType: string): Record<string, u
   switch (blockType) {
     case 'service':
       return buildServiceConfig(block);
+    // Group Session IS a service block (audience=group, cycle-driven
+    // occurrences) — without this case its config fell to the default
+    // `{ icon }` and the cycle/audience were silently dropped on save.
+    case 'session': {
+      const cfg = buildServiceConfig(block);
+      // Group-audience is the session's identity — the Group Sessions
+      // dashboard filters on config.audience='group', so a session block
+      // must NEVER save without it (blocks created pre-fix have no saved
+      // audience for the edit form to carry through).
+      if (!cfg.audience) cfg.audience = 'group';
+      return cfg;
+    }
     case 'spare':
       return buildSpareConfig(block);
     case 'billing':
@@ -884,8 +910,11 @@ export const blockToUpdateData = (
   const resourcePricing = buildResourcePricing(updates);
   if (resourcePricing) data.resource_pricing = resourcePricing;
 
-  // Config updates - rebuild entire config if any meta changes
-  if (Object.keys(meta).length > 0 && updates.categoryId) {
+  // Config updates — a categoryId means a FULL wizard save (all callers pass
+  // the complete form), so rebuild the whole config from it. The old
+  // meta-must-be-non-empty guard dropped configs for forms that carried the
+  // wizard's top-level fields only (e.g. requiresCycles/cycleDays).
+  if (updates.categoryId) {
     data.config = buildConfig(updates, updates.categoryId);
   } else if (Object.keys(meta).length > 0) {
     // Partial config update - merge with existing
@@ -913,6 +942,8 @@ export const blockToUpdateData = (
     if (meta.resourceTypes !== undefined) configUpdates.resourceTypes = meta.resourceTypes;
     if (meta.deliveryMode !== undefined) configUpdates.deliveryMode = meta.deliveryMode;
     if (meta.serviceCycles !== undefined) configUpdates.serviceCycles = meta.serviceCycles;
+    if (meta.audience !== undefined) configUpdates.audience = meta.audience;
+    if (meta.complimentary !== undefined) configUpdates.complimentary = meta.complimentary;
     if (meta.billingOnly !== undefined) configUpdates.billingOnly = meta.billingOnly;
     if (meta.bufferTime !== undefined) configUpdates.buffer = meta.bufferTime;
     if (meta.terms !== undefined) configUpdates.terms = meta.terms;

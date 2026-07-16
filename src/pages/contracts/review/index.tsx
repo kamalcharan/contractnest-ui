@@ -452,8 +452,12 @@ const ContractReviewPage: React.FC = () => {
       }>;
   }, [contract]);
 
-  // The buyer may change plans only while the contract awaits their sign-off
-  const cadencePickerActive = cadenceChoices.length > 0 && contract?.status === 'pending_acceptance';
+  // The buyer may change plans only while the contract awaits their sign-off.
+  // EMI contracts keep the seller's proposal: EMI events are contract-level
+  // and would not regenerate on a cadence switch (stale-schedule hazard).
+  const cadencePickerActive = cadenceChoices.length > 0
+    && contract?.status === 'pending_acceptance'
+    && contract?.payment_mode !== 'emi';
 
   // Contract with the buyer's picks applied — drives the on-screen document
   // and displayed totals so the buyer signs exactly what they see.
