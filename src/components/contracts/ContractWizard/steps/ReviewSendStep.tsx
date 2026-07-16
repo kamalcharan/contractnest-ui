@@ -56,6 +56,11 @@ import {
 export interface ReviewSendStepProps {
   contractName: string;
   contractStatus: string;
+  // Saved-contract viewers (contract detail page) pass the real number and
+  // start date so the document shows them; the wizard omits them (pre-save).
+  contractNumber?: string | null;
+  startDate?: string | Date | null;
+  createdDate?: string | null;
   description: string;
   durationValue: number;
   durationUnit: string;
@@ -134,6 +139,8 @@ const CATEGORY_ICONS: Record<string, React.FC<{ className?: string; style?: Reac
 const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   contractName,
   contractStatus,
+  contractNumber = null,
+  startDate: startDateProp = null,
   description,
   durationValue,
   durationUnit,
@@ -246,8 +253,14 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     ].filter(Boolean) as string[];
     return buildDocFromWizard({
       contractName,
-      contractNumber: null,
-      statusLabel: rfqMode ? 'RFQ Draft' : `${contractStatus || 'draft'} — awaiting acceptance`,
+      contractNumber: contractNumber || null,
+      statusLabel: rfqMode
+        ? 'RFQ Draft'
+        : contractStatus === 'active'
+          ? 'Active'
+          : contractStatus === 'pending_acceptance'
+            ? 'Awaiting acceptance'
+            : `${contractStatus || 'draft'} — awaiting acceptance`,
       providerName: tenantProfile?.business_name || 'Your Company',
       providerLogoUrl: tenantProfile?.logo_url,
       providerLines,
@@ -255,7 +268,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       customerLines,
       durationValue,
       durationUnit,
-      startDate: new Date(),
+      startDate: startDateProp ? new Date(startDateProp) : new Date(),
       acceptanceMethod,
       currency,
       selectedBlocks,
@@ -266,7 +279,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       discountType,
       discountValue,
     });
-  }, [tenantProfile, buyerDisplayName, buyerPrimaryEmail, buyerPrimaryPhone, contractName, contractStatus, rfqMode, isTemplate, durationValue, durationUnit, acceptanceMethod, currency, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, discountType, discountValue]);
+  }, [tenantProfile, buyerDisplayName, buyerPrimaryEmail, buyerPrimaryPhone, contractName, contractStatus, contractNumber, startDateProp, rfqMode, isTemplate, durationValue, durationUnit, acceptanceMethod, currency, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, discountType, discountValue]);
 
   // ─── Group blocks by category ────────────────────────────────────
   // Billing-only blocks (fees/dues — no service visits) group under Billing,
@@ -375,9 +388,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       }));
   }, [selectedBlocks]);
 
-  // Timeline dates
-  const startDate = new Date();
-  const endDate = new Date();
+  // Timeline dates (saved-contract viewers pass the real start date)
+  const startDate = startDateProp ? new Date(startDateProp) : new Date();
+  const endDate = new Date(startDate);
   endDate.setMonth(endDate.getMonth() + durationMonths);
   const formatDate = (d: Date) =>
     new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);

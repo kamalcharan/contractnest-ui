@@ -40,6 +40,9 @@ import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { getCategoryById, categoryHasPricing } from '@/utils/catalog-studio/categories';
 import ContractDocument, { buildDocFromSavedContract } from '@/components/contracts/document/ContractDocument';
+import { CADENCE_CYCLES, cadenceTermMath } from '@/utils/catalog-studio/cadencePricing';
+import type { CadenceRate } from '@/utils/catalog-studio/cadencePricing';
+import { durationToDays } from '@/utils/service-contracts/contractEvents';
 
 // ═══════════════════════════════════════════════════
 // TYPES (full contract from get_contract_by_id)
@@ -217,6 +220,9 @@ const ContractReviewPage: React.FC = () => {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [cnakCopied, setCnakCopied] = useState(false);
+  // Cadence pricing 2b: buyer's payment-plan picks — {block row id → cycle}.
+  // Empty/absent = keep the seller's proposal.
+  const [cadenceSelections, setCadenceSelections] = useState<Record<string, string>>({});
 
   const paperRef = useRef<HTMLDivElement>(null);
   // PDF export captures the professional ContractDocument (off-screen render)
@@ -261,6 +267,14 @@ const ContractReviewPage: React.FC = () => {
 
     try {
       setSubmitting(true);
+      // Cadence pricing 2b→2c hand-off: only picks that DIFFER from the
+      // seller's proposal travel, and only as {block_id, cycle} — the server
+      // recomputes all amounts from the stored rate card.
+      const selections = action === 'accept'
+        ? cadenceChoices
+            .filter((cb) => cadenceSelections[cb.rowId] && cadenceSelections[cb.rowId] !== cb.proposedCycle)
+            .map((cb) => ({ block_id: cb.rowId, cycle: cadenceSelections[cb.rowId] }))
+        : [];
       const response = await api.post(API_ENDPOINTS.CONTRACTS.PUBLIC_RESPOND, {
         cnak,
         secret_code: secret,
@@ -268,6 +282,7 @@ const ContractReviewPage: React.FC = () => {
         responder_name: contractData?.access?.accessor_name || null,
         responder_email: contractData?.access?.accessor_email || null,
         rejection_reason: action === 'reject' ? rejectionReason : null,
+        cadence_selections: selections.length > 0 ? selections : undefined,
       });
 
       const data = response.data;
@@ -344,6 +359,10 @@ const ContractReviewPage: React.FC = () => {
   const brandSecondary = profile?.secondary_color || '#10B981';
 
   const canvasBg = isDarkMode ? '#1a1a2e' : '#F1F5F9';
+  // Typed aliases for the theme's text colors (the file-wide colors.text
+  // idiom predates the ThemeColors type — new code goes through these).
+  const inkText = (colors as any).text as string;
+  const inkSub = (colors as any).textSecondary as string;
   const paperBg = isDarkMode ? '#1e1e30' : '#FFFFFF';
   const paperShadow = isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 10px 30px rgba(0,0,0,0.05)';
   const borderColor = isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
@@ -366,18 +385,132 @@ const ContractReviewPage: React.FC = () => {
     );
   }, [contract?.blocks]);
 
-  // Financial totals
+  // ═══ Cadence pricing 2b: buyer payment-plan options ═══
+  // For every cadence-priced block, the enabled cadences that fit the term —
+  // each with its effective rate (seller per-cadence override wins) and the
+  // tax-adjusted term total. DISPLAY ONLY: on accept the server recomputes
+  // every amount from the stored rate card; only {block_id, cycle} is sent.
+  // ⚠ Mirrors contracts edge fn cadence-acceptance.ts (repriceBlockForCadence).
+  const cadenceChoices = useMemo(() => {
+    if (!contract?.blocks?.length) return [];
+    const totalDays = durationToDays(contract.duration_value || 0, contract.duration_unit || 'months');
+    const durationMonths = Math.max(1, Math.round(totalDays / 30));
+
+    return contract.blocks
+      .map((row) => {
+        const cfg = row.custom_fields?.config || {};
+        const card = cfg.cadencePricing as { rates?: CadenceRate[] } | undefined;
+        if (!card || !Array.isArray(card.rates)) return null;
+
+        // Effective tax factor backed out of the stored totals (same derivation
+        // as the server): total_price ÷ pre-tax term total of the proposal.
+        const proposedCycle = row.billing_cycle;
+        const oldMonths = CADENCE_CYCLES.find((c) => c.id === proposedCycle)?.monthsPerPeriod || 1;
+        const oldEffRate = typeof cfg.customPrice === 'number' ? cfg.customPrice : row.unit_price;
+        const oldMath = cadenceTermMath(
+          oldEffRate, durationMonths, oldMonths,
+          typeof cfg.cadenceFinalPayment === 'number' ? cfg.cadenceFinalPayment : undefined
+        );
+        const taxFactor = oldMath.termTotal > 0 ? row.total_price / oldMath.termTotal : 1;
+
+        const options = CADENCE_CYCLES
+          .filter((c) => {
+            const r = card.rates!.find((cr) => cr.cycle === c.id);
+            return !!r && r.enabled !== false && r.amount > 0 && c.monthsPerPeriod <= durationMonths;
+          })
+          .map((c) => {
+            const isProposed = c.id === proposedCycle;
+            const override = (cfg.cadenceOverrides as Record<string, number> | undefined)?.[c.id];
+            const cardRate = card.rates!.find((cr) => cr.cycle === c.id)!.amount;
+            // The proposed cadence must show EXACTLY what the seller sent
+            // (incl. custom rate + hand-set final); others use standard math.
+            const rate = isProposed ? oldEffRate : (typeof override === 'number' && override > 0 ? override : cardRate);
+            const math = isProposed ? oldMath : cadenceTermMath(rate, durationMonths, c.monthsPerPeriod);
+            const totalWithTax = isProposed ? row.total_price : Math.round(math.termTotal * taxFactor * 100) / 100;
+            const finalWithTax = Math.round(math.finalPayment * taxFactor * 100) / 100;
+            return {
+              cycle: c.id as string,
+              label: c.label,
+              per: c.per,
+              rate,
+              fullPayments: math.fullPayments,
+              remMonths: math.remMonths,
+              finalWithTax,
+              totalWithTax,
+              preTaxTotal: math.termTotal,
+              isProposed,
+            };
+          });
+
+        // A picker with one (or zero) options is noise — the proposal stands
+        if (options.length < 2) return null;
+        return { rowId: row.id, blockName: row.block_name, proposedCycle, taxFactor, options };
+      })
+      .filter(Boolean) as Array<{
+        rowId: string; blockName: string; proposedCycle: string; taxFactor: number;
+        options: Array<{ cycle: string; label: string; per: string; rate: number; fullPayments: number; remMonths: number; finalWithTax: number; totalWithTax: number; preTaxTotal: number; isProposed: boolean }>;
+      }>;
+  }, [contract]);
+
+  // The buyer may change plans only while the contract awaits their sign-off
+  const cadencePickerActive = cadenceChoices.length > 0 && contract?.status === 'pending_acceptance';
+
+  // Contract with the buyer's picks applied — drives the on-screen document
+  // and displayed totals so the buyer signs exactly what they see.
+  const adjustedContract = useMemo(() => {
+    if (!contract) return null;
+    if (!cadencePickerActive) return contract;
+    const changed = cadenceChoices.filter((cb) => {
+      const pick = cadenceSelections[cb.rowId];
+      return pick && pick !== cb.proposedCycle;
+    });
+    if (changed.length === 0) return contract;
+
+    let dPre = 0, dTax = 0, dTotal = 0;
+    const blocks = contract.blocks.map((row) => {
+      const cb = changed.find((c) => c.rowId === row.id);
+      if (!cb) return row;
+      const opt = cb.options.find((o) => o.cycle === cadenceSelections[cb.rowId]);
+      const proposed = cb.options.find((o) => o.isProposed);
+      if (!opt || !proposed) return row;
+      dPre += opt.preTaxTotal - proposed.preTaxTotal;
+      dTotal += opt.totalWithTax - row.total_price;
+      dTax += (opt.totalWithTax - opt.preTaxTotal) - (row.total_price - proposed.preTaxTotal);
+      const cfg = row.custom_fields?.config || {};
+      return {
+        ...row,
+        billing_cycle: opt.cycle,
+        unit_price: opt.rate,
+        total_price: opt.totalWithTax,
+        custom_fields: {
+          ...(row.custom_fields || {}),
+          config: { ...cfg, customPrice: undefined, cadenceFinalPayment: undefined },
+        },
+      };
+    });
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      ...contract,
+      blocks,
+      total_value: round2((contract.total_value || 0) + dPre),
+      tax_total: round2((contract.tax_total || 0) + dTax),
+      grand_total: round2((contract.grand_total || contract.total_value || 0) + dTotal),
+    };
+  }, [contract, cadencePickerActive, cadenceChoices, cadenceSelections]);
+
+  // Financial totals (buyer-adjusted when a different plan is picked)
   const totals = useMemo(() => {
-    if (!contract) return { subtotal: 0, taxTotal: 0, grandTotal: 0, billableCount: 0 };
-    const blocks = contract.blocks || [];
+    const c = adjustedContract || contract;
+    if (!c) return { subtotal: 0, taxTotal: 0, grandTotal: 0, billableCount: 0 };
+    const blocks = c.blocks || [];
     const billable = blocks.filter((b) => categoryHasPricing(b.category_id || ''));
     return {
-      subtotal: contract.total_value || 0,
-      taxTotal: contract.tax_total || 0,
-      grandTotal: contract.grand_total || contract.total_value || 0,
+      subtotal: c.total_value || 0,
+      taxTotal: c.tax_total || 0,
+      grandTotal: c.grand_total || c.total_value || 0,
       billableCount: billable.length,
     };
-  }, [contract]);
+  }, [adjustedContract, contract]);
 
   // Duration timeline
   const startDate = useMemo(() => {
@@ -405,24 +538,28 @@ const ContractReviewPage: React.FC = () => {
   // Professional document (PDF export) — every section derives from the
   // saved contract: parties, schedules, text-block terms, CNAK footer.
   const documentData = useMemo(() => {
-    if (!contract) return null;
+    // Buyer-adjusted view: the document reflects the picked payment plan —
+    // rates, term totals and the payment schedule all recompute client-side
+    // from the adjusted blocks (the server redoes this authoritatively).
+    const docContract = adjustedContract || contract;
+    if (!docContract) return null;
     const profile = tenant?.profile;
     const providerLines = [
       [profile?.city, profile?.state_code].filter(Boolean).join(', '),
       [profile?.business_phone_country_code, profile?.business_phone].filter(Boolean).join(' '),
       profile?.business_email || '',
     ].filter(Boolean) as string[];
-    const customerLines = [contract.buyer_phone || '', contract.buyer_email || ''].filter(Boolean) as string[];
+    const customerLines = [docContract.buyer_phone || '', docContract.buyer_email || ''].filter(Boolean) as string[];
     return buildDocFromSavedContract({
-      contract: contract as any,
+      contract: docContract as any,
       providerName: profile?.business_name || tenant?.name || 'Provider',
       providerLogoUrl: profile?.logo_url,
       providerLines,
-      customerName: contract.buyer_company || contract.buyer_name || null,
+      customerName: docContract.buyer_company || docContract.buyer_name || null,
       customerLines,
       cnak: cnak || null,
     });
-  }, [contract, tenant, cnak]);
+  }, [adjustedContract, contract, tenant, cnak]);
 
   // ═══════════════════════════════════════════════════
   // RENDERS
@@ -579,6 +716,84 @@ const ContractReviewPage: React.FC = () => {
       {error && (
         <div style={{ maxWidth: 820, margin: '12px auto 0', padding: '12px 16px', borderRadius: 8, backgroundColor: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: 13 }}>
           {error}
+        </div>
+      )}
+
+      {/* ═══ PAYMENT PLAN PICKER (cadence pricing 2b) ═══
+          The seller offered these payment cadences on the block's rate card;
+          the buyer may sign with any of them. The document below live-updates
+          to the pick. Server recomputes all amounts on accept. */}
+      {cadencePickerActive && responseState === 'idle' && (
+        <div style={{ maxWidth: 860, margin: '16px auto 0', padding: '0 16px' }}>
+          <div style={{ backgroundColor: paperBg, borderRadius: 12, boxShadow: paperShadow, border: `1px solid ${borderColor}`, padding: '20px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: `${brandPrimary}12`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CreditCard size={17} style={{ color: brandPrimary }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: inkText }}>Choose your payment plan</div>
+                <div style={{ fontSize: 11, color: inkSub }}>
+                  The provider offers these payment cadences — pick the one that suits you. The contract below updates to your choice.
+                </div>
+              </div>
+            </div>
+
+            {cadenceChoices.map((cb) => {
+              const selected = cadenceSelections[cb.rowId] || cb.proposedCycle;
+              return (
+                <div key={cb.rowId} style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: inkText, marginBottom: 8 }}>{cb.blockName}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+                    {cb.options.map((opt) => {
+                      const isSelected = selected === opt.cycle;
+                      return (
+                        <div
+                          key={opt.cycle}
+                          onClick={() => setCadenceSelections((prev) => ({ ...prev, [cb.rowId]: opt.cycle }))}
+                          style={{
+                            position: 'relative',
+                            padding: '12px 14px',
+                            borderRadius: 10,
+                            border: `2px solid ${isSelected ? brandPrimary : borderColor}`,
+                            backgroundColor: isSelected ? `${brandPrimary}08` : 'transparent',
+                            cursor: 'pointer',
+                            transition: 'all .15s ease',
+                          }}
+                        >
+                          {opt.isProposed && (
+                            <span style={{ position: 'absolute', top: 8, right: 10, fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, padding: '2px 7px', borderRadius: 8, backgroundColor: `${brandPrimary}14`, color: brandPrimary }}>
+                              Proposed
+                            </span>
+                          )}
+                          <div style={{ fontSize: 12, fontWeight: 700, color: isSelected ? brandPrimary : inkText }}>{opt.label}</div>
+                          <div style={{ fontSize: 11, color: inkSub, marginTop: 2 }}>
+                            {formatCurrency(opt.rate, contract.currency)} {opt.per}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: inkSub, marginTop: 6 }}>
+                            {opt.fullPayments} payment{opt.fullPayments !== 1 ? 's' : ''}
+                            {opt.finalWithTax > 0 ? ` + final (${opt.remMonths} mo)` : ''}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: inkText, marginTop: 4 }}>
+                            {formatCurrency(opt.totalWithTax, contract.currency)}
+                            <span style={{ fontSize: 9.5, fontWeight: 500, color: inkSub }}> term total</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {adjustedContract && adjustedContract !== contract && (
+              <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 8, backgroundColor: `${brandPrimary}0A`, border: `1px solid ${brandPrimary}25`, fontSize: 12, color: inkText }}>
+                With your plan the contract total is{' '}
+                <strong>{formatCurrency(adjustedContract.grand_total || 0, contract.currency)}</strong>
+                <span style={{ color: inkSub }}> (proposed: {formatCurrency(contract.grand_total || contract.total_value || 0, contract.currency)})</span>
+                . Accepting signs the contract with this payment plan.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

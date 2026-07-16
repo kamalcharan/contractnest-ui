@@ -178,6 +178,12 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
     const catId = block.category_id || 'service';
     const hasPricing = categoryHasPricing(catId);
     const baseLine = unitPrice * qty;
+    // The saved block config is the source of truth for behavior flags —
+    // cadencePricing (rate card), billingOnly, seller finals, service cycles.
+    // Dropping it made cadence blocks render as rate×qty with a generic
+    // payment split (the ₹9,000-instead-of-₹25,500 document bug).
+    const savedCfg = (block.custom_fields?.config || {}) as Record<string, any>;
+    const isCadence = !!savedCfg.cadencePricing;
 
     return {
       id: block.id,
@@ -186,12 +192,18 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
       icon: catId,
       quantity: qty,
       cycle: block.billing_cycle || 'prepaid',
-      unlimited: false,
+      unlimited: block.custom_fields?.unlimited === true,
       price: unitPrice,
       currency: contract.currency || 'INR',
-      totalPrice: hasPricing && combinedTaxRate > 0
-        ? baseLine * (1 + combinedTaxRate / 100)
-        : block.total_price || baseLine,
+      customCycleDays: savedCfg.customCycleDays,
+      serviceCycleDays: savedCfg.serviceCycles?.days,
+      // Cadence blocks: total_price IS the term total (payments × rate + final,
+      // tax handled at save time) — never rate×qty
+      totalPrice: isCadence
+        ? (block.total_price || baseLine)
+        : (hasPricing && combinedTaxRate > 0
+            ? baseLine * (1 + combinedTaxRate / 100)
+            : block.total_price || baseLine),
       categoryName: block.category_name || catId,
       categoryColor: '#6B7280',
       categoryId: catId,
@@ -200,9 +212,10 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
       taxes: hasPricing ? taxItems : [],
       config: {
         showDescription: true,
-        customPrice: unitPrice,
-        notes: block.custom_fields?.notes,
-        content: block.custom_fields?.content,
+        ...savedCfg,
+        customPrice: savedCfg.customPrice ?? unitPrice,
+        notes: savedCfg.notes ?? block.custom_fields?.notes,
+        content: savedCfg.content ?? block.custom_fields?.content,
       },
     };
   });
