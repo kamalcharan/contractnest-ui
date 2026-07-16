@@ -8,7 +8,8 @@ import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import type { CreateContractRequest, UpdateContractRequest, RecordPaymentResponse, PaymentMethod } from '@/types/contracts';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
-import FloatingActionIsland from './FloatingActionIsland';
+import PhaseStepper from './shell/PhaseStepper';
+import ActionBar from './shell/ActionBar';
 import PathSelectionStep, { ContractPath, WizardMode } from './steps/PathSelectionStep';
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
 import NomenclatureStep from './steps/NomenclatureStep';
@@ -23,7 +24,9 @@ import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
 import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } from './steps/AssetSelectionStep';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
-import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import { categoryHasPricing, getCategoryById } from '@/utils/catalog-studio/categories';
+import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
+import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
 import vaniComposerService from '@/services/vaniComposerService';
 import { useSaveTemplate, type CreateTemplateData, type UpdateTemplateData } from '@/hooks/mutations/useCatTemplatesMutations';
 import { useCatTemplates, type CatTemplate } from '@/hooks/queries/useCatTemplates';
@@ -52,6 +55,8 @@ import {
   COUNTERPARTY_HEADINGS,
   COUNTERPARTY_LABEL,
   DRAFT_SAVE_MIN_STEP_ID,
+  blockedHintFor,
+  TEMPLATE_SELECTION_HINT,
 } from './logic/stepConfig';
 import { canGoNextForStep, shouldSkipAssetStepFor } from './logic/gating';
 
@@ -131,12 +136,32 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // Draft tracking state
   const [draftId, setDraftId] = useState<string | null>(draftContractId);
   const [draftVersion, setDraftVersion] = useState<number>(draftContractData?.version || 1);
+  // Always-current mirrors for async save paths. Debounced/overlapping saves
+  // reading `draftVersion` from a stale closure is exactly what produced
+  // bursts of 409s (and an "Update Failed" toast escaping silent mode) when
+  // Billing View reported totals — refs never go stale.
+  const draftVersionRef = useRef<number>(draftContractData?.version || 1);
+  const bumpDraftVersion = useCallback((v: number) => {
+    draftVersionRef.current = v;
+    setDraftVersion(v);
+  }, []);
+  const isSavingDraftRef = useRef(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // Current step state
   const [currentStep, setCurrentStep] = useState(0);
+
+  // ── WizardShell (Phase 2) navigation state ──
+  // Highest step reached — every step up to here stays clickable in the stepper
+  const [maxVisitedStep, setMaxVisitedStep] = useState(0);
+  // Reason Continue is blocked (set on a blocked attempt; Continue is never
+  // silently disabled). Cleared on any state/step change.
+  const [blockedHint, setBlockedHint] = useState<string | null>(null);
+  // Set when the user jumps backward FROM the review step — the next
+  // successful Continue returns straight to review (edit-from-review)
+  const returnToReviewRef = useRef(false);
 
   // Sub-step for template selection (shown after choosing "From Template")
   const [showTemplateSelection, setShowTemplateSelection] = useState(false);
@@ -219,7 +244,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         setCurrentStep(savedStep);
       }
       setDraftId(draftContractData.id || draftContractId);
-      setDraftVersion(draftContractData.version || 1);
+      bumpDraftVersion(draftContractData.version || 1);
     }
   }, [draftContractData, draftContractId, isOpen]);
 
@@ -378,13 +403,16 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   const resetWizard = useCallback(() => {
     setWizardState(createInitialWizardState());
     setCurrentStep(0);
+    setMaxVisitedStep(0);
+    setBlockedHint(null);
+    returnToReviewRef.current = false;
     setShowTemplateSelection(false);
     setIsContractSent(false);
     setCreatedContractData(null);
     setCnakCopied(false);
     // Draft state resets
     setDraftId(null);
-    setDraftVersion(1);
+    bumpDraftVersion(1);
     setIsSavingDraft(false);
     setDraftSaveStatus('idle');
     setShowCloseConfirm(false);
@@ -405,6 +433,73 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Determine if RFQ mode is active
   const isRfqMode = !isTemplateMode && wizardState.wizardMode === 'rfq';
+
+  // ===== MVP: auto-include the tenant's Terms & Conditions text block =====
+  // Business rule (owner decision): the singleton T&C text block rides on
+  // EVERY contract and template automatically — it is not hand-picked in the
+  // blocks step. Contributes ₹0 (no pricing, no events); its content renders
+  // as the Terms section of the contract document.
+  const { data: tncBlocksResponse } = useCatBlocksTest();
+  useEffect(() => {
+    if (!isOpen) return;
+    const catBlocks = tncBlocksResponse?.data?.blocks;
+    if (!Array.isArray(catBlocks) || catBlocks.length === 0) return;
+
+    // RFQs carry no document terms — strip any auto-included T&C that was
+    // injected before the user picked the RFQ path.
+    if (isRfqMode) {
+      setWizardState((prev) => {
+        const kept = prev.selectedBlocks.filter(
+          (b) => !((b.config as any)?.autoIncluded === true && b.categoryId === 'text')
+        );
+        return kept.length === prev.selectedBlocks.length ? prev : { ...prev, selectedBlocks: kept };
+      });
+      return;
+    }
+
+    const blocks = catBlocksToBlocks(catBlocks);
+    const tnc =
+      blocks.find(
+        (b) => b.categoryId === 'text' && /terms\s*(&|and)\s*conditions/i.test(b.name || '')
+      ) || blocks.find((b) => b.categoryId === 'text');
+    if (!tnc) return; // tenant hasn't authored T&C yet (lazy-seeded via onboarding/studio)
+
+    setWizardState((prev) => {
+      // Already present (re-injected, restored from a draft, or carried by a
+      // template) — nothing to do. Missing → (re-)append, enforcing the rule
+      // even when a template or draft predates auto-inclusion.
+      if (prev.selectedBlocks.some((b) => b.categoryId === 'text')) return prev;
+      const category = getCategoryById('text');
+      const tncSelected: SelectedBlock = {
+        id: tnc.id,
+        name: tnc.name,
+        description: tnc.description || '',
+        icon: tnc.icon || 'FileText',
+        quantity: 1,
+        cycle: 'prepaid',
+        unlimited: false,
+        price: 0,
+        listPrice: 0,
+        currency: prev.currency,
+        totalPrice: 0,
+        categoryName: category?.name || 'Text',
+        categoryColor: category?.color || '#8B5CF6',
+        categoryBgColor: category?.bgColor,
+        categoryId: 'text',
+        isFlyBy: false,
+        taxRate: 0,
+        taxes: [],
+        config: {
+          showDescription: true,
+          // Catalog text blocks keep rich text in meta.content (config.content)
+          // or, when authored via the wizard's ContentStep, in description.
+          content: ((tnc.meta as any)?.content as string) || tnc.description || '',
+          autoIncluded: true,
+        },
+      } as SelectedBlock;
+      return { ...prev, selectedBlocks: [...prev.selectedBlocks, tncSelected] };
+    });
+  }, [isOpen, isRfqMode, tncBlocksResponse, wizardState.selectedBlocks.length]);
 
   // Dynamic step array based on wizard mode
   const activeSteps = isTemplateMode ? TEMPLATE_STEPS : (isRfqMode ? RFQ_STEPS : CONTRACT_STEPS);
@@ -436,6 +531,10 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Save draft to API (create or update)
   const saveDraftToApi = useCallback(async (stepIndex: number): Promise<boolean> => {
+    // Single-flight: overlapping saves race on version (409) and un-silence
+    // each other's toasts. The debounce re-arms, so a skipped save is retried.
+    if (isSavingDraftRef.current) return false;
+    isSavingDraftRef.current = true;
     setIsSavingDraft(true);
     setDraftSaveStatus('saving');
     setSilentMode(true);
@@ -451,13 +550,13 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         const result = await updateContract({
           contractId: draftId,
           contractData: {
-            version: draftVersion,
+            version: draftVersionRef.current,
             title: wizardState.contractName || 'Untitled Draft',
             description: wizardState.description || undefined,
             metadata,
           } as UpdateContractRequest,
         });
-        setDraftVersion((result as any)?.version || draftVersion + 1);
+        bumpDraftVersion((result as any)?.version || draftVersionRef.current + 1);
       } else {
         // Create new draft — truly minimal payload to avoid auto-accept.
         // Do NOT use mapWizardToRequest here: it includes acceptance_method
@@ -482,7 +581,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         const created = result as Record<string, any>;
         if (created?.id) {
           setDraftId(created.id);
-          setDraftVersion(created.version || 1);
+          bumpDraftVersion(created.version || 1);
         }
       }
       setDraftSaveStatus('saved');
@@ -504,9 +603,10 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       return false;
     } finally {
       setSilentMode(false);
+      isSavingDraftRef.current = false;
       setIsSavingDraft(false);
     }
-  }, [wizardState, contractType, draftId, draftVersion, createContract, updateContract, setSilentMode]);
+  }, [wizardState, contractType, draftId, createContract, updateContract, setSilentMode]);
 
   // Close with save — used by confirmation dialog
   const handleCloseWithSave = useCallback(async () => {
@@ -549,7 +649,6 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   );
 
   const totalSteps = activeSteps.length;
-  const stepLabels = activeSteps.map(s => s.label);
 
   // Skip asset selection step when nomenclature group has no resource mapping
   // (template mode has no asset step at all — flag must stay false)
@@ -560,6 +659,54 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Get current step ID
   const currentStepId = activeSteps[currentStep]?.id || 'path';
+
+  // ── WizardShell (Phase 2) effects ──
+  // Track the furthest step reached (drives stepper clickability)
+  useEffect(() => {
+    setMaxVisitedStep((m) => Math.max(m, currentStep));
+  }, [currentStep]);
+
+  // Any edit or navigation clears the blocked-continue hint
+  useEffect(() => {
+    setBlockedHint(null);
+  }, [wizardState, currentStep, showTemplateSelection]);
+
+  // Guard against accidental tab close/refresh while mid-wizard with content.
+  // (The in-app close button already has its own confirm dialog.)
+  useEffect(() => {
+    if (!isOpen || isContractSent) return;
+    const hasContent =
+      currentStep > 0 ||
+      wizardState.contractName.trim() !== '' ||
+      wizardState.selectedBlocks.length > 0;
+    if (!hasContent) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isOpen, isContractSent, currentStep, wizardState.contractName, wizardState.selectedBlocks.length]);
+
+  // Debounced autosave: once a draft record exists, every edit persists after
+  // 2.5s of quiet — not only on Continue. First draft creation still happens
+  // on Continue past Details (server needs a contract name), unchanged.
+  useEffect(() => {
+    if (isTemplateMode || !draftId || !isOpen || isContractSent) return;
+    if (isCreating || isProcessingPayment) return;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const fire = () => {
+      if (isSavingDraftRef.current) {
+        // a save is mid-flight — try again shortly instead of overlapping
+        retry = setTimeout(fire, 1000);
+        return;
+      }
+      void saveDraftToApi(currentStep);
+    };
+    const timer = setTimeout(fire, 2500);
+    return () => { clearTimeout(timer); if (retry) clearTimeout(retry); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardState]);
 
   // Calculate total value from selected blocks
   const calculateTotalValue = useCallback(() => {
@@ -620,7 +767,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             contractId: draftId,
             contractData: {
               ...request,
-              version: draftVersion,
+              version: draftVersionRef.current,
             } as UpdateContractRequest,
           });
           created = result as Record<string, any>;
@@ -664,6 +811,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         // Error toast is handled by the mutation's onError
       }
     } else if (showTemplateSelection) {
+      // Continue is never silently disabled — explain instead
+      if (!wizardState.templateId) {
+        setBlockedHint(TEMPLATE_SELECTION_HINT);
+        return;
+      }
       const tpl = publishedTemplates.find((t) => t.id === wizardState.templateId);
       // Direct path: hand the chosen template to the seeded VaNi composer
       // (assemble → review → create) instead of walking the wizard. This is
@@ -729,10 +881,15 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         }
       }
 
+      // Edit-from-review: if the user jumped back FROM review, a successful
+      // Continue returns straight to the review step
+      const returningToReview = returnToReviewRef.current;
+      returnToReviewRef.current = false;
+
       // Auto-save draft on Continue when past the details step.
       // IMPORTANT: We await the save before navigating so the user
       // doesn't see save errors appear on the next page.
-      const nextStepIndex = Math.min(currentStep + 1, totalSteps - 1);
+      const nextStepIndex = returningToReview ? totalSteps - 1 : Math.min(currentStep + 1, totalSteps - 1);
       const isAtOrPastDetails = currentStep >= detailsStepIdx && detailsStepIdx >= 0;
 
       // Contract drafts only — template mode never creates contract records
@@ -740,16 +897,23 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         await saveDraftToApi(nextStepIndex);
       }
 
-      setCurrentStep((prev) => {
-        let next = Math.min(prev + 1, totalSteps - 1);
-        // Skip asset selection step when nomenclature group has no resource mapping
-        if (shouldSkipAssetStep && next === assetStepIndex) {
-          next = Math.min(next + 1, totalSteps - 1);
-        }
-        return next;
-      });
+      if (returningToReview) {
+        setCurrentStep(totalSteps - 1);
+      } else {
+        setCurrentStep((prev) => {
+          let next = Math.min(prev + 1, totalSteps - 1);
+          // Skip asset selection step when nomenclature group has no resource mapping
+          if (shouldSkipAssetStep && next === assetStepIndex) {
+            next = Math.min(next + 1, totalSteps - 1);
+          }
+          return next;
+        });
+      }
+    } else {
+      // Blocked: surface the reason instead of a silently disabled button
+      setBlockedHint(blockedHintFor(currentStepId, isRfqMode));
     }
-  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateContract, updateStatus, sendNotification, addToast, shouldSkipAssetStep, assetStepIndex, draftId, draftVersion, saveDraftToApi, currentStep, detailsStepIdx, isTemplateMode, handleSaveTemplate, resetWizard, onClose, publishedTemplates, onAssignTemplate]);
+  }, [isLastStep, canGoNext, wizardState, showTemplateSelection, currentStepId, totalSteps, contractType, createContract, updateContract, updateStatus, sendNotification, addToast, shouldSkipAssetStep, assetStepIndex, draftId, draftVersion, saveDraftToApi, currentStep, detailsStepIdx, isTemplateMode, isRfqMode, handleSaveTemplate, resetWizard, onClose, publishedTemplates, onAssignTemplate]);
 
   // Done button handler on success screen
   const handleDone = useCallback(() => {
@@ -772,7 +936,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (draftId) {
         contractResult = (await updateContract({
           contractId: draftId,
-          contractData: { ...request, version: draftVersion } as UpdateContractRequest,
+          contractData: { ...request, version: draftVersionRef.current } as UpdateContractRequest,
         })) as Record<string, any>;
       } else {
         contractResult = (await createContract(request as CreateContractRequest)) as Record<string, any>;
@@ -873,7 +1037,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (draftId) {
         result = (await updateContract({
           contractId: draftId,
-          contractData: { ...request, version: draftVersion } as UpdateContractRequest,
+          contractData: { ...request, version: draftVersionRef.current } as UpdateContractRequest,
         })) as Record<string, any>;
       } else {
         result = (await createContract(request as CreateContractRequest)) as Record<string, any>;
@@ -922,7 +1086,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       if (draftId) {
         contractResult = (await updateContract({
           contractId: draftId,
-          contractData: { ...request, version: draftVersion } as UpdateContractRequest,
+          contractData: { ...request, version: draftVersionRef.current } as UpdateContractRequest,
         })) as Record<string, any>;
       } else {
         contractResult = (await createContract(request as CreateContractRequest)) as Record<string, any>;
@@ -1054,6 +1218,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   }, [wizardState, contractType, createContract, updateContract, updateStatus, draftId, draftVersion, paymentAmount, addToast]);
 
   const handleBack = useCallback(() => {
+    // Manual Back cancels a pending edit-from-review return
+    returnToReviewRef.current = false;
     if (showTemplateSelection) {
       // Go back to path selection
       setShowTemplateSelection(false);
@@ -1069,6 +1235,21 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       });
     }
   }, [showTemplateSelection, updateWizardState, shouldSkipAssetStep, assetStepIndex]);
+
+  // WizardShell: jump to any VISITED step from the phase stepper.
+  // Jumping backward from the review step arms edit-from-review (the next
+  // successful Continue returns straight to review).
+  const handleJumpToStep = useCallback(
+    (index: number) => {
+      if (index === currentStep || index > maxVisitedStep) return;
+      if (shouldSkipAssetStep && index === assetStepIndex) return;
+      if (currentStepId === 'review' && index < currentStep) {
+        returnToReviewRef.current = true;
+      }
+      setCurrentStep(index);
+    },
+    [currentStep, maxVisitedStep, shouldSkipAssetStep, assetStepIndex, currentStepId]
+  );
 
   // Path selection handler
   const handlePathSelect = useCallback(
@@ -1203,14 +1384,23 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
 
   // Tax totals change handler (called by BillingViewStep when computed totals change)
   const handleTotalsChange = useCallback(
-    (totals: { baseSubtotal?: number; taxTotal: number; grandTotal: number; taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }> }) => {
+    (totals: { baseSubtotal?: number; taxTotal: number; grandTotal: number; discountTotal?: number; taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }> }) => {
       setWizardState((prev) => ({
         ...prev,
         baseSubtotal: totals.baseSubtotal ?? prev.baseSubtotal,
         taxTotal: totals.taxTotal,
         grandTotal: totals.grandTotal,
+        discountTotal: totals.discountTotal ?? prev.discountTotal,
         taxBreakdown: totals.taxBreakdown,
       }));
+    },
+    []
+  );
+
+  // Sprint 1: contract-level discount change handler
+  const handleDiscountChange = useCallback(
+    (type: 'percent' | 'amount' | null, value: number) => {
+      setWizardState((prev) => ({ ...prev, discountType: type, discountValue: value }));
     },
     []
   );
@@ -1370,6 +1560,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             } : undefined}
             rfqMode={isRfqMode}
             coverageTypes={wizardState.coverageTypes}
+            billingCycleType={wizardState.billingCycleType}
           />
         );
       }
@@ -1390,6 +1581,9 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             selectedTaxRateIds={wizardState.selectedTaxRateIds}
             onTaxRateIdsChange={handleTaxRateIdsChange}
             onTotalsChange={handleTotalsChange}
+            discountType={wizardState.discountType}
+            discountValue={wizardState.discountValue}
+            onDiscountChange={handleDiscountChange}
             paymentMode={wizardState.paymentMode}
             onPaymentModeChange={handlePaymentModeChange}
             emiMonths={wizardState.emiMonths}
@@ -1459,6 +1653,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
         return (
           <ReviewSendStep
             contractName={wizardState.contractName}
+            discountType={wizardState.discountType}
+            discountValue={wizardState.discountValue}
             contractStatus={wizardState.status}
             description={wizardState.description}
             durationValue={wizardState.durationValue}
@@ -2393,38 +2589,17 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               </div>
             </div>
 
-            {/* Center: Progress Dots */}
-            <div className="flex items-center gap-2">
-              {Array.from({ length: totalSteps }).map((_, index) => {
-                // Hide the asset selection dot when step is skipped
-                if (shouldSkipAssetStep && index === assetStepIndex) return null;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      if (index < currentStep) {
-                        // Prevent navigating to the skipped asset step
-                        if (shouldSkipAssetStep && index === assetStepIndex) return;
-                        setCurrentStep(index);
-                      }
-                    }}
-                    disabled={index > currentStep}
-                    className="transition-all duration-300 rounded-full"
-                    style={{
-                      width: index === currentStep ? '32px' : '8px',
-                      height: '8px',
-                      backgroundColor:
-                        index === currentStep
-                          ? colors.brand.primary
-                          : index < currentStep
-                            ? colors.semantic.success
-                            : `${colors.utility.primaryText}20`,
-                      cursor: index < currentStep ? 'pointer' : 'default',
-                    }}
-                  />
-                );
-              })}
-            </div>
+            {/* Center: Phase Stepper — the single progress model (WizardShell) */}
+            {!showTemplateSelection && (
+              <PhaseStepper
+                steps={activeSteps}
+                currentStep={currentStep}
+                maxVisitedStep={maxVisitedStep}
+                skippedStepIndex={shouldSkipAssetStep ? assetStepIndex : -1}
+                onJump={handleJumpToStep}
+                colors={colors}
+              />
+            )}
 
             {/* Right: Close Button */}
             <button
@@ -2445,19 +2620,22 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           {renderStepContent()}
         </main>
 
-        {/* Floating Action Island */}
-        <FloatingActionIsland
-          currentStep={showTemplateSelection ? 0 : (shouldSkipAssetStep && currentStep > assetStepIndex ? currentStep - 1 : currentStep)}
-          totalSteps={shouldSkipAssetStep ? totalSteps - 1 : totalSteps}
-          stepLabels={showTemplateSelection ? ['Select Template', ...stepLabels.slice(1)] : (shouldSkipAssetStep ? stepLabels.filter((_, i) => i !== assetStepIndex) : stepLabels)}
+        {/* WizardShell Action Bar — Continue never silently disabled */}
+        <ActionBar
+          stepLabel={
+            showTemplateSelection
+              ? 'Select Template'
+              : `${activeSteps[currentStep]?.label || ''} · step ${
+                  shouldSkipAssetStep && currentStep > assetStepIndex ? currentStep : currentStep + 1
+                } of ${shouldSkipAssetStep ? totalSteps - 1 : totalSteps}`
+          }
           totalValue={calculateTotalValue()}
           currency={wizardState.currency}
           canGoBack={canGoBack}
-          canGoNext={canGoNext() && !isCreating && !isSavingDraft && !saveTemplateMutation.isPending}
-          isLastStep={isLastStep}
+          isBusy={isCreating || isSavingDraft || saveTemplateMutation.isPending}
+          isLastStep={isLastStep && !showTemplateSelection}
           onBack={handleBack}
           onNext={handleNext}
-          onClose={handleClose}
           sendButtonText={
             isTemplateMode
               ? (saveTemplateMutation.isPending ? 'Saving…' : 'Save Template')
@@ -2470,8 +2648,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
                     : 'Send Contract'
           }
           showTotal={!isRfqMode}
-          isSavingDraft={isSavingDraft}
           draftSaveStatus={draftSaveStatus}
+          blockedHint={blockedHint}
         />
       </div>
     </div>

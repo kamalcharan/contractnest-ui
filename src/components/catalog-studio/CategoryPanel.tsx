@@ -88,17 +88,27 @@ const CategoryPanel: React.FC<CategoryPanelProps> = ({
                 <IconComponent className="w-4 h-4" style={{ color: category.color }} />
               </div>
               <div className="flex-1 min-w-0">
-                <div
-                  className="text-sm font-semibold"
-                  style={{ color: colors.utility.primaryText }}
-                >
-                  {category.name}
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className="text-sm font-semibold"
+                    style={{ color: colors.utility.primaryText }}
+                  >
+                    {category.name}
+                  </div>
+                  {category.comingSoon && (
+                    <span
+                      className="text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: `${colors.utility.primaryText}10`, color: colors.utility.secondaryText }}
+                    >
+                      Soon
+                    </span>
+                  )}
                 </div>
                 <div
                   className="text-xs"
                   style={{ color: colors.utility.secondaryText }}
                 >
-                  {category.count} blocks
+                  {category.comingSoon ? 'Coming soon' : `${category.count} blocks`}
                 </div>
               </div>
             </div>

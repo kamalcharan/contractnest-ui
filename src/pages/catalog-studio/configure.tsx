@@ -185,8 +185,33 @@ const CatalogStudioConfigurePage: React.FC = () => {
 
   // Navigation handlers (replaced inline wizard with URL-based navigation)
   const navigateToCreateBlock = (blockType?: string) => {
-    const typeParam = blockType ? `?type=${blockType}` : `?type=${selectedCategory}`;
-    navigate(`/catalog-studio/blocks/new${typeParam}`);
+    const type = blockType || selectedCategory;
+
+    // MVP gate: coming-soon block types (video/image/document) can't be created
+    const targetCategory = blockCategories.find(c => c.id === type);
+    if (targetCategory?.comingSoon) {
+      vaniToast.info(`${targetCategory.name} blocks are coming soon`, {
+        message: 'A smart canvas for rich content is on the roadmap — post MVP.',
+      });
+      return;
+    }
+
+    // MVP gate: one Terms & Conditions text block per business — creating a
+    // second one redirects to editing the existing block instead
+    if (type === 'text') {
+      const existingTnC =
+        allBlocks.find(b => b.categoryId === 'text' && /terms\s*(&|and)\s*conditions/i.test(b.name || '')) ||
+        allBlocks.find(b => b.categoryId === 'text');
+      if (existingTnC) {
+        vaniToast.info('Terms & Conditions', {
+          message: 'One T&C per business during MVP — opening yours for editing.',
+        });
+        navigate(`/catalog-studio/blocks/${existingTnC.id}/edit`);
+        return;
+      }
+    }
+
+    navigate(`/catalog-studio/blocks/new?type=${type}`);
   };
 
   const navigateToEditBlock = (block: Block) => {

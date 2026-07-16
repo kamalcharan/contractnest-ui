@@ -39,6 +39,7 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { getCategoryById, categoryHasPricing } from '@/utils/catalog-studio/categories';
+import ContractDocument, { buildDocFromSavedContract } from '@/components/contracts/document/ContractDocument';
 
 // ═══════════════════════════════════════════════════
 // TYPES (full contract from get_contract_by_id)
@@ -218,6 +219,8 @@ const ContractReviewPage: React.FC = () => {
   const [cnakCopied, setCnakCopied] = useState(false);
 
   const paperRef = useRef<HTMLDivElement>(null);
+  // PDF export captures the professional ContractDocument (off-screen render)
+  const docRef = useRef<HTMLDivElement>(null);
 
   // ── Validate on mount ──
   useEffect(() => {
@@ -284,10 +287,10 @@ const ContractReviewPage: React.FC = () => {
 
   // ── PDF download ──
   const handleDownloadPdf = useCallback(async () => {
-    if (!paperRef.current) return;
+    if (!docRef.current) return;
     setGeneratingPdf(true);
     try {
-      const canvas = await html2canvas(paperRef.current, {
+      const canvas = await html2canvas(docRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#FFFFFF',
@@ -345,12 +348,15 @@ const ContractReviewPage: React.FC = () => {
   const paperShadow = isDarkMode ? '0 4px 20px rgba(0,0,0,0.3)' : '0 10px 30px rgba(0,0,0,0.05)';
   const borderColor = isDarkMode ? 'rgba(255,255,255,0.08)' : '#E2E8F0';
 
-  // Group blocks by category
+  // Group blocks by category. Billing-only blocks (fees/dues — no service
+  // visits) never belong under "Service": they group under Billing, where the
+  // reader expects payments, not deliverables.
   const blockGroups = useMemo(() => {
     if (!contract?.blocks?.length) return [];
     const groups: Record<string, ContractBlock[]> = {};
     contract.blocks.forEach((block) => {
-      const catId = block.category_id || 'service';
+      const isBillingOnly = block.custom_fields?.config?.billingOnly === true;
+      const catId = isBillingOnly ? 'billing' : (block.category_id || 'service');
       if (!groups[catId]) groups[catId] = [];
       groups[catId].push(block);
     });
@@ -395,6 +401,28 @@ const ContractReviewPage: React.FC = () => {
 
   // Tax breakdown from contract
   const taxBreakdown = contract?.tax_breakdown || [];
+
+  // Professional document (PDF export) — every section derives from the
+  // saved contract: parties, schedules, text-block terms, CNAK footer.
+  const documentData = useMemo(() => {
+    if (!contract) return null;
+    const profile = tenant?.profile;
+    const providerLines = [
+      [profile?.city, profile?.state_code].filter(Boolean).join(', '),
+      [profile?.business_phone_country_code, profile?.business_phone].filter(Boolean).join(' '),
+      profile?.business_email || '',
+    ].filter(Boolean) as string[];
+    const customerLines = [contract.buyer_phone || '', contract.buyer_email || ''].filter(Boolean) as string[];
+    return buildDocFromSavedContract({
+      contract: contract as any,
+      providerName: profile?.business_name || tenant?.name || 'Provider',
+      providerLogoUrl: profile?.logo_url,
+      providerLines,
+      customerName: contract.buyer_company || contract.buyer_name || null,
+      customerLines,
+      cnak: cnak || null,
+    });
+  }, [contract, tenant, cnak]);
 
   // ═══════════════════════════════════════════════════
   // RENDERS
@@ -554,8 +582,23 @@ const ContractReviewPage: React.FC = () => {
         </div>
       )}
 
-      {/* ═══ THE PAPER ═══ */}
-      <div style={{ maxWidth: 820, margin: '16px auto', padding: '0 16px 140px' }}>
+      {/* ═══ THE DOCUMENT ═══
+          The professional ContractDocument — the exact page the PDF exports
+          (docRef is what handleDownloadPdf captures). Fixed 794px paper width;
+          scrolls horizontally on narrow screens. Falls back to the legacy
+          paper below if the document data can't be assembled. */}
+      {documentData && (
+        <div style={{ maxWidth: 860, margin: '16px auto', padding: '0 16px 140px' }}>
+          <div style={{ borderRadius: 12, boxShadow: paperShadow, overflowX: 'auto', backgroundColor: '#FFFFFF' }}>
+            <div ref={docRef} style={{ width: 794, margin: '0 auto' }}>
+              <ContractDocument data={documentData} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ THE PAPER (legacy fallback — hidden when the document renders) ═══ */}
+      <div style={{ maxWidth: 820, margin: '16px auto', padding: '0 16px 140px', display: documentData ? 'none' : undefined }}>
         <div ref={paperRef} style={{ backgroundColor: paperBg, borderRadius: 12, boxShadow: paperShadow }}>
 
           {/* ── Branded gradient header ── */}
@@ -691,7 +734,19 @@ const ContractReviewPage: React.FC = () => {
 
                   {/* Block items */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {blocks.map((block) => (
+                    {blocks.map((block) => {
+                      // Pricing/qty chips follow the block's ORIGINAL category —
+                      // billing-only service blocks regrouped under Billing keep them
+                      const blockHasPricing = categoryHasPricing(block.category_id || '');
+                      const isBillingOnly = block.custom_fields?.config?.billingOnly === true;
+                      // Cadence-priced: show the payment schedule, not a unit qty
+                      const cadMonthsMap: Record<string, number> = { monthly: 1, quarterly: 3, halfyearly: 6, annual: 12 };
+                      const cadMonths = block.custom_fields?.config?.cadencePricing
+                        ? cadMonthsMap[block.billing_cycle] : undefined;
+                      const termMonths = getDurationInMonths(contract.duration_value || 0, contract.duration_unit || 'months');
+                      const fullPayments = cadMonths ? Math.max(0, Math.floor(termMonths / cadMonths)) : 0;
+                      const hasFinal = cadMonths ? termMonths - fullPayments * cadMonths > 0 : false;
+                      return (
                       <div key={block.id} style={{ display: 'flex', gap: 16, padding: 16, borderRadius: 12, border: `1px solid ${borderColor}`, backgroundColor: `${catColor}03` }}>
                         {/* Icon */}
                         <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: `${catColor}10`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -704,14 +759,25 @@ const ContractReviewPage: React.FC = () => {
                             {block.block_name || 'Untitled'}
                           </h4>
 
-                          {hasPricing && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 500, backgroundColor: `${colors.text}08`, color: colors.textSecondary }}>
-                                Qty: {block.quantity}
-                              </span>
+                          {blockHasPricing && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                              {cadMonths ? (
+                                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 600, backgroundColor: `${brandPrimary}10`, color: brandPrimary }}>
+                                  {fullPayments} payment{fullPayments !== 1 ? 's' : ''}{hasFinal ? ' + final' : ''} × {formatCurrency(block.unit_price, contract.currency)}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 500, backgroundColor: `${colors.text}08`, color: colors.textSecondary }}>
+                                  Qty: {block.quantity}
+                                </span>
+                              )}
                               {block.billing_cycle && (
                                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 500, backgroundColor: `${brandPrimary}10`, color: brandPrimary, textTransform: 'capitalize' }}>
                                   {block.billing_cycle}
+                                </span>
+                              )}
+                              {isBillingOnly && (
+                                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, fontWeight: 500, backgroundColor: `${colors.text}08`, color: colors.textSecondary }}>
+                                  billing only — no service visits
                                 </span>
                               )}
                             </div>
@@ -725,18 +791,21 @@ const ContractReviewPage: React.FC = () => {
                         </div>
 
                         {/* Price */}
-                        {hasPricing && (
+                        {blockHasPricing && (
                           <div style={{ textAlign: 'right', flexShrink: 0, alignSelf: 'center' }}>
                             <p style={{ fontSize: 14, fontWeight: 700, color: catColor }}>
                               {formatCurrency(block.total_price, contract.currency)}
                             </p>
                             <p style={{ fontSize: 10, color: colors.textSecondary }}>
-                              {formatCurrency(block.unit_price, contract.currency)}/ea
+                              {cadMonths
+                                ? `${formatCurrency(block.unit_price, contract.currency)}/${block.billing_cycle === 'monthly' ? 'mo' : block.billing_cycle === 'quarterly' ? 'qtr' : block.billing_cycle === 'halfyearly' ? '6mo' : 'yr'}`
+                                : `${formatCurrency(block.unit_price, contract.currency)}/ea`}
                             </p>
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -838,6 +907,9 @@ const ContractReviewPage: React.FC = () => {
           Accept Contract
         </button>
       </div>
+
+      {/* The document renders visibly above (same docRef the PDF export
+          captures) — no off-screen copy needed anymore. */}
     </div>
   );
 };

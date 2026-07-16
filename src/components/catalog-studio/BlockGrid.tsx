@@ -69,12 +69,22 @@ const BlockGrid: React.FC<BlockGridProps> = ({
             <CategoryIcon className="w-5 h-5" style={{ color: category.color }} />
           </div>
           <div>
-            <h2
-              className="text-base font-bold"
-              style={{ color: colors.utility.primaryText }}
-            >
-              {category.name} Blocks
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2
+                className="text-base font-bold"
+                style={{ color: colors.utility.primaryText }}
+              >
+                {category.name} Blocks
+              </h2>
+              {category.comingSoon && (
+                <span
+                  className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: `${colors.utility.primaryText}10`, color: colors.utility.secondaryText }}
+                >
+                  Coming soon
+                </span>
+              )}
+            </div>
             <p
               className="text-xs"
               style={{ color: colors.utility.secondaryText }}
@@ -135,6 +145,28 @@ const BlockGrid: React.FC<BlockGridProps> = ({
         className="flex-1 overflow-y-auto p-6"
         style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#F3F4F6' }}
       >
+        {/* MVP gate: coming-soon block types show an empty state instead of
+            the grid — creation is not invokable until the post-MVP smart
+            canvas ships. */}
+        {category.comingSoon ? (
+          <div className="text-center py-20 max-w-md mx-auto">
+            <div
+              className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+              style={{ backgroundColor: category.bgColor }}
+            >
+              <CategoryIcon className="w-8 h-8" style={{ color: category.color }} />
+            </div>
+            <div className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
+              {category.name} blocks are coming soon
+            </div>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: colors.utility.secondaryText }}>
+              A smart canvas for designing rich {category.name.toLowerCase()} content is on
+              the roadmap. For now, contracts are built from Service, Spare Part, Billing
+              and your Terms &amp; Conditions blocks.
+            </p>
+          </div>
+        ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredBlocks.map((block) => (
             <BlockCard
@@ -199,6 +231,8 @@ const BlockGrid: React.FC<BlockGridProps> = ({
               Try adjusting your search query
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

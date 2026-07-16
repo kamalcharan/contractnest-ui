@@ -10,6 +10,10 @@ export interface BlockCategory {
   color: string;
   bgColor: string;
   description: string;
+  /** MVP gate: type is visible but not creatable yet ("Coming soon"). */
+  comingSoon?: boolean;
+  /** MVP gate: exactly one block of this type may exist (e.g. Terms & Conditions). */
+  singleton?: boolean;
 }
 
 // =================================================================

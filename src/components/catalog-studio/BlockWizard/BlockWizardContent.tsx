@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Block, WizardMode, BlockCategory } from '../../../types/catalogStudio';
 import { BLOCK_CATEGORIES, WIZARD_STEPS } from '../../../utils/catalog-studio';
+import { validateCadencePricing } from '../../../utils/catalog-studio/cadencePricing';
 import WizardProgress from './WizardProgress';
 import WizardFooter from './WizardFooter';
 import {
@@ -177,6 +178,14 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           if (!valid) {
             errors.push('Enter a price in Currency-Specific Pricing');
           }
+        }
+
+        // Cadence (cyclical) pricing — each cadence-scheme record must be complete
+        if ((data.meta?.priceType as string || 'fixed') === 'fixed') {
+          const allRecords = (data.meta?.pricingRecords || []) as Array<Parameters<typeof validateCadencePricing>[0]>;
+          allRecords.forEach((rec) => {
+            validateCadencePricing(rec).forEach((msg) => errors.push(msg));
+          });
         }
       }
       // Step 6 - Business Rules: No mandatory fields

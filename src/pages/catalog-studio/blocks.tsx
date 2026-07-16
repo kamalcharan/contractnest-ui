@@ -1064,7 +1064,24 @@ const CatalogStudioBlocksPage: React.FC = () => {
           mode={wizardMode}
           blockType={wizardBlockType}
           editingBlock={editingBlock}
-          onBlockTypeChange={setWizardBlockType}
+          onBlockTypeChange={(type) => {
+            // MVP: Text is a SINGLETON — exactly one "Terms & Conditions"
+            // block per tenant (auto-included in every contract/template).
+            // Picking Text edits the existing one instead of creating another.
+            if (type === 'text' && wizardMode === 'create') {
+              const existingTnC = allBlocks.find(
+                (b) => b.categoryId === 'text' && /terms\s*(&|and)\s*conditions/i.test(b.name || '')
+              ) || allBlocks.find((b) => b.categoryId === 'text');
+              if (existingTnC) {
+                setWizardMode('edit');
+                setEditingBlock(existingTnC);
+                setWizardBlockType('text');
+                showToast('info', 'Terms & Conditions', 'Editing your existing T&C — one per business during MVP');
+                return;
+              }
+            }
+            setWizardBlockType(type);
+          }}
           fullPage={true}
         />
       )}

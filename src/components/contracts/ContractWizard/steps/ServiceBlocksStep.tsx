@@ -17,7 +17,14 @@ import { getSubCategoryConfig } from '@/constants/subCategoryConfig';
 import { BlockLibraryMini, BlockCardConfigurable, FlyByBlockCard, ConfigurableBlock } from '@/components/catalog-studio';
 import type { FlyByCategoryId } from '@/components/catalog-studio/BlockLibraryMini';
 import { FLYBY_TYPE_CONFIG } from '@/components/catalog-studio/FlyByBlockCard';
-import { getCategoryById as getCatById } from '@/utils/catalog-studio/categories';
+import { getCategoryById as getCatById, categoryHasPricing } from '@/utils/catalog-studio/categories';
+import {
+  cadenceTermMath,
+  fittingCadences,
+  getCadenceCycle,
+  proposedCadence,
+  type BlockCadencePricing,
+} from '@/utils/catalog-studio/cadencePricing';
 
 // Import contract preview panel
 import ContractPreviewPanel from '../components/ContractPreviewPanel';
@@ -69,6 +76,9 @@ export interface ServiceBlocksStepProps {
   rfqMode?: boolean;
   // Coverage types from AssetSelectionStep
   coverageTypes?: CoverageTypeItem[];
+  // Sprint 1: unified-cycle mismatch warns inline at selection time
+  // (instead of a toast when Continue is pressed)
+  billingCycleType?: string | null;
 }
 
 // Format currency
@@ -105,6 +115,9 @@ const buildConfigurableBlock = (
   const pricingRecords = ((block.meta as any)?.pricingRecords || (block.config as any)?.pricingRecords || []) as Array<{
     currency: string; amount: number; tax_inclusion: 'inclusive' | 'exclusive';
     taxes: Array<{ name: string; rate: number }>; is_active: boolean;
+    pricing_scheme?: 'single' | 'cadence'; base_term_months?: number;
+    cadence_rates?: Array<{ cycle: string; amount: number; enabled: boolean }>;
+    default_cadence?: string;
   }>;
   const matchingRecord = pricingRecords.find(r => r.currency === currency && r.is_active !== false)
     || pricingRecords.find(r => r.is_active !== false)
@@ -115,6 +128,35 @@ const buildConfigurableBlock = (
   const blockPrice = matchingRecord?.amount ?? block.price ?? 0;
   const unitPriceWithTax = taxInclusion === 'inclusive' ? blockPrice : blockPrice + (blockPrice * totalTaxRate / 100);
   const instanceId = hasCoverageTypes ? `${block.id}__${activeCoverageTabId}` : block.id;
+
+  // ── Cadence (cyclical) pricing — carried from the catalog rate card ──
+  // v1 limitation: Group Session blocks keep single-price behavior (their
+  // quantity means roster occurrences; payments-vs-occurrences needs its own
+  // design pass before combining the two).
+  const durationMonths = durationDays ? Math.max(1, Math.round(durationDays / 30)) : 12;
+  let cadence: { cp: BlockCadencePricing; proposed: ReturnType<typeof proposedCadence> } | null = null;
+  if (!isGroupSession && matchingRecord?.pricing_scheme === 'cadence' && (matchingRecord.cadence_rates || []).length > 0) {
+    const cp: BlockCadencePricing = {
+      baseAmount: matchingRecord.amount,
+      baseMonths: matchingRecord.base_term_months || 12,
+      rates: (matchingRecord.cadence_rates || []) as BlockCadencePricing['rates'],
+      defaultCadence: matchingRecord.default_cadence as BlockCadencePricing['defaultCadence'],
+    };
+    const proposed = proposedCadence(cp, durationMonths);
+    // If no cadence fits the term (contract shorter than every priced cadence),
+    // fall back to single-price behavior at the anchor total.
+    if (proposed) cadence = { cp, proposed };
+  }
+  const cadenceRate = cadence ? cadence.cp.rates.find(r => r.cycle === cadence!.proposed!.id)!.amount : 0;
+  const cadenceMath = cadence
+    ? cadenceTermMath(cadenceRate, durationMonths, cadence.proposed!.monthsPerPeriod)
+    : null;
+  // Term total with tax (final payment taxed like every other payment)
+  const cadenceTotalWithTax = cadenceMath
+    ? (taxInclusion === 'inclusive'
+        ? cadenceMath.termTotal
+        : cadenceMath.termTotal * (1 + totalTaxRate / 100))
+    : 0;
 
   // Group Sessions are cadence-first: default the occurrence count to however
   // many cycles fit the contract duration (e.g. 14-day cadence over 12 months
@@ -131,13 +173,16 @@ const buildConfigurableBlock = (
     description: block.description || '',
     icon: block.icon || 'Package',
     quantity: defaultQuantity,
-    cycle: defaultCycle,
+    cycle: cadence ? cadence.proposed!.id : defaultCycle,
     customCycleDays,
     serviceCycleDays,
     unlimited: false,
-    price: blockPrice,
+    price: cadence ? cadenceRate : blockPrice,
+    listPrice: cadence ? cadenceRate : blockPrice,
     currency: matchingRecord?.currency || currency,
-    totalPrice: Math.round(unitPriceWithTax * 100) / 100,
+    totalPrice: cadence
+      ? Math.round(cadenceTotalWithTax * 100) / 100
+      : Math.round(unitPriceWithTax * 100) / 100,
     categoryName: category?.name || block.categoryId,
     categoryColor: category?.color || '#6B7280',
     categoryBgColor: category?.bgColor,
@@ -165,6 +210,9 @@ const buildConfigurableBlock = (
       // Group Sessions fill the contract: keep the count auto-derived from the
       // duration until the user pins it manually on the card.
       autoCount: isGroupSession && serviceCycleDays && serviceCycleDays > 0 ? true : undefined,
+      // Cadence pricing: the full rate card rides on the block so the card can
+      // offer cadence switches now and the buyer can pick at review later.
+      cadencePricing: cadence ? cadence.cp : undefined,
     },
   } as ConfigurableBlock;
 };
@@ -182,10 +230,31 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   useCompanyContact,
   rfqMode = false,
   coverageTypes = [],
+  billingCycleType = null,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
+
+  // ── Sprint 1: unified-cycle mismatch, detected at selection time ────
+  // Mirrors the rule enforced at Continue in index.tsx (same pricing-block
+  // filter) so the user is warned on the offending card, not by a late toast.
+  const cycleMismatch = useMemo(() => {
+    if (rfqMode || billingCycleType !== 'unified') return null;
+    const pricingBlocks = selectedBlocks.filter((b) => {
+      if (b.isFlyBy) return b.flyByType === 'service' || b.flyByType === 'spare';
+      return categoryHasPricing(b.categoryId || '');
+    });
+    if (pricingBlocks.length < 2) return null;
+    const cycles = [...new Set(pricingBlocks.map((b) => b.cycle))];
+    if (cycles.length <= 1) return null;
+    // Majority cycle = the "expected" one; every other cycle's blocks offend
+    const counts = new Map<string, number>();
+    pricingBlocks.forEach((b) => counts.set(b.cycle, (counts.get(b.cycle) || 0) + 1));
+    const majority = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const offenders = new Set(pricingBlocks.filter((b) => b.cycle !== majority).map((b) => b.id));
+    return { cycles, majority, offenders };
+  }, [rfqMode, billingCycleType, selectedBlocks]);
 
   // Fetch tenant profile for preview
   const { profile: tenantProfile } = useTenantProfile();
@@ -324,6 +393,50 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
     if (changed) onBlocksChange(next);
   }, [contractDuration, selectedBlocks, onBlocksChange]);
 
+  // ── Cadence blocks: keep money in sync with the contract duration ───
+  // The payment count derives from (cadence, term); when the duration changes,
+  // term totals must follow. If the chosen cadence no longer fits (term became
+  // shorter than the cadence period), auto-switch to the tenant default /
+  // first fitting cadence — with a visible toast, never a silent price change.
+  useEffect(() => {
+    if (!contractDuration) return;
+    const durationMonths = Math.max(1, contractDuration);
+    let changed = false;
+    const switched: string[] = [];
+    const next = selectedBlocks.map((b) => {
+      const cp = b.config?.cadencePricing as BlockCadencePricing | undefined;
+      if (!cp) return b;
+      let cycle = b.cycle;
+      let price = b.price;
+      let listPrice = b.listPrice;
+      let cfg = b.config;
+      const def = getCadenceCycle(cycle);
+      if (!def || def.monthsPerPeriod > durationMonths || !fittingCadences(cp, durationMonths).some((c) => c.id === cycle)) {
+        const fallback = proposedCadence(cp, durationMonths);
+        if (!fallback) return b; // nothing fits — card shows the warning
+        cycle = fallback.id;
+        price = cp.rates.find((r) => r.cycle === fallback.id)!.amount;
+        listPrice = price;
+        cfg = { ...cfg, customPrice: cfg?.cadenceOverrides?.[fallback.id], cadenceFinalPayment: undefined };
+        switched.push(`${b.name}: switched to ${fallback.label}`);
+      }
+      const cadDef = getCadenceCycle(cycle)!;
+      const effectivePrice = cfg?.customPrice ?? price;
+      const taxFactor = (b.taxRate || 0) > 0 && b.taxInclusion === 'exclusive' ? 1 + (b.taxRate || 0) / 100 : 1;
+      const m = cadenceTermMath(effectivePrice, durationMonths, cadDef.monthsPerPeriod, cfg?.cadenceFinalPayment);
+      const totalPrice = Math.round(m.termTotal * taxFactor * 100) / 100;
+      if (b.cycle !== cycle || b.totalPrice !== totalPrice) {
+        changed = true;
+        return { ...b, cycle, price, listPrice, config: cfg, totalPrice };
+      }
+      return b;
+    });
+    if (changed) {
+      onBlocksChange(next);
+      switched.forEach((msg) => addToast({ type: 'warning', title: 'Payment cadence adjusted', message: `${msg} — the previous cadence no longer fits the contract duration` }));
+    }
+  }, [contractDuration, selectedBlocks, onBlocksChange, addToast]);
+
   const grandTotal = useMemo(() => {
     return selectedBlocks.reduce((sum, b) => sum + b.totalPrice, 0);
   }, [selectedBlocks]);
@@ -454,6 +567,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   // Update block configuration
   const handleUpdateBlock = useCallback(
     (blockId: string, updates: Partial<ConfigurableBlock>) => {
+      const durationMonths = Math.max(1, contractDuration || 12);
       onBlocksChange(
         selectedBlocks.map((block) => {
           if (block.id === blockId) {
@@ -461,20 +575,26 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             // Recalculate total price with tax
             const effectivePrice = updated.config?.customPrice ?? updated.price;
             const taxRate = updated.taxRate || 0;
-            let unitPrice = effectivePrice;
-            if (taxRate > 0 && updated.taxInclusion === 'exclusive') {
-              unitPrice = effectivePrice + (effectivePrice * taxRate / 100);
+            const taxFactor = taxRate > 0 && updated.taxInclusion === 'exclusive' ? 1 + taxRate / 100 : 1;
+            const unitPrice = effectivePrice * taxFactor;
+            const cadDef = updated.config?.cadencePricing ? getCadenceCycle(updated.cycle) : undefined;
+            if (cadDef) {
+              // Cadence-priced: total = payments derived from (cadence, term),
+              // NOT quantity (quantity stays the service-visit count).
+              const m = cadenceTermMath(effectivePrice, durationMonths, cadDef.monthsPerPeriod, updated.config?.cadenceFinalPayment);
+              updated.totalPrice = Math.round(m.termTotal * taxFactor * 100) / 100;
+            } else {
+              updated.totalPrice = Math.round(
+                (updated.unlimited ? unitPrice : unitPrice * updated.quantity) * 100
+              ) / 100;
             }
-            updated.totalPrice = Math.round(
-              (updated.unlimited ? unitPrice : unitPrice * updated.quantity) * 100
-            ) / 100;
             return updated;
           }
           return block;
         })
       );
     },
-    [selectedBlocks, onBlocksChange]
+    [selectedBlocks, onBlocksChange, contractDuration]
   );
 
   // Toggle block expansion
@@ -564,12 +684,43 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                 : 'Add blocks from the library to build your contract'
             }
           </p>
+          {/* Sprint 1: recommendations-first — VaNi is the opening move, not a hidden button */}
+          {!rfqMode && (
+            <button
+              type="button"
+              onClick={() => setShowRecommender(true)}
+              className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition-all hover:opacity-90"
+              style={{
+                borderColor: colors.brand.primary,
+                backgroundColor: `${colors.brand.primary}10`,
+                color: colors.brand.primary,
+              }}
+            >
+              <Sparkles size={13} />
+              Ask VaNi what this contract usually includes
+            </button>
+          )}
         </div>
       );
     }
 
     return (
       <div className="space-y-2">
+        {/* Sprint 1: unified-cycle mismatch — warn here, on selection, not at Continue */}
+        {cycleMismatch && (
+          <div
+            className="flex items-start gap-2 rounded-lg border px-3 py-2 text-[11px] font-medium"
+            style={{ borderColor: '#F59E0B', backgroundColor: '#F59E0B12', color: '#B45309' }}
+            role="alert"
+          >
+            <Zap size={12} className="flex-shrink-0 mt-0.5" style={{ color: '#F59E0B' }} />
+            <span>
+              Unified billing cycle, but blocks bill on {cycleMismatch.cycles.join(' and ')}. Align the
+              marked block{cycleMismatch.offenders.size > 1 ? 's' : ''} to <strong>{cycleMismatch.majority}</strong> —
+              or switch the contract to per-block billing on the Billing Cycle step.
+            </span>
+          </div>
+        )}
         {blocks.map((block) => {
           const isDragging = draggedBlockId === block.id;
           const isDragOver = dragOverBlockId === block.id;
@@ -616,6 +767,45 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                   onUpdate={handleUpdateBlock}
                 />
               )}
+              {/* Sprint 1: per-block footnotes — cycle offender + recorded discount.
+                  Discount compares the EFFECTIVE selling price (customPrice ?? price)
+                  against the list price — for cadence blocks, list = the chosen
+                  cadence's rate, so the chip is cadence-aware automatically. */}
+              {(() => {
+                const effPrice = block.config?.customPrice ?? block.price;
+                const hasList = typeof block.listPrice === 'number' && block.listPrice > 0;
+                if (!cycleMismatch?.offenders.has(block.id) && !(hasList && effPrice !== block.listPrice)) return null;
+                return (
+                  <div className="flex flex-wrap gap-1.5 px-1 pt-1">
+                    {cycleMismatch?.offenders.has(block.id) && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: '#F59E0B15', color: '#B45309', border: '1px solid #F59E0B50' }}
+                      >
+                        <Zap size={9} /> bills {block.cycle} — contract is unified {cycleMismatch.majority}
+                      </span>
+                    )}
+                    {hasList && effPrice < block.listPrice! && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary }}
+                        title="Recorded as a line discount (internal — not shown on the invoice lines)"
+                      >
+                        list <s>{formatCurrency(block.listPrice!, block.currency)}</s> → {formatCurrency(effPrice, block.currency)}
+                        {' '}(−{Math.round((1 - effPrice / block.listPrice!) * 1000) / 10}%)
+                      </span>
+                    )}
+                    {hasList && effPrice > block.listPrice! && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: `${colors.utility.primaryText}0A`, color: colors.utility.secondaryText }}
+                      >
+                        above list ({formatCurrency(block.listPrice!, block.currency)})
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
@@ -673,7 +863,8 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
             onAddBlock={handleAddBlock}
             maxHeight="calc(100vh - 200px)"
             currency={currency}
-            flyByTypes={['service', 'spare', 'text', 'document']}
+            flyByTypes={['service']} /* MVP: ad-hoc text/document FlyBys can break
+              the generated contract document structure — services only (owner decision) */
             onAddFlyByBlock={handleAddFlyByBlock}
             flyByOnly={rfqMode}
           />

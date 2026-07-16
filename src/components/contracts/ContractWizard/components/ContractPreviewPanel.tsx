@@ -118,13 +118,25 @@ const ContractPreviewPanel: React.FC<ContractPreviewPanelProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Calculate totals
+  // Calculate totals from REAL per-block taxes. block.totalPrice already
+  // includes tax (exclusive taxes applied at build/update time), so the
+  // pre-tax base is backed out per block — never a hardcoded default rate.
   const totals = useMemo(() => {
-    const subtotal = selectedBlocks.reduce((sum, block) => sum + block.totalPrice, 0);
-    // TODO: Get tax rate from blocks' pricing rules
-    const taxRate = 0.18; // 18% GST default
-    const tax = subtotal * taxRate;
-    const total = subtotal + tax;
+    let subtotal = 0;
+    let tax = 0;
+    let total = 0;
+    selectedBlocks.forEach((block) => {
+      const rate = block.taxRate || 0;
+      const withTax = block.totalPrice || 0;
+      const base = rate > 0 && block.taxInclusion !== 'inclusive' ? withTax / (1 + rate / 100) : withTax;
+      subtotal += rate > 0 && block.taxInclusion === 'inclusive' ? withTax / (1 + rate / 100) : base;
+      tax += withTax - (rate > 0 ? withTax / (1 + rate / 100) : withTax);
+      total += withTax;
+    });
+    subtotal = Math.round(subtotal * 100) / 100;
+    tax = Math.round(tax * 100) / 100;
+    total = Math.round(total * 100) / 100;
+    const taxRate = subtotal > 0 ? tax / subtotal : 0;
     return { subtotal, tax, taxRate, total, blockCount: selectedBlocks.length };
   }, [selectedBlocks]);
 
@@ -484,14 +496,16 @@ const ContractPreviewPanel: React.FC<ContractPreviewPanelProps> = ({
                 {formatCurrency(totals.subtotal, currency)}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                Tax ({Math.round(totals.taxRate * 100)}%)
-              </span>
-              <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                {formatCurrency(totals.tax, currency)}
-              </span>
-            </div>
+            {totals.tax > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                  Tax ({Math.round(totals.taxRate * 100)}%)
+                </span>
+                <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                  {formatCurrency(totals.tax, currency)}
+                </span>
+              </div>
+            )}
             <div
               className="flex items-center justify-between pt-2 border-t"
               style={{ borderColor: `${colors.utility.primaryText}15` }}

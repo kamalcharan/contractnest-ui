@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { BlockCategory } from '@/types/catalogStudio';
+import { applyMvpOverrides } from '@/utils/catalog-studio/categories';
 
 // =================================================================
 // TYPES
@@ -114,7 +115,9 @@ export const mapDetailToBlockCategory = (detail: BlockTypeDetail): BlockCategory
   const defaultColors = DEFAULT_COLORS[detail.sub_cat_name] || { color: '#6B7280', bgColor: '#F9FAFB' };
   const color = detail.hexcolor || defaultColors.color;
 
-  return {
+  // MVP flags (comingSoon / singleton) are product decisions that don't live
+  // in m_category_details — overlay them so DB-driven categories carry them.
+  return applyMvpOverrides({
     id: detail.sub_cat_name,
     dbId: detail.id, // Actual UUID for database operations
     name: detail.display_name,
@@ -123,7 +126,7 @@ export const mapDetailToBlockCategory = (detail: BlockTypeDetail): BlockCategory
     color: color,
     bgColor: detail.hexcolor ? generateBgColor(detail.hexcolor) : defaultColors.bgColor,
     description: detail.description || `${detail.display_name} blocks`,
-  };
+  });
 };
 
 // =================================================================

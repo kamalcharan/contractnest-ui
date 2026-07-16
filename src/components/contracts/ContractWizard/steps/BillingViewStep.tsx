@@ -17,6 +17,7 @@ import {
   Lock,
   Shuffle,
   Zap,
+  Percent,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -25,6 +26,7 @@ import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/Bl
 import { BillingCycleType } from './BillingCycleStep';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 import { FLYBY_TYPE_CONFIG } from '@/components/catalog-studio/FlyByBlockCard';
+import { cadenceTermMath, getCadenceCycle } from '@/utils/catalog-studio/cadencePricing';
 
 export interface BillingViewStepProps {
   selectedBlocks: ConfigurableBlock[];
@@ -35,10 +37,17 @@ export interface BillingViewStepProps {
   selectedTaxRateIds: string[];
   onTaxRateIdsChange: (ids: string[]) => void;
   onTotalsChange?: (totals: {
+    baseSubtotal?: number;
     taxTotal: number;
     grandTotal: number;
+    discountTotal?: number;
     taxBreakdown: Array<{ tax_rate_id: string; name: string; rate: number; amount: number }>;
   }) => void;
+  // Sprint 1: contract-level discount (% or absolute), applied BEFORE tax and
+  // loaded uniformly across line items internally
+  discountType?: 'percent' | 'amount' | null;
+  discountValue?: number;
+  onDiscountChange?: (type: 'percent' | 'amount' | null, value: number) => void;
   // Payment
   paymentMode: 'prepaid' | 'emi' | 'defined';
   onPaymentModeChange: (mode: 'prepaid' | 'emi' | 'defined') => void;
@@ -56,8 +65,10 @@ const formatCurrency = (amount: number, currency: string = 'INR', decimals = 2) 
   return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 };
 
-// Get cycle label from id
+// Get cycle label from id (cadence-pricing cycles included)
 const getCycleLabel = (cycleId: string): string => {
+  const cadence = getCadenceCycle(cycleId);
+  if (cadence) return cadence.label;
   const cycle = CYCLE_OPTIONS.find((c) => c.id === cycleId);
   return cycle?.label || cycleId || '-';
 };
@@ -106,6 +117,9 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
   perBlockPaymentType,
   onPerBlockPaymentTypeChange,
   contractDuration = 12,
+  discountType = null,
+  discountValue = 0,
+  onDiscountChange,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -138,7 +152,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       groups[cycle].count += 1;
     });
 
-    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'custom', 'postpaid'];
+    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'halfyearly', 'annual', 'custom', 'postpaid'];
     return order
       .filter((cycle) => groups[cycle])
       .map((cycle) => ({
@@ -154,6 +168,21 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
   }, [billableBlocks]);
 
   // Calculate totals from per-block taxes + aggregate tax breakup by tax name
+  // Money multiplier for a block. Cadence-priced blocks bill by (payments ×
+  // rate + seller-set final) derived from the contract term — NOT by the
+  // visit quantity — so their multiplier is termTotal/rate. Everything else
+  // keeps qty (or 1 when unlimited).
+  const billingQty = useCallback((block: ConfigurableBlock): number => {
+    const cadDef = block.config?.cadencePricing ? getCadenceCycle(block.cycle) : undefined;
+    if (cadDef) {
+      const ep = block.config?.customPrice ?? block.price;
+      if (!ep || ep <= 0) return 0;
+      const m = cadenceTermMath(ep, Math.max(1, contractDuration || 12), cadDef.monthsPerPeriod, block.config?.cadenceFinalPayment);
+      return m.termTotal / ep;
+    }
+    return block.unlimited ? 1 : block.quantity;
+  }, [contractDuration]);
+
   const totals = useMemo(() => {
     let baseSubtotal = 0;
     let totalTax = 0;
@@ -162,7 +191,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
 
     billableBlocks.forEach((block) => {
       const ep = block.config?.customPrice ?? block.price;
-      const qty = block.unlimited ? 1 : block.quantity;
+      const qty = billingQty(block);
       const taxRate = block.taxRate || 0;
 
       if (block.isFlyBy && taxRate === 0) {
@@ -206,23 +235,40 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       }
     });
 
-    const emiInstallment = emiMonths > 0 ? grandTotal / emiMonths : grandTotal;
+    // ── Sprint 1: contract-level discount, applied BEFORE tax ────────
+    // Uniform (pro-rata) loading across line items == one proportional factor,
+    // since every block's tax is linear in its base. Exact by construction.
+    const rawDiscount = discountType === 'percent'
+      ? baseSubtotal * (Math.max(0, discountValue) / 100)
+      : discountType === 'amount'
+        ? Math.max(0, discountValue)
+        : 0;
+    const discountTotal = Math.min(rawDiscount, baseSubtotal);
+    const factor = baseSubtotal > 0 ? (baseSubtotal - discountTotal) / baseSubtotal : 1;
 
-    // Build sorted tax breakup array
+    const netTax = totalTax * factor;
+    const netGrand = grandTotal * factor;
+    const emiInstallment = emiMonths > 0 ? netGrand / emiMonths : netGrand;
+
+    // Build sorted tax breakup array (net of discount)
     const taxBreakup = Object.values(taxMap).map((t) => ({
       ...t,
-      amount: Math.round(t.amount * 100) / 100,
+      amount: Math.round(t.amount * factor * 100) / 100,
     }));
 
     return {
-      baseSubtotal: Math.round(baseSubtotal * 100) / 100,
-      totalTax: Math.round(totalTax * 100) / 100,
-      grandTotal: Math.round(grandTotal * 100) / 100,
+      baseSubtotal: Math.round(baseSubtotal * 100) / 100,          // gross (pre-discount) — "sum total"
+      discountTotal: Math.round(discountTotal * 100) / 100,
+      taxableSubtotal: Math.round((baseSubtotal - discountTotal) * 100) / 100,
+      totalTax: Math.round(netTax * 100) / 100,                    // net of discount
+      grandTotal: Math.round(netGrand * 100) / 100,                // "total to be paid"
+      grossGrandTotal: Math.round(grandTotal * 100) / 100,
+      discountFactor: factor,
       blockCount: billableBlocks.length,
       emiInstallment: Math.round(emiInstallment * 100) / 100,
       taxBreakup,
     };
-  }, [billableBlocks, emiMonths]);
+  }, [billableBlocks, emiMonths, discountType, discountValue, billingQty]);
 
   // Report computed totals to parent wizard state
   useEffect(() => {
@@ -231,6 +277,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
       baseSubtotal: totals.baseSubtotal,
       taxTotal: totals.totalTax,
       grandTotal: totals.grandTotal,
+      discountTotal: totals.discountTotal,
       taxBreakdown: totals.taxBreakup.map((t) => ({
         tax_rate_id: t.tax_rate_id,
         name: t.name,
@@ -238,7 +285,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
         amount: t.amount,
       })),
     });
-  }, [totals.baseSubtotal, totals.totalTax, totals.grandTotal, totals.taxBreakup, onTotalsChange]);
+  }, [totals.baseSubtotal, totals.totalTax, totals.grandTotal, totals.discountTotal, totals.taxBreakup, onTotalsChange]);
 
   // 'prepaid' is the invalid default for mixed cycles — it bills everything
   // upfront as ONE lump event instead of per-block. When a contract enters
@@ -473,7 +520,15 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
             ) : (
               billableBlocks.map((block) => {
                 const ep = block.config?.customPrice ?? block.price;
-                const qty = block.unlimited ? 1 : block.quantity;
+                const qty = billingQty(block);
+                // Cadence blocks: show whole payments (+ final) instead of a
+                // fractional money multiplier
+                const isCadenceLine = !!block.config?.cadencePricing && !!getCadenceCycle(block.cycle);
+                const qtyLabel = block.unlimited
+                  ? '∞'
+                  : isCadenceLine
+                    ? `${Math.floor(qty)}${qty % 1 > 0.001 ? ' + final' : ''} pay`
+                    : `×${qty}`;
                 const taxRate = block.taxRate || 0;
                 const isFlyBy = block.isFlyBy;
                 const showTax = !isFlyBy && taxRate > 0;
@@ -551,7 +606,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                               {isFlyBy ? `FlyBy ${block.categoryName}` : block.categoryName}
                             </span>
                             <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                              {block.unlimited ? '∞' : `×${qty}`} • {getCycleLabel(block.cycle)}
+                              {qtyLabel} • {getCycleLabel(block.cycle)}
                             </span>
                             {isMixed && (
                               <span
@@ -597,7 +652,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
                         <div className="flex justify-between text-xs">
                           <span style={{ color: colors.utility.secondaryText }}>
                             {showTax && block.taxInclusion === 'inclusive' ? 'Base Price' : 'Selling Price'}
-                            {' '}({block.unlimited ? '∞' : `×${qty}`})
+                            {' '}({qtyLabel})
                           </span>
                           <span style={{ color: colors.utility.primaryText }}>
                             {formatCurrency(Math.round(baseAmount * 100) / 100, block.currency)}
@@ -679,6 +734,107 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
         {/* Column 3: Payment Schedule + Summary */}
         <div className="w-[420px] flex-shrink-0 min-h-0">
           <div className="h-full overflow-y-auto flex flex-col gap-3 pr-1">
+
+          {/* ── Sprint 1: Contract-level discount ─────────────────────── */}
+          {onDiscountChange && billableBlocks.length > 0 && (
+            <div
+              className="rounded-xl border overflow-hidden flex-shrink-0"
+              style={{
+                backgroundColor: colors.utility.secondaryBackground,
+                borderColor: totals.discountTotal > 0 ? `${colors.brand.primary}40` : `${colors.utility.primaryText}10`,
+              }}
+            >
+              <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: `${colors.utility.primaryText}10` }}>
+                <Percent className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>Discount</span>
+                <div className="ml-auto flex rounded-lg border overflow-hidden" style={{ borderColor: `${colors.utility.primaryText}15` }}>
+                  {(['amount', 'percent'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => onDiscountChange(t, discountValue || 0)}
+                      className="px-3 py-1 text-xs font-bold transition-colors"
+                      style={{
+                        backgroundColor: (discountType ?? 'amount') === t ? colors.brand.primary : 'transparent',
+                        color: (discountType ?? 'amount') === t ? '#FFFFFF' : colors.utility.secondaryText,
+                      }}
+                    >
+                      {t === 'percent' ? '%' : getCurrencySymbol(currency)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="p-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="number"
+                    min={0}
+                    max={discountType === 'percent' ? 100 : undefined}
+                    value={discountValue || ''}
+                    placeholder={discountType === 'percent' ? 'e.g. 10' : 'e.g. 5000'}
+                    onChange={(e) => {
+                      const v = Math.max(0, parseFloat(e.target.value) || 0);
+                      const t = discountType ?? 'amount';
+                      onDiscountChange(t, t === 'percent' ? Math.min(100, v) : v);
+                    }}
+                    className="flex-1 rounded-lg border px-3 py-2 text-sm font-semibold bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    style={{ borderColor: `${colors.utility.primaryText}20`, color: colors.utility.primaryText }}
+                  />
+                  {totals.discountTotal > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onDiscountChange(null, 0)}
+                      className="text-[11px] font-semibold px-2 py-1 rounded hover:opacity-80"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {!discountType && (
+                  <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                    Pick % or {getCurrencySymbol(currency)} to give a contract-level discount — applied before tax.
+                  </p>
+                )}
+                {totals.discountTotal > 0 && (
+                  <>
+                    {/* The chain: sum total → discount → taxable → tax → to pay */}
+                    <div className="space-y-1 text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                      <div className="flex justify-between"><span>Sum total (before tax)</span><span className="tabular-nums">{formatCurrency(totals.baseSubtotal, currency)}</span></div>
+                      <div className="flex justify-between font-semibold" style={{ color: colors.brand.primary }}>
+                        <span>Discount{discountType === 'percent' ? ` (${discountValue}%)` : ''}</span>
+                        <span className="tabular-nums">−{formatCurrency(totals.discountTotal, currency)}</span>
+                      </div>
+                      <div className="flex justify-between"><span>Taxable value</span><span className="tabular-nums">{formatCurrency(totals.taxableSubtotal, currency)}</span></div>
+                      <div className="flex justify-between"><span>Tax</span><span className="tabular-nums">{formatCurrency(totals.totalTax, currency)}</span></div>
+                      <div className="flex justify-between font-bold pt-1 border-t" style={{ color: colors.utility.primaryText, borderColor: `${colors.utility.primaryText}10` }}>
+                        <span>Total to be paid</span><span className="tabular-nums">{formatCurrency(totals.grandTotal, currency)}</span>
+                      </div>
+                    </div>
+                    {/* Internal allocation — uniform loading, never shown on the invoice */}
+                    <details className="mt-2">
+                      <summary className="text-[10px] font-semibold cursor-pointer" style={{ color: colors.utility.secondaryText }}>
+                        Internal allocation across {totals.blockCount} line item{totals.blockCount !== 1 ? 's' : ''} (not shown on invoice)
+                      </summary>
+                      <div className="mt-1.5 space-y-0.5">
+                        {billableBlocks.map((b) => {
+                          const ep = (b.config?.customPrice ?? b.price) * billingQty(b);
+                          const share = totals.baseSubtotal > 0 ? (ep / totals.baseSubtotal) * totals.discountTotal : 0;
+                          return (
+                            <div key={b.id} className="flex justify-between text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                              <span className="truncate pr-2">{b.name}</span>
+                              <span className="tabular-nums flex-shrink-0">−{formatCurrency(Math.round(share * 100) / 100, currency)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Payment Schedule Section */}
           <div
             className="rounded-xl border overflow-hidden flex-shrink-0"

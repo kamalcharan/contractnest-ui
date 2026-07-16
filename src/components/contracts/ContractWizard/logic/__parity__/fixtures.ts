@@ -60,10 +60,15 @@ export const F1_basicContract = base({
   ] as any,
   totalValue: 164000,
   baseSubtotal: 164000,
-  taxTotal: 29520,
-  grandTotal: 193520,
+  // Sprint 1: 10% contract-level discount, applied before tax.
+  // taxable = 164000 − 16400 = 147600 → GST 18% = 26568 → to pay 174168
+  discountType: 'percent',
+  discountValue: 10,
+  discountTotal: 16400,
+  taxTotal: 26568,
+  grandTotal: 174168,
   selectedTaxRateIds: ['55555555-5555-4555-8555-555555555555'],
-  taxBreakdown: [{ tax_rate_id: '55555555-5555-4555-8555-555555555555', name: 'GST 18%', rate: 18, amount: 29520 }],
+  taxBreakdown: [{ tax_rate_id: '55555555-5555-4555-8555-555555555555', name: 'GST 18%', rate: 18, amount: 26568 }],
 });
 
 // F2 — EMI + per-block payment types + event date overrides + equipment/coverage

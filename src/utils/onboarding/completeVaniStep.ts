@@ -17,6 +17,7 @@ export type VaniStepId =
   | 'vani-consent'
   | 'vani-working'
   | 'pricing-review'
+  | 'terms-conditions'
   | 'equipment-confirm'
   | 'lov-setup'
   | 'vani-intelligence'

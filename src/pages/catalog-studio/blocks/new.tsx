@@ -2,7 +2,7 @@
 // Full Page Block Creation - Phase 4
 // Replaces modal wizard with URL-based navigation
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, X } from 'lucide-react';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -11,7 +11,8 @@ import { useBlockCategories, usePricingModes } from '../../../hooks/queries/useB
 import { BLOCK_CATEGORIES } from '../../../utils/catalog-studio';
 import BlockWizardContent from '../../../components/catalog-studio/BlockWizard/BlockWizardContent';
 import { useCreateCatBlock } from '../../../hooks/mutations/useCatBlocksMutations';
-import { blockToCreateData } from '../../../utils/catalog-studio/catBlockAdapter';
+import { useCatBlocksTest } from '../../../hooks/queries/useCatBlocksTest';
+import { blockToCreateData, catBlocksToBlocks } from '../../../utils/catalog-studio/catBlockAdapter';
 import { VaNiLoader } from '../../../components/common/loaders/UnifiedLoader';
 import { useStorageManagement } from '../../../hooks/useStorageManagement';
 import { vaniToast } from '../../../components/common/toast';
@@ -46,6 +47,37 @@ const NewBlockPage: React.FC = () => {
 
   // Get current category info
   const currentCategory = blockCategories.find(c => c.id === blockType);
+
+  // ── MVP gates ─────────────────────────────────────────────────────
+  // Coming-soon block types can't be created — covers direct URLs like
+  // /blocks/new?type=video that bypass the type-selection cards.
+  useEffect(() => {
+    if (currentCategory?.comingSoon) {
+      vaniToast.info(`${currentCategory.name} blocks are coming soon`, {
+        message: 'A smart canvas for rich content is on the roadmap — post MVP.',
+      });
+      setBlockType('service');
+    }
+  }, [currentCategory]);
+
+  // One Terms & Conditions text block per business — creating a second one
+  // redirects to editing the existing block instead.
+  const { data: existingBlocksResponse } = useCatBlocksTest();
+  useEffect(() => {
+    if (blockType !== 'text') return;
+    const raw = existingBlocksResponse?.data?.blocks;
+    if (!Array.isArray(raw) || raw.length === 0) return;
+    const existingBlocks = catBlocksToBlocks(raw);
+    const existingTnC =
+      existingBlocks.find(b => b.categoryId === 'text' && /terms\s*(&|and)\s*conditions/i.test(b.name || '')) ||
+      existingBlocks.find(b => b.categoryId === 'text');
+    if (existingTnC) {
+      vaniToast.info('Terms & Conditions', {
+        message: 'One T&C per business during MVP — opening yours for editing.',
+      });
+      navigate(`/catalog-studio/blocks/${existingTnC.id}/edit`, { replace: true });
+    }
+  }, [blockType, existingBlocksResponse, navigate]);
 
   // Handlers
   const handleBlockTypeChange = useCallback((type: string) => {

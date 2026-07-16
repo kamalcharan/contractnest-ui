@@ -17,7 +17,6 @@ import {
   Video,
   Image as ImageIcon,
   Eye,
-  EyeOff,
   Download,
   MapPin,
   Loader2,
@@ -44,6 +43,8 @@ import { useIntegrations } from '@/hooks/useIntegrations';
 import { useGatewayStatus } from '@/hooks/useGatewayStatus';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { ConfigurableBlock, CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
+import { cadenceTermMath, getCadenceCycle } from '@/utils/catalog-studio/cadencePricing';
+import ContractDocument, { buildDocFromWizard } from '@/components/contracts/document/ContractDocument';
 import { BillingCycleType } from './BillingCycleStep';
 import {
   categoryHasPricing,
@@ -78,14 +79,11 @@ export interface ReviewSendStepProps {
   vendorNames?: string[];
   // Nomenclature
   nomenclatureName?: string | null;
-  // Real contract identity/timeline (used when viewing an existing contract, e.g.
-  // the Document tab). In the creation wizard these are omitted and safe defaults
-  // (placeholder ref, "today") are used.
-  contractNumber?: string | null;
-  startDate?: string | Date | null;
-  createdDate?: string | Date | null;
   // Force a specific view mode (hides the Self/Client toggle)
   forcedViewMode?: 'self' | 'client';
+  // Sprint 1 contract-level discount — shown on the exported document chain
+  discountType?: 'percent' | 'amount' | null;
+  discountValue?: number;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -154,10 +152,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   rfqMode = false,
   vendorNames = [],
   nomenclatureName,
-  contractNumber,
-  startDate: startDateProp,
-  createdDate: createdDateProp,
   forcedViewMode,
+  discountType = null,
+  discountValue = 0,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -186,12 +183,16 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   );
 
   // View mode
-  const [viewMode, setViewMode] = useState<'self' | 'client'>(forcedViewMode || 'self');
+  // Self/Client toggle retired with the old paper (the document IS the client
+  // view); forcedViewMode still honored for callers that pin a mode.
+  const [viewMode] = useState<'self' | 'client'>(forcedViewMode || 'self');
   const effectiveViewMode = forcedViewMode || viewMode;
   const isSelfView = effectiveViewMode === 'self';
 
-  // PDF generation
+  // PDF generation — the export captures the professional ContractDocument
+  // (owner-approved layout), rendered off-screen; the on-screen paper stays.
   const paperRef = useRef<HTMLDivElement>(null);
+  const docRef = useRef<HTMLDivElement>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const isMixed = billingCycleType === 'mixed';
@@ -231,11 +232,49 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       || buyerContact.contact_channels.find((c) => c.channel_type === 'mobile' || c.channel_type === 'phone');
   }, [buyerContact]);
 
+  // ─── Professional document (PDF export target) — all content from the
+  //     contract itself: parties, schedules, text-block terms ─────────
+  const documentData = useMemo(() => {
+    const providerLines = [
+      [tenantProfile?.city, tenantProfile?.state_code].filter(Boolean).join(', '),
+      [tenantProfile?.business_phone_country_code, tenantProfile?.business_phone].filter(Boolean).join(' '),
+      tenantProfile?.business_email || '',
+    ].filter(Boolean) as string[];
+    const customerLines = [
+      buyerPrimaryPhone?.value ? `${buyerPrimaryPhone.value}` : '',
+      buyerPrimaryEmail?.value || '',
+    ].filter(Boolean) as string[];
+    return buildDocFromWizard({
+      contractName,
+      contractNumber: null,
+      statusLabel: rfqMode ? 'RFQ Draft' : `${contractStatus || 'draft'} — awaiting acceptance`,
+      providerName: tenantProfile?.business_name || 'Your Company',
+      providerLogoUrl: tenantProfile?.logo_url,
+      providerLines,
+      customerName: isTemplate ? null : (buyerDisplayName === 'Not selected' ? null : buyerDisplayName),
+      customerLines,
+      durationValue,
+      durationUnit,
+      startDate: new Date(),
+      acceptanceMethod,
+      currency,
+      selectedBlocks,
+      paymentMode,
+      emiMonths,
+      perBlockPaymentType,
+      billingCycleType,
+      discountType,
+      discountValue,
+    });
+  }, [tenantProfile, buyerDisplayName, buyerPrimaryEmail, buyerPrimaryPhone, contractName, contractStatus, rfqMode, isTemplate, durationValue, durationUnit, acceptanceMethod, currency, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, discountType, discountValue]);
+
   // ─── Group blocks by category ────────────────────────────────────
+  // Billing-only blocks (fees/dues — no service visits) group under Billing,
+  // never under Service: the reader expects payments there, not deliverables.
   const blockGroups = useMemo(() => {
     const groups: Record<string, ConfigurableBlock[]> = {};
     selectedBlocks.forEach((block) => {
-      const catId = block.categoryId || 'service';
+      const catId = block.config?.billingOnly === true ? 'billing' : (block.categoryId || 'service');
       if (!groups[catId]) groups[catId] = [];
       groups[catId].push(block);
     });
@@ -256,7 +295,12 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
 
     billableBlocks.forEach((block) => {
       const ep = block.config?.customPrice ?? block.price;
-      const qty = block.unlimited ? 1 : block.quantity;
+      // Cadence-priced blocks bill by (payments × rate + final) from the term —
+      // their money multiplier is termTotal/rate, never the visit quantity.
+      const cadDef = block.config?.cadencePricing ? getCadenceCycle(block.cycle) : undefined;
+      const qty = cadDef && ep > 0
+        ? cadenceTermMath(ep, Math.max(1, durationMonths), cadDef.monthsPerPeriod, block.config?.cadenceFinalPayment).termTotal / ep
+        : (block.unlimited ? 1 : block.quantity);
       const taxRate = block.taxRate || 0;
 
       if (taxRate === 0) {
@@ -302,23 +346,25 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     const emiInstallment = emiMonths > 0 ? grandTotal / emiMonths : grandTotal;
 
     return { subtotal, taxBreakup, taxAmount: totalTax, grandTotal, emiInstallment, billableCount: billableBlocks.length };
-  }, [selectedBlocks, emiMonths]);
+  }, [selectedBlocks, emiMonths, durationMonths]);
 
   // ─── Payment plan breakup (for "As Defined" / Mixed display) ─────
   const definedBreakup = useMemo(() => {
     const billableBlocks = selectedBlocks.filter((b) => categoryHasPricing(b.categoryId || ''));
-    const groups: Record<string, { total: number; count: number }> = {};
+    const groups: Record<string, { total: number; count: number; hasCadence: boolean }> = {};
     billableBlocks.forEach((block) => {
       const cycle = block.cycle || 'prepaid';
-      if (!groups[cycle]) groups[cycle] = { total: 0, count: 0 };
+      if (!groups[cycle]) groups[cycle] = { total: 0, count: 0, hasCadence: false };
       groups[cycle].total += block.totalPrice;
       groups[cycle].count += 1;
+      if (block.config?.cadencePricing) groups[cycle].hasCadence = true;
     });
-    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'custom', 'postpaid'];
+    const order = ['prepaid', 'monthly', 'fortnightly', 'quarterly', 'halfyearly', 'annual', 'custom', 'postpaid'];
     return order
       .filter((cycle) => groups[cycle])
       .map((cycle) => ({
         cycle,
+        hasCadence: groups[cycle].hasCadence,
         label:
           cycle === 'prepaid' ? 'On Acceptance (Prepaid)'
           : cycle === 'postpaid' ? 'On Completion (Postpaid)'
@@ -329,21 +375,19 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       }));
   }, [selectedBlocks]);
 
-  // Timeline dates — use the real contract dates when provided (Document tab /
-  // existing contract); fall back to "today" for the creation wizard.
-  const startDate = startDateProp ? new Date(startDateProp) : new Date();
-  const endDate = new Date(startDate);
+  // Timeline dates
+  const startDate = new Date();
+  const endDate = new Date();
   endDate.setMonth(endDate.getMonth() + durationMonths);
-  const createdDate = createdDateProp ? new Date(createdDateProp) : startDate;
   const formatDate = (d: Date) =>
     new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 
   // ─── PDF generation ───────────────────────────────────────────────
   const handleDownloadPdf = useCallback(async () => {
-    if (!paperRef.current) return;
+    if (!docRef.current) return;
     setGeneratingPdf(true);
     try {
-      const canvas = await html2canvas(paperRef.current, {
+      const canvas = await html2canvas(docRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#FFFFFF',
@@ -893,38 +937,10 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
         <div className="min-w-0">
         {/* Controls above paper */}
         <div className="flex items-center justify-between px-2 pb-3">
-          {/* Self / Client pill toggle - hidden in RFQ mode and when forcedViewMode is set */}
-          {!rfqMode && !forcedViewMode ? (
-            <div
-              className="flex items-center rounded-full p-1 shadow-sm"
-              style={{ backgroundColor: paperBg }}
-            >
-              <button
-                type="button"
-                onClick={() => setViewMode('self')}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: isSelfView ? brandPrimary : 'transparent',
-                  color: isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
-                }}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Self View
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('client')}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: !isSelfView ? brandPrimary : 'transparent',
-                  color: !isSelfView ? '#FFFFFF' : colors.utility.secondaryText,
-                }}
-              >
-                <EyeOff className="w-3.5 h-3.5" />
-                Client View
-              </button>
-            </div>
-          ) : rfqMode ? (
+          {/* Contracts show the real document (what the buyer sees and what the
+              PDF exports) — the Self/Client paper toggle went with the old paper.
+              RFQs keep the lightweight preview. */}
+          {rfqMode ? (
             <span
               className="text-[10px] px-3 py-1.5 rounded-full font-medium uppercase tracking-wide shadow-sm"
               style={{ backgroundColor: paperBg, color: brandPrimary }}
@@ -936,8 +952,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm"
               style={{ backgroundColor: brandPrimary, color: '#FFFFFF' }}
             >
-              {isSelfView ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              {isSelfView ? 'Self View' : 'Client View'}
+              <Eye className="w-3.5 h-3.5" />
+              Contract Document
             </span>
           )}
 
@@ -981,7 +997,23 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
           </div>
         </div>
 
-        {/* ═══ THE PAPER ═══ */}
+        {/* ═══ THE DOCUMENT (contract mode) ═══
+            The professional ContractDocument — identical to the PDF export
+            (docRef is what handleDownloadPdf captures). Fixed 794px paper
+            width; scrolls horizontally on narrow screens. */}
+        {!rfqMode && (
+          <div
+            className="rounded-lg"
+            style={{ boxShadow: paperShadow, marginBottom: '24px', overflowX: 'auto', backgroundColor: '#FFFFFF' }}
+          >
+            <div ref={docRef} style={{ width: 794, margin: '0 auto' }}>
+              <ContractDocument data={documentData} />
+            </div>
+          </div>
+        )}
+
+        {/* ═══ THE PAPER (RFQ preview only — replaced by the document above
+            for contracts) ═══ */}
         <div
           ref={paperRef}
           className="rounded-lg [&_h4]:!no-underline [&_h4]:![text-decoration:none] [&_.block-name]:![text-decoration:none]"
@@ -990,6 +1022,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
             boxShadow: paperShadow,
             marginBottom: '24px',
             textDecoration: 'none',
+            display: rfqMode ? undefined : 'none',
           }}
         >
           {/* Branded header strip */}
@@ -1049,10 +1082,10 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                 </span>
               )}
               <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                Ref: #{contractNumber || 'CN-XXXX'}
+                Ref: #CN-XXXX
               </span>
               <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                · Created {formatDate(createdDate)}
+                · Created {formatDate(startDate)}
               </span>
             </div>
 
@@ -1246,18 +1279,16 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                   <div className="space-y-3">
                     {blocks.map((block) => {
                       const effectivePrice = block.config?.customPrice ?? block.price;
-                      const lineTotal = block.unlimited ? effectivePrice : effectivePrice * block.quantity;
+                      // Cadence-priced: the line shows the TERM total (payments ×
+                      // rate + seller final), never rate × visit-quantity.
+                      const lineCadDef = block.config?.cadencePricing ? getCadenceCycle(block.cycle) : undefined;
+                      const lineCadMath = lineCadDef
+                        ? cadenceTermMath(effectivePrice, Math.max(1, durationMonths), lineCadDef.monthsPerPeriod, block.config?.cadenceFinalPayment)
+                        : null;
+                      const lineTotal = lineCadMath
+                        ? lineCadMath.termTotal
+                        : (block.unlimited ? effectivePrice : effectivePrice * block.quantity);
                       const blockPayType = perBlockPaymentType[block.id] || 'prepaid';
-
-                      // Group Session: surface its occurrence count + cadence so the
-                      // review reflects the real schedule (e.g. 25 sessions), not a
-                      // bare block. Non-pricing sessions otherwise show only a name.
-                      const isGroupSession = (block.config as any)?.audience === 'group' || categoryId === 'session';
-                      const gsAnchor = (block.config as any)?.serviceCycles?.anchorWeekday;
-                      const gsAnchorLabel =
-                        typeof gsAnchor === 'number' && gsAnchor >= 0 && gsAnchor <= 6
-                          ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][gsAnchor]
-                          : null;
 
                       return (
                         <div
@@ -1295,9 +1326,8 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               )}
                             </div>
 
-                            {/* Pricing tags - hidden in RFQ mode and for Group Sessions
-                                (which render their own occurrence + cadence summary) */}
-                            {hasPricing && !isGroupSession && !rfqMode && (
+                            {/* Pricing tags - hidden in RFQ mode */}
+                            {hasPricing && !rfqMode && (
                               <div className="flex items-center gap-2 mt-1.5">
                                 <span
                                   className="text-[10px] px-2 py-0.5 rounded-md font-medium"
@@ -1306,7 +1336,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                                     color: colors.utility.secondaryText,
                                   }}
                                 >
-                                  Qty: {block.unlimited ? '∞' : block.quantity}
+                                  {lineCadMath
+                                    ? `${lineCadMath.fullPayments} payment${lineCadMath.fullPayments !== 1 ? 's' : ''}${lineCadMath.remMonths > 0 ? ' + final' : ''} × ${formatCurrency(effectivePrice, currency)}`
+                                    : `Qty: ${block.unlimited ? '∞' : block.quantity}`}
                                 </span>
                                 <span
                                   className="text-[10px] px-2 py-0.5 rounded-md font-medium"
@@ -1323,29 +1355,6 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                                     }}
                                   >
                                     {blockPayType === 'prepaid' ? 'Prepaid' : 'Postpaid'}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Group Session: occurrence count + cadence summary */}
-                            {isGroupSession && !rfqMode && (
-                              <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                                <span
-                                  className="text-[10px] px-2 py-0.5 rounded-md font-medium"
-                                  style={{
-                                    backgroundColor: `${colors.utility.primaryText}08`,
-                                    color: colors.utility.secondaryText,
-                                  }}
-                                >
-                                  {block.unlimited ? '∞' : block.quantity} session{block.quantity > 1 ? 's' : ''}
-                                </span>
-                                {block.serviceCycleDays && block.serviceCycleDays > 0 && (
-                                  <span
-                                    className="text-[10px] px-2 py-0.5 rounded-md font-medium"
-                                    style={{ backgroundColor: `${brandPrimary}10`, color: brandPrimary }}
-                                  >
-                                    Every {block.serviceCycleDays} days{gsAnchorLabel ? ` · ${gsAnchorLabel}` : ''}
                                   </span>
                                 )}
                               </div>
@@ -1539,7 +1548,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               </span>
                               {group.isRecurring && (
                                 <span className="text-[9px] block" style={{ color: colors.utility.secondaryText }}>
-                                  /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                                  {(group as any).hasCadence
+                                    ? 'term total'
+                                    : `/${group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}`}
                                 </span>
                               )}
                             </div>
@@ -1587,7 +1598,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
                               </span>
                               {group.isRecurring && (
                                 <span className="text-[9px] block" style={{ color: colors.utility.secondaryText }}>
-                                  /{group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}
+                                  {(group as any).hasCadence
+                                    ? 'term total'
+                                    : `/${group.cycle === 'monthly' ? 'mo' : group.cycle === 'fortnightly' ? '2wk' : group.cycle === 'quarterly' ? 'qtr' : group.cycle}`}
                                 </span>
                               )}
                             </div>
@@ -1696,6 +1709,16 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
 
         </div>{/* end grid */}
       </div>
+
+      {/* Off-screen document for RFQ PDF export — contracts render it
+          visibly above (same docRef; the two never mount together). */}
+      {rfqMode && (
+        <div style={{ position: 'fixed', left: -10000, top: 0, zIndex: -1, pointerEvents: 'none' }} aria-hidden="true">
+          <div ref={docRef}>
+            <ContractDocument data={documentData} />
+          </div>
+        </div>
+      )}
 
     </div>
   );

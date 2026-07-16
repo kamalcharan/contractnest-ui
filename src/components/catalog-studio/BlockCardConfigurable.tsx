@@ -30,6 +30,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 import { useTaxRatesDropdown } from '@/hooks/queries/useProductMasterdata';
+import {
+  CADENCE_CYCLES,
+  cadenceTermMath,
+  fittingCadences,
+  getCadenceCycle,
+  type BlockCadencePricing,
+  type CadenceCycleId,
+} from '@/utils/catalog-studio/cadencePricing';
 
 // Billing cycle options
 export const CYCLE_OPTIONS = [
@@ -52,6 +60,10 @@ export interface ConfigurableBlock {
   serviceCycleDays?: number; // Service cycle interval (days between each occurrence)
   unlimited: boolean;
   price: number; // Defined price (from block)
+  // Sprint 1: catalog list price captured at add-time. When price is edited
+  // below list, the delta is a RECORDED line discount (internal analytics +
+  // future invoice allocation) instead of silently overwriting the price.
+  listPrice?: number;
   currency: string;
   totalPrice: number;
   categoryName: string;
@@ -79,6 +91,16 @@ export interface ConfigurableBlock {
     complimentary?: boolean; // Complimentary block — delivers occurrences but no price/billing
     serviceCycles?: { anchorWeekday?: number; days?: number; enabled?: boolean }; // Cadence config
     autoCount?: boolean; // Group Session: occurrence count auto-derives from contract duration until user edits it
+    // Cadence (cyclical) pricing — carried from the catalog block's rate card.
+    // When present: cycle = the proposed cadence, price/listPrice = that
+    // cadence's rate, quantity = number of FULL payments in the term.
+    cadencePricing?: BlockCadencePricing;
+    // Seller-set final payment for leftover months (pre-tax). Absent = the
+    // pro-rata suggestion applies. Never invented by the system silently.
+    cadenceFinalPayment?: number;
+    // Per-cadence selling-price overrides, so switching cadences round-trips
+    // the seller's negotiated rates (matches the approved mock behavior).
+    cadenceOverrides?: Record<string, number>;
   };
 }
 
@@ -195,6 +217,45 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
     [block.id, onUpdate]
   );
 
+  // ── Cadence (cyclical) pricing ──────────────────────────────────
+  const cadencePricing = block.config?.cadencePricing;
+  const isCadencePriced = !!cadencePricing;
+  const durationMonths = contractDurationDays ? Math.max(1, Math.round(contractDurationDays / 30)) : 12;
+  const currentCadenceDef = isCadencePriced ? getCadenceCycle(block.cycle) : undefined;
+  const cadenceEffRate = block.config?.customPrice ?? block.price;
+  const cadenceMath = isCadencePriced && currentCadenceDef
+    ? cadenceTermMath(cadenceEffRate, durationMonths, currentCadenceDef.monthsPerPeriod, block.config?.cadenceFinalPayment)
+    : null;
+  const cadenceDoesNotFit = isCadencePriced && currentCadenceDef && currentCadenceDef.monthsPerPeriod > durationMonths;
+
+  // Switching cadence: look up the new rate, restore any per-cadence override,
+  // re-derive the payment count, and reset the seller-set final payment.
+  const handleCadenceChange = useCallback(
+    (cycleId: CadenceCycleId) => {
+      if (!cadencePricing) return;
+      const rate = cadencePricing.rates.find((r) => r.cycle === cycleId);
+      const def = getCadenceCycle(cycleId);
+      if (!rate || !def) return;
+      const overrides = { ...(block.config?.cadenceOverrides || {}) };
+      if (block.config?.customPrice !== undefined) overrides[block.cycle] = block.config.customPrice;
+      else delete overrides[block.cycle];
+      // quantity is untouched — it stays the SERVICE-VISIT count. The payment
+      // count is always derived from (cadence, contract duration), never stored.
+      onUpdate(block.id, {
+        cycle: cycleId,
+        price: rate.amount,
+        listPrice: rate.amount,
+        config: {
+          ...block.config,
+          customPrice: overrides[cycleId],
+          cadenceOverrides: overrides,
+          cadenceFinalPayment: undefined,
+        },
+      });
+    },
+    [block.id, block.cycle, block.config, cadencePricing, durationMonths, onUpdate]
+  );
+
   const handleCustomCycleDaysChange = useCallback(
     (days: number | undefined) => {
       onUpdate(block.id, { customCycleDays: days });
@@ -237,8 +298,11 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
     [block.id, block.config, onUpdate]
   );
 
-  // Get current cycle option
-  const currentCycle = CYCLE_OPTIONS.find((c) => c.id === block.cycle) || CYCLE_OPTIONS[0];
+  // Get current cycle option — cadence-priced blocks use the cadence label
+  // ('halfyearly'/'annual' don't exist in CYCLE_OPTIONS)
+  const currentCycle = isCadencePriced && currentCadenceDef
+    ? { id: currentCadenceDef.id, label: currentCadenceDef.label, shortLabel: currentCadenceDef.label, icon: CalendarClock }
+    : (CYCLE_OPTIONS.find((c) => c.id === block.cycle) || CYCLE_OPTIONS[0]);
 
   return (
     <div
@@ -525,7 +589,123 @@ const BlockCardConfigurable: React.FC<BlockCardConfigurableProps> = ({
             )}
 
             {/* Billing Cycle Section (billing blocks only) */}
-            {showPrice && <div>
+            {showPrice && isCadencePriced && cadencePricing && (
+              <div>
+                <label
+                  className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
+                  style={{ color: colors.utility.secondaryText }}
+                >
+                  Payment Cadence — your proposal to the buyer
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {fittingCadences(cadencePricing, durationMonths).map((cad) => {
+                    const rate = cadencePricing.rates.find((r) => r.cycle === cad.id)!;
+                    const effRate = block.config?.cadenceOverrides?.[cad.id] ??
+                      (block.cycle === cad.id ? cadenceEffRate : rate.amount);
+                    const isActive = block.cycle === cad.id;
+                    return (
+                      <button
+                        key={cad.id}
+                        onClick={() => handleCadenceChange(cad.id)}
+                        className="px-3 py-2 rounded-lg text-xs font-medium transition-all text-left"
+                        style={{
+                          backgroundColor: isActive ? colors.brand.primary : `${colors.utility.primaryText}08`,
+                          color: isActive ? '#FFFFFF' : colors.utility.secondaryText,
+                        }}
+                        title={`${cad.label} — ${getCurrencySymbol(block.currency)}${effRate.toLocaleString()} ${cad.per}`}
+                      >
+                        <span className="font-bold">
+                          {cad.label}
+                          {cadencePricing.defaultCadence === cad.id && (
+                            <span
+                              className="ml-1.5 text-[8px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                              style={{
+                                backgroundColor: isActive ? 'rgba(255,255,255,0.25)' : `${colors.brand.primary}15`,
+                                color: isActive ? '#FFFFFF' : colors.brand.primary,
+                              }}
+                            >
+                              default
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-[10px] mt-0.5" style={{ opacity: 0.85 }}>
+                          {getCurrencySymbol(block.currency)}{effRate.toLocaleString()} {cad.per}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: colors.utility.secondaryText }}>
+                  The buyer may pick any of these at contract review — this is the pre-selected proposal.
+                </p>
+
+                {cadenceDoesNotFit && (
+                  <div
+                    className="flex items-start gap-1.5 mt-2 p-2 rounded-lg"
+                    style={{ backgroundColor: `${colors.semantic.error}12` }}
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: colors.semantic.error }} />
+                    <span className="text-xs" style={{ color: colors.semantic.error }}>
+                      {currentCadenceDef?.label} is longer than the {durationMonths}-month contract — pick a cadence above.
+                    </span>
+                  </div>
+                )}
+
+                {/* Payment schedule summary + seller-set final payment */}
+                {cadenceMath && !cadenceDoesNotFit && (
+                  <div
+                    className="mt-2 p-2.5 rounded-lg border"
+                    style={{ borderColor: `${colors.brand.primary}30`, backgroundColor: `${colors.brand.primary}06` }}
+                  >
+                    <div className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
+                      {cadenceMath.fullPayments} payment{cadenceMath.fullPayments !== 1 ? 's' : ''} × {getCurrencySymbol(block.currency)}{cadenceEffRate.toLocaleString()}
+                      {cadenceMath.remMonths > 0 && (
+                        <> + final payment {getCurrencySymbol(block.currency)}{cadenceMath.finalPayment.toLocaleString()}</>
+                      )}
+                      {' '}= <span style={{ color: colors.brand.primary }}>{getCurrencySymbol(block.currency)}{cadenceMath.termTotal.toLocaleString()}</span> over {durationMonths} months
+                    </div>
+                    {cadenceMath.remMonths > 0 && (
+                      <div className="mt-2 pt-2 border-t border-dashed" style={{ borderColor: '#F59E0B60' }}>
+                        <div className="text-[11px] font-semibold mb-1" style={{ color: '#B45309' }}>
+                          {cadenceMath.remMonths} month{cadenceMath.remMonths > 1 ? 's' : ''} left over — you decide the final payment
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs" style={{ color: colors.utility.secondaryText }}>
+                              {getCurrencySymbol(block.currency)}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={block.config?.cadenceFinalPayment ?? cadenceMath.suggestedFinal}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value);
+                                handleConfigChange('cadenceFinalPayment', isNaN(v) ? undefined : Math.max(0, v));
+                              }}
+                              className="w-28 pl-7 pr-2 py-1.5 text-sm rounded-lg border"
+                              style={{
+                                backgroundColor: colors.utility.primaryBackground,
+                                borderColor: '#F59E0B60',
+                                color: colors.utility.primaryText,
+                              }}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleConfigChange('cadenceFinalPayment', undefined)}
+                            className="text-[10px] font-bold underline"
+                            style={{ color: '#B45309' }}
+                          >
+                            pro-rata suggestion: {getCurrencySymbol(block.currency)}{cadenceMath.suggestedFinal.toLocaleString()}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {showPrice && !isCadencePriced && <div>
               <label
                 className="text-[10px] font-medium uppercase tracking-wide mb-1.5 block"
                 style={{ color: colors.utility.secondaryText }}

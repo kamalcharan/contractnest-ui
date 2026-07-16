@@ -14,7 +14,8 @@
 //   - Confirm PATCHes only blocks whose price differs from the seeded value —
 //     accepting KT prices is a no-op, not 100 writes.
 //
-// Navigation: seller → /onboarding/done | both → /onboarding/equipment-confirm
+// Navigation: → /onboarding/terms-conditions (which then branches by persona:
+// both → equipment-confirm | seller → lov-setup)
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -94,7 +95,6 @@ const Screen8APricingStep: React.FC = () => {
   const location   = useLocation();
   const routeState = (location.state || {}) as Record<string, any>;
 
-  const persona                   = (routeState.persona       || 'seller') as string;
   const industryNames             = (routeState.industryNames || []) as string[];
   const selectedEquipmentTemplates: any[] = routeState.selectedEquipmentTemplates || [];
   const selectedFacilityTemplates:  any[] = routeState.selectedFacilityTemplates  || [];
@@ -251,8 +251,7 @@ const Screen8APricingStep: React.FC = () => {
         edited: deltas.length,
         currency,
       });
-      const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/lov-setup';
-      navigate(dest, { state: { ...routeState, pricingConfirmed: true } });
+      navigate('/onboarding/terms-conditions', { state: { ...routeState, pricingConfirmed: true } });
     } catch (err: any) {
       setSaveError(err?.response?.data?.error || 'Failed to save pricing. Please try again.');
       setSaving(false);
@@ -261,8 +260,7 @@ const Screen8APricingStep: React.FC = () => {
 
   const handleSkip = () => {
     completeVaniStep('pricing-review', { accepted: false, skipped: true, total_blocks: totalBlocks });
-    const dest = persona === 'both' ? '/onboarding/equipment-confirm' : '/onboarding/lov-setup';
-    navigate(dest, { state: routeState });
+    navigate('/onboarding/terms-conditions', { state: routeState });
   };
 
   const handleBack = () => navigate('/onboarding/vani-working', { state: routeState });

@@ -48,12 +48,15 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
         {categories.map((cat) => {
           const IconComponent = getIconComponent(cat.icon);
           const isSelected = selectedType === cat.id;
+          // MVP gate: type is shown (keeps the ambition visible) but not
+          // creatable — post-MVP smart canvas replaces these block types.
+          const gated = cat.comingSoon === true;
 
           return (
             <div
               key={cat.id}
-              onClick={() => onSelectType(cat.id)}
-              className="p-5 border-2 rounded-xl cursor-pointer text-center transition-all hover:shadow-lg"
+              onClick={() => { if (!gated) onSelectType(cat.id); }}
+              className={`p-5 border-2 rounded-xl text-center transition-all relative ${gated ? 'cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'}`}
               style={{
                 ...cardStyle,
                 backgroundColor: isSelected
@@ -63,8 +66,17 @@ const TypeSelectionStep: React.FC<TypeSelectionStepProps> = ({ categories, selec
                   ? colors.brand.primary
                   : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
                 transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                opacity: gated ? 0.55 : 1,
               }}
             >
+              {gated && (
+                <span
+                  className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: `${colors.utility.primaryText}10`, color: colors.utility.secondaryText }}
+                >
+                  Coming soon
+                </span>
+              )}
               <div
                 className="w-14 h-14 mx-auto mb-3 rounded-xl flex items-center justify-center transition-all"
                 style={{

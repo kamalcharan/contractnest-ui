@@ -51,6 +51,9 @@ const getStepPath = (stepId: string): string => {
     'served-industries': '/onboarding/served-industries',
     'vani-consent': '/onboarding/vani-consent',
     'vani-working': '/onboarding/vani-working',
+    'pricing-review': '/onboarding/pricing-review',
+    'terms-conditions': '/onboarding/terms-conditions',
+    'equipment-confirm': '/onboarding/equipment-confirm',
     'lov-setup': '/onboarding/lov-setup',
   };
 

@@ -67,3 +67,48 @@ export const COUNTERPARTY_LABEL: Record<string, string> = {
 
 // Minimum step index to trigger auto-save (Details step = index 4 in CONTRACT_STEPS)
 export const DRAFT_SAVE_MIN_STEP_ID = 'details';
+
+// ── WizardShell additions (Phase 2) ─────────────────────────────────────────
+// Phases group the granular steps into 4 chapters for the stepper.
+// Grouping is contiguous over the ACTUAL step order of every flow.
+export type WizardPhaseId = 'setup' | 'terms' | 'services' | 'finalize';
+
+export const PHASE_LABELS: Record<WizardPhaseId, string> = {
+  setup: 'Setup',
+  terms: 'Terms',
+  services: 'Services',
+  finalize: 'Finalize',
+};
+
+export const STEP_PHASE: Record<StepId, WizardPhaseId> = {
+  path: 'setup',
+  nomenclature: 'setup',
+  acceptance: 'setup',
+  counterparty: 'setup',
+  details: 'terms',
+  assetSelection: 'terms',
+  billingCycle: 'terms',
+  blocks: 'services',
+  billingView: 'services',
+  evidencePolicy: 'finalize',
+  events: 'finalize',
+  review: 'finalize',
+};
+
+// Reason shown when Continue is pressed while the step is incomplete.
+// The button is never silently disabled — this is the "why".
+export function blockedHintFor(stepId: StepId, isRfqMode: boolean): string {
+  switch (stepId) {
+    case 'path': return 'Choose how you want to start';
+    case 'counterparty':
+      return isRfqMode ? 'Select at least one vendor to continue' : 'Select a counterparty to continue';
+    case 'acceptance': return 'Choose how this contract will be accepted';
+    case 'details': return 'Add a contract name and a duration greater than zero';
+    case 'billingCycle': return 'Pick a billing cycle to continue';
+    case 'blocks': return 'Add at least one service block';
+    case 'assetSelection': return 'Select at least one coverage type';
+    default: return 'Complete this step to continue';
+  }
+}
+
+export const TEMPLATE_SELECTION_HINT = 'Pick a template to continue';

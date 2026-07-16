@@ -65,6 +65,12 @@ export interface ContractWizardState {
   paymentMode: 'prepaid' | 'emi' | 'defined';
   emiMonths: number;
   perBlockPaymentType: Record<string, 'prepaid' | 'postpaid'>;
+  // Sprint 1: contract-level discount — % or absolute, applied BEFORE tax.
+  // Loaded uniformly (pro-rata) across line items internally; the invoice
+  // presents: sum total → discount → total to be paid (per owner decision).
+  discountType: 'percent' | 'amount' | null;
+  discountValue: number;
+  discountTotal: number;
   // Asset Selection
   equipmentDetails: EquipmentDetailItem[];
   allowBuyerToAdd: boolean;
@@ -120,6 +126,10 @@ export const createInitialWizardState = (): ContractWizardState => ({
   paymentMode: 'prepaid',
   emiMonths: 6,
   perBlockPaymentType: {},
+  // Discount
+  discountType: null,
+  discountValue: 0,
+  discountTotal: 0,
   // Asset Selection
   equipmentDetails: [],
   allowBuyerToAdd: false,

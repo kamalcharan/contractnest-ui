@@ -29,8 +29,6 @@ initSentry();
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
-import SessionCheckinPage from './pages/checkin/SessionCheckinPage'; // [batch3-checkin]
-import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [batch3-checkin]
 
 // Catalog Pages
 import CatalogPage from './pages/catalog/index';
@@ -67,7 +65,7 @@ import OnboardingLayout from './components/onboarding/OnboardingLayout';
 import OnboardingPendingPage from './pages/onboarding/OnboardingPendingPage';
 import StorageSetupStep from './pages/onboarding/steps/StorageSetupStep';
 import VaniIntroStep from '@/pages/onboarding/steps/VaniIntroStep';
-import UserProfileStep from '@/pages/onboarding/steps/userProfileStep';
+import UserProfileStep from '@/pages/onboarding/steps/UserProfileStep';
 import BusinessDetailsStep from '@/pages/onboarding/steps/BusinessDetailsStep';
 import PersonaSelectionStep from '@/pages/onboarding/steps/PersonaSelectionStep';
 import EngagementModelStep from '@/pages/onboarding/steps/EngagementModelStep';
@@ -81,7 +79,9 @@ import BusinessBasicStep from '@/pages/onboarding/steps/BusinessBasicStep';
 import BusinessBrandingStep from '@/pages/onboarding/steps/BusinessBrandingStep';
 import ServedIndustriesStep from '@/pages/onboarding/steps/ServedIndustriesStep';
 import Screen8APricingStep from '@/pages/onboarding/steps/Screen8APricingStep';
+import TermsConditionsStep from '@/pages/onboarding/steps/TermsConditionsStep';
 import Screen8BEquipmentStep from '@/pages/onboarding/steps/Screen8BEquipmentStep';
+import LovSetupStep from '@/pages/onboarding/steps/LovSetupStep';
 import ResourcePickStep from '@/pages/onboarding/steps/ResourcePickStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
@@ -180,7 +180,6 @@ import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
 import FinancePage from './pages/operations/finance';
 import OpsServiceSchedulePage from './pages/operations/services';
-import GroupSessionsPage from './pages/operations/group-sessions';
 import OpsAppointmentsPage from './pages/operations/appointments';
 import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
@@ -238,6 +237,7 @@ import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscriptio
 import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
+import ContactsImportPage from './pages/contacts/import';
 
 // Admin - Subscription Management
 import SubscriptionManagementPage from './pages/admin/subscription-management';
@@ -254,7 +254,6 @@ import FormEditorPage from './pages/admin/smart-forms/FormEditorPage';
 
 // Tenant - Smart Forms Selection (Cycle 3)
 import SmartFormsSelectionPage from './pages/settings/smart-forms/SmartFormsSelectionPage';
-import CadenceSettingsPage from './pages/settings/cadence/CadenceSettingsPage';
 
 
 // Temporary API test
@@ -355,11 +354,6 @@ const AppContent: React.FC = () => {
       {/* <Toaster position="bottom-right" /> */}
       <MiscPageWrapper>
         <Routes>
-          {/* [batch3-checkin] Group Session check-in */}
-          <Route path="/checkin/:token" element={<SessionCheckinPage />} />
-          <Route path="/session-checkin" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-            <Route index element={<ChairCheckinPage />} />
-          </Route>
           {/* MISC Routes - Outside of MainLayout */}
           <Route path="/misc/maintenance" element={<MaintenancePage />} />
           <Route path="/misc/unauthorized" element={<UnauthorizedPage />} />
@@ -450,7 +444,9 @@ const AppContent: React.FC = () => {
   <Route path="vani-intelligence" element={<VaniIntelligenceStep />} />
   <Route path="vani-working" element={<VaniWorkingStep />} />
   <Route path="pricing-review" element={<Screen8APricingStep />} />
+  <Route path="terms-conditions" element={<TermsConditionsStep />} />
   <Route path="equipment-confirm" element={<Screen8BEquipmentStep />} />
+  <Route path="lov-setup" element={<LovSetupStep />} />
   <Route path="done" element={
     <ProtectedRoute requireTenant={true}>
       <VaniDoneStep />
@@ -596,18 +592,6 @@ const AppContent: React.FC = () => {
             <Route index element={<OpsServiceSchedulePage />} />
           </Route>
 
-          {/* Operations → Group Sessions dashboard (generic per tenant) */}
-          <Route
-            path="/group-sessions"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<GroupSessionsPage />} />
-          </Route>
-
           {/* Operations → Appointments — Stage 3 */}
           <Route
             path="/ops/appointments"
@@ -712,7 +696,6 @@ const AppContent: React.FC = () => {
             <Route path="configure/lovs" element={<ListOfValuesPage />} />
             <Route path="configure/resources" element={<ResourcesPage />} />
             <Route path="configure/smart-forms" element={<SmartFormsSelectionPage />} />
-            <Route path="configure/cadence" element={<CadenceSettingsPage />} />
             <Route path="configure/automation-rules" element={<AutomationRulesPage />} />
 
             {/* Team Management Routes */}
@@ -743,7 +726,6 @@ const AppContent: React.FC = () => {
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />
             <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
             <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
-       
             <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
 
             {/* Integration Settings */}
@@ -784,6 +766,7 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ContactsPage />} />
             <Route path="create" element={<ContactCreateForm />} />
+            <Route path="import" element={<ContactsImportPage />} />
             <Route path=":id" element={<ContactViewPage />} />
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
           </Route>

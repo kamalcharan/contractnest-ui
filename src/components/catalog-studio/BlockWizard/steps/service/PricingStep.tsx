@@ -23,6 +23,14 @@ import { useTheme } from '../../../../../contexts/ThemeContext';
 import { Block, SelectedVariant } from '../../../../../types/catalogStudio';
 import { currencyOptions } from '../../../../../utils/constants/currencies';
 import { useTaxRatesDropdown } from '../../../../../hooks/queries/useProductMasterdata';
+import {
+  CADENCE_CYCLES,
+  createDefaultCadenceRates,
+  fairCadenceRate,
+  cadenceDeltaPct,
+  type CadenceCycleId,
+  type CadenceRate,
+} from '../../../../../utils/catalog-studio/cadencePricing';
 
 // =================================================================
 // TYPES
@@ -43,6 +51,12 @@ interface PricingRecord {
   taxes: TaxEntry[];
   billing_cycle?: string;
   is_active: boolean;
+  // Cadence (cyclical) pricing — all optional; absent = single price (today).
+  // In cadence mode, `amount` is the anchor's X in "Total price X for Y months".
+  pricing_scheme?: 'single' | 'cadence';
+  base_term_months?: number;
+  cadence_rates?: CadenceRate[];
+  default_cadence?: CadenceCycleId;
 }
 
 interface VariantPricingRecord {
@@ -331,6 +345,42 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
 
   const updatePricingRecord = useCallback((id: string, field: keyof PricingRecord, value: unknown) => {
     setPricingRecords(prev => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  }, []);
+
+  // ── Cadence (cyclical) pricing handlers ─────────────────────────
+  const setPricingScheme = useCallback((id: string, scheme: 'single' | 'cadence') => {
+    setPricingRecords(prev => prev.map((r) => {
+      if (r.id !== id) return r;
+      if (scheme === 'cadence') {
+        return {
+          ...r,
+          pricing_scheme: 'cadence',
+          base_term_months: r.base_term_months || 12,
+          cadence_rates: r.cadence_rates && r.cadence_rates.length > 0 ? r.cadence_rates : createDefaultCadenceRates(),
+        };
+      }
+      return { ...r, pricing_scheme: 'single' };
+    }));
+  }, []);
+
+  const updateCadenceRate = useCallback((id: string, cycle: CadenceCycleId, patch: Partial<CadenceRate>) => {
+    setPricingRecords(prev => prev.map((r) => {
+      if (r.id !== id) return r;
+      const rates = (r.cadence_rates || createDefaultCadenceRates()).map((cr) =>
+        cr.cycle === cycle ? { ...cr, ...patch } : cr
+      );
+      let def = r.default_cadence;
+      const enabled = rates.filter((cr) => cr.enabled);
+      // default must always be one of the enabled cadences
+      if (!def || !enabled.some((cr) => cr.cycle === def)) {
+        def = enabled[0]?.cycle;
+      }
+      return { ...r, cadence_rates: rates, default_cadence: def };
+    }));
+  }, []);
+
+  const setDefaultCadence = useCallback((id: string, cycle: CadenceCycleId) => {
+    setPricingRecords(prev => prev.map((r) => (r.id === id ? { ...r, default_cadence: cycle } : r)));
   }, []);
 
   const addTaxToRecord = useCallback((recordId: string, taxOption: { value: string; label: string; rate?: number }) => {
@@ -667,6 +717,8 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                 {pricingRecords.map((record) => {
                   const currencyInfo = currencyOptions.find((c) => c.code === record.currency);
                   const currencySymbol = currencyInfo?.symbol || record.currency;
+                  // Cadence pricing applies to fixed-price services only
+                  const isCadence = priceType === 'fixed' && record.pricing_scheme === 'cadence';
 
                   return (
                     <div key={record.id} className="p-4 rounded-xl border" style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FAFAFA', borderColor: isDarkMode ? '#374151' : '#E5E7EB' }}>
@@ -687,36 +739,224 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-medium mb-1.5" style={{ color: colors.utility.secondaryText }}>
-                            {priceType === 'hourly' ? 'Hourly Rate' : 'Price'} <span className="text-red-500">*</span>
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
-                            <input
-                              type="number"
-                              value={record.amount || ''}
-                              onChange={(e) => updatePricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
-                              className="w-full pl-10 pr-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                      {/* Pricing scheme — fixed-price services can vary by billing cadence */}
+                      {priceType === 'fixed' && (
+                        <div className="grid grid-cols-2 gap-3 mb-4">
+                          {([
+                            { id: 'single', label: 'One price', desc: "Single price, any billing cycle — today's behavior" },
+                            { id: 'cadence', label: 'Varies by billing cadence', desc: 'Different rate per cadence, anchored to a base you define' },
+                          ] as const).map((opt) => {
+                            const sel = (record.pricing_scheme === 'cadence') === (opt.id === 'cadence');
+                            return (
+                              <div
+                                key={opt.id}
+                                onClick={() => setPricingScheme(record.id, opt.id)}
+                                className="p-3 border-2 rounded-xl cursor-pointer transition-all"
+                                style={{
+                                  backgroundColor: sel ? `${colors.brand.primary}08` : (isDarkMode ? colors.utility.primaryBackground : '#FFFFFF'),
+                                  borderColor: sel ? colors.brand.primary : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
+                                }}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>{opt.label}</div>
+                                    <div className="text-xs mt-0.5" style={{ color: colors.utility.secondaryText }}>{opt.desc}</div>
+                                  </div>
+                                  {sel && <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: colors.brand.primary }} />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {isCadence ? (
+                        <>
+                          {/* The anchor: "Total price X for Y months" — captured & stored */}
+                          <div
+                            className="rounded-xl border-2 p-4 mb-4"
+                            style={{ borderColor: `${colors.brand.primary}30`, backgroundColor: `${colors.brand.primary}08` }}
+                          >
+                            <div className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: colors.brand.primary }}>
+                              Base price — the anchor
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
+                              Total price
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-sm" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
+                                <input
+                                  type="number"
+                                  value={record.amount || ''}
+                                  onChange={(e) => updatePricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
+                                  className="w-36 pl-9 pr-2 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                                  style={inputStyle}
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              for
+                              <input
+                                type="number"
+                                min={1}
+                                value={record.base_term_months || ''}
+                                onChange={(e) => updatePricingRecord(record.id, 'base_term_months', parseInt(e.target.value, 10) || 0)}
+                                className="w-20 px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                                style={inputStyle}
+                                placeholder="12"
+                              />
+                              months
+                            </div>
+                            <p className="text-xs mt-2" style={{ color: colors.utility.secondaryText }}>
+                              Every cadence rate below is compared against this. The cycle timeline is whatever you define here — never assumed.
+                            </p>
+                          </div>
+
+                          {/* Per-cadence rate card */}
+                          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: isDarkMode ? '#374151' : '#E5E7EB' }}>
+                            <div
+                              className="grid gap-3 px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider"
+                              style={{ gridTemplateColumns: '22px 96px 130px 1fr 72px', color: colors.utility.secondaryText, backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F3F4F6' }}
+                            >
+                              <span></span><span>Cadence</span><span>Rate</span><span>vs base</span><span>Default</span>
+                            </div>
+                            {CADENCE_CYCLES.map((cad) => {
+                              const rate = (record.cadence_rates || []).find((cr) => cr.cycle === cad.id) || { cycle: cad.id, amount: 0, enabled: false };
+                              const fair = fairCadenceRate(record.amount, record.base_term_months, cad.monthsPerPeriod);
+                              const delta = fair !== null && rate.amount > 0 ? cadenceDeltaPct(rate.amount, fair) : null;
+                              return (
+                                <div
+                                  key={cad.id}
+                                  className="grid gap-3 items-center px-3.5 py-2.5 border-t"
+                                  style={{
+                                    gridTemplateColumns: '22px 96px 130px 1fr 72px',
+                                    borderColor: isDarkMode ? '#374151' : '#E5E7EB',
+                                    opacity: rate.enabled ? 1 : 0.5,
+                                    backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={rate.enabled}
+                                    onChange={(e) => updateCadenceRate(record.id, cad.id, { enabled: e.target.checked })}
+                                    className="w-4 h-4 rounded cursor-pointer"
+                                    style={{ accentColor: colors.brand.primary }}
+                                  />
+                                  <div>
+                                    <div className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>{cad.label}</div>
+                                    <div className="text-[10px]" style={{ color: colors.utility.secondaryText }}>{cad.per}</div>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
+                                    <input
+                                      type="number"
+                                      value={rate.amount || ''}
+                                      disabled={!rate.enabled}
+                                      onChange={(e) => updateCadenceRate(record.id, cad.id, { amount: parseFloat(e.target.value) || 0 })}
+                                      className="w-full pl-7 pr-2 py-1.5 border rounded-lg text-xs font-semibold"
+                                      style={inputStyle}
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <div className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                                    {!rate.enabled ? (
+                                      '—'
+                                    ) : fair === null ? (
+                                      'set a base price first'
+                                    ) : (
+                                      <>
+                                        fair {currencySymbol}{Math.round(fair).toLocaleString()}
+                                        <button
+                                          type="button"
+                                          onClick={() => updateCadenceRate(record.id, cad.id, { amount: Math.round(fair) })}
+                                          className="ml-1.5 font-bold underline"
+                                          style={{ color: colors.brand.primary }}
+                                        >
+                                          use
+                                        </button>
+                                        {delta !== null && (
+                                          Math.abs(delta) < 0.5 ? (
+                                            <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${colors.brand.primary}15`, color: colors.brand.primary }}>at par</span>
+                                          ) : delta > 0 ? (
+                                            <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#F59E0B18', color: '#B45309' }}>+{delta.toFixed(1)}% premium</span>
+                                          ) : (
+                                            <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${colors.semantic.success}18`, color: colors.semantic.success }}>−{Math.abs(delta).toFixed(1)}% discount</span>
+                                          )
+                                        )}
+                                        {rate.amount > 0 && record.base_term_months ? (
+                                          <div className="text-[10px] mt-0.5">
+                                            = {currencySymbol}{Math.round(rate.amount * record.base_term_months / cad.monthsPerPeriod).toLocaleString()} over the {record.base_term_months}-month base term
+                                          </div>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 text-[10px] font-bold" style={{ color: colors.utility.secondaryText }}>
+                                    <input
+                                      type="radio"
+                                      name={`default-cadence-${record.id}`}
+                                      checked={record.default_cadence === cad.id}
+                                      disabled={!rate.enabled}
+                                      onChange={() => setDefaultCadence(record.id, cad.id)}
+                                      className="w-3.5 h-3.5 cursor-pointer"
+                                      style={{ accentColor: colors.brand.primary }}
+                                    />
+                                    {record.default_cadence === cad.id ? 'default' : ''}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs mb-4 flex items-center gap-1.5" style={{ color: colors.brand.primary }}>
+                            <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                            Sellers propose from these cadences; the buyer may pick any of them at contract review. The default is pre-selected when the block is added.
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-medium mb-1.5" style={{ color: colors.utility.secondaryText }}>Tax Treatment</label>
+                              <select
+                                value={record.tax_inclusion}
+                                onChange={(e) => updatePricingRecord(record.id, 'tax_inclusion', e.target.value)}
+                                className="w-full px-3 py-2.5 border rounded-xl text-sm"
+                                style={inputStyle}
+                              >
+                                <option value="exclusive">Tax Exclusive</option>
+                                <option value="inclusive">Tax Inclusive</option>
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.utility.secondaryText }}>
+                              {priceType === 'hourly' ? 'Hourly Rate' : 'Price'} <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
+                              <input
+                                type="number"
+                                value={record.amount || ''}
+                                onChange={(e) => updatePricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
+                                className="w-full pl-10 pr-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2"
+                                style={inputStyle}
+                                placeholder="0.00"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1.5" style={{ color: colors.utility.secondaryText }}>Tax Treatment</label>
+                            <select
+                              value={record.tax_inclusion}
+                              onChange={(e) => updatePricingRecord(record.id, 'tax_inclusion', e.target.value)}
+                              className="w-full px-3 py-2.5 border rounded-xl text-sm"
                               style={inputStyle}
-                              placeholder="0.00"
-                            />
+                            >
+                              <option value="exclusive">Tax Exclusive</option>
+                              <option value="inclusive">Tax Inclusive</option>
+                            </select>
                           </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium mb-1.5" style={{ color: colors.utility.secondaryText }}>Tax Treatment</label>
-                          <select
-                            value={record.tax_inclusion}
-                            onChange={(e) => updatePricingRecord(record.id, 'tax_inclusion', e.target.value)}
-                            className="w-full px-3 py-2.5 border rounded-xl text-sm"
-                            style={inputStyle}
-                          >
-                            <option value="exclusive">Tax Exclusive</option>
-                            <option value="inclusive">Tax Inclusive</option>
-                          </select>
-                        </div>
-                      </div>
+                      )}
 
                       <div className="mt-4">
                         <TaxTags taxes={record.taxes} onRemove={(taxId) => removeTaxFromRecord(record.id, taxId)} recordId={record.id} onAddTax={addTaxToRecord} availableTaxes={taxRateOptions} />
