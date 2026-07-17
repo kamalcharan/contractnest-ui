@@ -221,7 +221,8 @@ class VaniComposerService {
     templateId: string,
     intent: VaniParsedIntent,
     buyer: { id: string; name: string } | null,
-    defaultCurrency?: string
+    defaultCurrency?: string,
+    cadenceSelections?: Array<{ block_id: string; cycle: string }>
   ): Promise<VaniComposeResult> {
     const response = await api.post(
       `${BASE}/assemble-from-template`,
@@ -231,6 +232,7 @@ class VaniComposerService {
         buyer_id: buyer?.id || '',
         buyer_name: buyer?.name || '',
         default_currency: defaultCurrency || '',
+        cadence_selections: cadenceSelections || [],
       },
       { timeout: FAST_TIMEOUT_MS }
     );
@@ -257,7 +259,8 @@ class VaniComposerService {
     buyer: { id: string; name: string } | null,
     candidates: VaniCandidate[],
     selection: VaniSelectResult,
-    defaultCurrency?: string
+    defaultCurrency?: string,
+    cadenceSelections?: Array<{ block_id: string; cycle: string }>
   ): Promise<VaniComposeResult> {
     const response = await api.post(
       `${BASE}/assemble`,
@@ -270,6 +273,7 @@ class VaniComposerService {
         gaps: selection.gaps,
         summary: selection.summary,
         default_currency: defaultCurrency || '',
+        cadence_selections: cadenceSelections || [],
       },
       { timeout: FAST_TIMEOUT_MS }
     );

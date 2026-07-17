@@ -117,6 +117,14 @@ const STEP_NARRATION: Record<StepId, { title: string; detail: string }> = {
   assemble: { title: 'Assembling the draft…', detail: 'Pricing, assets, evidence and the service calendar' },
 };
 
+// Mirrors CADENCE_LABEL in contractnest-edge/supabase/functions/contracts/cadence-acceptance.ts
+const CADENCE_LABEL: Record<string, string> = {
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  halfyearly: '6-Monthly',
+  annual: 'Annual',
+};
+
 const TEMPLATE_EXAMPLES = [
   '1 year HVAC AMC with quarterly PM visits and sign-off acceptance',
   '6 month housekeeping FMC, billed monthly',
@@ -176,6 +184,11 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
 
   // Adjustable preferences (defaults visible + changeable; re-assemble on change)
   const [contractCurrency, setContractCurrency] = useState(getDefaultCurrency().code);
+  // Per-block cadence choice (block_id -> cycle), for blocks whose saved
+  // config carries a cadencePricing rate card. Only ever sends a cycle name
+  // to the server — the rate itself is always re-derived from that block's
+  // own stored rate card, never trusted from the client.
+  const [cadenceOverrides, setCadenceOverrides] = useState<Record<string, string>>({});
 
   // Smart helper chips — the tenant's templates/equipment/services phrased as
   // prompts (template-derived chips hit the zero-LLM fast path). Static
@@ -210,6 +223,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     setBuyerSearch('');
     setShowQuickAdd(false);
     setContractCurrency(getDefaultCurrency().code);
+    setCadenceOverrides({});
     parseRef.current = null;
     templateMatchRef.current = null;
     rawTextRef.current = '';
@@ -274,16 +288,18 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   }), []);
 
   // ── STEP 5: assemble (deterministic) ──
-  const runAssemble = useCallback(async (currencyOverride?: string) => {
+  const runAssemble = useCallback(async (currencyOverride?: string, cadenceOverride?: Record<string, string>) => {
     const parse = parseRef.current;
     const shortlist = shortlistRef.current;
     const selection = selectRef.current;
     if (!parse || !shortlist || !selection) return;
     setRunningStep('assemble');
     try {
+      const cadMap = cadenceOverride ?? cadenceOverrides;
       const res = await vaniComposerService.assemble(
         parse.intent, buyerRef.current, shortlist.candidates, selection,
-        currencyOverride ?? contractCurrency
+        currencyOverride ?? contractCurrency,
+        Object.entries(cadMap).map(([block_id, cycle]) => ({ block_id, cycle }))
       );
       setResult(res);
       pushCard({
@@ -316,18 +332,20 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     } catch (err: any) {
       fail('assemble', 'Assembly failed', err, runAssemble);
     }
-  }, [pushCard, fail, contractCurrency]);
+  }, [pushCard, fail, contractCurrency, cadenceOverrides]);
 
   // ── TEMPLATE TIER: assemble straight from a matched signed-off template ──
-  const runAssembleFromTemplate = useCallback(async (currencyOverride?: string) => {
+  const runAssembleFromTemplate = useCallback(async (currencyOverride?: string, cadenceOverride?: Record<string, string>) => {
     const parse = parseRef.current;
     const match = templateMatchRef.current;
     if (!parse || !match) return;
     setRunningStep('assemble');
     try {
+      const cadMap = cadenceOverride ?? cadenceOverrides;
       const res = await vaniComposerService.assembleFromTemplate(
         match.template_id, parse.intent, buyerRef.current,
-        currencyOverride ?? contractCurrency
+        currencyOverride ?? contractCurrency,
+        Object.entries(cadMap).map(([block_id, cycle]) => ({ block_id, cycle }))
       );
       // The assembled draft omits the template link — stamp it so the created
       // contract carries template_id (used for template lineage + bulk dedup).
@@ -360,13 +378,23 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     } catch (err: any) {
       fail('assemble', 'Template assembly failed', err, runAssembleFromTemplate);
     }
-  }, [pushCard, fail, contractCurrency]);
+  }, [pushCard, fail, contractCurrency, cadenceOverrides]);
 
   /** Re-run the assemble that matches the active path (template vs composed) */
-  const reassemble = useCallback((currencyOverride?: string) => {
-    if (templateMatchRef.current) runAssembleFromTemplate(currencyOverride);
-    else runAssemble(currencyOverride);
+  const reassemble = useCallback((currencyOverride?: string, cadenceOverride?: Record<string, string>) => {
+    if (templateMatchRef.current) runAssembleFromTemplate(currencyOverride, cadenceOverride);
+    else runAssemble(currencyOverride, cadenceOverride);
   }, [runAssemble, runAssembleFromTemplate]);
+
+  /** Author picks a cadence for one block — validated server-side against
+   *  that block's own rate card; sends the FULL updated map immediately
+   *  (not via state) so this doesn't race the next render's stale closure. */
+  const setCadenceOverride = useCallback((blockId: string, cycle: string) => {
+    if (runningStep) return;
+    const next = { ...cadenceOverrides, [blockId]: cycle };
+    setCadenceOverrides(next);
+    reassemble(undefined, next);
+  }, [runningStep, cadenceOverrides, reassemble]);
 
   /** Preference adjusters (billing/acceptance/start/currency) — mutate the
    *  intent the pipeline holds and re-run the fast assemble step. */
@@ -509,7 +537,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   /** On-card contact search (gap mitigation without leaving the canvas) */
   const handleBuyerSearch = useCallback(async () => {
     const q = buyerSearch.trim();
-    if (q.length < 2) return;
+    if (q.length < 3) return;
     setBuyerSearching(true);
     try {
       const res = await vaniComposerService.resolveBuyer(q);
@@ -524,6 +552,18 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
       setBuyerSearching(false);
     }
   }, [buyerSearch, resumeWithBuyer, addToast]);
+
+  // Debounced type-ahead: once the buyer-search card is showing, fire the
+  // same search automatically 300ms after the 3rd character (mirrors the
+  // classic wizard's BuyerSelectionStep). Gated on buyerAction so this never
+  // re-fires after a buyer has already been picked and the state lingers.
+  useEffect(() => {
+    if (!buyerAction) return;
+    const q = buyerSearch.trim();
+    if (q.length < 3) return;
+    const t = setTimeout(() => { handleBuyerSearch(); }, 300);
+    return () => clearTimeout(t);
+  }, [buyerSearch, buyerAction, handleBuyerSearch]);
 
   // ── STEP 2: resolve buyer (deterministic; may pause for user action) ──
   const runBuyer = useCallback(async () => {
@@ -1017,7 +1057,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                             />
                             <button
                               onClick={handleBuyerSearch}
-                              disabled={buyerSearching || buyerSearch.trim().length < 2}
+                              disabled={buyerSearching || buyerSearch.trim().length < 3}
                               className="px-3 py-2 rounded-lg border text-xs font-semibold hover:opacity-80 disabled:opacity-40"
                               style={{ borderColor: colors.brand.primary, color: colors.brand.primary }}
                             >
@@ -1145,32 +1185,65 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                         <input
                           type="date"
                           value={parseRef.current.intent.start_date || new Date().toISOString().slice(0, 10)}
-                          min={new Date().toISOString().slice(0, 10)}
                           onChange={(e) => adjustAndReassemble(() => { parseRef.current!.intent.start_date = e.target.value; })}
                           className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
                           style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
                         />
                       </div>
-                      {/* Currency */}
+                      {/* Currency — locked. Blocks are priced in the template/catalog's
+                          currency; relabeling without converting prices would silently
+                          mismatch every amount, so this is display-only. */}
                       <div>
                         <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>
-                          Currency {contractCurrency === getDefaultCurrency().code && '(default)'}
+                          Currency (locked)
                         </p>
-                        <select
-                          value={contractCurrency}
-                          onChange={(e) => {
-                            setContractCurrency(e.target.value);
-                            if (!runningStep) reassemble(e.target.value);
+                        <div
+                          className="px-2.5 py-1.5 rounded-lg border text-[11px]"
+                          style={{
+                            borderColor: `${colors.utility.primaryText}20`,
+                            backgroundColor: `${colors.utility.secondaryText}0C`,
+                            color: colors.utility.secondaryText,
                           }}
-                          className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
-                          style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
                         >
-                          {currencyOptions.map((c) => (
-                            <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-                          ))}
-                        </select>
+                          {contractCurrency} — {currencyOptions.find((c) => c.code === contractCurrency)?.name || contractCurrency}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Per-block cadence — only for blocks whose saved config
+                        carries a real cadencePricing rate card (distinct from
+                        the generic Billing per-cycle picker above, which
+                        doesn't apply to these blocks at all). */}
+                    {result.draft.selectedBlocks
+                      .filter((b: any) => b.config?.cadencePricing?.rates?.length)
+                      .map((b: any) => {
+                        const rates = (b.config.cadencePricing.rates as Array<{ cycle: string; amount: number; enabled?: boolean }>)
+                          .filter((r) => r.enabled !== false && Number(r.amount) > 0);
+                        const activeCycle = cadenceOverrides[b.id] ?? b.cycle;
+                        return (
+                          <div key={b.id} className="mt-3 pt-3 border-t" style={{ borderColor: `${colors.utility.primaryText}10` }}>
+                            <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>
+                              Cadence — {b.name}
+                            </p>
+                            <div className="flex gap-1 flex-wrap">
+                              {rates.map((r) => (
+                                <button
+                                  key={r.cycle}
+                                  onClick={() => setCadenceOverride(b.id, r.cycle)}
+                                  className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                                  style={{
+                                    borderColor: activeCycle === r.cycle ? colors.brand.primary : `${colors.utility.primaryText}20`,
+                                    backgroundColor: activeCycle === r.cycle ? `${colors.brand.primary}10` : 'transparent',
+                                    color: activeCycle === r.cycle ? colors.brand.primary : colors.utility.secondaryText,
+                                  }}
+                                >
+                                  {CADENCE_LABEL[r.cycle] || r.cycle} · {getCurrencySymbol(b.currency)}{Number(r.amount).toLocaleString()}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               )}
