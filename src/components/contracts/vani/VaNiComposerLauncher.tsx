@@ -30,6 +30,7 @@ import vaniComposerService, {
   VaniSelectResult,
   VaniComposeResult,
   VaniTemplateMatch,
+  VaniParsedIntent,
 } from '@/services/vaniComposerService';
 import { getCurrencySymbol, getDefaultCurrency, currencyOptions } from '@/utils/constants/currencies';
 import VaNiReviewFinalize from './VaNiReviewFinalize';
@@ -123,6 +124,13 @@ const CADENCE_LABEL: Record<string, string> = {
   quarterly: 'Quarterly',
   halfyearly: '6-Monthly',
   annual: 'Annual',
+};
+
+const DURATION_TO_DAYS: Record<string, number> = { days: 1, months: 30, years: 365 };
+const addDays = (isoDate: string, days: number): Date => {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d;
 };
 
 const TEMPLATE_EXAMPLES = [
@@ -1189,6 +1197,44 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                           className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
                           style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
                         />
+                        <p className="text-[10px] mt-1" style={{ color: colors.utility.secondaryText }}>
+                          Ends {addDays(
+                            parseRef.current.intent.start_date || new Date().toISOString().slice(0, 10),
+                            Math.max(1, Number(parseRef.current.intent.duration.value) || 1) * (DURATION_TO_DAYS[parseRef.current.intent.duration.unit] || 30)
+                          ).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      {/* Duration override — end date is never edited directly (it's
+                          always start_date + duration downstream); editing duration
+                          and showing the computed end date keeps this exact, since
+                          converting an edited end date back into duration units would
+                          be lossy. */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Duration</p>
+                        <div className="flex gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            value={parseRef.current.intent.duration.value}
+                            onChange={(e) => adjustAndReassemble(() => {
+                              parseRef.current!.intent.duration.value = Math.max(1, Number(e.target.value) || 1);
+                            })}
+                            className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-16"
+                            style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
+                          />
+                          <select
+                            value={parseRef.current.intent.duration.unit}
+                            onChange={(e) => adjustAndReassemble(() => {
+                              parseRef.current!.intent.duration.unit = e.target.value as VaniParsedIntent['duration']['unit'];
+                            })}
+                            className="px-2 py-1.5 rounded-lg border text-[11px] outline-none flex-1"
+                            style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
+                          >
+                            <option value="days">Days</option>
+                            <option value="months">Months</option>
+                            <option value="years">Years</option>
+                          </select>
+                        </div>
                       </div>
                       {/* Currency — locked. Blocks are priced in the template/catalog's
                           currency; relabeling without converting prices would silently
