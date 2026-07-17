@@ -4,19 +4,21 @@
 // vaniComposerService.assembleFromTemplate (no LLM) → useContractSubmission —
 // looped per member with animated batch progress. No backend change.
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Users, Search, User, Building2, CheckCircle2, Loader2, AlertTriangle,
-  Zap, ArrowRight, X,
+  Zap, ArrowRight, Settings2,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { useContactList } from '@/hooks/useContacts';
 import { useContractSubmission } from '@/hooks/useContractSubmission';
-import vaniComposerService from '@/services/vaniComposerService';
+import vaniComposerService, { VaniParsedIntent, VaniComposeResult } from '@/services/vaniComposerService';
+import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 import type { TemplateSeed } from './VaNiComposerLauncher';
 
 interface BulkAssignDialogProps {
@@ -36,17 +38,44 @@ interface ProgressRow {
   error?: string;
 }
 
+// Mirrors CADENCE_LABEL in VaNiComposerLauncher.tsx / cadence-acceptance.ts
+const CADENCE_LABEL: Record<string, string> = {
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  halfyearly: '6-Monthly',
+  annual: 'Annual',
+};
+
+const DURATION_TO_DAYS: Record<string, number> = { days: 1, months: 30, years: 365 };
+
 const contactDisplayName = (c: any): string =>
   c?.display_name || c?.company_name ||
   [c?.first_name, c?.last_name].filter(Boolean).join(' ') ||
   c?.name || 'Unnamed';
 
-// Contract relationship from the member's classifications (falls back to client).
+// Display classification — the contact's actual type, for the tag/badge shown
+// beside their name. Uses the shared 4-type config (client/vendor/partner/
+// team_member) so it never mislabels a team member as a client.
+const contactClassificationLabel = (c: any): string => {
+  const cls: string[] = c?.classifications || [];
+  const match = CONTACT_CLASSIFICATION_CONFIG.find((cfg) => cls.includes(cfg.id));
+  return match?.label || 'Client';
+};
+
+// Contract relationship (t_contracts.contract_type) — distinct from the
+// display tag above. The contract record only models client/partner/vendor;
+// a team-member contact still gets a normal client-perspective contract.
 const contactContractType = (c: any): 'client' | 'partner' | 'vendor' => {
   const cls: string[] = c?.classifications || [];
   if (cls.includes('partner')) return 'partner';
   if (cls.includes('vendor')) return 'vendor';
   return 'client';
+};
+
+const addDays = (isoDate: string, days: number): Date => {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d;
 };
 
 const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
@@ -64,6 +93,14 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [finished, setFinished] = useState(false);
+
+  // Preferences — mirrors VaNiComposerLauncher's single-assign panel, applied
+  // to the ONE shared draft (assembleFromTemplate is buyer-independent) that
+  // gets cloned per member at Create time.
+  const [intent, setIntent] = useState<VaniParsedIntent | null>(null);
+  const [cadenceOverrides, setCadenceOverrides] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<VaniComposeResult | null>(null);
+  const [assembling, setAssembling] = useState(false);
 
   const { data: contacts, loading } = useContactList({
     search: search.trim().length >= 2 ? search.trim() : undefined,
@@ -104,34 +141,88 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   const reset = () => {
     setSelected({}); setProgress([]); setFinished(false); setRunning(false);
     setSearch(''); setClassFilter('all');
+    setIntent(null); setResult(null); setCadenceOverrides({});
   };
   const handleClose = () => { if (!running) { reset(); onClose(); } };
 
-  // ── Run the batch: assemble ONCE → clone per member → single bulk call ──
-  // The template's assembled draft is buyer-independent, so we assemble once
-  // and clone it per member (setting buyer + type + template link), then hand
-  // the whole set to the server bulk endpoint (create + activate + idempotent
-  // dedup, one round-trip). No per-member client loop.
+  // ── Preview assemble: runs once on open, then again on every preference
+  //    change — same live-reassemble UX as single-assign. Create time just
+  //    clones whatever the LAST assemble produced, per member. ──
+  const reassembleBase = useCallback(async (nextIntent: VaniParsedIntent, cadOverride: Record<string, string>) => {
+    if (!seed) return;
+    setAssembling(true);
+    try {
+      const res = await vaniComposerService.assembleFromTemplate(
+        seed.match.template_id,
+        nextIntent,
+        null,
+        seed.match.currency,
+        Object.entries(cadOverride).map(([block_id, cycle]) => ({ block_id, cycle }))
+      );
+      setResult(res);
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Could not refresh draft', message: err?.message || 'Failed to assemble' });
+    } finally {
+      setAssembling(false);
+    }
+  }, [seed, addToast]);
+
+  useEffect(() => {
+    if (!isOpen || !seed) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setStartDate(today);
+    const initIntent: VaniParsedIntent = { ...seed.intent, start_date: today };
+    setIntent(initIntent);
+    setCadenceOverrides({});
+    reassembleBase(initIntent, {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, seed?.match.template_id]);
+
+  const updateIntent = (mutate: (i: VaniParsedIntent) => void) => {
+    if (!intent || assembling) return;
+    const next: VaniParsedIntent = { ...intent, billing: { ...intent.billing }, duration: { ...intent.duration } };
+    mutate(next);
+    setIntent(next);
+    reassembleBase(next, cadenceOverrides);
+  };
+
+  const updateStartDate = (v: string) => {
+    setStartDate(v);
+    updateIntent((i) => { i.start_date = v; });
+  };
+
+  const setCadenceOverride = (blockId: string, cycle: string) => {
+    if (!intent || assembling) return;
+    const next = { ...cadenceOverrides, [blockId]: cycle };
+    setCadenceOverrides(next);
+    reassembleBase(intent, next);
+  };
+
+  const endDateLabel = useMemo(() => {
+    if (!intent) return '';
+    const days = Math.max(1, Number(intent.duration.value) || 1) * (DURATION_TO_DAYS[intent.duration.unit] || 30);
+    return addDays(startDate, days).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }, [intent, startDate]);
+
+  // ── Run the batch: clone the already-assembled draft per member → single
+  //    bulk call. The template's assembled draft is buyer-independent, so it
+  //    only needs to be built once (via the Preferences panel above), then
+  //    every member gets a clone with buyer + start date substituted, and the
+  //    whole set goes to the server bulk endpoint (create + activate +
+  //    idempotent dedup, one round-trip). No per-member client loop.
   const run = async () => {
-    if (!seed || selectedCount === 0) return;
+    if (!seed || !result || selectedCount === 0) return;
     const members = selectedIds.map((id) => selected[id]);
     setProgress(members.map((c) => ({ id: c.id, name: contactDisplayName(c), status: 'running' as RowStatus })));
     setRunning(true);
     setFinished(false);
 
     try {
-      const base = await vaniComposerService.assembleFromTemplate(
-        seed.match.template_id,
-        { ...seed.intent, start_date: startDate },
-        null,
-        seed.match.currency
-      );
-
       const items = members.map((c) => ({
         buyerId: c.id,
         contractType: contactContractType(c),
         draft: {
-          ...(base.draft as any),
+          ...(result.draft as any),
           buyerId: c.id,
           buyerName: contactDisplayName(c),
           startDate,
@@ -168,7 +259,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
           + (summary.failed ? `, ${summary.failed} failed` : ''),
       });
     } catch (err: any) {
-      // Whole-batch failure (e.g. the one-shot assemble failed) — mark all rows.
+      // Whole-batch failure — mark all rows.
       setProgress((p) => p.map((r) => ({ ...r, status: 'error' as RowStatus, error: err?.message || 'Failed' })));
       addToast({ type: 'error', title: 'Bulk assignment failed', message: err?.message || 'Please try again.' });
     } finally {
@@ -185,7 +276,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent
-        className="sm:max-w-3xl rounded-xl"
+        className="sm:max-w-5xl rounded-xl max-h-[90vh] overflow-y-auto"
         style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.border }}
       >
         <DialogHeader>
@@ -203,7 +294,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
 
         {/* ── PICK STAGE ── */}
         {!running && !finished && (
-          <div className="space-y-3 mt-1">
+          <div className="space-y-4 mt-1">
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[180px]">
@@ -216,17 +307,6 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                   style={{ borderColor: colors.utility.border, color: colors.utility.primaryText }}
                 />
               </div>
-              <select
-                value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm"
-                style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-              >
-                <option value="all">All types</option>
-                <option value="client">Client</option>
-                <option value="partner">Partner</option>
-                <option value="vendor">Vendor</option>
-              </select>
               <button
                 type="button"
                 onClick={selectAllVisible}
@@ -237,8 +317,39 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
               </button>
             </div>
 
+            {/* Contact type filter — radio, all 4 classifications */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setClassFilter('all')}
+                className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                style={{
+                  borderColor: classFilter === 'all' ? colors.brand.primary : colors.utility.border,
+                  backgroundColor: classFilter === 'all' ? `${colors.brand.primary}10` : 'transparent',
+                  color: classFilter === 'all' ? colors.brand.primary : colors.utility.secondaryText,
+                }}
+              >
+                All types
+              </button>
+              {CONTACT_CLASSIFICATION_CONFIG.map((cfg) => (
+                <button
+                  key={cfg.id}
+                  type="button"
+                  onClick={() => setClassFilter(cfg.id)}
+                  className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                  style={{
+                    borderColor: classFilter === cfg.id ? colors.brand.primary : colors.utility.border,
+                    backgroundColor: classFilter === cfg.id ? `${colors.brand.primary}10` : 'transparent',
+                    color: classFilter === cfg.id ? colors.brand.primary : colors.utility.secondaryText,
+                  }}
+                >
+                  {cfg.label}
+                </button>
+              ))}
+            </div>
+
             {/* Member list */}
-            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '18rem' }}>
+            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '24rem' }}>
               {loading ? (
                 <div className="flex items-center justify-center py-8 gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" style={{ color: colors.brand.primary }} />
@@ -273,7 +384,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                         {contactDisplayName(c)}
                       </span>
                       <span className="text-[9px] uppercase font-bold flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
-                        {contactContractType(c)}
+                        {contactClassificationLabel(c)}
                       </span>
                     </button>
                   );
@@ -281,16 +392,139 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
               )}
             </div>
 
-            {/* Shared start date */}
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>Start date (all)</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm"
-                style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-              />
+            {/* Preferences — same live-reassemble pattern as single-assign */}
+            <div className="rounded-lg border p-3" style={{ borderColor: colors.utility.border }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Settings2 className="w-4 h-4" style={{ color: colors.brand.primary }} />
+                <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
+                  Preferences — applies to every contract in this batch
+                </span>
+                {assembling && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" style={{ color: colors.brand.primary }} />}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* Acceptance */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Acceptance</p>
+                  <div className="flex gap-1 flex-wrap">
+                    {(['signoff', 'payment', 'auto'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => updateIntent((i) => { i.acceptance = m; })}
+                        className="px-2 py-1 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                        style={{
+                          borderColor: intent?.acceptance === m ? colors.brand.primary : colors.utility.border,
+                          backgroundColor: intent?.acceptance === m ? `${colors.brand.primary}10` : 'transparent',
+                          color: intent?.acceptance === m ? colors.brand.primary : colors.utility.secondaryText,
+                        }}
+                      >
+                        {m === 'signoff' ? 'Sign-off' : m === 'payment' ? 'Payment' : 'Auto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Billing */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Billing</p>
+                  <div className="flex gap-1 flex-wrap">
+                    {([
+                      { m: 'prepaid' as const, label: 'Upfront' },
+                      { m: 'emi' as const, label: 'EMI' },
+                      { m: 'per_block' as const, label: 'Per cycle' },
+                    ]).map(({ m, label }) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => updateIntent((i) => {
+                          i.billing.mode = m;
+                          if (m === 'emi' && !i.billing.emi_months) i.billing.emi_months = 12;
+                          if (m === 'per_block' && !i.billing.cycle) i.billing.cycle = 'quarterly';
+                        })}
+                        className="px-2 py-1 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                        style={{
+                          borderColor: intent?.billing.mode === m ? colors.brand.primary : colors.utility.border,
+                          backgroundColor: intent?.billing.mode === m ? `${colors.brand.primary}10` : 'transparent',
+                          color: intent?.billing.mode === m ? colors.brand.primary : colors.utility.secondaryText,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Start date + computed end date */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Start date (all)</p>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => updateStartDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-full"
+                    style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
+                  />
+                  {intent && (
+                    <p className="text-[10px] mt-1" style={{ color: colors.utility.secondaryText }}>Ends {endDateLabel}</p>
+                  )}
+                </div>
+                {/* Duration override */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Duration</p>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      min={1}
+                      value={intent?.duration.value ?? ''}
+                      onChange={(e) => updateIntent((i) => { i.duration.value = Math.max(1, Number(e.target.value) || 1); })}
+                      className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-16"
+                      style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
+                    />
+                    <select
+                      value={intent?.duration.unit ?? 'months'}
+                      onChange={(e) => updateIntent((i) => { i.duration.unit = e.target.value as VaniParsedIntent['duration']['unit']; })}
+                      className="px-2 py-1.5 rounded-lg border text-[11px] outline-none flex-1"
+                      style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
+                    >
+                      <option value="days">Days</option>
+                      <option value="months">Months</option>
+                      <option value="years">Years</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Per-block cadence — only for blocks with a real cadencePricing
+                  rate card (same as single-assign's picker). */}
+              {result?.draft.selectedBlocks
+                .filter((b: any) => b.config?.cadencePricing?.rates?.length)
+                .map((b: any) => {
+                  const rates = (b.config.cadencePricing.rates as Array<{ cycle: string; amount: number; enabled?: boolean }>)
+                    .filter((r) => r.enabled !== false && Number(r.amount) > 0);
+                  const activeCycle = cadenceOverrides[b.id] ?? b.cycle;
+                  return (
+                    <div key={b.id} className="mt-3 pt-3 border-t" style={{ borderColor: colors.utility.border }}>
+                      <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>
+                        Cadence — {b.name}
+                      </p>
+                      <div className="flex gap-1 flex-wrap">
+                        {rates.map((r) => (
+                          <button
+                            key={r.cycle}
+                            type="button"
+                            onClick={() => setCadenceOverride(b.id, r.cycle)}
+                            className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
+                            style={{
+                              borderColor: activeCycle === r.cycle ? colors.brand.primary : colors.utility.border,
+                              backgroundColor: activeCycle === r.cycle ? `${colors.brand.primary}10` : 'transparent',
+                              color: activeCycle === r.cycle ? colors.brand.primary : colors.utility.secondaryText,
+                            }}
+                          >
+                            {CADENCE_LABEL[r.cycle] || r.cycle} · {getCurrencySymbol(b.currency)}{Number(r.amount).toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -298,7 +532,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
         {/* ── PROGRESS / SUMMARY STAGE ── */}
         {(running || finished) && (
           <div className="mt-1">
-            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '22rem' }}>
+            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '26rem' }}>
               {progress.map((r) => (
                 <div key={r.id} className="flex items-center gap-2.5 px-3 py-2 border-b last:border-b-0" style={{ borderColor: colors.utility.border }}>
                   <span className="w-5 flex-shrink-0 flex items-center justify-center">
@@ -341,9 +575,9 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
           {!finished && (
             <button
               onClick={run}
-              disabled={running || selectedCount === 0}
+              disabled={running || assembling || !result || selectedCount === 0}
               className="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 flex items-center gap-1.5"
-              style={{ backgroundColor: colors.brand.primary, opacity: (running || selectedCount === 0) ? 0.6 : 1 }}
+              style={{ backgroundColor: colors.brand.primary, opacity: (running || assembling || !result || selectedCount === 0) ? 0.6 : 1 }}
             >
               {running ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating…</>) : (<><ArrowRight className="w-3.5 h-3.5" /> Create {selectedCount || ''} contract{selectedCount === 1 ? '' : 's'}</>)}
             </button>
