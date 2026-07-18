@@ -77,6 +77,11 @@ const addDays = (isoDate: string, days: number): Date => {
   d.setDate(d.getDate() + days);
   return d;
 };
+const isoDaysBetween = (startIso: string, endIso: string): number => {
+  const start = new Date(startIso + 'T00:00:00');
+  const end = new Date(endIso + 'T00:00:00');
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+};
 
 const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   isOpen, onClose, seed, templateName, onDone,
@@ -198,11 +203,15 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
     reassembleBase(intent, next);
   };
 
-  const endDateLabel = useMemo(() => {
-    if (!intent) return '';
+  const endDateIso = useMemo(() => {
+    if (!intent) return startDate;
     const days = Math.max(1, Number(intent.duration.value) || 1) * (DURATION_TO_DAYS[intent.duration.unit] || 30);
-    return addDays(startDate, days).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return addDays(startDate, days).toISOString().slice(0, 10);
   }, [intent, startDate]);
+
+  const updateEndDate = (v: string) => {
+    updateIntent((i) => { i.duration = { value: isoDaysBetween(startDate, v), unit: 'days' }; });
+  };
 
   // ── Run the batch: clone the already-assembled draft per member → single
   //    bulk call. The template's assembled draft is buyer-independent, so it
@@ -383,6 +392,18 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                       <span className="text-xs font-medium truncate flex-1" style={{ color: colors.utility.primaryText }}>
                         {contactDisplayName(c)}
                       </span>
+                      {(c.tags || []).slice(0, 3).map((tag: any) => (
+                        <span
+                          key={tag.id || tag.tag_value}
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium flex-shrink-0"
+                          style={{
+                            backgroundColor: (tag.tag_color || colors.brand.secondary || colors.brand.primary) + '20',
+                            color: isDarkMode ? colors.utility.primaryText : (tag.tag_color || colors.brand.secondary || colors.brand.primary),
+                          }}
+                        >
+                          {tag.tag_label || tag.tag_value}
+                        </span>
+                      ))}
                       <span className="text-[9px] uppercase font-bold flex-shrink-0" style={{ color: colors.utility.secondaryText }}>
                         {contactClassificationLabel(c)}
                       </span>
@@ -452,7 +473,7 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                     ))}
                   </div>
                 </div>
-                {/* Start date + computed end date */}
+                {/* Start date */}
                 <div>
                   <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Start date (all)</p>
                   <input
@@ -462,9 +483,20 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                     className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-full"
                     style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
                   />
-                  {intent && (
-                    <p className="text-[10px] mt-1" style={{ color: colors.utility.secondaryText }}>Ends {endDateLabel}</p>
-                  )}
+                </div>
+                {/* End date — directly selectable. Picking one back-computes an
+                    EXACT duration in days (not the lossy months=30/years=365
+                    approximation); editing Duration instead keeps its own unit
+                    and just moves this date. Both stay in sync either way. */}
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>End date</p>
+                  <input
+                    type="date"
+                    value={endDateIso}
+                    onChange={(e) => updateEndDate(e.target.value)}
+                    className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-full"
+                    style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
+                  />
                 </div>
                 {/* Duration override */}
                 <div>

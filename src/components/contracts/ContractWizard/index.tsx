@@ -1645,6 +1645,8 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               currency={wizardState.currency}
               eventOverrides={wizardState.eventOverrides}
               onEventOverridesChange={handleEventOverridesChange}
+              baseSubtotal={wizardState.baseSubtotal}
+              discountTotal={wizardState.discountTotal}
             />
           </div>
         );

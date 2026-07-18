@@ -4,8 +4,9 @@
 // EquipmentCard (selectable) + EquipmentFormDialog from equipment-registry
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Wrench, Plus, X, Search, Package, Building2 } from 'lucide-react';
+import { Wrench, Plus, X, Search, Package, Building2, Link2 } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
+import { isPlaceholderDetail } from '@/components/contracts/ContractWizard/steps/AssetSelectionStep';
 import { useAuth } from '@/context/AuthContext';
 import {
   useAssetRegistryManager,
@@ -163,6 +164,9 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   const [addFormMode, setAddFormMode] = useState<'equipment' | 'entity'>('equipment');
   /** Track which asset ID is currently being added/removed */
   const [mutatingAssetId, setMutatingAssetId] = useState<string | null>(null);
+  /** Set when "Attach Asset" was clicked on a placeholder — the picker then
+   * replaces this specific placeholder instead of appending a new item. */
+  const [attachingPlaceholder, setAttachingPlaceholder] = useState<ContractEquipmentDetail | null>(null);
 
   const showEquipmentBtn = mode === 'equipment' || mode === 'both';
   const showFacilityBtn = mode === 'facility' || mode === 'both';
@@ -266,6 +270,23 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
   const canAdd = contractId && (isSeller || (isBuyer && allowBuyerToAdd));
 
+  // Display index among same-category items ("2 of 3") — only meaningful once
+  // a category has more than one instance (real or placeholder).
+  const displayIndexById = useMemo(() => {
+    const byCategory = new Map<string, ContractEquipmentDetail[]>();
+    for (const d of equipmentDetails) {
+      const key = d.category_id || d.category_name || 'uncategorized';
+      if (!byCategory.has(key)) byCategory.set(key, []);
+      byCategory.get(key)!.push(d);
+    }
+    const map = new Map<string, { index: number; total: number }>();
+    for (const items of byCategory.values()) {
+      if (items.length <= 1) continue;
+      items.forEach((d, i) => map.set(d.id, { index: i + 1, total: items.length }));
+    }
+    return map;
+  }, [equipmentDetails]);
+
   // Filter registry assets for picker based on pickerResourceType
   // For seller view, also filter by buyer contact so only this contract's client equipment shows
   const displayAssets = useMemo(() => {
@@ -276,6 +297,12 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         (a.resource_type_id || '').toLowerCase() === matchType &&
         a.is_active
     );
+
+    // Attaching a specific placeholder — narrow to its exact category so
+    // only relevant units show (e.g. only HVAC units, not all equipment).
+    if (attachingPlaceholder?.category_id) {
+      filtered = filtered.filter((a) => a.asset_type_id === attachingPlaceholder.category_id);
+    }
 
     // Seller view: filter by buyer contact (client-side safety net in case API didn't filter)
     if (isSeller && buyerId) {
@@ -295,7 +322,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     }
 
     return filtered;
-  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType]);
+  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType, attachingPlaceholder]);
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -311,16 +338,37 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           await removeMutation.mutateAsync({ contractId, itemId: detail.id });
         }
       } else {
-        // Add the asset
+        // Add the asset — replacing a specific placeholder if we're in attach mode
         const item = assetToDetail(asset, tenantId, role, resourceIdToSubCategory);
-        await addMutation.mutateAsync({ contractId, equipmentItem: item });
+        await addMutation.mutateAsync({
+          contractId,
+          equipmentItem: item,
+          replacesItemId: attachingPlaceholder?.id,
+        });
+        if (attachingPlaceholder) {
+          setAttachingPlaceholder(null);
+          setShowPicker(false);
+        }
       }
     } catch {
       // Error toast handled by mutation hook
     } finally {
       setMutatingAssetId(null);
     }
-  }, [contractId, existingAssetIds, equipmentDetails, tenantId, role, resourceIdToSubCategory, addMutation, removeMutation]);
+  }, [contractId, existingAssetIds, equipmentDetails, tenantId, role, resourceIdToSubCategory, addMutation, removeMutation, attachingPlaceholder]);
+
+  const handleStartAttach = useCallback((placeholder: ContractEquipmentDetail) => {
+    setAttachingPlaceholder(placeholder);
+    setPickerResourceType(placeholder.resource_type === 'entity' ? 'entity' : 'equipment');
+    setSearchQuery('');
+    setShowPicker(true);
+  }, []);
+
+  const handleClosePicker = useCallback(() => {
+    setShowPicker(false);
+    setSearchQuery('');
+    setAttachingPlaceholder(null);
+  }, []);
 
   const handleRemoveCard = useCallback(async (detail: ContractEquipmentDetail) => {
     if (!contractId) return;
@@ -398,7 +446,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           )}
           {canAdd && showPicker && (
             <button
-              onClick={() => { setShowPicker(false); setSearchQuery(''); }}
+              onClick={handleClosePicker}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
               style={{
                 backgroundColor: colors.utility.secondaryBackground,
@@ -452,7 +500,9 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           >
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-                Select {pickerResourceType === 'entity' ? 'Facility' : 'Equipment'} from Registry
+                {attachingPlaceholder
+                  ? `Attach real asset for "${attachingPlaceholder.category_name}"`
+                  : `Select ${pickerResourceType === 'entity' ? 'Facility' : 'Equipment'} from Registry`}
               </span>
               {displayAssets.length > 0 && (
                 <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
@@ -556,16 +606,46 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
             // Resolve client name: use asset_registry_id to find in registry,
             // or fall back to the buyer contact on this contract
             const clientName = buyerId ? contactNameMap.get(buyerId) : undefined;
+            const isPlaceholder = isPlaceholderDetail(item as any);
+            const displayIndex = displayIndexById.get(item.id);
 
             return (
-              <EquipmentCard
-                key={item.id}
-                asset={cardAsset}
-                clientName={clientName}
-                onDelete={canRemove ? () => handleRemoveCard(item) : undefined}
-                onEdit={undefined}
-                disabled={removeMutation.isPending}
-              />
+              <div key={item.id} className="relative">
+                {(isPlaceholder || displayIndex) && (
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {isPlaceholder && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide"
+                        style={{ backgroundColor: '#f59e0b18', color: '#d97706', border: '1px solid #f59e0b30' }}
+                      >
+                        To be attached
+                      </span>
+                    )}
+                    {displayIndex && (
+                      <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                        {displayIndex.index} of {displayIndex.total}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <EquipmentCard
+                  asset={cardAsset}
+                  clientName={clientName}
+                  onDelete={canRemove ? () => handleRemoveCard(item) : undefined}
+                  onEdit={undefined}
+                  disabled={removeMutation.isPending}
+                />
+                {isPlaceholder && canAdd && (
+                  <button
+                    onClick={() => handleStartAttach(item)}
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
+                    style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Attach Asset
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>

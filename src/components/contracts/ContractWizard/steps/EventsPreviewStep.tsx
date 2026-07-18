@@ -35,6 +35,8 @@ export interface EventsPreviewStepProps {
   currency: string;
   eventOverrides: Record<string, Date>;
   onEventOverridesChange: (overrides: Record<string, Date>) => void;
+  baseSubtotal?: number;
+  discountTotal?: number;
 }
 
 // ─── Helpers ───
@@ -68,6 +70,8 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
   currency,
   eventOverrides,
   onEventOverridesChange,
+  baseSubtotal,
+  discountTotal,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -79,10 +83,10 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
     const input: ComputeEventsInput = {
       startDate, durationValue, durationUnit, selectedBlocks,
       paymentMode, emiMonths, perBlockPaymentType, billingCycleType,
-      grandTotal, currency,
+      grandTotal, currency, baseSubtotal, discountTotal,
     };
     return computeContractEvents(input);
-  }, [startDate, durationValue, durationUnit, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, grandTotal, currency]);
+  }, [startDate, durationValue, durationUnit, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, grandTotal, currency, baseSubtotal, discountTotal]);
 
   // Apply overrides
   const events: ContractEvent[] = useMemo(() => {

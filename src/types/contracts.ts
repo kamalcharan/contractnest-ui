@@ -205,6 +205,19 @@ export interface Contract {
   equipment_details?: ContractEquipmentDetail[];
   // Equipment flag — buyer can add equipment to this contract
   allow_buyer_to_add_equipment?: boolean;
+  // Declared asset/coverage types (Sprint 1 "which asset types does this
+  // contract cover") — may be non-empty even when equipment_details is
+  // empty (buyer-will-add-later, nothing attached yet).
+  coverage_types?: ContractCoverageType[];
+}
+
+/** Single declared coverage type stored in t_contracts.coverage_types JSONB */
+export interface ContractCoverageType {
+  id: string;
+  resource_id: string;
+  resource_name: string;
+  sub_category?: string;
+  unit_count?: number;
 }
 
 export interface ContractBlock {

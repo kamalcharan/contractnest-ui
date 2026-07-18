@@ -239,6 +239,7 @@ import SubscriptionPage from './pages/settings/businessmodel/tenants/Subscriptio
 import ContactsPage from './pages/contacts/index';
 import ContactViewPage from './pages/contacts/view';
 import ContactCreateForm from './pages/contacts/create';
+import ContactsImportPage from './pages/contacts/import';
 
 // Admin - Subscription Management
 import SubscriptionManagementPage from './pages/admin/subscription-management';
@@ -786,6 +787,7 @@ const AppContent: React.FC = () => {
           >
             <Route index element={<ContactsPage />} />
             <Route path="create" element={<ContactCreateForm />} />
+            <Route path="import" element={<ContactsImportPage />} />
             <Route path=":id" element={<ContactViewPage />} />
             <Route path=":id/edit" element={<ContactCreateForm mode="edit" />} />
           </Route>

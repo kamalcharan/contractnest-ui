@@ -1871,10 +1871,15 @@ const ContractDetailPage: React.FC = () => {
       case 'proof_of_work':
         return (
           <div className="space-y-6">
-            <EvidencePolicySection
-              contractId={contract.id}
-              colors={colors}
-            />
+            {/* Evidence policy configuration (which forms are required, upload
+                vs smart-form, etc.) is a seller-authoring concern — the buyer
+                only ever views proof already captured, via EvidenceTab below. */}
+            {!isBuyer && (
+              <EvidencePolicySection
+                contractId={contract.id}
+                colors={colors}
+              />
+            )}
             <EvidenceTab
               contractId={contract.id}
               currency={contract.currency || 'INR'}

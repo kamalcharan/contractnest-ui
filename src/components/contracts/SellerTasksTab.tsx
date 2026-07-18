@@ -255,7 +255,10 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
   return (
     <div
       style={{
-        background: colors.utility.secondaryBackground,
+        // Distinct from EventCard's own background (secondaryBackground /
+        // white) so cards are actually visible against this panel, instead
+        // of both resolving to the same white-on-white.
+        background: colors.utility.primaryBackground,
         borderRadius: 16,
         border: `1px solid ${colors.utility.primaryText}15`,
         padding: 24,

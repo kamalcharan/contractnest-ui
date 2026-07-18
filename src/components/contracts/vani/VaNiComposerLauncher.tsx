@@ -132,6 +132,13 @@ const addDays = (isoDate: string, days: number): Date => {
   d.setDate(d.getDate() + days);
   return d;
 };
+const isoDaysBetween = (startIso: string, endIso: string): number => {
+  const start = new Date(startIso + 'T00:00:00');
+  const end = new Date(endIso + 'T00:00:00');
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+};
+const durationDays = (duration: { value: number; unit: string }): number =>
+  Math.max(1, Number(duration.value) || 1) * (DURATION_TO_DAYS[duration.unit] || 30);
 
 const TEMPLATE_EXAMPLES = [
   '1 year HVAC AMC with quarterly PM visits and sign-off acceptance',
@@ -1197,18 +1204,31 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                           className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
                           style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
                         />
-                        <p className="text-[10px] mt-1" style={{ color: colors.utility.secondaryText }}>
-                          Ends {addDays(
-                            parseRef.current.intent.start_date || new Date().toISOString().slice(0, 10),
-                            Math.max(1, Number(parseRef.current.intent.duration.value) || 1) * (DURATION_TO_DAYS[parseRef.current.intent.duration.unit] || 30)
-                          ).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </p>
                       </div>
-                      {/* Duration override — end date is never edited directly (it's
-                          always start_date + duration downstream); editing duration
-                          and showing the computed end date keeps this exact, since
-                          converting an edited end date back into duration units would
-                          be lossy. */}
+                      {/* End date — directly selectable. Picking one back-computes an
+                          EXACT duration in days (never the lossy months=30/years=365
+                          approximation), which the Duration control below then shows
+                          as duration.unit='days'. Editing Duration instead keeps its
+                          own unit and just moves this date forward. */}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>End date</p>
+                        <input
+                          type="date"
+                          value={addDays(
+                            parseRef.current.intent.start_date || new Date().toISOString().slice(0, 10),
+                            durationDays(parseRef.current.intent.duration)
+                          ).toISOString().slice(0, 10)}
+                          onChange={(e) => adjustAndReassemble(() => {
+                            const start = parseRef.current!.intent.start_date || new Date().toISOString().slice(0, 10);
+                            parseRef.current!.intent.duration = { value: isoDaysBetween(start, e.target.value), unit: 'days' };
+                          })}
+                          className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
+                          style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
+                        />
+                      </div>
+                      {/* Duration — kept in sync with End date above (editing either
+                          updates the other via the shared start_date + duration
+                          model the server derives end date from). */}
                       <div>
                         <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Duration</p>
                         <div className="flex gap-1">

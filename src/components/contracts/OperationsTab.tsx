@@ -30,7 +30,9 @@ import { getCurrencySymbol } from '@/utils/constants/currencies';
 import {
   useContractEventsForContract,
   useContractEventOperations,
+  useContractEventAssets,
 } from '@/hooks/queries/useContractEventQueries';
+import EventAssetProgress from '@/components/contracts/EventAssetProgress';
 import { useContract } from '@/hooks/queries/useContractQueries';
 import {
   useEventStatuses,
@@ -555,6 +557,8 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
     refetch,
   } = useContractEventsForContract(contractId);
 
+  const { data: eventAssetsByEvent = {} } = useContractEventAssets(contractId);
+
   const { data: serviceStatuses } = useEventStatuses('service');
   const { data: billingStatuses } = useEventStatuses('billing');
   const { data: sparePartStatuses } = useEventStatuses('spare_part');
@@ -801,16 +805,18 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
                     style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
                   >
                     {group.deliverables.map((event) => (
-                      <EventCard
-                        key={event.id}
-                        event={event}
-                        currency={currency}
-                        colors={colors}
-                        onStatusChange={handleStatusChange}
-                        updatingEventId={changingStatusEventId}
-                        statusDefs={statusDefsByType[event.event_type]}
-                        allowedTransitions={transitionsByType[event.event_type]?.[event.status] || []}
-                      />
+                      <div key={event.id}>
+                        <EventCard
+                          event={event}
+                          currency={currency}
+                          colors={colors}
+                          onStatusChange={handleStatusChange}
+                          updatingEventId={changingStatusEventId}
+                          statusDefs={statusDefsByType[event.event_type]}
+                          allowedTransitions={transitionsByType[event.event_type]?.[event.status] || []}
+                        />
+                        <EventAssetProgress assets={eventAssetsByEvent[event.id] || []} colors={colors} />
+                      </div>
                     ))}
                   </div>
                   {/* Start Service button — only if there are non-completed deliverables */}
@@ -858,10 +864,12 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
                       />
                     ))}
                   </div>
-                  {/* Generate Invoice button — only if there are non-completed billing events */}
+                  {/* Generate Invoice — arrives Sprint 4; disabled (not a dead button) until then */}
                   {group.billing.some((e) => e.status !== 'completed' && e.status !== 'cancelled') && (
                     <button
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border transition-all hover:shadow-md hover:opacity-90"
+                      disabled
+                      title="Generate Invoice arrives in Sprint 4"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border cursor-not-allowed opacity-50"
                       style={{
                         borderColor: `${colors.semantic.warning}30`,
                         color: colors.semantic.warning,

@@ -219,6 +219,8 @@ export function buildDocFromWizard(input: WizardDocInput): ContractDocumentData 
     billingCycleType,
     grandTotal: grand,
     currency,
+    baseSubtotal: sumTotal,
+    discountTotal: rawDiscount,
   }).filter((e: ContractEvent) => e.event_type === 'billing');
 
   const payments = events.map((e) => ({

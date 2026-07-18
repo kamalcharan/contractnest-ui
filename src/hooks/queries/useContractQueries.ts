@@ -505,10 +505,10 @@ export const useBuyerAddEquipment = () => {
   const { currentTenant } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ contractId, equipmentItem }: { contractId: string; equipmentItem: any }) => {
+    mutationFn: async ({ contractId, equipmentItem, replacesItemId }: { contractId: string; equipmentItem: any; replacesItemId?: string }) => {
       const response = await api.post(
         API_ENDPOINTS.CONTRACTS.BUYER_ADD_EQUIPMENT(contractId),
-        { equipment_item: equipmentItem }
+        { equipment_item: equipmentItem, replaces_item_id: replacesItemId }
       );
       return response.data;
     },
@@ -575,10 +575,10 @@ export const useSellerAddEquipment = () => {
   const { currentTenant } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ contractId, equipmentItem }: { contractId: string; equipmentItem: any }) => {
+    mutationFn: async ({ contractId, equipmentItem, replacesItemId }: { contractId: string; equipmentItem: any; replacesItemId?: string }) => {
       const response = await api.post(
         API_ENDPOINTS.CONTRACTS.SELLER_ADD_EQUIPMENT(contractId),
-        { equipment_item: equipmentItem }
+        { equipment_item: equipmentItem, replaces_item_id: replacesItemId }
       );
       return response.data;
     },

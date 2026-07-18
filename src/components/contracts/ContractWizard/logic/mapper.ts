@@ -38,6 +38,8 @@ export function computeEventsForApi(state: ContractWizardState): any[] | undefin
     billingCycleType: state.billingCycleType,
     grandTotal: state.grandTotal || state.totalValue,
     currency: state.currency,
+    baseSubtotal: state.baseSubtotal,
+    discountTotal: state.discountTotal,
   });
 
   if (!rawEvents || rawEvents.length === 0) return undefined;
@@ -163,6 +165,11 @@ export function mapWizardToRequest(
     grand_total: state.grandTotal,
     selected_tax_rate_ids: state.selectedTaxRateIds,
     tax_breakdown: state.taxBreakdown,
+
+    // Sprint 1: contract-level discount, applied before tax
+    discount_type: state.discountType || undefined,
+    discount_value: state.discountValue || undefined,
+    discount_total: state.discountTotal || undefined,
 
     // Related entities
     blocks,

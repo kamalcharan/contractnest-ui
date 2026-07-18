@@ -113,6 +113,35 @@ export const useContractEventsForContract = (
   );
 };
 
+/** Per-asset progress row (Sprint 3) — one per (event x covered asset) */
+export interface ContractEventAssetRow {
+  id: string;
+  event_id: string;
+  asset_ref: string;
+  asset_name: string;
+  status: 'open' | 'assigned' | 'in_progress' | 'proven' | 'blocked_placeholder';
+  assignee?: string | null;
+  form_submission_id?: string | null;
+  evidence_id?: string | null;
+  proven_at?: string | null;
+}
+
+/**
+ * Hook to fetch per-asset progress rows for a contract, grouped by event_id.
+ * Powers the "n/m assets proven" chip on each event card.
+ */
+export const useContractEventAssets = (contractId: string | null, options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: [...contractEventKeys.all, 'event-assets', contractId],
+    queryFn: async (): Promise<Record<string, ContractEventAssetRow[]>> => {
+      const response = await api.get(API_ENDPOINTS.CONTRACTS.EVENT_ASSETS(contractId as string));
+      return response.data?.data || {};
+    },
+    enabled: !!contractId && (options?.enabled !== false),
+    staleTime: 60 * 1000,
+  });
+};
+
 /**
  * Hook to fetch contract events for a specific customer (contact)
  */

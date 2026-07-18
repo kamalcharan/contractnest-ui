@@ -53,6 +53,11 @@ export interface ComputeEventsInput {
   billingCycleType: 'unified' | 'mixed' | null;
   grandTotal: number;
   currency: string;
+  // Sprint 1: contract-level discount — needed to load it pro-rata into
+  // per-block billing amounts (paymentMode === 'defined'). prepaid/emi
+  // already net it via grandTotal, which is computed post-discount.
+  baseSubtotal?: number;
+  discountTotal?: number;
 }
 
 // ─── Helpers ───
@@ -135,11 +140,18 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     emiMonths,
     grandTotal,
     currency,
+    baseSubtotal,
+    discountTotal,
   } = input;
 
   const events: ContractEvent[] = [];
   const totalDays = durationToDays(durationValue, durationUnit);
   const endDate = addDays(startDate, totalDays);
+  // Contract-level discount loaded pro-rata into every block's billed total —
+  // same allocation the Billing View step uses for its own tax-breakup display.
+  const discountFactor = baseSubtotal && baseSubtotal > 0 && discountTotal
+    ? Math.max(0, (baseSubtotal - discountTotal) / baseSubtotal)
+    : 1;
 
   // ─── SERVICE EVENTS ───
   // For each priced, non-unlimited block
@@ -240,7 +252,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
       if (!hasPricing || block.unlimited) continue;
 
       const blockCycle = block.cycle || 'prepaid';
-      const blockTotal = block.totalPrice || 0;
+      const blockTotal = (block.totalPrice || 0) * discountFactor;
 
       // The block's CYCLE (frequency) drives billing — NOT the prepaid/postpaid
       // payment type. A Monthly block bills every month even when its payment
@@ -301,7 +313,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
           ? (typeof cfg?.cadenceFinalPayment === 'number' ? cfg.cadenceFinalPayment : Math.round((effRate * remMonths) / periodMonths))
           : 0;
         const taxFactor = (block.taxRate || 0) > 0 && block.taxInclusion === 'exclusive' ? 1 + (block.taxRate || 0) / 100 : 1;
-        const finalWithTax = Math.round(preTaxFinal * taxFactor * 100) / 100;
+        const finalWithTax = Math.round(preTaxFinal * taxFactor * discountFactor * 100) / 100;
         const count = fullPayments + (finalWithTax > 0 ? 1 : 0);
         const perPeriodAmount = fullPayments > 0
           ? Math.round(((blockTotal - finalWithTax) / fullPayments) * 100) / 100
