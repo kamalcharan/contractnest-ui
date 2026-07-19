@@ -45,7 +45,7 @@ const EventAssetProgress: React.FC<EventAssetProgressProps> = ({ assets, colors 
 
       {expanded && (
         <div
-          className="mt-1.5 rounded-lg border divide-y overflow-hidden"
+          className="mt-1.5 rounded-lg border divide-y overflow-hidden max-h-56 overflow-y-auto"
           style={{ borderColor: colors.utility.primaryText + '10' }}
         >
           {assets.map((a) => {

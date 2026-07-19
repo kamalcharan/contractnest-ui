@@ -2,9 +2,17 @@
 // Equipment & Facility details tab for contract detail page
 // Both seller and buyer can add/remove equipment using the same
 // EquipmentCard (selectable) + EquipmentFormDialog from equipment-registry
+//
+// Batch B "Fleet Logbook" redesign (includes Batch A picker fixes):
+// - Fleet summary strip (machines / awaiting / visits proven / next / behind)
+// - Category-grouped machine grid with per-machine service-state footers
+// - Lens toggle: machine cards | service matrix
+// - Machine logbook drawer (click a card)
+// - Stay-open placeholder attach flow
+// - "Show only awaiting" filter
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Wrench, Plus, X, Search, Package, Building2, Link2 } from 'lucide-react';
+import { Wrench, Plus, X, Search, Package, Building2, Link2, LayoutGrid, TableIcon, CheckCircle2 } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
 import { isPlaceholderDetail } from '@/components/contracts/ContractWizard/steps/AssetSelectionStep';
 import { useAuth } from '@/context/AuthContext';
@@ -19,11 +27,23 @@ import {
   useSellerAddEquipment,
   useSellerRemoveEquipment,
 } from '@/hooks/queries/useContractQueries';
+import {
+  useContractEventsForContract,
+  useContractEventAssets,
+} from '@/hooks/queries/useContractEventQueries';
 import type { TenantAsset, AssetFormData, AssetRegistryFilters } from '@/types/assetRegistry';
 import EquipmentCard, { type CardAsset } from '@/pages/equipment-registry/EquipmentCard';
 import EquipmentFormDialog from '@/pages/equipment-registry/EquipmentFormDialog';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { useContactList } from '@/hooks/useContacts';
+import FleetSummaryStrip from '@/components/contracts/fleet/FleetSummaryStrip';
+import FleetMatrix, { type FleetMatrixGroup } from '@/components/contracts/fleet/FleetMatrix';
+import MachineLogbookDrawer from '@/components/contracts/fleet/MachineLogbookDrawer';
+import {
+  buildFleetServiceMap,
+  formatShortDate,
+  localTodayKey,
+} from '@/components/contracts/fleet/fleetTypes';
 
 // =================================================================
 // PROPS
@@ -124,6 +144,17 @@ function detailToCardAsset(detail: ContractEquipmentDetail): CardAsset {
   } as CardAsset;
 }
 
+/** Category group of machines (cards lens) */
+interface FleetGroup {
+  key: string;
+  name: string;
+  items: ContractEquipmentDetail[];
+  attached: number;
+  awaiting: number;
+  proven: number;
+  totalVisits: number;
+}
+
 // =================================================================
 // MAIN COMPONENT
 // =================================================================
@@ -142,17 +173,6 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   const isSeller = !isBuyer;
   const role: 'seller' | 'buyer' = isBuyer ? 'buyer' : 'seller';
 
-  // ── DEBUG: log buyerId so we can verify the filter value ──────
-  useEffect(() => {
-    console.log('[EquipmentTab] Filter debug:', {
-      buyerId,
-      isBuyer,
-      isSeller,
-      contractId,
-      willFilterByContact: isSeller && !!buyerId,
-    });
-  }, [buyerId, isBuyer, isSeller, contractId]);
-
   // ── State ──────────────────────────────────────────────────────
 
   const [showPicker, setShowPicker] = useState(false);
@@ -167,6 +187,15 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   /** Set when "Attach Asset" was clicked on a placeholder — the picker then
    * replaces this specific placeholder instead of appending a new item. */
   const [attachingPlaceholder, setAttachingPlaceholder] = useState<ContractEquipmentDetail | null>(null);
+  /** Stay-open attach flow: note shown after a successful attach when more
+   * placeholders remain ("Attached ✓ — now attaching: <category>") */
+  const [attachedNote, setAttachedNote] = useState<string | null>(null);
+  /** Fleet lens: category-grouped machine cards or read-only service matrix */
+  const [lens, setLens] = useState<'cards' | 'matrix'>('cards');
+  /** "Show only awaiting" filter — placeholder cards only */
+  const [showOnlyAwaiting, setShowOnlyAwaiting] = useState(false);
+  /** Machine whose logbook drawer is open (equipment detail id) */
+  const [logbookMachineId, setLogbookMachineId] = useState<string | null>(null);
 
   const showEquipmentBtn = mode === 'equipment' || mode === 'both';
   const showFacilityBtn = mode === 'facility' || mode === 'both';
@@ -201,31 +230,17 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
       return { limit: 500, offset: 0, ownership_type: 'self' as const };
     }
     // Revenue side — seller picks from equipment registered under the buyer/client contact
-    const f: AssetRegistryFilters = {
+    return {
       limit: 500,
       offset: 0,
       ownership_type: 'client' as const,
       contact_id: buyerId || undefined,
     };
-    console.log('[EquipmentTab] Registry filters:', f);
-    return f;
   }, [isBuyer, buyerId]);
 
   const { assets, isLoading: assetsLoading } = useAssetRegistryManager(
     showPicker ? filters : { limit: 0, offset: 0 }
   );
-
-  // ── DEBUG: log assets returned from registry ──────────────────
-  useEffect(() => {
-    if (showPicker && !assetsLoading) {
-      console.log('[EquipmentTab] Registry returned', assets.length, 'assets:', assets.map(a => ({
-        id: a.id,
-        name: a.name,
-        owner_contact_id: a.owner_contact_id,
-        ownership_type: a.ownership_type,
-      })));
-    }
-  }, [showPicker, assetsLoading, assets]);
 
   const createMutation = useCreateAsset();
 
@@ -253,11 +268,73 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     return { resourceIdToSubCategory: idToSubCat, allFormCategories: formCats };
   }, [allResources]);
 
+  // ── Fleet service data (client-side join, no backend change) ───
+  // Events + per-asset rows for this contract. Works for both personas;
+  // if either query errors or returns nothing, cards render without the
+  // service footer and the matrix lens stays hidden.
+
+  const { data: eventsData, isLoading: eventsLoading } = useContractEventsForContract(
+    contractId || null,
+    { per_page: 200 },
+  );
+  const { data: eventAssetsByEvent = {}, isLoading: eventAssetsLoading } = useContractEventAssets(
+    contractId || null,
+  );
+
+  const allEvents = eventsData?.items || [];
+  const serviceDataLoading = !!contractId && (eventsLoading || eventAssetsLoading);
+
+  /** Per-machine service state, keyed by equipment detail id */
+  const fleetMap = useMemo(
+    () => buildFleetServiceMap(equipmentDetails, allEvents, eventAssetsByEvent),
+    [equipmentDetails, allEvents, eventAssetsByEvent],
+  );
+
+  /** Distinct ISO dates of the contract's service visits (matrix columns).
+   * Derived from the service events themselves — per-asset rows refine the
+   * per-machine detail when they exist, but are NOT required for the fleet
+   * view to render. */
+  const dateColumns = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of allEvents) {
+      if (e.event_type === 'service' && e.scheduled_date) {
+        set.add(e.scheduled_date.split('T')[0]);
+      }
+    }
+    return Array.from(set).sort();
+  }, [allEvents]);
+
+  const hasServiceData = !serviceDataLoading && dateColumns.length > 0;
+
+  /** Fleet-wide aggregates for the summary strip */
+  const fleetStats = useMemo(() => {
+    let proven = 0;
+    let total = 0;
+    let behind = 0;
+    let next: string | null = null;
+    for (const s of fleetMap.values()) {
+      proven += s.provenCount;
+      total += s.totalVisits;
+      if (s.overdueCount > 0) behind += 1;
+      if (s.nextDueDate && (!next || s.nextDueDate < next)) next = s.nextDueDate;
+    }
+    if (!next) {
+      const todayKey = localTodayKey();
+      next = dateColumns.find((d) => d >= todayKey) || null;
+    }
+    return { proven, total, behind, next };
+  }, [fleetMap, dateColumns]);
+
   // ── Derived data ──────────────────────────────────────────────
 
   const hasEquipment = equipmentDetails.length > 0;
   const equipmentCount = equipmentDetails.filter(e => e.resource_type === 'equipment').length;
   const entityCount = equipmentDetails.filter(e => e.resource_type === 'entity').length;
+  const awaitingCount = useMemo(
+    () => equipmentDetails.filter((d) => isPlaceholderDetail(d as any)).length,
+    [equipmentDetails],
+  );
+  const awaitingFilterActive = showOnlyAwaiting && awaitingCount > 0;
 
   // Track which asset_registry_ids are already in the contract
   const existingAssetIds = useMemo(() => {
@@ -287,6 +364,74 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     return map;
   }, [equipmentDetails]);
 
+  // Category-grouped machines (same bucketing key as displayIndexById)
+  const fleetGroups = useMemo((): FleetGroup[] => {
+    const order: string[] = [];
+    const byKey = new Map<string, ContractEquipmentDetail[]>();
+    for (const d of equipmentDetails) {
+      const key = d.category_id || d.category_name || 'uncategorized';
+      if (!byKey.has(key)) {
+        byKey.set(key, []);
+        order.push(key);
+      }
+      byKey.get(key)!.push(d);
+    }
+    return order.map((key) => {
+      const items = byKey.get(key)!;
+      let attached = 0;
+      let awaiting = 0;
+      let proven = 0;
+      let totalVisits = 0;
+      for (const d of items) {
+        if (isPlaceholderDetail(d as any)) awaiting += 1;
+        else attached += 1;
+        const s = fleetMap.get(d.id);
+        if (s) {
+          proven += s.provenCount;
+          totalVisits += s.totalVisits;
+        }
+      }
+      return {
+        key,
+        name: items[0].category_name || 'Other',
+        items,
+        attached,
+        awaiting,
+        proven,
+        totalVisits,
+      };
+    });
+  }, [equipmentDetails, fleetMap]);
+
+  /** Groups shown in the cards lens (honours the "show only awaiting" filter) */
+  const visibleGroups = useMemo(() => {
+    if (!awaitingFilterActive) return fleetGroups;
+    return fleetGroups
+      .map((g) => ({ ...g, items: g.items.filter((d) => isPlaceholderDetail(d as any)) }))
+      .filter((g) => g.items.length > 0);
+  }, [fleetGroups, awaitingFilterActive]);
+
+  /** Matrix always shows the full fleet (read-only overview) */
+  const matrixGroups = useMemo(
+    (): FleetMatrixGroup[] =>
+      fleetGroups.map((g) => ({
+        key: g.key,
+        name: g.name,
+        machines: g.items.map((d) => ({
+          detail: d,
+          state: fleetMap.get(d.id),
+          isPlaceholder: isPlaceholderDetail(d as any),
+        })),
+      })),
+    [fleetGroups, fleetMap],
+  );
+
+  const logbookMachine = useMemo(
+    () => (logbookMachineId ? equipmentDetails.find((d) => d.id === logbookMachineId) || null : null),
+    [logbookMachineId, equipmentDetails],
+  );
+  const logbookState = logbookMachineId ? fleetMap.get(logbookMachineId) || null : null;
+
   // Filter registry assets for picker based on pickerResourceType
   // For seller view, also filter by buyer contact so only this contract's client equipment shows
   const displayAssets = useMemo(() => {
@@ -300,8 +445,14 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
     // Attaching a specific placeholder — narrow to its exact category so
     // only relevant units show (e.g. only HVAC units, not all equipment).
-    if (attachingPlaceholder?.category_id) {
-      filtered = filtered.filter((a) => a.asset_type_id === attachingPlaceholder.category_id);
+    // Also hide assets already attached to this contract: clicking one in
+    // attach mode would run the REMOVE branch and silently detach it from
+    // the slot it already fills.
+    if (attachingPlaceholder) {
+      if (attachingPlaceholder.category_id) {
+        filtered = filtered.filter((a) => a.asset_type_id === attachingPlaceholder.category_id);
+      }
+      filtered = filtered.filter((a) => !existingAssetIds.has(a.id));
     }
 
     // Seller view: filter by buyer contact (client-side safety net in case API didn't filter)
@@ -322,7 +473,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     }
 
     return filtered;
-  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType, attachingPlaceholder]);
+  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType, attachingPlaceholder, existingAssetIds]);
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -346,8 +497,26 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           replacesItemId: attachingPlaceholder?.id,
         });
         if (attachingPlaceholder) {
-          setAttachingPlaceholder(null);
-          setShowPicker(false);
+          // Stay-open attach: if other placeholders remain, advance to the
+          // next one instead of closing the picker.
+          const remaining = equipmentDetails.filter(
+            (d) => d.id !== attachingPlaceholder.id && isPlaceholderDetail(d as any),
+          );
+          if (remaining.length > 0) {
+            // Prefer another slot of the same category, then any other slot
+            const next =
+              (attachingPlaceholder.category_id &&
+                remaining.find((d) => d.category_id === attachingPlaceholder.category_id)) ||
+              remaining[0];
+            setAttachedNote(`Attached "${asset.name}" — now attaching: ${next.category_name}`);
+            setAttachingPlaceholder(next);
+            setPickerResourceType(next.resource_type === 'entity' ? 'entity' : 'equipment');
+            setSearchQuery('');
+          } else {
+            setAttachedNote(null);
+            setAttachingPlaceholder(null);
+            setShowPicker(false);
+          }
         }
       }
     } catch {
@@ -361,6 +530,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     setAttachingPlaceholder(placeholder);
     setPickerResourceType(placeholder.resource_type === 'entity' ? 'entity' : 'equipment');
     setSearchQuery('');
+    setAttachedNote(null);
     setShowPicker(true);
   }, []);
 
@@ -368,6 +538,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     setShowPicker(false);
     setSearchQuery('');
     setAttachingPlaceholder(null);
+    setAttachedNote(null);
   }, []);
 
   const handleRemoveCard = useCallback(async (detail: ContractEquipmentDetail) => {
@@ -396,7 +567,142 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     [createMutation, tenantId, role, resourceIdToSubCategory, contractId, addMutation]
   );
 
+  /** Card click → open the machine logbook drawer (buttons keep their own actions) */
+  const handleCardClick = useCallback(
+    (e: React.MouseEvent, detail: ContractEquipmentDetail) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      const s = fleetMap.get(detail.id);
+      if (!s || s.totalVisits === 0) return; // no service history to show
+      setLogbookMachineId(detail.id);
+    },
+    [fleetMap],
+  );
+
+  const handleCloseLogbook = useCallback(() => setLogbookMachineId(null), []);
+
   const isLoading = assetsLoading || resourcesLoading;
+
+  // ── Render helpers ────────────────────────────────────────────
+
+  /** Compact per-machine service-state footer under each card */
+  const renderServiceFooter = (item: ContractEquipmentDetail, isPlaceholder: boolean) => {
+    if (serviceDataLoading || !hasServiceData) return null;
+    const state = fleetMap.get(item.id);
+    if (!state || state.totalVisits === 0) return null;
+
+    if (isPlaceholder) {
+      return (
+        <div
+          className="mt-2 rounded-lg border border-dashed px-3 py-2 text-[11px] font-medium"
+          style={{ borderColor: '#f59e0b40', color: '#d97706', backgroundColor: '#f59e0b0a' }}
+        >
+          {state.totalVisits} visit{state.totalVisits === 1 ? '' : 's'} locked until an asset is attached
+        </div>
+      );
+    }
+
+    const behind = state.overdueCount > 0;
+    const pct = state.totalVisits > 0 ? Math.round((state.provenCount / state.totalVisits) * 100) : 0;
+    return (
+      <div
+        className="mt-2 rounded-lg border px-3 py-2"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: behind ? colors.semantic.error + '50' : colors.utility.primaryText + '10',
+        }}
+      >
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span
+            style={{
+              color: behind ? colors.semantic.error : colors.utility.secondaryText,
+              fontWeight: behind ? 700 : 500,
+            }}
+          >
+            {state.provenCount} of {state.totalVisits} visits proven
+            {behind ? ` · ${state.overdueCount} overdue` : ''}
+          </span>
+          <span style={{ color: colors.utility.secondaryText }}>
+            {state.nextDueDate ? `Next: ${formatShortDate(state.nextDueDate)}` : ''}
+          </span>
+        </div>
+        <div
+          className="h-1 rounded-full mt-1.5 overflow-hidden"
+          style={{ backgroundColor: colors.utility.primaryText + '10' }}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${pct}%`,
+              backgroundColor: behind ? colors.semantic.error : colors.semantic.success,
+            }}
+          />
+        </div>
+        {state.lastProven && (
+          <div className="text-[10px] mt-1" style={{ color: colors.utility.secondaryText }}>
+            Last proven {formatShortDate(state.lastProven.dateKey)}
+            {state.lastProven.assignee ? ` · ${state.lastProven.assignee}` : ''}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMachineCard = (item: ContractEquipmentDetail) => {
+    const isOwnItem = item.added_by_tenant_id === tenantId;
+    const canRemove = isOwnItem && !!contractId;
+    const cardAsset = detailToCardAsset(item);
+    // Resolve client name: use asset_registry_id to find in registry,
+    // or fall back to the buyer contact on this contract
+    const clientName = buyerId ? contactNameMap.get(buyerId) : undefined;
+    const isPlaceholder = isPlaceholderDetail(item as any);
+    const displayIndex = displayIndexById.get(item.id);
+    const state = fleetMap.get(item.id);
+    const clickable = !!state && state.totalVisits > 0;
+
+    return (
+      <div
+        key={item.id}
+        className={`relative ${clickable ? 'cursor-pointer' : ''}`}
+        onClick={(e) => handleCardClick(e, item)}
+      >
+        {(isPlaceholder || displayIndex) && (
+          <div className="flex items-center gap-2 mb-1.5">
+            {isPlaceholder && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide"
+                style={{ backgroundColor: '#f59e0b18', color: '#d97706', border: '1px solid #f59e0b30' }}
+              >
+                To be attached
+              </span>
+            )}
+            {displayIndex && (
+              <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                {displayIndex.index} of {displayIndex.total}
+              </span>
+            )}
+          </div>
+        )}
+        <EquipmentCard
+          asset={cardAsset}
+          clientName={clientName}
+          onDelete={canRemove ? () => handleRemoveCard(item) : undefined}
+          onEdit={undefined}
+          disabled={removeMutation.isPending}
+        />
+        {renderServiceFooter(item, isPlaceholder)}
+        {isPlaceholder && canAdd && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleStartAttach(item); }}
+            className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
+            style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Attach Asset
+          </button>
+        )}
+      </div>
+    );
+  };
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -481,6 +787,25 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         </div>
       </div>
 
+      {/* ── Fleet summary strip ── */}
+      {hasEquipment && (
+        <FleetSummaryStrip
+          colors={colors}
+          machinesTotal={equipmentDetails.length}
+          equipmentCount={equipmentCount}
+          entityCount={entityCount}
+          awaitingCount={awaitingCount}
+          provenTotal={fleetStats.proven}
+          visitsTotal={fleetStats.total}
+          nextVisitDate={fleetStats.next}
+          machinesBehind={fleetStats.behind}
+          hasServiceData={hasServiceData}
+          serviceDataLoading={serviceDataLoading}
+          showOnlyAwaiting={awaitingFilterActive}
+          onToggleAwaiting={() => setShowOnlyAwaiting((v) => !v)}
+        />
+      )}
+
       {/* ── Equipment Picker (registry-based, reuses EquipmentCard) ── */}
       {showPicker && contractId && canAdd && (
         <div
@@ -506,7 +831,9 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
               </span>
               {displayAssets.length > 0 && (
                 <span className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                  {existingAssetIds.size} of {displayAssets.length} added
+                  {/* Count only assets visible in THIS filtered view — the global
+                      attached count can exceed the narrowed list (e.g. "9 of 3"). */}
+                  {displayAssets.filter((a) => existingAssetIds.has(a.id)).length} of {displayAssets.length} added
                 </span>
               )}
             </div>
@@ -550,6 +877,22 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Stay-open attach note — shown after a successful attach when the
+              picker advanced to the next remaining placeholder */}
+          {attachedNote && attachingPlaceholder && (
+            <div
+              className="px-5 py-2 flex items-center gap-2 text-xs font-medium"
+              style={{
+                backgroundColor: colors.semantic.success + '10',
+                color: colors.semantic.success,
+                borderBottom: `1px solid ${colors.semantic.success}20`,
+              }}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+              {attachedNote}
+            </div>
+          )}
 
           {/* Picker body — equipment card grid */}
           <div className="px-5 py-4">
@@ -596,59 +939,121 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         </div>
       )}
 
-      {/* ── Attached equipment — reuses EquipmentCard from registry ── */}
-      {hasEquipment ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: equipmentDetails.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(380px, 1fr))' }}>
-          {equipmentDetails.map((item) => {
-            const isOwnItem = item.added_by_tenant_id === tenantId;
-            const canRemove = isOwnItem && !!contractId;
-            const cardAsset = detailToCardAsset(item);
-            // Resolve client name: use asset_registry_id to find in registry,
-            // or fall back to the buyer contact on this contract
-            const clientName = buyerId ? contactNameMap.get(buyerId) : undefined;
-            const isPlaceholder = isPlaceholderDetail(item as any);
-            const displayIndex = displayIndexById.get(item.id);
-
-            return (
-              <div key={item.id} className="relative">
-                {(isPlaceholder || displayIndex) && (
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {isPlaceholder && (
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide"
-                        style={{ backgroundColor: '#f59e0b18', color: '#d97706', border: '1px solid #f59e0b30' }}
-                      >
-                        To be attached
-                      </span>
-                    )}
-                    {displayIndex && (
-                      <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                        {displayIndex.index} of {displayIndex.total}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <EquipmentCard
-                  asset={cardAsset}
-                  clientName={clientName}
-                  onDelete={canRemove ? () => handleRemoveCard(item) : undefined}
-                  onEdit={undefined}
-                  disabled={removeMutation.isPending}
-                />
-                {isPlaceholder && canAdd && (
-                  <button
-                    onClick={() => handleStartAttach(item)}
-                    className="mt-2 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:opacity-90"
-                    style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
-                  >
-                    <Link2 className="h-3.5 w-3.5" />
-                    Attach Asset
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      {/* ── Lens toggle + awaiting filter ── */}
+      {hasEquipment && (hasServiceData || awaitingCount > 0) && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {hasServiceData && (
+            <div
+              className="flex items-center rounded-lg border overflow-hidden"
+              style={{
+                borderColor: colors.utility.primaryText + '15',
+                backgroundColor: colors.utility.secondaryBackground,
+              }}
+            >
+              <button
+                onClick={() => setLens('cards')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={
+                  lens === 'cards'
+                    ? { backgroundColor: colors.brand.primary, color: '#fff' }
+                    : { color: colors.utility.secondaryText }
+                }
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Machine cards
+              </button>
+              <button
+                onClick={() => setLens('matrix')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors"
+                style={
+                  lens === 'matrix'
+                    ? { backgroundColor: colors.brand.primary, color: '#fff' }
+                    : { color: colors.utility.secondaryText }
+                }
+              >
+                <TableIcon className="h-3.5 w-3.5" />
+                Service matrix
+              </button>
+            </div>
+          )}
+          {awaitingCount > 0 && (
+            <button
+              onClick={() => setShowOnlyAwaiting((v) => !v)}
+              aria-pressed={awaitingFilterActive}
+              className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors hover:opacity-90"
+              style={
+                awaitingFilterActive
+                  ? { backgroundColor: '#d97706', color: '#fff', border: '1px solid #d97706' }
+                  : { backgroundColor: '#f59e0b18', color: '#d97706', border: '1px solid #f59e0b30' }
+              }
+            >
+              Show only awaiting · {awaitingCount}
+            </button>
+          )}
+          {hasServiceData && lens === 'matrix' && (
+            <span className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+              Cards for working a machine, matrix for spotting who's behind
+            </span>
+          )}
         </div>
+      )}
+
+      {/* ── Zero-visits note: equipment exists but no service visits yet ── */}
+      {hasEquipment && !serviceDataLoading && !hasServiceData && (
+        <div
+          className="rounded-xl border border-dashed px-4 py-3 text-xs"
+          style={{ borderColor: colors.utility.primaryText + '15', color: colors.utility.secondaryText }}
+        >
+          No service visits scheduled on this contract yet — per-machine service
+          tracking and the service matrix light up once visits exist.
+        </div>
+      )}
+
+      {/* ── Attached equipment — category-grouped fleet (cards | matrix) ── */}
+      {hasEquipment ? (
+        lens === 'matrix' && hasServiceData ? (
+          <FleetMatrix
+            colors={colors}
+            groups={matrixGroups}
+            dateColumns={dateColumns}
+            isLoading={serviceDataLoading}
+          />
+        ) : visibleGroups.length === 0 ? (
+          <div
+            className="rounded-xl border border-dashed px-5 py-8 text-center text-xs"
+            style={{ borderColor: colors.utility.primaryText + '15', color: colors.utility.secondaryText }}
+          >
+            No machines awaiting attachment.
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {visibleGroups.map((group) => (
+              <div key={group.key}>
+                <div className="flex items-baseline gap-2.5 mb-2 flex-wrap">
+                  <h3 className="text-[13px] font-bold" style={{ color: colors.utility.primaryText }}>
+                    {group.name}
+                  </h3>
+                  <span className="text-[11px]" style={{ color: colors.utility.secondaryText }}>
+                    {group.items.length} unit{group.items.length === 1 ? '' : 's'}
+                    {group.awaiting > 0 && ` · ${group.attached} attached · ${group.awaiting} awaiting`}
+                    {hasServiceData && group.totalVisits > 0 && ` · ${group.proven}/${group.totalVisits} visits proven`}
+                  </span>
+                </div>
+                <div
+                  className="grid gap-4"
+                  style={{
+                    gridTemplateColumns:
+                      equipmentDetails.length === 1
+                        ? '1fr'
+                        : 'repeat(auto-fill, minmax(380px, 1fr))',
+                  }}
+                >
+                  {group.items.map((item) => renderMachineCard(item))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : (
         <div
           className="rounded-xl border p-10 flex flex-col items-center justify-center text-center"
@@ -675,6 +1080,15 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           </p>
         </div>
       )}
+
+      {/* ── Machine logbook drawer (read-only) ── */}
+      <MachineLogbookDrawer
+        isOpen={!!logbookMachine}
+        onClose={handleCloseLogbook}
+        colors={colors}
+        machine={logbookMachine}
+        state={logbookState}
+      />
 
       {/* ── EquipmentFormDialog (reused from equipment-registry) ── */}
       <EquipmentFormDialog

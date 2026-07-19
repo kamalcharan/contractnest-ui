@@ -136,6 +136,8 @@ interface TenantProfile {
   state_code: string | null;
   postal_code: string | null;
   website_url: string | null;
+  country_code?: string | null;
+  gst_number?: string | null;
 }
 
 interface TenantData {
@@ -552,6 +554,9 @@ const ContractReviewPage: React.FC = () => {
       [profile?.city, profile?.state_code].filter(Boolean).join(', '),
       [profile?.business_phone_country_code, profile?.business_phone].filter(Boolean).join(' '),
       profile?.business_email || '',
+      profile?.gst_number
+        ? `${profile?.country_code === 'IN' ? 'GSTIN' : 'Tax Reg. No.'}: ${profile.gst_number}`
+        : '',
     ].filter(Boolean) as string[];
     const customerLines = [docContract.buyer_phone || '', docContract.buyer_email || ''].filter(Boolean) as string[];
     return buildDocFromSavedContract({

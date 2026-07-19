@@ -246,6 +246,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       [tenantProfile?.city, tenantProfile?.state_code].filter(Boolean).join(', '),
       [tenantProfile?.business_phone_country_code, tenantProfile?.business_phone].filter(Boolean).join(' '),
       tenantProfile?.business_email || '',
+      tenantProfile?.gst_number
+        ? `${tenantProfile?.country_code === 'IN' ? 'GSTIN' : 'Tax Reg. No.'}: ${tenantProfile.gst_number}`
+        : '',
     ].filter(Boolean) as string[];
     const customerLines = [
       buyerPrimaryPhone?.value ? `${buyerPrimaryPhone.value}` : '',

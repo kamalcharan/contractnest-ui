@@ -30,7 +30,7 @@ export interface TaxSectionConfig {
  * Tax Display form data (for the display settings panel)
  */
 export interface TaxDisplayFormData {
-  display_mode: 'including_tax' | 'excluding_tax';
+  display_mode: 'including_tax' | 'excluding_tax' | 'no_tax';
 }
 
 /**
@@ -157,7 +157,7 @@ export interface UseTaxDisplayReturn {
   state: TaxDisplayState;
   
   // Actions
-  updateDisplayMode: (mode: 'including_tax' | 'excluding_tax') => Promise<void>;
+  updateDisplayMode: (mode: 'including_tax' | 'excluding_tax' | 'no_tax') => Promise<void>;
   refresh: () => Promise<void>;
   
   // Utils
@@ -225,6 +225,11 @@ export const DISPLAY_MODE_OPTIONS = [
     value: 'including_tax' as const,
     label: 'Including tax',
     description: 'Show prices with tax included'
+  },
+  {
+    value: 'no_tax' as const,
+    label: 'No tax',
+    description: 'Not tax-registered — invoices carry no tax; the rate picker is hidden'
   }
 ];
 

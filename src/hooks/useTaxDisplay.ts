@@ -19,7 +19,7 @@ import type { TaxSettings } from '@/types/taxTypes';
 
 /**
  * Hook for managing tax display settings
- * Handles the display_mode configuration (including_tax vs excluding_tax)
+ * Handles the display_mode configuration (including_tax / excluding_tax / no_tax)
  */
 export const useTaxDisplay = (): UseTaxDisplayReturn => {
   const { currentTenant } = useAuth();
@@ -104,7 +104,7 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
   }, [currentTenant?.id]);
 
   // Update display mode
-  const updateDisplayMode = useCallback(async (mode: 'including_tax' | 'excluding_tax') => {
+  const updateDisplayMode = useCallback(async (mode: 'including_tax' | 'excluding_tax' | 'no_tax') => {
     if (!currentTenant?.id) {
       vaniToast.error('No Tenant Selected', {
         message: 'Please select a tenant to continue'
@@ -159,7 +159,9 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
       }));
 
       // Show success toast using VaNiToast
-      const displayLabel = mode === 'including_tax' ? 'Including tax' : 'Excluding tax';
+      const displayLabel =
+        mode === 'including_tax' ? 'Including tax' :
+        mode === 'no_tax' ? 'No tax' : 'Excluding tax';
       vaniToast.success('Settings Updated', {
         message: `Tax display mode changed to "${displayLabel}"`,
         duration: 3000
@@ -225,7 +227,7 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
     // Validate display mode
     if (!data.display_mode) {
       errors.display_mode = 'Display mode is required';
-    } else if (!['including_tax', 'excluding_tax'].includes(data.display_mode)) {
+    } else if (!['including_tax', 'excluding_tax', 'no_tax'].includes(data.display_mode)) {
       errors.display_mode = 'Invalid display mode';
     }
 

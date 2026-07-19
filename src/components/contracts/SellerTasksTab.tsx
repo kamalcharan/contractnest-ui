@@ -22,7 +22,9 @@ import { useTheme } from '@/contexts/ThemeContext';
 import {
   useContractEventsForContract,
   useContractEventOperations,
+  useContractEventAssets,
 } from '@/hooks/queries/useContractEventQueries';
+import EventAssetProgress from '@/components/contracts/EventAssetProgress';
 import { useContract } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
 import {
@@ -95,6 +97,10 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
     error,
     refetch,
   } = useContractEventsForContract(contractId);
+
+  // Sprint 3 per-asset grain — one fetch per contract, keyed by event id.
+  // Renders the "n/m assets proven" chip under each service event card.
+  const { data: eventAssetsByEvent = {} } = useContractEventAssets(contractId);
 
   const { data: serviceStatuses } = useEventStatuses('service');
   const { data: billingStatuses } = useEventStatuses('billing');
@@ -355,6 +361,10 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
                             allowedTransitions={
                               transitionsByType[evt.event_type]?.[evt.status] || []
                             }
+                          />
+                          <EventAssetProgress
+                            assets={eventAssetsByEvent[evt.id] || []}
+                            colors={colors}
                           />
                         </div>
                       ))}

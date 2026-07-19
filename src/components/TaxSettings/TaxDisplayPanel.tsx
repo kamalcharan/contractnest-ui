@@ -2,13 +2,14 @@
 // UPDATED: Using VaNiLoader and vaniToast for consistent UI
 
 import { useState, useEffect } from 'react';
-import { Info, Check } from 'lucide-react';
+import { Info, Check, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Label } from '@/components/ui/label';
 import { vaniToast } from '@/components/common/toast';
 import { VaNiLoader, InlineLoader } from '@/components/common/loaders/UnifiedLoader';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTenantProfile } from '@/hooks/useTenantProfile';
 
 // Import types
 import type {
@@ -25,12 +26,17 @@ interface TaxDisplayPanelProps {
 const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
   const { state, updateDisplayMode, resetChanges } = hook;
   const { isDarkMode, currentTheme } = useTheme();
+  // Read-only — the tax registration number (GSTIN/VAT ID/etc., country-
+  // dependent) is captured on the business profile, not here. This just
+  // surfaces it so it's visible alongside tax display/rate settings, since
+  // it's what gets printed on invoices.
+  const { profile: tenantProfile } = useTenantProfile();
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // Local form state
-  const [selectedMode, setSelectedMode] = useState<'including_tax' | 'excluding_tax'>('excluding_tax');
+  const [selectedMode, setSelectedMode] = useState<'including_tax' | 'excluding_tax' | 'no_tax'>('excluding_tax');
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
 
   // Display mode options (matching your reference UI)
@@ -44,6 +50,11 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
       value: 'including_tax' as const,
       label: 'Including tax',
       description: 'Show prices with tax included'
+    },
+    {
+      value: 'no_tax' as const,
+      label: 'No tax',
+      description: 'Not tax-registered — no rate ever applies; invoices carry no tax line'
     }
   ];
 
@@ -56,7 +67,7 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
   }, [state.data]);
 
   // Handle mode change
-  const handleModeChange = (mode: 'including_tax' | 'excluding_tax') => {
+  const handleModeChange = (mode: 'including_tax' | 'excluding_tax' | 'no_tax') => {
     setSelectedMode(mode);
     setHasLocalChanges(state.data?.display_mode !== mode);
   };
@@ -198,6 +209,32 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
             <InlineLoader size="sm" text="Saving..." />
           </div>
         )}
+      </div>
+
+      {/* Tax Registration Number — read-only here; printed on invoices when set */}
+      <div
+        className="rounded-lg shadow-sm border p-4 transition-colors flex items-center gap-3"
+        style={{
+          backgroundColor: colors.utility.secondaryBackground,
+          borderColor: `${colors.utility.primaryText}20`
+        }}
+      >
+        <FileText className="w-5 h-5 shrink-0" style={{ color: colors.utility.secondaryText }} />
+        <div className="flex-1">
+          <div className="text-sm font-medium transition-colors" style={{ color: colors.utility.primaryText }}>
+            Tax registration number
+            {tenantProfile?.country_code === 'IN' ? ' (GSTIN)' : ''}
+          </div>
+          {tenantProfile?.gst_number ? (
+            <div className="text-sm mt-0.5 font-mono transition-colors" style={{ color: colors.utility.secondaryText }}>
+              {tenantProfile.gst_number}
+            </div>
+          ) : (
+            <div className="text-sm mt-0.5 transition-colors" style={{ color: colors.semantic.warning }}>
+              Not set — invoices won't show a tax registration number until this is added to your Business Profile.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Settings Card */}
@@ -399,7 +436,8 @@ const TaxDisplayPanel = ({ hook, onError }: TaxDisplayPanelProps) => {
               className="font-medium transition-colors"
               style={{ color: colors.utility.primaryText }}
             >
-              {state.data.display_mode === 'including_tax' ? 'Including tax' : 'Excluding tax'}
+              {state.data.display_mode === 'including_tax' ? 'Including tax' :
+               state.data.display_mode === 'no_tax' ? 'No tax' : 'Excluding tax'}
             </span></div>
             {state.data.default_tax_rate_id && (
               <div>Default Tax Rate: <span

@@ -305,6 +305,11 @@ const InvoiceViewPage: React.FC = () => {
                       {tenantProfile.business_email}
                     </div>
                   )}
+                  {tenantProfile?.gst_number && (
+                    <div className="text-sm text-gray-500 mt-1 font-medium">
+                      {tenantProfile?.country_code === 'IN' ? 'GSTIN' : 'Tax Reg. No.'}: {tenantProfile.gst_number}
+                    </div>
+                  )}
                 </div>
 
                 {/* Invoice Number + Dates */}

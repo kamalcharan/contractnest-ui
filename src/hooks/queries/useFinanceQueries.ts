@@ -1,6 +1,6 @@
 // ============================================================================
 // Finance queries — Stage 1 Finance AR/AP (Operations → Finance)
-// Tenant-level receivables/payables + invoice actions.
+// Tenant-level receivables/payables + invoice actions + tax summary (Sprint 4).
 // Conventions per useInvoiceQueries: shared axios `api`, query-key factory,
 // currentTenant guard, response unwrap, vaniToast on mutations.
 // ============================================================================
@@ -16,6 +16,7 @@ import { vaniToast } from '@/components/common/toast';
 export const FINANCE_ENDPOINTS = {
   RECEIVABLES: '/api/finance/receivables',
   PAYABLES: '/api/finance/payables',
+  TAX_SUMMARY: '/api/finance/tax-summary',
   APPROVE: (invoiceId: string) => `/api/finance/invoices/${invoiceId}/approve`,
   REMIND: (invoiceId: string) => `/api/finance/invoices/${invoiceId}/remind`,
   CANCEL: (invoiceId: string) => `/api/finance/invoices/${invoiceId}/cancel`
@@ -132,12 +133,40 @@ export interface PayablesResponse {
 }
 
 // ─────────────────────────────────────────────
+// Types — tax summary (Sprint 4, mirrors get_tenant_tax_summary RPC shape)
+// ─────────────────────────────────────────────
+export interface TaxComponent {
+  name: string;
+  amount: number;
+}
+
+export interface TaxMonth {
+  month: string; // 'YYYY-MM'
+  invoice_count: number;
+  taxable_value: number;
+  tax_invoiced: number;
+  total_invoiced: number;
+  collected_value: number;
+  tax_collected_approx: number;
+  components: TaxComponent[];
+}
+
+export interface TaxSummaryResponse {
+  success: boolean;
+  months: TaxMonth[];
+  basis: string;
+  note?: string;
+  retrieved_at: string;
+}
+
+// ─────────────────────────────────────────────
 // Query keys
 // ─────────────────────────────────────────────
 export const financeKeys = {
   all: ['finance'] as const,
   receivables: (tenantId: string) => [...financeKeys.all, 'receivables', tenantId] as const,
-  payables: (tenantId: string) => [...financeKeys.all, 'payables', tenantId] as const
+  payables: (tenantId: string) => [...financeKeys.all, 'payables', tenantId] as const,
+  taxSummary: (tenantId: string) => [...financeKeys.all, 'tax-summary', tenantId] as const
 };
 
 // ─────────────────────────────────────────────
@@ -175,6 +204,29 @@ export const usePayables = (options?: { enabled?: boolean }) => {
     },
     enabled: !!currentTenant?.id && (options?.enabled !== false),
     staleTime: 30_000,
+    refetchOnWindowFocus: false
+  });
+};
+
+/**
+ * Sprint 4 — month-wise tax records for the current tenant (own tax data,
+ * same for both revenue/expense perspective since it reads t_invoices
+ * scoped to tenant_id, not by_buyer/by_vendor).
+ */
+export const useTaxSummary = (options?: { enabled?: boolean }) => {
+  const { currentTenant } = useAuth();
+
+  return useQuery({
+    queryKey: financeKeys.taxSummary(currentTenant?.id || ''),
+    queryFn: async (): Promise<TaxSummaryResponse> => {
+      if (!currentTenant?.id) {
+        throw new Error('Missing tenant');
+      }
+      const response = await api.get(FINANCE_ENDPOINTS.TAX_SUMMARY);
+      return response.data?.data || response.data;
+    },
+    enabled: !!currentTenant?.id && (options?.enabled !== false),
+    staleTime: 60_000,
     refetchOnWindowFocus: false
   });
 };

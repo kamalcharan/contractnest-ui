@@ -5,6 +5,7 @@
 //   - KPI cards (outstanding / overdue / upcoming / collected this month)
 //   - Ageing buckets (1-7 / 8-15 / 16-30 / 30+ days overdue)
 //   - Who owes (by buyer) · Drafts pending approval (scanner-created)
+//   - Taxes — month-wise tax records (Sprint 4)
 //   - Invoice worklist with manual actions: Approve draft, Send reminder,
 //     Cancel draft, Open contract (record payment lives on the contract page)
 //   - Follows the GLOBAL Revenue/Expense perspective (header switcher):
@@ -41,6 +42,7 @@ import {
   useCancelDraftInvoice,
   type FinanceInvoice
 } from '@/hooks/queries/useFinanceQueries';
+import TaxSummarySection from '@/components/operations/finance/TaxSummarySection';
 
 type ViewMode = 'receivables' | 'payables';
 type StatusFilter = 'all' | 'draft' | 'open' | 'overdue' | 'paid';
@@ -493,6 +495,10 @@ const FinancePage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Taxes — month-wise tax records (Sprint 4). Own-tenant tax data;
+          shown only on the receivables/AR view. */}
+      {view === 'receivables' && <TaxSummarySection />}
 
       {/* Drafts pending approval (receivables only) */}
       {view === 'receivables' && drafts.length > 0 && (

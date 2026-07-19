@@ -84,6 +84,7 @@ import BuyerOverview from '@/components/contracts/BuyerOverview';
 import EquipmentTab from '@/components/contracts/EquipmentTab';
 import type { EquipmentTabMode } from '@/components/contracts/EquipmentTab';
 import { useGlobalMasterData } from '@/hooks/queries/useProductMasterdata';
+import { useResources } from '@/hooks/queries/useResources';
 import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
 import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
@@ -1564,23 +1565,12 @@ const ContractDetailPage: React.FC = () => {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: contract, isLoading, error } = useContract(id || null);
-  const { data: nomenclatureResponse, isLoading: nomenclatureLoading, error: nomenclatureError } = useGlobalMasterData('cat_contract_nomenclature', true);
+  const { data: nomenclatureResponse } = useGlobalMasterData('cat_contract_nomenclature', true);
   const nomenclatureItems = nomenclatureResponse?.data || [];
 
-  // DEBUG: Remove after fixing equipment/facility tab issue
-  useEffect(() => {
-    console.log('[NomenclatureDebug] nomenclatureResponse:', nomenclatureResponse);
-    console.log('[NomenclatureDebug] nomenclatureItems count:', nomenclatureItems.length);
-    console.log('[NomenclatureDebug] nomenclatureLoading:', nomenclatureLoading);
-    console.log('[NomenclatureDebug] nomenclatureError:', nomenclatureError);
-    if (contract) {
-      console.log('[NomenclatureDebug] contract.nomenclature_id:', contract.nomenclature_id);
-      const matched = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
-      console.log('[NomenclatureDebug] matched item:', matched);
-      console.log('[NomenclatureDebug] form_settings:', matched?.form_settings);
-      console.log('[NomenclatureDebug] form_settings type:', typeof matched?.form_settings);
-    }
-  }, [nomenclatureResponse, nomenclatureItems, nomenclatureLoading, nomenclatureError, contract]);
+  // Tenant's resource catalog — used to classify coverage_types (declared asset
+  // types with no equipment_details/nomenclature yet) as equipment vs facility.
+  const { data: allTenantResources = [] } = useResources();
   const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
   const pageSummary = invoiceData?.summary;
   const pageInvoices = invoiceData?.invoices || [];
@@ -1804,14 +1794,6 @@ const ContractDetailPage: React.FC = () => {
           />
         );
       case 'equipment': {
-        console.log('[ContractDetail→Equipment] contact fields:', {
-          buyer_id: contract.buyer_id,
-          buyer_contact_person_id: contract.buyer_contact_person_id,
-          contact_id: contract.contact_id,
-          buyer_name: contract.buyer_name,
-          buyer_id: contract.buyer_id,
-          resolved_buyerId: contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id,
-        });
         // Derive equipment tab mode from actual asset data on the contract
         // First try nomenclature form_settings, then fall back to data-driven detection
         let equipTabMode: EquipmentTabMode = 'equipment';
@@ -2135,15 +2117,29 @@ const ContractDetailPage: React.FC = () => {
       if (hasEntity && hasEquip) return 'Equipment & Facility';
       if (hasEntity) return 'Facility';
     }
+    // Fallback: no attached instances yet — classify the declared coverage
+    // types (Sprint 1 "which asset types does this contract cover") against
+    // the tenant's resource catalog.
+    if (contract?.coverage_types?.length && allTenantResources.length) {
+      const classify = (resourceId: string) =>
+        (allTenantResources.find((r: any) => r.id === resourceId)?.resource_type_id || '').toLowerCase();
+      const hasEquip = contract.coverage_types.some((c: any) => classify(c.resource_id) === 'equipment');
+      const hasEntity = contract.coverage_types.some((c: any) => classify(c.resource_id) === 'asset');
+      if (hasEquip && hasEntity) return 'Equipment & Facility';
+      if (hasEntity) return 'Facility';
+    }
     return 'Equipment';
   })();
   const baseTabs = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
 
   // Show the Equipment/Facility tab only when it's meaningful for this contract:
-  // the contract type (nomenclature) is equipment/entity-based, OR the contract
-  // already has equipment/facility rows attached. Pure-service contracts hide it.
+  // the contract type (nomenclature) is equipment/entity-based, the contract
+  // already has equipment/facility rows attached, or it declares coverage types
+  // (asset types this contract covers, even before any instance is attached).
+  // Pure-service contracts hide it.
   const contractSupportsEquipment = (() => {
     if (contract?.equipment_details?.length) return true;
+    if (contract?.coverage_types?.length) return true;
     if (contract?.nomenclature_id && nomenclatureItems.length > 0) {
       const nType = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
       if (nType?.form_settings) {
