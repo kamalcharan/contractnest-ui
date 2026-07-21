@@ -3,6 +3,7 @@
 // variant="full" (default) for detail pages, variant="compact" for grids/dashboards
 
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
   Wrench,
@@ -150,6 +151,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   onViewContract,
   onRecordPayment,
 }) => {
+  const navigate = useNavigate();
   const [showActions, setShowActions] = useState(false);
   // Stage 3: appointment context (fields arrive via get_contract_events_list v3)
   const createAppointment = useCreateAppointment();
@@ -445,8 +447,34 @@ export const EventCard: React.FC<EventCardProps> = ({
           </div>
         )}
 
+        {/* Group Session occurrences don't get an individual appointment —
+            attendance is tracked on the roster, not per-visit — so point
+            here to the Group Session dashboard instead of leaving this
+            row blank. */}
+        {event.event_type === 'service' && isGroupSession && (
+          <div
+            className="mt-3 pt-3 border-t flex items-center gap-2"
+            style={{ borderColor: `${colors.utility.primaryText}10` }}
+          >
+            <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+              Group Session
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate('/group-sessions');
+              }}
+              className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-80"
+              style={{ backgroundColor: colors.brand?.primary || '#4F46E5', color: '#fff' }}
+            >
+              <Users className="w-3 h-3" />
+              Go to Group Session
+            </button>
+          </div>
+        )}
+
         {/* Stage 3: Appointment (scheduling layer on service events) */}
-        {event.event_type === 'service' && (appointmentStatus || canBookAppointment) && (
+        {event.event_type === 'service' && !isGroupSession && (appointmentStatus || canBookAppointment) && (
           <div
             className="mt-3 pt-3 border-t flex items-center gap-2"
             style={{ borderColor: `${colors.utility.primaryText}10` }}

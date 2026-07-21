@@ -2,21 +2,28 @@
 // Operations → Group Sessions — chair dashboard (reference-matching drill-down)
 // ============================================================================
 // A "group session" = a catalog block (config.audience='group'). Each block is
-// the group; drill-down mirrors the agreed reference mock:
-//   Overview (block cards) → Group (KPIs · sessions · roster · series · QR)
-//     → Occurrence (attendance marking · QR) → Member (profile · history · dues)
+// the group; drill-down:
+//   Overview (block cards) → Group (KPIs · sessions · roster sheet · series · QR)
+//     → Occurrence (attendance marking · QR)
+// The per-member detail view (profile · history · dues) lives on that
+// member's own Contract page (Sessions tab, src/components/contracts/
+// GroupSessionTab.tsx) — the Roster here links out to it via
+// membership_contract_id rather than duplicating the same view in-dashboard.
 // Shared schedule per block (not per member). Data via /api/group-sessions/*.
 // ============================================================================
 
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users, RefreshCw, AlertTriangle, Inbox, ChevronRight, CalendarClock, QrCode,
   CheckCircle2, Clock, CircleDollarSign, UserRound, ArrowLeft, TrendingUp, Wallet,
-  Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw,
+  Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw, Mic, UserCog, Lock, Search,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
+import ContactPicker from '@/components/common/ContactPicker';
+import { useContact } from '@/hooks/useContacts';
 import {
   useGroupSessions,
   useGroupSessionOccurrences,
@@ -27,16 +34,18 @@ import {
   useAddOccurrence,
   useOccurrenceAttendance,
   useMarkAttendance,
-  useMemberBlock,
   usePendingDeclarations,
   useConfirmDeclaration,
+  useAssignChair,
+  useAssignChairDefault,
   type GsSessionRow,
-  type GsRosterRow,
   type GsOccurrenceRow,
 } from '@/hooks/queries/useGroupSessionsDashboard';
 import QRCard from '@/components/group-sessions/QRCard';
 
-type ViewLevel = 'overview' | 'group' | 'occurrence' | 'member';
+const CHAIR_CLASSIFICATIONS = ['buyer', 'vendor', 'partner', 'team_member'];
+
+type ViewLevel = 'overview' | 'group' | 'occurrence' | 'roster';
 
 const fmtDate = (d?: string | null): string => {
   if (!d) return '—';
@@ -60,19 +69,18 @@ const initials = (n?: string | null) =>
 const WEEKDAYS = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 
 const GroupSessionsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   const [view, setView] = useState<ViewLevel>('overview');
   const [selectedSession, setSelectedSession] = useState<GsSessionRow | null>(null);
   const [selectedOcc, setSelectedOcc] = useState<GsOccurrenceRow | null>(null);
-  const [selectedMember, setSelectedMember] = useState<GsRosterRow | null>(null);
 
   const sessionsQuery = useGroupSessions();
   const occurrencesQuery = useGroupSessionOccurrences(selectedSession?.block_id, { enabled: view === 'group' });
-  const rosterQuery = useGroupSessionRoster(selectedSession?.block_id, { enabled: view === 'group' });
+  const rosterQuery = useGroupSessionRoster(selectedSession?.block_id, { enabled: view === 'group' || view === 'roster' });
   const occAttQuery = useOccurrenceAttendance(selectedOcc?.event_id, { enabled: view === 'occurrence' });
-  const memberQuery = useMemberBlock(selectedMember?.contact_id, selectedSession?.block_id, { enabled: view === 'member' });
   const declarationsQuery = usePendingDeclarations({ enabled: view === 'overview' });
 
   const generateSchedule = useGenerateSchedule();
@@ -81,12 +89,15 @@ const GroupSessionsPage: React.FC = () => {
   const addOccurrence = useAddOccurrence();
   const markAttendance = useMarkAttendance();
   const confirmDeclaration = useConfirmDeclaration();
+  const assignChair = useAssignChair();
+  const assignChairDefault = useAssignChairDefault();
   const scheduleBusy = generateSchedule.isPending || moveOccurrence.isPending || setOccurrenceStatus.isPending || addOccurrence.isPending;
 
   const [editOccId, setEditOccId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState('');
   const [addDate, setAddDate] = useState('');
   const [showAdd, setShowAdd] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState('');
 
   const sessions = sessionsQuery.data?.sessions ?? [];
   const occurrences = occurrencesQuery.data ?? [];
@@ -105,6 +116,18 @@ const GroupSessionsPage: React.FC = () => {
     return wd ? `Weekly · ${wd}` : 'Recurring';
   }, [occurrences]);
 
+  // Derived from the occurrences already fetched — not a separately stored
+  // field. Reflects reality even after a refresh: whoever chairs the
+  // nearest upcoming (non-past, non-cancelled) occurrence is shown as the
+  // series' current default; count = how many future occurrences share it.
+  const seriesChair = useMemo(() => {
+    const upcoming = occurrences.filter((o) => !o.is_past && o.status !== 'cancelled');
+    const next = upcoming.find((o) => o.assigned_to_name);
+    if (!next) return null;
+    const matching = upcoming.filter((o) => o.assigned_to_name === next.assigned_to_name).length;
+    return { name: next.assigned_to_name as string, count: matching, total: upcoming.length };
+  }, [occurrences]);
+
   const overview = useMemo(() => {
     const totalSessions = sessions.length;
     const members = sessionsQuery.data?.roster_size ?? 0;
@@ -116,7 +139,6 @@ const GroupSessionsPage: React.FC = () => {
 
   const openGroup = (s: GsSessionRow) => { setSelectedSession(s); setView('group'); setShowAdd(false); setEditOccId(null); };
   const openOccurrence = (o: GsOccurrenceRow) => { setSelectedOcc(o); setEditOccId(null); setView('occurrence'); };
-  const openMember = (m: GsRosterRow) => { if (m.membership_contract_id) { setSelectedMember(m); setView('member'); } };
 
   const cardStyle: React.CSSProperties = { backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '14' };
   const sub = { color: colors.utility.secondaryText };
@@ -155,6 +177,68 @@ const GroupSessionsPage: React.FC = () => {
       <span className="ml-auto text-[11.5px]" style={sub}>{right}</span>
     </div>
   );
+  // ── Chair assignment (single occurrence, or default for the whole series) ──
+  // Picking a contact only yields an id (ContactPicker), so we resolve its
+  // display name via useContact before firing the mutation — same lookup
+  // ContactPicker itself uses for its trigger label.
+  const AssignChairControl = ({
+    currentName,
+    onAssign,
+    onRemove,
+    busy,
+    buttonLabel = 'Assign chair',
+    changeLabel = 'Change',
+  }: {
+    currentName?: string | null;
+    onAssign: (contactId: string, contactName: string) => void;
+    onRemove?: () => void;
+    busy?: boolean;
+    buttonLabel?: string;
+    changeLabel?: string;
+  }) => {
+    const [editing, setEditing] = useState(false);
+    const [pickedId, setPickedId] = useState<string | undefined>(undefined);
+    const { data: pickedContact } = useContact(pickedId || '');
+
+    const confirm = () => {
+      if (!pickedId || !pickedContact) return;
+      const name = pickedContact.company_name || pickedContact.name || pickedContact.displayName || 'Unnamed';
+      onAssign(pickedId, name);
+      setEditing(false);
+      setPickedId(undefined);
+    };
+
+    if (editing) {
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-[220px]">
+            <ContactPicker value={pickedId} onChange={setPickedId} classifications={CHAIR_CLASSIFICATIONS} placeholder="Search clients, vendors, partners, team…" />
+          </div>
+          <button disabled={!pickedId || busy} onClick={confirm} className="p-2 rounded-md" style={{ backgroundColor: colors.brand.primary, color: '#fff' }}><Check size={14} /></button>
+          <button onClick={() => { setEditing(false); setPickedId(undefined); }} className="p-2 rounded-md" style={sub}><X size={14} /></button>
+        </div>
+      );
+    }
+
+    if (currentName) {
+      return (
+        <span className="inline-flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-full px-2.5 py-1" style={{ backgroundColor: colors.brand.primary + '15', color: colors.brand.primary }}>
+            <Mic size={12} /> Chaired by {currentName}
+          </span>
+          <button onClick={() => setEditing(true)} disabled={busy} className="text-[12px] font-medium" style={{ color: colors.brand.primary }}>{changeLabel}</button>
+          {onRemove && <button onClick={onRemove} disabled={busy} className="text-[12px] font-medium" style={{ color: colors.semantic.error }}>Remove</button>}
+        </span>
+      );
+    }
+
+    return (
+      <button onClick={() => setEditing(true)} disabled={busy} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-2.5 py-1.5 rounded-md border" style={{ color: colors.brand.primary, borderColor: colors.brand.primary + '40' }}>
+        <UserCog size={13} /> {buttonLabel}
+      </button>
+    );
+  };
+
   const StatusPill = ({ o, rosterSize }: { o: GsOccurrenceRow; rosterSize: number }) => {
     let bg = colors.brand.primary, txt = 'Scheduled';
     if (o.status === 'cancelled') { bg = colors.semantic.error; txt = 'Cancelled'; }
@@ -247,7 +331,6 @@ const GroupSessionsPage: React.FC = () => {
 
   const renderGroup = () => {
     const s = selectedSession!;
-    const duesDue = roster.filter((m) => m.dues_pending).length;
     return (
       <>
         <Crumb items={[{ label: 'Group Sessions', onClick: () => setView('overview') }, { label: s.name }]} />
@@ -257,7 +340,11 @@ const GroupSessionsPage: React.FC = () => {
           <Kpi icon={<UserRound size={12} />} label="Members" value={s.roster_size} sub="enrolled" />
           <Kpi icon={<TrendingUp size={12} />} label="Attendance" value={s.attendance_pct == null ? '—' : `${s.attendance_pct}%`} sub="avg" tone="good" />
           <Kpi icon={<CalendarClock size={12} />} label="Next" value={s.next_occurrence ? fmtShort(s.next_occurrence) : '—'} sub={cadence} />
-          <Kpi icon={<Wallet size={12} />} label="Dues due" value={duesDue} sub="members" tone={duesDue > 0 ? 'warn' : undefined} />
+          <button onClick={() => setView('roster')} className="text-left rounded-xl p-4 transition-shadow hover:shadow-md" style={{ backgroundColor: colors.brand.primary, color: '#fff' }}>
+            <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide opacity-90"><Users size={12} /> Roster View</div>
+            <div className="text-lg font-bold mt-1">{s.roster_size} members</div>
+            <div className="text-[11px] mt-0.5 opacity-90 inline-flex items-center gap-1">Open sheet <ChevronRight size={12} /></div>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-5 items-start">
@@ -292,23 +379,6 @@ const GroupSessionsPage: React.FC = () => {
                 </div>
               ))}
             </Card>
-
-            <Card style={cardStyle}>
-              <SectionHd icon={<Users size={15} />} title="Roster" right={`${roster.length} members`} />
-              {rosterQuery.isLoading ? (
-                <div className="py-10 flex justify-center"><LoadingSpinner size="md" /></div>
-              ) : roster.length === 0 ? (
-                <div className="py-10 text-center text-sm" style={sub}>No members yet.</div>
-              ) : roster.map((m) => (
-                <div key={m.contact_id} className="flex items-center gap-3 px-4 py-2.5 border-b cursor-pointer hover:bg-black/5" style={{ borderColor: line }} onClick={() => openMember(m)}>
-                  <div className="w-7 h-7 rounded-full grid place-items-center text-[11px] font-bold flex-none" style={{ backgroundColor: colors.brand.primary + '1e', color: colors.brand.primary }}>{initials(m.name)}</div>
-                  <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold truncate" style={ink}>{m.name || '—'}</div><div className="text-[11px] truncate" style={sub}>{m.contract_name || ''}</div></div>
-                  <span className="text-[9.5px] font-bold rounded px-1.5 py-0.5" style={{ backgroundColor: (m.dues_pending ? colors.semantic.warning : colors.semantic.success) + '1e', color: m.dues_pending ? colors.semantic.warning : colors.semantic.success }}>{m.dues_pending ? 'Due' : 'Paid'}</span>
-                  <span className="text-[11.5px] tabular-nums" style={sub}>{m.attended}/{s.occurrences_done}</span>
-                  <ChevronRight size={15} style={sub} className="flex-none" />
-                </div>
-              ))}
-            </Card>
           </div>
 
           <div>
@@ -319,10 +389,125 @@ const GroupSessionsPage: React.FC = () => {
                 <div className="flex-1"><div className="text-[13px] font-semibold" style={ink}>{s.name}</div><div className="text-[11.5px]" style={sub}>{cadence}</div></div>
                 <span className="text-[10.5px] font-bold rounded-full px-2 py-1" style={{ backgroundColor: (s.qr_ready ? colors.semantic.success : colors.semantic.warning) + '1e', color: s.qr_ready ? colors.semantic.success : colors.semantic.warning }}>{s.qr_ready ? 'QR ready' : 'No QR'}</span>
               </div>
+              <div className="px-4 pb-3.5 pt-1 border-t" style={{ borderColor: line }}>
+                <div className="text-[11px] mb-2" style={sub}>
+                  {occurrencesQuery.isLoading
+                    ? 'Loading…'
+                    : seriesChair
+                      ? `Default chair — applied to ${seriesChair.count} of ${seriesChair.total} upcoming sessions.`
+                      : 'Default chair — applies to every upcoming session; override any single date from that session.'}
+                </div>
+                <AssignChairControl
+                  currentName={seriesChair?.name}
+                  busy={assignChairDefault.isPending}
+                  buttonLabel="Assign default chair"
+                  changeLabel="Change default"
+                  onAssign={(id, name) => assignChairDefault.mutate({ blockId: s.block_id, contactId: id, contactName: name })}
+                />
+              </div>
             </Card>
             <QRCard blockId={s.block_id} title={s.name} />
           </div>
         </div>
+      </>
+    );
+  };
+
+  const renderRoster = () => {
+    const s = selectedSession!;
+    const avgAttendance = roster.length === 0 ? null : Math.round(
+      roster.reduce((sum, m) => sum + (m.overall > 0 ? (m.attended / m.overall) * 100 : 0), 0) / roster.length
+    );
+    const overCapCount = roster.filter((m) => m.over_no_show_cap || m.over_substitute_cap).length;
+    const filteredRoster = rosterSearch.trim()
+      ? roster.filter((m) => (m.name || '').toLowerCase().includes(rosterSearch.trim().toLowerCase()))
+      : roster;
+
+    return (
+      <>
+        <Crumb items={[{ label: 'Group Sessions', onClick: () => setView('overview') }, { label: s.name, onClick: () => setView('group') }, { label: 'Roster' }]} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={() => setView('group')} className="inline-flex items-center gap-1 text-sm" style={sub}><ArrowLeft size={15} /> Back</button>
+          <h1 className="text-lg font-semibold" style={ink}>{s.name} · Roster</h1>
+        </div>
+        <p className="text-sm mt-1 mb-4" style={sub}>{roster.length} members enrolled.</p>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+          <Kpi icon={<UserRound size={12} />} label="Members" value={roster.length} sub="enrolled" />
+          <Kpi icon={<TrendingUp size={12} />} label="Average attendance" value={avgAttendance == null ? '—' : `${avgAttendance}%`} sub="till now" tone="good" />
+          <Kpi icon={<AlertTriangle size={12} />} label="Over cap" value={overCapCount} sub="members" tone={overCapCount > 0 ? 'warn' : undefined} />
+          <Kpi icon={<Wallet size={12} />} label="Dues due" value={roster.filter((m) => m.dues_pending).length} sub="members" />
+        </div>
+
+        <div className="relative mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={sub} />
+          <input
+            type="text"
+            value={rosterSearch}
+            onChange={(e) => setRosterSearch(e.target.value)}
+            placeholder="Search by member name…"
+            className="w-full pl-9 pr-3 py-2 rounded-lg text-sm border"
+            style={{ ...ink, borderColor: colors.utility.primaryText + '22', backgroundColor: colors.utility.secondaryBackground }}
+          />
+        </div>
+
+        {rosterQuery.isLoading ? (
+          <div className="py-16 flex justify-center"><LoadingSpinner size="md" /></div>
+        ) : filteredRoster.length === 0 ? (
+          <div className="py-16 text-center text-sm" style={sub}>{roster.length === 0 ? 'No members yet.' : 'No members match that search.'}</div>
+        ) : (
+          <div className="space-y-2">
+            {filteredRoster.map((m) => {
+              const overCap = m.over_no_show_cap || m.over_substitute_cap;
+              return (
+                <div
+                  key={m.contact_id}
+                  className="rounded-lg shadow-sm border p-3"
+                  style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+                >
+                  <div className="flex items-center gap-3 flex-wrap mb-2.5">
+                    <div className="w-10 h-10 rounded-lg grid place-items-center text-sm font-semibold flex-none" style={{ backgroundColor: colors.brand.primary + '20', color: colors.brand.primary, border: `1px solid ${colors.brand.primary}40` }}>{initials(m.name)}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-semibold truncate" style={ink}>{m.name || '—'}</div>
+                      <div className="text-[11.5px] truncate" style={sub}>{m.contract_name || ''}</div>
+                    </div>
+
+                    <span className="text-[12.5px] font-bold tabular-nums" style={{ color: overCap ? colors.semantic.error : colors.utility.primaryText }}>{m.attended}/{m.overall}</span>
+
+                    {overCap ? (
+                      <span className="text-[9.5px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap" style={{ backgroundColor: colors.semantic.error + '1e', color: colors.semantic.error }}>
+                        {m.over_no_show_cap ? `⚠ ${m.missed}/${m.max_no_shows} no-shows` : `⚠ ${m.substituted}/${m.max_substitutes} subs`}
+                      </span>
+                    ) : (
+                      <span className="text-[9.5px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap" style={{ backgroundColor: colors.semantic.success + '1e', color: colors.semantic.success }}>OK</span>
+                    )}
+                    <span className="text-[9.5px] font-bold rounded-full px-2 py-0.5 whitespace-nowrap" style={{ backgroundColor: (m.dues_pending ? colors.semantic.warning : colors.semantic.success) + '1e', color: m.dues_pending ? colors.semantic.warning : colors.semantic.success }}>{m.dues_pending ? 'Due' : 'Paid'}</span>
+
+                    {m.membership_contract_id && (
+                      <button
+                        onClick={() => navigate(`/contracts/${m.membership_contract_id}?tab=sessions`)}
+                        className="inline-flex items-center gap-1 text-[11.5px] font-semibold whitespace-nowrap"
+                        style={{ color: colors.brand.primary }}
+                      >
+                        View contract <ChevronRight size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {(m.attendance ?? []).map((a, i) => (
+                      <div key={i} title={`${fmtDate(a.date)}${a.present && a.is_substitute ? ' · attended via substitute' : a.present ? ' · present' : a.is_past ? ' · absent' : ' · upcoming'}`}
+                        className="w-5 h-5 rounded grid place-items-center text-[9.5px] font-bold"
+                        style={a.present && a.is_substitute ? { backgroundColor: '#8B5CF61e', color: '#8B5CF6' } : a.present ? { backgroundColor: colors.semantic.success + '1e', color: colors.semantic.success } : a.is_past ? { backgroundColor: colors.semantic.warning + '1e', color: colors.semantic.warning } : { backgroundColor: colors.utility.primaryText + '0d', color: colors.utility.secondaryText }}>
+                        {a.present && a.is_substitute ? 'S' : a.present ? '✓' : a.is_past ? '✕' : '·'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </>
     );
   };
@@ -333,15 +518,26 @@ const GroupSessionsPage: React.FC = () => {
     const data = occAttQuery.data;
     const att = data?.roster ?? [];
     const canEdit = editOccId === o.event_id;
+    const isHeld = o.status === 'held';
     return (
       <>
         <Crumb items={[{ label: 'Group Sessions', onClick: () => setView('overview') }, { label: s.name, onClick: () => setView('group') }, { label: fmtShort(o.date) }]} />
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={() => setView('group')} className="inline-flex items-center gap-1 text-sm" style={sub}><ArrowLeft size={15} /> Back</button>
           <h1 className="text-lg font-semibold" style={ink}>{s.name}</h1>
+          {isHeld && (
+            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold rounded-full px-2.5 py-1" style={{ backgroundColor: colors.semantic.success + '1e', color: colors.semantic.success }}>
+              <Lock size={11} /> Completed — locked
+            </span>
+          )}
         </div>
         <p className="text-sm mt-1 mb-4" style={sub}>{fmtDate(o.date)} · one session occurrence · {data?.present_count ?? 0} present</p>
 
+        {isHeld && (
+          <p className="text-[11.5px] mb-4" style={sub}>This session has already been held — the date and chair are locked. Attendance can still be corrected below.</p>
+        )}
+
+        {!isHeld && (
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {canEdit ? (
             <span className="inline-flex items-center gap-2">
@@ -359,7 +555,30 @@ const GroupSessionsPage: React.FC = () => {
               )}
             </>
           )}
+          <span className="w-px h-5" style={{ backgroundColor: line }} />
+          <AssignChairControl
+            currentName={o.assigned_to_name}
+            busy={assignChair.isPending}
+            buttonLabel="Assign chair"
+            changeLabel="Change"
+            onAssign={(id, name) => { assignChair.mutate({ id: o.event_id, contactId: id, contactName: name }); setSelectedOcc({ ...o, assigned_to: id, assigned_to_name: name }); }}
+            onRemove={() => { assignChair.mutate({ id: o.event_id, contactId: undefined, contactName: undefined }); setSelectedOcc({ ...o, assigned_to: null, assigned_to_name: null }); }}
+          />
         </div>
+        )}
+
+        {o.assigned_to_name && (
+          <Card style={cardStyle} className="mb-4">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div className="w-9 h-9 rounded-lg grid place-items-center flex-none" style={{ backgroundColor: colors.semantic.success + '18', color: colors.semantic.success }}><CalendarClock size={17} /></div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold" style={ink}>Appointment · {o.assigned_to_name}</div>
+                <div className="text-[11.5px]" style={sub}>{fmtDate(o.date)} · chairs this session</div>
+              </div>
+              <span className="text-[10.5px] font-bold rounded-full px-2.5 py-1" style={{ backgroundColor: colors.semantic.success + '1e', color: colors.semantic.success }}>Accepted</span>
+            </div>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-5 items-start">
           <Card style={cardStyle}>
@@ -384,65 +603,7 @@ const GroupSessionsPage: React.FC = () => {
               </div>
             ))}
           </Card>
-          <QRCard blockId={s.block_id} title={s.name} />
         </div>
-      </>
-    );
-  };
-
-  const renderMember = () => {
-    const s = selectedSession!;
-    const m = selectedMember!;
-    const d = memberQuery.data;
-    const attPct = d && d.occurrences_done > 0 ? Math.round((d.attended / d.occurrences_done) * 100) : null;
-    const duesPending = d?.dues_pending ?? m.dues_pending;
-    return (
-      <>
-        <Crumb items={[{ label: 'Group Sessions', onClick: () => setView('overview') }, { label: s.name, onClick: () => setView('group') }, { label: m.name || 'Member' }]} />
-        <div className="flex items-center gap-4 rounded-2xl border p-4 mb-4" style={cardStyle}>
-          <div className="rounded-full grid place-items-center text-lg font-bold flex-none" style={{ width: 52, height: 52, backgroundColor: colors.brand.primary + '1e', color: colors.brand.primary }}>{initials(m.name)}</div>
-          <div className="flex-1"><div className="text-lg font-bold" style={ink}>{m.name || 'Member'}</div><div className="text-[12.5px]" style={sub}>{s.name}{m.contract_name ? ` · ${m.contract_name}` : ''}</div></div>
-          <span className="text-[12px] font-semibold rounded-full px-3 py-1.5" style={{ backgroundColor: (duesPending ? colors.semantic.warning : colors.semantic.success) + '1e', color: duesPending ? colors.semantic.warning : colors.semantic.success }}>{duesPending ? 'Dues due' : 'Dues clear'}</span>
-        </div>
-
-        {memberQuery.isLoading ? (
-          <div className="py-10 flex justify-center"><LoadingSpinner size="md" /></div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <Kpi icon={<TrendingUp size={12} />} label="Attendance" value={attPct == null ? '—' : `${attPct}%`} sub="of held" tone="good" />
-              <Kpi icon={<CalendarClock size={12} />} label="Attended" value={`${d?.attended ?? 0} / ${d?.occurrences_done ?? 0}`} sub="sessions" />
-              <Kpi icon={<Wallet size={12} />} label="Dues" value={duesPending ? 'Pending' : 'Clear'} tone={duesPending ? 'warn' : 'good'} />
-              <Kpi icon={<Clock size={12} />} label="Last seen" value={d?.last_seen ? fmtShort(d.last_seen) : '—'} />
-            </div>
-
-            <Card style={cardStyle} className="mb-4">
-              <SectionHd icon={<CalendarClock size={15} />} title="Attendance history" />
-              <div className="flex flex-wrap gap-1.5 p-4">
-                {(d?.attendance ?? []).map((a, i) => (
-                  <div key={i} title={`${fmtDate(a.date)}${a.present ? ' · present' : a.is_past ? ' · absent' : ' · upcoming'}`}
-                    className="w-7 h-7 rounded-md grid place-items-center text-[11px] font-bold"
-                    style={a.present ? { backgroundColor: colors.semantic.success + '1e', color: colors.semantic.success } : a.is_past ? { backgroundColor: colors.semantic.warning + '1e', color: colors.semantic.warning } : { backgroundColor: colors.utility.primaryText + '0d', color: colors.utility.secondaryText }}>
-                    {a.present ? '✓' : a.is_past ? '✕' : '·'}
-                  </div>
-                ))}
-                {(d?.attendance?.length ?? 0) === 0 && <span className="text-sm" style={sub}>No sessions yet.</span>}
-              </div>
-            </Card>
-
-            <Card style={cardStyle}>
-              <SectionHd icon={<Wallet size={15} />} title="Payments (BAU dues)" />
-              {(d?.billing?.length ?? 0) === 0 ? (
-                <div className="py-8 text-center text-sm" style={sub}>No billing schedule.</div>
-              ) : (d?.billing ?? []).map((b, i) => (
-                <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: line }}>
-                  <div><div className="text-[13px]" style={ink}>{b.label || fmtDate(b.date)}</div><div className="text-[11.5px]" style={sub}>{fmtDate(b.date)}</div></div>
-                  <span className="text-[11px] font-semibold rounded px-2 py-0.5" style={{ backgroundColor: (b.status === 'paid' ? colors.semantic.success : colors.semantic.warning) + '1e', color: b.status === 'paid' ? colors.semantic.success : colors.semantic.warning }}>{b.status === 'paid' ? `Paid ${money(b.amount, b.currency)}` : `${money(b.amount, b.currency)} · ${b.status || 'due'}`}</span>
-                </div>
-              ))}
-            </Card>
-          </>
-        )}
       </>
     );
   };
@@ -451,7 +612,7 @@ const GroupSessionsPage: React.FC = () => {
     <div className="p-6">
       <div className="flex items-center justify-end mb-1">
         <button
-          onClick={() => { sessionsQuery.refetch(); occurrencesQuery.refetch(); rosterQuery.refetch(); occAttQuery.refetch(); memberQuery.refetch(); declarationsQuery.refetch(); }}
+          onClick={() => { sessionsQuery.refetch(); occurrencesQuery.refetch(); rosterQuery.refetch(); occAttQuery.refetch(); declarationsQuery.refetch(); }}
           className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border" style={{ ...ink, borderColor: colors.utility.primaryText + '22' }}
         >
           <RefreshCw size={14} /> Refresh
@@ -459,8 +620,8 @@ const GroupSessionsPage: React.FC = () => {
       </div>
       {view === 'overview' && renderOverview()}
       {view === 'group' && selectedSession && renderGroup()}
+      {view === 'roster' && selectedSession && renderRoster()}
       {view === 'occurrence' && selectedOcc && selectedSession && renderOccurrence()}
-      {view === 'member' && selectedMember && selectedSession && renderMember()}
     </div>
   );
 };

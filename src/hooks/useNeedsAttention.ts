@@ -468,6 +468,51 @@ function evaluateActiveContract(
     }
   }
 
+  // 7. Credit set aside on this (ending) contract, for the buyer's next contract
+  if (contract.credit_status === 'pending') {
+    completed.push({
+      id: 'credit_pending',
+      state: 'info' as StepState,
+      priority: 'info',
+      icon: '↪️',
+      title: 'Credit Set Aside',
+      description: `${formatCurrency(contract.credit_amount, contract.currency || 'INR')} — ${contract.credit_reason || 'reserved for buyer’s next contract'}`,
+      actions: [],
+      aging: null,
+      sortOrder: 12,
+    });
+  }
+
+  // 8. Credit received from a prior contract for the same buyer
+  if (contract.credit_received_amount) {
+    completed.push({
+      id: 'credit_received',
+      state: 'info' as StepState,
+      priority: 'info',
+      icon: '↪️',
+      title: 'Credit Applied',
+      description: `${formatCurrency(contract.credit_received_amount, contract.currency || 'INR')} applied from a prior contract`,
+      actions: [],
+      aging: null,
+      sortOrder: 13,
+    });
+  }
+
+  // 9. Security deposit held against this contract
+  if (contract.deposit_status === 'held') {
+    completed.push({
+      id: 'deposit_held',
+      state: 'info' as StepState,
+      priority: 'info',
+      icon: '🔒',
+      title: 'Security Deposit Held',
+      description: `${formatCurrency(contract.deposit_amount, contract.currency || 'INR')} held — reclaim once the contract closes`,
+      actions: [],
+      aging: null,
+      sortOrder: 14,
+    });
+  }
+
   // If no alerts AND no events at all
   if (now.length === 0 && events.length === 0) {
     completed.push({

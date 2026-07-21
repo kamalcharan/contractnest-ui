@@ -143,13 +143,16 @@ const ContactsImportPage: React.FC = () => {
     const extracted = extractRows(sheet, mapping);
     setRows(extracted);
 
-    // Suggest an industry per unique category value
+    // Suggest an industry per unique category value — unmatched categories
+    // default to the "Other" industry (still adjustable in the mapping UI
+    // below) rather than being left unmapped.
+    const otherIndustryId = allIndustries.find((i) => i.name.trim().toLowerCase() === 'other')?.id || null;
     const uniqueCategories = Array.from(
       new Set(extracted.map((r) => r.category).filter(Boolean))
     );
     const suggested: Record<string, string | null> = {};
     for (const cat of uniqueCategories) {
-      suggested[cat] = suggestIndustry(cat, allIndustries);
+      suggested[cat] = suggestIndustry(cat, allIndustries) || otherIndustryId;
     }
     setCategoryMap(suggested);
     setStep('preview');

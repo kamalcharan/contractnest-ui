@@ -15,7 +15,7 @@
 // makes React remount the subtree and drop input focus while typing.
 
 import React, { useState } from 'react';
-import { Pencil, Check, X, Plus, Trash2, Phone, Mail, MapPin, Users, ShieldCheck, StickyNote, Tag, UserRound } from 'lucide-react';
+import { Pencil, Check, X, Plus, Trash2, Phone, Mail, MapPin, Users, ShieldCheck, StickyNote, Tag, UserRound, Hash } from 'lucide-react';
 import { useUpdateContact, type Contact } from '@/hooks/useContacts';
 import { useMasterDataOptions } from '@/hooks/useMasterData';
 import { vaniToast } from '@/components/common/toast';
@@ -26,6 +26,7 @@ interface Props {
   contact: Contact & { compliance_numbers?: any[] };
   colors: any;
   onSaved: () => void;
+  readOnly?: boolean;
 }
 
 type SectionKey = 'identity' | 'channels' | 'tags' | 'addresses' | 'compliance' | 'notes';
@@ -78,7 +79,12 @@ const FieldLabel: React.FC<{ colors: any; children: React.ReactNode }> = ({ colo
   <div style={{ ...labelStyle(colors), marginBottom: 5 }}>{children}</div>
 );
 
-const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
+// "member_id" -> "Member Id" — humanizes any key so future external_data
+// keys show up correctly without new UI code.
+const humanizeKey = (key: string): string =>
+  key.split('_').map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(' ');
+
+const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly = false }) => {
   const { mutate, loading } = useUpdateContact();
   const { options: tagLov } = useMasterDataOptions('Tags', {});
   const [editing, setEditing] = useState<SectionKey | null>(null);
@@ -90,11 +96,17 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
   const channels = contact.contact_channels || [];
   const compliance = (contact as any).compliance_numbers || [];
   const tags = (contact.tags || []) as any[];
+  const externalData = Object.entries(contact.external_data || {}).filter(([, v]) => v !== null && v !== undefined && v !== '');
 
   const sparse = channels.length <= 1 && addresses.length === 0 && persons.length === 0
     && compliance.length === 0 && (contact.classifications || []).length === 0 && !contact.notes;
 
   const startEdit = (key: SectionKey, initial: any) => { setDraft(initial); setEditing(key); };
+  // When archived, sections are locked read-only — only the header status
+  // control (view.tsx) may still change the contact, so it can be reactivated.
+  // Returning undefined (vs a no-op handler) also hides each SectionCard's
+  // Edit affordance entirely, per SectionCard's `{onEdit && !active && ...}`.
+  const editHandler = (key: SectionKey, initial: any) => (readOnly ? undefined : () => startEdit(key, initial));
   const cancel = () => { setEditing(null); setDraft(null); };
   const save = async (updates: any) => {
     try {
@@ -113,13 +125,17 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
   const bar = (onSave: () => void) => <EditBar colors={colors} loading={loading} onSave={onSave} onCancel={cancel} />;
 
   return (
-    <div className="p-6" style={{ maxWidth: 1120, margin: '0 auto' }}>
+    // Extra bottom padding — ActionIsland (Profile/Contract/Email/WhatsApp
+    // pill) is position:fixed at the viewport bottom with no space of its
+    // own reserved in the page; without this, the last section can end up
+    // sitting directly under it on short-content contacts.
+    <div className="p-6" style={{ maxWidth: 1120, margin: '0 auto', paddingBottom: 100 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 14 }}>
 
         {/* IDENTITY */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
           <SectionCard colors={colors} icon={UserRound} title="Identity" active={editing === 'identity'}
-            onEdit={() => startEdit('identity', { salutation: contact.salutation || '', name: contact.name || '', company_name: contact.company_name || '', designation: contact.designation || '' })}>
+            onEdit={editHandler('identity', { salutation: contact.salutation || '', name: contact.name || '', company_name: contact.company_name || '', designation: contact.designation || '' })}>
             {editing === 'identity' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {!isCorp && (
@@ -153,7 +169,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
         {/* CHANNELS */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
           <SectionCard colors={colors} icon={Phone} title="Contact channels" active={editing === 'channels'}
-            onEdit={() => startEdit('channels', { list: channels.map(c => ({ channel_type: c.channel_type || 'mobile', value: c.value, cc: ccFromDial((c as any).country_code), is_primary: c.is_primary })) })}>
+            onEdit={editHandler('channels', { list: channels.map(c => ({ channel_type: c.channel_type || 'mobile', value: c.value, cc: ccFromDial((c as any).country_code), is_primary: c.is_primary })) })}>
             {editing === 'channels' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {draft.list.map((ch: any, i: number) => (
@@ -215,7 +231,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
         {/* TAGS & CLASSIFICATIONS */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
           <SectionCard colors={colors} icon={Tag} title="Tags & roles" active={editing === 'tags'}
-            onEdit={() => startEdit('tags', { tags: tags.map(t => t.tag_value), classifications: [...(contact.classifications || [])] })}>
+            onEdit={editHandler('tags', { tags: tags.map(t => t.tag_value), classifications: [...(contact.classifications || [])] })}>
             {editing === 'tags' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
@@ -297,7 +313,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
         {!sparse && (
           <div style={{ gridColumn: 'span 6' }} className="cn-col-6">
             <SectionCard colors={colors} icon={MapPin} title="Addresses" active={editing === 'addresses'} editLabel={addresses.length ? 'Edit' : 'Add'}
-              onEdit={() => startEdit('addresses', { a: addresses[0] ? { ...addresses[0], country_code: ccFromDial(addresses[0].country_code) } : { type: 'billing', address_line1: '', city: '', state_code: '', country_code: 'IN', postal_code: '' } })}>
+              onEdit={editHandler('addresses', { a: addresses[0] ? { ...addresses[0], country_code: ccFromDial(addresses[0].country_code) } : { type: 'billing', address_line1: '', city: '', state_code: '', country_code: 'IN', postal_code: '' } })}>
               {editing === 'addresses' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <input style={input} placeholder="Address line 1" value={draft.a.address_line1 || ''} onChange={e => setDraft({ a: { ...draft.a, address_line1: e.target.value } })} />
@@ -333,7 +349,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
         {!sparse && (
           <div style={{ gridColumn: 'span 6' }} className="cn-col-6">
             <SectionCard colors={colors} icon={ShieldCheck} title="Compliance" active={editing === 'compliance'} editLabel={compliance.length ? 'Edit' : 'Add'}
-              onEdit={() => startEdit('compliance', { gstin: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('GST'))?.value || '', pan: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('PAN'))?.value || '' })}>
+              onEdit={editHandler('compliance', { gstin: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('GST'))?.value || '', pan: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('PAN'))?.value || '' })}>
               {editing === 'compliance' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div><FieldLabel colors={colors}>GSTIN</FieldLabel><input style={input} value={draft.gstin} onChange={e => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })} placeholder="22ABCDE1234F1Z5" /></div>
@@ -357,7 +373,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
         {/* NOTES */}
         <div style={{ gridColumn: 'span 12' }} className="cn-col-12">
           <SectionCard colors={colors} icon={StickyNote} title="Notes" active={editing === 'notes'} editLabel={contact.notes ? 'Edit' : 'Add'}
-            onEdit={() => startEdit('notes', { notes: contact.notes || '' })}>
+            onEdit={editHandler('notes', { notes: contact.notes || '' })}>
             {editing === 'notes' ? (
               <div>
                 <textarea style={{ ...input, minHeight: 90, resize: 'vertical' }} value={draft.notes} onChange={e => setDraft({ notes: e.target.value })} placeholder="Anything worth remembering about this contact…" />
@@ -368,6 +384,19 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved }) => {
             )}
           </SectionCard>
         </div>
+
+        {/* EXTERNAL DATA (read-only — populated only by import, never by create/edit) */}
+        {externalData.length > 0 && (
+          <div style={{ gridColumn: 'span 12' }} className="cn-col-12">
+            <SectionCard colors={colors} icon={Hash} title="External Data">
+              {externalData.map(([key, value]) => (
+                <KV colors={colors} key={key} k={humanizeKey(key)}>
+                  <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}>{value}</span>
+                </KV>
+              ))}
+            </SectionCard>
+          </div>
+        )}
 
         {/* enrich hint for sparse/guest contacts */}
         {sparse && (

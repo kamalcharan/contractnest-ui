@@ -4,12 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
-  Edit,
   User,
   FileText,
   Building2,
   AlertCircle,
   Archive,
+  ChevronDown,
+  Check,
   Loader2,
   LayoutDashboard,
   Wrench,
@@ -107,12 +108,13 @@ const ContactViewPage: React.FC = () => {
   // State
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
+  const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [daysAhead, setDaysAhead] = useState(7);
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
 
   // API
-  const { data: contact, loading, error, refetch } = useContact(id || '');
+  const { data: contact, loading, error, refetch, hardRefresh } = useContact(id || '');
   const updateStatusHook = useUpdateContactStatus();
   const sendInvitationHook = useSendInvitation();
   const { data: cockpitData, isLoading: cockpitLoading } = useContactCockpit(id || '', { daysAhead });
@@ -172,12 +174,22 @@ const ContactViewPage: React.FC = () => {
 
   // Handle status update
   const handleStatusUpdate = async (newStatus: 'active' | 'inactive' | 'archived') => {
-    if (!contact) return;
+    if (!contact || newStatus === contact.status) return;
     try {
       await updateStatusHook.mutate(contact.id, newStatus);
-      refetch();
-    } catch (err) {
+      toast({ title: 'Status updated', description: `Contact is now ${newStatus}.` });
+      // refetch() serves cached data first (useContact's fetchContact skips
+      // the network call when a cache entry exists) — that cache still
+      // holds the pre-update status, so the header/lock state wouldn't
+      // update until something else (e.g. a full page reload) invalidated
+      // it. hardRefresh() explicitly invalidates the cache before fetching.
+      hardRefresh();
+    } catch (err: any) {
       console.error('Failed to update status:', err);
+      const description = err?.code === 'DEPENDENCY_EXISTS'
+        ? err.message
+        : err?.message || 'Failed to update contact status.';
+      toast({ variant: 'destructive', title: 'Could not update status', description });
     }
   };
 
@@ -270,19 +282,68 @@ const ContactViewPage: React.FC = () => {
                 ) : (
                   <User className="h-4 w-4" style={{ color: colors.brand.primary }} />
                 )}
+                {contact.contact_number && (
+                  <span
+                    className="px-2 py-0.5 rounded-md text-xs font-semibold"
+                    style={{
+                      fontFamily: 'ui-monospace, monospace',
+                      backgroundColor: colors.utility.primaryBackground,
+                      color: colors.utility.secondaryText,
+                      border: `1px solid ${colors.utility.primaryText}15`,
+                    }}
+                  >
+                    {contact.contact_number}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
                 {primaryEmail && <span>{primaryEmail.value}</span>}
-                <span
-                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase"
-                  style={{
-                    backgroundColor: contact.status === 'active' ? '#22c55e20' : contact.status === 'inactive' ? '#f59e0b20' : '#ef444420',
-                    color: contact.status === 'active' ? '#22c55e' : contact.status === 'inactive' ? '#f59e0b' : '#ef4444'
-                  }}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />
-                  {contact.status}
-                </span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsStatusMenuOpen(o => !o)}
+                    disabled={updateStatusHook.loading}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase transition-opacity hover:opacity-80 disabled:opacity-60"
+                    style={{
+                      backgroundColor: contact.status === 'active' ? '#22c55e20' : contact.status === 'inactive' ? '#f59e0b20' : '#ef444420',
+                      color: contact.status === 'active' ? '#22c55e' : contact.status === 'inactive' ? '#f59e0b' : '#ef4444'
+                    }}
+                  >
+                    {updateStatusHook.loading
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />}
+                    {contact.status}
+                    <ChevronDown className="h-3 w-3" />
+                  </button>
+
+                  {isStatusMenuOpen && (
+                    <div
+                      className="absolute top-full left-0 mt-1 py-1 rounded-lg shadow-xl border min-w-[140px] z-10 normal-case"
+                      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+                    >
+                      {(['active', 'inactive', 'archived'] as const).map(statusOption => (
+                        <button
+                          key={statusOption}
+                          type="button"
+                          onClick={() => {
+                            setIsStatusMenuOpen(false);
+                            if (statusOption === contact.status) return;
+                            if (statusOption === 'archived') {
+                              setShowArchiveDialog(true);
+                            } else {
+                              handleStatusUpdate(statusOption);
+                            }
+                          }}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-left transition-colors hover:opacity-80"
+                          style={{ color: colors.utility.primaryText }}
+                        >
+                          <span className="capitalize">{statusOption}</span>
+                          {statusOption === contact.status && <Check className="h-3 w-3" style={{ color: colors.brand.primary }} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {/* Classification Badges */}
                 {classifications.map(cls => {
                   const clsConfig: Record<string, { label: string; color: string }> = {
@@ -305,18 +366,6 @@ const ContactViewPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Right: Edit */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className="px-4 py-2 rounded-lg flex items-center gap-2 transition-colors hover:opacity-80"
-            style={{ backgroundColor: colors.utility.primaryBackground, border: `1px solid ${colors.utility.primaryText}20`, color: colors.utility.primaryText }}
-          >
-            <Edit className="h-4 w-4" />
-            Edit
-          </button>
         </div>
       </header>
 
@@ -400,7 +449,7 @@ const ContactViewPage: React.FC = () => {
       <div className="flex-1 overflow-y-auto">
         {/* Profile Tab — identity-first, inline section edit (no cockpit needed) */}
         {activeTab === 'profile' && (
-          <ContactProfileTab contact={contact as any} colors={colors} onSaved={refetch} />
+          <ContactProfileTab contact={contact as any} colors={colors} onSaved={refetch} readOnly={contact.status === 'archived'} />
         )}
 
         {/* Cockpit loading skeleton (analytics tabs only) */}

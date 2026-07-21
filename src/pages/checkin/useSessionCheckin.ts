@@ -59,6 +59,20 @@ export interface SubmitPayload {
   responses?: Record<string, unknown> | null;
   form_template_id?: string | null;
   form_template_version?: number | null;
+  device_token?: string | null;
+}
+
+// ---- Device recognition (returning browser on the same chapter QR) ----
+export interface CheckinDeviceMemberMatch { contact_id: string; name: string; membership_contract_id: string | null; phone: string | null }
+export interface CheckinDeviceSubstituteMatch { contact_id: string; name: string; phone: string | null }
+export interface CheckinDeviceLastMember { contact_id: string; name: string; membership_contract_id: string | null }
+export interface CheckinDeviceGuestMatch { contact_id: string; name: string; phone: string | null; email: string | null; company: string | null }
+export interface CheckinDeviceLookup {
+  ok: boolean; found: boolean; role?: 'member' | 'substitute' | 'guest'; reason?: string;
+  member?: CheckinDeviceMemberMatch;
+  substitute?: CheckinDeviceSubstituteMatch;
+  last_member?: CheckinDeviceLastMember;
+  guest?: CheckinDeviceGuestMatch;
 }
 
 export const sessionCheckinApi = {
@@ -74,10 +88,14 @@ export const sessionCheckinApi = {
   async lookup(token: string, phone: string): Promise<{ ok: boolean; found: boolean; member?: CheckinMember }> {
     return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/lookup`, { phone }));
   },
+  async deviceLookup(token: string, deviceToken: string): Promise<CheckinDeviceLookup> {
+    return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/device-lookup`, { device_token: deviceToken }));
+  },
   async guest(token: string, payload: {
     name: string; phone?: string; company?: string; email?: string;
     status: 'present' | 'apologies'; responses?: Record<string, unknown> | null;
     form_template_id?: string | null; form_template_version?: number | null;
+    device_token?: string | null;
   }): Promise<{ ok: boolean; kind?: string; contact_id?: string; reason?: string }> {
     return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/guest`, payload));
   },
@@ -85,6 +103,7 @@ export const sessionCheckinApi = {
     member_id: string; sub_name: string; sub_phone?: string;
     status: 'present' | 'apologies'; responses?: Record<string, unknown> | null;
     form_template_id?: string | null; form_template_version?: number | null;
+    device_token?: string | null;
   }): Promise<CheckinHistory> {
     return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/substitute`, payload));
   },
@@ -96,5 +115,36 @@ export const sessionCheckinApi = {
   },
 };
 
-// localStorage key so a returning member on the same device is auto-recognised.
-export const CHECKIN_PHONE_KEY = 'cn_checkin_phone';
+// A random per-browser token, persisted in localStorage, so a returning
+// visitor on the same browser is auto-recognised on rescan. This is NOT a
+// real device identifier — no such thing is readable from a web page — it
+// only proves "same browser as last time," and only within this origin.
+export const CHECKIN_DEVICE_KEY = 'cn_checkin_device';
+
+const genDeviceToken = (): string => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { /* fall through to the manual fallback below */ }
+  return `dev_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+};
+
+// Returns the stored token, minting and persisting one on first visit.
+export const getOrCreateDeviceToken = (): string => {
+  try {
+    const existing = window.localStorage.getItem(CHECKIN_DEVICE_KEY);
+    if (existing) return existing;
+    const fresh = genDeviceToken();
+    window.localStorage.setItem(CHECKIN_DEVICE_KEY, fresh);
+    return fresh;
+  } catch {
+    return genDeviceToken(); // storage unavailable (e.g. private mode) — this visit just won't be remembered
+  }
+};
+
+// Rotates the stored token so this browser is "forgotten" going forward —
+// used when someone says "not you" / starts over.
+export const forgetDeviceToken = (): string => {
+  const fresh = genDeviceToken();
+  try { window.localStorage.setItem(CHECKIN_DEVICE_KEY, fresh); } catch { /* ignore */ }
+  return fresh;
+};

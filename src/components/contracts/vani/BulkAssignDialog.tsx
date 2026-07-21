@@ -110,9 +110,9 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   const { data: contacts, loading } = useContactList({
     search: search.trim().length >= 2 ? search.trim() : undefined,
     classifications: classFilter === 'all' ? [] : [classFilter],
-    per_page: 100,
+    limit: 100,
     enabled: isOpen && !running && !finished,
-  } as any);
+  });
 
   const selectedIds = Object.keys(selected);
   const selectedCount = selectedIds.length;

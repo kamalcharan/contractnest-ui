@@ -967,6 +967,15 @@ export const API_ENDPOINTS = {
     INVOICES: (id: string) => `/api/contracts/${id}/invoices`,
     RECORD_PAYMENT: (id: string) => `/api/contracts/${id}/invoices/record-payment`,
     CANCEL_INVOICE: (id: string) => `/api/contracts/${id}/invoices/cancel`,
+
+    // Credit / Deposit
+    SET_CREDIT: (id: string) => `/api/contracts/${id}/credit`,
+    APPLY_CREDIT: (id: string) => `/api/contracts/${id}/credit/apply`,
+    FIND_BUYER_PENDING_CREDITS: (buyerId: string, excludeContractId?: string) =>
+      `/api/contracts/credit-pending?buyer_id=${buyerId}${excludeContractId ? `&exclude_contract_id=${excludeContractId}` : ''}`,
+    SET_DEPOSIT: (id: string) => `/api/contracts/${id}/deposit`,
+    RECLAIM_DEPOSIT: (id: string) => `/api/contracts/${id}/deposit/reclaim`,
+
     NOTIFY: (id: string) => `/api/contracts/${id}/notify`,
     BUYER_ADD_EQUIPMENT: (id: string) => `/api/contracts/${id}/buyer-equipment`,
     BUYER_REMOVE_EQUIPMENT: (id: string) => `/api/contracts/${id}/buyer-equipment`,

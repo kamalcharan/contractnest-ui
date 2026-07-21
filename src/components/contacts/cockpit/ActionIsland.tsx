@@ -145,15 +145,20 @@ const ActionIsland: React.FC<ActionIslandProps> = ({
             <>
               <button
                 onClick={onProfileClick}
+                disabled={isDisabled}
                 className={`
                   flex items-center gap-2 px-4 py-2 rounded-full
                   font-semibold text-sm transition-all
-                  hover:scale-105 active:scale-95
+                  ${isDisabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:scale-105 active:scale-95'
+                  }
                 `}
                 style={{
                   backgroundColor: isDarkMode ? '#6366F1' : '#4F46E5',
                   color: 'white',
                 }}
+                title={isDisabled ? 'Contact is archived — reactivate to edit' : undefined}
               >
                 <User className="h-4 w-4" />
                 <span>Profile</span>

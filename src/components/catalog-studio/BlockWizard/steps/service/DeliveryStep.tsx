@@ -26,6 +26,13 @@ interface DeliveryStepProps {
     // Audience: who receives each cycle — the contract's buyer (individual/1:1)
     // or a group that checks in (group/1:N). The engine branches on this field.
     audience?: 'individual' | 'group';
+    // Group Session attendance policy — how many no-shows / substitute
+    // check-ins a member is allowed before the roster flags them. Becomes
+    // part of every member's own contract (config snapshots onto
+    // t_contract_blocks.custom_fields at signing) — a real T&C, not a
+    // dashboard toggle. Undefined/blank = no cap.
+    maxNoShows?: number;
+    maxSubstitutes?: number;
   };
   onChange: (field: string, value: unknown) => void;
 }
@@ -118,6 +125,14 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   const cycleDaysForDisplay =
     formData.cycleDays ??
     (formData as { meta?: { serviceCycles?: { days?: number } } }).meta?.serviceCycles?.days;
+  // Attendance policy — hydrates from the top-level wizard field, falling
+  // back to an existing block's meta (edit mode), same pattern as above.
+  const maxNoShowsForDisplay =
+    formData.maxNoShows ??
+    (formData as { meta?: { maxNoShows?: number } }).meta?.maxNoShows;
+  const maxSubstitutesForDisplay =
+    formData.maxSubstitutes ??
+    (formData as { meta?: { maxSubstitutes?: number } }).meta?.maxSubstitutes;
   const sampleDates = React.useMemo(() => {
     const days = cycleDaysForDisplay;
     if (!requiresCycles || !days || days < 1) return [] as Date[];
@@ -189,6 +204,48 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
             })}
           </div>
         </div>
+
+        {/* Attendance policy — Group Session only. How many no-shows / substitute
+            check-ins a member is allowed before the roster flags them. This
+            becomes part of every member's own contract (config snapshots onto
+            the contract at signing), not a live dashboard setting. */}
+        {audience === 'group' && (
+          <div className="p-6 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-200" style={cardStyle}>
+            <label className="block text-sm font-semibold mb-1" style={labelStyle}>
+              Attendance policy
+            </label>
+            <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
+              How many no-shows and substitute check-ins a member may have before the roster flags them.
+              This becomes part of each member&apos;s own contract when they join — leave blank for no cap.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>Max no-shows allowed</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="No cap"
+                  value={maxNoShowsForDisplay ?? ''}
+                  onChange={(e) => onChange('maxNoShows', e.target.value === '' ? undefined : parseInt(e.target.value))}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ ...inputStyle, borderRadius: '0.75rem' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>Max substitute check-ins allowed</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="No cap"
+                  value={maxSubstitutesForDisplay ?? ''}
+                  onChange={(e) => onChange('maxSubstitutes', e.target.value === '' ? undefined : parseInt(e.target.value))}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ ...inputStyle, borderRadius: '0.75rem' }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Billing-only toggle — fees/dues blocks that never create service visits */}
         <div className="p-6 rounded-xl border" style={cardStyle}>

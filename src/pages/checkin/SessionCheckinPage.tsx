@@ -15,9 +15,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-  sessionCheckinApi,
+  sessionCheckinApi, getOrCreateDeviceToken, forgetDeviceToken,
   type CheckinResolve, type CheckinMember, type CheckinHistory, type BillingRow,
   type CheckinForm, type CheckinField, type CheckinFormSchema, type CheckinPaymentConfig,
+  type CheckinDeviceLookup,
 } from './useSessionCheckin';
 import { QrCode } from '@/utils/qrcodegen';
 import { countries } from '@/utils/constants/countries';
@@ -191,6 +192,18 @@ const SessionCheckinPage: React.FC = () => {
   const [subForMember, setSubForMember] = useState<CheckinMember | null>(null);
   const [subName, setSubName] = useState('');
 
+  // Device recognition (returning browser on this chapter's QR)
+  const [deviceToken, setDeviceToken] = useState<string>(() => getOrCreateDeviceToken());
+  const [deviceChecking, setDeviceChecking] = useState(true);
+  const [deviceMatch, setDeviceMatch] = useState<CheckinDeviceLookup | null>(null);
+  const [deviceDismissed, setDeviceDismissed] = useState(false);
+  const [deviceConfirming, setDeviceConfirming] = useState(false);
+  // Recognised phone numbers, used at submit time in place of the typed
+  // p1Num/poNum fields (which stay blank on the silent/confirm paths).
+  const [recognizedMemberPhone, setRecognizedMemberPhone] = useState('');
+  const [recognizedSubPhone, setRecognizedSubPhone] = useState('');
+  const [recognizedGuestPhone, setRecognizedGuestPhone] = useState('');
+
   const phone = fullPhone(p1Num, p1Cc);
 
   const [status, setStatus] = useState<'present' | 'apologies'>('present');
@@ -205,13 +218,30 @@ const SessionCheckinPage: React.FC = () => {
   useEffect(() => {
     let alive = true;
     (async () => {
+      let resolved: CheckinResolve | null = null;
       try {
         const r = await sessionCheckinApi.resolve(token);
         if (!alive) return;
         if (!r.ok) { setErr('This check-in link is invalid or has expired.'); }
-        else setResolve(r);
+        else { setResolve(r); resolved = r; }
       } catch { if (alive) setErr('Could not reach the check-in service.'); }
       finally { if (alive) setLoading(false); }
+      // Device recognition runs after resolve succeeds (needs today's
+      // occurrence date to compute alreadyChecked correctly for a
+      // silently-recognised member) — best-effort, never blocks the page.
+      if (!alive || !resolved) { if (alive) setDeviceChecking(false); return; }
+      try {
+        const dl = await sessionCheckinApi.deviceLookup(token, deviceToken);
+        if (!alive) return;
+        if (dl.ok && dl.found) {
+          if (dl.role === 'member' && dl.member) {
+            await applyMemberMatch(dl.member, resolved, dl.member.phone || undefined);
+          } else if (dl.role === 'substitute' || dl.role === 'guest') {
+            setDeviceMatch(dl);
+          }
+        }
+      } catch { /* device recognition is optional — phone entry still works */ }
+      finally { if (alive) setDeviceChecking(false); }
     })();
     (async () => {
       try {
@@ -253,6 +283,19 @@ const SessionCheckinPage: React.FC = () => {
 
   const atStep2 = !!member || (notFound && guestConfirmed);
 
+  // Shared by identify() (typed phone) and the on-mount device recognition
+  // (silent, no typing) — both land on the same Step 2 attendance screen.
+  const applyMemberMatch = async (m: CheckinMember, resolvedData: CheckinResolve | null, phoneForSubmit?: string) => {
+    setMember(m);
+    if (phoneForSubmit) setRecognizedMemberPhone(phoneForSubmit);
+    try {
+      const h = await sessionCheckinApi.history(token, m.contact_id);
+      setHistory(h);
+      const today = resolvedData?.occurrence?.date;
+      if (today && (h?.attendance || []).some((a) => a.date === today)) setAlreadyChecked(true);
+    } catch { /* history is optional — attendance still works without it */ }
+  };
+
   const identify = async () => {
     const v = validatePhoneByCountry(p1Num, p1Cc);
     if (!v.isValid) { setErr(v.error || 'Enter a valid mobile number.'); return; }
@@ -261,17 +304,57 @@ const SessionCheckinPage: React.FC = () => {
     try {
       const r = await sessionCheckinApi.lookup(token, phone);
       if (r.found && r.member) {
-        setMember(r.member);
-        const h = await sessionCheckinApi.history(token, r.member.contact_id);
-        setHistory(h);
-        // (#6) Already attended today's session? -> show it + payment options.
-        const today = resolve?.occurrence?.date;
-        if (today && (h?.attendance || []).some((a) => a.date === today)) setAlreadyChecked(true);
+        await applyMemberMatch(r.member, resolve);
       } else {
         setNotFound(true);
       }
     } catch { setErr('Lookup failed. Try again.'); }
     finally { setChecking(false); }
+  };
+
+  // Substitute/guest device match: confirmed with one tap, or dismissed
+  // ("not me") which forgets this browser going forward.
+  const confirmDeviceSubstitute = () => {
+    if (!deviceMatch?.substitute || !deviceMatch.last_member) return;
+    setDeviceConfirming(true);
+    setNotFound(true); setNotFoundKind('substitute');
+    setSubName(deviceMatch.substitute.name);
+    setRecognizedSubPhone(deviceMatch.substitute.phone || '');
+    setSubForMember({
+      contact_id: deviceMatch.last_member.contact_id,
+      name: deviceMatch.last_member.name,
+      membership_contract_id: deviceMatch.last_member.membership_contract_id,
+    });
+    setGuestConfirmed(true);
+  };
+
+  const confirmDeviceGuest = () => {
+    if (!deviceMatch?.guest) return;
+    setDeviceConfirming(true);
+    setNotFound(true); setNotFoundKind('guest');
+    setFirstTimerName(deviceMatch.guest.name);
+    setGuestCompany(deviceMatch.guest.company || '');
+    setGuestEmail(deviceMatch.guest.email || '');
+    setRecognizedGuestPhone(deviceMatch.guest.phone || '');
+    setGuestConfirmed(true);
+  };
+
+  const dismissDeviceMatch = () => {
+    setDeviceMatch(null);
+    setDeviceDismissed(true);
+    setDeviceToken(forgetDeviceToken());
+  };
+
+  // Same recognised substitute, but standing in for someone else today —
+  // keep the browser recognised as this substitute (last_member updates on
+  // the next successful submit), just ask which member this time.
+  const substituteDifferentMemberToday = () => {
+    if (!deviceMatch?.substitute) return;
+    setDeviceMatch(null); // clear the confirm card without forgetting the device token
+    setNotFound(true); setNotFoundKind('substitute'); setGuestConfirmed(false);
+    setSubName(deviceMatch.substitute.name);
+    setRecognizedSubPhone(deviceMatch.substitute.phone || '');
+    setSubForMember(null);
   };
 
   // Substitute: look up the member being stood in for by their mobile number.
@@ -292,6 +375,10 @@ const SessionCheckinPage: React.FC = () => {
     setHistory(null); setSubForMember(null); setSubName(''); setPmNum(''); setPoNum('');
     setFirstTimerName(''); setGuestCompany(''); setGuestEmail(''); setErr(null);
     setP1Num(''); setPayEventId(''); setUpiRef(''); setStatus('present');
+    // Forget this browser too — "not you" means the next scan should ask again.
+    setDeviceMatch(null); setDeviceDismissed(true); setDeviceConfirming(false);
+    setRecognizedMemberPhone(''); setRecognizedSubPhone(''); setRecognizedGuestPhone('');
+    setDeviceToken(forgetDeviceToken());
   };
 
   const setResponse = (id: string, value: unknown) => {
@@ -332,12 +419,13 @@ const SessionCheckinPage: React.FC = () => {
       };
 
       if (member) {
-        // Recognised member
+        // Recognised member (typed phone, or silently via device recognition)
         await sessionCheckinApi.submit(token, {
           member_id: member.contact_id,
           member_name: member.name,
-          member_phone: phone,
+          member_phone: recognizedMemberPhone || phone,
           status, payment, responses: fullResponses, ...formIds,
+          device_token: deviceToken,
         });
       } else if (notFoundKind === 'substitute' && subForMember) {
         // Standing in for a member → member marked present, substitute saved
@@ -345,17 +433,19 @@ const SessionCheckinPage: React.FC = () => {
         await sessionCheckinApi.substitute(token, {
           member_id: subForMember.contact_id,
           sub_name: subName,
-          sub_phone: fullPhone(poNum, poCc),
+          sub_phone: recognizedSubPhone || fullPhone(poNum, poCc),
           status, responses: fullResponses, ...formIds,
+          device_token: deviceToken,
         });
       } else {
         // Guest → own contact tagged 'guest'
         await sessionCheckinApi.guest(token, {
           name: firstTimerName,
-          phone,
+          phone: recognizedGuestPhone || phone,
           company: guestCompany || undefined,
           email: guestEmail || undefined,
           status, responses: fullResponses, ...formIds,
+          device_token: deviceToken,
         });
       }
       setDone(true);
@@ -369,6 +459,10 @@ const SessionCheckinPage: React.FC = () => {
   const chapterName = resolve?.contract_name || 'Session Check-in';
   const tenantName = resolve?.business_name;
   const occ = resolve?.occurrence;
+  // Substitute/guest device recognition needs a one-tap confirm before it's
+  // treated as identified; member recognition is silent (member is already
+  // set by applyMemberMatch by the time this would matter).
+  const showDeviceConfirm = !!deviceMatch && deviceMatch.role !== 'member' && !deviceDismissed && !deviceConfirming && !atStep2;
 
   const inputStyle = INPUT_STYLE;
   const labelStyle = LABEL_STYLE;
@@ -546,20 +640,66 @@ const SessionCheckinPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Step 1 · identify */}
-      {!atStep2 && !notFound && (
+      {/* Recognised this browser as a substitute or guest — one-tap confirm */}
+      {showDeviceConfirm && deviceMatch?.role === 'substitute' && deviceMatch.substitute && deviceMatch.last_member && (
         <Card>
-          <PhoneField label="Your mobile number" cc={p1Cc} num={p1Num} onCc={setP1Cc} onNum={setP1Num} onEnter={identify} />
-          {err && <p style={{ color: BRAND.err, fontSize: 13, marginBottom: 0, marginTop: 8 }}>{err}</p>}
-          <button onClick={identify} disabled={checking}
-            style={{ width: '100%', marginTop: 14, padding: 14, border: 'none', borderRadius: 12,
-              background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, cursor: 'pointer',
-              opacity: checking ? 0.7 : 1 }}>
-            {checking ? 'Checking…' : 'Continue'}
-          </button>
-          <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
-            We use your number to recognise you on the roster.
+          <div style={{ fontWeight: 800, color: BRAND.ink, fontSize: 16 }}>Welcome back, {deviceMatch.substitute.name}</div>
+          <p style={{ marginTop: 6, color: BRAND.sub, fontSize: 13.5 }}>
+            Standing in for <strong style={{ color: BRAND.ink }}>{deviceMatch.last_member.name}</strong> again today?
           </p>
+          <button onClick={confirmDeviceSubstitute}
+            style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 12,
+              background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+            Yes, continue
+          </button>
+          <button onClick={substituteDifferentMemberToday}
+            style={{ width: '100%', marginTop: 10, padding: 12, border: `1px solid ${BRAND.field}`, borderRadius: 12,
+              background: '#fff', color: BRAND.ink, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            Different member today
+          </button>
+          <button onClick={dismissDeviceMatch}
+            style={{ marginTop: 10, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+            Not you? Use your number instead
+          </button>
+        </Card>
+      )}
+
+      {showDeviceConfirm && deviceMatch?.role === 'guest' && deviceMatch.guest && (
+        <Card>
+          <div style={{ fontWeight: 800, color: BRAND.ink, fontSize: 16 }}>Welcome back, {deviceMatch.guest.name}</div>
+          <p style={{ marginTop: 6, color: BRAND.sub, fontSize: 13.5 }}>Check in as a guest again today?</p>
+          <button onClick={confirmDeviceGuest}
+            style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 12,
+              background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+            Yes, continue
+          </button>
+          <button onClick={dismissDeviceMatch}
+            style={{ marginTop: 10, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
+            Not you? Use your number instead
+          </button>
+        </Card>
+      )}
+
+      {/* Step 1 · identify (skipped while device recognition is still checking, or once it found a match above) */}
+      {!atStep2 && !notFound && !showDeviceConfirm && (
+        <Card>
+          {deviceChecking ? (
+            <p style={{ fontSize: 13.5, color: BRAND.sub, textAlign: 'center', margin: 0 }}>Checking this device…</p>
+          ) : (
+            <>
+              <PhoneField label="Your mobile number" cc={p1Cc} num={p1Num} onCc={setP1Cc} onNum={setP1Num} onEnter={identify} />
+              {err && <p style={{ color: BRAND.err, fontSize: 13, marginBottom: 0, marginTop: 8 }}>{err}</p>}
+              <button onClick={identify} disabled={checking}
+                style={{ width: '100%', marginTop: 14, padding: 14, border: 'none', borderRadius: 12,
+                  background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, cursor: 'pointer',
+                  opacity: checking ? 0.7 : 1 }}>
+                {checking ? 'Checking…' : 'Continue'}
+              </button>
+              <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
+                We use your number to recognise you on the roster.
+              </p>
+            </>
+          )}
         </Card>
       )}
 
@@ -633,10 +773,14 @@ const SessionCheckinPage: React.FC = () => {
                     <label style={labelStyle}>Your name <span style={{ color: BRAND.err }}>*</span></label>
                     <input value={subName} onChange={(e) => setSubName(e.target.value)} placeholder="Full name" style={inputStyle} />
                   </div>
-                  <div style={{ marginTop: 12 }}>
-                    <PhoneField label="Your mobile number" cc={poCc} num={poNum} onCc={setPoCc} onNum={setPoNum} required />
-                  </div>
-                  <button onClick={() => { if (subName.trim() && validatePhoneByCountry(poNum, poCc).isValid) setGuestConfirmed(true); else setErr('Enter your name and a valid mobile number.'); }} disabled={!subName.trim()}
+                  {recognizedSubPhone ? (
+                    <p style={{ marginTop: 12, fontSize: 12.5, color: BRAND.sub }}>Mobile: {recognizedSubPhone}</p>
+                  ) : (
+                    <div style={{ marginTop: 12 }}>
+                      <PhoneField label="Your mobile number" cc={poCc} num={poNum} onCc={setPoCc} onNum={setPoNum} required />
+                    </div>
+                  )}
+                  <button onClick={() => { const phoneOk = !!recognizedSubPhone || validatePhoneByCountry(poNum, poCc).isValid; if (subName.trim() && phoneOk) setGuestConfirmed(true); else setErr('Enter your name and a valid mobile number.'); }} disabled={!subName.trim()}
                     style={{ width: '100%', marginTop: 16, padding: 13, border: 'none', borderRadius: 12,
                       background: subName.trim() ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
                     Continue

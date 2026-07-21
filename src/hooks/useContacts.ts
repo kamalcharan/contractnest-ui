@@ -162,6 +162,7 @@ export interface ContactFilters {
 
 export interface Contact {
   id: string;
+  contact_number?: string;
   type: 'individual' | 'corporate';
   status: 'active' | 'inactive' | 'archived';
   name?: string;
@@ -183,6 +184,10 @@ export interface Contact {
   created_at: string;
   updated_at: string;
   is_live: boolean;
+  /** Values sourced from external systems (e.g. a member roster import) —
+   *  not editable via the create/edit contact forms, populated only by
+   *  import. e.g. { member_id: "HYDBHA2750" }. */
+  external_data?: Record<string, string>;
 }
 
 export interface ContactChannel {
@@ -747,11 +752,20 @@ export const useUpdateContactStatus = () => {
       if (response.data.success) {
         return response.data.data;
       } else {
-        throw new Error(response.data.error || 'Failed to update contact status');
+        const err = new Error(response.data.error || 'Failed to update contact status') as Error & { code?: string; dependencies?: any };
+        err.code = response.data.code;
+        err.dependencies = response.data.dependencies;
+        throw err;
       }
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || err.message || 'Failed to update status';
       setError(errorMsg);
+      if (!err.code) {
+        err.code = err.response?.data?.code;
+      }
+      if (!err.dependencies) {
+        err.dependencies = err.response?.data?.dependencies;
+      }
       throw err;
     } finally {
       setLoading(false);

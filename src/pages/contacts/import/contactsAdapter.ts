@@ -24,6 +24,7 @@ export type TargetFieldKey =
   | 'designation'
   | 'category'
   | 'tags'
+  | 'member_id'
   | 'reference'
   | 'ignore';
 
@@ -42,6 +43,7 @@ export const TARGET_FIELDS: TargetField[] = [
   { key: 'designation', label: 'Designation', hint: 'Role or title (e.g. President, Member)' },
   { key: 'category', label: 'Category → Industry', hint: 'Business category, mapped to industries' },
   { key: 'tags', label: 'Tags', hint: 'Tag name(s) — multiple separated by / or ,' },
+  { key: 'member_id', label: 'Member ID', hint: 'External member ID from the source system — stored on the contact, shown on the profile' },
   { key: 'reference', label: 'Reference Id', hint: 'External id, stored in notes' },
   { key: 'ignore', label: 'Ignore', hint: 'Skip this column' },
 ];
@@ -56,6 +58,7 @@ export interface ImportRow {
   designation: string;
   category: string;
   tags: string[];
+  memberId: string;
   reference: string;
   errors: string[];
   include: boolean;
@@ -122,7 +125,8 @@ const HEADER_PATTERNS: Array<{ field: TargetFieldKey; patterns: RegExp[] }> = [
   { field: 'designation', patterns: [/designation/i, /^role$/i, /title/i, /position/i] },
   { field: 'category', patterns: [/category/i, /industry/i, /business\s*type/i, /segment/i] },
   { field: 'tags', patterns: [/^tags?$/i, /labels?/i] },
-  { field: 'reference', patterns: [/member\s*id/i, /\bid\b/i, /reference/i, /reg\s*no/i, /code/i] },
+  { field: 'member_id', patterns: [/member\s*id/i] },
+  { field: 'reference', patterns: [/\bid\b/i, /reference/i, /reg\s*no/i, /code/i] },
 ];
 
 /** Suggest a target field per column header; unmatched columns -> 'ignore'. */
@@ -191,6 +195,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
   const designationCols = col('designation');
   const categoryCols = col('category');
   const tagCols = col('tags');
+  const memberIdCols = col('member_id');
   const referenceCols = col('reference');
 
   const firstValue = (row: string[], cols: number[]): string => {
@@ -208,6 +213,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
     const tags = Array.from(new Set(
       tagCols.flatMap((c) => splitList(raw[c] || ''))
     ));
+    const memberId = firstValue(raw, memberIdCols);
     const reference = firstValue(raw, referenceCols);
 
     const errors: string[] = [];
@@ -227,6 +233,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
       designation,
       category,
       tags,
+      memberId,
       reference,
       errors,
       include: errors.length === 0,
@@ -360,6 +367,7 @@ export function buildContactPayload(
     tags: resolveRowTags(row.tags, batch.tags, tagCatalog),
     industries: industryId ? [industryId] : [],
     notes: noteParts.length > 0 ? noteParts.join('\n') : undefined,
+    external_data: row.memberId ? { member_id: row.memberId } : undefined,
   };
 }
 

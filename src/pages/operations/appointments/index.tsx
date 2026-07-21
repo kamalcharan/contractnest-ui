@@ -82,12 +82,24 @@ const AppointmentsPage: React.FC = () => {
   const [acceptSlot, setAcceptSlot] = useState<string>('');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | '7d' | '30d'>('all');
 
   const appointments = appointmentsQuery.data || [];
 
+  const filteredAppointments = useMemo(() => {
+    if (dateFilter === 'all') return appointments;
+    const horizonDays = dateFilter === '7d' ? 7 : 30;
+    const cutoff = Date.now() + horizonDays * 86_400_000;
+    return appointments.filter((a) => {
+      const dateStr = a.status === 'accepted' && a.scheduled_at ? a.scheduled_at : a.event_date;
+      const t = new Date(dateStr).getTime();
+      return isNaN(t) ? true : t <= cutoff;
+    });
+  }, [appointments, dateFilter]);
+
   const columns = useMemo(() => {
     const by = (statuses: AppointmentStatus[]) =>
-      appointments.filter((a) => statuses.includes(a.status));
+      filteredAppointments.filter((a) => statuses.includes(a.status));
     return {
       requested: by(['requested']),
       accepted: by(['accepted']),
@@ -95,7 +107,7 @@ const AppointmentsPage: React.FC = () => {
       followUp: by(['no_response']),
       closed: by(['completed', 'declined']),
     };
-  }, [appointments]);
+  }, [filteredAppointments]);
 
   const transition = async (
     appt: Appointment,
@@ -131,6 +143,8 @@ const AppointmentsPage: React.FC = () => {
   const renderCard = (appt: Appointment, column: string) => {
     const busy = actioningId === appt.id;
     const stale = daysSince(appt.last_activity_at);
+    const isGroupSession = !appt.contract_id;
+    const isReschedulingInPlace = acceptingId === appt.id && appt.status === 'accepted';
 
     return (
       <div
@@ -150,14 +164,26 @@ const AppointmentsPage: React.FC = () => {
               {appt.block_name || 'Service visit'}
               {appt.task_id ? ` · ${appt.task_id}` : ''}
             </p>
+            {appt.contract_number && (
+              <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
+                {appt.contract_number}
+              </p>
+            )}
+            {isGroupSession && appt.assigned_to_name && (
+              <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
+                Chaired by {appt.assigned_to_name}
+              </p>
+            )}
           </div>
-          <button
-            onClick={() => navigate(`/contracts/${appt.contract_id}`)}
-            title={`Open ${appt.contract_number || 'contract'}`}
-            className="flex-shrink-0"
-          >
-            <ExternalLink className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
-          </button>
+          {!isGroupSession && (
+            <button
+              onClick={() => navigate(`/contracts/${appt.contract_id}`)}
+              title={`Open ${appt.contract_number || 'contract'}`}
+              className="flex-shrink-0"
+            >
+              <ExternalLink className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+            </button>
+          )}
         </div>
 
         <div className="space-y-0.5">
@@ -186,9 +212,12 @@ const AppointmentsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Accept inline slot picker */}
+        {/* Accept / reschedule inline slot picker */}
         {acceptingId === appt.id ? (
           <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold" style={{ color: colors.utility.secondaryText }}>
+              {isReschedulingInPlace ? 'New date & time' : 'Confirm date & time'}
+            </p>
             <input
               type="datetime-local"
               value={acceptSlot}
@@ -208,7 +237,7 @@ const AppointmentsPage: React.FC = () => {
                 style={{ backgroundColor: colors.semantic.success, color: '#fff', opacity: busy ? 0.6 : 1 }}
               >
                 {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                Confirm slot
+                {isReschedulingInPlace ? 'Confirm new time' : 'Confirm slot'}
               </button>
               <button
                 onClick={() => setAcceptingId(null)}
@@ -232,15 +261,29 @@ const AppointmentsPage: React.FC = () => {
                 <CheckCircle2 className="h-3 w-3" /> Accept
               </button>
             )}
-            {(appt.status === 'requested' || appt.status === 'accepted') && (
-              <button
-                onClick={() => transition(appt, 'rescheduled')}
-                disabled={busy}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border"
-                style={{ borderColor: colors.semantic.warning + '60', color: colors.semantic.warning }}
-              >
-                <RotateCcw className="h-3 w-3" /> Reschedule
-              </button>
+            {isGroupSession ? (
+              (appt.status === 'requested' || appt.status === 'accepted') && (
+                <button
+                  onClick={() => navigate('/group-sessions')}
+                  disabled={busy}
+                  title="Reschedule and cancellations for Group Sessions are managed on the Group Sessions dashboard"
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border"
+                  style={{ borderColor: colors.utility.secondaryText + '30', color: colors.utility.secondaryText }}
+                >
+                  <ExternalLink className="h-3 w-3" /> Managed in Group Sessions
+                </button>
+              )
+            ) : (
+              (appt.status === 'requested' || appt.status === 'accepted') && (
+                <button
+                  onClick={() => startAccept(appt)}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-semibold border"
+                  style={{ borderColor: colors.semantic.warning + '60', color: colors.semantic.warning }}
+                >
+                  <RotateCcw className="h-3 w-3" /> Reschedule
+                </button>
+              )
             )}
             {appt.status === 'accepted' && (
               <button
@@ -272,7 +315,7 @@ const AppointmentsPage: React.FC = () => {
                 <RotateCcw className="h-3 w-3" /> Re-request
               </button>
             )}
-            {appt.status !== 'completed' && appt.status !== 'declined' && (
+            {!isGroupSession && appt.status !== 'completed' && appt.status !== 'declined' && (
               <button
                 onClick={() => {
                   if (window.confirm('Mark as "no appointment needed"? The event stays on the Service Schedule.')) {
@@ -361,6 +404,25 @@ const AppointmentsPage: React.FC = () => {
             The scanner requests appointments ~6 days before each service visit — you agree the slot with the
             customer and record it here. Accepting updates the Service Schedule.
           </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border p-0.5" style={{ borderColor: colors.utility.secondaryText + '25' }}>
+          {([
+            { key: 'all', label: 'All' },
+            { key: '7d', label: 'Next 7 days' },
+            { key: '30d', label: 'Next 30 days' },
+          ] as const).map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => setDateFilter(opt.key)}
+              className="px-2.5 py-1.5 rounded-md text-xs font-semibold"
+              style={{
+                backgroundColor: dateFilter === opt.key ? colors.brand.primary : 'transparent',
+                color: dateFilter === opt.key ? '#fff' : colors.utility.secondaryText,
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
         <button
           onClick={() => appointmentsQuery.refetch()}
@@ -459,16 +521,19 @@ const AppointmentsPage: React.FC = () => {
                       {appt.buyer_name || 'Unknown customer'}
                     </span>
                     <span className="text-[11px] truncate" style={{ color: colors.utility.secondaryText }}>
-                      {appt.block_name || 'Service visit'} · {formatDate(appt.event_date)}
+                      {appt.block_name || 'Service visit'}
+                      {appt.contract_number ? ` · ${appt.contract_number}` : ''} · {formatDate(appt.event_date)}
                       {appt.status === 'completed' && appt.scheduled_at ? ` · done ${formatDateTime(appt.scheduled_at)}` : ''}
                     </span>
-                    <button
-                      onClick={() => navigate(`/contracts/${appt.contract_id}`)}
-                      className="ml-auto flex-shrink-0"
-                      title="Open contract"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
-                    </button>
+                    {appt.contract_id && (
+                      <button
+                        onClick={() => navigate(`/contracts/${appt.contract_id}`)}
+                        className="ml-auto flex-shrink-0"
+                        title="Open contract"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText }} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

@@ -147,6 +147,11 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       deliveryMode: config.deliveryMode || config.location?.type,
       serviceCycles: config.serviceCycles,
       audience: config.audience,
+      // Group Session attendance policy (max no-shows / substitute check-ins
+      // tolerated before flagging) — exposed flat so getField()'s top-level
+      // wizard field falls back to this on edit, same as other scalars.
+      maxNoShows: (config.groupSession as { attendancePolicy?: { maxNoShows?: number } } | undefined)?.attendancePolicy?.maxNoShows,
+      maxSubstitutes: (config.groupSession as { attendancePolicy?: { maxSubstitutes?: number } } | undefined)?.attendancePolicy?.maxSubstitutes,
       complimentary: config.complimentary,
       billingOnly: config.billingOnly,
       bufferTime: config.buffer || config.bufferTime,
@@ -324,6 +329,25 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   // Billing-only flag — block bills on its cycle but generates no service events
   const billingOnly = getField(block, 'billingOnly');
   if (billingOnly !== undefined) config.billingOnly = billingOnly;
+
+  // Group Session config (config.groupSession) — carries the attendance
+  // policy set here PLUS defaultChairContactId/Name, which is set live from
+  // the Group Sessions dashboard, not this wizard. Always preserve whatever
+  // is already there and only overlay the policy, so a routine wizard save
+  // (e.g. just changing the price) never silently wipes the chair default.
+  const existingGroupSession = (block.config as Record<string, unknown> | undefined)?.groupSession as
+    { attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number } } | undefined;
+  const maxNoShows = getField(block, 'maxNoShows') as number | undefined;
+  const maxSubstitutes = getField(block, 'maxSubstitutes') as number | undefined;
+  if (existingGroupSession || maxNoShows !== undefined || maxSubstitutes !== undefined) {
+    config.groupSession = {
+      ...existingGroupSession,
+      attendancePolicy: {
+        maxNoShows: maxNoShows ?? existingGroupSession?.attendancePolicy?.maxNoShows,
+        maxSubstitutes: maxSubstitutes ?? existingGroupSession?.attendancePolicy?.maxSubstitutes,
+      },
+    };
+  }
 
   // Assignment
   const assignment = getField(block, 'assignment');
@@ -946,6 +970,17 @@ export const blockToUpdateData = (
     if (meta.complimentary !== undefined) configUpdates.complimentary = meta.complimentary;
     if (meta.billingOnly !== undefined) configUpdates.billingOnly = meta.billingOnly;
     if (meta.bufferTime !== undefined) configUpdates.buffer = meta.bufferTime;
+    if (meta.maxNoShows !== undefined || meta.maxSubstitutes !== undefined) {
+      const existingGroupSession = (updates.config as Record<string, unknown> | undefined)?.groupSession as
+        { attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number } } | undefined;
+      configUpdates.groupSession = {
+        ...existingGroupSession,
+        attendancePolicy: {
+          maxNoShows: (meta.maxNoShows as number | undefined) ?? existingGroupSession?.attendancePolicy?.maxNoShows,
+          maxSubstitutes: (meta.maxSubstitutes as number | undefined) ?? existingGroupSession?.attendancePolicy?.maxSubstitutes,
+        },
+      };
+    }
     if (meta.terms !== undefined) configUpdates.terms = meta.terms;
 
     // Business rules

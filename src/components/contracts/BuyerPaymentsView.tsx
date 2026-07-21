@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { useContractInvoices } from '@/hooks/queries/useInvoiceQueries';
+import InvoiceTaxChain from '@/components/contracts/finance/InvoiceTaxChain';
 import BuyerTimelineNode from './BuyerTimelineNode';
 
 // =================================================================
@@ -233,18 +234,35 @@ export const BuyerPaymentsView: React.FC<BuyerPaymentsViewProps> = ({
             const isPaid = inv.status === 'paid';
             const canPay = !isPaid && inv.status !== 'cancelled';
             return (
-              <BuyerTimelineNode
-                key={inv.id}
-                title={inv.invoice_number || `Invoice #${i + 1}`}
-                status={nodeStatus}
-                dueDate={inv.due_date}
-                amount={inv.total_amount}
-                currency={inv.currency || currency}
-                isLast={i === sortedInvoices.length - 1}
-                type="billing"
-                onAction={canPay && onPayInvoice ? () => onPayInvoice(inv.id) : undefined}
-                actionLabel={canPay ? (inv.status === 'overdue' ? 'Pay Now' : 'Pay') : undefined}
-              />
+              <div key={inv.id}>
+                <BuyerTimelineNode
+                  title={inv.invoice_number || `Invoice #${i + 1}`}
+                  status={nodeStatus}
+                  dueDate={inv.due_date}
+                  amount={inv.total_amount}
+                  currency={inv.currency || currency}
+                  isLast={i === sortedInvoices.length - 1}
+                  type="billing"
+                  onAction={canPay && onPayInvoice ? () => onPayInvoice(inv.id) : undefined}
+                  actionLabel={canPay ? (inv.status === 'overdue' ? 'Pay Now' : 'Pay') : undefined}
+                />
+                {/* Mock 8 buyer parity: the same locked tax chain the seller sees */}
+                {inv.status !== 'cancelled' && inv.status !== 'bad_debt' && (
+                  <div className="ml-8 mb-3">
+                    <InvoiceTaxChain
+                      invoice={inv}
+                      colors={colors}
+                      formatCurrency={(v, c) =>
+                        new Intl.NumberFormat('en-IN', {
+                          style: 'currency',
+                          currency: c || inv.currency || currency || 'INR',
+                          maximumFractionDigits: 0,
+                        }).format(v)
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             );
           })
         ) : (

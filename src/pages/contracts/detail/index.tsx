@@ -43,9 +43,19 @@ import {
   Inbox,
   TrendingUp,
   Copy,
+  ArrowRightCircle,
+  Coins,
+  PiggyBank,
 } from 'lucide-react';
 import { useContract, useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices, useCancelInvoice } from '@/hooks/queries/useInvoiceQueries';
+import {
+  useSetContractCredit,
+  useBuyerPendingCredits,
+  useApplyBuyerCredit,
+  useSetContractDeposit,
+  useReclaimContractDeposit,
+} from '@/hooks/queries/useContractCreditDeposit';
 import type { ContractDetail, ContractStatus, InvoiceReceipt, Invoice } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS, CONTRACT_STATUS_FLOW, RFQ_STATUS_FLOW } from '@/types/contracts';
 import {
@@ -84,7 +94,6 @@ import BuyerOverview from '@/components/contracts/BuyerOverview';
 import EquipmentTab from '@/components/contracts/EquipmentTab';
 import type { EquipmentTabMode } from '@/components/contracts/EquipmentTab';
 import { useGlobalMasterData } from '@/hooks/queries/useProductMasterdata';
-import { useResources } from '@/hooks/queries/useResources';
 import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
 import ServiceRequestsPlaceholder from '@/components/contracts/ServiceRequestsPlaceholder';
@@ -416,6 +425,8 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
         return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Cancelled' };
       case 'bad_debt':
         return { bg: colors.semantic.error + '18', color: colors.semantic.error, label: 'Bad Debt' };
+      case 'adjustment':
+        return { bg: '#6366F1' + '18', color: '#6366F1', label: 'Adjusted' };
       default:
         return { bg: colors.utility.primaryText + '10', color: colors.utility.secondaryText, label: 'Unpaid' };
     }
@@ -699,6 +710,328 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
             />
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════
+// SIDEBAR: CREDIT / DEPOSIT
+// Credit: amount + reason set aside on this (ending) contract, carried
+// forward as a deferral for the buyer's NEXT contract — e.g. a mid-cycle
+// join proration (2500 of this year's fee is really next year's advance).
+// Deposit: security deposit the SELLER holds against this contract
+// (regulated industries), reclaimed once the contract closes.
+// Both are plain columns on t_contracts, mirroring discount_type/value —
+// not a new table. Seller-only; manual capture, manual apply (no system-
+// invented proration).
+// ═══════════════════════════════════════════════════
+
+interface CreditDepositCardProps {
+  contract: ContractDetail;
+  colors: any;
+  isSeller: boolean;
+  formatCurrency: (amount: number, currency?: string) => string;
+  formatDate: (date?: string | null) => string;
+}
+
+const CreditDepositCard: React.FC<CreditDepositCardProps> = ({ contract, colors, isSeller, formatCurrency, formatDate }) => {
+  const { addToast } = useVaNiToast();
+
+  const [showCreditForm, setShowCreditForm] = useState(false);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [creditReason, setCreditReason] = useState('');
+
+  const [showDepositForm, setShowDepositForm] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+
+  const setCreditMutation = useSetContractCredit(contract.id);
+  const setDepositMutation = useSetContractDeposit(contract.id);
+  const reclaimDepositMutation = useReclaimContractDeposit(contract.id);
+  const applyCreditMutation = useApplyBuyerCredit(contract.id);
+
+  const alreadyReceivedCredit = !!contract.credit_received_amount;
+  const { data: pendingCredits, isLoading: pendingCreditsLoading } = useBuyerPendingCredits(
+    contract.buyer_id,
+    contract.id,
+    { enabled: isSeller && !!contract.buyer_id && !alreadyReceivedCredit }
+  );
+
+  if (!isSeller) return null;
+
+  const handleSetCredit = async () => {
+    const amount = parseFloat(creditAmount);
+    if (!amount || amount <= 0) {
+      addToast({ type: 'error', title: 'Invalid Amount', message: 'Enter an amount greater than zero.' });
+      return;
+    }
+    if (!creditReason.trim()) {
+      addToast({ type: 'error', title: 'Reason Required', message: 'Explain what this credit is for (e.g. "mid-cycle join proration — next contract").' });
+      return;
+    }
+    try {
+      await setCreditMutation.mutateAsync({ amount, reason: creditReason.trim() });
+      addToast({ type: 'success', title: 'Credit Set Aside', message: `${formatCurrency(amount, contract.currency)} will carry forward to the buyer's next contract.` });
+      setShowCreditForm(false);
+      setCreditAmount('');
+      setCreditReason('');
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to Set Credit', message: err?.message || 'Something went wrong. Please try again.' });
+    }
+  };
+
+  const handleSetDeposit = async () => {
+    const amount = parseFloat(depositAmount);
+    if (!amount || amount <= 0) {
+      addToast({ type: 'error', title: 'Invalid Amount', message: 'Enter an amount greater than zero.' });
+      return;
+    }
+    try {
+      await setDepositMutation.mutateAsync({ amount });
+      addToast({ type: 'success', title: 'Deposit Recorded', message: `${formatCurrency(amount, contract.currency)} held as security deposit.` });
+      setShowDepositForm(false);
+      setDepositAmount('');
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to Set Deposit', message: err?.message || 'Something went wrong. Please try again.' });
+    }
+  };
+
+  const handleReclaimDeposit = async () => {
+    try {
+      await reclaimDepositMutation.mutateAsync();
+      addToast({ type: 'success', title: 'Deposit Reclaimed', message: `${formatCurrency(contract.deposit_amount || 0, contract.currency)} marked as reclaimed.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to Reclaim Deposit', message: err?.message || 'Something went wrong. Please try again.' });
+    }
+  };
+
+  const handleApplyCredit = async (sourceContractId: string, amount: number) => {
+    try {
+      await applyCreditMutation.mutateAsync(sourceContractId);
+      addToast({ type: 'success', title: 'Credit Applied', message: `${formatCurrency(amount, contract.currency)} applied — contract total reduced.` });
+    } catch (err: any) {
+      addToast({ type: 'error', title: 'Failed to Apply Credit', message: err?.message || 'Something went wrong. Please try again.' });
+    }
+  };
+
+  const inputStyle = {
+    backgroundColor: colors.utility.secondaryBackground,
+    borderColor: colors.utility.primaryText + '15',
+    color: colors.utility.primaryText,
+  };
+
+  return (
+    <div
+      className="rounded-xl shadow-md border overflow-hidden"
+      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
+    >
+      <div
+        className="px-5 py-3 border-b flex items-center gap-2"
+        style={{ borderColor: colors.utility.primaryText + '10' }}
+      >
+        <Coins className="h-4 w-4" style={{ color: colors.brand.primary }} />
+        <h3 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>Credit &amp; Deposit</h3>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* ── Credit received from a prior contract ── */}
+        {alreadyReceivedCredit && (
+          <div className="flex items-start gap-2.5 p-3 rounded-lg" style={{ backgroundColor: '#6366F1' + '0c', border: '1px solid #6366F125' }}>
+            <ArrowRightCircle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: '#6366F1' }} />
+            <div className="min-w-0">
+              <p className="text-xs font-bold" style={{ color: '#6366F1' }}>
+                {formatCurrency(contract.credit_received_amount || 0, contract.currency)} credit applied
+              </p>
+              <p className="text-[0.65rem] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                Received from a prior contract — grand total reduced accordingly.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Apply a pending credit from another contract for this buyer ── */}
+        {!alreadyReceivedCredit && !pendingCreditsLoading && (pendingCredits || []).length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-wide" style={{ color: colors.utility.secondaryText }}>
+              Pending Credit Available
+            </p>
+            {(pendingCredits || []).map((c) => (
+              <div
+                key={c.contract_id}
+                className="flex items-center justify-between gap-2 p-3 rounded-lg"
+                style={{ backgroundColor: '#6366F1' + '0c', border: '1px solid #6366F125' }}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-bold" style={{ color: '#6366F1' }}>
+                    {formatCurrency(c.credit_amount, contract.currency)} from {c.contract_number}
+                  </p>
+                  <p className="text-[0.65rem] mt-0.5 truncate" style={{ color: colors.utility.secondaryText }}>
+                    {c.credit_reason}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleApplyCredit(c.contract_id, c.credit_amount)}
+                  disabled={applyCreditMutation.isPending}
+                  className="flex items-center gap-1 text-[0.65rem] font-semibold px-2.5 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50 flex-shrink-0"
+                  style={{ backgroundColor: '#6366F1' }}
+                >
+                  {applyCreditMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── This contract's own credit (set aside for the NEXT contract) ── */}
+        <div>
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wide mb-2" style={{ color: colors.utility.secondaryText }}>
+            Credit for Next Contract
+          </p>
+          {contract.credit_status === 'pending' ? (
+            <div className="p-3 rounded-lg" style={{ backgroundColor: colors.semantic.warning + '0c', border: `1px solid ${colors.semantic.warning}25` }}>
+              <p className="text-xs font-bold" style={{ color: colors.semantic.warning }}>
+                {formatCurrency(contract.credit_amount || 0, contract.currency)} pending
+              </p>
+              <p className="text-[0.65rem] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                {contract.credit_reason}
+              </p>
+              <p className="text-[0.6rem] mt-1" style={{ color: colors.utility.secondaryText }}>
+                Will show up as available credit on this buyer's next contract — apply it manually from there.
+              </p>
+            </div>
+          ) : contract.credit_status === 'applied' ? (
+            <div className="p-3 rounded-lg" style={{ backgroundColor: colors.semantic.success + '0c', border: `1px solid ${colors.semantic.success}25` }}>
+              <p className="text-xs font-bold" style={{ color: colors.semantic.success }}>
+                {formatCurrency(contract.credit_amount || 0, contract.currency)} applied
+              </p>
+              <p className="text-[0.65rem] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                Applied {formatDate(contract.credit_applied_at)}
+              </p>
+            </div>
+          ) : showCreditForm ? (
+            <div className="space-y-2">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Amount"
+                value={creditAmount}
+                onChange={(e) => setCreditAmount(e.target.value)}
+                className="w-full text-xs px-3 py-1.5 rounded-md border outline-none"
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder="Reason (e.g. mid-cycle join proration)"
+                value={creditReason}
+                onChange={(e) => setCreditReason(e.target.value)}
+                className="w-full text-xs px-3 py-1.5 rounded-md border outline-none"
+                style={inputStyle}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSetCredit}
+                  disabled={setCreditMutation.isPending}
+                  className="flex items-center gap-1.5 text-[0.65rem] font-semibold px-3 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: colors.brand.primary }}
+                >
+                  {setCreditMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setShowCreditForm(false); setCreditAmount(''); setCreditReason(''); }}
+                  disabled={setCreditMutation.isPending}
+                  className="text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                  style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowCreditForm(true)}
+              className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+              style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+            >
+              <Plus className="h-3 w-3" /> Set Aside a Credit
+            </button>
+          )}
+        </div>
+
+        {/* ── Security deposit held by the seller ── */}
+        <div>
+          <p className="text-[0.65rem] font-semibold uppercase tracking-wide mb-2" style={{ color: colors.utility.secondaryText }}>
+            Security Deposit
+          </p>
+          {contract.deposit_status === 'held' ? (
+            <div className="flex items-center justify-between gap-2 p-3 rounded-lg" style={{ backgroundColor: colors.brand.primary + '0c', border: `1px solid ${colors.brand.primary}25` }}>
+              <div>
+                <p className="text-xs font-bold" style={{ color: colors.brand.primary }}>
+                  {formatCurrency(contract.deposit_amount || 0, contract.currency)} held
+                </p>
+                <p className="text-[0.65rem] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                  Since {formatDate(contract.deposit_created_at)}
+                </p>
+              </div>
+              <button
+                onClick={handleReclaimDeposit}
+                disabled={reclaimDepositMutation.isPending}
+                className="flex items-center gap-1 text-[0.65rem] font-semibold px-2.5 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50 flex-shrink-0"
+                style={{ backgroundColor: colors.brand.primary }}
+              >
+                {reclaimDepositMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Reclaim'}
+              </button>
+            </div>
+          ) : contract.deposit_status === 'reclaimed' ? (
+            <div className="p-3 rounded-lg" style={{ backgroundColor: colors.semantic.success + '0c', border: `1px solid ${colors.semantic.success}25` }}>
+              <p className="text-xs font-bold" style={{ color: colors.semantic.success }}>
+                {formatCurrency(contract.deposit_amount || 0, contract.currency)} reclaimed
+              </p>
+              <p className="text-[0.65rem] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                Reclaimed {formatDate(contract.deposit_reclaimed_at)}
+              </p>
+            </div>
+          ) : showDepositForm ? (
+            <div className="space-y-2">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Amount"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                className="w-full text-xs px-3 py-1.5 rounded-md border outline-none"
+                style={inputStyle}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSetDeposit}
+                  disabled={setDepositMutation.isPending}
+                  className="flex items-center gap-1.5 text-[0.65rem] font-semibold px-3 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: colors.brand.primary }}
+                >
+                  {setDepositMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setShowDepositForm(false); setDepositAmount(''); }}
+                  disabled={setDepositMutation.isPending}
+                  className="text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                  style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowDepositForm(true)}
+              className="flex items-center gap-1.5 text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+              style={{ color: colors.brand.primary, backgroundColor: colors.brand.primary + '08' }}
+            >
+              <PiggyBank className="h-3 w-3" /> Add Deposit
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1221,6 +1554,13 @@ interface InvoiceCardProps {
   onViewInvoice: () => void;
 }
 
+// Shared copy for the two terminal invoice actions — keeps the confirm
+// panel, toast, and button labels in sync without triple-nested ternaries.
+const INVOICE_ACTION_COPY: Record<'cancel' | 'bad_debt', { verb: string; title: string; past: string }> = {
+  cancel: { verb: 'Cancel Invoice', title: 'Invoice Cancelled', past: 'cancelled' },
+  bad_debt: { verb: 'Mark as Bad Debt', title: 'Marked as Bad Debt', past: 'marked as bad debt' },
+};
+
 const InvoiceCard: React.FC<InvoiceCardProps> = ({
   inv, isPaid, isPartial, isCancelled, isBadDebt, isTerminal, statusColor, statusLabel,
   balance, receipts, hasReceipts, colors, isSeller, contractId,
@@ -1244,8 +1584,8 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
       });
       addToast({
         type: 'success',
-        title: confirmAction === 'cancel' ? 'Invoice Cancelled' : 'Marked as Bad Debt',
-        message: `${inv.invoice_number} has been ${confirmAction === 'cancel' ? 'cancelled' : 'marked as bad debt'}.`,
+        title: INVOICE_ACTION_COPY[confirmAction].title,
+        message: `${inv.invoice_number} has been ${INVOICE_ACTION_COPY[confirmAction].past}.`,
       });
       setConfirmAction(null);
       setReason('');
@@ -1501,7 +1841,7 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
             }}
           >
             <p className="text-xs font-bold mb-2" style={{ color: confirmAction === 'bad_debt' ? colors.semantic.error : colors.utility.primaryText }}>
-              {confirmAction === 'cancel' ? 'Cancel Invoice' : 'Mark as Bad Debt'} — {inv.invoice_number}
+              {INVOICE_ACTION_COPY[confirmAction].verb} — {inv.invoice_number}
             </p>
             <p className="text-[0.65rem] mb-2" style={{ color: colors.utility.secondaryText }}>
               {confirmAction === 'cancel'
@@ -1532,7 +1872,7 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
                 ) : (
                   <AlertTriangle className="h-3 w-3" />
                 )}
-                {isSubmitting ? 'Processing...' : confirmAction === 'cancel' ? 'Confirm Cancel' : 'Confirm Bad Debt'}
+                {isSubmitting ? 'Processing...' : `Confirm ${confirmAction === 'cancel' ? 'Cancel' : 'Bad Debt'}`}
               </button>
               <button
                 onClick={() => { setConfirmAction(null); setReason(''); }}
@@ -1565,12 +1905,23 @@ const ContractDetailPage: React.FC = () => {
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
   const { data: contract, isLoading, error } = useContract(id || null);
-  const { data: nomenclatureResponse } = useGlobalMasterData('cat_contract_nomenclature', true);
+  const { data: nomenclatureResponse, isLoading: nomenclatureLoading, error: nomenclatureError } = useGlobalMasterData('cat_contract_nomenclature', true);
   const nomenclatureItems = nomenclatureResponse?.data || [];
 
-  // Tenant's resource catalog — used to classify coverage_types (declared asset
-  // types with no equipment_details/nomenclature yet) as equipment vs facility.
-  const { data: allTenantResources = [] } = useResources();
+  // DEBUG: Remove after fixing equipment/facility tab issue
+  useEffect(() => {
+    console.log('[NomenclatureDebug] nomenclatureResponse:', nomenclatureResponse);
+    console.log('[NomenclatureDebug] nomenclatureItems count:', nomenclatureItems.length);
+    console.log('[NomenclatureDebug] nomenclatureLoading:', nomenclatureLoading);
+    console.log('[NomenclatureDebug] nomenclatureError:', nomenclatureError);
+    if (contract) {
+      console.log('[NomenclatureDebug] contract.nomenclature_id:', contract.nomenclature_id);
+      const matched = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
+      console.log('[NomenclatureDebug] matched item:', matched);
+      console.log('[NomenclatureDebug] form_settings:', matched?.form_settings);
+      console.log('[NomenclatureDebug] form_settings type:', typeof matched?.form_settings);
+    }
+  }, [nomenclatureResponse, nomenclatureItems, nomenclatureLoading, nomenclatureError, contract]);
   const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
   const pageSummary = invoiceData?.summary;
   const pageInvoices = invoiceData?.invoices || [];
@@ -1794,6 +2145,14 @@ const ContractDetailPage: React.FC = () => {
           />
         );
       case 'equipment': {
+        console.log('[ContractDetail→Equipment] contact fields:', {
+          buyer_id: contract.buyer_id,
+          buyer_contact_person_id: contract.buyer_contact_person_id,
+          contact_id: contract.contact_id,
+          buyer_name: contract.buyer_name,
+          buyer_id: contract.buyer_id,
+          resolved_buyerId: contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id,
+        });
         // Derive equipment tab mode from actual asset data on the contract
         // First try nomenclature form_settings, then fall back to data-driven detection
         let equipTabMode: EquipmentTabMode = 'equipment';
@@ -1995,14 +2354,16 @@ const ContractDetailPage: React.FC = () => {
                         const isOverdue = inv.status === 'overdue';
                         const isCancelled = inv.status === 'cancelled';
                         const isBadDebt = inv.status === 'bad_debt';
-                        const isTerminal = isCancelled || isBadDebt;
+                        const isAdjustment = inv.status === 'adjustment';
+                        const isTerminal = isCancelled || isBadDebt || isAdjustment;
                         const statusColor = isPaid ? colors.semantic.success
                           : isPartial ? colors.semantic.warning
                           : isOverdue ? colors.semantic.error
                           : isBadDebt ? colors.semantic.error
+                          : isAdjustment ? '#6366F1'
                           : isCancelled ? colors.utility.secondaryText
                           : colors.utility.secondaryText;
-                        const statusLabel = isPaid ? 'Fully Paid' : isPartial ? 'Partially Paid' : isOverdue ? 'Overdue' : isCancelled ? 'Cancelled' : isBadDebt ? 'Bad Debt' : 'Unpaid';
+                        const statusLabel = isPaid ? 'Fully Paid' : isPartial ? 'Partially Paid' : isOverdue ? 'Overdue' : isCancelled ? 'Cancelled' : isBadDebt ? 'Bad Debt' : isAdjustment ? 'Adjusted' : 'Unpaid';
                         const balance = inv.total_amount - (inv.amount_paid || 0);
                         const receipts = inv.receipts || [];
                         const hasReceipts = receipts.length > 0;
@@ -2050,14 +2411,23 @@ const ContractDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* Right: Financial Health sidebar */}
-            <FinancialHealth
-              contract={contract}
-              colors={colors}
-              hasActiveGateway={hasActiveGateway}
-              onRecordPayment={isFullyPaid ? undefined : () => setIsPaymentDialogOpen(true)}
-              onViewInvoice={(invoiceId) => navigate(`/contracts/${id}/invoice/${invoiceId}`)}
-            />
+            {/* Right: Financial Health + Credit/Deposit sidebar */}
+            <div className="space-y-6">
+              <FinancialHealth
+                contract={contract}
+                colors={colors}
+                hasActiveGateway={hasActiveGateway}
+                onRecordPayment={isFullyPaid ? undefined : () => setIsPaymentDialogOpen(true)}
+                onViewInvoice={(invoiceId) => navigate(`/contracts/${id}/invoice/${invoiceId}`)}
+              />
+              <CreditDepositCard
+                contract={contract}
+                colors={colors}
+                isSeller={!showBuyerView}
+                formatCurrency={formatCurrency}
+                formatDate={formatDate}
+              />
+            </div>
           </div>
         );
       case 'evidence':
@@ -2117,29 +2487,15 @@ const ContractDetailPage: React.FC = () => {
       if (hasEntity && hasEquip) return 'Equipment & Facility';
       if (hasEntity) return 'Facility';
     }
-    // Fallback: no attached instances yet — classify the declared coverage
-    // types (Sprint 1 "which asset types does this contract cover") against
-    // the tenant's resource catalog.
-    if (contract?.coverage_types?.length && allTenantResources.length) {
-      const classify = (resourceId: string) =>
-        (allTenantResources.find((r: any) => r.id === resourceId)?.resource_type_id || '').toLowerCase();
-      const hasEquip = contract.coverage_types.some((c: any) => classify(c.resource_id) === 'equipment');
-      const hasEntity = contract.coverage_types.some((c: any) => classify(c.resource_id) === 'asset');
-      if (hasEquip && hasEntity) return 'Equipment & Facility';
-      if (hasEntity) return 'Facility';
-    }
     return 'Equipment';
   })();
   const baseTabs = showBuyerView ? BUYER_TAB_DEFINITIONS : SELLER_TAB_DEFINITIONS;
 
   // Show the Equipment/Facility tab only when it's meaningful for this contract:
-  // the contract type (nomenclature) is equipment/entity-based, the contract
-  // already has equipment/facility rows attached, or it declares coverage types
-  // (asset types this contract covers, even before any instance is attached).
-  // Pure-service contracts hide it.
+  // the contract type (nomenclature) is equipment/entity-based, OR the contract
+  // already has equipment/facility rows attached. Pure-service contracts hide it.
   const contractSupportsEquipment = (() => {
     if (contract?.equipment_details?.length) return true;
-    if (contract?.coverage_types?.length) return true;
     if (contract?.nomenclature_id && nomenclatureItems.length > 0) {
       const nType = nomenclatureItems.find((item: any) => item.id === contract.nomenclature_id);
       if (nType?.form_settings) {

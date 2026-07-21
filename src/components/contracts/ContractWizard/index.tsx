@@ -1561,6 +1561,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             rfqMode={isRfqMode}
             coverageTypes={wizardState.coverageTypes}
             billingCycleType={wizardState.billingCycleType}
+            onContinue={handleNext}
           />
         );
       }

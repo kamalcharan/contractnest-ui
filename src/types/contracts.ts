@@ -209,6 +209,25 @@ export interface Contract {
   // contract cover") — may be non-empty even when equipment_details is
   // empty (buyer-will-add-later, nothing attached yet).
   coverage_types?: ContractCoverageType[];
+  // Credit — amount set aside on this (ending) contract for the buyer's
+  // NEXT contract, e.g. a mid-cycle-join proration deferral. One credit
+  // per contract; 'pending' until applied to a later contract for the
+  // same buyer via apply_buyer_credit_to_contract.
+  credit_amount?: number | null;
+  credit_reason?: string | null;
+  credit_status?: 'pending' | 'applied' | null;
+  credit_created_at?: string | null;
+  credit_applied_to_contract_id?: string | null;
+  credit_applied_at?: string | null;
+  // Set on the RECEIVING contract once a prior contract's credit is applied to it
+  credit_received_amount?: number | null;
+  credit_received_from_contract_id?: string | null;
+  // Deposit — security deposit the SELLER holds against this contract
+  // (regulated industries), reclaimed once the contract closes.
+  deposit_amount?: number | null;
+  deposit_status?: 'held' | 'reclaimed' | null;
+  deposit_created_at?: string | null;
+  deposit_reclaimed_at?: string | null;
 }
 
 /** Single declared coverage type stored in t_contracts.coverage_types JSONB */
@@ -295,7 +314,7 @@ export interface ContractDetail extends Contract {
 // =================================================================
 
 export type InvoiceType = 'receivable' | 'payable';
-export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'bad_debt';
+export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'bad_debt' | 'adjustment';
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'card' | 'other';
 
 export interface Invoice {
@@ -390,18 +409,50 @@ export interface RecordPaymentResponse {
 // Invoice cancel / write-off
 export interface CancelInvoicePayload {
   invoice_id: string;
-  action: 'cancel' | 'bad_debt';
+  action: 'cancel' | 'bad_debt' | 'adjustment';
   reason?: string;
 }
 
 export interface CancelInvoiceResponse {
   invoice_id: string;
   invoice_number: string;
-  action: 'cancel' | 'bad_debt';
+  action: 'cancel' | 'bad_debt' | 'adjustment';
   new_status: InvoiceStatus;
   previous_status: InvoiceStatus;
   previous_balance: number;
   amount_paid: number;
+}
+
+// =================================================================
+// CONTRACT CREDIT / DEPOSIT
+// =================================================================
+
+export interface SetContractCreditPayload {
+  amount: number;
+  reason: string;
+}
+
+export interface SetContractDepositPayload {
+  amount: number;
+}
+
+export interface BuyerPendingCredit {
+  contract_id: string;
+  contract_number: string;
+  credit_amount: number;
+  credit_reason: string;
+  credit_created_at: string;
+}
+
+export interface ApplyBuyerCreditPayload {
+  source_contract_id: string;
+}
+
+export interface ApplyBuyerCreditResponse {
+  source_contract_id: string;
+  target_contract_id: string;
+  amount: number;
+  target_new_grand_total: number;
 }
 
 // =================================================================

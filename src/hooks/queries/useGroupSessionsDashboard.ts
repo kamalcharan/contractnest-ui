@@ -40,6 +40,9 @@ export interface GsOccurrenceRow {
   is_past: boolean;
   note: string | null;
   present: number;
+  /** Chair assigned to this occurrence (also backs a real appointment — see gs_schedule_assign) */
+  assigned_to: string | null;
+  assigned_to_name: string | null;
 }
 
 export interface GsRosterRow {
@@ -49,8 +52,23 @@ export interface GsRosterRow {
   contract_name: string | null;
   start_date: string | null;
   end_date: string | null;
+  /** Scoped to THIS member's own contract window (join date .. today/end date),
+   * not the block's total — someone who joined late has a smaller denominator. */
+  overall: number;
   attended: number;
+  missed: number;
+  substituted: number;
+  /** From this member's OWN signed contract snapshot, not the live catalog
+   * block — a later policy change never retroactively applies to them. */
+  max_no_shows: number | null;
+  max_substitutes: number | null;
+  over_no_show_cap: boolean;
+  over_substitute_cap: boolean;
   dues_pending: boolean;
+  /** Occurrence-by-occurrence present/substitute grid for this member —
+   * lets the Roster page render every member's own attendance history
+   * without a separate per-member API call. */
+  attendance: GsMemberBlockAtt[];
 }
 
 export interface GsMemberAttendanceRow {
@@ -182,6 +200,18 @@ export const useGroupSessionMember = (
 const gsErr = (e: any): string =>
   e?.response?.data?.error?.message || e?.response?.data?.message || e?.message || 'Something went wrong';
 
+/** gs_schedule_move/status/assign return {ok:false, reason} on refusal (e.g. a
+ * held/completed occurrence is frozen) instead of throwing — surface that as a
+ * real mutation error so the UI doesn't show a false "success" toast. */
+const gsThrowIfRefused = (result: any) => {
+  if (result?.ok === false) {
+    throw new Error(result.reason === 'occurrence_completed'
+      ? 'This session has already been held and is locked — it can no longer be moved or reassigned.'
+      : result.reason || 'Request was refused');
+  }
+  return result;
+};
+
 /** Generate the shared schedule for a block from its cadence config. */
 export const useGenerateSchedule = () => {
   const queryClient = useQueryClient();
@@ -205,7 +235,7 @@ export const useMoveOccurrence = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (vars: { id: string; date: string; note?: string }) =>
-      unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_MOVE(vars.id), { date: vars.date, note: vars.note })),
+      gsThrowIfRefused(unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_MOVE(vars.id), { date: vars.date, note: vars.note }))),
     onSuccess: () => {
       toast.success('Date updated');
       queryClient.invalidateQueries({ queryKey: gsDashboardKeys.all });
@@ -219,12 +249,48 @@ export const useSetOccurrenceStatus = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (vars: { id: string; status: GsOccurrenceStatus; note?: string }) =>
-      unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_STATUS(vars.id), { status: vars.status, note: vars.note })),
+      gsThrowIfRefused(unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_STATUS(vars.id), { status: vars.status, note: vars.note }))),
     onSuccess: (_d, vars) => {
       toast.success(`Marked ${vars.status}`);
       queryClient.invalidateQueries({ queryKey: gsDashboardKeys.all });
     },
     onError: (e) => toast.error(`Could not update: ${gsErr(e)}`),
+  });
+};
+
+/** Assign (or clear, with contactId=undefined) one occurrence's chair.
+ * Also creates/updates a real 'accepted' appointment for that person —
+ * see gs_schedule_assign (bbb-foundation/031). */
+export const useAssignChair = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { id: string; contactId: string | undefined; contactName: string | undefined }) =>
+      gsThrowIfRefused(unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_ASSIGN(vars.id), {
+        assigned_to: vars.contactId ?? null, assigned_to_name: vars.contactName ?? null,
+      }))),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.contactId ? 'Chair assigned' : 'Chair removed');
+      queryClient.invalidateQueries({ queryKey: gsDashboardKeys.all });
+    },
+    onError: (e) => toast.error(`Could not update the chair: ${gsErr(e)}`),
+  });
+};
+
+/** Set the default chair for every future occurrence of a block in one call
+ * ("assign once, applies going forward"; a later single-occurrence
+ * useAssignChair call still overrides just that date). */
+export const useAssignChairDefault = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: { blockId: string; contactId: string; contactName: string | undefined }) =>
+      unwrap(await api.post(API_ENDPOINTS.GROUP_SESSIONS.OCC_ASSIGN_DEFAULT(vars.blockId), {
+        assigned_to: vars.contactId, assigned_to_name: vars.contactName ?? null,
+      })),
+    onSuccess: (d) => {
+      toast.success(`Set as default chair for ${d?.assigned_count ?? 0} upcoming sessions`);
+      queryClient.invalidateQueries({ queryKey: gsDashboardKeys.all });
+    },
+    onError: (e) => toast.error(`Could not set the default chair: ${gsErr(e)}`),
   });
 };
 
@@ -273,13 +339,22 @@ export const useMarkAttendance = () => {
 
 // ── Member within a block (member profile drill-down) ───────────────────────
 
-export interface GsMemberBlockAtt { date: string; seq: number | null; is_past: boolean; present: boolean }
+export interface GsMemberBlockAtt { date: string; seq: number | null; is_past: boolean; present: boolean; is_substitute: boolean }
 export interface GsMemberBlock {
   ok: boolean;
   name: string | null;
   membership_contract_id: string | null;
   attended: number;
+  /** occurrences_done kept for back-compat; now member-window-scoped (was
+   * block-wide before) — same value as `overall`. */
   occurrences_done: number;
+  overall: number;
+  missed: number;
+  substituted: number;
+  max_no_shows: number | null;
+  max_substitutes: number | null;
+  over_no_show_cap: boolean;
+  over_substitute_cap: boolean;
   last_seen: string | null;
   dues_pending: boolean;
   attendance: GsMemberBlockAtt[];

@@ -118,6 +118,10 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
   // behaviour is hardcoded here.
   const isPlatformManaged = provider.metadata?.platform_managed === true;
   const isComingSoon = provider.metadata?.coming_soon === true;
+  // Built-in providers are always "configured" (no setup needed), so the
+  // toggle switch below reflects the real per-tenant on/off state — this
+  // used to be hardcoded true regardless of tenantIntegration.
+  const isBuiltinChannelActive = tenantIntegration?.is_active ?? true;
 
   return (
     <>
@@ -180,12 +184,21 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
               {/* Show status badge inline for better visibility */}
               <div className="mt-1">
                 {isPlatformManaged ? (
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{ backgroundColor: `${colors.semantic.success}15`, color: colors.semantic.success }}
-                  >
-                    Active · Powered by ContractNest
-                  </span>
+                  isBuiltinChannelActive ? (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={{ backgroundColor: `${colors.semantic.success}15`, color: colors.semantic.success }}
+                    >
+                      Active · Powered by ContractNest
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={{ backgroundColor: `${colors.utility.secondaryText}20`, color: colors.utility.secondaryText }}
+                    >
+                      Disabled for your workspace
+                    </span>
+                  )
                 ) : isComingSoon ? (
                   <span
                     className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
@@ -212,18 +225,29 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
           >
             <div className="flex justify-between items-center">
               <div className="text-sm">
-                <p 
-                  className="transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Last verified: {formatLastVerified(tenantIntegration.last_verified)}
-                </p>
-                <p 
-                  className="transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  {tenantIntegration.is_live ? 'Live mode' : 'Test mode'}
-                </p>
+                {isPlatformManaged ? (
+                  <p
+                    className="transition-colors"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Controls whether ContractNest actually sends this channel for your workspace.
+                  </p>
+                ) : (
+                  <>
+                    <p
+                      className="transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      Last verified: {formatLastVerified(tenantIntegration.last_verified)}
+                    </p>
+                    <p
+                      className="transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      {tenantIntegration.is_live ? 'Live mode' : 'Test mode'}
+                    </p>
+                  </>
+                )}
               </div>
               
               {/* Toggle Switch */}
@@ -286,9 +310,9 @@ const IntegrationProviderCard: React.FC<IntegrationProviderCardProps> = ({
           {isPlatformManaged ? (
             <span
               className="text-sm ml-auto font-medium"
-              style={{ color: colors.semantic.success }}
+              style={{ color: isBuiltinChannelActive ? colors.semantic.success : colors.utility.secondaryText }}
             >
-              ✓ Enabled for your workspace
+              {isBuiltinChannelActive ? '✓ Enabled for your workspace' : 'Disabled — use the toggle to re-enable'}
             </span>
           ) : isComingSoon ? (
             <button
