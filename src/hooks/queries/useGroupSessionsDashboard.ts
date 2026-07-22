@@ -392,6 +392,9 @@ export interface GsDeclaration {
   currency: string | null;
   upi_reference: string | null;
   created_at: string | null;
+  /** Group identity (bbb-foundation/046) — null for legacy/ad-hoc declarations */
+  block_id: string | null;
+  block_name: string | null;
 }
 
 /** Pending payment declarations awaiting chair confirmation (tenant-wide). */
@@ -416,8 +419,15 @@ export const useConfirmDeclaration = () => {
   return useMutation({
     mutationFn: async (vars: { id: string; confirm: boolean }) =>
       unwrap(await api.post(API_ENDPOINTS.SESSION_CHECKIN.CONFIRM_DECLARATION(vars.id), { confirm: vars.confirm })),
-    onSuccess: (_d, vars) => {
-      toast.success(vars.confirm ? 'Payment confirmed — marked paid' : 'Payment rejected');
+    onSuccess: (d: any, vars) => {
+      if (!vars.confirm) {
+        toast.success('Payment rejected');
+      } else if (d?.ledger_recorded === false) {
+        // Confirmed, but nothing reached AR (no open invoice / already settled)
+        toast.success('Payment confirmed — no open invoice to record it against', { duration: 5000 });
+      } else {
+        toast.success('Payment confirmed — receipt recorded against the invoice');
+      }
       queryClient.invalidateQueries({ queryKey: gsDashboardKeys.all });
     },
     onError: (e) => toast.error(`Could not update the payment: ${gsErr(e)}`),

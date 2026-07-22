@@ -51,6 +51,32 @@ const formatDate = (d?: string) => {
   });
 };
 
+// Block descriptions are stored as HTML (template editor) — print plain text
+const stripHtml = (value?: string) => (value || '').replace(/<[^>]+>/g, '').trim();
+
+const formatPaymentMode = (mode?: string, emiMonths?: number) => {
+  if (!mode) return '';
+  if (mode === 'emi') return `EMI (${emiMonths || 0} months)`;
+  if (mode === 'defined') return 'As per billing schedule';
+  return mode.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+// Recurring blocks store the per-cycle rate in unit_price and the full-term
+// value in total_price (e.g. monthly ₹1,500 × 12 = ₹18,000) while quantity
+// stays 1 — derive the billed occurrence count so Rate × Qty = Total.
+const deriveQty = (block: { unit_price?: number; quantity?: number; total_price?: number }) => {
+  const qty = block.quantity || 1;
+  const unit = Number(block.unit_price || 0);
+  const total = Number(block.total_price || 0);
+  if (unit > 0 && total > 0) {
+    const occurrences = Math.round(total / (unit * qty));
+    if (occurrences > 1 && Math.abs(occurrences * unit * qty - total) < 0.01) {
+      return qty * occurrences;
+    }
+  }
+  return qty;
+};
+
 const getStatusConfig = (status: string) => {
   switch (status) {
     case 'paid':
@@ -118,7 +144,8 @@ const InvoiceViewPage: React.FC = () => {
         logging: false,
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // JPEG keeps the PDF ~10-20x smaller than PNG for a rasterized page
+      const imgData = canvas.toDataURL('image/jpeg', 0.92);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = 210; // A4 width in mm
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -128,11 +155,11 @@ const InvoiceViewPage: React.FC = () => {
       let yOffset = 0;
 
       if (pdfHeight <= pageHeight) {
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
       } else {
         while (yOffset < pdfHeight) {
           if (yOffset > 0) pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, -yOffset, pdfWidth, pdfHeight);
+          pdf.addImage(imgData, 'JPEG', 0, -yOffset, pdfWidth, pdfHeight);
           yOffset += pageHeight;
         }
       }
@@ -388,9 +415,7 @@ const InvoiceViewPage: React.FC = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Payment Mode</span>
                         <span className="font-medium text-gray-700">
-                          {contract.payment_mode === 'emi'
-                            ? `EMI (${contract.emi_months || 0} months)`
-                            : contract.payment_mode.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                          {formatPaymentMode(contract.payment_mode, contract.emi_months)}
                         </span>
                       </div>
                     )}
@@ -473,13 +498,13 @@ const InvoiceViewPage: React.FC = () => {
                             )}
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-500 max-w-[200px]">
-                            {block.block_description || '\u2014'}
+                            {stripHtml(block.block_description) || '\u2014'}
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-700 text-right font-medium">
                             {formatCurrency(block.unit_price, currency)}
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-700 text-right">
-                            {block.quantity || 1}
+                            {deriveQty(block)}
                           </td>
                           <td className="py-3 px-4 text-sm font-bold text-gray-800 text-right">
                             {formatCurrency(
@@ -761,9 +786,7 @@ const InvoiceViewPage: React.FC = () => {
                     ? [
                         {
                           label: 'Payment Mode',
-                          value: invoice.payment_mode
-                            .replace(/_/g, ' ')
-                            .replace(/\b\w/g, (c) => c.toUpperCase()),
+                          value: formatPaymentMode(invoice.payment_mode, invoice.emi_total ?? undefined),
                         },
                       ]
                     : []),

@@ -98,6 +98,34 @@ export interface FinanceInvoice {
   days_overdue: number;
 }
 
+/**
+ * One billing event (instalment) on a contract with an open invoice —
+ * added by operations-loop/021. Settled events are included (open_amount 0)
+ * so the full schedule can be rendered; `id` is null for the synthetic
+ * invoice-level row of contracts that have no billing events.
+ */
+export interface FinanceEvent {
+  id: string | null;
+  contract_id: string;
+  contract_number: string;
+  contract_name: string;
+  buyer_id: string | null;
+  buyer_name: string | null;
+  buyer_company: string | null;
+  invoice_id: string;
+  invoice_number: string;
+  block_name: string | null;
+  sequence_number: number | null;
+  total_occurrences: number | null;
+  billing_cycle_label: string | null;
+  event_status: string | null;
+  due_on: string | null;
+  amount: number;
+  open_amount: number;
+  settled: boolean;
+  days_overdue: number;
+}
+
 export interface BuyerGroup {
   buyer_id: string | null;
   buyer_name: string;
@@ -121,6 +149,7 @@ export interface ReceivablesResponse {
   as_of: string;
   summary: ReceivablesSummary;
   by_buyer: BuyerGroup[];
+  events?: FinanceEvent[];
   invoices: FinanceInvoice[];
 }
 

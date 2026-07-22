@@ -2,7 +2,7 @@
 // Contract 360° View — full lifecycle dashboard
 // R4: Buyer view + Document tab + edge cases (draft/cancelled/expired)
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   ArrowLeft,
@@ -93,6 +93,7 @@ import SellerTasksTab from '@/components/contracts/SellerTasksTab';
 import BuyerOverview from '@/components/contracts/BuyerOverview';
 import EquipmentTab from '@/components/contracts/EquipmentTab';
 import type { EquipmentTabMode } from '@/components/contracts/EquipmentTab';
+import GroupSessionTab from '@/components/contracts/GroupSessionTab';
 import { useGlobalMasterData } from '@/hooks/queries/useProductMasterdata';
 import { ACCEPTANCE_METHOD_HEX_COLORS } from '@/utils/constants/contracts';
 import BuyerPaymentsView from '@/components/contracts/BuyerPaymentsView';
@@ -272,11 +273,12 @@ const mapContractToReviewProps = (contract: ContractDetail): ReviewSendStepProps
 // TAB DEFINITIONS
 // ═══════════════════════════════════════════════════
 
-type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document' | 'overview' | 'tasks' | 'equipment' | 'my_services' | 'payments' | 'proof_of_work' | 'requests';
+type TabId = 'operations' | 'financials' | 'evidence' | 'communication' | 'audit' | 'document' | 'overview' | 'tasks' | 'equipment' | 'my_services' | 'payments' | 'proof_of_work' | 'requests' | 'sessions';
 
 const BUYER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'equipment', label: 'Equipment', icon: Package },
+  { id: 'sessions', label: 'Sessions', icon: Users },
   { id: 'my_services', label: 'My Services', icon: Calendar },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'proof_of_work', label: 'Proof of Work', icon: Camera },
@@ -288,6 +290,7 @@ const SELLER_TAB_DEFINITIONS: Array<{ id: TabId; label: string; icon: React.Comp
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'tasks', label: 'Tasks', icon: Clock },
   { id: 'equipment', label: 'Equipment', icon: Package },
+  { id: 'sessions', label: 'Sessions', icon: Users },
   { id: 'financials', label: 'Financials', icon: DollarSign },
   { id: 'audit', label: 'Audit Log', icon: ScrollText },
   { id: 'document', label: 'Document', icon: FileText },
@@ -1897,10 +1900,15 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
 const ContractDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const [activeTab, setActiveTab] = useState<TabId>('operations');
+  // Deep-link support: /contracts/:id?tab=sessions lands directly on a tab
+  // (e.g. from the Group Sessions roster sheet). An unknown/hidden tab param
+  // simply renders the default via the tabDefinitions filter.
+  const initialTabParam = searchParams.get('tab') as TabId | null;
+  const [activeTab, setActiveTab] = useState<TabId>(initialTabParam || 'operations');
   const [tabInitialized, setTabInitialized] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
@@ -2191,6 +2199,23 @@ const ContractDetailPage: React.FC = () => {
       }
 
       // ── Buyer-only tabs ──
+      case 'sessions': {
+        // Attendance grid for the member on this contract — the block is the
+        // group (config.audience='group'); attendance keys off its catalog id.
+        const groupSessionBlock = (contract.blocks || []).find(
+          (b) => (b.custom_fields?.config as any)?.audience === 'group'
+        );
+        if (!groupSessionBlock?.source_block_id) return null;
+        return (
+          <GroupSessionTab
+            colors={colors}
+            memberId={contract.buyer_contact_person_id || contract.contact_id || contract.buyer_id}
+            blockId={groupSessionBlock.source_block_id}
+            blockName={groupSessionBlock.block_name}
+          />
+        );
+      }
+
       case 'my_services':
         return (
           <SellerTasksTab
@@ -2506,8 +2531,16 @@ const ContractDetailPage: React.FC = () => {
     return false;
   })();
 
+  // Show the Sessions tab only when this contract actually carries a Group
+  // Session block (config.audience='group') — a plain service/equipment
+  // contract never shows it.
+  const contractSupportsSessions = (contract?.blocks || []).some(
+    (b) => (b.custom_fields?.config as any)?.audience === 'group'
+  );
+
   const tabDefinitions = baseTabs
     .filter(t => t.id !== 'equipment' || contractSupportsEquipment)
+    .filter(t => t.id !== 'sessions' || contractSupportsSessions)
     .map(t => (t.id === 'equipment' ? { ...t, label: equipmentTabLabel } : t));
 
   return (

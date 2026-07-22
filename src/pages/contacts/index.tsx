@@ -110,6 +110,10 @@ type ViewType = 'grid' | 'list';
 
 const MINIMUM_SEARCH_LENGTH = 3;
 
+// Table column template for list view (product-wide list pattern):
+// select · contact · CT number · primary channel · classification · status · actions
+const CONTACT_GRID_COLS = '28px minmax(180px,1.6fr) 100px minmax(160px,1.3fr) minmax(140px,1fr) 100px 70px';
+
 // Filter Dropdown Component
 const FilterDropdown: React.FC<{
   isOpen: boolean;
@@ -827,7 +831,7 @@ const ContactsPage: React.FC = () => {
               />
               <input
                 type="text"
-                placeholder={`Search contacts... (min ${MINIMUM_SEARCH_LENGTH} characters)`}
+                placeholder={`Search name, phone, email, CT number… (min ${MINIMUM_SEARCH_LENGTH} characters)`}
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors"
@@ -1189,11 +1193,36 @@ const ContactsPage: React.FC = () => {
               <div className={`
                 ${viewType === 'grid'
                   ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
-                  : 'space-y-2'
+                  : 'space-y-1.5 overflow-x-auto'
                 }
               `}>
+                {/* Table header (product-wide list pattern) — list view only.
+                    Child contacts are excluded server-side (bbb-foundation/045)
+                    so pages are full and totals honest. */}
+                {viewType === 'list' && (
+                  <div
+                    className="grid items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider min-w-[880px]"
+                    style={{ gridTemplateColumns: CONTACT_GRID_COLS, color: colors.utility.secondaryText }}
+                  >
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={contacts.length > 0 && selectedContacts.size === contacts.length}
+                        onChange={handleSelectAll}
+                        className="h-4 w-4 rounded cursor-pointer"
+                        style={{ accentColor: colors.brand.primary }}
+                        aria-label="Select all on this page"
+                      />
+                    </span>
+                    <span>Contact</span>
+                    <span>Number</span>
+                    <span>Phone / Email</span>
+                    <span>Classification</span>
+                    <span>Status</span>
+                    <span />
+                  </div>
+                )}
                 {contacts
-                  .filter((contact) => !contact.parent_contact_id) // Hide child contacts (persons linked to corporate)
                   .map((contact) => {
                   const isSelected = selectedContacts.has(contact.id);
                   const classificationConfig = contact.classifications?.[0] 
@@ -1376,159 +1405,149 @@ const ContactsPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    // FIXED LIST VIEW - Better alignment
+                    // TABLE LIST VIEW (product-wide list pattern)
                     <div
                       key={contact.id}
-                      className="rounded-lg shadow-sm border hover:shadow-md transition-all duration-200 p-3"
+                      className="grid items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors cursor-pointer min-w-[880px]"
                       style={{
-                        backgroundColor: colors.utility.secondaryBackground,
-                        borderColor: colors.utility.primaryText + '20'
+                        gridTemplateColumns: CONTACT_GRID_COLS,
+                        borderColor: isSelected ? colors.brand.primary + '60' : colors.utility.primaryText + '15',
+                        backgroundColor: isSelected ? colors.brand.primary + '08' : colors.utility.secondaryBackground
                       }}
+                      onClick={() => navigate(`/contacts/${contact.id}`)}
                     >
-                      <div className="flex items-center justify-between">
-                        {/* Left Section - Avatar + Name + Status */}
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div
-                            className="w-10 h-10 rounded-lg flex items-center justify-center font-semibold text-sm border flex-shrink-0"
-                            style={{
-                              backgroundColor: colors.brand.primary + '20',
-                              color: colors.brand.primary,
-                              borderColor: colors.brand.primary + '40'
-                            }}
-                          >
-                            {contact.displayName?.charAt(0)?.toUpperCase() || 'U'}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 
-                                className="font-semibold text-base truncate transition-colors"
-                                style={{ color: colors.utility.primaryText }}
-                                title={contact.displayName}
-                              >
-                                {contact.displayName}
-                              </h3>
-                              {contact.type === 'corporate' ? (
-                                <Building2 
-                                  className="h-4 w-4 flex-shrink-0"
-                                  style={{ color: colors.utility.secondaryText }}
-                                  title="Corporate"
-                                />
-                              ) : (
-                                <User 
-                                  className="h-4 w-4 flex-shrink-0"
-                                  style={{ color: colors.utility.secondaryText }}
-                                  title="Individual"
-                                />
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {/* Contact Number */}
-                              {contact.contact_number && (
-                                <span
-                                  className="text-xs font-mono"
-                                  style={{ color: colors.utility.secondaryText }}
-                                >
-                                  {contact.contact_number}
-                                </span>
-                              )}
-                            <span
-                              className="px-2 py-0.5 rounded-full text-xs font-medium border"
-                              style={{
-                                backgroundColor: contact.status === 'active'
-                                  ? colors.semantic.success + '20'
-                                  : contact.status === 'inactive'
-                                  ? colors.semantic.warning + '20'
-                                  : colors.utility.secondaryText + '20',
-                                borderColor: contact.status === 'active'
-                                  ? colors.semantic.success + '40'
-                                  : contact.status === 'inactive'
-                                  ? colors.semantic.warning + '40'
-                                  : colors.utility.secondaryText + '40',
-                                color: contact.status === 'active'
-                                  ? colors.semantic.success
-                                  : contact.status === 'inactive' 
-                                  ? colors.semantic.warning
-                                  : colors.utility.secondaryText
-                              }}
-                            >
-                              {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
-                            </span>
-                            </div>
-                          </div>
-                        </div>
+                      {/* Select */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleSelectContact(contact.id)}
+                          className="h-4 w-4 rounded cursor-pointer"
+                          style={{ accentColor: colors.brand.primary }}
+                          aria-label={`Select ${contact.displayName}`}
+                        />
+                      </div>
 
-                        {/* FIXED: Middle Section - Primary Contact Channel */}
-                        <div 
-                          className="flex items-center gap-2 min-w-0 flex-1 px-4"
-                          style={{ color: colors.utility.secondaryText }}
+                      {/* Contact */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-lg flex-none flex items-center justify-center font-bold text-xs border"
+                          style={{
+                            backgroundColor: colors.brand.primary + '20',
+                            color: colors.brand.primary,
+                            borderColor: colors.brand.primary + '40'
+                          }}
                         >
-                          {primaryChannel.icon && (
-                            <primaryChannel.icon className="h-4 w-4 flex-shrink-0" />
-                          )}
-                          <span className="truncate text-sm" title={primaryChannel.value}>
-                            {primaryChannel.value}
-                          </span>
+                          {contact.displayName?.charAt(0)?.toUpperCase() || 'U'}
                         </div>
-
-                        {/* FIXED: Right Section - Classifications + Actions */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          {/* Classification Tags - Using Lucide icons and centralized colors */}
-                          <div className="flex flex-wrap gap-1">
-                            {contact.classifications?.slice(0, 2).map((cls) => {
-                              const config = getClassificationConfig(cls);
-                              const badgeColors = getClassificationColors(config?.colorKey || 'default', colors, 'badge');
-                              const IconComponent = getClassificationIcon(cls);
-                              return (
-                                <span
-                                  key={cls}
-                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border"
-                                  style={{
-                                    backgroundColor: badgeColors.bg,
-                                    borderColor: badgeColors.border,
-                                    color: badgeColors.text
-                                  }}
-                                  title={config?.label}
-                                >
-                                  <IconComponent className="h-3 w-3" />
-                                  {config?.label}
-                                </span>
-                              );
-                            })}
-                            {contact.classifications && contact.classifications.length > 2 && (
-                              <span
-                                className="text-xs"
-                                style={{ color: colors.utility.secondaryText }}
-                              >
-                                +{contact.classifications.length - 2}
-                              </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p
+                              className="text-xs font-bold truncate"
+                              style={{ color: colors.utility.primaryText }}
+                              title={contact.displayName}
+                            >
+                              {contact.displayName}
+                            </p>
+                            {contact.type === 'corporate' ? (
+                              <Building2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} title="Corporate" />
+                            ) : (
+                              <User className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} title="Individual" />
                             )}
                           </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => navigate(`/contacts/${contact.id}`)}
-                              className="p-1.5 rounded-md transition-colors"
-                              style={{
-                                backgroundColor: colors.utility.secondaryText + '20',
-                                color: colors.utility.primaryText
-                              }}
-                              title="View contact details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              className="p-1.5 rounded-md transition-colors"
-                              style={{
-                                backgroundColor: colors.semantic.success,
-                                color: '#ffffff'
-                              }}
-                              title="Create new contract"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </button>
-                          </div>
+                          <p className="text-[10px] capitalize" style={{ color: colors.utility.secondaryText }}>
+                            {contact.type}
+                          </p>
                         </div>
+                      </div>
+
+                      {/* CT number */}
+                      <span className="text-xs font-mono" style={{ color: colors.utility.secondaryText }}>
+                        {contact.contact_number || '—'}
+                      </span>
+
+                      {/* Primary channel */}
+                      <div className="flex items-center gap-1.5 min-w-0" style={{ color: colors.utility.primaryText }}>
+                        {primaryChannel.icon && (
+                          <primaryChannel.icon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} />
+                        )}
+                        <span className="truncate text-xs" title={primaryChannel.value}>
+                          {primaryChannel.value}
+                        </span>
+                      </div>
+
+                      {/* Classifications */}
+                      <div className="flex flex-wrap gap-1 min-w-0">
+                        {contact.classifications?.slice(0, 2).map((cls) => {
+                          const config = getClassificationConfig(cls);
+                          const badgeColors = getClassificationColors(config?.colorKey || 'default', colors, 'badge');
+                          const IconComponent = getClassificationIcon(cls);
+                          return (
+                            <span
+                              key={cls}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap"
+                              style={{
+                                backgroundColor: badgeColors.bg,
+                                borderColor: badgeColors.border,
+                                color: badgeColors.text
+                              }}
+                              title={config?.label}
+                            >
+                              <IconComponent className="h-3 w-3" />
+                              {config?.label}
+                            </span>
+                          );
+                        })}
+                        {contact.classifications && contact.classifications.length > 2 && (
+                          <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                            +{contact.classifications.length - 2}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Status */}
+                      <div>
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap"
+                          style={{
+                            backgroundColor: contact.status === 'active'
+                              ? colors.semantic.success + '20'
+                              : contact.status === 'inactive'
+                              ? colors.semantic.warning + '20'
+                              : colors.utility.secondaryText + '20',
+                            borderColor: contact.status === 'active'
+                              ? colors.semantic.success + '40'
+                              : contact.status === 'inactive'
+                              ? colors.semantic.warning + '40'
+                              : colors.utility.secondaryText + '40',
+                            color: contact.status === 'active'
+                              ? colors.semantic.success
+                              : contact.status === 'inactive'
+                              ? colors.semantic.warning
+                              : colors.utility.secondaryText
+                          }}
+                        >
+                          {CONTACT_STATUS_LABELS[contact.status as keyof typeof CONTACT_STATUS_LABELS]}
+                        </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => navigate(`/contacts/${contact.id}`)}
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-lg border"
+                          style={{ borderColor: colors.utility.secondaryText + '30', color: colors.utility.primaryText }}
+                          title="View contact details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-lg"
+                          style={{ backgroundColor: colors.semantic.success, color: '#ffffff' }}
+                          title="Create new contract"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -1569,8 +1588,34 @@ const ContactsPage: React.FC = () => {
                   </button>
                   
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(pagination.totalPages, 5) }, (_, i) => {
-                      const page = i + 1;
+                    {/* Windowed pager: first · window around current · last —
+                        the old version only ever rendered pages 1-5, making
+                        page 6+ unreachable */}
+                    {(() => {
+                      const totalPages = pagination.totalPages;
+                      const current = pagination.page;
+                      const pages: (number | '…')[] = [];
+                      const window = [current - 1, current, current + 1].filter(
+                        (p) => p >= 1 && p <= totalPages
+                      );
+                      if (!window.includes(1)) {
+                        pages.push(1);
+                        if (window[0] > 2) pages.push('…');
+                      }
+                      pages.push(...window);
+                      if (!window.includes(totalPages)) {
+                        if (window[window.length - 1] < totalPages - 1) pages.push('…');
+                        pages.push(totalPages);
+                      }
+                      return pages;
+                    })().map((page, idx) => {
+                      if (page === '…') {
+                        return (
+                          <span key={`gap-${idx}`} className="px-1 text-sm" style={{ color: colors.utility.secondaryText }}>
+                            …
+                          </span>
+                        );
+                      }
                       return (
                         <button
                           key={page}

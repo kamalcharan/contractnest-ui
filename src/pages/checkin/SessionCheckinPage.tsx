@@ -400,10 +400,14 @@ const SessionCheckinPage: React.FC = () => {
 
   const submit = async () => {
     setErr(null);
+    const hasSession = !!resolve?.occurrence;
     // Already checked in: nothing to record unless they're paying a due.
     if (member && alreadyChecked && !payEventId) { setDone(true); return; }
-    // Smart-form questions only apply to a fresh check-in (hidden once checked in).
-    if (!alreadyChecked && !validateForm()) { setErr('Please answer the required questions.'); return; }
+    // Dues-only mode (no session today): only a payment declaration can be
+    // submitted — the backend records it without touching attendance.
+    if (!hasSession && !payEventId) { setErr('There is no session today — select a due to record a payment.'); return; }
+    // Smart-form questions only apply to a fresh check-in on a session day.
+    if (hasSession && !alreadyChecked && !validateForm()) { setErr('Please answer the required questions.'); return; }
     setSubmitting(true);
     try {
       const payment = payEventId
@@ -587,10 +591,12 @@ const SessionCheckinPage: React.FC = () => {
           <div style={{ width: 68, height: 68, margin: '4px auto 10px', borderRadius: '50%', background: '#ECFDF3',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 }}>✅</div>
           <h2 style={{ textAlign: 'center', margin: '4px 0', color: BRAND.ink }}>
-            {alreadyChecked && !payEventId ? "You're all set" : "You're checked in"}
+            {!occ ? 'Payment recorded' : alreadyChecked && !payEventId ? "You're all set" : "You're checked in"}
           </h2>
           <p style={{ textAlign: 'center', color: BRAND.sub, marginTop: 4, fontSize: 14 }}>
-            {alreadyChecked
+            {!occ
+              ? 'No session today — no attendance was recorded.'
+              : alreadyChecked
               ? `Attendance already recorded for ${fmtDate(occ?.date)}.`
               : `${status === 'present' ? 'Marked present' : 'Marked apologies'} for ${fmtDate(occ?.date)}.`}
           </p>
@@ -634,7 +640,8 @@ const SessionCheckinPage: React.FC = () => {
               <div style={{ fontSize: 13, color: BRAND.sub, marginTop: 2 }}>Next session: {fmtDate(resolve.next_occurrence.date)}</div>
             )}
             <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 8 }}>
-              Check-in opens on the session day. For a past session, please ask the chapter to mark you.
+              Check-in opens on the session day — but you can still view and settle your dues below.
+              For a past session, please ask the chapter to mark you.
             </div>
           </>
         )}
@@ -837,7 +844,7 @@ const SessionCheckinPage: React.FC = () => {
                   {openDues.length > 0 ? 'You can still settle your dues below.' : 'Nothing else to do — you’re all set.'}
                 </div>
               </div>
-            ) : (
+            ) : occ ? (
               <>
                 <div style={{ marginTop: 14, fontSize: 12.5, fontWeight: 700, color: BRAND.sub }}>Are you attending today?</div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -851,11 +858,21 @@ const SessionCheckinPage: React.FC = () => {
                   ))}
                 </div>
               </>
+            ) : (
+              // Dues-only mode: no session today, so no attendance to mark —
+              // the member can still review and settle dues below.
+              <div style={{ marginTop: 14, background: BRAND.accentSoft, borderRadius: 12, padding: 12 }}>
+                <div style={{ fontWeight: 700, color: BRAND.accentInk, fontSize: 14 }}>No session today</div>
+                <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>
+                  You can view and settle your dues below — no attendance will be recorded.
+                </div>
+              </div>
             )}
           </Card>
 
-          {/* Smart Form questions (tenant-configurable) — only on a fresh check-in */}
-          {!alreadyChecked && formFields.length > 0 && (
+          {/* Smart Form questions (tenant-configurable) — only on a fresh
+              check-in on a session day (dues-only mode records no attendance) */}
+          {!alreadyChecked && !!occ && formFields.length > 0 && (
             <Card>
               <div style={{ fontWeight: 800, color: BRAND.ink, marginBottom: 4 }}>
                 {form?.schema?.title && form.schema.title !== 'Session Check-in' ? form.schema.title : 'A few quick questions'}
@@ -930,12 +947,12 @@ const SessionCheckinPage: React.FC = () => {
           )}
 
           {err && <p style={{ color: BRAND.err, fontSize: 13 }}>{err}</p>}
-          <button onClick={submit} disabled={submitting || !occ}
+          <button onClick={submit} disabled={submitting || (!occ && !payEventId)}
             style={{ width: '100%', padding: 15, border: 'none', borderRadius: 13,
-              background: occ ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 16.5, cursor: occ ? 'pointer' : 'not-allowed',
-              boxShadow: occ ? '0 6px 16px -4px rgba(218,100,16,0.5)' : 'none', opacity: submitting ? 0.75 : 1 }}>
+              background: (occ || payEventId) ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 16.5, cursor: (occ || payEventId) ? 'pointer' : 'not-allowed',
+              boxShadow: (occ || payEventId) ? '0 6px 16px -4px rgba(218,100,16,0.5)' : 'none', opacity: submitting ? 0.75 : 1 }}>
             {submitting ? 'Submitting…'
-              : !occ ? 'No session today'
+              : !occ ? (payEventId ? 'Record payment' : 'Select a due to pay')
               : alreadyChecked ? (payEventId ? 'Record payment' : 'Done')
               : 'Check in'}
           </button>
