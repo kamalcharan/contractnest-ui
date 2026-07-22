@@ -29,6 +29,7 @@ import {
   CHANNELS,
   getChannelByCode,
   formatChannelValue,
+  getLocalPhoneDigits,
   channelRequiresCountryCode,
   normalizeCountryCode
 } from '@/utils/constants/channels';
@@ -724,7 +725,18 @@ const ContactChannelsSection: React.FC<ContactChannelsSectionProps> = ({
                         </button>
                       )}
                       <button
-                        onClick={() => setEditingIndex(index)}
+                        onClick={() => {
+                          // Stored value already has the country's dial code
+                          // baked in (messaging reads it as the dialable
+                          // number) — strip it back off here so the edit
+                          // input shows just the local digits, matching the
+                          // separate country selector next to it instead of
+                          // duplicating "+91" into the value too.
+                          if (channelConfig) {
+                            updateChannel(index, { value: getLocalPhoneDigits(channelConfig, channel.value, channel.country_code) });
+                          }
+                          setEditingIndex(index);
+                        }}
                         disabled={disabled}
                         className="p-1.5 rounded-md transition-colors disabled:opacity-50"
                         style={{ color: colors.utility.secondaryText }}

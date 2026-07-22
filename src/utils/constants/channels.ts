@@ -239,6 +239,42 @@ export const formatChannelValue = (
 };
 
 /**
+ * Extract just the local digits from a stored phone value, stripping the
+ * country's dial code if present. Stored channel values carry the dial code
+ * baked in (formatChannelValue always rebuilds them as +{phoneCode}{digits})
+ * because messaging reads the value directly as the number to dial — but
+ * edit UIs also show a separate country selector, so re-displaying the raw
+ * value duplicates the code. Only strips when the remaining digits are a
+ * plausible local number for that country (same safe-strip rule
+ * formatChannelValue itself uses), so an ambiguous/corrupted value is left
+ * alone rather than risk chopping real digits off a valid number.
+ */
+export const getLocalPhoneDigits = (
+    channel: Channel,
+    value: string,
+    countryCode?: string
+): string => {
+    const digits = (value || '').replace(/\D/g, '');
+    if (channel.validation.type !== 'phone' || !countryCode) return digits;
+
+    let country = countries.find(c => c.code === countryCode);
+    if (!country) {
+        const cleanCode = countryCode.replace(/^\+/, '');
+        country = countries.find(c => c.phoneCode === cleanCode);
+    }
+    if (!country) return digits;
+
+    if (digits.startsWith(country.phoneCode)) {
+        const localPart = digits.slice(country.phoneCode.length);
+        const { min, max } = getPhoneLengthForCountry(country.code);
+        if (localPart.length >= min && localPart.length <= max) {
+            return localPart;
+        }
+    }
+    return digits;
+};
+
+/**
  * Normalize a country_code value to ISO format.
  * Converts "+91" or "91" to "IN", passes "IN" through as-is.
  */

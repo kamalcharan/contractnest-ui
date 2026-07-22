@@ -19,7 +19,7 @@ import { Pencil, Check, X, Plus, Trash2, Phone, Mail, MapPin, Users, ShieldCheck
 import { useUpdateContact, type Contact } from '@/hooks/useContacts';
 import { useMasterDataOptions } from '@/hooks/useMasterData';
 import { vaniToast } from '@/components/common/toast';
-import { countries } from '@/utils/constants/countries';
+import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getPhonePlaceholder } from '@/utils/validation/contactValidation';
 
 interface Props {
@@ -34,6 +34,25 @@ type SectionKey = 'identity' | 'channels' | 'tags' | 'addresses' | 'compliance' 
 const COUNTRY_LIST = [...countries].sort((a, b) => (a.code === 'IN' ? -1 : b.code === 'IN' ? 1 : a.name.localeCompare(b.name)));
 const ccFromDial = (dial?: string) => COUNTRY_LIST.find(c => `+${c.phoneCode}` === dial || c.code === dial)?.code || 'IN';
 const dialFromCc = (cc: string) => { const c = COUNTRY_LIST.find(x => x.code === cc); return c ? `+${c.phoneCode}` : undefined; };
+// Stored channel values already carry the country's dial code baked in
+// (e.g. "+919885164233") since messaging reminders read this value directly
+// as the number to dial — but the edit/view UI also has its own country
+// selector, so re-displaying the raw value duplicates it ("IN +9198…").
+// Strip the dial code back off for display, only when the remaining digits
+// are a plausible local number for that country (same safe-strip rule the
+// backend normalizer uses) — an ambiguous/corrupted value is left as-is
+// rather than risk chopping real digits off a valid number.
+const localDigits = (value: string, cc: string): string => {
+  const digits = (value || '').replace(/\D/g, '');
+  const country = COUNTRY_LIST.find(c => c.code === cc);
+  if (!country) return digits;
+  if (digits.startsWith(country.phoneCode)) {
+    const rest = digits.slice(country.phoneCode.length);
+    const { min, max } = getPhoneLengthForCountry(cc);
+    if (rest.length >= min && rest.length <= max) return rest;
+  }
+  return digits;
+};
 
 const labelStyle = (colors: any): React.CSSProperties => ({ fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: colors.utility.secondaryText });
 const inputStyle = (colors: any): React.CSSProperties => ({ width: '100%', border: `1px solid ${colors.utility.primaryText}33`, background: colors.utility.primaryBackground, color: colors.utility.primaryText, borderRadius: 9, padding: '9px 11px', fontSize: 13.5, outline: 'none', boxSizing: 'border-box' });
@@ -169,7 +188,11 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
         {/* CHANNELS */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
           <SectionCard colors={colors} icon={Phone} title="Contact channels" active={editing === 'channels'}
-            onEdit={editHandler('channels', { list: channels.map(c => ({ channel_type: c.channel_type || 'mobile', value: c.value, cc: ccFromDial((c as any).country_code), is_primary: c.is_primary })) })}>
+            onEdit={editHandler('channels', { list: channels.map(c => {
+              const cc = ccFromDial((c as any).country_code);
+              const channelType = c.channel_type || 'mobile';
+              return { channel_type: channelType, value: channelType === 'email' ? c.value : localDigits(c.value, cc), cc, is_primary: c.is_primary };
+            }) })}>
             {editing === 'channels' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {draft.list.map((ch: any, i: number) => (
@@ -217,7 +240,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                       {c.channel_type === 'email' ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...vStyle, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{(c as any).country_code && c.channel_type !== 'email' ? `${(c as any).country_code} ` : ''}{c.value}</div>
+                      <div style={{ ...vStyle, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{(c as any).country_code && c.channel_type !== 'email' ? `${(c as any).country_code} ${localDigits(c.value, ccFromDial((c as any).country_code))}` : c.value}</div>
                       <div style={{ fontSize: 11.5, color: colors.utility.secondaryText, textTransform: 'capitalize' }}>{c.channel_type}</div>
                     </div>
                     {c.is_primary && <span style={{ fontSize: 10, fontWeight: 800, color: colors.semantic.success, background: `${colors.semantic.success}18`, padding: '2px 7px', borderRadius: 999, textTransform: 'uppercase' }}>Primary</span>}
