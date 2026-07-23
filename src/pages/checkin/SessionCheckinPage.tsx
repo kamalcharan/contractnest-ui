@@ -213,6 +213,16 @@ const SessionCheckinPage: React.FC = () => {
   const [upiRef, setUpiRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  // UPI deep links have no callback — the browser tab just sits there
+  // untouched while the user pays in GPay/PhonePe. Without this, a user can
+  // easily assume the system detected the payment automatically and never
+  // come back to enter the reference + tap Record payment. A confirm modal
+  // sets that expectation before they leave, and a visibility-change nudge
+  // catches them again if they forget once they're back on the tab.
+  const [payConfirmOpen, setPayConfirmOpen] = useState(false);
+  const [pendingPayUrl, setPendingPayUrl] = useState('');
+  const [paymentAttempted, setPaymentAttempted] = useState(false);
+  const [showReturnNudge, setShowReturnNudge] = useState(false);
 
   // Resolve the token + load the check-in form on mount
   useEffect(() => {
@@ -267,6 +277,19 @@ const SessionCheckinPage: React.FC = () => {
     // (#3) No pre-fill — each open starts blank.
     return () => { alive = false; };
   }, [token]);
+
+  // Nudge if the tab regains focus after a UPI pay attempt and the payment
+  // still hasn't been declared — the deep link gives no signal on its own
+  // that the user ever came back, let alone paid.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && paymentAttempted && !upiRef && !done) {
+        setShowReturnNudge(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [paymentAttempted, upiRef, done]);
 
   const openDues = useMemo<BillingRow[]>(
     () => (history?.billing || []).filter((b) => isOpen(b.status)),
@@ -914,11 +937,13 @@ const SessionCheckinPage: React.FC = () => {
                   <div style={{ marginTop: 14, borderTop: `1px solid #F1F1F3`, paddingTop: 14 }}>
                     {canPay && (
                       <>
-                        <a href={url}
-                          style={{ display: 'block', textAlign: 'center', textDecoration: 'none', padding: 13, borderRadius: 12,
-                            background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setPendingPayUrl(url); setPayConfirmOpen(true); }}
+                          style={{ display: 'block', width: '100%', textAlign: 'center', textDecoration: 'none', padding: 13, borderRadius: 12,
+                            background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, border: 'none', cursor: 'pointer' }}>
                           Pay {money(amount, due?.currency)} now
-                        </a>
+                        </button>
                         <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
                           Opens your UPI app (GPay / PhonePe / Paytm).
                         </p>
@@ -933,9 +958,17 @@ const SessionCheckinPage: React.FC = () => {
                         </div>
                       </>
                     )}
+                    {showReturnNudge && (
+                      <div style={{ marginTop: 12, background: BRAND.accentSoft, border: `1px solid ${BRAND.accent}44`, borderRadius: 10, padding: 11 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.accentInk }}>Back from paying?</div>
+                        <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 2 }}>
+                          Enter your UPI reference below and tap Record payment — it isn't recorded until you do.
+                        </div>
+                      </div>
+                    )}
                     <div style={{ marginTop: canPay ? 14 : 0 }}>
                       <label style={labelStyle}>UPI reference {canPay ? '(after paying)' : '(after paying the chapter UPI)'}</label>
-                      <input value={upiRef} onChange={(e) => setUpiRef(e.target.value)} placeholder="e.g. 4098XXXX2231" style={inputStyle} />
+                      <input value={upiRef} onChange={(e) => { setUpiRef(e.target.value); setShowReturnNudge(false); }} placeholder="e.g. 4098XXXX2231" style={inputStyle} />
                       <p style={{ fontSize: 12, color: BRAND.sub, marginBottom: 0, marginTop: 6 }}>
                         The chair will confirm your payment offline.
                       </p>
@@ -960,6 +993,34 @@ const SessionCheckinPage: React.FC = () => {
             style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
             ← Not you? Start over
           </button>
+
+          {/* Sets expectations before the user leaves for their UPI app —
+              there's no callback that tells this page a payment succeeded,
+              so without this a user can easily assume it's automatic and
+              never come back to declare it. */}
+          {payConfirmOpen && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}
+              onClick={() => setPayConfirmOpen(false)}>
+              <div style={{ background: '#fff', borderRadius: 16, padding: 20, maxWidth: 360, width: '100%' }}
+                onClick={(e) => e.stopPropagation()}>
+                <div style={{ fontWeight: 800, fontSize: 16, color: BRAND.ink, marginBottom: 8 }}>Before you pay</div>
+                <p style={{ fontSize: 13.5, color: BRAND.sub, marginTop: 0, marginBottom: 16, lineHeight: 1.5 }}>
+                  This opens your UPI app to pay. <strong style={{ color: BRAND.ink }}>The payment isn't recorded automatically</strong> —
+                  once you've paid, come back here, enter the UPI reference number, and tap <strong style={{ color: BRAND.ink }}>Record payment</strong> so the chair knows.
+                </p>
+                <a href={pendingPayUrl}
+                  onClick={() => { setPaymentAttempted(true); setPayConfirmOpen(false); }}
+                  style={{ display: 'block', textAlign: 'center', textDecoration: 'none', padding: 13, borderRadius: 12,
+                    background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15 }}>
+                  Continue to pay
+                </a>
+                <button onClick={() => setPayConfirmOpen(false)}
+                  style={{ marginTop: 10, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13, padding: 8 }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </Shell>
