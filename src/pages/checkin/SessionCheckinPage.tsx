@@ -1,5 +1,5 @@
-// ============================================================================
-// SessionCheckinPage — public Group Session check-in (Batch 3 · G2 polish)
+﻿// ============================================================================
+// SessionCheckinPage ΓÇö public Group Session check-in (Batch 3 ┬╖ G2 polish)
 // ============================================================================
 // Reached at /checkin/:token (no auth, outside the app shell). A member scans
 // the chapter QR, is identified by phone, answers the tenant's check-in Smart
@@ -9,7 +9,7 @@
 // Option A skeleton: a fixed, polished mobile shell (branding + session hero +
 // steps) whose *questions* are driven by the tenant's Smart Form schema
 // (gs_checkin_form). The form body is rendered by a compact, self-contained
-// renderer below — deliberately dependency-light (no ThemeContext / admin
+// renderer below ΓÇö deliberately dependency-light (no ThemeContext / admin
 // components) because this page renders for logged-out members on a phone.
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -24,7 +24,7 @@ import { QrCode } from '@/utils/qrcodegen';
 import { countries } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getFullPhoneNumber, getPhonePlaceholder } from '@/utils/validation/contactValidation';
 
-// ── brand tokens (Option A: the configurable skeleton) ──────────────────────
+// ΓöÇΓöÇ brand tokens (Option A: the configurable skeleton) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 const BRAND = {
   accent: '#DA6410',
   accentSoft: '#FEF3EC',
@@ -44,15 +44,21 @@ const fmtDate = (iso?: string) => {
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 const money = (n?: number, c = 'INR') =>
-  `${c === 'INR' ? '₹' : c + ' '}${Number(n || 0).toLocaleString()}`;
+  `${c === 'INR' ? 'Γé╣' : c + ' '}${Number(n || 0).toLocaleString()}`;
 const isOpen = (s: string) => ['scheduled', 'due', 'overdue'].includes(s);
 const initialOf = (s?: string) => (s || '?').trim().charAt(0).toUpperCase() || '?';
 
-// Build a UPI intent URL (upi://pay?…). On a phone this opens the UPI app
+// Build a UPI intent URL (upi://pay?ΓÇª). On a phone this opens the UPI app
 // chooser (GPay / PhonePe / Paytm) pre-filled with payee + amount.
+// mc (merchant category code) is mandatory per the NPCI UPI Linking Spec ΓÇö
+// every real QR (personal or merchant) carries it, defaulting to 0000 for a
+// non-merchant payee. Omitting it made GPay reject the link outright with
+// "Payments to this receiver are not allowed by UPI network", even to a
+// valid VPA, while scanning that same payee's own QR worked fine.
 const upiPayUrl = (vpa: string, payee?: string, amount?: number, note?: string) => {
   const parts = [`pa=${encodeURIComponent(vpa)}`];
   if (payee) parts.push(`pn=${encodeURIComponent(payee)}`);
+  parts.push('mc=0000');
   if (amount) parts.push(`am=${amount}`);
   parts.push('cu=INR');
   if (note) parts.push(`tn=${encodeURIComponent(note)}`);
@@ -64,7 +70,7 @@ const upiPayUrl = (vpa: string, payee?: string, amount?: number, note?: string) 
 const ATTENDANCE_FIELD_IDS = new Set(['attendance_status', 'attendance', 'present']);
 const LAYOUT_TYPES = new Set(['heading', 'paragraph', 'divider']);
 
-// ── tiny conditional evaluator (mirrors the admin FormRenderer semantics) ────
+// ΓöÇΓöÇ tiny conditional evaluator (mirrors the admin FormRenderer semantics) ΓöÇΓöÇΓöÇΓöÇ
 function condMet(cond: CheckinField['conditional'], values: Record<string, unknown>): boolean {
   if (!cond) return true;
   const v = values[cond.field_id];
@@ -92,7 +98,7 @@ function validateField(f: CheckinField, value: unknown): string | null {
   return null;
 }
 
-// Module-scope so their identity is stable across renders — defining these
+// Module-scope so their identity is stable across renders ΓÇö defining these
 // INSIDE the component makes React remount the whole tree on every keystroke
 // (inputs lose focus). Keep them out here.
 const Card: React.FC<{ children: React.ReactNode; pad?: number }> = ({ children, pad = 18 }) => (
@@ -210,10 +216,12 @@ const SessionCheckinPage: React.FC = () => {
   const [responses, setResponses] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [payEventId, setPayEventId] = useState<string>('');
+  const [payAmount, setPayAmount] = useState<string>('');
+  const [selectedCadence, setSelectedCadence] = useState<string | null>(null);
   const [upiRef, setUpiRef] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
-  // UPI deep links have no callback — the browser tab just sits there
+  // UPI deep links have no callback ΓÇö the browser tab just sits there
   // untouched while the user pays in GPay/PhonePe. Without this, a user can
   // easily assume the system detected the payment automatically and never
   // come back to enter the reference + tap Record payment. A confirm modal
@@ -238,7 +246,7 @@ const SessionCheckinPage: React.FC = () => {
       finally { if (alive) setLoading(false); }
       // Device recognition runs after resolve succeeds (needs today's
       // occurrence date to compute alreadyChecked correctly for a
-      // silently-recognised member) — best-effort, never blocks the page.
+      // silently-recognised member) ΓÇö best-effort, never blocks the page.
       if (!alive || !resolved) { if (alive) setDeviceChecking(false); return; }
       try {
         const dl = await sessionCheckinApi.deviceLookup(token, deviceToken);
@@ -250,7 +258,7 @@ const SessionCheckinPage: React.FC = () => {
             setDeviceMatch(dl);
           }
         }
-      } catch { /* device recognition is optional — phone entry still works */ }
+      } catch { /* device recognition is optional ΓÇö phone entry still works */ }
       finally { if (alive) setDeviceChecking(false); }
     })();
     (async () => {
@@ -268,18 +276,18 @@ const SessionCheckinPage: React.FC = () => {
             }));
           if (Object.keys(seed).length) setResponses((prev) => ({ ...seed, ...prev }));
         }
-      } catch { /* form is optional — attendance still works without it */ }
+      } catch { /* form is optional ΓÇö attendance still works without it */ }
     })();
     (async () => {
       try { const pc = await sessionCheckinApi.paymentConfig(token); if (alive && pc?.ok) setPayCfg(pc); }
-      catch { /* payment config is optional — dues still declare without it */ }
+      catch { /* payment config is optional ΓÇö dues still declare without it */ }
     })();
-    // (#3) No pre-fill — each open starts blank.
+    // (#3) No pre-fill ΓÇö each open starts blank.
     return () => { alive = false; };
   }, [token]);
 
   // Nudge if the tab regains focus after a UPI pay attempt and the payment
-  // still hasn't been declared — the deep link gives no signal on its own
+  // still hasn't been declared ΓÇö the deep link gives no signal on its own
   // that the user ever came back, let alone paid.
   useEffect(() => {
     const onVisible = () => {
@@ -291,10 +299,38 @@ const SessionCheckinPage: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [paymentAttempted, upiRef, done]);
 
+  // Full billing timeline, oldest first ΓÇö the RPC already sorts by
+  // scheduled_date. This is the real cadence: which periods are paid, which
+  // is next, and when ΓÇö no separate "pick monthly or quarterly" abstraction,
+  // because the contract is already ON one cadence and these ARE its events.
+  const billingTimeline = history?.billing || [];
   const openDues = useMemo<BillingRow[]>(
-    () => (history?.billing || []).filter((b) => isOpen(b.status)),
-    [history]
+    () => billingTimeline.filter((b) => isOpen(b.status)),
+    [billingTimeline]
   );
+  const paidEvents = useMemo<BillingRow[]>(
+    () => billingTimeline.filter((b) => b.status === 'paid'),
+    [billingTimeline]
+  );
+  // Earliest open due is the only thing a payment can settle against right
+  // now ΓÇö matches how the seller-side ledger applies money (oldest first).
+  // It's the sole payable amount: no picker, because there's no real choice
+  // here ΓÇö it's exactly what this event was priced at.
+  const targetDue = openDues[0] || null;
+  const [showSchedule, setShowSchedule] = useState(false);
+
+  // Auto-target the next due the moment it's known ΓÇö paying it isn't a
+  // decision the member makes among options, so there's nothing to tap
+  // before the "Pay" action becomes available.
+  useEffect(() => {
+    if (targetDue) {
+      setPayEventId(targetDue.event_id);
+      setPayAmount(String(targetDue.remaining ?? targetDue.amount));
+    } else {
+      setPayEventId(''); setPayAmount('');
+    }
+    setSelectedCadence(null);
+  }, [targetDue?.event_id, targetDue?.remaining, targetDue?.amount]);
 
   // Flattened, condition-filtered form fields (minus the attendance control we
   // render ourselves and any pure-layout blocks we still show as text).
@@ -307,7 +343,7 @@ const SessionCheckinPage: React.FC = () => {
   const atStep2 = !!member || (notFound && guestConfirmed);
 
   // Shared by identify() (typed phone) and the on-mount device recognition
-  // (silent, no typing) — both land on the same Step 2 attendance screen.
+  // (silent, no typing) ΓÇö both land on the same Step 2 attendance screen.
   const applyMemberMatch = async (m: CheckinMember, resolvedData: CheckinResolve | null, phoneForSubmit?: string) => {
     setMember(m);
     if (phoneForSubmit) setRecognizedMemberPhone(phoneForSubmit);
@@ -316,7 +352,7 @@ const SessionCheckinPage: React.FC = () => {
       setHistory(h);
       const today = resolvedData?.occurrence?.date;
       if (today && (h?.attendance || []).some((a) => a.date === today)) setAlreadyChecked(true);
-    } catch { /* history is optional — attendance still works without it */ }
+    } catch { /* history is optional ΓÇö attendance still works without it */ }
   };
 
   const identify = async () => {
@@ -368,7 +404,7 @@ const SessionCheckinPage: React.FC = () => {
     setDeviceToken(forgetDeviceToken());
   };
 
-  // Same recognised substitute, but standing in for someone else today —
+  // Same recognised substitute, but standing in for someone else today ΓÇö
   // keep the browser recognised as this substitute (last_member updates on
   // the next successful submit), just ask which member this time.
   const substituteDifferentMemberToday = () => {
@@ -397,8 +433,8 @@ const SessionCheckinPage: React.FC = () => {
     setMember(null); setAlreadyChecked(false); setNotFound(false); setNotFoundKind('choose'); setGuestConfirmed(false);
     setHistory(null); setSubForMember(null); setSubName(''); setPmNum(''); setPoNum('');
     setFirstTimerName(''); setGuestCompany(''); setGuestEmail(''); setErr(null);
-    setP1Num(''); setPayEventId(''); setUpiRef(''); setStatus('present');
-    // Forget this browser too — "not you" means the next scan should ask again.
+    setP1Num(''); setPayEventId(''); setPayAmount(''); setSelectedCadence(null); setUpiRef(''); setStatus('present');
+    // Forget this browser too ΓÇö "not you" means the next scan should ask again.
     setDeviceMatch(null); setDeviceDismissed(true); setDeviceConfirming(false);
     setRecognizedMemberPhone(''); setRecognizedSubPhone(''); setRecognizedGuestPhone('');
     setDeviceToken(forgetDeviceToken());
@@ -427,15 +463,15 @@ const SessionCheckinPage: React.FC = () => {
     // Already checked in: nothing to record unless they're paying a due.
     if (member && alreadyChecked && !payEventId) { setDone(true); return; }
     // Dues-only mode (no session today): only a payment declaration can be
-    // submitted — the backend records it without touching attendance.
-    if (!hasSession && !payEventId) { setErr('There is no session today — select a due to record a payment.'); return; }
+    // submitted ΓÇö the backend records it without touching attendance.
+    if (!hasSession && !payEventId) { setErr('There is no session today ΓÇö enter an amount to record a payment.'); return; }
     // Smart-form questions only apply to a fresh check-in on a session day.
     if (hasSession && !alreadyChecked && !validateForm()) { setErr('Please answer the required questions.'); return; }
     setSubmitting(true);
     try {
       const payment = payEventId
         ? { billing_event_id: payEventId, upi_reference: upiRef || undefined,
-            amount: openDues.find((d) => d.event_id === payEventId)?.amount }
+            amount: Number(payAmount) || openDues.find((d) => d.event_id === payEventId)?.amount }
         : null;
       // Persist the attendance choice inside the responses too, so the stored
       // form answers stay consistent with the attendance column.
@@ -455,7 +491,7 @@ const SessionCheckinPage: React.FC = () => {
           device_token: deviceToken,
         });
       } else if (notFoundKind === 'substitute' && subForMember) {
-        // Standing in for a member → member marked present, substitute saved
+        // Standing in for a member ΓåÆ member marked present, substitute saved
         // as that member's Alternative Contact Person.
         await sessionCheckinApi.substitute(token, {
           member_id: subForMember.contact_id,
@@ -465,7 +501,7 @@ const SessionCheckinPage: React.FC = () => {
           device_token: deviceToken,
         });
       } else {
-        // Guest → own contact tagged 'guest'
+        // Guest ΓåÆ own contact tagged 'guest'
         await sessionCheckinApi.guest(token, {
           name: firstTimerName,
           phone: recognizedGuestPhone || phone,
@@ -482,7 +518,7 @@ const SessionCheckinPage: React.FC = () => {
     } finally { setSubmitting(false); }
   };
 
-  // ── shared UI atoms ──
+  // ΓöÇΓöÇ shared UI atoms ΓöÇΓöÇ
   const chapterName = resolve?.contract_name || 'Session Check-in';
   const tenantName = resolve?.business_name;
   const occ = resolve?.occurrence;
@@ -494,7 +530,7 @@ const SessionCheckinPage: React.FC = () => {
   const inputStyle = INPUT_STYLE;
   const labelStyle = LABEL_STYLE;
 
-  // ── Smart Form field renderer (mobile-styled) ──
+  // ΓöÇΓöÇ Smart Form field renderer (mobile-styled) ΓöÇΓöÇ
   const renderField = (f: CheckinField) => {
     if (!condMet(f.conditional, responses)) return null;
     const val = responses[f.id];
@@ -550,7 +586,7 @@ const SessionCheckinPage: React.FC = () => {
                   style={{ padding: '9px 14px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer',
                     border: sel ? `2px solid ${BRAND.accent}` : `1px solid ${BRAND.field}`,
                     background: sel ? BRAND.accentSoft : '#fff', color: sel ? BRAND.accentInk : BRAND.ink }}>
-                  {sel ? '✓ ' : ''}{o.label}
+                  {sel ? 'Γ£ô ' : ''}{o.label}
                 </button>
               );
             })}
@@ -603,8 +639,8 @@ const SessionCheckinPage: React.FC = () => {
     );
   };
 
-  // ── screens ──
-  if (loading) return <Shell chapterName={chapterName} tenantName={tenantName}><Card>Loading…</Card></Shell>;
+  // ΓöÇΓöÇ screens ΓöÇΓöÇ
+  if (loading) return <Shell chapterName={chapterName} tenantName={tenantName}><Card>LoadingΓÇª</Card></Shell>;
   if (err && !resolve) return <Shell chapterName={chapterName} tenantName={tenantName}><Card><p style={{ color: BRAND.err, margin: 0 }}>{err}</p></Card></Shell>;
 
   if (done) {
@@ -612,20 +648,20 @@ const SessionCheckinPage: React.FC = () => {
       <Shell chapterName={chapterName} tenantName={tenantName}>
         <Card pad={24}>
           <div style={{ width: 68, height: 68, margin: '4px auto 10px', borderRadius: '50%', background: '#ECFDF3',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 }}>✅</div>
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34 }}>Γ£à</div>
           <h2 style={{ textAlign: 'center', margin: '4px 0', color: BRAND.ink }}>
             {!occ ? 'Payment recorded' : alreadyChecked && !payEventId ? "You're all set" : "You're checked in"}
           </h2>
           <p style={{ textAlign: 'center', color: BRAND.sub, marginTop: 4, fontSize: 14 }}>
             {!occ
-              ? 'No session today — no attendance was recorded.'
+              ? 'No session today ΓÇö no attendance was recorded.'
               : alreadyChecked
               ? `Attendance already recorded for ${fmtDate(occ?.date)}.`
               : `${status === 'present' ? 'Marked present' : 'Marked apologies'} for ${fmtDate(occ?.date)}.`}
           </p>
           {payEventId && (
             <div style={{ marginTop: 14, background: BRAND.accentSoft, borderRadius: 12, padding: 12, textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: BRAND.accentInk, fontWeight: 600 }}>Payment recorded as pending</div>
+              <div style={{ fontSize: 15, color: BRAND.accentInk, fontWeight: 800 }}>{money(Number(payAmount))} recorded as pending</div>
               <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>The chair will confirm it offline.</div>
             </div>
           )}
@@ -663,14 +699,14 @@ const SessionCheckinPage: React.FC = () => {
               <div style={{ fontSize: 13, color: BRAND.sub, marginTop: 2 }}>Next session: {fmtDate(resolve.next_occurrence.date)}</div>
             )}
             <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 8 }}>
-              Check-in opens on the session day — but you can still view and settle your dues below.
+              Check-in opens on the session day ΓÇö but you can still view and settle your dues below.
               For a past session, please ask the chapter to mark you.
             </div>
           </>
         )}
       </Card>
 
-      {/* Recognised this browser as a substitute or guest — one-tap confirm */}
+      {/* Recognised this browser as a substitute or guest ΓÇö one-tap confirm */}
       {showDeviceConfirm && deviceMatch?.role === 'substitute' && deviceMatch.substitute && deviceMatch.last_member && (
         <Card>
           <div style={{ fontWeight: 800, color: BRAND.ink, fontSize: 16 }}>Welcome back, {deviceMatch.substitute.name}</div>
@@ -710,11 +746,11 @@ const SessionCheckinPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Step 1 · identify (skipped while device recognition is still checking, or once it found a match above) */}
+      {/* Step 1 ┬╖ identify (skipped while device recognition is still checking, or once it found a match above) */}
       {!atStep2 && !notFound && !showDeviceConfirm && (
         <Card>
           {deviceChecking ? (
-            <p style={{ fontSize: 13.5, color: BRAND.sub, textAlign: 'center', margin: 0 }}>Checking this device…</p>
+            <p style={{ fontSize: 13.5, color: BRAND.sub, textAlign: 'center', margin: 0 }}>Checking this deviceΓÇª</p>
           ) : (
             <>
               <PhoneField label="Your mobile number" cc={p1Cc} num={p1Num} onCc={setP1Cc} onNum={setP1Num} onEnter={identify} />
@@ -723,7 +759,7 @@ const SessionCheckinPage: React.FC = () => {
                 style={{ width: '100%', marginTop: 14, padding: 14, border: 'none', borderRadius: 12,
                   background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, cursor: 'pointer',
                   opacity: checking ? 0.7 : 1 }}>
-                {checking ? 'Checking…' : 'Continue'}
+                {checking ? 'CheckingΓÇª' : 'Continue'}
               </button>
               <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
                 We use your number to recognise you on the roster.
@@ -733,7 +769,7 @@ const SessionCheckinPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Not on roster → choose guest or substitute */}
+      {/* Not on roster ΓåÆ choose guest or substitute */}
       {notFound && !guestConfirmed && (
         <Card>
           <div style={{ fontWeight: 700, color: BRAND.ink }}>We couldn't match that number</div>
@@ -744,12 +780,12 @@ const SessionCheckinPage: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
                 <button onClick={() => setNotFoundKind('guest')}
                   style={{ textAlign: 'left', padding: 14, borderRadius: 12, border: `1px solid ${BRAND.field}`, background: '#fff', cursor: 'pointer' }}>
-                  <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm a guest 👋</div>
+                  <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm a guest ≡ƒæï</div>
                   <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>Visiting this session for the first time.</div>
                 </button>
                 <button onClick={() => { setNotFoundKind('substitute'); setPoCc(p1Cc); setPoNum(p1Num); }}
                   style={{ textAlign: 'left', padding: 14, borderRadius: 12, border: `1px solid ${BRAND.field}`, background: '#fff', cursor: 'pointer' }}>
-                  <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm standing in for a member 🔁</div>
+                  <div style={{ fontWeight: 700, color: BRAND.ink }}>I'm standing in for a member ≡ƒöü</div>
                   <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>Attending on behalf of a member who can't make it.</div>
                 </button>
               </div>
@@ -776,7 +812,7 @@ const SessionCheckinPage: React.FC = () => {
               </button>
               <button onClick={() => setNotFoundKind('choose')}
                 style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
-                ← Back
+                ΓåÉ Back
               </button>
             </>
           )}
@@ -790,7 +826,7 @@ const SessionCheckinPage: React.FC = () => {
                   <button onClick={lookupSubMember} disabled={subLookupLoading}
                     style={{ width: '100%', marginTop: 14, padding: 13, border: 'none', borderRadius: 12,
                       background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', opacity: subLookupLoading ? 0.7 : 1 }}>
-                    {subLookupLoading ? 'Checking…' : 'Find member'}
+                    {subLookupLoading ? 'CheckingΓÇª' : 'Find member'}
                   </button>
                 </>
               ) : (
@@ -817,14 +853,14 @@ const SessionCheckinPage: React.FC = () => {
                   </button>
                   <button onClick={() => { setSubForMember(null); setSubName(''); }}
                     style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
-                    ← Different member
+                    ΓåÉ Different member
                   </button>
                 </>
               )}
               {!subForMember && (
                 <button onClick={() => setNotFoundKind('choose')}
                   style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
-                  ← Back
+                  ΓåÉ Back
                 </button>
               )}
             </>
@@ -833,12 +869,12 @@ const SessionCheckinPage: React.FC = () => {
           {err && <p style={{ color: BRAND.err, fontSize: 13, marginTop: 10, marginBottom: 0 }}>{err}</p>}
           <button onClick={resetIdentity}
             style={{ marginTop: 14, width: '100%', background: 'none', border: 'none', color: BRAND.accent, fontWeight: 700, cursor: 'pointer' }}>
-            ← Try a different number
+            ΓåÉ Try a different number
           </button>
         </Card>
       )}
 
-      {/* Step 2 · attendance + smart form + dues */}
+      {/* Step 2 ┬╖ attendance + smart form + dues */}
       {atStep2 && (
         <>
           <Card>
@@ -862,9 +898,9 @@ const SessionCheckinPage: React.FC = () => {
 
             {alreadyChecked ? (
               <div style={{ marginTop: 14, background: '#ECFDF3', border: '1px solid #A7F3D0', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontWeight: 700, color: '#047857', fontSize: 14 }}>✓ You've already checked in{occ ? ` for ${fmtDate(occ.date)}` : ''}</div>
+                <div style={{ fontWeight: 700, color: '#047857', fontSize: 14 }}>Γ£ô You've already checked in{occ ? ` for ${fmtDate(occ.date)}` : ''}</div>
                 <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>
-                  {openDues.length > 0 ? 'You can still settle your dues below.' : 'Nothing else to do — you’re all set.'}
+                  {openDues.length > 0 ? 'You can still settle your dues below.' : 'Nothing else to do ΓÇö youΓÇÖre all set.'}
                 </div>
               </div>
             ) : occ ? (
@@ -882,18 +918,18 @@ const SessionCheckinPage: React.FC = () => {
                 </div>
               </>
             ) : (
-              // Dues-only mode: no session today, so no attendance to mark —
+              // Dues-only mode: no session today, so no attendance to mark ΓÇö
               // the member can still review and settle dues below.
               <div style={{ marginTop: 14, background: BRAND.accentSoft, borderRadius: 12, padding: 12 }}>
                 <div style={{ fontWeight: 700, color: BRAND.accentInk, fontSize: 14 }}>No session today</div>
                 <div style={{ fontSize: 12.5, color: BRAND.sub, marginTop: 2 }}>
-                  You can view and settle your dues below — no attendance will be recorded.
+                  You can view and settle your dues below ΓÇö no attendance will be recorded.
                 </div>
               </div>
             )}
           </Card>
 
-          {/* Smart Form questions (tenant-configurable) — only on a fresh
+          {/* Smart Form questions (tenant-configurable) ΓÇö only on a fresh
               check-in on a session day (dues-only mode records no attendance) */}
           {!alreadyChecked && !!occ && formFields.length > 0 && (
             <Card>
@@ -906,29 +942,88 @@ const SessionCheckinPage: React.FC = () => {
             </Card>
           )}
 
-          {/* BAU dues — matched members only */}
+          {/* BAU dues ΓÇö matched members only */}
           {member && (
             <Card>
-              <div style={{ fontWeight: 800, color: BRAND.ink, marginBottom: 8 }}>Your dues</div>
-              {openDues.length === 0 && (
-                <p style={{ color: BRAND.ok, fontSize: 14, margin: 0 }}>All dues are settled. 🎉</p>
+              <div style={{ fontWeight: 800, color: BRAND.ink, marginBottom: 8 }}>Payments</div>
+
+              {/* Total Paid / Balance ΓÇö same numbers as the seller's Financials tab */}
+              {history?.totals && (history.totals.total_paid > 0 || history.totals.balance > 0) && (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                  <div style={{ flex: 1, background: '#F8FAFC', border: `1px solid ${BRAND.line}`, borderRadius: 12, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: BRAND.sub, fontWeight: 600 }}>TOTAL PAID</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: BRAND.ok, marginTop: 2 }}>{money(history.totals.total_paid)}</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#F8FAFC', border: `1px solid ${BRAND.line}`, borderRadius: 12, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: BRAND.sub, fontWeight: 600 }}>BALANCE</div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: history.totals.balance > 0 ? BRAND.accentInk : BRAND.ok, marginTop: 2 }}>
+                      {money(history.totals.balance)}
+                    </div>
+                  </div>
+                </div>
               )}
-              {openDues.map((d) => (
-                <label key={d.event_id}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderTop: `1px solid #F1F1F3`, cursor: 'pointer' }}>
-                  <input type="radio" name="due" checked={payEventId === d.event_id}
-                    onChange={() => setPayEventId(payEventId === d.event_id ? '' : d.event_id)} />
-                  <span style={{ flex: 1 }}>
-                    <span style={{ fontSize: 14, color: BRAND.ink }}>{d.label}</span>
-                    <span style={{ display: 'block', fontSize: 12, color: BRAND.sub }}>Due {fmtDate(d.date)} · {d.status}</span>
-                  </span>
-                  <strong style={{ color: BRAND.ink }}>{money(d.amount, d.currency)}</strong>
-                </label>
-              ))}
-              {payEventId && (() => {
-                const due = openDues.find((d) => d.event_id === payEventId);
-                const amount = due?.amount;
-                const note = `${chapterName} — ${due?.label || 'dues'}`;
+
+              {/* Payment History ΓÇö every already-paid event, real dates and
+                  amounts, collapsed by default (same pattern as the seller's
+                  receipts list). Shows exactly which periods are settled. */}
+              {paidEvents.length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedule(!showSchedule)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 12px', borderRadius: 10, border: `1px solid ${BRAND.line}`, background: '#F8FAFC',
+                      cursor: 'pointer' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.ink }}>
+                      Payment History
+                      <span style={{ fontWeight: 500, color: BRAND.sub }}> ┬╖ {paidEvents.length} paid</span>
+                    </span>
+                    <span style={{ fontSize: 12, color: BRAND.sub }}>{showSchedule ? 'Γû▓' : 'Γû╝'}</span>
+                  </button>
+                  {showSchedule && (
+                    <div style={{ marginTop: 4 }}>
+                      {paidEvents.map((e) => (
+                        <div key={e.event_id}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 4px', borderTop: `1px solid #F1F1F3` }}>
+                          <div>
+                            <div style={{ fontSize: 13, color: BRAND.ink }}>{e.label}</div>
+                            <div style={{ fontSize: 11.5, color: BRAND.sub, marginTop: 1 }}>{fmtDate(e.date)}</div>
+                          </div>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: BRAND.ok }}>
+                            Γ£ô {money(e.amount_settled ?? e.amount, e.currency)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Clear break between what's settled and what's owed now */}
+              {(paidEvents.length > 0 && (targetDue || openDues.length === 0)) && (
+                <div style={{ height: 1, background: BRAND.line, margin: '14px 0' }} />
+              )}
+
+              {openDues.length === 0 ? (
+                <p style={{ color: BRAND.ok, fontSize: 14, margin: 0 }}>All dues are settled. ≡ƒÄë</p>
+              ) : targetDue && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.sub, letterSpacing: 0.4, marginBottom: 6 }}>CURRENT</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: BRAND.ink }}>{targetDue.label}</div>
+                      <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 2 }}>Due {fmtDate(targetDue.date)}</div>
+                    </div>
+                    <div style={{ fontSize: 19, fontWeight: 800, color: BRAND.accentInk }}>
+                      {money(targetDue.remaining ?? targetDue.amount, targetDue.currency)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {payEventId && Number(payAmount) > 0 && (() => {
+                const amount = Number(payAmount);
+                const note = `${chapterName} ΓÇö ${targetDue?.label || 'dues'}`;
                 const canPay = !!payCfg?.configured && !!payCfg.upi_id;
                 const url = canPay ? upiPayUrl(payCfg!.upi_id!, payCfg!.payee_name, amount, note) : '';
                 let qrSvg = '';
@@ -942,7 +1037,7 @@ const SessionCheckinPage: React.FC = () => {
                           onClick={() => { setPendingPayUrl(url); setPayConfirmOpen(true); }}
                           style={{ display: 'block', width: '100%', textAlign: 'center', textDecoration: 'none', padding: 13, borderRadius: 12,
                             background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15.5, border: 'none', cursor: 'pointer' }}>
-                          Pay {money(amount, due?.currency)} now
+                          Pay {money(amount, targetDue?.currency)} now
                         </button>
                         <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
                           Opens your UPI app (GPay / PhonePe / Paytm).
@@ -962,7 +1057,7 @@ const SessionCheckinPage: React.FC = () => {
                       <div style={{ marginTop: 12, background: BRAND.accentSoft, border: `1px solid ${BRAND.accent}44`, borderRadius: 10, padding: 11 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.accentInk }}>Back from paying?</div>
                         <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 2 }}>
-                          Enter your UPI reference below and tap Record payment — it isn't recorded until you do.
+                          Enter your UPI reference below and tap Record payment ΓÇö it isn't recorded until you do.
                         </div>
                       </div>
                     )}
@@ -984,17 +1079,17 @@ const SessionCheckinPage: React.FC = () => {
             style={{ width: '100%', padding: 15, border: 'none', borderRadius: 13,
               background: (occ || payEventId) ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 16.5, cursor: (occ || payEventId) ? 'pointer' : 'not-allowed',
               boxShadow: (occ || payEventId) ? '0 6px 16px -4px rgba(218,100,16,0.5)' : 'none', opacity: submitting ? 0.75 : 1 }}>
-            {submitting ? 'Submitting…'
-              : !occ ? (payEventId ? 'Record payment' : 'Select a due to pay')
-              : alreadyChecked ? (payEventId ? 'Record payment' : 'Done')
+            {submitting ? 'SubmittingΓÇª'
+              : !occ ? (payEventId ? `Record ${money(Number(payAmount))} payment` : 'Enter an amount to pay')
+              : alreadyChecked ? (payEventId ? `Record ${money(Number(payAmount))} payment` : 'Done')
               : 'Check in'}
           </button>
           <button onClick={resetIdentity}
             style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: BRAND.sub, fontWeight: 600, cursor: 'pointer', fontSize: 13 }}>
-            ← Not you? Start over
+            ΓåÉ Not you? Start over
           </button>
 
-          {/* Sets expectations before the user leaves for their UPI app —
+          {/* Sets expectations before the user leaves for their UPI app ΓÇö
               there's no callback that tells this page a payment succeeded,
               so without this a user can easily assume it's automatic and
               never come back to declare it. */}
@@ -1005,7 +1100,7 @@ const SessionCheckinPage: React.FC = () => {
                 onClick={(e) => e.stopPropagation()}>
                 <div style={{ fontWeight: 800, fontSize: 16, color: BRAND.ink, marginBottom: 8 }}>Before you pay</div>
                 <p style={{ fontSize: 13.5, color: BRAND.sub, marginTop: 0, marginBottom: 16, lineHeight: 1.5 }}>
-                  This opens your UPI app to pay. <strong style={{ color: BRAND.ink }}>The payment isn't recorded automatically</strong> —
+                  This opens your UPI app to pay. <strong style={{ color: BRAND.ink }}>The payment isn't recorded automatically</strong> ΓÇö
                   once you've paid, come back here, enter the UPI reference number, and tap <strong style={{ color: BRAND.ink }}>Record payment</strong> so the chair knows.
                 </p>
                 <a href={pendingPayUrl}
