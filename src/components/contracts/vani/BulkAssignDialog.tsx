@@ -53,6 +53,12 @@ const contactDisplayName = (c: any): string =>
   [c?.first_name, c?.last_name].filter(Boolean).join(' ') ||
   c?.name || 'Unnamed';
 
+// Contact names are free-text (often ALL CAPS from bulk imports) — title-case
+// for display in the generated contract heading, same as the single-assign
+// composer does.
+const toTitleCase = (s: string): string =>
+  String(s || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
 // Display classification — the contact's actual type, for the tag/badge shown
 // beside their name. Uses the shared 4-type config (client/vendor/partner/
 // team_member) so it never mislabels a team member as a client.
@@ -227,17 +233,32 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
     setFinished(false);
 
     try {
-      const items = members.map((c) => ({
-        buyerId: c.id,
-        contractType: contactContractType(c),
-        draft: {
-          ...(result.draft as any),
+      const baseName = String((result.draft as any).contractName || '');
+      const baseNameParts = baseName.split(' — ');
+
+      const items = members.map((c) => {
+        const buyerDisplayName = contactDisplayName(c);
+        // The base draft was assembled buyer-independent (no member picked
+        // yet), so its contractName has a placeholder buyer segment ("New
+        // Client") baked in — swap in this member's real, title-cased name
+        // instead of leaving every contract in the batch with that placeholder.
+        const contractName = baseNameParts.length === 3
+          ? `${baseNameParts[0]} — ${toTitleCase(buyerDisplayName)} — ${baseNameParts[2]}`
+          : baseName;
+
+        return {
           buyerId: c.id,
-          buyerName: contactDisplayName(c),
-          startDate,
-          templateId: seed.match.template_id,
-        },
-      }));
+          contractType: contactContractType(c),
+          draft: {
+            ...(result.draft as any),
+            buyerId: c.id,
+            buyerName: buyerDisplayName,
+            contractName,
+            startDate,
+            templateId: seed.match.template_id,
+          },
+        };
+      });
 
       const { results, summary } = await submitBulk(items, {
         templateId: seed.match.template_id,
