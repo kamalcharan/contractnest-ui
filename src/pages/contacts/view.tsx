@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Check,
   Loader2,
+  LayoutDashboard,
   Wrench,
   Calendar,
   DollarSign,
@@ -90,8 +91,7 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { key: 'profile', label: 'Profile', icon: UserRound },
-  // Hidden 2026-07-24, flagged for review next session — see CLAUDE.md "Future Review Items".
-  // { key: 'overview', label: 'Overview', icon: LayoutDashboard, insight: true },
+  { key: 'overview', label: 'Overview', icon: LayoutDashboard, insight: true },
   { key: 'contracts', label: 'Contracts', icon: FileText, insight: true },
   { key: 'assets', label: 'Assets', icon: Wrench, insight: true },
   { key: 'financials', label: 'Financials', icon: DollarSign, insight: true },
