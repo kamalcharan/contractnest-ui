@@ -5,6 +5,16 @@
 import type { ConfigurableBlock } from '@/components/catalog-studio/BlockCardConfigurable';
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 
+// ─── Categories needing an occurrence/attendance schedule ───
+// Broader than pricing: a complimentary Group Session (categoryId 'session',
+// price 0) still needs its scheduled occurrences generated for check-in /
+// attendance tracking — categoryHasPricing() wrongly skipped it below since
+// 'session' has no pricing step in the wizard (it's priced 0 on purpose).
+// Mirrors contractnest-api/src/services/contractEventsDerivationService.ts.
+const SERVICE_TRACKED_CATEGORY_IDS = new Set(['service', 'session']);
+const categoryNeedsServiceEvents = (categoryId: string): boolean =>
+  SERVICE_TRACKED_CATEGORY_IDS.has(categoryId);
+
 // ─── Types ───
 
 export type EventType = 'service' | 'billing';
@@ -156,8 +166,8 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
   // ─── SERVICE EVENTS ───
   // For each priced, non-unlimited block
   for (const block of selectedBlocks) {
-    const hasPricing = categoryHasPricing(block.categoryId || '');
-    if (!hasPricing || block.unlimited) continue;
+    const needsServiceEvents = categoryNeedsServiceEvents(block.categoryId || '');
+    if (!needsServiceEvents || block.unlimited) continue;
 
     // Billing-only blocks (fees/dues like memberships) bill on their cycle
     // but never generate service events/visits
