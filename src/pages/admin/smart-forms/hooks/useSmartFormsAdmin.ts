@@ -12,6 +12,7 @@ import type {
   CreateTemplatePayload,
   UpdateTemplatePayload,
   ValidateSchemaResult,
+  EquipmentTag,
 } from '../types/smartFormsAdmin.types';
 
 // =============================
@@ -43,6 +44,7 @@ export function useFormTemplates(filters: FormTemplateFilters = {}) {
     filters.category,
     filters.form_type,
     filters.search,
+    filters.resource_template_id,
   ]);
 
   useEffect(() => {
@@ -50,6 +52,34 @@ export function useFormTemplates(filters: FormTemplateFilters = {}) {
   }, [fetch]);
 
   return { templates, pagination, loading, error, refresh: fetch };
+}
+
+// =============================
+// Equipment Tags (filter dropdown)
+// =============================
+export function useEquipmentTags() {
+  const [tags, setTags] = useState<EquipmentTag[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await api.get(API_ENDPOINTS.ADMIN.SMART_FORMS.EQUIPMENT_TAGS);
+        if (!cancelled) setTags(res.data?.data || []);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.response?.data?.error || err.message || 'Failed to load equipment tags');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  return { tags, loading, error };
 }
 
 // =============================

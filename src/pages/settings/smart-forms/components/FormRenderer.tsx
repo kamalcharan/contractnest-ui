@@ -246,6 +246,58 @@ const FormRenderer: React.FC<FormRendererProps> = ({
       );
     }
 
+    // Checkpoint — traffic-light tri-state (good / attention / fail)
+    if (field.type === 'checkpoint') {
+      const opts = field.options && field.options.length > 0 ? field.options : [
+        { label: 'Good', value: 'good' },
+        { label: 'Attention', value: 'warn' },
+        { label: 'Fail', value: 'bad' },
+      ];
+      const toneColor = (i: number) => (i === 0 ? colors.semantic.success : i === 1 ? colors.semantic.warning : colors.semantic.error);
+      return (
+        <div key={field.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {labelEl}
+            {field.photo_required && (
+              <span style={{ fontSize: '0.6875rem', color: colors.utility.secondaryText, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                📷 photo required
+              </span>
+            )}
+          </div>
+          {helpEl}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {opts.map((opt, i) => {
+              const isOn = displayValue === opt.value;
+              const tone = toneColor(i);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => !isDisabled && handleChange(field.id, opt.value)}
+                  disabled={isDisabled}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem 0.5rem',
+                    borderRadius: '8px',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    cursor: isDisabled ? 'default' : 'pointer',
+                    border: `1.5px solid ${isOn ? tone : colors.utility.secondaryText + '30'}`,
+                    backgroundColor: isOn ? tone : colors.utility.primaryBackground,
+                    color: isOn ? '#ffffff' : colors.utility.secondaryText,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+          {errorEl}
+        </div>
+      );
+    }
+
     // Radio
     if (field.type === 'radio') {
       return (

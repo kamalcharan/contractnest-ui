@@ -111,6 +111,11 @@ export interface CatBlock {
   sequence_no?: number;
   version?: number;
   is_deletable?: boolean;
+
+  // Knowledge Tree linkage (Sprint 2/7 pilot)
+  resource_template_id?: string | null;
+  kt_checkpoint_ids?: string[] | null;
+  form_template_id?: string | null;
 }
 
 export interface CatBlocksResponse {

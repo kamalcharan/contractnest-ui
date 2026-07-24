@@ -83,6 +83,21 @@ export const FIELD_TYPE_REGISTRY: FieldTypeDefinition[] = [
     category: 'selection',
     defaultProps: { required: false, options: [{ label: 'Option 1', value: 'option_1' }] },
   },
+  {
+    type: 'checkpoint',
+    label: 'Checkpoint',
+    icon: '\uD83D\uDEA6',
+    category: 'selection',
+    defaultProps: {
+      required: false,
+      photo_required: false,
+      options: [
+        { label: 'Good', value: 'good' },
+        { label: 'Attention', value: 'warn' },
+        { label: 'Fail', value: 'bad' },
+      ],
+    },
+  },
 
   // Content fields
   {

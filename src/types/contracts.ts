@@ -423,6 +423,22 @@ export interface CancelInvoiceResponse {
   amount_paid: number;
 }
 
+// Receipt cancel
+export interface CancelReceiptPayload {
+  receipt_id: string;
+  reason?: string;
+}
+
+export interface CancelReceiptResponse {
+  receipt_id: string;
+  receipt_number: string;
+  cancelled_amount: number;
+  invoice_id: string;
+  invoice_status: InvoiceStatus;
+  amount_paid: number;
+  balance: number;
+}
+
 // =================================================================
 // CONTRACT CREDIT / DEPOSIT
 // =================================================================

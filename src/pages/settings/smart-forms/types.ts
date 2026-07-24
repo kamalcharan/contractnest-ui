@@ -76,6 +76,7 @@ export interface FormField {
   help_text?: string;
   default_value?: unknown;
   options?: FormFieldOption[];
+  photo_required?: boolean;
   validation?: FormFieldValidation;
   computed?: {
     formula: string;

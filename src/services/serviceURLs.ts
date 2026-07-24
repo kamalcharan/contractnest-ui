@@ -967,6 +967,7 @@ export const API_ENDPOINTS = {
     INVOICES: (id: string) => `/api/contracts/${id}/invoices`,
     RECORD_PAYMENT: (id: string) => `/api/contracts/${id}/invoices/record-payment`,
     CANCEL_INVOICE: (id: string) => `/api/contracts/${id}/invoices/cancel`,
+    CANCEL_RECEIPT: (id: string) => `/api/contracts/${id}/invoices/receipts/cancel`,
 
     // Credit / Deposit
     SET_CREDIT: (id: string) => `/api/contracts/${id}/credit`,

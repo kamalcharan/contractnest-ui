@@ -1,13 +1,21 @@
 // FormPreviewTab — Auto-composed SmartForm from Knowledge Tree data
 // Uses FormRenderer in readOnly mode, exports to m_form_templates as draft
-import React, { useState, useCallback } from 'react';
-import { Smartphone, Monitor, Download, Loader2, CheckCircle2 } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Smartphone, Monitor, Download, Loader2, CheckCircle2, Wrench } from 'lucide-react';
 import VaNiBubble from './VaNiBubble';
 import { useAutoComposeForm } from './useAutoComposeForm';
 import FormRenderer from '@/pages/settings/smart-forms/components/FormRenderer';
 import { useFormTemplateMutations } from '@/pages/admin/smart-forms/hooks/useSmartFormsAdmin';
+import api from '@/services/api';
 import { vaniToast } from '@/components/common/toast/VaNiToast';
 import type { KnowledgeTreeSummary } from '../types';
+
+interface ServiceFormStatus {
+  service_name: string;
+  checkpoint_count: number;
+  form_template_id: string | null;
+  form_status: string | null;
+}
 
 interface Props {
   summary: KnowledgeTreeSummary;
@@ -27,6 +35,54 @@ const FormPreviewTab: React.FC<Props> = ({ summary, variants, checkpointsBySecti
 
   // Only use selected variants
   const activeVariants = variants.filter((v) => selectedVariantIds.has(v.id));
+
+  // ── Per-service forms (Sprint 2/7) ──
+  // Status is read from m_kt_service_form_map — a platform master table,
+  // one row per (resource_template_id, service_name) — not from tenant-owned
+  // m_cat_blocks, which showed one duplicate row per tenant that had seeded
+  // this equipment. Forms themselves are created automatically right after
+  // "Generate Service Names"; this panel is a status view + a fallback
+  // "Generate Missing" action for groups that failed or predate that wiring.
+  const [formStatus, setFormStatus] = useState<ServiceFormStatus[]>([]);
+  const [formStatusLoading, setFormStatusLoading] = useState(true);
+  const [generatingAll, setGeneratingAll] = useState(false);
+
+  const fetchFormStatus = useCallback(async () => {
+    setFormStatusLoading(true);
+    try {
+      const resp = await api.get('/api/knowledge-tree/service-forms', {
+        params: { resourceTemplateId: summary.resource_template.id },
+      });
+      setFormStatus(resp.data?.data?.results || []);
+    } catch {
+      vaniToast.error('Could not load per-service form status');
+    } finally {
+      setFormStatusLoading(false);
+    }
+  }, [summary.resource_template.id]);
+
+  useEffect(() => { fetchFormStatus(); }, [fetchFormStatus]);
+
+  const handleGenerateMissing = useCallback(async () => {
+    setGeneratingAll(true);
+    try {
+      const resp = await api.post('/api/knowledge-tree/generate-forms', {
+        resourceTemplateId: summary.resource_template.id,
+      });
+      const results = resp.data?.data?.results || [];
+      const created = results.filter((r: any) => r.status === 'created').length;
+      if (created > 0) {
+        vaniToast.success(`${created} form${created === 1 ? '' : 's'} generated`);
+      } else {
+        vaniToast.info('Nothing to generate — every service group already has a form');
+      }
+      await fetchFormStatus();
+    } catch {
+      vaniToast.error('Failed to generate forms');
+    } finally {
+      setGeneratingAll(false);
+    }
+  }, [summary.resource_template.id, fetchFormStatus]);
 
   const schema = useAutoComposeForm(
     summary.resource_template.name,
@@ -53,6 +109,8 @@ const FormPreviewTab: React.FC<Props> = ({ summary, variants, checkpointsBySecti
       form_type: 'during_service',
       tags: ['auto-composed', 'knowledge-tree', summary.resource_template.id, summary.resource_template.sub_category],
       schema: schema as unknown as Record<string, unknown>,
+      source: 'knowledge_tree',
+      resource_template_id: summary.resource_template.id,
     });
     if (result) {
       setExported(true);
@@ -188,6 +246,89 @@ const FormPreviewTab: React.FC<Props> = ({ summary, variants, checkpointsBySecti
             <><Download className="h-4 w-4" /> Export as Draft SmartForm</>
           )}
         </button>
+      </div>
+
+      {/* Per-Service Forms */}
+      <div style={{ marginTop: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+          <Wrench className="h-4 w-4" style={{ color: brandPrimary }} />
+          <h3 style={{ fontSize: '14px', fontWeight: 700, color: colors.utility.primaryText, margin: 0, flex: 1 }}>
+            Per-Service Forms
+          </h3>
+          <button
+            onClick={handleGenerateMissing}
+            disabled={generatingAll || formStatusLoading}
+            style={{
+              padding: '6px 14px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: '5px', fontFamily: 'inherit',
+              cursor: generatingAll || formStatusLoading ? 'not-allowed' : 'pointer',
+              background: brandPrimary, color: '#fff', border: 'none',
+              opacity: generatingAll || formStatusLoading ? 0.6 : 1,
+            }}
+          >
+            {generatingAll ? (<><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</>) : 'Generate Missing'}
+          </button>
+        </div>
+        <VaNiBubble colors={colors}>
+          <p>
+            Each service group below gets its own SmartForm, generated automatically right after <strong style={{ color: colors.utility.primaryText }}>Service Names</strong> runs.
+            This is a platform-level mapping (one form per service, not per tenant) — every tenant who seeds this equipment <strong style={{ color: brandPrimary }}>automatically inherits the right form</strong>, no manual picking.
+          </p>
+        </VaNiBubble>
+
+        {formStatusLoading && (
+          <div style={{ padding: '16px', fontSize: '12px', color: colors.utility.secondaryText }}>Loading service form status…</div>
+        )}
+
+        {!formStatusLoading && formStatus.length === 0 && (
+          <div style={{ padding: '16px', fontSize: '12px', color: colors.utility.secondaryText }}>
+            No service groups found yet — run Service Names first.
+          </div>
+        )}
+
+        {!formStatusLoading && formStatus.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            {formStatus.map((s) => {
+              const hasForm = Boolean(s.form_template_id);
+              return (
+                <div
+                  key={s.service_name}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', borderRadius: '10px',
+                    border: `1px solid ${borderColor}`,
+                    background: colors.utility.secondaryBackground,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: colors.utility.primaryText }}>
+                      {s.service_name}
+                    </span>
+                    <div style={{ fontSize: '11px', color: colors.utility.secondaryText }}>
+                      {s.checkpoint_count} checkpoint{s.checkpoint_count === 1 ? '' : 's'}
+                    </div>
+                  </div>
+                  {hasForm ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      fontSize: '10px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px',
+                      background: colors.semantic.success + '15', color: colors.semantic.success, flexShrink: 0,
+                    }}>
+                      <CheckCircle2 className="h-3 w-3" /> {s.form_status || 'ready'}
+                    </span>
+                  ) : (
+                    <span style={{
+                      fontSize: '10px', fontWeight: 600, padding: '3px 10px', borderRadius: '999px',
+                      background: colors.semantic.warning + '15', color: colors.semantic.warning, flexShrink: 0,
+                    }}>
+                      no form yet
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

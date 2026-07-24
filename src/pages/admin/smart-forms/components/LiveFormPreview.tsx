@@ -269,6 +269,45 @@ const FieldPreview: React.FC<FieldPreviewProps> = ({ field, colors }) => {
     );
   }
 
+  // Checkpoint — traffic-light tri-state (good / attention / fail)
+  if (field.type === 'checkpoint') {
+    const options = (field.options as Array<{ label: string; value: string }>) || [
+      { label: 'Good', value: 'good' },
+      { label: 'Attention', value: 'warn' },
+      { label: 'Fail', value: 'bad' },
+    ];
+    const toneColor = (i: number) => (i === 0 ? colors.semantic.success : i === 1 ? colors.semantic.warning : colors.semantic.error);
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+          <span style={labelStyle}>{field.label}{field.required ? ' *' : ''}</span>
+          {field.photo_required as boolean && (
+            <span style={{ fontSize: '0.6875rem', color: colors.utility.secondaryText }}>📷 photo required</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {options.map((opt, i) => (
+            <div
+              key={opt.value}
+              style={{
+                flex: 1,
+                padding: '0.5rem 0.5rem',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                textAlign: 'center',
+                border: `1.5px solid ${toneColor(i)}60`,
+                color: toneColor(i),
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // Select / Multi Select
   if (field.type === 'select' || field.type === 'multi_select') {
     const options = (field.options as Array<{ label: string; value: string }>) || [];

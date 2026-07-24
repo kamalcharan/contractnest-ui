@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
-import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse, CancelInvoicePayload, CancelInvoiceResponse } from '@/types/contracts';
+import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse, CancelInvoicePayload, CancelInvoiceResponse, CancelReceiptPayload, CancelReceiptResponse } from '@/types/contracts';
 
 // =================================================================
 // QUERY KEYS
@@ -168,6 +168,54 @@ export const useCancelInvoice = (contractId: string | undefined) => {
       onError: (error: any) => {
         captureException(error, {
           tags: { component: 'useCancelInvoice' },
+          extra: { contractId, tenantId: currentTenant?.id },
+        });
+      },
+    },
+  });
+};
+
+// =================================================================
+// MUTATION: Cancel Receipt
+// =================================================================
+
+/**
+ * Cancel a single receipt (payment record) with a reason.
+ * Seller-only action. Reverses whatever it settled on the invoice/events.
+ * Invalidates invoice queries on success.
+ */
+export const useCancelReceipt = (contractId: string | undefined) => {
+  const { currentTenant } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: CancelReceiptPayload): Promise<CancelReceiptResponse> => {
+      if (!currentTenant?.id || !contractId) {
+        throw new Error('Missing tenant or contract ID');
+      }
+
+      const response = await api.post(
+        API_ENDPOINTS.CONTRACTS.CANCEL_RECEIPT(contractId),
+        payload
+      );
+
+      const result = response.data?.data || response.data;
+
+      if (result?.success === false) {
+        throw new Error(result.error || 'Failed to cancel receipt');
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      if (contractId) {
+        queryClient.invalidateQueries({ queryKey: invoiceKeys.byContract(contractId) });
+      }
+    },
+    meta: {
+      onError: (error: any) => {
+        captureException(error, {
+          tags: { component: 'useCancelReceipt' },
           extra: { contractId, tenantId: currentTenant?.id },
         });
       },

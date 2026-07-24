@@ -86,19 +86,20 @@ function buildConditionSections(checkpoints: Checkpoint[]): FormSection[] {
     description: `${cps.length} condition checks`,
     fields: cps.map((cp): FormField => ({
       id: `cp_${cp.id}`,
-      type: 'select',
+      type: 'checkpoint',
       label: cp.name,
       help_text: cp.description || undefined,
       validation: { required: true },
+      // checkpoint renders these as 3 traffic-light buttons, colored by
+      // position (good/warn/bad) -- keep exactly 3 entries in that order.
+      // A checkpoint with custom severity values (cp.values) beyond the
+      // first 3 will still render every option, just without a 4th color.
       options: (cp.values && cp.values.length > 0)
-        ? cp.values.map((v) => ({
-            label: `${v.severity === 'ok' ? '🟢' : v.severity === 'attention' ? '🟡' : '🔴'} ${v.label}`,
-            value: v.label.toLowerCase().replace(/[^a-z0-9]+/g, '_'),
-          }))
+        ? cp.values.map((v) => ({ label: v.label, value: v.label.toLowerCase().replace(/[^a-z0-9]+/g, '_') }))
         : [
-            { label: '🟢 OK', value: 'ok' },
-            { label: '🟡 Needs Attention', value: 'attention' },
-            { label: '🔴 Critical', value: 'critical' },
+            { label: 'OK', value: 'ok' },
+            { label: 'Needs Attention', value: 'attention' },
+            { label: 'Critical', value: 'critical' },
           ],
     })),
   }));
@@ -220,6 +221,47 @@ function buildSignOffSection(): FormSection {
       },
       { id: 'next_service_date', type: 'date', label: 'Recommended Next Service Date' },
     ],
+  };
+}
+
+// ── Scoped form for ONE catalog block (Sprint 2/7: "arm catalog-studio") ──
+// Composes a small form limited to the given checkpoint ids only, instead of
+// the whole equipment's checkpoints -- matches how m_cat_blocks.kt_checkpoint_ids
+// already scopes one catalog service (e.g. "Air Filter Inspection &
+// Replacement") to its own small slice of the Knowledge Tree, rather than
+// every checkpoint on the equipment.
+export function composeBlockForm(
+  blockName: string,
+  variants: Variant[],
+  allCheckpoints: Checkpoint[],
+  checkpointIds: string[],
+): FormSchema {
+  const idSet = new Set(checkpointIds);
+  const scoped = allCheckpoints.filter((cp) => idSet.has(cp.id));
+
+  const conditionSections = buildConditionSections(scoped);
+  const readingSections = buildReadingSections(scoped);
+  const totalFields = 7 +
+    conditionSections.reduce((s, sec) => s + sec.fields.length, 0) +
+    readingSections.reduce((s, sec) => s + sec.fields.length, 0) +
+    4;
+
+  return {
+    id: `kt_block_${Date.now()}`,
+    title: blockName,
+    description: `Auto-composed from Knowledge Tree · ${scoped.length} checkpoints · ${totalFields} fields`,
+    version: 1,
+    sections: [
+      buildIdentificationSection(variants),
+      ...conditionSections,
+      ...readingSections,
+      buildSignOffSection(),
+    ],
+    settings: {
+      allow_draft: true,
+      require_all_sections: false,
+      show_progress: true,
+    },
   };
 }
 

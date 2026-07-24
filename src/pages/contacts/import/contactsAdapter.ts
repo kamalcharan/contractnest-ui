@@ -25,6 +25,7 @@ export type TargetFieldKey =
   | 'category'
   | 'tags'
   | 'member_id'
+  | 'chapter'
   | 'reference'
   | 'ignore';
 
@@ -44,6 +45,7 @@ export const TARGET_FIELDS: TargetField[] = [
   { key: 'category', label: 'Category → Industry', hint: 'Business category, mapped to industries' },
   { key: 'tags', label: 'Tags', hint: 'Tag name(s) — multiple separated by / or ,' },
   { key: 'member_id', label: 'Member ID', hint: 'External member ID from the source system — stored on the contact, shown on the profile' },
+  { key: 'chapter', label: 'Chapter', hint: 'Chapter / branch name — stored on the contact, shown on the profile' },
   { key: 'reference', label: 'Reference Id', hint: 'External id, stored in notes' },
   { key: 'ignore', label: 'Ignore', hint: 'Skip this column' },
 ];
@@ -59,6 +61,7 @@ export interface ImportRow {
   category: string;
   tags: string[];
   memberId: string;
+  chapter: string;
   reference: string;
   errors: string[];
   include: boolean;
@@ -126,6 +129,7 @@ const HEADER_PATTERNS: Array<{ field: TargetFieldKey; patterns: RegExp[] }> = [
   { field: 'category', patterns: [/category/i, /industry/i, /business\s*type/i, /segment/i] },
   { field: 'tags', patterns: [/^tags?$/i, /labels?/i] },
   { field: 'member_id', patterns: [/member\s*id/i] },
+  { field: 'chapter', patterns: [/chapter/i, /^branch$/i, /^group$/i] },
   { field: 'reference', patterns: [/\bid\b/i, /reference/i, /reg\s*no/i, /code/i] },
 ];
 
@@ -196,6 +200,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
   const categoryCols = col('category');
   const tagCols = col('tags');
   const memberIdCols = col('member_id');
+  const chapterCols = col('chapter');
   const referenceCols = col('reference');
 
   const firstValue = (row: string[], cols: number[]): string => {
@@ -214,6 +219,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
       tagCols.flatMap((c) => splitList(raw[c] || ''))
     ));
     const memberId = firstValue(raw, memberIdCols);
+    const chapter = firstValue(raw, chapterCols);
     const reference = firstValue(raw, referenceCols);
 
     const errors: string[] = [];
@@ -234,6 +240,7 @@ export function extractRows(sheet: ParsedSheet, mapping: TargetFieldKey[]): Impo
       category,
       tags,
       memberId,
+      chapter,
       reference,
       errors,
       include: errors.length === 0,
@@ -367,7 +374,12 @@ export function buildContactPayload(
     tags: resolveRowTags(row.tags, batch.tags, tagCatalog),
     industries: industryId ? [industryId] : [],
     notes: noteParts.length > 0 ? noteParts.join('\n') : undefined,
-    external_data: row.memberId ? { member_id: row.memberId } : undefined,
+    external_data: (row.memberId || row.chapter)
+      ? {
+          ...(row.memberId ? { member_id: row.memberId } : {}),
+          ...(row.chapter ? { chapter_name: row.chapter } : {}),
+        }
+      : undefined,
   };
 }
 

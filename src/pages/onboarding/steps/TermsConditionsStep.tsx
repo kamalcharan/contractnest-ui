@@ -44,6 +44,14 @@ const DARK_BG     = 'linear-gradient(145deg, #1a1816, #2a2520)';
 const TNC_NAME = 'Terms & Conditions';
 const TNC_MATCH = /terms\s*(&|and)\s*conditions/i;
 
+// Platform LOV id for the "text" block type (m_category_details, cat_block_type
+// = 'text') — same constants-not-resolution convention used by
+// Screen8APricingStep.tsx and ktCatBlockMapperService.ts. block_type_id is a
+// uuid column; nothing downstream resolves the friendly string 'text' into
+// this UUID, so it must be sent as-is or block creation fails with
+// "invalid input syntax for type uuid".
+const BLOCK_TYPE_TEXT = 'db4bf715-dc1a-46f6-94a9-e64429137d3f';
+
 // Editable starting point — deliberately generic service-agreement language.
 // The tenant owns every word; this only saves what they confirm.
 const BOILERPLATE = `
@@ -114,7 +122,7 @@ const TermsConditionsStep: React.FC = () => {
           id: existing.id,
           data: blockToUpdateData({
             name: existing.name || TNC_NAME,
-            categoryId: 'text',
+            categoryId: BLOCK_TYPE_TEXT,
             icon: existing.icon || 'FileText',
             description: content,
             meta: { content, contentType: 'rich' },
@@ -124,7 +132,7 @@ const TermsConditionsStep: React.FC = () => {
         await createBlockMutation.mutateAsync(
           blockToCreateData({
             name: TNC_NAME,
-            categoryId: 'text',
+            categoryId: BLOCK_TYPE_TEXT,
             icon: 'FileText',
             description: content,
             meta: { content, contentType: 'rich' },

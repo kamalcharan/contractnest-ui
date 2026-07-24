@@ -48,6 +48,8 @@ export interface UpdateBlockData {
   tags?: string[];
   tenant_id?: string | null;
   is_seed?: boolean;
+  // Knowledge Tree linkage (Sprint 2/7 pilot)
+  form_template_id?: string | null;
   // NEW: For optimistic locking
   expected_version?: number;
 }

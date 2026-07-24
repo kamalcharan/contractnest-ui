@@ -209,7 +209,8 @@ const SECTIONS: Array<{
   comingSoon?: boolean;
   typeLabelByCat?: Record<string, string>;
 }> = [
-  { key: 'services', title: 'Services — from your catalog', chipLabel: 'Services', cats: ['service', 'session'], priced: true },
+  { key: 'services', title: 'Services — from your catalog', chipLabel: 'Services', cats: ['service'], priced: true },
+  { key: 'sessions', title: 'Group Sessions — from your catalog', chipLabel: 'Group Sessions', cats: ['session'], priced: true },
   { key: 'spares', title: 'Spares & parts', chipLabel: 'Spare Parts', cats: ['spare'], priced: true },
   { key: 'fees', title: 'Fees & billing', chipLabel: 'Fees & Billing', cats: ['billing'], priced: true },
   {

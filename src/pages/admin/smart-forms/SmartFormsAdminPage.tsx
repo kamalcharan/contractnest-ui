@@ -6,7 +6,7 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useFormTemplates, useFormTemplateMutations } from './hooks/useSmartFormsAdmin';
+import { useFormTemplates, useFormTemplateMutations, useEquipmentTags } from './hooks/useSmartFormsAdmin';
 import { vaniToast } from '@/components/common/toast';
 import { VaNiLoader } from '@/components/common/loaders';
 import type { FormTemplateFilters, FormTemplate, FormStatus } from './types/smartFormsAdmin.types';
@@ -24,6 +24,11 @@ const SmartFormsAdminPage: React.FC = () => {
   // Data
   const { templates, pagination, loading, error, refresh } = useFormTemplates(filters);
   const mutations = useFormTemplateMutations();
+  const { tags: equipmentTags } = useEquipmentTags();
+  const equipmentNameById = React.useMemo(
+    () => new Map(equipmentTags.map(t => [t.resource_template_id, t.name])),
+    [equipmentTags],
+  );
 
   // Confirmation dialog state
   const [confirmAction, setConfirmAction] = useState<{
@@ -254,7 +259,26 @@ const SmartFormsAdminPage: React.FC = () => {
             <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
           ))}
         </select>
-        {(filters.search || filters.status || filters.category || filters.form_type) && (
+        <select
+          value={filters.resource_template_id || ''}
+          onChange={(e) => handleFilterChange('resource_template_id', e.target.value)}
+          style={{
+            padding: '0.5rem 0.75rem',
+            borderRadius: '8px',
+            border: `1px solid ${colors.utility.borderLight}`,
+            backgroundColor: colors.utility.secondaryBackground,
+            color: colors.utility.textPrimary,
+            fontSize: '0.875rem',
+          }}
+        >
+          <option value="">All Equipment</option>
+          {equipmentTags.map(t => (
+            <option key={t.resource_template_id} value={t.resource_template_id}>
+              {t.name} ({t.form_count})
+            </option>
+          ))}
+        </select>
+        {(filters.search || filters.status || filters.category || filters.form_type || filters.resource_template_id) && (
           <button
             onClick={clearFilters}
             style={{
@@ -331,6 +355,29 @@ const SmartFormsAdminPage: React.FC = () => {
                   <span style={{ fontSize: '0.75rem', color: colors.utility.textSecondary }}>
                     v{t.version}
                   </span>
+                  {t.source === 'knowledge_tree' && t.resource_template_id && (
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/service-contracts/templates/admin/global-templates/tree/${t.resource_template_id}?type=equipment`);
+                      }}
+                      title="Auto-composed from Knowledge Tree — click to open the source tree"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        fontSize: '0.6875rem',
+                        fontWeight: 600,
+                        padding: '0.125rem 0.5rem',
+                        borderRadius: '999px',
+                        backgroundColor: colors.semantic.success + '15',
+                        color: colors.semantic.success,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🌳 {equipmentNameById.get(t.resource_template_id) || 'Knowledge Tree'}
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: '0.8125rem', color: colors.utility.textSecondary }}>
                   {t.category} &middot; {t.form_type.replace(/_/g, ' ')}

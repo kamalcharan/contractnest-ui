@@ -48,7 +48,7 @@ import {
   PiggyBank,
 } from 'lucide-react';
 import { useContract, useContractOperations } from '@/hooks/queries/useContractQueries';
-import { useContractInvoices, useCancelInvoice } from '@/hooks/queries/useInvoiceQueries';
+import { useContractInvoices, useCancelInvoice, useCancelReceipt } from '@/hooks/queries/useInvoiceQueries';
 import {
   useSetContractCredit,
   useBuyerPendingCredits,
@@ -1573,8 +1573,38 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
   const [confirmAction, setConfirmAction] = useState<'cancel' | 'bad_debt' | null>(null);
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cancelReceiptId, setCancelReceiptId] = useState<string | null>(null);
+  const [receiptCancelReason, setReceiptCancelReason] = useState('');
+  const [isCancellingReceipt, setIsCancellingReceipt] = useState(false);
   const { addToast } = useVaNiToast();
   const cancelInvoiceMutation = useCancelInvoice(contractId);
+  const cancelReceiptMutation = useCancelReceipt(contractId);
+
+  const handleConfirmCancelReceipt = async (receiptNumber: string) => {
+    if (!cancelReceiptId) return;
+    setIsCancellingReceipt(true);
+    try {
+      await cancelReceiptMutation.mutateAsync({
+        receipt_id: cancelReceiptId,
+        reason: receiptCancelReason.trim() || undefined,
+      });
+      addToast({
+        type: 'success',
+        title: 'Receipt Cancelled',
+        message: `${receiptNumber} has been cancelled.`,
+      });
+      setCancelReceiptId(null);
+      setReceiptCancelReason('');
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Action Failed',
+        message: err?.message || 'Something went wrong. Please try again.',
+      });
+    } finally {
+      setIsCancellingReceipt(false);
+    }
+  };
 
   const handleConfirmAction = async () => {
     if (!confirmAction) return;
@@ -1698,47 +1728,110 @@ const InvoiceCard: React.FC<InvoiceCardProps> = ({
         {showReceipts && hasReceipts && (
           <div className="mb-3 space-y-1.5">
             {receipts.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between px-3 py-2 rounded-md"
-                style={{ backgroundColor: colors.utility.primaryText + '04', border: `1px solid ${colors.utility.primaryText}08` }}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: colors.semantic.success + '12' }}
-                  >
-                    <Hash className="h-3 w-3" style={{ color: colors.semantic.success }} />
-                  </div>
-                  <div className="min-w-0">
-                    <span className="text-[0.6rem] font-bold block" style={{ color: colors.utility.primaryText }}>
-                      {r.receipt_number}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
-                        {formatDate(r.payment_date)}
+              <div key={r.id}>
+                <div
+                  className="flex items-center justify-between px-3 py-2 rounded-md"
+                  style={{ backgroundColor: colors.utility.primaryText + '04', border: `1px solid ${colors.utility.primaryText}08` }}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: colors.semantic.success + '12' }}
+                    >
+                      <Hash className="h-3 w-3" style={{ color: colors.semantic.success }} />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[0.6rem] font-bold block" style={{ color: colors.utility.primaryText }}>
+                        {r.receipt_number}
                       </span>
-                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
-                      <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
-                        {(r.payment_method || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
-                      </span>
-                      {r.reference_number && (
-                        <>
-                          <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
-                          <span className="text-[0.55rem] font-mono" style={{ color: colors.utility.secondaryText }}>
-                            Ref: {r.reference_number}
-                          </span>
-                        </>
-                      )}
-                      {r.is_offline && (
-                        <Wallet className="h-2.5 w-2.5 flex-shrink-0" style={{ color: '#F59E0B' }} title="Offline payment" />
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+                          {formatDate(r.payment_date)}
+                        </span>
+                        <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                        <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>
+                          {(r.payment_method || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                        </span>
+                        {r.reference_number && (
+                          <>
+                            <span className="text-[0.55rem]" style={{ color: colors.utility.secondaryText }}>&middot;</span>
+                            <span className="text-[0.55rem] font-mono" style={{ color: colors.utility.secondaryText }}>
+                              Ref: {r.reference_number}
+                            </span>
+                          </>
+                        )}
+                        {r.is_offline && (
+                          <Wallet className="h-2.5 w-2.5 flex-shrink-0" style={{ color: '#F59E0B' }} title="Offline payment" />
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <span className="text-xs font-bold" style={{ color: colors.semantic.success }}>
+                      {formatCurrency(r.amount, r.currency || inv.currency)}
+                    </span>
+                    {isSeller && (
+                      <button
+                        onClick={() => { setCancelReceiptId(r.id); setReceiptCancelReason(''); }}
+                        className="p-1 rounded transition-all hover:opacity-80"
+                        style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+                        title="Cancel Receipt"
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <span className="text-xs font-bold flex-shrink-0 ml-3" style={{ color: colors.semantic.success }}>
-                  {formatCurrency(r.amount, r.currency || inv.currency)}
-                </span>
+
+                {/* Per-receipt cancel confirmation */}
+                {cancelReceiptId === r.id && (
+                  <div
+                    className="mt-1.5 p-3 rounded-lg border"
+                    style={{ backgroundColor: colors.utility.primaryText + '04', borderColor: colors.utility.primaryText + '15' }}
+                  >
+                    <p className="text-xs font-bold mb-2" style={{ color: colors.utility.primaryText }}>
+                      Cancel Receipt — {r.receipt_number}
+                    </p>
+                    <p className="text-[0.65rem] mb-2" style={{ color: colors.utility.secondaryText }}>
+                      This reverses {formatCurrency(r.amount, r.currency || inv.currency)} from the invoice and un-settles any billing events it paid toward.
+                    </p>
+                    <input
+                      type="text"
+                      placeholder="Reason (optional)"
+                      value={receiptCancelReason}
+                      onChange={(e) => setReceiptCancelReason(e.target.value)}
+                      className="w-full text-xs px-3 py-1.5 rounded-md border mb-2 outline-none"
+                      style={{
+                        backgroundColor: colors.utility.secondaryBackground,
+                        borderColor: colors.utility.primaryText + '15',
+                        color: colors.utility.primaryText,
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleConfirmCancelReceipt(r.receipt_number)}
+                        disabled={isCancellingReceipt}
+                        className="flex items-center gap-1.5 text-[0.65rem] font-semibold px-3 py-1.5 rounded-md text-white transition-all hover:opacity-90 disabled:opacity-50"
+                        style={{ backgroundColor: colors.semantic.error }}
+                      >
+                        {isCancellingReceipt ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <AlertTriangle className="h-3 w-3" />
+                        )}
+                        {isCancellingReceipt ? 'Processing...' : 'Confirm Cancel'}
+                      </button>
+                      <button
+                        onClick={() => { setCancelReceiptId(null); setReceiptCancelReason(''); }}
+                        disabled={isCancellingReceipt}
+                        className="text-[0.65rem] font-medium px-3 py-1.5 rounded-md transition-all hover:opacity-80"
+                        style={{ color: colors.utility.secondaryText, backgroundColor: colors.utility.primaryText + '06' }}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

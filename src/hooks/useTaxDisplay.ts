@@ -179,10 +179,14 @@ export const useTaxDisplay = (): UseTaxDisplayReturn => {
 
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update tax display mode';
 
+      // Note: intentionally NOT setting state.error here — that field drives
+      // TaxDisplayPanel's full-panel "Failed to load tax display settings"
+      // view, which would discard the user's in-progress selection on a
+      // save failure. A save error is reported via the toast below instead,
+      // leaving the form (and selectedMode) intact so the user can retry.
       setState(prev => ({
         ...prev,
-        saving: false,
-        error: errorMessage
+        saving: false
       }));
 
       // Capture exception

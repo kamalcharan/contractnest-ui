@@ -236,6 +236,18 @@ export const defaultMenuItems: MenuItem[] = [
     defaultOpen: true, // Implementation Toolkit should be open by default
     submenuItems: [
       {
+        id: 'global-templates',
+        label: 'Global Templates',
+        icon: 'FileText',
+        path: '/service-contracts/templates/admin/global-templates'
+      },
+      {
+        id: 'global-template-designer',
+        label: 'Global Template Designer',
+        icon: 'Edit',
+        path: '/service-contracts/templates/admin/global-designer'
+      },
+      {
         id: 'template-analytics',
         label: 'Template Analytics',
         icon: 'BarChart',

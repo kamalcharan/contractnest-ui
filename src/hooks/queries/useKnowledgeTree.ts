@@ -299,6 +299,19 @@ export const useKTGenerateServiceNames = () => {
         resource_template_id: payload.resourceTemplateId,
         service_names: response.data.data.service_names,
       });
+
+      // Auto-compose + register a SmartForm per service group now that
+      // service_name is persisted (catalog_name from Cycles was already
+      // there) -- grouping is only resolvable from this point on, so this
+      // is the earliest point forms can be generated without a manual
+      // per-block admin click. Best-effort: a failure here shouldn't roll
+      // back the service-name save that already succeeded.
+      try {
+        await api.post('/api/knowledge-tree/generate-forms', { resourceTemplateId: payload.resourceTemplateId }, { timeout: 60000 });
+      } catch (formErr) {
+        console.error('[useKTGenerateServiceNames] Auto form generation failed (service names still saved):', formErr);
+      }
+
       return response.data.data as { resource_template_id: string; service_names: Array<{ section_name: string; service_name: string }> };
     },
     onSuccess: (_data, variables) => {

@@ -159,7 +159,45 @@ const CatalogEquipmentPage: React.FC = () => {
 
   // ── Seed actions ────────────────────────────────────────────────────────────
 
+  // tplId currently syncing, or null — tracked per-template (not a single
+  // boolean) so the inline sync control next to each UNPRICED badge in the
+  // sidebar can show its own spinner without disabling every other row.
+  const [syncingTplId, setSyncingTplId] = useState<string | null>(null);
+
   useEffect(() => { setVariantFilter('all'); }, [selectedId]);
+
+  // Seeding is a one-time snapshot, not a live reference, and "Re-seed with
+  // VaNi" no-ops on already-seeded equipment — its idempotency check is
+  // whole-template (any existing row -> skip entirely), so it can never
+  // actually add anything new. This does the item-level reconciliation
+  // "Re-seed" always implied: adds any KT block missing from the tenant's
+  // catalog, and backfills base_price on existing-but-still-unpriced blocks.
+  // Never touches a block the tenant has already priced or customized.
+  // Callable both from the sidebar's inline sync control (discoverable right
+  // where the UNPRICED badge is) and the equipment detail page's VaNi card.
+  const syncEquipment = async (tplId: string) => {
+    setSyncingTplId(tplId);
+    try {
+      const resp = await api.post('/api/seeds/tenant/sync-equipment', {
+        resourceTemplateId: tplId,
+      });
+      const { added = 0, repriced = 0 } = resp.data?.data || {};
+      if (added > 0 || repriced > 0) {
+        const parts = [];
+        if (added > 0) parts.push(`${added} new block${added === 1 ? '' : 's'} added`);
+        if (repriced > 0) parts.push(`${repriced} priced`);
+        vaniToast.success(parts.join(', '));
+      } else {
+        vaniToast.info('Already up to date with the knowledge tree');
+      }
+      setBlocksLoading(true);
+      await fetchBlocks();
+    } catch (err: any) {
+      vaniToast.error(err?.response?.data?.error || 'Sync failed');
+    } finally {
+      setSyncingTplId(null);
+    }
+  };
 
   const openPreview = async (tplId: string) => {
     setPreviewFor(tplId);
@@ -230,7 +268,22 @@ const CatalogEquipmentPage: React.FC = () => {
           </div>
         </div>
         {st === 'seeded' && <Badge tone="green">IN CATALOG</Badge>}
-        {st === 'unpriced' && <Badge tone="amber">UNPRICED</Badge>}
+        {st === 'unpriced' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Badge tone="amber">UNPRICED</Badge>
+            <button
+              onClick={(e) => { e.stopPropagation(); syncEquipment(tpl.id); }}
+              disabled={syncingTplId !== null}
+              title="Sync with the knowledge tree — adds anything missing and fills in prices"
+              style={{
+                fontFamily: MONO, fontSize: 12, lineHeight: 1, padding: '3px 6px', borderRadius: 5,
+                border: `1px solid ${AMBER}40`, background: AMBER_BG, color: AMBER,
+                cursor: syncingTplId !== null ? 'not-allowed' : 'pointer',
+                opacity: syncingTplId !== null && syncingTplId !== tpl.id ? 0.4 : 1,
+              }}
+            >{syncingTplId === tpl.id ? '…' : '↻'}</button>
+          </div>
+        )}
         {st === 'kt' && <Badge tone="blue">KT READY</Badge>}
         {st === 'none' && <Badge tone="grey">NO KT</Badge>}
       </div>
@@ -423,12 +476,15 @@ const CatalogEquipmentPage: React.FC = () => {
                     <div style={{ fontSize: 13, color: 'rgba(255,255,255,.8)', flex: 1, lineHeight: 1.5 }}>
                       {selState === 'kt'
                         ? <>The knowledge tree is ready for <strong style={{ color: '#fff' }}>{(selected as any).name}</strong> — preview what VaNi would build before anything is saved.</>
-                        : <>Seeded from the knowledge tree. <strong style={{ color: '#fff' }}>Re-running is safe</strong> — your edits and contract-linked blocks are always kept.</>}
+                        : selState === 'unpriced'
+                        ? <>Some items were seeded before the knowledge tree had pricing for them. <strong style={{ color: '#fff' }}>Sync now</strong> to pull in current KT prices — anything already priced is left alone.</>
+                        : <>Seeded from the knowledge tree. <strong style={{ color: '#fff' }}>Sync anytime</strong> — adds anything new from the KT and fills in missing prices; your edits and contract-linked blocks are always kept.</>}
                     </div>
                     <button
-                      onClick={() => openPreview(selectedId!)}
-                      style={{ border: 'none', borderRadius: 100, padding: '10px 20px', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer', background: `linear-gradient(135deg,${VANI},#ff8f5a)`, color: '#fff', boxShadow: '0 3px 10px rgba(255,107,43,.35)' }}
-                    >{selState === 'kt' ? '✨ Seed with VaNi' : '⟳ Re-seed with VaNi'}</button>
+                      onClick={() => selState === 'kt' ? openPreview(selectedId!) : syncEquipment(selectedId!)}
+                      disabled={syncingTplId === selectedId}
+                      style={{ border: 'none', borderRadius: 100, padding: '10px 20px', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: syncingTplId === selectedId ? 'wait' : 'pointer', background: `linear-gradient(135deg,${VANI},#ff8f5a)`, color: '#fff', boxShadow: '0 3px 10px rgba(255,107,43,.35)', opacity: syncingTplId === selectedId ? 0.6 : 1 }}
+                    >{selState === 'kt' ? '✨ Seed with VaNi' : (syncingTplId === selectedId ? 'Syncing…' : '⟳ Sync with Knowledge Tree')}</button>
                   </div>
                 )}
 

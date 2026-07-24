@@ -21,12 +21,18 @@ export interface CheckinMember { contact_id: string; name: string; membership_co
 export interface BillingRow {
   event_id: string; label: string; date: string; amount: number; currency: string;
   status: string; sub_type?: string; seq?: number;
+  /** Already settled on this event, and what's left to pay on it (amount - amount_settled). */
+  amount_settled?: number; remaining?: number;
 }
 export interface AttendanceRow { date: string; status: string }
 export interface DeclarationRow { billing_event_id: string; status: string; upi_reference?: string; amount?: number }
+export interface CheckinTotals { total_amount: number; total_paid: number; balance: number }
+export interface CadenceRate { cycle: string; amount: number; enabled: boolean }
+export interface CadenceRateCard { rates: CadenceRate[]; baseAmount?: number; baseMonths?: number; defaultCadence?: string }
 export interface CheckinHistory {
   ok: boolean; membership_contract_id?: string | null;
   attendance: AttendanceRow[]; billing: BillingRow[]; declarations: DeclarationRow[];
+  totals?: CheckinTotals; cadence_rates?: CadenceRateCard | null;
 }
 
 // ---- Smart Form schema (subset rendered by the check-in page) ----

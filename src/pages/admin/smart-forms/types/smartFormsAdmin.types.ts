@@ -17,6 +17,8 @@ export interface FormTemplate {
   approved_by: string | null;
   approved_at: string | null;
   review_notes: string | null;
+  source: 'manual' | 'knowledge_tree' | 'tenant_fork';
+  resource_template_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +30,14 @@ export interface FormTemplateFilters {
   category?: string;
   form_type?: string;
   search?: string;
+  resource_template_id?: string;
+}
+
+export interface EquipmentTag {
+  resource_template_id: string;
+  name: string;
+  resource_type_id: string;
+  form_count: number;
 }
 
 export interface Pagination {
@@ -44,6 +54,8 @@ export interface CreateTemplatePayload {
   form_type: string;
   tags?: string[];
   schema: Record<string, unknown>;
+  source?: 'manual' | 'knowledge_tree' | 'tenant_fork';
+  resource_template_id?: string;
 }
 
 export interface UpdateTemplatePayload {
