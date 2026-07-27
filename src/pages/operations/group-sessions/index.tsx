@@ -25,7 +25,7 @@ import {
   Users, RefreshCw, AlertTriangle, Inbox, ChevronRight, ChevronLeft, ChevronDown,
   CalendarClock, CheckCircle2, CircleDollarSign, UserRound, ArrowLeft, TrendingUp,
   Wallet, Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw, Mic,
-  UserCog, Lock, Search,
+  UserCog, Lock, Search, Download,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -65,8 +65,26 @@ const PAGE_SIZE = 10;
 const GROUPS_COLS = 'minmax(200px,1.6fr) 90px 110px 90px minmax(120px,1fr) 100px 32px';
 const OCC_COLS = '110px 44px minmax(160px,1.3fr) minmax(120px,1fr) 130px 32px';
 const ROSTER_COLS = 'minmax(180px,1.5fr) minmax(140px,1.1fr) 90px 150px 70px 120px 32px';
-const ATT_COLS = 'minmax(200px,1.6fr) 90px 100px 120px';
+const ATT_COLS = 'minmax(180px,1.4fr) 70px 90px 100px 120px';
 const PAY_COLS = 'minmax(180px,1.4fr) minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.9fr) 190px';
+
+// CSV export — same client-side Blob/anchor pattern as TaxSummarySection,
+// no server round-trip, no new dependency.
+const csvCell = (v: unknown): string => {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const downloadCsv = (csv: string, filename: string) => {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 const fmtDate = (d?: string | null): string => {
   if (!d) return '—';
@@ -499,6 +517,20 @@ const GroupSessionsPage: React.FC = () => {
                 style={{ borderColor: colors.utility.secondaryText + '30', ...ink }}
               />
             </div>
+            <button
+              onClick={() => {
+                const header = ['Member', 'Group', 'Amount', 'Currency', 'Reference', 'Declared At'];
+                const rows = filteredDeclarations.map((d) => [
+                  d.member_name, d.block_name, d.amount, d.currency, d.upi_reference, d.created_at,
+                ]);
+                downloadCsv([header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n'), `payments-to-confirm-${new Date().toISOString().slice(0, 10)}.csv`);
+              }}
+              disabled={!filteredDeclarations.length}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ borderColor: colors.utility.secondaryText + '30', ...sub }}
+            >
+              <Download size={13} /> Export CSV
+            </button>
           </div>
 
           {filteredDeclarations.length === 0 ? (
@@ -931,6 +963,21 @@ const GroupSessionsPage: React.FC = () => {
               style={{ ...ink, borderColor: colors.utility.secondaryText + '30' }}
             />
           </div>
+          <button
+            onClick={() => {
+              const header = ['Name', 'Type', 'Status', 'Dues'];
+              const rows = filteredAtt.map((m) => [
+                m.name, m.type === 'guest' ? 'Guest' : 'Member', m.present ? 'Present' : 'Not marked',
+                m.type === 'guest' ? '—' : (m.dues_pending ? 'Due' : 'Paid'),
+              ]);
+              downloadCsv([header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n'), `attendance-${toInputDate(o.date) || o.date}.csv`);
+            }}
+            disabled={!filteredAtt.length}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: colors.utility.secondaryText + '30', ...sub }}
+          >
+            <Download size={13} /> Export CSV
+          </button>
         </div>
 
         {occAttQuery.isLoading ? (
@@ -943,7 +990,7 @@ const GroupSessionsPage: React.FC = () => {
           <div className="overflow-x-auto">
             <div className="space-y-1.5 min-w-[620px]">
               <div className="grid items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={headStyle(ATT_COLS)}>
-                <span>Member</span><span>Dues</span><span>Status</span><span className="text-right">Mark</span>
+                <span>Member</span><span>Type</span><span>Dues</span><span>Status</span><span className="text-right">Mark</span>
               </div>
               {filteredAtt.map((m) => (
                 <div key={m.contact_id} className="grid items-center gap-2 px-3 py-2.5 rounded-lg border" style={rowStyle(ATT_COLS)}>
@@ -953,7 +1000,8 @@ const GroupSessionsPage: React.FC = () => {
                     </span>
                     <p className="text-xs font-bold truncate" style={ink}>{m.name || '—'}</p>
                   </div>
-                  <div><Pill label={m.dues_pending ? 'Due' : 'Paid'} accent={m.dues_pending ? colors.semantic.warning : colors.semantic.success} /></div>
+                  <div><Pill label={m.type === 'guest' ? 'Guest' : 'Member'} accent={m.type === 'guest' ? colors.brand.primary : colors.utility.secondaryText} /></div>
+                  <div>{m.type === 'guest' ? <span style={sub}>—</span> : <Pill label={m.dues_pending ? 'Due' : 'Paid'} accent={m.dues_pending ? colors.semantic.warning : colors.semantic.success} />}</div>
                   <div><Pill label={m.present ? 'Present' : 'Not marked'} accent={m.present ? colors.semantic.success : colors.utility.secondaryText} /></div>
                   <div className="flex justify-end">
                     <button

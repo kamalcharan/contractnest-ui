@@ -299,6 +299,8 @@ export const useAssignChairDefault = () => {
 export interface GsOccAttendanceMember {
   contact_id: string;
   name: string | null;
+  /** 'guest' = checked in with no contract on this block (visitor/prospect) — dues don't apply. */
+  type: 'member' | 'guest';
   membership_contract_id: string | null;
   present: boolean;
   dues_pending: boolean;
