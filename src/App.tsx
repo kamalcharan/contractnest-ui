@@ -33,9 +33,9 @@ import SessionCheckinPage from './pages/checkin/SessionCheckinPage'; // [batch3-
 import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [batch3-checkin]
 
 // Catalog Pages
-import CatalogPage from './pages/catalog/index';
-import ServiceViewPage from './pages/catalog/view';
-import CatalogServiceFormPage from './pages/catalog/catalogService-form';
+
+
+
 import CatalogStudioConfigurePage from './pages/catalog-studio/configure';
 import CatalogStudioBlocksPage from './pages/catalog-studio/blocks';
 import CatalogStudioNewBlockPage from './pages/catalog-studio/blocks/new';
@@ -386,7 +386,7 @@ const AppContent: React.FC = () => {
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/auth/google-callback" element={<GoogleCallbackPage />} />
           <Route path="/playground" element={<PlaygroundPage />} />
-          
+
           <Route path="/contracts/review" element={<ContractReviewPage />} />
 
 
@@ -481,21 +481,6 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ProfilePage />} />
-          </Route>
-
-          {/* Catalog routes */}
-          <Route
-            path="/catalog"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<CatalogPage />} />
-
-            <Route path="view/:id" element={<ServiceViewPage />} />
-            <Route path="/catalog/catalogService-form" element={<CatalogServiceFormPage />} />
           </Route>
 
           {/* Service Contracts Routes */}
@@ -746,7 +731,7 @@ const AppContent: React.FC = () => {
             <Route path="storage/storagesetup" element={<StorageSetupPage />} />
             <Route path="storage/storagecomplete" element={<StorageCompletePage />} />
             <Route path="storage/storagemanagement" element={<StorageManagementPage />} />
-       
+
             <Route path="storage/categoryfiles/:categoryId" element={<CategoryFilesPage />} />
 
             {/* Integration Settings */}
