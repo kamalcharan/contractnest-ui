@@ -6,12 +6,17 @@ import type { ConfigurableBlock } from '@/components/catalog-studio/BlockCardCon
 import { categoryHasPricing } from '@/utils/catalog-studio/categories';
 
 // ─── Categories needing an occurrence/attendance schedule ───
-// Broader than pricing: a complimentary Group Session (categoryId 'session',
-// price 0) still needs its scheduled occurrences generated for check-in /
-// attendance tracking — categoryHasPricing() wrongly skipped it below since
-// 'session' has no pricing step in the wizard (it's priced 0 on purpose).
+// Deliberately excludes 'session' (Group Sessions): those get exactly one
+// shared occurrence schedule per block via t_group_session_schedule /
+// gs_generate_schedule, not a per-member-contract event here. A prior change
+// added 'session' to this set to fix Group Sessions getting zero occurrences
+// from this function -- but that was the wrong fix: it duplicated every
+// occurrence as a service event per member contract (675 stray rows found
+// live for one tenant's single Group Session block). The actual fix for
+// "zero occurrences" belongs in the group-session schedule generator, not
+// here -- this function should never run for 'session' category blocks.
 // Mirrors contractnest-api/src/services/contractEventsDerivationService.ts.
-const SERVICE_TRACKED_CATEGORY_IDS = new Set(['service', 'session']);
+const SERVICE_TRACKED_CATEGORY_IDS = new Set(['service']);
 const categoryNeedsServiceEvents = (categoryId: string): boolean =>
   SERVICE_TRACKED_CATEGORY_IDS.has(categoryId);
 
