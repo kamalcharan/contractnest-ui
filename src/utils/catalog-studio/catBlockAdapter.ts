@@ -302,20 +302,29 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
     config.deliveryMode = deliveryMode;
   }
 
-  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod.
+  // Service cycles - wizard sets requiresCycles, cycleDays, cycleGracePeriod,
+  // cycleAnchorWeekday, cycleAnchorDate.
   // An explicit requiresCycles WINS over a stale meta.serviceCycles (else
   // toggling cycles OFF on edit silently kept the old enabled config).
   const requiresCycles = getField(block, 'requiresCycles');
   const cycleDays = getField(block, 'cycleDays');
+  const cycleAnchorWeekday = getField(block, 'cycleAnchorWeekday');
+  const cycleAnchorDate = getField(block, 'cycleAnchorDate');
   const serviceCycles = getField(block, 'serviceCycles') as
-    { enabled?: boolean; days?: number; gracePeriod?: number; anchorWeekday?: number } | undefined;
+    { enabled?: boolean; days?: number; gracePeriod?: number; anchorWeekday?: number; anchorDate?: string } | undefined;
   if (requiresCycles === true || (requiresCycles === undefined && serviceCycles?.enabled)) {
+    const anchorWeekday = (cycleAnchorWeekday as number | undefined) ?? serviceCycles?.anchorWeekday;
+    const anchorDate = (cycleAnchorDate as string | undefined) ?? serviceCycles?.anchorDate;
     config.serviceCycles = {
       enabled: true,
       days: (cycleDays as number | undefined) ?? serviceCycles?.days,
       gracePeriod: getField(block, 'cycleGracePeriod') ?? serviceCycles?.gracePeriod,
-      // Weekday anchor (e.g. "every Saturday") rides through untouched
-      ...(serviceCycles?.anchorWeekday !== undefined ? { anchorWeekday: serviceCycles.anchorWeekday } : {}),
+      // Weekday anchor (e.g. "every Saturday") — wizard value wins over a stale one
+      ...(anchorWeekday !== undefined ? { anchorWeekday } : {}),
+      // Explicit first-occurrence date — overrides the auto-computed weekday
+      // anchor in gs_generate_schedule when set (e.g. the real chapter's
+      // actual first meeting, not "next Saturday after contract start")
+      ...(anchorDate !== undefined && anchorDate !== '' ? { anchorDate } : {}),
     };
   }
 

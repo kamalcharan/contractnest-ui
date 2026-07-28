@@ -68,6 +68,12 @@ export interface SubmitPayload {
   device_token?: string | null;
 }
 
+// ---- Guest-payable services (tenant-flagged catalog items, not hardcoded) ----
+export interface CheckinGuestService { id: string; name: string; price: number; currency: string }
+
+// ---- Referrer search (tag which member brought a guest) ----
+export interface CheckinMemberSearchResult { contact_id: string; name: string }
+
 // ---- Device recognition (returning browser on the same chapter QR) ----
 export interface CheckinDeviceMemberMatch { contact_id: string; name: string; membership_contract_id: string | null; phone: string | null }
 export interface CheckinDeviceSubstituteMatch { contact_id: string; name: string; phone: string | null }
@@ -102,8 +108,16 @@ export const sessionCheckinApi = {
     status: 'present' | 'apologies'; responses?: Record<string, unknown> | null;
     form_template_id?: string | null; form_template_version?: number | null;
     device_token?: string | null;
+    referred_by?: string | null;
+    payment?: { cat_block_id: string; amount?: number; currency?: string; upi_reference?: string } | null;
   }): Promise<{ ok: boolean; kind?: string; contact_id?: string; reason?: string }> {
     return unwrap(await publicClient.post(`/api/checkin/${encodeURIComponent(token)}/guest`, payload));
+  },
+  async guestServices(token: string): Promise<{ ok: boolean; services: CheckinGuestService[] }> {
+    return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}/guest-services`));
+  },
+  async searchMembers(token: string, query: string): Promise<{ ok: boolean; members: CheckinMemberSearchResult[] }> {
+    return unwrap(await publicClient.get(`/api/checkin/${encodeURIComponent(token)}/members`, { params: { q: query } }));
   },
   async substitute(token: string, payload: {
     member_id: string; sub_name: string; sub_phone?: string;
