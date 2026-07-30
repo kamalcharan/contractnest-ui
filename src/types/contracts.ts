@@ -157,6 +157,8 @@ export interface Contract {
   duration_unit?: string;
   grace_period_value?: number;
   grace_period_unit?: string;
+  // RFQ only: last date a vendor may submit a quote (the "last date to apply")
+  response_deadline?: string | null;
   // Billing
   currency?: string;
   billing_cycle_type?: string;

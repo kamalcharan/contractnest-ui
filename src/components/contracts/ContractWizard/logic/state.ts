@@ -51,6 +51,8 @@ export interface ContractWizardState {
   durationUnit: string;
   gracePeriodValue: number;
   gracePeriodUnit: string;
+  // RFQ only: last date a vendor may submit a quote (ISO date string yyyy-mm-dd)
+  responseDeadline: string | null;
   // Step 4: Billing Cycle
   billingCycleType: BillingCycleType;
   // Step 5: Blocks & Total
@@ -112,6 +114,7 @@ export const createInitialWizardState = (): ContractWizardState => ({
   durationUnit: 'months',
   gracePeriodValue: 0,
   gracePeriodUnit: 'days',
+  responseDeadline: null,
   // Billing Cycle
   billingCycleType: null,
   // Blocks & Total

@@ -20,19 +20,7 @@ import SessionConflictNotification from './components/SessionConflictNotificatio
 import EnvironmentSwitchModal from './components/EnvironmentSwitchModal';
 import LockScreen from './components/auth/LockScreen';
 import BrowserWarningBanner from './components/common/BrowserWarningBanner';
-// MVP: the public landing page now comes from the lite surface.
-// The previous 19-component landing (./pages/public/LandingPage) is retired but
-// left in the tree — delete it once this has run a full week in production.
-import LiteLandingPage from './lite/landing/LandingPage';
-// MVP express onboarding: two screens, then it hands off into the existing
-// /onboarding chain at vani-working. The long form stays reachable at /onboarding.
-import RevealProvider from './components/reveal/RevealProvider';
-import RevealSignalsBridge from './components/reveal/RevealSignalsBridge';
-import ExpressIntroStep from './lite/onboarding/IntroStep';
-import ExpressFirstContractStep from './lite/onboarding/FirstContractStep';
-import ExpressPlanStep from './lite/onboarding/PlanStep';
-import ExpressBusinessPersonaStep from './lite/onboarding/BusinessPersonaStep';
-import ExpressServiceableStep from './lite/onboarding/ServiceableStep';
+import LandingPage from './pages/public/LandingPage';
 import PlaygroundPage from './pages/public/PlaygroundPage';
 import LoadingSpinner from './components/ui/LoadingSpinner';
 
@@ -96,7 +84,6 @@ import Screen8APricingStep from '@/pages/onboarding/steps/Screen8APricingStep';
 import TermsConditionsStep from '@/pages/onboarding/steps/TermsConditionsStep';
 import Screen8BEquipmentStep from '@/pages/onboarding/steps/Screen8BEquipmentStep';
 import ResourcePickStep from '@/pages/onboarding/steps/ResourcePickStep';
-import LovSetupStep from '@/pages/onboarding/steps/LovSetupStep';
 import BusinessPreferencesStep from '@/pages/onboarding/steps/BusinessPreferencesStep';
 import SequenceNumbersStep from '@/pages/onboarding/steps/SequenceNumbersStep';
 import MasterDataStep from '@/pages/onboarding/steps/MasterDataStep';
@@ -201,6 +188,7 @@ import InviteSellersPage from './pages/contracts/invite';
 
 // Contracts Hub + Detail + Invoice View + Public Review
 import ContractsHubPage from './pages/contracts/hub';
+import RfqBuilderPage from './pages/contracts/rfq/RfqBuilderPage';
 import ContractDetailPage from './pages/contracts/detail';
 import InvoiceViewPage from './pages/contracts/invoice';
 import ContractReviewPage from './pages/contracts/review';
@@ -322,7 +310,7 @@ const SmartHomePage: React.FC = () => {
   }
 
   // Not authenticated - show landing page
-  return <LiteLandingPage />;
+  return <LandingPage />;
 };
 
 // Network status component
@@ -384,53 +372,6 @@ const AppContent: React.FC = () => {
           <Route path="/misc/coming-soon" element={<ComingSoonPage />} />
           <Route path="/misc/api-server-down" element={<ApiServerDownPage />} />
           <Route path="/misc/browser-not-supported" element={<BrowserNotSupportedPage />} />
-
-          {/* MVP express onboarding — short path into the existing chain */}
-          <Route
-            path="/start"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <ExpressIntroStep />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/start/business"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <ExpressBusinessPersonaStep />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/start/serve"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <ExpressServiceableStep />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/start/contract"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <ExpressFirstContractStep />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/start/plan"
-            element={
-              <ProtectedRoute requireTenant={true}>
-                <ExpressPlanStep />
-              </ProtectedRoute>
-            }
-          />
-          {/* /start/trade asked for the industry and has been replaced by
-              /start/serve, which asks for the equipment and derives the
-              industry from it. Redirect so any bookmark or half-finished
-              session lands on the screen that exists. */}
-          <Route path="/start/trade" element={<Navigate to="/start/serve" replace />} />
 
           {/* Root Route - Smart Landing/Dashboard */}
           <Route path="/" element={<SmartHomePage />} />
@@ -514,13 +455,6 @@ const AppContent: React.FC = () => {
   <Route path="pricing-review" element={<Screen8APricingStep />} />
   <Route path="terms-conditions" element={<TermsConditionsStep />} />
   <Route path="equipment-confirm" element={<Screen8BEquipmentStep />} />
-  {/* LovSetupStep.tsx has existed all along but was never imported or routed,
-      so every navigate('/onboarding/lov-setup') — from TermsConditionsStep,
-      Screen8BEquipmentStep, ResourcePickStep's Skip and the resume map — fell
-      through to the catch-all <Route path="*"> and rendered NotFoundPage.
-      That is the "404, no page found" seen at the end of onboarding, on the
-      long path as well as the express one. */}
-  <Route path="lov-setup" element={<LovSetupStep />} />
   <Route path="done" element={
     <ProtectedRoute requireTenant={true}>
       <VaniDoneStep />
@@ -745,6 +679,7 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ContractsHubPage />} />
+            <Route path="rfq/new" element={<RfqBuilderPage />} />
             <Route path=":id" element={<ContractDetailPage />} />
             <Route path="claim" element={<ClaimContractPage />} />
             <Route path=":id/invoice/:invoiceId" element={<InvoiceViewPage />} />
@@ -994,15 +929,7 @@ const App: React.FC = () => {
                     <MasterDataProvider>
                       {/* VaNiToast Provider wrapping the entire app - POSITION CHANGED TO TOP-RIGHT */}
                       <VaNiToastProviderWithGlobal position="top-right" maxToasts={5}>
-                        {/* Reveal: progressive disclosure for new tenants.
-                            Inside QueryProvider because the signals bridge
-                            reads existing React Query caches. Every signal
-                            starts undefined and every rule fails open, so
-                            until the bridge resolves nothing is hidden. */}
-                        <RevealProvider>
-                          <RevealSignalsBridge />
-                          <AppContent />
-                        </RevealProvider>
+                        <AppContent />
                       </VaNiToastProviderWithGlobal>
                     </MasterDataProvider>
                   </TenantProvider>

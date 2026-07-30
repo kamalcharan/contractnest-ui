@@ -153,6 +153,10 @@ export function mapWizardToRequest(
     duration_unit: state.durationUnit,
     grace_period_value: state.gracePeriodValue,
     grace_period_unit: state.gracePeriodUnit,
+    // RFQ only: the last date a vendor may submit a quote. Sent for RFQs;
+    // omitted for contracts so it never lands on a non-RFQ row.
+    response_deadline:
+      state.wizardMode === 'rfq' ? (state.responseDeadline || undefined) : undefined,
 
     // Billing
     currency: state.currency,

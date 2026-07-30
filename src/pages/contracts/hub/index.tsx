@@ -412,6 +412,18 @@ const ContractsHubPage: React.FC = () => {
   const activePerspective: Perspective = perspective;
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
+  // ── Record type: contracts vs RFQs (requests). RFQs are always an Expense-
+  // side concept (a buyer asking vendors to quote), so this toggle only shows
+  // in Expense mode; Revenue mode is always contracts. Defaulting to 'contract'
+  // ALSO fixes a latent bug: the hub never passed record_type before, so RFQs
+  // leaked into the vendor-contract list with statuses the pills don't model.
+  const [recordType, setRecordType] = useState<'contract' | 'rfq'>(
+    searchParams.get('record') === 'rfq' ? 'rfq' : 'contract'
+  );
+  const effectiveRecordType: 'contract' | 'rfq' =
+    activePerspective === 'expense' ? recordType : 'contract';
+  const isRfqView = effectiveRecordType === 'rfq';
+
   // ── Filter state — Active is the default status ──
   const [activeStatus, setActiveStatus] = useState<string | null>(
     searchParams.get('status') || 'active'
@@ -506,13 +518,14 @@ const ContractsHubPage: React.FC = () => {
       limit: ITEMS_PER_PAGE,
       page: currentPage,
       contract_type: perspectiveTypeFilter as any,
+      record_type: effectiveRecordType as any,
       sort_by: sortBy as any,
       sort_direction: sortOrder,
     };
     if (activeStatus) f.status = activeStatus as any;
     if (searchQuery.trim()) f.search = searchQuery.trim();
     return f;
-  }, [activePerspective, activeStatus, searchQuery, sortBy, sortOrder, currentPage, perspectiveTypeFilter]);
+  }, [activePerspective, activeStatus, searchQuery, sortBy, sortOrder, currentPage, perspectiveTypeFilter, effectiveRecordType]);
 
   // ── Data hooks ──
   const { data: contractsData, isLoading: isLoadingFlat, isError: isErrorFlat, refetch: refetchFlat } = useContracts(
@@ -570,8 +583,12 @@ const ContractsHubPage: React.FC = () => {
   // ── Status counts from stats ──
   const statusCounts: Record<string, number> = statsData?.by_status || {};
 
-  // ── Pipeline stages: exactly 6 statuses ──
-  const pipelineStages: StatusStage[] = useMemo(() => [
+  // ── Pipeline stages ──
+  // Contracts: the 6-status lifecycle. RFQs: the request lifecycle. Every RFQ
+  // status here (sent → quotes_received → awarded → converted_to_contract) is
+  // RFQ-exclusive, so the counts read straight from by_status stay accurate
+  // even though the stats endpoint scopes by contract_type, not record_type.
+  const contractStages: StatusStage[] = useMemo(() => [
     { key: 'draft', label: 'Draft', count: statusCounts['draft'] || 0, color: colors.utility.secondaryText },
     { key: 'pending_review', label: 'In Review', count: statusCounts['pending_review'] || 0, color: colors.brand.secondary || colors.brand.primary },
     { key: 'pending_acceptance', label: 'Pending', count: statusCounts['pending_acceptance'] || 0, color: colors.semantic.warning },
@@ -579,6 +596,30 @@ const ContractsHubPage: React.FC = () => {
     { key: 'completed', label: 'Completed', count: statusCounts['completed'] || 0, color: colors.brand.tertiary || colors.brand.primary },
     { key: 'expired', label: 'Expired', count: statusCounts['expired'] || 0, color: colors.semantic.error },
   ], [statusCounts, colors]);
+
+  const rfqStages: StatusStage[] = useMemo(() => [
+    { key: 'draft', label: 'Draft', count: statusCounts['draft'] || 0, color: colors.utility.secondaryText },
+    { key: 'sent', label: 'Sent', count: statusCounts['sent'] || 0, color: colors.semantic.info || colors.brand.primary },
+    { key: 'quotes_received', label: 'Quotes In', count: statusCounts['quotes_received'] || 0, color: colors.semantic.warning },
+    { key: 'awarded', label: 'Awarded', count: statusCounts['awarded'] || 0, color: colors.semantic.success },
+    { key: 'converted_to_contract', label: 'Converted', count: statusCounts['converted_to_contract'] || 0, color: colors.brand.tertiary || colors.brand.primary },
+  ], [statusCounts, colors]);
+
+  const pipelineStages = isRfqView ? rfqStages : contractStages;
+
+  // ── Toggle contracts ⇄ requests. Reset the status filter, because the
+  // default 'active' is meaningless for an RFQ and 'sent' is meaningless for a
+  // contract — start on "All" so the switch never lands on an empty list.
+  const handleRecordTypeChange = (next: 'contract' | 'rfq') => {
+    if (next === recordType) return;
+    setRecordType(next);
+    setActiveStatus(null);
+    setCurrentPage(1);
+    const params = new URLSearchParams(searchParams);
+    if (next === 'rfq') params.set('record', 'rfq'); else params.delete('record');
+    params.delete('status');
+    setSearchParams(params, { replace: true });
+  };
 
   // ── URL sync ──
   const handleStatusClick = (status: string | null) => {
@@ -597,6 +638,12 @@ const ContractsHubPage: React.FC = () => {
   };
 
   const handleCreateClick = () => {
+    // RFQ view → the dedicated product-led request builder (its own route),
+    // not the shared wizard modal.
+    if (isRfqView) {
+      navigate('/contracts/rfq/new');
+      return;
+    }
     // Revenue → use the chosen relationship (client/partner); Expense → vendor
     const type = activePerspective === 'revenue' ? createRelationship : 'vendor';
     openWizard(type as ContractType);
@@ -692,11 +739,13 @@ const ContractsHubPage: React.FC = () => {
                   fontWeight: 500,
                 }}
               >
-                {totalCount} contract{totalCount !== 1 ? 's' : ''}
+                {totalCount} {isRfqView ? 'request' : 'contract'}{totalCount !== 1 ? 's' : ''}
               </span>
             </div>
             <p style={{ fontSize: 12, color: colors.utility.secondaryText, marginTop: 4 }}>
-              {activePerspective === 'revenue' ? 'Revenue · Clients' : 'Expense · Vendors'}
+              {activePerspective === 'revenue'
+                ? 'Revenue · Clients'
+                : isRfqView ? 'Expense · Requests (RFQ)' : 'Expense · Vendors'}
             </p>
           </div>
 
@@ -718,7 +767,7 @@ const ContractsHubPage: React.FC = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search contracts..."
+                placeholder={isRfqView ? 'Search requests...' : 'Search contracts...'}
                 style={{
                   border: 'none',
                   outline: 'none',
@@ -813,7 +862,50 @@ const ContractsHubPage: React.FC = () => {
               </div>
             )}
 
-            {/* Create button — label reflects the chosen relationship */}
+            {/* Contracts ⇄ Requests toggle — Expense only. An RFQ is a buyer
+                asking vendors to quote, which lives on the expense side. */}
+            {activePerspective === 'expense' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                  padding: 2,
+                  borderRadius: 9,
+                  border: `1px solid ${colors.utility.primaryText}20`,
+                  background: `${colors.utility.primaryText}06`,
+                }}
+                role="radiogroup"
+                aria-label="Contracts or requests"
+              >
+                {([['contract', 'Contracts'], ['rfq', 'Requests']] as const).map(([key, label]) => {
+                  const on = recordType === key;
+                  return (
+                    <button
+                      key={key}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => handleRecordTypeChange(key)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: 7,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        background: on ? colors.brand.primary : 'transparent',
+                        color: on ? '#fff' : colors.utility.secondaryText,
+                        transition: 'all .15s',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Create button — label reflects the chosen relationship / record type */}
             <button
               onClick={handleCreateClick}
               style={{
@@ -833,7 +925,7 @@ const ContractsHubPage: React.FC = () => {
               <Plus size={14} />
               {activePerspective === 'revenue'
                 ? `New ${createRelationship === 'client' ? 'Client' : 'Partner'} Contract`
-                : 'New Contract'}
+                : isRfqView ? 'New Request' : 'New Contract'}
             </button>
           </div>
         </div>

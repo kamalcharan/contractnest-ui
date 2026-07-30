@@ -40,6 +40,8 @@ export interface ContractDetailsData {
   durationUnit: string;
   gracePeriodValue: number;
   gracePeriodUnit: string;
+  // RFQ only: last date a vendor may submit a quote (ISO yyyy-mm-dd or null)
+  responseDeadline?: string | null;
 }
 
 interface ContractDetailsStepProps {
@@ -51,6 +53,8 @@ interface ContractDetailsStepProps {
   // Template mode: this step names a reusable template, so the contract
   // status card is hidden and the title field is relabelled
   templateMode?: boolean;
+  // RFQ mode: show the "last date to apply" field so vendors have a deadline
+  showResponseDeadline?: boolean;
 }
 
 // Helper to get Lucide icon component by name
@@ -134,6 +138,7 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
   title,
   subtitle,
   templateMode = false,
+  showResponseDeadline = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -610,6 +615,33 @@ const ContractDetailsStep: React.FC<ContractDetailsStepProps> = ({
                     style={{ color: colors.utility.secondaryText }}
                   >
                     Pick an exact end date, or use the duration presets below — they stay in sync.
+                  </p>
+                </div>
+              )}
+
+              {/* Last date to apply — RFQ only. Vendors see this as "respond by"
+                  and cannot submit a quote after it. Stored as a yyyy-mm-dd
+                  string; DatePicker works in Date, so we bridge on the edge. */}
+              {showResponseDeadline && (
+                <div className="mb-4">
+                  <DatePicker
+                    value={data.responseDeadline ? new Date(`${data.responseDeadline}T00:00:00`) : null}
+                    onChange={(date) =>
+                      onChange({
+                        responseDeadline: date
+                          ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                          : null,
+                      })
+                    }
+                    label="Last date to apply"
+                    minDate={new Date()}
+                    placeholder="When should vendors respond by?"
+                  />
+                  <p
+                    className="text-[11px] mt-1"
+                    style={{ color: colors.utility.secondaryText }}
+                  >
+                    Vendors see this as their deadline; quotes are not accepted after it. Optional.
                   </p>
                 </div>
               )}

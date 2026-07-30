@@ -1520,6 +1520,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               durationUnit: wizardState.durationUnit,
               gracePeriodValue: wizardState.gracePeriodValue,
               gracePeriodUnit: wizardState.gracePeriodUnit,
+              responseDeadline: wizardState.responseDeadline,
             }}
             onChange={handleDetailsChange}
             title={isTemplateMode ? 'Template Details' : (isRfqMode ? 'Request Details' : undefined)}
@@ -1527,6 +1528,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               ? 'Name this template and set the default duration for contracts created from it'
               : (isRfqMode ? 'Define the basic information for your RFQ' : undefined)}
             templateMode={isTemplateMode}
+            showResponseDeadline={isRfqMode}
           />
         );
       case 'billingCycle':
