@@ -17,7 +17,6 @@ import {
   Shield,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import RevealGate from '@/components/reveal/RevealGate';
 import { useAuth } from '../../context/AuthContext';
 import { languages } from '../../utils/constants/languages';
 import { themes } from "../../utils/theme"
@@ -245,12 +244,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             <TenantSwitcher showFullName={true} className="mr-4" />
           )}
 
-          {/* Perspective Switcher (Revenue / Expense) — segmented pill.
-              Gated: a tenant with no partner contracts has no expense side, so
-              the switch would only lead to an empty Payables view. Gating it
-              also gates Payables, which operations/finance derives purely from
-              this perspective (finance/index.tsx:107). Fails open. */}
-          <RevealGate id="perspective">
+          {/* Perspective Switcher (Revenue / Expense) — segmented pill */}
           {currentTenant && (
             <div className={`inline-flex rounded-lg p-0.5 gap-0.5 ${
               isDarkMode ? 'bg-gray-800' : 'bg-gray-100'
@@ -276,7 +270,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               })}
             </div>
           )}
-          </RevealGate>
         </div>
         
         {/* Right section */}
