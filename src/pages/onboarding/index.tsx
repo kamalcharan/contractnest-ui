@@ -19,7 +19,11 @@ const OnboardingIndexPage: React.FC = () => {
     // point hasn't experienced the VaNi intro yet and should see it first.
     const needsIntro = !currentStepId || currentStepId === 'user-profile' || currentStepId === 'welcome';
     if (needsIntro) {
-      navigate('/onboarding/vani-intro', { replace: true });
+      // MVP: a tenant who has not started yet goes to the express path — two
+      // screens, then it hands back into this chain at vani-working.
+      // Anyone already mid-onboarding still resumes at their exact step below,
+      // so nobody in flight is disturbed. Revert = restore '/onboarding/vani-intro'.
+      navigate('/start', { replace: true });
     } else {
       // Resume from where they left off
       const stepPath = getStepPath(currentStepId);

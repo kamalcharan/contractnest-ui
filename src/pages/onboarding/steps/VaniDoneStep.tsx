@@ -194,7 +194,7 @@ const Screen9A: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ sta
 
     <VaniSignoff message="Try it in test mode — <strong>5 sample clients</strong> are ready to go. Switch to live anytime from the header." />
 
-    <CtaButton label="Try it in test mode →" primary onClick={onDashboard} />
+    <CtaButton label="Create your first contract →" primary onClick={onDashboard} />
     <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', textAlign: 'center', marginTop: -6, marginBottom: 16, fontFamily: "'IBM Plex Mono', monospace" }}>
       5 sample clients ready · switch to live anytime from the header
     </div>
@@ -211,7 +211,7 @@ const Screen9A: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ sta
 
 // ── Screen 9B — Buyer ─────────────────────────────────────────────────────────
 
-const Screen9B: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ state, onDashboard }) => {
+const Screen9B: React.FC<{ state: DoneState; onDashboard: () => void; onClaim: () => void }> = ({ state, onDashboard, onClaim }) => {
   const workspaceCode = `CN-${(state.companyName || 'COMP').slice(0, 4).toUpperCase().replace(/\s/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   const handleCopy = () => {
@@ -254,12 +254,12 @@ const Screen9B: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ sta
 
       <VaniSignoff message="5 sample vendors are ready in test mode. Try receiving a contract — <strong>no real vendor needed</strong>." />
 
-      <CtaButton label="Try it in test mode →" primary onClick={onDashboard} />
+      <CtaButton label="Send your first request →" primary onClick={onDashboard} />
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,.35)', textAlign: 'center', marginTop: -6, marginBottom: 16, fontFamily: "'IBM Plex Mono', monospace" }}>
-        5 sample vendor contacts ready · switch to live anytime
+        ask one or more vendors to quote · 5 sample vendor contacts ready
       </div>
 
-      <CtaButton label="I have a contract code (CNAK) →" onClick={() => {}} />
+      <CtaButton label="I have a contract code (CNAK) →" onClick={onClaim} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '20px 0', color: 'rgba(255,255,255,.2)', fontSize: 11, fontWeight: 600 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,.08)' }} />
@@ -326,7 +326,7 @@ const Screen9C: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ sta
 
       <VaniSignoff message={`${state.companyName} is live on both sides. Use the <strong>Revenue</strong> view to send contracts, <strong>Expense</strong> view to receive them.`} />
 
-      <CtaButton label="Go to dashboard →" primary onClick={onDashboard} />
+      <CtaButton label="Create your first contract →" primary onClick={onDashboard} />
     </div>
   );
 };
@@ -349,8 +349,26 @@ const VaniDoneStep: React.FC = () => {
   const { persona } = state;
   const cardWidth = persona === 'both' ? 580 : 540;
 
+  // Onboarding no longer ends here. A tenant arriving on this screen has a
+  // furnished catalog and sample contacts but nothing they have DONE — landing
+  // them on a dashboard hands over a to-do list. The last step is a real
+  // contract, created in test, then the plan screen, then the product.
+  // Revert = navigate('/dashboard').
+  //
+  // BUT NOT FOR A PURE BUYER. /start/contract authors a contract from the
+  // tenant's own catalog, and a buyer has no catalog to author from — in this
+  // product the VENDOR issues the contract. A buyer's first act is a request
+  // for quotation, so they go to the vendor-side wizard, whose first step
+  // offers exactly that choice. 'both' keeps the seller path: they can author,
+  // and the catalog they just built is the thing worth rehearsing with.
   const handleDashboard = () => {
-    navigate('/dashboard');
+    navigate(persona === 'buyer' ? '/contracts/create/vendor' : '/start/contract');
+  };
+
+  // Screen9B's CNAK button shipped with an empty onClick while the page it
+  // needs has been routed at App.tsx all along.
+  const handleClaim = () => {
+    navigate('/contracts/claim');
   };
 
   return (
@@ -390,7 +408,7 @@ const VaniDoneStep: React.FC = () => {
           textAlign: 'center',
         }}>
           {persona === 'seller' && <Screen9A state={state} onDashboard={handleDashboard} />}
-          {persona === 'buyer' && <Screen9B state={state} onDashboard={handleDashboard} />}
+          {persona === 'buyer' && <Screen9B state={state} onDashboard={handleDashboard} onClaim={handleClaim} />}
           {persona === 'both' && <Screen9C state={state} onDashboard={handleDashboard} />}
         </div>
       </div>

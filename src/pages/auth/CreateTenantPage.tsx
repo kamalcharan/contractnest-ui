@@ -203,9 +203,11 @@ const CreateTenantPage: React.FC = () => {
       // Reset retry count on success
       setRetryCount(0);
       
-      // Navigate to dashboard
+      // A newly created workspace has not onboarded, so send it to the
+      // onboarding hub rather than straight to the cockpit. The hub decides
+      // express vs resume. Previously this skipped onboarding entirely.
       setTimeout(() => {
-        navigate('/ops/cockpit', { replace: true });
+        navigate('/onboarding', { replace: true });
       }, 100);
       
     } catch (error: any) {

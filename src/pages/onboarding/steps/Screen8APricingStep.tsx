@@ -557,6 +557,31 @@ const Screen8APricingStep: React.FC = () => {
           {/* ── RIGHT PANEL ── */}
           <div style={{ position: 'sticky', top: 84, paddingLeft: 24 }}>
 
+            {/* Where these prices came from.
+                Reported by the owner: the screen reads as "Accept KT pricing"
+                with no apparent alternative. The alternatives exist — every row
+                has an `edit` control, unpriced groups have "Fill unpriced", and
+                there are two Skip links — but they are quiet, and "KT" means
+                nothing to a tenant on day one. This card says where the numbers
+                came from and that nothing here is final. */}
+            <div style={{ background: VANI_SOFT, border: `1px solid rgba(255,107,43,.22)`, borderRadius: 14, padding: '15px 18px', marginBottom: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8, fontFamily: "'IBM Plex Mono', monospace", color: VANI, marginBottom: 8 }}>
+                Where these prices come from
+              </div>
+              <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: TEXT_DIM }}>
+                These are <strong style={{ color: TEXT }}>market-reference prices</strong> we
+                researched for your equipment — a starting point, not a quote.
+              </p>
+              <p style={{ margin: '9px 0 0', fontSize: 12.5, lineHeight: 1.6, color: TEXT_DIM }}>
+                Change any of them now with the <strong style={{ color: TEXT }}>edit</strong> link
+                on each row, or leave them and adjust later — every price stays editable in{' '}
+                <strong style={{ color: TEXT }}>Catalog Studio</strong>.
+              </p>
+              <p style={{ margin: '9px 0 0', fontSize: 12, lineHeight: 1.55, color: TEXT_MUTED }}>
+                Nothing is sent to a customer from this screen.
+              </p>
+            </div>
+
             {/* Pricing progress — dark card */}
             <div style={{ background: DARK_BG, border: '1px solid rgba(255,107,43,.12)', borderRadius: 14, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ padding: '13px 18px 10px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
@@ -567,7 +592,7 @@ const Screen8APricingStep: React.FC = () => {
               <div style={{ padding: '14px 18px' }}>
                 {[
                   { k: 'Blocks total',   v: String(totalBlocks) },
-                  { k: 'KT suggested',   v: String(ktPriced), accent: ktPriced > 0 },
+                  { k: 'Suggested',      v: String(ktPriced), accent: ktPriced > 0 },
                   { k: 'Edited by you',  v: String(changed), accent: changed > 0 },
                   { k: 'Still unpriced', v: String(totalBlocks - pricesSet) },
                   { k: 'Currency',       v: currency },
@@ -649,7 +674,7 @@ const Screen8APricingStep: React.FC = () => {
           }}
         >
           {saving && <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />}
-          {saving ? 'Saving…' : changed > 0 ? `Confirm pricing (${changed} edits) →` : 'Accept KT pricing →'}
+          {saving ? 'Saving…' : changed > 0 ? `Confirm pricing (${changed} edits) →` : 'Use these prices →'}
         </button>
       </div>
     </>

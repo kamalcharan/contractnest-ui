@@ -25,4 +25,51 @@ export default tseslint.config(
       ],
     },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MVP isolation rules — keep src/lite/ deletable.
+  //
+  // Rule A: lite may not reach into the heavy surfaces it exists to bypass.
+  //         If it needs 20 lines from one of them, copy the 20 lines.
+  // Rule B: nothing outside lite may import from lite. This one-way dependency
+  //         is what makes `rm -rf src/lite` a safe rollback at any moment.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    files: ['src/lite/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: [
+              '**/components/contracts/ContractWizard/**',
+              '**/pages/contracts/**',
+              '**/components/catalog-studio/**',
+              '**/pages/catalog-studio/**',
+              '**/components/group-sessions/**',
+            ],
+            message:
+              'src/lite must not import the heavy surfaces it bypasses. Copy what you need instead — see ClaudeDocumentation/mvp/EXECUTION-PLAN.md rule 4.',
+          },
+        ],
+      }],
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    // src/App.tsx is the single documented mount seam: it routes to the lite
+    // surfaces, so it is the one file allowed to import them. Keeping the
+    // exception to exactly one file is what stops the dependency spreading.
+    ignores: ['src/lite/**', 'src/App.tsx'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [
+          {
+            group: ['**/lite/**', '@/lite/**'],
+            message:
+              'Nothing outside src/lite may depend on it — that one-way rule is what keeps the MVP surface deletable.',
+          },
+        ],
+      }],
+    },
+  },
 )

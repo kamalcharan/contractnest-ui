@@ -5,6 +5,18 @@ import * as LucideIcons from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { getMenuItemsForIndustry, MenuItem } from '../../utils/constants/industryMenus';
+import { useReveals } from '@/components/reveal/useReveal';
+import type { RevealId } from '@/components/reveal/revealRules';
+
+// Menu entries the reveal schedule gates. Anything absent from this map is
+// always shown, so adding a menu item can never accidentally hide it.
+const REVEAL_BY_MENU_ID: Record<string, RevealId> = {
+  'ops-group-sessions': 'group-sessions',
+};
+
+// Module-level so the reference is stable — useReveals memoises on it, and an
+// inline array literal would rebuild the map on every render.
+const GATED_IDS = ['group-sessions'] as const;
 import { useContractStats } from '../../hooks/queries/useContractQueries';
 
 interface NavItemProps {
@@ -327,16 +339,31 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
 
   // Filter items into regular and admin groups
   // Also filter out 'getting-started' if onboarding is complete or user is not owner
+  // Reveal schedule. Fails open: an id with no rule, or a rule whose signal has
+  // not arrived, returns true and the item renders exactly as it does today.
+  const revealed = useReveals(GATED_IDS);
+  const isRevealed = (id: string): boolean => {
+    const ruleId = REVEAL_BY_MENU_ID[id];
+    return ruleId ? revealed[ruleId] !== false : true;
+  };
+
   const regularMenuItems = menuItems.filter(item => {
     if (!item.adminOnly) {
       // Hide 'getting-started' if onboarding complete or not owner
       if (item.id === 'getting-started' && !showGettingStarted) {
         return false;
       }
-      return true;
+      return isRevealed(item.id);
     }
     return false;
-  });
+  })
+    // Submenu entries are gated too — Group Sessions lives under Operations,
+    // so filtering only the top level would leave it visible.
+    .map(item =>
+      item.submenuItems
+        ? { ...item, submenuItems: item.submenuItems.filter(sub => isRevealed(sub.id)) }
+        : item
+    );
   const adminMenuItems = menuItems.filter(item => item.adminOnly);
 
   // Badge counts — contracts from real stats, others placeholder

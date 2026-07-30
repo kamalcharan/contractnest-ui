@@ -15,6 +15,8 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { OnboardingUtils } from '@/types/onboardingTypes';
+import JourneyRail from './JourneyRail';
+import { resolveJourney, normaliseJourneyPersona } from './journey';
 import toast from 'react-hot-toast';
 
 interface OnboardingLayoutProps {
@@ -54,10 +56,44 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
   // Tenant Profile Hook for business profile steps
   const {
+    formData: tenantFormData,
+    fetchProfile: fetchTenantProfile,
     updateField: updateTenantField,
     handleLogoChange: handleTenantLogoChange,
     submitProfile,
   } = useTenantProfile({ isOnboarding: true });
+
+  // With isOnboarding: true the hook deliberately skips its own auto-fetch
+  // (useTenantProfile.ts:154, 167, 188), so formData stays empty unless
+  // something asks for it. The journey below needs the persona to know
+  // whether this tenant sees a pricing step or an assets step, so fetch it
+  // once here. This layout is the parent route: it mounts once for the whole
+  // onboarding session, not per step, so this is a single request.
+  useEffect(() => {
+    fetchTenantProfile?.();
+    // fetchProfile is stable in the existing hook; re-running would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTenant?.id]);
+
+  // ── Unified wizard ────────────────────────────────────────────────────────
+  // The header used to draw its dots from OnboardingUtils.getAllSteps(), the
+  // LEGACY 11-step list. Almost no VaNi route appears in it, so the lookup
+  // returned -1 and the counter rendered "0 / 11" with no dot marked current —
+  // while the body of the same screen said "Step 7 of 9". Three step models,
+  // three different answers.
+  //
+  // For the express journey the header now renders the SAME JourneyRail the
+  // express screens render, from the SAME model, so the numbers agree end to
+  // end. resolveJourney returns null for anything else — the long form, and
+  // therefore BBB and every existing chapter, falls through to the original
+  // markup below completely unchanged.
+  const personaSource = tenantFormData as
+    | { persona?: unknown; business_type_id?: unknown }
+    | undefined;
+  const journeyPersona = normaliseJourneyPersona(
+    personaSource?.persona ?? personaSource?.business_type_id
+  );
+  const journey = resolveJourney(location.pathname, journeyPersona);
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const allSteps = OnboardingUtils.getAllSteps();
@@ -97,6 +133,13 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
     'vani-working',
     'pricing-review',
     'equipment-confirm',
+    // Both of these render their own Continue and drive their own navigation,
+    // but neither was listed here. currentIndex is -1 for them (they are not
+    // in the legacy allSteps), so the header's Continue computed
+    // allSteps[-1 + 1] = allSteps[0] and would have thrown the tenant back to
+    // the legacy 'welcome' screen. Listing them hides that second button.
+    'terms-conditions',
+    'lov-setup',
   ];
 
   useEffect(() => {
@@ -377,15 +420,39 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
 
           <div>
             <h1 className="text-base font-semibold" style={{ color: colors.utility.primaryText }}>
-              {getStepTitle(uiStepId) || 'Getting Started'}
+              {/* On the express journey the rail's own label is the truth —
+                  getStepTitle reads the legacy registry, which has no entry
+                  for these routes and falls back to 'Getting Started'. */}
+              {journey
+                ? journey.steps[journey.currentIndex]?.label
+                : getStepTitle(uiStepId) || 'Getting Started'}
             </h1>
             <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-              {currentStepDef?.description || 'Begin your setup journey'}
+              {/* Same reason as the title above: the legacy registry has no
+                  entry for these routes, so every express screen showed
+                  "Begin your setup journey" — as if the flow never moved. */}
+              {journey
+                ? journey.steps[journey.currentIndex]?.blurb || ''
+                : currentStepDef?.description || 'Begin your setup journey'}
             </p>
           </div>
         </div>
 
-        {/* Center: Progress Dots */}
+        {/* Center: Progress — the shared wizard on the express journey, the
+            original legacy dots everywhere else. */}
+        {journey ? (
+          <div className="hidden md:flex items-center">
+            <JourneyRail
+              steps={journey.steps}
+              currentIndex={journey.currentIndex}
+              compact
+              accent={colors.brand.primary}
+              done={colors.semantic.success}
+              muted={colors.utility.secondaryText}
+              onAccent="#ffffff"
+            />
+          </div>
+        ) : (
         <div className="hidden md:flex items-center gap-1.5">
           {allSteps.map((step, index) => {
             const isCompleted = completedSteps.includes(step.id) || skippedSteps.includes(step.id);
@@ -411,6 +478,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
             );
           })}
         </div>
+        )}
 
         {/* Right: Navigation + Step counter + Close */}
         <div className="flex items-center gap-2">
@@ -480,16 +548,31 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
             }}
           />
 
-          {/* Step counter */}
-          <span
-            className="text-xs font-medium px-2.5 py-1 rounded-full"
-            style={{
-              backgroundColor: colors.brand.primary + '15',
-              color: colors.brand.primary,
-            }}
-          >
-            {currentIndex + 1} / {allSteps.length}
-          </span>
+          {/* Step counter. On the express journey JourneyRail already carries
+              the count, so a second one here would contradict it on narrow
+              screens where the rail is hidden. */}
+          {!journey && (
+            <span
+              className="text-xs font-medium px-2.5 py-1 rounded-full"
+              style={{
+                backgroundColor: colors.brand.primary + '15',
+                color: colors.brand.primary,
+              }}
+            >
+              {currentIndex + 1} / {allSteps.length}
+            </span>
+          )}
+          {journey && (
+            <span
+              className="text-xs font-medium px-2.5 py-1 rounded-full md:hidden"
+              style={{
+                backgroundColor: colors.brand.primary + '15',
+                color: colors.brand.primary,
+              }}
+            >
+              {journey.currentIndex + 1} / {journey.steps.length}
+            </span>
+          )}
 
           {/* Close */}
           <button
