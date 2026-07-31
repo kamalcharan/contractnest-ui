@@ -324,6 +324,12 @@ export const defaultMenuItems: MenuItem[] = [
         label: 'Worker Health',
         icon: 'HeartPulse',
         path: '/admin/jtd/worker'
+      },
+      {
+        id: 'jtd-templates',
+        label: 'Template Mapping',
+        icon: 'FileText',
+        path: '/admin/jtd/templates'
       }
     ]
   },
