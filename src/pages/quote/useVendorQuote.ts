@@ -23,6 +23,13 @@ export interface QuoteBlock {
   category_name?: string | null;
   quantity?: number | null;
   billing_cycle?: string | null;
+  // How often the visit repeats (days) — the thing a vendor actually needs
+  // to price the work. null/undefined = one-time. Added alongside
+  // `unlimited` because billing_cycle (prepaid/postpaid/monthly/...) is a
+  // buyer-payment-terms concept that means nothing before a vendor is even
+  // chosen, and was the only cadence-ish info sent here before.
+  service_cycle_days?: number | null;
+  unlimited?: boolean | null;
   // NOTE: no price. The buyer's own pricing is deliberately not sent — the
   // vendor is quoting, not matching a number.
 }

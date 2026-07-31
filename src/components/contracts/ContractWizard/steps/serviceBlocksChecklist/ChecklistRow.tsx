@@ -7,6 +7,7 @@
 // component owns zero pricing math.
 
 import React from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Block } from '@/types/catalogStudio';
 import type { ConfigurableBlock } from '@/components/catalog-studio';
 // Single source of truth for non-cadence billing cycles — the SAME six
@@ -14,6 +15,8 @@ import type { ConfigurableBlock } from '@/components/catalog-studio';
 // Fortnightly/Quarterly/Custom)
 import { CYCLE_OPTIONS } from '@/components/catalog-studio/BlockCardConfigurable';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import SafeHtml from '@/components/catalog-studio/SafeHtml';
 import {
   getCadenceCycle,
   fittingCadences,
@@ -37,8 +40,35 @@ export interface ChecklistRowProps {
   priced: boolean;
   /** Row is a FlyBy custom line (name/description editable) */
   flyBy?: boolean;
+  /**
+   * Contract vs RFQ, consulted ONLY within flyBy rows — catalog (non-flyBy)
+   * rendering is completely unaffected by this prop. In 'rfq' mode a flyBy
+   * line still shows Visits/Unlimited/Billing Cycle/Service Cycle, but hides
+   * the price amount and the Advanced (tax/billing-only) disclosure, since
+   * an RFQ has no price yet — the vendor sets it when they quote.
+   * Default 'contract' — existing behavior, byte-for-byte unchanged.
+   */
+  mode?: 'contract' | 'rfq';
   /** This block's cycle offends the unified billing cycle */
   mismatch?: { majority: string } | null;
+  /**
+   * Unit count of the coverage/asset group this block is scoped to (e.g. "DG
+   * Set ×2"), resolved by the caller from CoverageTypeItem/coverage line.
+   * Undefined or 1 → no ambiguity, nothing shown. When > 1 and a service
+   * cycle is set, disambiguates that Visits × Cycle covers ALL units
+   * together per visit, not per unit — the compliance gap flagged 2026-07-31
+   * (see CLAUDE.md). Not shown on a block already produced by a split
+   * (config.splitUnitIndex set).
+   */
+  coverageUnitCount?: number;
+  /**
+   * Split this recurring FlyBy block into N independent per-unit schedules
+   * (one clone per unit, each keeping its own Visits/Cycle to edit
+   * separately). Only offered by the caller for FlyBy rows — catalog rows
+   * never receive this prop, so no button renders there (splitting a
+   * reusable catalog block per unit is a bigger structural change, deferred).
+   */
+  onSplitByUnits?: () => void;
   expanded: boolean;
   durationMonths: number;
   onToggle: () => void;
@@ -50,6 +80,18 @@ export interface ChecklistRowProps {
   /** Small colored category pill so the block TYPE is visible on every row */
   typeChip?: { label: string; color: string };
 }
+
+// Spare Part category — SAME options catalog-studio's Basic Info step offers
+// when defining a Spare Part block (id -> label kept identical so a value
+// written here reads the same way there). No SKU on the flyby line — SKU is
+// an inventory-tracked identity that only makes sense for a real catalog part;
+// a loose RFQ/contract line asks by CATEGORY + quantity instead.
+const SPARE_CATEGORIES = [
+  { id: 'filter', label: 'Filters' },
+  { id: 'gas', label: 'Gases' },
+  { id: 'parts', label: 'Parts' },
+  { id: 'accessories', label: 'Accessories' },
+];
 
 const cycleLabel = (cycle: string, customDays?: number): string => {
   const cad = getCadenceCycle(cycle);
@@ -69,9 +111,12 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
   checked,
   disabled = false,
   disabledLabel = 'COMING SOON',
-  priced,
+  priced: pricedProp,
   flyBy = false,
+  mode = 'contract',
   mismatch,
+  coverageUnitCount,
+  onSplitByUnits,
   expanded,
   durationMonths,
   onToggle,
@@ -81,9 +126,24 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
   typeLabel,
   typeChip,
 }) => {
+  // Group Session is NEVER priced — enforced HERE regardless of what the
+  // caller passes, so a caller bug can't accidentally show pricing UI for it.
+  // Matches the catalog side: categoryHasPricing('session') is false there
+  // (no CATEGORY_METADATA entry) — this is the FlyBy equivalent of that rule.
+  const isSessionFlyBy = flyBy && instance?.flyByType === 'session';
+  const priced = pricedProp && !isSessionFlyBy;
+  const rfqFlyBy = flyBy && mode === 'rfq';
   const line = colors.utility.primaryText + '15';
   const dim = colors.utility.secondaryText;
   const sym = getCurrencySymbol(instance?.currency || currency);
+  // Coverage-unit ambiguity: only meaningful once a cycle is actually set,
+  // and never on a block a split already produced (that instance IS one unit).
+  const showCoverageAmbiguity =
+    !!instance &&
+    !!instance.serviceCycleDays &&
+    !!coverageUnitCount &&
+    coverageUnitCount > 1 &&
+    !instance.config?.splitUnitIndex;
 
   const name = instance?.name ?? block?.name ?? '';
   const description = instance?.description ?? block?.description ?? '';
@@ -105,6 +165,12 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
     typeof anchorWeekday === 'number' && anchorWeekday >= 0 && anchorWeekday <= 6
       ? ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'][anchorWeekday]
       : null;
+  // First-occurrence override (catalog-studio: "overrides the weekday anchor
+  // above for the first occurrence only") and the overdue buffer, both from
+  // the SAME config.serviceCycles cluster as anchorWeekday/days.
+  const anchorDate = (instance?.config as any)?.serviceCycles?.anchorDate as string | undefined;
+  const gracePeriod = (instance?.config as any)?.serviceCycles?.gracePeriod as number | undefined;
+  const spareCategory = (instance?.config as any)?.spareCategory as string | undefined;
   const contractDurationDays = durationMonths * 30;
   const serviceCycleSpanDays =
     instance?.serviceCycleDays && !instance.unlimited && instance.quantity > 1
@@ -170,6 +236,85 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
     if (cfg.autoCount) cfg.autoCount = false;
     onUpdate({ quantity: v, config: cfg });
   };
+
+  // FlyBy Spare Part — category, same field/options as catalog-studio's Basic
+  // Info step (config.spareCategory). No SKU here by design.
+  const handleSpareCategoryChange = (category: string) => {
+    if (!instance) return;
+    onUpdate({ config: { ...instance.config, spareCategory: category } as any });
+  };
+
+  // FlyBy Service Cycle — Yes/No toggle (mirrors catalog-studio's "Does this
+  // service require Cycles?" in Delivery Settings). Reuses the SAME
+  // serviceCycleDays field — no schema change. "Yes" seeds a sensible
+  // default so the days input is immediately visible and editable.
+  const handleRequiresCycleToggle = (yes: boolean) => {
+    if (!instance) return;
+    if (yes) {
+      onUpdate({ serviceCycleDays: instance.serviceCycleDays || 30 });
+    } else {
+      onUpdate({
+        serviceCycleDays: undefined,
+        config: { ...instance.config, serviceCycles: { ...(instance.config as any)?.serviceCycles, days: undefined, anchorWeekday: undefined, anchorDate: undefined, gracePeriod: undefined } } as any,
+      });
+    }
+  };
+  const handleAnchorWeekdayChange = (day: number | undefined) => {
+    if (!instance) return;
+    onUpdate({
+      config: {
+        ...instance.config,
+        serviceCycles: { ...(instance.config as any)?.serviceCycles, anchorWeekday: day, days: instance.serviceCycleDays, enabled: true },
+      } as any,
+    });
+  };
+  // First-occurrence date override — "overrides the weekday anchor above for
+  // the first occurrence only" (same semantics as catalog-studio). Setting it
+  // clears any conflicting weekday anchor is NOT done here — the anchor still
+  // governs occurrence 2+ once the first is pinned, matching DeliveryStep.
+  const handleAnchorDateChange = (dateStr: string | undefined) => {
+    if (!instance) return;
+    onUpdate({
+      config: {
+        ...instance.config,
+        serviceCycles: { ...(instance.config as any)?.serviceCycles, anchorDate: dateStr, days: instance.serviceCycleDays, enabled: true },
+      } as any,
+    });
+  };
+  // Grace period — buffer before an occurrence is marked overdue.
+  const handleGracePeriodChange = (days: number | undefined) => {
+    if (!instance) return;
+    onUpdate({
+      config: {
+        ...instance.config,
+        serviceCycles: { ...(instance.config as any)?.serviceCycles, gracePeriod: days, days: instance.serviceCycleDays, enabled: true },
+      } as any,
+    });
+  };
+  // Next few occurrence dates from today — same anchor-aware logic as the
+  // catalog-studio Delivery Settings preview, so a buyer/seller can see how
+  // the cadence lands before saving. An explicit first-occurrence date
+  // overrides the computed first date; later dates still follow the interval.
+  const sampleDates = React.useMemo(() => {
+    if (!instance?.serviceCycleDays || instance.serviceCycleDays < 1) return [] as Date[];
+    const hasAnchor = typeof anchorWeekday === 'number' && anchorWeekday >= 0 && anchorWeekday <= 6;
+    const addD = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    let first = start;
+    if (anchorDate) {
+      const parsed = new Date(`${anchorDate}T00:00:00`);
+      if (!isNaN(parsed.getTime())) first = parsed;
+    } else if (hasAnchor) {
+      const diff = (((anchorWeekday as number) - start.getDay()) % 7 + 7) % 7;
+      first = addD(start, diff);
+    }
+    const everyNWeeks = Math.max(1, Math.round(instance.serviceCycleDays / 7));
+    const count = Math.min(instance.quantity || 6, 6);
+    const out: Date[] = [];
+    for (let i = 0; i < count; i++) out.push(hasAnchor && !anchorDate ? addD(first, i * everyNWeeks * 7) : addD(first, i * instance.serviceCycleDays!));
+    return out;
+  }, [instance?.serviceCycleDays, anchorWeekday, anchorDate, instance?.quantity]);
 
   const inputStyle: React.CSSProperties = {
     backgroundColor: isDarkMode ? 'rgba(15,23,42,0.6)' : '#fff',
@@ -250,9 +395,14 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
               )}
             </div>
           )}
-          <div className="text-[12px] truncate" style={{ color: dim }}>
-            {description}
-          </div>
+          <SafeHtml
+            html={description}
+            stripTags
+            maxLength={140}
+            as="div"
+            className="text-[12px] truncate"
+            style={{ color: dim }}
+          />
         </div>
         {/* Explicit pick affordance — the checkbox alone was easy to miss */}
         {!disabled && !flyBy && (
@@ -277,8 +427,8 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
             </span>
           ) : priced ? (
             <>
-              <div className="font-extrabold text-[13.5px] tabular-nums" style={{ color: colors.utility.primaryText }}>
-                {displayPrice !== undefined ? `${sym}${displayPrice.toLocaleString()}` : '—'}
+              <div className="font-extrabold text-[13.5px] tabular-nums" style={{ color: rfqFlyBy ? colors.brand.primary : colors.utility.primaryText }}>
+                {rfqFlyBy ? 'Quote pending' : (displayPrice !== undefined ? `${sym}${displayPrice.toLocaleString()}` : '—')}
               </div>
               <div className="text-[11px]" style={{ color: dim }}>
                 {checked && instance ? cycleLabel(instance.cycle, instance.customCycleDays) : 'per unit'}
@@ -318,6 +468,11 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
               {sym}{effPrice!.toLocaleString()} · −{discountPct}% off list
             </span>
           )}
+          {flyBy && instance.flyByType === 'spare' && (
+            <span className="rounded-full px-2.5 py-0.5 font-semibold" style={{ backgroundColor: colors.utility.primaryText + '0a' }}>
+              {SPARE_CATEGORIES.find((c) => c.id === (spareCategory || 'parts'))?.label}
+            </span>
+          )}
           {instance.config?.billingOnly && (
             <span className="rounded-full px-2.5 py-0.5 font-semibold" style={{ backgroundColor: colors.utility.primaryText + '0a' }}>
               Billing-only
@@ -342,15 +497,14 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
         >
           {flyBy && (
             <div className="mb-3">
-              <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
-                Description
-              </label>
-              <input
+              <RichTextEditor
                 value={description}
+                onChange={(html) => onUpdate({ description: html })}
+                label="Description"
                 placeholder="What does this line cover?"
-                onChange={(e) => onUpdate({ description: e.target.value })}
-                className="w-full rounded-lg px-2.5 py-2 text-[13px]"
-                style={inputStyle}
+                minHeight={90}
+                maxHeight={220}
+                allowFullscreen={false}
               />
             </div>
           )}
@@ -387,35 +541,72 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
                   </label>
                 </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
-                  Your price {cp ? '(per payment)' : '(per visit)'}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  value={effPrice ?? ''}
-                  onChange={(e) => handlePriceChange(e.target.value)}
-                  className="w-full rounded-lg px-2.5 py-2 text-[13px]"
-                  style={inputStyle}
-                />
-                <div
-                  className="text-[11.5px] font-semibold mt-1"
-                  style={{ color: discounted ? '#0d9464' : dim }}
-                >
-                  {hasList
-                    ? discounted
-                      ? `List ${sym}${listPrice!.toLocaleString()} → −${discountPct}% recorded as discount`
-                      : effPrice !== undefined && effPrice > listPrice!
-                        ? `Above list (${sym}${listPrice!.toLocaleString()})`
-                        : 'At list price — no discount recorded'
-                    : 'No list price on this block'}
+              {!rfqFlyBy && (
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
+                    Your price {cp ? '(per payment)' : '(per visit)'}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={effPrice ?? ''}
+                    onChange={(e) => handlePriceChange(e.target.value)}
+                    className="w-full rounded-lg px-2.5 py-2 text-[13px]"
+                    style={inputStyle}
+                  />
+                  <div
+                    className="text-[11.5px] font-semibold mt-1"
+                    style={{ color: discounted ? '#0d9464' : dim }}
+                  >
+                    {hasList
+                      ? discounted
+                        ? `List ${sym}${listPrice!.toLocaleString()} → −${discountPct}% recorded as discount`
+                        : effPrice !== undefined && effPrice > listPrice!
+                          ? `Above list (${sym}${listPrice!.toLocaleString()})`
+                          : 'At list price — no discount recorded'
+                      : 'No list price on this block'}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="text-[12.5px]" style={{ color: dim }}>
               Content block — no pricing. It shapes the contract document{typeLabel === 'checklist block' ? ' and attaches to visits' : ''}.
+            </div>
+          )}
+          {rfqFlyBy && priced && (
+            <div className="text-[11.5px] mt-2" style={{ color: dim }}>
+              The vendor sets the price when they quote this request.
+            </div>
+          )}
+
+          {/* Spare Part category — same 4 options catalog-studio offers when
+              defining a spare part. No SKU on a loose line; category + the
+              Visits quantity above is enough to ask "N of this kind". */}
+          {flyBy && instance.flyByType === 'spare' && (
+            <div className="mt-3">
+              <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
+                Category
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {SPARE_CATEGORIES.map((c) => {
+                  const isActive = (spareCategory || 'parts') === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleSpareCategoryChange(c.id)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                      style={{
+                        backgroundColor: isActive ? colors.brand.primary : colors.utility.primaryText + '08',
+                        color: isActive ? '#fff' : dim,
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -501,76 +692,281 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
             </div>
           )}
 
-          {/* Service cycle (visit interval) — full previous-card logic:
-              editable interval, anchor weekday, plain-language summary,
-              span-vs-duration validation. Hidden when Unlimited. */}
+          {/* Service cycle (visit interval). FlyBy rows (Contract's custom
+              lines AND RFQ) get the catalog-studio "Delivery Settings" style
+              redesign — explicit Yes/No + anchor weekday + sample dates.
+              Catalog (non-flyBy) rows keep the EXACT previous design,
+              completely untouched — zero behavior change there. */}
           {deliversOccurrences && !instance.unlimited && (
-            <div
-              className="mt-3 p-3 rounded-xl border-2 border-dashed"
-              style={{
-                borderColor: serviceCycleExceedsDuration
-                  ? colors.semantic?.error || '#EF4444'
-                  : instance.serviceCycleDays
-                    ? colors.brand.primary
-                    : colors.utility.primaryText + '20',
-                backgroundColor: serviceCycleExceedsDuration
-                  ? (colors.semantic?.error || '#EF4444') + '08'
-                  : instance.serviceCycleDays
-                    ? colors.brand.primary + '06'
-                    : 'transparent',
-              }}
-            >
-              <label className="block text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: dim }}>
-                Service cycle
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: dim }}>Every</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={instance.serviceCycleDays || ''}
-                  placeholder="—"
-                  onChange={(e) =>
-                    onUpdate({ serviceCycleDays: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })
-                  }
-                  className="w-20 rounded-lg px-2.5 py-1.5 text-sm font-medium text-center"
-                  style={{
-                    ...inputStyle,
-                    border: `1px solid ${serviceCycleExceedsDuration ? colors.semantic?.error || '#EF4444' : colors.utility.primaryText + '20'}`,
-                  }}
-                />
-                <span className="text-xs" style={{ color: dim }}>
-                  {anchorLabel ? `days · on ${anchorLabel}` : 'days from start of contract'}
-                </span>
-              </div>
-              {instance.serviceCycleDays && instance.serviceCycleDays > 0 ? (
-                <p className="text-xs leading-relaxed mt-2" style={{ color: colors.utility.primaryText }}>
-                  {isGroupSession ? 'This session runs' : 'This service will be performed'} every{' '}
-                  <strong>{instance.serviceCycleDays} days</strong>
-                  {anchorLabel && <> on <strong>{anchorLabel}</strong></>},{' '}
-                  <strong>{instance.quantity} time{instance.quantity > 1 ? 's' : ''}</strong>
-                  {instance.quantity > 1 && !anchorLabel && (
-                    <span style={{ color: dim }}>
-                      {' '}(Day 1 to Day {(instance.quantity - 1) * instance.serviceCycleDays})
-                    </span>
-                  )}
-                </p>
-              ) : null}
-              {isGroupSession && (
-                <p className="text-[11px] mt-1" style={{ color: dim }}>
-                  Holidays shift per Cadence Settings — you'll confirm each clash at the schedule preview.
-                </p>
-              )}
-              {serviceCycleExceedsDuration && (
-                <div
-                  className="mt-2 p-2 rounded-lg text-xs"
-                  style={{ backgroundColor: (colors.semantic?.error || '#EF4444') + '12', color: colors.semantic?.error || '#EF4444' }}
-                >
-                  Cycles span {serviceCycleSpanDays} days but the contract is only {contractDurationDays} days.
-                  Reduce visits or increase the interval.
+            flyBy ? (
+              <div
+                className="mt-3 p-3 rounded-xl border-2 border-dashed"
+                style={{
+                  borderColor: serviceCycleExceedsDuration
+                    ? colors.semantic?.error || '#EF4444'
+                    : instance.serviceCycleDays
+                      ? colors.brand.primary
+                      : colors.utility.primaryText + '20',
+                  backgroundColor: serviceCycleExceedsDuration
+                    ? (colors.semantic?.error || '#EF4444') + '08'
+                    : instance.serviceCycleDays
+                      ? colors.brand.primary + '06'
+                      : 'transparent',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <RefreshCw className="w-3.5 h-3.5" style={{ color: colors.brand.primary }} />
+                  <label className="text-[10px] font-bold uppercase tracking-wide" style={{ color: dim }}>
+                    Service Cycles
+                  </label>
                 </div>
-              )}
-            </div>
+                <div className="text-[12px] mb-2" style={{ color: dim }}>Does this repeat?</div>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => handleRequiresCycleToggle(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border-2 text-[12px] font-semibold transition-all"
+                    style={{
+                      backgroundColor: instance.serviceCycleDays ? colors.brand.primary : (isDarkMode ? 'rgba(15,23,42,0.5)' : '#fff'),
+                      borderColor: instance.serviceCycleDays ? colors.brand.primary : line,
+                      color: instance.serviceCycleDays ? '#fff' : colors.utility.primaryText,
+                    }}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Yes, repeats
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRequiresCycleToggle(false)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border-2 text-[12px] font-semibold transition-all"
+                    style={{
+                      backgroundColor: !instance.serviceCycleDays ? colors.brand.primary : (isDarkMode ? 'rgba(15,23,42,0.5)' : '#fff'),
+                      borderColor: !instance.serviceCycleDays ? colors.brand.primary : line,
+                      color: !instance.serviceCycleDays ? '#fff' : colors.utility.primaryText,
+                    }}
+                  >
+                    One-time
+                  </button>
+                </div>
+
+                {instance.serviceCycleDays !== undefined && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs" style={{ color: dim }}>Every</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={instance.serviceCycleDays || ''}
+                        onChange={(e) =>
+                          onUpdate({ serviceCycleDays: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })
+                        }
+                        className="w-20 rounded-lg px-2.5 py-1.5 text-sm font-medium text-center"
+                        style={{
+                          ...inputStyle,
+                          border: `1px solid ${serviceCycleExceedsDuration ? colors.semantic?.error || '#EF4444' : colors.utility.primaryText + '20'}`,
+                        }}
+                      />
+                      <span className="text-xs" style={{ color: dim }}>days</span>
+                    </div>
+
+                    <div className="mt-2.5">
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: dim }}>
+                        Repeat on a fixed weekday? (optional)
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAnchorWeekdayChange(undefined)}
+                          className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                          style={{
+                            backgroundColor: anchorWeekday === undefined ? colors.brand.primary : colors.utility.primaryText + '0a',
+                            color: anchorWeekday === undefined ? '#fff' : dim,
+                          }}
+                        >
+                          No fixed day
+                        </button>
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((lbl, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleAnchorWeekdayChange(i)}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                            style={{
+                              backgroundColor: anchorWeekday === i ? colors.brand.primary : colors.utility.primaryText + '0a',
+                              color: anchorWeekday === i ? '#fff' : dim,
+                            }}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5">
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: dim }}>
+                        First occurrence date (optional)
+                      </div>
+                      <input
+                        type="date"
+                        value={anchorDate || ''}
+                        onChange={(e) => handleAnchorDateChange(e.target.value === '' ? undefined : e.target.value)}
+                        className="rounded-lg px-2.5 py-1.5 text-[13px]"
+                        style={inputStyle}
+                      />
+                      <p className="text-[10.5px] mt-1" style={{ color: dim }}>
+                        Set this when the real first visit doesn&apos;t match the computed date — overrides the weekday anchor above for the first occurrence only.
+                      </p>
+                    </div>
+
+                    <div className="mt-2.5">
+                      <div className="text-[11px] font-semibold mb-1.5" style={{ color: dim }}>
+                        Grace period
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          placeholder="e.g. 7"
+                          value={gracePeriod ?? ''}
+                          onChange={(e) => handleGracePeriodChange(e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          className="w-20 rounded-lg px-2.5 py-1.5 text-sm font-medium text-center"
+                          style={inputStyle}
+                        />
+                        <span className="text-xs" style={{ color: dim }}>days — buffer before marking overdue</span>
+                      </div>
+                    </div>
+
+                    {sampleDates.length > 0 && (
+                      <div className="mt-2.5 pt-2.5 border-t border-dashed" style={{ borderColor: line }}>
+                        <div className="text-[11px] font-semibold mb-1" style={{ color: dim }}>Next occurrences</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sampleDates.map((d, i) => (
+                            <span
+                              key={i}
+                              className="text-[10.5px] px-2 py-0.5 rounded-full"
+                              style={{ backgroundColor: colors.brand.primary + '10', color: colors.brand.primary }}
+                            >
+                              {d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {showCoverageAmbiguity && (
+                      <div className="mt-2.5 pt-2.5 border-t border-dashed" style={{ borderColor: line }}>
+                        <p className="text-[11.5px] leading-relaxed" style={{ color: colors.utility.primaryText }}>
+                          <strong>{instance.quantity} visit{instance.quantity === 1 ? '' : 's'}</strong> cover{instance.quantity === 1 ? 's' : ''} all{' '}
+                          <strong>{coverageUnitCount} units</strong>
+                          {instance.coverageTypeName ? <> of <strong>{instance.coverageTypeName}</strong></> : null} together, per visit —
+                          not {instance.quantity} visits for each unit.
+                        </p>
+                        {onSplitByUnits && (
+                          <button
+                            type="button"
+                            onClick={onSplitByUnits}
+                            className="mt-1.5 text-[11px] font-bold underline"
+                            style={{ color: colors.brand.primary }}
+                          >
+                            Split into {coverageUnitCount} independent schedules instead
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {isGroupSession && (
+                      <p className="text-[11px] mt-2" style={{ color: dim }}>
+                        Holidays shift per Cadence Settings — you&apos;ll confirm each clash at the schedule preview.
+                      </p>
+                    )}
+                    {serviceCycleExceedsDuration && (
+                      <div
+                        className="mt-2 p-2 rounded-lg text-xs"
+                        style={{ backgroundColor: (colors.semantic?.error || '#EF4444') + '12', color: colors.semantic?.error || '#EF4444' }}
+                      >
+                        Cycles span {serviceCycleSpanDays} days but the contract is only {contractDurationDays} days.
+                        Reduce visits or increase the interval.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <div
+                className="mt-3 p-3 rounded-xl border-2 border-dashed"
+                style={{
+                  borderColor: serviceCycleExceedsDuration
+                    ? colors.semantic?.error || '#EF4444'
+                    : instance.serviceCycleDays
+                      ? colors.brand.primary
+                      : colors.utility.primaryText + '20',
+                  backgroundColor: serviceCycleExceedsDuration
+                    ? (colors.semantic?.error || '#EF4444') + '08'
+                    : instance.serviceCycleDays
+                      ? colors.brand.primary + '06'
+                      : 'transparent',
+                }}
+              >
+                <label className="block text-[10px] font-bold uppercase tracking-wide mb-2" style={{ color: dim }}>
+                  Service cycle
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: dim }}>Every</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={instance.serviceCycleDays || ''}
+                    placeholder="—"
+                    onChange={(e) =>
+                      onUpdate({ serviceCycleDays: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })
+                    }
+                    className="w-20 rounded-lg px-2.5 py-1.5 text-sm font-medium text-center"
+                    style={{
+                      ...inputStyle,
+                      border: `1px solid ${serviceCycleExceedsDuration ? colors.semantic?.error || '#EF4444' : colors.utility.primaryText + '20'}`,
+                    }}
+                  />
+                  <span className="text-xs" style={{ color: dim }}>
+                    {anchorLabel ? `days · on ${anchorLabel}` : 'days from start of contract'}
+                  </span>
+                </div>
+                {instance.serviceCycleDays && instance.serviceCycleDays > 0 ? (
+                  <p className="text-xs leading-relaxed mt-2" style={{ color: colors.utility.primaryText }}>
+                    {isGroupSession ? 'This session runs' : 'This service will be performed'} every{' '}
+                    <strong>{instance.serviceCycleDays} days</strong>
+                    {anchorLabel && <> on <strong>{anchorLabel}</strong></>},{' '}
+                    <strong>{instance.quantity} time{instance.quantity > 1 ? 's' : ''}</strong>
+                    {instance.quantity > 1 && !anchorLabel && (
+                      <span style={{ color: dim }}>
+                        {' '}(Day 1 to Day {(instance.quantity - 1) * instance.serviceCycleDays})
+                      </span>
+                    )}
+                  </p>
+                ) : null}
+                {showCoverageAmbiguity && (
+                  <div className="mt-2 pt-2 border-t border-dashed" style={{ borderColor: line }}>
+                    <p className="text-[11.5px] leading-relaxed" style={{ color: colors.utility.primaryText }}>
+                      <strong>{instance.quantity} visit{instance.quantity === 1 ? '' : 's'}</strong> cover{instance.quantity === 1 ? 's' : ''} all{' '}
+                      <strong>{coverageUnitCount} units</strong>
+                      {instance.coverageTypeName ? <> of <strong>{instance.coverageTypeName}</strong></> : null} together, per visit —
+                      not {instance.quantity} visits for each unit.
+                    </p>
+                  </div>
+                )}
+                {isGroupSession && (
+                  <p className="text-[11px] mt-1" style={{ color: dim }}>
+                    Holidays shift per Cadence Settings — you&apos;ll confirm each clash at the schedule preview.
+                  </p>
+                )}
+                {serviceCycleExceedsDuration && (
+                  <div
+                    className="mt-2 p-2 rounded-lg text-xs"
+                    style={{ backgroundColor: (colors.semantic?.error || '#EF4444') + '12', color: colors.semantic?.error || '#EF4444' }}
+                  >
+                    Cycles span {serviceCycleSpanDays} days but the contract is only {contractDurationDays} days.
+                    Reduce visits or increase the interval.
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {/* Cadence payment schedule + seller-set final payment (as before) */}
@@ -625,7 +1021,8 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
             </div>
           )}
 
-          {/* Advanced disclosure */}
+          {/* Advanced disclosure — not needed in RFQ (no tax/billing yet) */}
+          {!rfqFlyBy && (
           <details className="mt-3">
             <summary className="text-[12.5px] font-bold cursor-pointer" style={{ color: dim }}>
               Advanced — tax, description{priced ? ', billing-only' : ''} (rarely needed)
@@ -661,6 +1058,7 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
               )}
             </div>
           </details>
+          )}
 
           <div className="flex items-center justify-between mt-3">
             {onRemove ? (

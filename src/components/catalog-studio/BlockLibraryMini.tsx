@@ -13,7 +13,7 @@ import { Block } from '@/types/catalogStudio';
 import BlockCardSelectable from './BlockCardSelectable';
 
 // FlyBy-enabled category IDs
-export type FlyByCategoryId = 'service' | 'spare' | 'text' | 'document';
+export type FlyByCategoryId = 'service' | 'spare' | 'text' | 'document' | 'session';
 
 export interface BlockLibraryMiniProps {
   selectedBlockIds: string[];

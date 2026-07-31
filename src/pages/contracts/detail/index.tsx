@@ -58,6 +58,7 @@ import {
 } from '@/hooks/queries/useContractCreditDeposit';
 import type { ContractDetail, ContractStatus, InvoiceReceipt, Invoice } from '@/types/contracts';
 import { CONTRACT_STATUS_COLORS, CONTRACT_STATUS_FLOW, RFQ_STATUS_FLOW } from '@/types/contracts';
+import RfqReport from './RfqReport';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -2152,6 +2153,19 @@ const ContractDetailPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4" /> Back to Contracts
         </button>
       </div>
+    );
+  }
+
+  // ─── RFQ gets its own report, not the contract detail layout (B7) ───
+  if (isRfq) {
+    return (
+      <RfqReport
+        contract={contract}
+        colors={colors}
+        canChangeStatus={canChangeStatus}
+        availableTransitions={availableTransitions}
+        onStatusChange={handleStatusChange}
+      />
     );
   }
 

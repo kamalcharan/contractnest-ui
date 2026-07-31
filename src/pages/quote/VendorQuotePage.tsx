@@ -20,6 +20,12 @@ import {
   type QuoteResolve,
   type QuoteBreakdownRow,
 } from './useVendorQuote';
+// Sanitizes + renders the block description as real HTML instead of literal
+// tags — a bare {block_description} shows raw <p><span style="..."> text,
+// since descriptions come from the buyer's RichTextEditor. Pure leaf
+// component (no ThemeContext/app-shell dependency), safe on this
+// dependency-light public page.
+import SafeHtml from '@/components/catalog-studio/SafeHtml';
 
 // ── brand tokens — same palette as the public check-in page ─────────────────
 const BRAND = {
@@ -46,11 +52,6 @@ const fmtDate = (iso?: string | null) => {
   if (!iso) return '';
   const d = new Date(iso.length === 10 ? `${iso}T00:00:00` : iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-const CYCLE_LABEL: Record<string, string> = {
-  monthly: 'Monthly', quarterly: 'Quarterly', halfyearly: 'Half-yearly',
-  annual: 'Annual', yearly: 'Annual', onetime: 'One-time', one_time: 'One-time',
 };
 
 type Mode = 'single' | 'perline';
@@ -358,14 +359,26 @@ const VendorQuotePage: React.FC = () => {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>{b.block_name}</div>
               {b.block_description && (
-                <div style={{ fontSize: 12, color: BRAND.sub, marginTop: 2, lineHeight: 1.5 }}>
-                  {b.block_description}
-                </div>
+                <SafeHtml
+                  html={b.block_description}
+                  as="div"
+                  style={{ fontSize: 12, color: BRAND.sub, marginTop: 2, lineHeight: 1.5 }}
+                />
               )}
+              {/* How often the visit repeats — what a vendor actually needs to
+                  price the work. billing_cycle (prepaid/postpaid/...) is a
+                  buyer-payment-terms concept that means nothing before a
+                  vendor is chosen, so it's deliberately not shown here. */}
               <div style={{ fontSize: 11, color: BRAND.sub, marginTop: 4 }}>
-                {b.quantity ? `Qty ${b.quantity}` : null}
-                {b.quantity && b.billing_cycle ? ' · ' : null}
-                {b.billing_cycle ? (CYCLE_LABEL[b.billing_cycle] || b.billing_cycle) : null}
+                {b.unlimited
+                  ? 'Unlimited'
+                  : b.service_cycle_days
+                    ? `Every ${b.service_cycle_days} day${b.service_cycle_days === 1 ? '' : 's'}${
+                        b.quantity && b.quantity > 1 ? ` · ${b.quantity} visits` : ''
+                      }`
+                    : b.quantity
+                      ? `Qty ${b.quantity}`
+                      : null}
               </div>
             </div>
 

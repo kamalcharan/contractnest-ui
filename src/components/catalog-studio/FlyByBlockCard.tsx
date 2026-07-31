@@ -28,6 +28,7 @@ import {
   Percent,
   Repeat,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
@@ -35,7 +36,10 @@ import RichTextEditor from '@/components/ui/RichTextEditor';
 import { ConfigurableBlock, CYCLE_OPTIONS } from './BlockCardConfigurable';
 import { useTaxRatesDropdown } from '@/hooks/queries/useProductMasterdata';
 
-export type FlyByBlockType = 'service' | 'spare' | 'text' | 'document';
+// 'session' (Group Session) added for FlyBy — no catalog entry required, never
+// priced (ChecklistRow forces priced=false for it regardless of caller), same
+// color/icon as the catalog session category (utils/catalog-studio/categories.ts).
+export type FlyByBlockType = 'service' | 'spare' | 'text' | 'document' | 'session';
 
 export const FLYBY_TYPE_CONFIG: Record<
   FlyByBlockType,
@@ -45,6 +49,7 @@ export const FLYBY_TYPE_CONFIG: Record<
   spare: { icon: Package, label: 'Spare Part', color: '#F59E0B', bgColor: '#FFFBEB' },
   text: { icon: FileText, label: 'Text Block', color: '#8B5CF6', bgColor: '#F5F3FF' },
   document: { icon: File, label: 'Document', color: '#10B981', bgColor: '#ECFDF5' },
+  session: { icon: Users, label: 'Group Session', color: '#DA6410', bgColor: '#FBEEE1' },
 };
 
 // Document file type options

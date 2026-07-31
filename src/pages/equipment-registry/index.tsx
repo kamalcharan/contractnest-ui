@@ -115,26 +115,21 @@
       isError: templatesError,
     } = useResourceTemplatesBrowser(templateFilters);
 
-    const categoriesLoading = isExpense ? templatesLoading : savedResourcesLoading;
-    const categoriesError = isExpense ? templatesError : savedResourcesError;
+    // Registry philosophy: the sidebar always reflects the TENANT'S OWN items
+    // (their configured resources), never the full master catalog.
+    //   Expenditure = "my items" (buyer)  ·  Revenue = client items (seller)
+    // Both group by the tenant's own resource list (t_category_resources_master
+    // via useResources). The master templates are used only as the "+ Add" picker
+    // and as a fallback lookup for seeded instances that were materialised from a
+    // template (they carry template_id, not asset_type_id).
+    const categoriesLoading = savedResourcesLoading;
+    const categoriesError = savedResourcesError;
 
     // Normalise both data sources into a common shape
     type NormalisedResource = { id: string; name: string; resource_type_id: string; sub_category: string | null; is_active: boolean };
 
+    // Sidebar / grouping source — the tenant's own configured resources (both perspectives).
     const equipmentResources: NormalisedResource[] = useMemo(() => {
-      if (isExpense) {
-        // Master catalog templates — filter by mode typeIds
-        return templates
-          .filter((t) => modeConfig.typeIds.includes((t.resource_type_id || '').toLowerCase()))
-          .map((t) => ({
-            id: t.id,
-            name: t.name,
-            resource_type_id: t.resource_type_id,
-            sub_category: t.sub_category || null,
-            is_active: true,
-          }));
-      }
-      // Revenue — tenant's saved resources
       return allResources
         .filter(
           (r) =>
@@ -148,7 +143,29 @@
           sub_category: r.sub_category || null,
           is_active: r.is_active,
         }));
-    }, [isExpense, templates, allResources, modeConfig.typeIds]);
+    }, [allResources, modeConfig.typeIds]);
+
+    // Master-catalog templates — only for the "+ Add" picker + seeded-instance lookup.
+    const templateResources: NormalisedResource[] = useMemo(() => {
+      return templates
+        .filter((t) => modeConfig.typeIds.includes((t.resource_type_id || '').toLowerCase()))
+        .map((t) => ({
+          id: t.id,
+          name: t.name,
+          resource_type_id: t.resource_type_id,
+          sub_category: t.sub_category || null,
+          is_active: true,
+        }));
+    }, [templates, modeConfig.typeIds]);
+
+    // template_id → sub_category. Seeded/onboarding instances link to their type
+    // via template_id (asset_type_id is null on them), so counts/filters must
+    // resolve through here too, not just the resource list.
+    const templateIdToSubCategory = useMemo(() => {
+      const m = new Map<string, string>();
+      for (const t of templateResources) m.set(t.id, t.sub_category || 'Other');
+      return m;
+    }, [templateResources]);
 
     // ── Sub-category grouping ───────────────────────────────────────
     const { subCategories, resourcesBySubCategory, resourceIdToSubCategory } =
@@ -244,6 +261,15 @@
       }
     }, [selectedSubCategory, searchQuery, setSearchParams, searchParams]);
 
+    // Resolve an asset's sub-category. asset_type_id may hold a resource id
+    // (manual adds) OR a template id (buyer adds); seeded/onboarding instances
+    // carry only template_id. Check all three so no item silently lands in "Other".
+    const assetSubCategory = (a: TenantAsset): string =>
+      resourceIdToSubCategory.get(a.asset_type_id || '') ||
+      templateIdToSubCategory.get(a.asset_type_id || '') ||
+      templateIdToSubCategory.get(a.template_id || '') ||
+      'Other';
+
     // ── Assets scoped to this registry mode + enforce ownership_type client-side ──
     const modeAssets = useMemo(() => {
       if (isError) return [];
@@ -257,14 +283,10 @@
     const displayAssets = useMemo(() => {
       let filtered = modeAssets;
 
-      // Filter by sub_category (asset_type_id holds the specific resource UUID)
+      // Filter by sub_category — resolve each asset's category (resource id,
+      // template id, or seeded template_id) so seeded items filter correctly.
       if (selectedSubCategory) {
-        const resourceIdsInSubCat = new Set(
-          (resourcesBySubCategory.get(selectedSubCategory) || []).map((r) => r.id)
-        );
-        filtered = filtered.filter((a) =>
-          resourceIdsInSubCat.has(a.asset_type_id || '')
-        );
+        filtered = filtered.filter((a) => assetSubCategory(a) === selectedSubCategory);
       }
 
       // Filter by search query
@@ -281,20 +303,19 @@
       }
 
       return filtered;
-    }, [modeAssets, selectedSubCategory, resourcesBySubCategory, searchQuery]);
+    }, [modeAssets, selectedSubCategory, resourceIdToSubCategory, templateIdToSubCategory, searchQuery]);
 
     // ── Sub-category asset counts (for sidebar badges) ──────────────
     const subCategoryAssetCounts = useMemo(() => {
       const counts: Record<string, number> = {};
 
       for (const asset of modeAssets) {
-        const subCat =
-          resourceIdToSubCategory.get(asset.asset_type_id || '') || 'Other';
+        const subCat = assetSubCategory(asset);
         counts[subCat] = (counts[subCat] || 0) + 1;
       }
 
       return counts;
-    }, [modeAssets, resourceIdToSubCategory]);
+    }, [modeAssets, resourceIdToSubCategory, templateIdToSubCategory]);
 
     const totalAssetCount = modeAssets.length;
 
@@ -306,14 +327,17 @@
     }, [sidebarSearch, subCategories]);
 
     // ── All categories for form dialog (always pass full list) ───────
+    // "+ Add" picker: a buyer (Expense) adds a new owned item from the full
+    // master catalog; a seller (Revenue) picks from their own configured resources.
     const allFormCategories = useMemo(() => {
-      return equipmentResources.map((r) => ({
+      const src = isExpense ? templateResources : equipmentResources;
+      return src.map((r) => ({
         id: r.id,
         name: r.name,
         sub_category: r.sub_category || null,
         resource_type_id: r.resource_type_id,
       }));
-    }, [equipmentResources]);
+    }, [isExpense, templateResources, equipmentResources]);
 
     // ── Handlers ────────────────────────────────────────────────────
 

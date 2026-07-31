@@ -101,6 +101,31 @@ export interface ConfigurableBlock {
     // Per-cadence selling-price overrides, so switching cadences round-trips
     // the seller's negotiated rates (matches the approved mock behavior).
     cadenceOverrides?: Record<string, number>;
+    // Set on a clone created by "Split into N independent schedules" (the
+    // coverage-unit-count disambiguation on a recurring FlyBy line). Marks
+    // this instance as already representing exactly ONE unit of its
+    // coverageTypeId group, so the shared/independent ambiguity banner never
+    // re-shows on it regardless of the group's unit_count.
+    splitUnitIndex?: number;
+    splitUnitTotal?: number;
+    // Set when this block was created by clicking a Knowledge Tree suggestion
+    // in the RFQ builder (m_service_cycles.id) — used both to dedupe "already
+    // added" suggestions and to show the KT market-reference price range
+    // (informational only; never written into price/totalPrice — the vendor
+    // quotes that).
+    ktCycleId?: string;
+    // Set instead of ktCycleId when the block was created from a KT spare
+    // part suggestion (m_equipment_spare_parts.id) rather than a service
+    // cycle — spares have no cadence, so there's no cycle id to key off.
+    ktSparePartId?: string;
+    ktPriceMin?: number;
+    ktPriceMedian?: number;
+    ktPriceMax?: number;
+    ktPriceCurrency?: string;
+    // Unit the KT price range is quoted in ("per unit", "per set") —
+    // spare parts only; shown alongside the price reference so it isn't
+    // read as a flat one-time cost.
+    ktPriceUnit?: string;
   };
 }
 

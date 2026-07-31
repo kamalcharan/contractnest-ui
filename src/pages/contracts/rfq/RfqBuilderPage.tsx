@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Package, Building2, Wrench, ArrowRight, ArrowLeft, Check, Plus, Minus, X,
   CalendarDays, Users, Loader2, FileText, Copy, PartyPopper, ClipboardList,
+  CreditCard, Receipt, Calendar, CalendarClock, Sliders, Sparkles,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +34,25 @@ import { useNomenclatureTypes } from '@/hooks/queries/useNomenclatureTypes';
 import { useContactList } from '@/hooks/useContacts';
 import { useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
+// Reuse the exact FlyBy card the contract wizard uses (ChecklistRow), in its
+// 'rfq' mode — NOT the full ServiceBlocksStep, which also carries catalog
+// browsing/VaNi recommender machinery the RFQ never needs (a buyer's request
+// is loose custom lines only, never a pick from a tenant's own catalog).
+import ChecklistRow from '@/components/contracts/ContractWizard/steps/serviceBlocksChecklist/ChecklistRow';
+import { FLYBY_TYPE_CONFIG, type FlyByBlockType } from '@/components/catalog-studio/FlyByBlockCard';
+import { getCategoryById } from '@/utils/catalog-studio/categories';
+import type { ConfigurableBlock } from '@/components/catalog-studio';
 import type { ContractEquipmentDetail } from '@/types/contracts';
+// Knowledge Tree suggestions — RFQ recommends from admin-curated KT master
+// data (m_equipment_checkpoints -> m_service_cycles), NOT the tenant's own
+// catalog (that's the Contract wizard's VaNi recommender, a different thing:
+// a buyer RFQing a vendor has no "own catalog" of priced services to reuse).
+// A tenant's Resource has no real FK to a KT resource_template — resolved by
+// name match, same fuzzy approach the Contract wizard's recommend.ts uses.
+import { useResourceTemplates } from '@/hooks/queries/useResourceTemplates';
+import { useKnowledgeTreeSummary } from '@/hooks/queries/useKnowledgeTree';
+import type { KnowledgeTreeCycle, KnowledgeTreeSparePart } from '@/pages/service-contracts/templates/admin/knowledge-tree/types';
+import { getCurrencySymbol } from '@/utils/constants/currencies';
 
 // ── what the RFQ is against ──────────────────────────────────────────────────
 type AssetKind = 'equipment' | 'facility' | 'service';
@@ -48,13 +67,6 @@ interface CoverageLine {
   flavour: string; // "2 DG sets, ~500kVA" — optional
 }
 
-// A service the buyer wants quoted, with an optional cadence.
-interface ServiceLine {
-  id: string;
-  name: string;
-  cycle: string; // monthly | quarterly | ... | oncall | onetime
-}
-
 interface VendorPick {
   vendor_id: string;
   vendor_name: string;
@@ -62,14 +74,25 @@ interface VendorPick {
   vendor_email: string;
 }
 
-const CYCLES = [
-  { id: 'monthly', label: 'Monthly' },
-  { id: 'quarterly', label: 'Quarterly' },
-  { id: 'halfyearly', label: 'Half-yearly' },
-  { id: 'annual', label: 'Annual' },
-  { id: 'oncall', label: 'On call' },
-  { id: 'onetime', label: 'One-time' },
+// Quote currency the buyer wants vendors to respond in. Persisted on the RFQ
+// (create_contract_transaction already accepts `currency`); default INR.
+const CURRENCIES = [
+  { id: 'INR', label: '₹ INR' },
+  { id: 'USD', label: '$ USD' },
+  { id: 'EUR', label: '€ EUR' },
+  { id: 'GBP', label: '£ GBP' },
+  { id: 'AED', label: 'د.إ AED' },
+  { id: 'SGD', label: 'S$ SGD' },
 ];
+
+// Nomenclature group → icon (mirrors the contract wizard's grouped design).
+const GROUP_ICON: Record<string, React.ComponentType<any>> = {
+  equipment_maintenance: Wrench,
+  facility_property: Building2,
+  service_delivery: Users,
+  flexible_hybrid: Package,
+};
+const groupIcon = (key: string): React.ComponentType<any> => GROUP_ICON[key] || FileText;
 
 const todayISO = () => {
   const d = new Date();
@@ -103,9 +126,21 @@ const RfqBuilderPage: React.FC = () => {
   const [startDate, setStartDate] = useState<string>(todayISO());
   const [durationValue, setDurationValue] = useState(12);
   const [durationUnit, setDurationUnit] = useState('months');
-  const [responseDeadline, setResponseDeadline] = useState<string>('');
+  // B4 — quote currency (was silently hardcoded to INR in the payload).
+  const [currency, setCurrency] = useState('INR');
+  // B3 — last date to apply. Pre-fill a sensible default (7 days out) so it is
+  // never left null (PRJ-1004 shipped with no deadline); the buyer can change it.
+  const [responseDeadline, setResponseDeadline] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  // Row expand/collapse for the FlyBy cards (ChecklistRow manages its own
+  // editor content, but expand state lives with the caller — same pattern
+  // ServiceBlocksStep uses).
+  const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
   const [coverage, setCoverage] = useState<CoverageLine[]>([]);
-  const [services, setServices] = useState<ServiceLine[]>([]);
+  const [services, setServices] = useState<ConfigurableBlock[]>([]);
   const [vendors, setVendors] = useState<VendorPick[]>([]);
 
   // ── flow ─────────────────────────────────────────────────────────────────
@@ -113,11 +148,12 @@ const RfqBuilderPage: React.FC = () => {
   const steps = useMemo(() => {
     const base: { id: string; label: string }[] = [
       { id: 'kind', label: 'What for' },
+      { id: 'type', label: 'Type' },        // B6 — nomenclature promoted to its own captured step
       { id: 'basics', label: 'Request' },
       { id: 'timing', label: 'Timing' },
     ];
     if (assetKind && assetKind !== 'service') base.push({ id: 'covers', label: 'What it covers' });
-    base.push({ id: 'services', label: 'Services' });
+    base.push({ id: 'services', label: 'Scope' });
     base.push({ id: 'vendors', label: 'Vendors' });
     base.push({ id: 'review', label: 'Review' });
     return base;
@@ -145,25 +181,50 @@ const RfqBuilderPage: React.FC = () => {
     [nomenclatureTypes, nomenclatureId]
   );
 
+  // Nomenclature groups filtered to what the buyer picked in step 1 — equipment
+  // maps to equipment-based types, facility to entity-based, service to
+  // service-based (form_settings flags). Falls back to all if nothing matches.
+  const nomGroupsForKind = useMemo(() => {
+    const match = (fs: any): boolean => {
+      if (!assetKind) return true;
+      if (assetKind === 'equipment') return !!fs?.is_equipment_based;
+      if (assetKind === 'facility') return !!fs?.is_entity_based;
+      if (assetKind === 'service') return !!fs?.is_service_based;
+      return true;
+    };
+    const filtered = (nomGroups as any[])
+      .map((g) => ({ ...g, items: (g.items || []).filter((it: any) => match(it.form_settings)) }))
+      .filter((g) => g.items.length > 0);
+    return filtered.length ? filtered : (nomGroups as any[]);
+  }, [nomGroups, assetKind]);
+
+  const nomTypesForKind = useMemo(
+    () => (nomGroupsForKind as any[]).flatMap((g: any) => g.items || []),
+    [nomGroupsForKind]
+  );
+
   // ── per-step validity ──────────────────────────────────────────────────────
   const canAdvance = useMemo(() => {
     switch (stepId) {
       case 'kind': return assetKind !== null;
+      // Require a pick when types exist; never trap if the workspace has none.
+      case 'type': return nomTypesForKind.length === 0 ? true : nomenclatureId !== null;
       case 'basics': return name.trim() !== '';
       case 'timing': return durationValue > 0;
       case 'covers': return true; // optional — a flavour, may be empty
-      case 'services': return services.length > 0 && services.every((s) => s.name.trim() !== '');
+      case 'services': return services.length > 0 && services.every((b) => (b.name || '').trim() !== '');
       case 'vendors': return vendors.length > 0;
       case 'review': return true;
       default: return false;
     }
-  }, [stepId, assetKind, name, durationValue, services, vendors]);
+  }, [stepId, assetKind, nomenclatureId, nomTypesForKind, name, durationValue, services, vendors]);
 
   const blockedHint = useMemo(() => {
     switch (stepId) {
       case 'kind': return 'Pick what this request is for';
+      case 'type': return 'Choose the kind of contract';
       case 'basics': return 'Give your request a name';
-      case 'services': return services.length === 0 ? 'Add at least one service to quote' : 'Name every service line';
+      case 'services': return services.length === 0 ? 'Add at least one item to quote' : 'Name every item';
       case 'vendors': return 'Choose at least one vendor';
       default: return 'Complete this step to continue';
     }
@@ -182,12 +243,202 @@ const RfqBuilderPage: React.FC = () => {
   const setCoverageFlavour = (id: string, v: string) =>
     setCoverage((prev) => prev.map((c) => (c.resource_id === id ? { ...c, flavour: v } : c)));
 
-  // ── service helpers ──────────────────────────────────────────────────────
-  const addService = () =>
-    setServices((prev) => [...prev, { id: `svc-${Date.now()}-${prev.length}`, name: '', cycle: 'monthly' }]);
-  const setService = (id: string, patch: Partial<ServiceLine>) =>
-    setServices((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const removeService = (id: string) => setServices((prev) => prev.filter((s) => s.id !== id));
+  // ── flyby helpers — mirrors ServiceBlocksStep.handleAddFlyByBlock exactly ──
+  const addFlyby = (type: FlyByBlockType) => {
+    const typeConfig = FLYBY_TYPE_CONFIG[type];
+    const category = getCategoryById(type);
+    const id = `flyby-${type}-${Date.now()}`;
+    const newBlock: ConfigurableBlock = {
+      id,
+      name: '',
+      description: '',
+      icon: category?.icon || 'Package',
+      quantity: 1,
+      cycle: 'prepaid',
+      unlimited: false,
+      price: 0,
+      currency,
+      totalPrice: 0,
+      categoryName: typeConfig?.label || type,
+      categoryColor: typeConfig?.color || '#6B7280',
+      categoryBgColor: typeConfig?.bgColor,
+      categoryId: type,
+      isFlyBy: true,
+      flyByType: type,
+      config: {
+        showDescription: false,
+        ...(type === 'session' ? { audience: 'group' as const } : {}),
+      },
+    };
+    setServices((prev) => [...prev, newBlock]);
+    setExpandedBlockId(id);
+  };
+  const updateFlyby = (id: string, updates: Partial<ConfigurableBlock>) =>
+    setServices((prev) => prev.map((b) => (b.id === id ? { ...b, ...updates } : b)));
+  const removeFlyby = (id: string) => {
+    setServices((prev) => prev.filter((b) => b.id !== id));
+    if (expandedBlockId === id) setExpandedBlockId(null);
+  };
+  // "Applies to" — links a block to a coverage line (e.g. "DG Set ×2") so its
+  // Visits/Cycle can be disambiguated against that line's unit_count. Unset
+  // (undefined) means a general line, not tied to a specific covered item.
+  const setFlybyCoverage = (id: string, resourceId: string) => {
+    const c = coverage.find((c) => c.resource_id === resourceId);
+    setServices((prev) =>
+      prev.map((b) =>
+        b.id === id ? { ...b, coverageTypeId: c?.resource_id, coverageTypeName: c?.resource_name } : b
+      )
+    );
+  };
+  // Split a recurring block into N independent per-unit schedules — same
+  // compliance-critical disambiguation as the Contract wizard (see
+  // ServiceBlocksStep.handleSplitByUnits / CLAUDE.md, 2026-07-31).
+  const splitFlybyByUnits = (id: string) => {
+    const block = services.find((b) => b.id === id);
+    if (!block) return;
+    const unitCount = coverage.find((c) => c.resource_id === block.coverageTypeId)?.unit_count;
+    if (!unitCount || unitCount <= 1) return;
+    const clones: ConfigurableBlock[] = Array.from({ length: unitCount }, (_, i) => ({
+      ...block,
+      id: `${block.id}-unit${i + 1}-${Date.now()}`,
+      name: block.name ? `${block.name} — Unit ${i + 1} of ${unitCount}` : `Unit ${i + 1} of ${unitCount}`,
+      config: { ...block.config, splitUnitIndex: i + 1, splitUnitTotal: unitCount },
+    }));
+    setServices((prev) => [...prev.filter((b) => b.id !== id), ...clones]);
+    setExpandedBlockId(null);
+    addToast({
+      type: 'success',
+      title: 'Split into independent schedules',
+      message: `${block.name || 'Block'} split into ${unitCount} per-unit schedules — edit each one's cycle independently.`,
+    });
+  };
+
+  // ── Knowledge Tree suggestions ──────────────────────────────────────────
+  // Resolve each coverage line to a KT resource_template_id by name match —
+  // a tenant's own Resource has no real FK to m_catalog_resource_templates
+  // (t_tenant_selected_resources only records bulk onboarding selections,
+  // not a per-resource mapping), so this is best-effort, the same approach
+  // recommend.ts already uses for the Contract wizard's own VaNi banner.
+  const { data: ktTemplatesResp } = useResourceTemplates(
+    { resource_type_id: assetKind === 'facility' ? 'asset' : 'equipment', limit: 100 },
+    { enabled: assetKind !== 'service' && coverage.length > 0 }
+  );
+  const ktTemplates = ktTemplatesResp?.data || [];
+  const matchTemplateFor = useCallback(
+    (resourceName: string) => {
+      const n = resourceName.toLowerCase();
+      return ktTemplates.find((t) => {
+        const tn = t.name.toLowerCase();
+        return tn === n || tn.includes(n) || n.includes(tn);
+      });
+    },
+    [ktTemplates]
+  );
+
+  // Already-added KT suggestions — a block's config.ktCycleId (service) or
+  // config.ktSparePartId (spare) marks it as created from a specific KT row,
+  // so that suggestion stops showing once added. The two id spaces never
+  // collide (different tables), so one combined set is enough.
+  const addedKtIds = useMemo(
+    () =>
+      new Set(
+        services
+          .map((b) => b.config?.ktCycleId || b.config?.ktSparePartId)
+          .filter(Boolean) as string[]
+      ),
+    [services]
+  );
+
+  // Clicking a suggestion adds the real thing immediately, in the same shape
+  // as any manually-added block — no preview/staging step. Price stays 0
+  // (vendor quotes it); the KT range is carried as a reference only.
+  // description is the REAL, authored KT service description
+  // (m_kt_service_definitions, via KTSuggestionsForCoverage) for services;
+  // spares use their own KT description when present.
+  const addFromKT = (c: CoverageLine, suggestion: KTSuggestion) => {
+    if (suggestion.kind === 'service') {
+      const { cycle, title, description } = suggestion;
+      const typeConfig = FLYBY_TYPE_CONFIG.service;
+      const category = getCategoryById('service');
+      const id = `flyby-service-kt-${cycle.id}-${Date.now()}`;
+      const newBlock: ConfigurableBlock = {
+        id,
+        name: title,
+        description,
+        icon: category?.icon || 'Wrench',
+        quantity: 1,
+        cycle: 'prepaid',
+        unlimited: false,
+        price: 0,
+        currency,
+        totalPrice: 0,
+        categoryName: typeConfig?.label || 'Service',
+        categoryColor: typeConfig?.color || '#3B82F6',
+        categoryBgColor: typeConfig?.bgColor,
+        categoryId: 'service',
+        isFlyBy: true,
+        flyByType: 'service',
+        coverageTypeId: c.resource_id,
+        coverageTypeName: c.resource_name,
+        serviceCycleDays: cycle.frequency_value,
+        config: {
+          showDescription: false,
+          ktCycleId: cycle.id,
+          ktPriceMin: cycle.price_min ?? undefined,
+          ktPriceMedian: cycle.price_median ?? undefined,
+          ktPriceMax: cycle.price_max ?? undefined,
+          ktPriceCurrency: cycle.price_currency ?? undefined,
+        },
+      };
+      setServices((prev) => [...prev, newBlock]);
+      setExpandedBlockId(id);
+      return;
+    }
+
+    // Spare part — no cadence (consumption-based, not scheduled). KT's
+    // component_group (controls/electrical/filters/mechanical/safety/
+    // water_side) doesn't map cleanly onto the RFQ's 4 fixed spare
+    // categories (Filters/Gases/Parts/Accessories); only "filters" has a
+    // clean match, everything else defaults to "Parts" — approximate, but
+    // honest rather than guessing a wrong specific category.
+    const { part, title, description } = suggestion;
+    const typeConfig = FLYBY_TYPE_CONFIG.spare;
+    const category = getCategoryById('spare');
+    const id = `flyby-spare-kt-${part.id}-${Date.now()}`;
+    const spareCategory = part.component_group === 'filters' ? 'filter' : 'parts';
+    const newBlock: ConfigurableBlock = {
+      id,
+      name: title,
+      description,
+      icon: category?.icon || 'Package',
+      quantity: 1,
+      cycle: 'prepaid',
+      unlimited: false,
+      price: 0,
+      currency,
+      totalPrice: 0,
+      categoryName: typeConfig?.label || 'Spare Part',
+      categoryColor: typeConfig?.color || '#F59E0B',
+      categoryBgColor: typeConfig?.bgColor,
+      categoryId: 'spare',
+      isFlyBy: true,
+      flyByType: 'spare',
+      coverageTypeId: c.resource_id,
+      coverageTypeName: c.resource_name,
+      config: {
+        showDescription: false,
+        spareCategory,
+        ktSparePartId: part.id,
+        ktPriceMin: part.price_min ?? undefined,
+        ktPriceMedian: part.price_median ?? undefined,
+        ktPriceMax: part.price_max ?? undefined,
+        ktPriceCurrency: part.price_currency ?? undefined,
+        ktPriceUnit: part.price_unit ?? undefined,
+      },
+    };
+    setServices((prev) => [...prev, newBlock]);
+    setExpandedBlockId(id);
+  };
 
   // ── vendor helpers ───────────────────────────────────────────────────────
   const emailOf = (c: any): string => {
@@ -238,17 +489,31 @@ const RfqBuilderPage: React.FC = () => {
       unit_count: c.unit_count,
     }));
 
-    const blocks = services.map((s, i) => ({
+    // FlyBy blocks straight from the real ServiceBlocksStep (ConfigurableBlock),
+    // structure only, no pricing (the vendor quotes the price).
+    const blocks = services.map((b, i) => ({
       position: i,
       source_type: 'flyby',
-      flyby_type: 'service',
-      block_name: s.name.trim(),
-      category_name: 'Service',
+      flyby_type: b.flyByType || 'service',
+      block_name: (b.name || '').trim(),
+      block_description: b.description || undefined,
+      category_name: b.categoryName || b.flyByType || 'Custom',
       unit_price: 0,
-      quantity: 1,
-      billing_cycle: s.cycle,
+      quantity: b.quantity ?? 1,
+      billing_cycle: b.cycle,
       total_price: 0,
-      custom_fields: { config: {} },
+      custom_fields: {
+        config: {
+          ...(b.config || {}),
+          flyby_type: b.flyByType,
+          serviceCycleDays: b.serviceCycleDays,
+          unlimited: b.unlimited,
+          // "Applies to" linkage — which coverage line's unit_count this
+          // block's Visits/Cycle should be read against (or split from).
+          coverageTypeId: b.coverageTypeId,
+          coverageTypeName: b.coverageTypeName,
+        },
+      },
     }));
 
     const payload: any = {
@@ -263,7 +528,7 @@ const RfqBuilderPage: React.FC = () => {
       duration_value: durationValue,
       duration_unit: durationUnit,
       response_deadline: responseDeadline || undefined,
-      currency: 'INR',
+      currency,
       coverage_types: coverage_types.length ? coverage_types : undefined,
       equipment_details: equipment_details.length ? equipment_details : undefined,
       blocks,
@@ -292,7 +557,7 @@ const RfqBuilderPage: React.FC = () => {
         message: e?.response?.data?.error?.message || e?.message || 'Something went wrong. Please try again.',
       });
     }
-  }, [isCreating, coverage, services, vendors, name, description, nomenclatureId, startDate, durationValue, durationUnit, responseDeadline, assetKind, tenant?.id, saveAsTemplate, createContract, updateStatus, addToast]);
+  }, [isCreating, coverage, services, vendors, name, description, nomenclatureId, startDate, durationValue, durationUnit, responseDeadline, currency, assetKind, tenant?.id, saveAsTemplate, createContract, updateStatus, addToast]);
 
   // ── styles ─────────────────────────────────────────────────────────────────
   const bg = colors.utility.primaryBackground || colors.utility.secondaryBackground;
@@ -366,7 +631,7 @@ const RfqBuilderPage: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '28px 20px 0' }}>
+      <div style={{ maxWidth: stepId === 'services' ? 980 : 640, margin: '0 auto', padding: '28px 20px 0' }}>
 
         {/* ── STEP: kind ── */}
         {stepId === 'kind' && (
@@ -396,6 +661,70 @@ const RfqBuilderPage: React.FC = () => {
           </>
         )}
 
+        {/* ── STEP: type (nomenclature) ── */}
+        {stepId === 'type' && (
+          <>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: ink, margin: '0 0 4px' }}>What kind of contract is this?</h1>
+            <p style={{ fontSize: 14, color: sub, margin: '0 0 20px' }}>This sets the nomenclature vendors and your records use. Pick the closest — you can refine later.</p>
+            {nomLoading ? (
+              <div style={{ color: sub, fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}><Loader2 className="w-4 h-4 animate-spin" /> Loading contract types…</div>
+            ) : nomTypesForKind.length === 0 ? (
+              <div style={{ ...card, color: sub, fontSize: 13 }}>No contract types available for this workspace — continue and you can set it later.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+                {(nomGroupsForKind as any[]).map((g: any) => {
+                  const GIcon = groupIcon(g.group);
+                  return (
+                    <div key={g.group}>
+                      {/* group header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                        <span style={{ width: 30, height: 30, borderRadius: 8, background: `${brand}12`, color: brand, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+                          <GIcon className="w-4 h-4" />
+                        </span>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, color: ink }}>{g.label}</div>
+                          <div style={{ fontSize: 10.5, color: sub }}>{g.items.length} type{g.items.length !== 1 ? 's' : ''}</div>
+                        </div>
+                      </div>
+                      {/* cards */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(148px, 1fr))', gap: 10 }}>
+                        {g.items.map((n: any) => {
+                          const on = nomenclatureId === n.id;
+                          const fs = n.form_settings || {};
+                          const accent = n.hexcolor || brand;
+                          const CIcon = groupIcon(g.group);
+                          return (
+                            <button key={n.id} onClick={() => {
+                              setNomenclatureId(on ? null : n.id);
+                              const dur = fs.typical_duration;
+                              if (!on && dur && /^\d+/.test(dur)) setDurationValue(parseInt(dur, 10));
+                            }}
+                              title={fs.full_name || n.description}
+                              style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', textAlign: 'left', padding: 14, borderRadius: 12, cursor: 'pointer',
+                                border: `2px solid ${on ? accent : ink + '12'}`, background: on ? `${accent}0C` : surface }}>
+                              <span style={{ position: 'absolute', top: 10, right: 10, width: 18, height: 18, borderRadius: '50%', border: `2px solid ${on ? accent : ink + '25'}`, background: on ? accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                {on && <Check className="w-3 h-3" style={{ color: '#fff' }} />}
+                              </span>
+                              <span style={{ width: 34, height: 34, borderRadius: 8, background: on ? `${accent}18` : ink + '08', color: on ? accent : sub, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                                <CIcon className="w-4 h-4" />
+                              </span>
+                              <span style={{ fontSize: 15, fontWeight: 700, color: on ? accent : ink, marginBottom: 2 }}>{fs.short_name || n.sub_cat_name || n.display_name}</span>
+                              <span style={{ fontSize: 11, color: sub, lineHeight: 1.3 }}>{fs.full_name || n.description}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {selectedNom?.description && (
+              <p style={{ fontSize: 12.5, color: sub, margin: '18px 2px 0' }}>{selectedNom.description}</p>
+            )}
+          </>
+        )}
+
         {/* ── STEP: basics ── */}
         {stepId === 'basics' && (
           <>
@@ -406,30 +735,6 @@ const RfqBuilderPage: React.FC = () => {
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Lift AMC — Towers A & B" style={fieldStyle} autoFocus />
               <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: sub, display: 'block', margin: '14px 0 6px' }}>Notes for vendors (optional)</label>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Anything they should know up front" style={{ ...fieldStyle, resize: 'vertical' }} />
-            </div>
-            <div style={card}>
-              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: sub, display: 'block', marginBottom: 10 }}>Contract type (optional)</label>
-              {nomLoading ? (
-                <div style={{ color: sub, fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}><Loader2 className="w-4 h-4 animate-spin" /> Loading types…</div>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {nomenclatureTypes.map((n: any) => {
-                    const on = nomenclatureId === n.id;
-                    return (
-                      <button key={n.id} onClick={() => {
-                        setNomenclatureId(on ? null : n.id);
-                        const dur = n.form_settings?.typical_duration;
-                        if (!on && dur && /^\d+/.test(dur)) setDurationValue(parseInt(dur, 10));
-                      }}
-                        title={n.description}
-                        style={{ fontSize: 13, fontWeight: 600, padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
-                          border: `1.5px solid ${on ? brand : ink + '22'}`, background: on ? brand : 'transparent', color: on ? '#fff' : sub }}>
-                        {n.sub_cat_name || n.display_name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </>
         )}
@@ -456,10 +761,30 @@ const RfqBuilderPage: React.FC = () => {
                 </div>
               </div>
             </div>
+            {/* B4 — quote currency */}
+            <div style={{ ...card, marginTop: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: sub, display: 'block', marginBottom: 10 }}>Quote currency</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {CURRENCIES.map((cu) => {
+                  const on = currency === cu.id;
+                  return (
+                    <button key={cu.id} onClick={() => setCurrency(cu.id)}
+                      style={{ fontSize: 13, fontWeight: 600, padding: '7px 13px', borderRadius: 999, cursor: 'pointer',
+                        border: `1.5px solid ${on ? brand : ink + '22'}`, background: on ? `${brand}18` : 'transparent', color: on ? brand : sub }}>
+                      {cu.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 12, color: sub, margin: '8px 0 0' }}>Vendors quote and you compare in this currency.</p>
+            </div>
+            {/* B3 — last date to apply, prominent + pre-filled */}
             <div style={{ ...card, marginTop: 12, borderColor: `${colors.semantic.warning}55`, background: `${colors.semantic.warning}0D` }}>
-              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: colors.semantic.warning, display: 'block', marginBottom: 6 }}>Last date to apply (optional)</label>
-              <input type="date" min={todayISO()} value={responseDeadline} onChange={(e) => setResponseDeadline(e.target.value)} style={fieldStyle} />
-              <p style={{ fontSize: 12, color: sub, margin: '8px 0 0' }}>Vendors see this as their deadline; quotes aren&apos;t accepted after it.</p>
+              <label style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: colors.semantic.warning, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <CalendarDays className="w-4 h-4" /> Last date for vendors to respond
+              </label>
+              <input type="date" min={todayISO()} value={responseDeadline} onChange={(e) => setResponseDeadline(e.target.value)} style={{ ...fieldStyle, fontSize: 16, fontWeight: 600 }} />
+              <p style={{ fontSize: 12, color: sub, margin: '8px 0 0' }}>Vendors see this as their deadline; quotes aren&apos;t accepted after it. Pre-filled a week out — change it to suit.</p>
             </div>
           </>
         )}
@@ -509,34 +834,106 @@ const RfqBuilderPage: React.FC = () => {
           </>
         )}
 
-        {/* ── STEP: services ── */}
+        {/* ── STEP: scope — the REAL FlyBy card (ChecklistRow), mode="rfq" ──
+            Two columns once there's a Knowledge Tree sidebar to show: the
+            request itself on the left, suggestions on the right. Falls back
+            to the single column (no coverage picked → no KT to suggest from). */}
         {stepId === 'services' && (
           <>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: ink, margin: '0 0 4px' }}>What should vendors quote for?</h1>
-            <p style={{ fontSize: 14, color: sub, margin: '0 0 20px' }}>One line per thing you need, with how often it happens.</p>
-            {services.map((s) => (
-              <div key={s.id} style={{ ...card, marginBottom: 10 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input value={s.name} onChange={(e) => setService(s.id, { name: e.target.value })} placeholder="e.g. Preventive maintenance visit" style={{ ...fieldStyle, flex: 1 }} />
-                  <button onClick={() => removeService(s.id)} style={{ background: 'none', border: 'none', color: sub, cursor: 'pointer', flex: 'none' }}><X className="w-4 h-4" /></button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-                  {CYCLES.map((cy) => {
-                    const on = s.cycle === cy.id;
+            <p style={{ fontSize: 14, color: sub, margin: '0 0 16px' }}>Add the services, spares, notes or documents you need quoted — the vendor fills the price when they quote.</p>
+
+            <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 480px', minWidth: 0 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  {(['service', 'spare', 'text', 'document', 'session'] as FlyByBlockType[]).map((t) => {
+                    const cfg = FLYBY_TYPE_CONFIG[t];
+                    const Icon = cfg.icon;
                     return (
-                      <button key={cy.id} onClick={() => setService(s.id, { cycle: cy.id })}
-                        style={{ fontSize: 12, fontWeight: 600, padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
-                          border: `1.5px solid ${on ? brand : ink + '22'}`, background: on ? `${brand}18` : 'transparent', color: on ? brand : sub }}>
-                        {cy.label}
+                      <button key={t} onClick={() => addFlyby(t)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                          border: `1.5px dashed ${cfg.color}88`, background: `${cfg.color}0D`, color: cfg.color }}>
+                        <Icon className="w-4 h-4" /> Add {cfg.label}
                       </button>
                     );
                   })}
                 </div>
+
+                {services.length === 0 && (
+                  <div style={{ ...card, color: sub, fontSize: 13, textAlign: 'center' }}>Nothing added yet — pick a block type above, or add a suggestion.</div>
+                )}
+
+                {services.map((b) => (
+                  <React.Fragment key={b.id}>
+                    {coverage.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: sub }}>Applies to</label>
+                        <select
+                          value={b.coverageTypeId || ''}
+                          onChange={(e) => setFlybyCoverage(b.id, e.target.value)}
+                          style={{ fontSize: 12.5, border: `1px solid ${ink}22`, borderRadius: 8, padding: '5px 8px', color: ink, background: 'transparent' }}
+                        >
+                          <option value="">General — not tied to a specific item</option>
+                          {coverage.map((c) => (
+                            <option key={c.resource_id} value={c.resource_id}>{c.resource_name} ×{c.unit_count}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <ChecklistRow
+                      colors={colors}
+                      isDarkMode={isDarkMode}
+                      currency={currency}
+                      instance={b}
+                      checked
+                      priced={b.flyByType === 'service' || b.flyByType === 'spare'}
+                      flyBy
+                      mode="rfq"
+                      typeChip={{ label: b.categoryName || b.flyByType || 'Custom', color: b.categoryColor || '#6B7280' }}
+                      coverageUnitCount={coverage.find((c) => c.resource_id === b.coverageTypeId)?.unit_count}
+                      onSplitByUnits={() => splitFlybyByUnits(b.id)}
+                      expanded={expandedBlockId === b.id}
+                      durationMonths={Math.max(1, durationUnit === 'years' ? durationValue * 12 : durationUnit === 'days' ? Math.round(durationValue / 30) : durationValue)}
+                      onToggle={() => setExpandedBlockId((cur) => (cur === b.id ? null : b.id))}
+                      onToggleExpand={() => setExpandedBlockId((cur) => (cur === b.id ? null : b.id))}
+                      onUpdate={(updates) => updateFlyby(b.id, updates)}
+                      onRemove={() => removeFlyby(b.id)}
+                    />
+                  </React.Fragment>
+                ))}
               </div>
-            ))}
-            <button onClick={addService} style={{ ...card, width: '100%', border: `1.5px dashed ${brand}`, background: `${brand}0D`, color: brand, fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Plus className="w-4 h-4" /> Add a service line
-            </button>
+
+              {/* Knowledge Tree suggestions — admin-curated master data, not
+                  the tenant's own catalog (see import comment above). Only
+                  shown when there's coverage to match against. */}
+              {coverage.length > 0 && (
+                <div style={{ flex: '0 1 300px', minWidth: 260 }}>
+                  <div style={{ ...card, position: 'sticky', top: 90 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <Sparkles className="w-4 h-4" style={{ color: brand }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: ink }}>Suggested from Knowledge Tree</span>
+                    </div>
+                    {coverage.map((c) => {
+                      const tmpl = matchTemplateFor(c.resource_name);
+                      if (!tmpl) return null;
+                      return (
+                        <KTSuggestionsForCoverage
+                          key={c.resource_id}
+                          coverageLine={c}
+                          resourceTemplateId={tmpl.id}
+                          addedKtIds={addedKtIds}
+                          colors={colors}
+                          onAdd={(suggestion) => addFromKT(c, suggestion)}
+                        />
+                      );
+                    })}
+                    {coverage.every((c) => !matchTemplateFor(c.resource_name)) && (
+                      <p style={{ fontSize: 12, color: sub, margin: 0 }}>No Knowledge Tree data yet for what you&apos;re covering.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -576,7 +973,7 @@ const RfqBuilderPage: React.FC = () => {
           <>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: ink, margin: '0 0 4px' }}>{name || 'Your request'}</h1>
             <p style={{ fontSize: 14, color: sub, margin: '0 0 20px' }}>
-              {selectedNom?.sub_cat_name ? `${selectedNom.sub_cat_name} · ` : ''}{durationValue} {durationUnit}
+              {selectedNom?.sub_cat_name ? `${selectedNom.sub_cat_name} · ` : ''}{durationValue} {durationUnit} · {currency}
               {responseDeadline ? ` · respond by ${responseDeadline}` : ''}
             </p>
             <div style={{ ...card, marginBottom: 12 }}>
@@ -586,10 +983,15 @@ const RfqBuilderPage: React.FC = () => {
                   <span style={{ color: sub, fontFamily: 'monospace' }}>×{c.unit_count}</span>
                 </div>
               ))}
-              {services.map((s) => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${line}`, fontSize: 13.5 }}>
-                  <span style={{ color: ink }}>{s.name || 'Unnamed service'}</span>
-                  <span style={{ color: sub, fontFamily: 'monospace' }}>{CYCLES.find((x) => x.id === s.cycle)?.label}</span>
+              {services.map((b) => (
+                <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${line}`, fontSize: 13.5 }}>
+                  <span style={{ color: ink }}>
+                    <span style={{ color: (b.categoryColor || brand), fontWeight: 700, fontSize: 11, marginRight: 6, textTransform: 'uppercase' }}>{b.categoryName || b.flyByType || 'Custom'}</span>
+                    {b.name || 'Unnamed block'}
+                  </span>
+                  <span style={{ color: sub, fontFamily: 'monospace' }}>
+                    {b.unlimited ? '∞' : b.quantity ? `×${b.quantity}` : ''}{b.cycle ? ` · ${b.cycle}` : ''}
+                  </span>
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 0', fontSize: 13.5 }}>
@@ -626,6 +1028,193 @@ const RfqBuilderPage: React.FC = () => {
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ── Knowledge Tree suggestions for one coverage line ────────────────────────
+// A separate component (not inline in the parent's render) so its own hook
+// (useKnowledgeTreeSummary) follows the Rules of Hooks per coverage line,
+// without the parent needing a loop of conditional hook calls.
+// NOT variant-aware: KT models multiple equipment variants per resource
+// template (e.g. DG Set has 10, by capacity range) and some checkpoints/
+// spares are variant-specific (CheckpointVariantMap/SparePartVariantMap).
+// The tenant's own registry doesn't currently record which variant a
+// resource actually is, so there's no reliable way to filter by variant —
+// every service/spare for the matched resource_template_id is shown,
+// unfiltered. Known limitation, not something this batch attempts to fix.
+type KTSuggestion =
+  | { kind: 'service'; cycle: KnowledgeTreeCycle; title: string; description: string }
+  | { kind: 'spare'; part: KnowledgeTreeSparePart; title: string; description: string };
+interface KTSuggestionsForCoverageProps {
+  coverageLine: CoverageLine;
+  resourceTemplateId: string;
+  addedKtIds: Set<string>;
+  colors: any;
+  onAdd: (suggestion: KTSuggestion) => void;
+}
+const KT_TAG = {
+  service: { label: 'Service', color: FLYBY_TYPE_CONFIG.service?.color || '#3B82F6' },
+  spare: { label: 'Spare Part', color: FLYBY_TYPE_CONFIG.spare?.color || '#F59E0B' },
+};
+const KTSuggestionsForCoverage: React.FC<KTSuggestionsForCoverageProps> = ({
+  coverageLine,
+  resourceTemplateId,
+  addedKtIds,
+  colors,
+  onAdd,
+}) => {
+  const { data: summary, isLoading } = useKnowledgeTreeSummary(resourceTemplateId);
+  const ink = colors.utility.primaryText;
+  const sub = colors.utility.secondaryText;
+  const brand = colors.brand.primary;
+  const line = ink + '15';
+
+  const serviceSuggestions = useMemo(() => {
+    const cycles = summary?.cycles || [];
+    const checkpointsFlat = Object.values(summary?.checkpoints_by_section || {}).flat();
+    const checkpointById = new Map(checkpointsFlat.map((cp) => [cp.id, cp]));
+    // The REAL, authored description — m_kt_service_definitions, one row per
+    // "sellable service" (founder decision: description stored ONCE here,
+    // not repeated on every checkpoint). Keyed by service_name, which
+    // matches checkpoint.service_name exactly. This is what KT actually
+    // generates for this purpose — NOT something built up client-side from
+    // checkpoint names (an earlier "Covers: ..." approach), which only
+    // exists below as a fallback for a package KT hasn't authored yet.
+    const descByServiceName = new Map(
+      (summary?.service_definitions || []).map((d) => [d.service_name, d.description])
+    );
+
+    // Only day-cadenced cycles map cleanly onto a FlyBy Service Cycle —
+    // hour/visit-based ones (equipment run-hours, one-off install/repair/
+    // decommission checkpoints) don't, so they're skipped rather than
+    // silently mismapped onto a days field.
+    const dayCycles = cycles.filter((c) => c.frequency_unit === 'days');
+
+    // Group ALL checkpoint rows sharing a package (catalog_name + cadence) —
+    // dedup by the group key, but keep every checkpoint_id in the group so
+    // the description covers everything the package actually includes, not
+    // just the first row.
+    const groups = new Map<string, { rep: KnowledgeTreeCycle; checkpointIds: Set<string> }>();
+    for (const c of dayCycles) {
+      const key = c.catalog_name
+        ? `name:${c.catalog_name}:${c.frequency_value}`
+        : `cp:${c.checkpoint_name || c.section_name}:${c.frequency_value}`;
+      const g = groups.get(key);
+      if (g) g.checkpointIds.add(c.checkpoint_id);
+      else groups.set(key, { rep: c, checkpointIds: new Set([c.checkpoint_id]) });
+    }
+
+    const built: KTSuggestion[] = Array.from(groups.values()).map(({ rep, checkpointIds }) => {
+      const serviceNames = Array.from(checkpointIds)
+        .map((id) => checkpointById.get(id)?.service_name)
+        .filter((n): n is string => !!n);
+      const uniqueServiceNames = Array.from(new Set(serviceNames));
+
+      const authored = uniqueServiceNames
+        .map((sn) => descByServiceName.get(sn))
+        .filter((d): d is string => !!d);
+      let description = Array.from(new Set(authored)).join('\n\n');
+
+      // Fallback only when KT has no authored service definition for this
+      // package yet — list the checkpoint names rather than leave it blank.
+      if (!description) {
+        const names = Array.from(checkpointIds)
+          .map((id) => checkpointById.get(id)?.name)
+          .filter((n): n is string => !!n);
+        const unique = Array.from(new Set(names));
+        const shown = unique.slice(0, 4);
+        const more = unique.length - shown.length;
+        description = shown.length ? `Covers: ${shown.join(', ')}${more > 0 ? ` (+${more} more)` : ''}` : '';
+      }
+
+      const title = rep.catalog_name || uniqueServiceNames[0] || rep.checkpoint_name || 'Service';
+      return { kind: 'service' as const, cycle: rep, title, description };
+    });
+
+    return built
+      .filter(({ cycle }) => !addedKtIds.has(cycle.id))
+      .sort((a, b) => a.cycle.frequency_value - b.cycle.frequency_value);
+  }, [summary, addedKtIds]);
+
+  const spareSuggestions = useMemo(() => {
+    const parts = Object.values(summary?.spare_parts_by_group || {}).flat();
+    const built: KTSuggestion[] = parts.map((part) => ({
+      kind: 'spare' as const,
+      part,
+      title: part.name,
+      description: part.description || '',
+    }));
+    return built
+      .filter(({ part }) => !addedKtIds.has(part.id))
+      .sort((a, b) => a.title.localeCompare(b.title));
+  }, [summary, addedKtIds]);
+
+  const suggestions = useMemo(
+    () => [...serviceSuggestions, ...spareSuggestions],
+    [serviceSuggestions, spareSuggestions]
+  );
+
+  if (isLoading) {
+    return (
+      <div style={{ fontSize: 12, color: sub, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
+        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking Knowledge Tree for {coverageLine.resource_name}…
+      </div>
+    );
+  }
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: sub, marginBottom: 8 }}>
+        {coverageLine.resource_name}
+      </div>
+      {suggestions.map((s) => {
+        const tag = KT_TAG[s.kind];
+        const key = s.kind === 'service' ? s.cycle.id : s.part.id;
+        const priceMin = s.kind === 'service' ? s.cycle.price_min : s.part.price_min;
+        const priceMax = s.kind === 'service' ? s.cycle.price_max : s.part.price_max;
+        const priceMedian = s.kind === 'service' ? s.cycle.price_median : s.part.price_median;
+        const priceCurrency = s.kind === 'service' ? s.cycle.price_currency : s.part.price_currency;
+        const priceUnit = s.kind === 'spare' ? s.part.price_unit : null;
+        return (
+          <div key={key} style={{ border: `1px solid ${line}`, borderRadius: 10, padding: '9px 11px', marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <span
+                className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded flex-shrink-0"
+                style={{ backgroundColor: tag.color + '15', color: tag.color }}
+              >
+                {tag.label}
+              </span>
+              <div style={{ fontSize: 13, fontWeight: 650, color: ink }}>{s.title}</div>
+            </div>
+            {s.kind === 'service' && (
+              <div style={{ fontSize: 11.5, color: sub, marginBottom: 4 }}>
+                Every {s.cycle.frequency_value} days
+              </div>
+            )}
+            {s.description && (
+              <div style={{ fontSize: 11, color: sub, marginBottom: 4, lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+                {s.description}
+              </div>
+            )}
+            {typeof priceMedian === 'number' && (
+              <div style={{ fontSize: 11, color: sub, marginBottom: 8 }}>
+                {getCurrencySymbol(priceCurrency || 'INR')}
+                {(priceMin ?? 0).toLocaleString()}–{(priceMax ?? 0).toLocaleString()}
+                {priceUnit ? ` ${priceUnit}` : ''} (market reference)
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => onAdd(s)}
+              style={{ fontSize: 11.5, fontWeight: 700, color: brand, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              <Plus className="w-3 h-3" /> Add to request
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 };

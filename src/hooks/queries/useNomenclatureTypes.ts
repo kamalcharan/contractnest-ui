@@ -4,6 +4,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import api from '@/services/api';
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -53,35 +54,23 @@ export const nomenclatureKeys = {
 // ─── Hook ───────────────────────────────────────────────────────────
 
 export const useNomenclatureTypes = () => {
-  const { user, currentTenant } = useAuth();
+  const { currentTenant } = useAuth();
 
   return useQuery({
     queryKey: nomenclatureKeys.types(),
     queryFn: async (): Promise<NomenclatureGroup[]> => {
-      if (!user?.token || !currentTenant?.id) {
-        throw new Error('User not authenticated or no tenant selected');
-      }
-
-      const response = await fetch(
-        `/api/product-masterdata/global?category_name=cat_contract_nomenclature&is_active=true`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${user.token}`,
-            'x-tenant-id': currentTenant.id,
-          },
-        }
+      // Use the shared api client (auth + tenant headers via interceptor),
+      // matching useResources/useGlobalMasterData. The old raw-fetch path gated
+      // on user.token — but the auth user field is access_token, so the query
+      // was permanently disabled and returned no types (null nomenclature).
+      const response = await api.get(
+        '/api/product-masterdata/global?category_name=cat_contract_nomenclature&is_active=true'
       );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch nomenclature types: ${response.status}`);
-      }
+      const result = response.data;
 
-      const result = await response.json();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch nomenclature types');
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to fetch nomenclature types');
       }
 
       // Transform raw items into typed NomenclatureType[]
@@ -123,7 +112,7 @@ export const useNomenclatureTypes = () => {
             .map(([, group]) => group)
         );
     },
-    enabled: !!user?.token && !!currentTenant?.id,
+    enabled: !!currentTenant?.id,
     staleTime: 30 * 60 * 1000, // 30 min — nomenclature types rarely change
     retry: 2,
   });

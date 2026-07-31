@@ -43,6 +43,7 @@ initSentry();
 import MainLayout from './components/layout/MainLayout';
 import SessionCheckinPage from './pages/checkin/SessionCheckinPage'; // [batch3-checkin]
 import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [batch3-checkin]
+import VendorQuotePage from './pages/quote/VendorQuotePage'; // [rfq] public vendor quote response
 
 // Catalog Pages
 
@@ -373,6 +374,8 @@ const AppContent: React.FC = () => {
         <Routes>
           {/* [batch3-checkin] Group Session check-in */}
           <Route path="/checkin/:token" element={<SessionCheckinPage />} />
+          {/* [rfq] public vendor quote response — no auth, gated by (cnak, secret) in the URL */}
+          <Route path="/quote/:cnak/:secret" element={<VendorQuotePage />} />
           <Route path="/session-checkin" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<ChairCheckinPage />} />
           </Route>

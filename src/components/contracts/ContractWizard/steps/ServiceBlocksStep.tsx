@@ -9,7 +9,7 @@
 // "Blocks attach to:" line are the scope switcher).
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Zap, Wrench, Package, FileText, File } from 'lucide-react';
+import { Zap, Wrench, Package, FileText, File, Users } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { Block } from '@/types/catalogStudio';
@@ -326,6 +326,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
     { type: 'spare' as FlyByCategoryId, icon: Package, label: 'Spare Part', color: '#F59E0B' },
     { type: 'text' as FlyByCategoryId, icon: FileText, label: 'Text Block', color: '#8B5CF6' },
     { type: 'document' as FlyByCategoryId, icon: File, label: 'Document', color: '#10B981' },
+    { type: 'session' as FlyByCategoryId, icon: Users, label: 'Group Session', color: '#DA6410' },
   ];
 
   // ── Catalog blocks (same source as library + recommender) ──────────
@@ -528,6 +529,10 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
         coverageTypeName: activeCoverageType?.resource_name,
         config: {
           showDescription: false,
+          // Group Session: mark audience explicitly, same as a catalog session
+          // block would carry — categoryId==='session' alone already triggers
+          // isGroupSession, this just matches the catalog convention exactly.
+          ...(type === 'session' ? { audience: 'group' as const } : {}),
         },
       };
 
@@ -564,6 +569,35 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       }
     },
     [selectedBlocks, onBlocksChange, expandedBlockId, addToast]
+  );
+
+  // Split a recurring FlyBy block into N independent per-unit schedules —
+  // the compliance-critical disambiguation for coverage groups with
+  // unit_count > 1 (e.g. "DG Set ×2"): today Visits × Cycle covers the whole
+  // group together per visit, which silently misreads as "per unit" to a
+  // reader. Each clone keeps the same Visits/Cycle to edit independently.
+  const handleSplitByUnits = useCallback(
+    (blockId: string) => {
+      const block = selectedBlocks.find((b) => b.id === blockId);
+      if (!block) return;
+      const unitCount = coverageTypes.find((ct) => ct.id === block.coverageTypeId)?.unit_count;
+      if (!unitCount || unitCount <= 1) return;
+
+      const clones: ConfigurableBlock[] = Array.from({ length: unitCount }, (_, i) => ({
+        ...block,
+        id: `${block.id}-unit${i + 1}-${Date.now()}`,
+        name: block.name ? `${block.name} — Unit ${i + 1} of ${unitCount}` : `Unit ${i + 1} of ${unitCount}`,
+        config: { ...block.config, splitUnitIndex: i + 1, splitUnitTotal: unitCount },
+      }));
+      onBlocksChange([...selectedBlocks.filter((b) => b.id !== blockId), ...clones]);
+      setExpandedBlockId(null);
+      addToast({
+        type: 'success',
+        title: 'Split into independent schedules',
+        message: `${block.name || 'Block'} split into ${unitCount} per-unit schedules — edit each one's cycle independently.`,
+      });
+    },
+    [selectedBlocks, coverageTypes, onBlocksChange, addToast]
   );
 
   // Update block configuration (UNCHANGED — cadence/tax math intact)
@@ -886,6 +920,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                                 ? { majority: cycleMismatch.majority }
                                 : null
                             }
+                            coverageUnitCount={coverageTypes.find((ct) => ct.id === instance?.coverageTypeId)?.unit_count}
                             expanded={expandedBlockId === instId}
                             durationMonths={Math.max(1, contractDuration || 12)}
                             typeLabel={section.typeLabelByCat?.[block.categoryId]}
@@ -977,6 +1012,8 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
                       ? { majority: cycleMismatch.majority }
                       : null
                   }
+                  coverageUnitCount={coverageTypes.find((ct) => ct.id === fb.coverageTypeId)?.unit_count}
+                  onSplitByUnits={() => handleSplitByUnits(fb.id)}
                   expanded={expandedBlockId === fb.id}
                   durationMonths={Math.max(1, contractDuration || 12)}
                   onToggle={() => handleToggleExpand(fb.id)}

@@ -138,6 +138,18 @@ export interface KnowledgeTreeCoverageItem {
 
 export type KnowledgeTreeCoverageMap = Record<string, KnowledgeTreeCoverageItem>;
 
+// Sellable service — the real, authored description for a service_name
+// (founder decision: description stored ONCE here, not repeated on every
+// checkpoint). Was already returned by GET /knowledge-tree/summary
+// (getSummary queries m_kt_service_definitions) but missing from this type,
+// which is why callers were building their own ad-hoc descriptions instead.
+export interface KnowledgeTreeServiceDefinition {
+  service_name: string;
+  description: string | null;
+  source: 'ai_researched' | 'user_contributed' | 'generated';
+  updated_at?: string;
+}
+
 // Full summary response from GET /knowledge-tree/summary
 export interface KnowledgeTreeSummary {
   resource_template: {
@@ -168,4 +180,5 @@ export interface KnowledgeTreeSummary {
   checkpoints_by_section: Record<string, KnowledgeTreeCheckpoint[]>;
   cycles: KnowledgeTreeCycle[];
   overlays_by_type: Record<string, KnowledgeTreeOverlay[]>;
+  service_definitions: KnowledgeTreeServiceDefinition[];
 }
