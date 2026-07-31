@@ -501,7 +501,19 @@ export const API_ENDPOINTS = {
         return qs ? `/api/admin/jtd/dlq/messages?${qs}` : '/api/admin/jtd/dlq/messages';
       },
       REQUEUE_DLQ: '/api/admin/jtd/actions/requeue-dlq',
-      PURGE_DLQ: '/api/admin/jtd/actions/purge-dlq'
+      PURGE_DLQ: '/api/admin/jtd/actions/purge-dlq',
+      // Tenant template mapping (n_jtd_templates)
+      TEMPLATES: '/api/admin/jtd/templates',
+      TEMPLATES_WITH_FILTERS: (filters: { tenant_id?: string; source_type_code?: string; channel_code?: string } = {}) => {
+        const params = new URLSearchParams();
+        if (filters.tenant_id) params.append('tenant_id', filters.tenant_id);
+        if (filters.source_type_code) params.append('source_type_code', filters.source_type_code);
+        if (filters.channel_code) params.append('channel_code', filters.channel_code);
+        const qs = params.toString();
+        return qs ? `/api/admin/jtd/templates?${qs}` : '/api/admin/jtd/templates';
+      },
+      TEMPLATE_OPTIONS: '/api/admin/jtd/templates/options',
+      TEMPLATE_UPDATE: (id: string) => `/api/admin/jtd/templates/${id}`,
     },
     // =================================================================
     // SMART FORMS — Admin Form Template Management

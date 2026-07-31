@@ -152,6 +152,11 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       // wizard field falls back to this on edit, same as other scalars.
       maxNoShows: (config.groupSession as { attendancePolicy?: { maxNoShows?: number } } | undefined)?.attendancePolicy?.maxNoShows,
       maxSubstitutes: (config.groupSession as { attendancePolicy?: { maxSubstitutes?: number } } | undefined)?.attendancePolicy?.maxSubstitutes,
+      // Group Session timing (start time + duration) — used to compute when
+      // a session "concludes" for downstream automation (e.g. no-show
+      // follow-up). Exposed flat, same fallback convention as attendance policy.
+      sessionStartTime: (config.groupSession as { timing?: { startTime?: string } } | undefined)?.timing?.startTime,
+      sessionDurationMinutes: (config.groupSession as { timing?: { durationMinutes?: number } } | undefined)?.timing?.durationMinutes,
       complimentary: config.complimentary,
       billingOnly: config.billingOnly,
       bufferTime: config.buffer || config.bufferTime,
@@ -345,15 +350,31 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   // is already there and only overlay the policy, so a routine wizard save
   // (e.g. just changing the price) never silently wipes the chair default.
   const existingGroupSession = (block.config as Record<string, unknown> | undefined)?.groupSession as
-    { attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number } } | undefined;
+    {
+      attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number };
+      timing?: { startTime?: string; durationMinutes?: number };
+    } | undefined;
   const maxNoShows = getField(block, 'maxNoShows') as number | undefined;
   const maxSubstitutes = getField(block, 'maxSubstitutes') as number | undefined;
-  if (existingGroupSession || maxNoShows !== undefined || maxSubstitutes !== undefined) {
+  // Session timing (start time + duration) — lets downstream automation
+  // compute when a session concludes. Catalog-level only, applies to every
+  // occurrence of this block.
+  const sessionStartTime = getField(block, 'sessionStartTime') as string | undefined;
+  const sessionDurationMinutes = getField(block, 'sessionDurationMinutes') as number | undefined;
+  if (
+    existingGroupSession ||
+    maxNoShows !== undefined || maxSubstitutes !== undefined ||
+    sessionStartTime !== undefined || sessionDurationMinutes !== undefined
+  ) {
     config.groupSession = {
       ...existingGroupSession,
       attendancePolicy: {
         maxNoShows: maxNoShows ?? existingGroupSession?.attendancePolicy?.maxNoShows,
         maxSubstitutes: maxSubstitutes ?? existingGroupSession?.attendancePolicy?.maxSubstitutes,
+      },
+      timing: {
+        startTime: (sessionStartTime as string | undefined) ?? existingGroupSession?.timing?.startTime,
+        durationMinutes: sessionDurationMinutes ?? existingGroupSession?.timing?.durationMinutes,
       },
     };
   }
@@ -979,14 +1000,24 @@ export const blockToUpdateData = (
     if (meta.complimentary !== undefined) configUpdates.complimentary = meta.complimentary;
     if (meta.billingOnly !== undefined) configUpdates.billingOnly = meta.billingOnly;
     if (meta.bufferTime !== undefined) configUpdates.buffer = meta.bufferTime;
-    if (meta.maxNoShows !== undefined || meta.maxSubstitutes !== undefined) {
+    if (
+      meta.maxNoShows !== undefined || meta.maxSubstitutes !== undefined ||
+      meta.sessionStartTime !== undefined || meta.sessionDurationMinutes !== undefined
+    ) {
       const existingGroupSession = (updates.config as Record<string, unknown> | undefined)?.groupSession as
-        { attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number } } | undefined;
+        {
+          attendancePolicy?: { maxNoShows?: number; maxSubstitutes?: number };
+          timing?: { startTime?: string; durationMinutes?: number };
+        } | undefined;
       configUpdates.groupSession = {
         ...existingGroupSession,
         attendancePolicy: {
           maxNoShows: (meta.maxNoShows as number | undefined) ?? existingGroupSession?.attendancePolicy?.maxNoShows,
           maxSubstitutes: (meta.maxSubstitutes as number | undefined) ?? existingGroupSession?.attendancePolicy?.maxSubstitutes,
+        },
+        timing: {
+          startTime: (meta.sessionStartTime as string | undefined) ?? existingGroupSession?.timing?.startTime,
+          durationMinutes: (meta.sessionDurationMinutes as number | undefined) ?? existingGroupSession?.timing?.durationMinutes,
         },
       };
     }

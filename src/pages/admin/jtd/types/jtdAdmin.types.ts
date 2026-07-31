@@ -230,6 +230,50 @@ export interface ActionResult {
   purged_count?: number;
 }
 
+// =============================
+// Template Mapping (n_jtd_templates)
+// =============================
+// Mandatory-tenant model: every row belongs to exactly one tenant. No
+// tenant_id=NULL "open" row can be created through this admin surface.
+export interface JtdTemplateRecord {
+  id: string;
+  tenant_id: string;
+  template_key: string;
+  name: string;
+  description: string | null;
+  channel_code: string;
+  source_type_code: string;
+  content: string;
+  provider_template_id: string | null;
+  is_live: boolean;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JtdTemplateOptions {
+  sourceTypes: Array<{ code: string; name: string }>;
+  channels: Array<{ code: string; name: string }>;
+}
+
+export interface CreateTemplatePayload {
+  tenant_id: string;
+  source_type_code: string;
+  channel_code: string;
+  provider_template_id: string;
+  content: string;
+  name?: string;
+  description?: string;
+  is_live?: boolean;
+  is_active?: boolean;
+}
+
+export interface UpdateTemplatePayload {
+  provider_template_id?: string;
+  is_active?: boolean;
+}
+
 // Status code → display metadata
 export const JTD_STATUS_META: Record<string, { label: string; color: string; bgColor: string }> = {
   created:     { label: 'Created',      color: '#6B7280', bgColor: '#F3F4F6' },

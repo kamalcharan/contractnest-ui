@@ -40,6 +40,12 @@ interface DeliveryStepProps {
     // dashboard toggle. Undefined/blank = no cap.
     maxNoShows?: number;
     maxSubstitutes?: number;
+    // Group Session timing — when a session starts and how long it runs.
+    // Lets downstream automation (e.g. a no-show follow-up) compute when a
+    // session actually concludes. Catalog-level only — applies to every
+    // occurrence of this block, not editable per contract.
+    sessionStartTime?: string;
+    sessionDurationMinutes?: number;
   };
   onChange: (field: string, value: unknown) => void;
 }
@@ -140,6 +146,14 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
   const maxSubstitutesForDisplay =
     formData.maxSubstitutes ??
     (formData as { meta?: { maxSubstitutes?: number } }).meta?.maxSubstitutes;
+  // Session timing — hydrates from the top-level wizard field, falling back
+  // to an existing block's meta (edit mode), same pattern as above.
+  const sessionStartTimeForDisplay =
+    formData.sessionStartTime ??
+    (formData as { meta?: { sessionStartTime?: string } }).meta?.sessionStartTime;
+  const sessionDurationMinutesForDisplay =
+    formData.sessionDurationMinutes ??
+    (formData as { meta?: { sessionDurationMinutes?: number } }).meta?.sessionDurationMinutes;
   const sampleDates = React.useMemo(() => {
     const days = cycleDaysForDisplay;
     if (!requiresCycles || !days || days < 1) return [] as Date[];
@@ -246,6 +260,46 @@ const DeliveryStep: React.FC<DeliveryStepProps> = ({ formData, onChange }) => {
                   placeholder="No cap"
                   value={maxSubstitutesForDisplay ?? ''}
                   onChange={(e) => onChange('maxSubstitutes', e.target.value === '' ? undefined : parseInt(e.target.value))}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ ...inputStyle, borderRadius: '0.75rem' }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Session timing — Group Session only. Start time + duration for each
+            occurrence, so downstream automation (e.g. a no-show follow-up)
+            can compute when a session actually concludes. Same for every
+            occurrence of this block — not editable per contract. */}
+        {audience === 'group' && (
+          <div className="p-6 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-200" style={cardStyle}>
+            <label className="block text-sm font-semibold mb-1" style={labelStyle}>
+              Session timing
+            </label>
+            <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
+              What time does each session start, and how long does it run? Used to work out when a
+              session has concluded — leave blank if this isn&apos;t known yet.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>Start time</label>
+                <input
+                  type="time"
+                  value={sessionStartTimeForDisplay ?? ''}
+                  onChange={(e) => onChange('sessionStartTime', e.target.value === '' ? undefined : e.target.value)}
+                  className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                  style={{ ...inputStyle, borderRadius: '0.75rem' }}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2" style={labelStyle}>Duration (minutes)</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g., 60"
+                  value={sessionDurationMinutesForDisplay ?? ''}
+                  onChange={(e) => onChange('sessionDurationMinutes', e.target.value === '' ? undefined : parseInt(e.target.value))}
                   className="w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
                   style={{ ...inputStyle, borderRadius: '0.75rem' }}
                 />
