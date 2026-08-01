@@ -72,6 +72,7 @@
     "lodash": "^4.17.21",
     "lottie-react": "^2.4.1",
     "lucide-react": "^0.488.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-confetti": "^6.4.0",
     "react-dnd": "^16.0.1",

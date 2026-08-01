@@ -14,6 +14,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   sessionCheckinApi, getOrCreateDeviceToken, forgetDeviceToken,
   type CheckinResolve, type CheckinMember, type CheckinHistory, type BillingRow,
@@ -767,6 +768,37 @@ const SessionCheckinPage: React.FC = () => {
       setPaymentAttempted(true);
       try { window.location.href = 'upi://pay'; } catch { /* no UPI app registered -- instructions below cover a manual open */ }
     };
+
+    // Build the full upi://pay?... URL for the on-page QR. Scanning this QR
+    // with a UPI app prefills payee + amount + note in one step, which is
+    // the biggest ergonomic win over "Open UPI app" (bare intent that then
+    // requires manual VPA + amount entry inside the UPI app). NB: our
+    // constructed URL is unsigned, so some UPI apps (notably GPay for
+    // personal VPAs) may still reject even when scanned rather than tapped
+    // -- if that happens the user still has the "Open UPI app" +
+    // manual-reference fallback below. `mc=0000` = generic merchant category
+    // code (mandatory per NPCI spec even on personal-account intents).
+    const upiPayUrl = ((): string | null => {
+      const vpa = payCfg?.upi_id;
+      if (!vpa) return null;
+      const params = new URLSearchParams();
+      params.set('pa', vpa);
+      if (payCfg?.payee_name) params.set('pn', payCfg.payee_name);
+      params.set('am', String(amount));
+      params.set('cu', currency || 'INR');
+      const note = `${payCfg?.payee_name || 'Chapter'} check-in ${(new Date().toISOString().slice(0, 10))}`;
+      params.set('tn', note);
+      params.set('mc', '0000');
+      return `upi://pay?${params.toString()}`;
+    })();
+
+    const onQrScan = () => {
+      // Scanning the QR is a payment intent -- flip the same state the
+      // "Open UPI app" tap flips so the reference-input step appears when
+      // the user comes back.
+      copyVpa();
+      setPaymentAttempted(true);
+    };
     if (!canPay) {
       return (
         <div style={{ marginTop: 14, borderTop: `1px solid #F1F1F3`, paddingTop: 14 }}>
@@ -800,9 +832,35 @@ const SessionCheckinPage: React.FC = () => {
 
         {!paymentAttempted ? (
           <>
+            {upiPayUrl && (
+              <div style={{ marginTop: 14, background: '#fff', border: `1px solid ${BRAND.line}`,
+                borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.ink, marginBottom: 10, textAlign: 'center' }}>
+                  Scan with any UPI app to pay
+                </div>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={onQrScan}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onQrScan(); }}
+                  title="Tap after scanning to reveal the confirmation step"
+                  style={{ cursor: 'pointer', padding: 8, borderRadius: 8, background: '#fff' }}
+                >
+                  <QRCodeSVG value={upiPayUrl} size={192} level="M" includeMargin={false} />
+                </div>
+                <div style={{ fontSize: 11.5, color: BRAND.sub, marginTop: 10, textAlign: 'center', lineHeight: 1.4 }}>
+                  Opens payee, amount and note pre-filled.<br />Tap the QR after scanning to enter your UPI reference.
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, color: BRAND.sub, fontSize: 12 }}>
+              <div style={{ flex: 1, height: 1, background: BRAND.line }} />
+              <span>or</span>
+              <div style={{ flex: 1, height: 1, background: BRAND.line }} />
+            </div>
             <button type="button" onClick={openUpiApp}
-              style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 12,
-                background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+              style={{ width: '100%', marginTop: 12, padding: 13, border: `1.5px solid ${BRAND.accent}`, borderRadius: 12,
+                background: '#fff', color: BRAND.accentInk, fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
               Open UPI app
             </button>
             <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
