@@ -150,15 +150,23 @@ export const useStartVaniTrial = () => {
 // ── Automation rules (Settings → Automation Rules) ─────────────────────────
 // Read is free for every tenant; editing needs VaNi entitlement (403 otherwise).
 
+// A rule's config value can be a scalar (existing services/finance rules —
+// `lead_days: 3`), an int array (reminder-schedule rules — `days: [7, 3, 1]`),
+// or absent entirely (toggle-only notification rules — empty `defaults`).
+// The union widens what the RPC has always accepted; older scalar-only
+// callers keep compiling because number is still in the union.
+export type VaniRuleConfigValue = number | number[];
+
 export interface VaniRule {
   rule_key: string;
   name: string;
   description: string;
-  domain: 'services' | 'finance' | string;
-  config: Record<string, number>;
+  domain: 'services' | 'finance' | 'notifications' | string;
+  config: Record<string, VaniRuleConfigValue>;
   is_enabled: boolean;
-  defaults: Record<string, number>;
-  constraints: Record<string, { min?: number; max?: number }>;
+  defaults: Record<string, VaniRuleConfigValue>;
+  // Array fields carry min_items/max_items alongside min/max (bounds per item).
+  constraints: Record<string, { min?: number; max?: number; min_items?: number; max_items?: number }>;
   version: number;
   is_customized: boolean;
 }
@@ -184,7 +192,7 @@ export const useVaniRules = (options?: { enabled?: boolean }) => {
 
 export interface UpdateVaniRuleParams {
   ruleKey: string;
-  config?: Record<string, number>;
+  config?: Record<string, VaniRuleConfigValue>;
   is_enabled?: boolean;
   expected_version?: number;
 }

@@ -21,6 +21,7 @@ import {
   Sparkles,
   Pencil,
   X,
+  Bell,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -30,17 +31,37 @@ import {
   useUpdateVaniRule,
   useVaniEntitlement,
   type VaniRule,
+  type VaniRuleConfigValue,
 } from '@/hooks/queries/useVaniDeskQueries';
 
 const FIELD_LABELS: Record<string, string> = {
   lead_days: 'Days ahead',
   backlog_cutoff_days: 'Backlog cutoff (days)',
+  days: 'Reminder days before',
+  days_before: 'Days before',
+  days_after_no_show: 'Days after no-show',
 };
 
 const DOMAIN_META: Record<string, { label: string; icon: React.ReactNode }> = {
   services: { label: 'Services', icon: <Wrench size={15} /> },
   finance: { label: 'Finance', icon: <IndianRupee size={15} /> },
+  notifications: { label: 'Notifications', icon: <Bell size={15} /> },
 };
+
+const isArrayField = (v: VaniRuleConfigValue | undefined): v is number[] =>
+  Array.isArray(v);
+
+const formatArrayField = (arr: number[]): string => arr.join(', ');
+
+// Parse "7, 3, 1" or "7,3,1" into [7,3,1]; drops NaN so a trailing comma
+// while typing doesn't torch the whole input.
+const parseArrayField = (raw: string): number[] =>
+  raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map((s) => Number(s))
+    .filter((n) => Number.isFinite(n));
 
 const AutomationRulesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,9 +74,13 @@ const AutomationRulesPage: React.FC = () => {
   const rulesQuery = useVaniRules();
   const updateMutation = useUpdateVaniRule();
 
-  // One card in edit mode at a time; draft holds its field values + toggle
+  // One card in edit mode at a time; draft holds its field values + toggle.
+  // Array fields are held as their raw text so mid-edit ("7, 3, ") doesn't get
+  // reformatted under the user; parsed on save. Scalar fields keep their
+  // numeric type as before.
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draftConfig, setDraftConfig] = useState<Record<string, number>>({});
+  const [draftArrayText, setDraftArrayText] = useState<Record<string, string>>({});
   const [draftEnabled, setDraftEnabled] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
 
@@ -70,21 +95,47 @@ const AutomationRulesPage: React.FC = () => {
 
   const startEdit = (rule: VaniRule) => {
     setEditingKey(rule.rule_key);
-    setDraftConfig({ ...rule.config });
+    // Split the rule's config into scalar drafts and array-text drafts.
+    // effective = tenant config value if present, else template default.
+    const scalars: Record<string, number> = {};
+    const arrays: Record<string, string> = {};
+    Object.keys(rule.defaults).forEach((field) => {
+      const effective = rule.config?.[field] ?? rule.defaults[field];
+      if (isArrayField(effective)) {
+        arrays[field] = formatArrayField(effective);
+      } else if (typeof effective === 'number') {
+        scalars[field] = effective;
+      }
+    });
+    setDraftConfig(scalars);
+    setDraftArrayText(arrays);
     setDraftEnabled(rule.is_enabled);
   };
 
   const cancelEdit = () => {
     setEditingKey(null);
     setDraftConfig({});
+    setDraftArrayText({});
   };
 
   const save = async (rule: VaniRule, resetToDefault = false) => {
     setSaving(true);
     try {
+      let configToSend: Record<string, VaniRuleConfigValue> | undefined;
+      if (resetToDefault) {
+        configToSend = rule.defaults;
+      } else {
+        // Assemble the config to send: scalar fields from draftConfig,
+        // array fields parsed fresh from their raw text.
+        const assembled: Record<string, VaniRuleConfigValue> = { ...draftConfig };
+        Object.entries(draftArrayText).forEach(([field, text]) => {
+          assembled[field] = parseArrayField(text);
+        });
+        configToSend = assembled;
+      }
       await updateMutation.mutateAsync({
         ruleKey: rule.rule_key,
-        config: resetToDefault ? rule.defaults : draftConfig,
+        config: configToSend,
         is_enabled: resetToDefault ? true : draftEnabled,
         expected_version: rule.version > 0 ? rule.version : undefined,
       });
@@ -135,7 +186,8 @@ const AutomationRulesPage: React.FC = () => {
         </h1>
         <p style={{ fontSize: 13.5, color: colors.utility.secondaryText, lineHeight: 1.5 }}>
           Standing instructions for the automation that runs your contracts — reminders,
-          invoice drafts and appointment requests. These are the values running for you right now
+          invoice drafts, appointment requests and the notifications members receive. These
+          are the values running for you right now
           {canEdit ? '; changes apply from the next automation run (within 15 minutes).' : '.'}
         </p>
       </div>
@@ -232,19 +284,25 @@ const AutomationRulesPage: React.FC = () => {
                     {/* ── VIEW MODE: current values as text + Edit button ── */}
                     {!isEditing && (
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {fields.map((field) => (
-                          <span
-                            key={field}
-                            style={{
-                              fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8,
-                              backgroundColor: `${colors.utility.secondaryText}12`,
-                              color: colors.utility.primaryText,
-                            }}
-                          >
-                            {FIELD_LABELS[field] || field.replace(/_/g, ' ')}:{' '}
-                            <b>{rule.config[field] ?? rule.defaults[field]}</b>
-                          </span>
-                        ))}
+                        {fields.map((field) => {
+                          const effective = rule.config?.[field] ?? rule.defaults[field];
+                          const display = isArrayField(effective)
+                            ? formatArrayField(effective)
+                            : String(effective);
+                          return (
+                            <span
+                              key={field}
+                              style={{
+                                fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8,
+                                backgroundColor: `${colors.utility.secondaryText}12`,
+                                color: colors.utility.primaryText,
+                              }}
+                            >
+                              {FIELD_LABELS[field] || field.replace(/_/g, ' ')}:{' '}
+                              <b>{display}</b>
+                            </span>
+                          );
+                        })}
                         <button
                           onClick={() => (canEdit ? startEdit(rule) : navigate('/vani/landing'))}
                           title={canEdit ? 'Edit this rule' : 'Editing needs a VaNi trial'}
@@ -267,31 +325,62 @@ const AutomationRulesPage: React.FC = () => {
                       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         {fields.map((field) => {
                           const bounds = rule.constraints?.[field] || {};
+                          const defaultVal = rule.defaults[field];
+                          const isArray = isArrayField(defaultVal);
+                          const boundsLabel = isArray
+                            ? (bounds.min !== undefined || bounds.max !== undefined)
+                                ? ` (each ${bounds.min ?? 0}–${bounds.max ?? '∞'})`
+                                : ''
+                            : (bounds.min !== undefined || bounds.max !== undefined)
+                                ? ` (${bounds.min ?? 0}–${bounds.max ?? '∞'})`
+                                : '';
                           return (
                             <label key={field} style={{ fontSize: 11, color: colors.utility.secondaryText, fontWeight: 600 }}>
                               <div style={{ marginBottom: 4 }}>
                                 {FIELD_LABELS[field] || field.replace(/_/g, ' ')}
-                                {(bounds.min !== undefined || bounds.max !== undefined) && (
-                                  <span style={{ fontWeight: 400 }}> ({bounds.min ?? 0}–{bounds.max ?? '∞'})</span>
+                                {boundsLabel && <span style={{ fontWeight: 400 }}>{boundsLabel}</span>}
+                                {isArray && (
+                                  <span style={{ fontWeight: 400, display: 'block', marginTop: 2 }}>
+                                    Comma-separated, e.g. 7, 3, 1
+                                  </span>
                                 )}
                               </div>
-                              <input
-                                type="number"
-                                value={draftConfig[field] ?? ''}
-                                min={bounds.min}
-                                max={bounds.max}
-                                disabled={saving}
-                                autoFocus={field === fields[0]}
-                                onChange={(e) =>
-                                  setDraftConfig((prev) => ({ ...prev, [field]: Number(e.target.value) }))
-                                }
-                                style={{
-                                  width: 100, padding: '7px 10px', borderRadius: 8, fontSize: 13,
-                                  border: `1px solid ${colors.brand.primary}60`,
-                                  backgroundColor: colors.utility.primaryBackground,
-                                  color: colors.utility.primaryText,
-                                }}
-                              />
+                              {isArray ? (
+                                <input
+                                  type="text"
+                                  value={draftArrayText[field] ?? ''}
+                                  disabled={saving}
+                                  autoFocus={field === fields[0]}
+                                  placeholder="7, 3, 1"
+                                  onChange={(e) =>
+                                    setDraftArrayText((prev) => ({ ...prev, [field]: e.target.value }))
+                                  }
+                                  style={{
+                                    width: 180, padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                                    border: `1px solid ${colors.brand.primary}60`,
+                                    backgroundColor: colors.utility.primaryBackground,
+                                    color: colors.utility.primaryText,
+                                  }}
+                                />
+                              ) : (
+                                <input
+                                  type="number"
+                                  value={draftConfig[field] ?? ''}
+                                  min={bounds.min}
+                                  max={bounds.max}
+                                  disabled={saving}
+                                  autoFocus={field === fields[0]}
+                                  onChange={(e) =>
+                                    setDraftConfig((prev) => ({ ...prev, [field]: Number(e.target.value) }))
+                                  }
+                                  style={{
+                                    width: 100, padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                                    border: `1px solid ${colors.brand.primary}60`,
+                                    backgroundColor: colors.utility.primaryBackground,
+                                    color: colors.utility.primaryText,
+                                  }}
+                                />
+                              )}
                             </label>
                           );
                         })}
