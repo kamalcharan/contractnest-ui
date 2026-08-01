@@ -565,13 +565,6 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/api/integrations/${id}`
   },
 
-  // Tenant-facing JTD message-type settings — per-message-type on/off +
-  // read-only template preview. Distinct from ADMIN.JTD (cross-tenant, admin-only).
-  JTD_MESSAGE_TYPES: {
-    LIST: '/api/jtd/message-types',
-    TOGGLE: (code: string) => `/api/jtd/message-types/${encodeURIComponent(code)}`,
-  },
-  
   // BUSINESS MODEL ENDPOINTS - PRESERVED
   BUSINESSMODEL: {
     // Plan management

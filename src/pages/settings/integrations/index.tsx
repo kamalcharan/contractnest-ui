@@ -7,7 +7,6 @@ import { useIntegrations } from '@/hooks/useIntegrations';
 import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import IntegrationTypeSection from '@/components/integrations/IntegrationTypeSection';
-import MessageTypeSettingsSection from '@/components/integrations/MessageTypeSettingsSection';
 import StatusBadge from '@/components/integrations/StatusBadge';
 // import ProviderLogo from '@/components/integrations/ProviderLogo';
 import { VaNiLoader } from '@/components/common/loaders';
@@ -431,10 +430,6 @@ const IntegrationsPage = () => {
               </p>
             </div>
           )}
-
-          {/* Per-message-type on/off + preview — separate from the channel-level
-              toggles above; see MessageTypeSettingsSection for why. */}
-          <MessageTypeSettingsSection />
         </div>
       </div>
     </div>
