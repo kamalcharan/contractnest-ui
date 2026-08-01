@@ -264,6 +264,7 @@ import QueueMonitorPage from './pages/admin/jtd/QueueMonitorPage';
 import TenantOperationsPage from './pages/admin/jtd/TenantOperationsPage';
 import EventExplorerPage from './pages/admin/jtd/EventExplorerPage';
 import WorkerHealthPage from './pages/admin/jtd/WorkerHealthPage';
+import TemplateMappingPage from './pages/admin/jtd/TemplateMappingPage';
 
 // Admin - Smart Forms
 import SmartFormsAdminPage from './pages/admin/smart-forms/SmartFormsAdminPage';
@@ -930,6 +931,7 @@ const AppContent: React.FC = () => {
             <Route path="tenants" element={<TenantOperationsPage />} />
             <Route path="events" element={<EventExplorerPage />} />
             <Route path="worker" element={<WorkerHealthPage />} />
+            <Route path="templates" element={<TemplateMappingPage />} />
             <Route index element={<QueueMonitorPage />} />
           </Route>
 

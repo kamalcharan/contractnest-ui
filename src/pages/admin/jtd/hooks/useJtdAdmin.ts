@@ -18,6 +18,10 @@ import type {
   Pagination,
   DlqMessage,
   ActionResult,
+  JtdTemplateRecord,
+  JtdTemplateOptions,
+  CreateTemplatePayload,
+  UpdateTemplatePayload,
 } from '../types/jtdAdmin.types';
 
 // =============================
@@ -314,4 +318,106 @@ export function useJtdAction() {
   );
 
   return { retryEvent, cancelEvent, forceComplete, requeueDlq, purgeDlq, loading, error };
+}
+
+// =============================
+// Template Mapping (n_jtd_templates)
+// =============================
+
+export function useJtdTemplates(filters: { tenant_id?: string; source_type_code?: string; channel_code?: string } = {}) {
+  const [templates, setTemplates] = useState<JtdTemplateRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const url = API_ENDPOINTS.ADMIN.JTD.TEMPLATES_WITH_FILTERS(filters);
+      const res = await api.get(url);
+      if (res.data?.success) {
+        setTemplates(res.data.data || []);
+      } else {
+        setError(res.data?.error || 'Failed to load templates');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err.message || 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.tenant_id, filters.source_type_code, filters.channel_code]);
+
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { templates, loading, error, refresh: fetch };
+}
+
+export function useJtdTemplateOptions() {
+  const [options, setOptions] = useState<JtdTemplateOptions | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await api.get(API_ENDPOINTS.ADMIN.JTD.TEMPLATE_OPTIONS);
+      if (res.data?.success) {
+        setOptions(res.data.data);
+      } else {
+        setError(res.data?.error || 'Failed to load template options');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err.message || 'Network error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
+
+  return { options, loading, error, refresh: fetch };
+}
+
+export function useJtdTemplateMutations() {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createTemplate = useCallback(async (payload: CreateTemplatePayload): Promise<JtdTemplateRecord | null> => {
+    try {
+      setSaving(true);
+      setError(null);
+      const res = await api.post(API_ENDPOINTS.ADMIN.JTD.TEMPLATES, payload);
+      if (res.data?.success) return res.data.data as JtdTemplateRecord;
+      setError(res.data?.error || 'Failed to create template');
+      return null;
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err.message || 'Failed to create template');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const updateTemplate = useCallback(async (id: string, payload: UpdateTemplatePayload): Promise<JtdTemplateRecord | null> => {
+    try {
+      setSaving(true);
+      setError(null);
+      const res = await api.patch(API_ENDPOINTS.ADMIN.JTD.TEMPLATE_UPDATE(id), payload);
+      if (res.data?.success) return res.data.data as JtdTemplateRecord;
+      setError(res.data?.error || 'Failed to update template');
+      return null;
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err.message || 'Failed to update template');
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  return { createTemplate, updateTemplate, saving, error };
 }
