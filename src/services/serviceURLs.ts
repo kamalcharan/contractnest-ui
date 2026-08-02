@@ -968,6 +968,8 @@ export const API_ENDPOINTS = {
     LIST: '/api/contracts',
     CREATE: '/api/contracts',
     BULK_CREATE: '/api/contracts/bulk-create',
+    // Caller's own access grant for a claimed CNAK (received-requests view)
+    MY_ACCESS: (cnak: string) => `/api/contracts/my-access/${cnak}`,
     GET: (id: string) => `/api/contracts/${id}`,
     UPDATE: (id: string) => `/api/contracts/${id}`,
     DELETE: (id: string) => `/api/contracts/${id}`,

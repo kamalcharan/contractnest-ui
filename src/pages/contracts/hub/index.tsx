@@ -27,6 +27,9 @@ import type {
   ContractGroup,
 } from '@/types/contracts';
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
+import { vaniToast } from '@/components/common/toast';
+import api from '@/services/api';
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 import ContractWizard from '@/components/contracts/ContractWizard';
 import type { ContractType } from '@/components/contracts/ContractWizard';
 import VaNiComposerLauncher, { TemplateSeed, buildTemplateSeed } from '@/components/contracts/vani/VaNiComposerLauncher';
@@ -412,17 +415,20 @@ const ContractsHubPage: React.FC = () => {
   const activePerspective: Perspective = perspective;
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
-  // ── Record type: contracts vs RFQs (requests). RFQs are always an Expense-
-  // side concept (a buyer asking vendors to quote), so this toggle only shows
-  // in Expense mode; Revenue mode is always contracts. Defaulting to 'contract'
+  // ── Record type: contracts vs RFQs (requests), on BOTH sides now.
+  // Expense · Requests = RFQs this tenant SENT (buyer asking vendors to
+  // quote). Revenue · Requests = RFQs this tenant RECEIVED (it is the vendor
+  // being asked — an RFQ CNAK claimed by this tenant; the edge list flips the
+  // claimed record onto the vendor's revenue side). Responding is always the
+  // vendor's job, and for the vendor it is Revenue. Defaulting to 'contract'
   // ALSO fixes a latent bug: the hub never passed record_type before, so RFQs
   // leaked into the vendor-contract list with statuses the pills don't model.
   const [recordType, setRecordType] = useState<'contract' | 'rfq'>(
     searchParams.get('record') === 'rfq' ? 'rfq' : 'contract'
   );
-  const effectiveRecordType: 'contract' | 'rfq' =
-    activePerspective === 'expense' ? recordType : 'contract';
+  const effectiveRecordType: 'contract' | 'rfq' = recordType;
   const isRfqView = effectiveRecordType === 'rfq';
+  const isReceivedRequestsView = isRfqView && activePerspective === 'revenue';
 
   // ── Filter state — Active is the default status ──
   const [activeStatus, setActiveStatus] = useState<string | null>(
@@ -676,11 +682,52 @@ const ContractsHubPage: React.FC = () => {
     }
   }, [resumeDraftId, resumeDraftData, isLoadingDraft, showWizard]);
 
+  // ── Received request (Revenue · Requests): open the vendor quote flow ──
+  // The row is an RFQ another tenant sent US (claimed via CNAK). Responding
+  // happens on the existing quote surface, which is keyed by (cnak, secret);
+  // the secret is OUR OWN grant's, fetched from the authenticated my-access
+  // endpoint (never exposed in the list payload).
+  const [openingRequestId, setOpeningRequestId] = useState<string | null>(null);
+  const openReceivedRequest = async (contract: Contract) => {
+    const cnak = (contract as any).global_access_id;
+    if (!cnak) {
+      vaniToast.error('Request not openable', {
+        message: 'This request has no access code attached.',
+        duration: 4000
+      });
+      return;
+    }
+    if (openingRequestId) return; // double-click guard
+    setOpeningRequestId(contract.id);
+    try {
+      const resp = await api.get(API_ENDPOINTS.CONTRACTS.MY_ACCESS(cnak));
+      const secret = resp.data?.data?.secret_code || resp.data?.secret_code;
+      if (!secret) {
+        throw new Error('No access grant found for this request');
+      }
+      navigate(`/quote/${cnak}/${secret}`);
+    } catch (e: any) {
+      vaniToast.error('Could not open request', {
+        message: e?.response?.data?.error || e?.message || 'Please try again.',
+        duration: 4000
+      });
+    } finally {
+      setOpeningRequestId(null);
+    }
+  };
+
   const handleRowClick = (id: string) => {
     // If contract is a draft, resume the wizard instead of navigating to detail page.
     // Note: the list API does not return metadata, so we check status only.
     const contract = contracts.find((c) => c.id === id)
       || groups.flatMap((g: ContractGroup) => g.contracts).find((c: Contract) => c.id === id);
+    // Received request rows (we are not the record's owner) → quote flow,
+    // not the buyer's RFQ detail/report.
+    if (isReceivedRequestsView && contract && (contract as any).tenant_id
+        && currentTenant?.id && (contract as any).tenant_id !== currentTenant.id) {
+      openReceivedRequest(contract as Contract);
+      return;
+    }
     if (contract?.status === 'draft') {
       handleResumeDraft(id);
       return;
@@ -744,7 +791,7 @@ const ContractsHubPage: React.FC = () => {
             </div>
             <p style={{ fontSize: 12, color: colors.utility.secondaryText, marginTop: 4 }}>
               {activePerspective === 'revenue'
-                ? 'Revenue · Clients'
+                ? (isRfqView ? 'Revenue · Requests received' : 'Revenue · Clients')
                 : isRfqView ? 'Expense · Requests (RFQ)' : 'Expense · Vendors'}
             </p>
           </div>
@@ -862,9 +909,10 @@ const ContractsHubPage: React.FC = () => {
               </div>
             )}
 
-            {/* Contracts ⇄ Requests toggle — Expense only. An RFQ is a buyer
-                asking vendors to quote, which lives on the expense side. */}
-            {activePerspective === 'expense' && (
+            {/* Contracts ⇄ Requests toggle — both sides. Expense: requests
+                you sent. Revenue: requests you received (you are the vendor
+                being asked to quote). */}
+            {(
               <div
                 style={{
                   display: 'flex',
@@ -905,7 +953,10 @@ const ContractsHubPage: React.FC = () => {
               </div>
             )}
 
-            {/* Create button — label reflects the chosen relationship / record type */}
+            {/* Create button — label reflects the chosen relationship / record
+                type. Hidden on Revenue · Requests: you don't create a request
+                you RECEIVE — you respond to it (row click → quote flow). */}
+            {!isReceivedRequestsView && (
             <button
               onClick={handleCreateClick}
               style={{
@@ -927,6 +978,7 @@ const ContractsHubPage: React.FC = () => {
                 ? `New ${createRelationship === 'client' ? 'Client' : 'Partner'} Contract`
                 : isRfqView ? 'New Request' : 'New Contract'}
             </button>
+            )}
           </div>
         </div>
 

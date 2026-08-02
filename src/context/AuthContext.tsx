@@ -80,6 +80,24 @@ interface GoogleAuthData {
 // Perspective type — Revenue (client contracts) vs Expense (vendor contracts)
 export type Perspective = 'revenue' | 'expense';
 
+// CNAK/RFQ-lite access tier. NOT a new persona — derived purely from
+// t_tenant_onboarding: onboarding_type 'cnak'/'rfq' while is_completed=false
+// means the tenant signed up through a contract (CNAK) or RFQ hand-off and
+// hasn't done onboarding yet. The incompleteness IS the tier: lite tenants
+// enter the app with restricted menus instead of being forced to /onboarding,
+// and completing the (lite) onboarding upgrades them to full automatically.
+export type LiteTier = 'cnak' | 'rfq' | null;
+
+// Map a t_tenant_onboarding.onboarding_type to the UI's lite flavor.
+// 'cnak' (CNAK sent to the buyer) → buyer-lite; 'cnak_vendor' (CNAK sent to
+// the vendor of an expense-side contract) and 'rfq' both render the seller
+// flavor. Anything else (vani/business/…) is not lite.
+export const onboardingTypeToLiteTier = (onboardingType: string | null | undefined): LiteTier => {
+  if (onboardingType === 'cnak') return 'cnak';
+  if (onboardingType === 'cnak_vendor' || onboardingType === 'rfq') return 'rfq';
+  return null;
+};
+
 // Readiness of the perspective being switched INTO (see requestPerspectiveSwitch)
 export type PerspectiveReadiness = 'checking' | 'ready' | 'activation_needed';
 
@@ -141,6 +159,9 @@ interface AuthContextType {
   checkOnboardingStatus: () => Promise<boolean>;
   markOnboardingComplete: () => void;
   skipOnboarding: () => void;
+  // CNAK/RFQ-lite tier ('cnak' | 'rfq' when onboarding is incomplete AND of
+  // that type; null for full tenants and completed onboardings)
+  liteTier: LiteTier;
 }
 
 // Register form data interface
@@ -152,6 +173,11 @@ export interface RegisterFormData {
   workspaceName: string;
   countryCode?: string;
   mobileNumber?: string;
+  // CNAK-lite signup (Flow 1): set when the signup arrived from a contract
+  // review hand-off — backend flags the tenant onboarding_type='cnak' and
+  // auto-claims the contract with the review-link secret.
+  cnakRef?: string;
+  cnakSecret?: string;
 }
 
 // User preferences interface
@@ -210,6 +236,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Onboarding state
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(false); // Default to false — API must confirm completion
+
+  // CNAK/RFQ-lite tier — state for rendering, ref for the login flow which
+  // needs the freshly-derived value synchronously after awaiting
+  // checkOnboardingStatus (React state would still be one render stale).
+  const [liteTier, setLiteTier] = useState<LiteTier>(null);
+  const liteTierRef = useRef<LiteTier>(null);
+  const applyLiteTier = (tier: LiteTier) => {
+    liteTierRef.current = tier;
+    setLiteTier(tier);
+    // The lite tier IS the persona: a CNAK buyer's world is vendor contracts
+    // (Expense), an RFQ seller's is client contracts (Revenue). Force the
+    // matching side UNCONDITIONALLY — a lite tenant that started normal
+    // onboarding before converting may have a saved business profile whose
+    // initializePerspective(business_type) races this call and would
+    // otherwise strand a buyer on the Revenue side with zero contracts.
+    if (tier === 'cnak') {
+      setPerspective('expense');
+      setPerspectiveInitialized(true);
+    } else if (tier === 'rfq') {
+      setPerspective('revenue');
+      setPerspectiveInitialized(true);
+    }
+  };
 
   // Refs for timeouts
   const idleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -477,18 +526,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedStatus = sessionStorage.getItem(storageKey);
       if (storedStatus === 'true') {
         setHasCompletedOnboarding(true);
+        applyLiteTier(null); // completed onboarding is never lite
         return true;
       }
 
       const response = await api.get(API_ENDPOINTS.ONBOARDING.STATUS);
 
-      // API returns { needs_onboarding: bool, onboarding: { is_completed: bool } | null, ... }
+      // API returns { needs_onboarding: bool, onboarding_type: string,
+      // onboarding: { is_completed: bool } | null, ... }
       // needs_onboarding=true means NOT complete; onboarding.is_completed=true means complete.
       if (response.data) {
         const isComplete =
           response.data.onboarding?.is_completed === true ||
           response.data.needs_onboarding === false;
         setHasCompletedOnboarding(isComplete);
+
+        // CNAK/RFQ-lite: incomplete + a lite onboarding_type = lite tenant —
+        // allowed into the app with restricted menus instead of being
+        // bounced to /onboarding. Flavor mapping:
+        //   'cnak'        → buyer-lite  (CNAK sent to the contract's client)
+        //   'cnak_vendor' → seller-lite (CNAK sent to the contract's vendor —
+        //                   rendered with the same 'rfq' seller UI flavor)
+        //   'rfq'         → seller-lite (future RFQ hand-off entry path)
+        const onboardingType: string =
+          response.data.onboarding_type || response.data.data?.onboarding_type || 'business';
+        applyLiteTier(
+          !isComplete
+            ? onboardingTypeToLiteTier(onboardingType)
+            : null
+        );
 
         // Store in session to avoid repeated checks (tenant-scoped)
         if (isComplete) {
@@ -500,11 +566,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // If we can't determine status, assume NOT complete (safe default)
       setHasCompletedOnboarding(false);
+      applyLiteTier(null);
       return false;
     } catch (error) {
       console.error('Error checking onboarding status:', error);
-      // On error, assume NOT complete — user sees onboarding (safe)
+      // On error, assume NOT complete — user sees onboarding (safe).
+      // Tier also resets: an error must never leave a stale lite tier that
+      // would let a full tenant bypass the onboarding gate.
       setHasCompletedOnboarding(false);
+      applyLiteTier(null);
       return false;
     }
   };
@@ -512,12 +582,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Function to skip onboarding (mark as complete)
   const skipOnboarding = () => {
     setHasCompletedOnboarding(true);
+    applyLiteTier(null); // completion upgrades a lite tenant to full
     sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
   };
 
   // Function to mark onboarding as complete (called from CompleteStep)
   const markOnboardingComplete = () => {
     setHasCompletedOnboarding(true);
+    applyLiteTier(null); // completion upgrades a lite tenant to full
     sessionStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, 'true');
   };
 
@@ -608,6 +680,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLockTime(null);
       setRegistrationStatus(null);
       setHasCompletedOnboarding(false);
+      applyLiteTier(null);
       vaniToast.error('Your session has expired — please sign in again.', { duration: 4000 });
       navigate('/login');
     };
@@ -674,6 +747,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUnlockBlockedUntil(null);
         setRegistrationStatus(null);
         setHasCompletedOnboarding(false);
+        applyLiteTier(null);
         navigate('/login');
       }
     };
@@ -932,6 +1006,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ── Initialize perspective from tenant profile (no modal, called once) ──
   const initializePerspective = (businessTypeId: string) => {
     if (perspectiveInitialized) return;
+    // Lite tenants: the tier owns the perspective (cnak→expense, rfq→revenue,
+    // set in applyLiteTier). A leftover business profile from an abandoned
+    // normal-onboarding run must not override it — checked via ref because
+    // this can race applyLiteTier within the same render cycle.
+    if (liteTierRef.current) return;
     // 'buyer' → expense view. 'seller' or 'both' → revenue view.
     // 'both' defaults to revenue: seller side is the major persona entry point.
     const defaultPerspective: Perspective = businessTypeId.toLowerCase() === 'buyer' ? 'expense' : 'revenue';
@@ -1166,9 +1245,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const isOnboardingComplete = await checkOnboardingStatus();
 
         if (!isOnboardingComplete) {
-          // FIX: Check if user is owner before redirecting to onboarding
-          // Only owners can complete onboarding, invited users should see pending page
-          if (tenant.is_owner) {
+          // CNAK/RFQ-lite tenants enter the app (restricted) — incompleteness
+          // IS their tier; they are never forced into onboarding. Ref, not
+          // state: checkOnboardingStatus just derived it this tick.
+          if (liteTierRef.current) {
+            console.log(`Lite tenant (${liteTierRef.current}) — entering app with restricted access`);
+            navigate('/ops/cockpit');
+          } else if (tenant.is_owner) {
+            // FIX: Check if user is owner before redirecting to onboarding
+            // Only owners can complete onboarding, invited users should see pending page
             console.log('Owner needs to complete onboarding');
             navigate('/onboarding');
           } else {
@@ -1212,7 +1297,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastName: userData.lastName,
         workspaceName: userData.workspaceName,
         countryCode: userData.countryCode,
-        mobileNumber: userData.mobileNumber
+        mobileNumber: userData.mobileNumber,
+        ...(userData.cnakRef ? { cnakRef: userData.cnakRef, cnakSecret: userData.cnakSecret } : {})
       });
 
       storage.setRememberMe(true);
@@ -1281,6 +1367,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!data.tenant) {
         navigate('/create-tenant');
+      } else if (userData.cnakRef) {
+        // CNAK-lite signup: the backend flagged this tenant with the right
+        // lite onboarding_type ('cnak' buyer / 'cnak_vendor' seller, echoed
+        // in the register response) and auto-claimed the contract. Do NOT
+        // send them to onboarding — they land straight on the (restricted)
+        // app in the flavor matching their side of the contract.
+        setHasCompletedOnboarding(false);
+        applyLiteTier(onboardingTypeToLiteTier(data.onboarding_type) || 'cnak');
+
+        // Land in the environment the claimed contract lives in, so the
+        // contract is actually visible on first paint.
+        const claim = data.cnak_claim;
+        if (claim?.success && typeof claim?.contract?.is_live === 'boolean') {
+          localStorage.setItem(STORAGE_KEYS.IS_LIVE, String(claim.contract.is_live));
+          setIsLive(claim.contract.is_live);
+        }
+        if (claim && !claim.success) {
+          console.warn('CNAK auto-claim did not succeed at signup:', claim.error);
+        }
+        navigate('/ops/cockpit');
       } else {
         // Check if new user should go through onboarding
         const shouldOnboard = data.user?.user_metadata?.should_onboard !== false;
@@ -1476,6 +1582,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsMultiTenantEnabled(true);
     setRegistrationStatus(null);
     setHasCompletedOnboarding(false);
+    applyLiteTier(null);
 
     setUserContext(null, null, isLive);
 
@@ -1501,6 +1608,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Reset onboarding state for new tenant — must re-check from API
     setHasCompletedOnboarding(false);
+    applyLiteTier(null);
 
     // Reset perspective so it re-initializes from new tenant's profile
     setPerspective('revenue');
@@ -1589,7 +1697,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasCompletedOnboarding,
     checkOnboardingStatus,
     markOnboardingComplete,
-    skipOnboarding
+    skipOnboarding,
+    liteTier
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

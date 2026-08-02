@@ -34,6 +34,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTenantContext } from '@/contexts/TenantContext';
 import { useAuth, type Perspective } from '@/context/AuthContext';
+import LiteDashboard from '@/components/lite/LiteDashboard';
 import FinanceActionChips from '@/components/ops/FinanceActionChips';
 import { useContractStats, useContracts, useContractOperations } from '@/hooks/queries/useContractQueries';
 import {
@@ -1503,4 +1504,18 @@ const OpsCockpitPage: React.FC = () => {
   );
 };
 
-export default OpsCockpitPage;
+// ─────────────────────────────────────────────────────────────────────────
+// CNAK/RFQ-lite: lite tenants get the LiteDashboard (stat row, "What needs
+// you", hero cross-sell) instead of the full cockpit. Wrapper component so
+// the two components keep their own hook orders — the tier only changes
+// across a remount (onboarding completion hard-navigates), never mid-render.
+// ─────────────────────────────────────────────────────────────────────────
+const OpsCockpitPageGate: React.FC = () => {
+  const { liteTier } = useAuth();
+  if (liteTier) {
+    return <LiteDashboard flavor={liteTier} />;
+  }
+  return <OpsCockpitPage />;
+};
+
+export default OpsCockpitPageGate;

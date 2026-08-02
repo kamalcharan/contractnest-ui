@@ -16,7 +16,7 @@ const LoginPage: React.FC = () => {
   const [message, setMessage] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   // FIXED: Added hasCompletedOnboarding and currentTenant to properly handle redirects
-  const { login, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding, currentTenant } = useAuth();
+  const { login, isAuthenticated, isLoading, error, clearError, hasCompletedOnboarding, liteTier, currentTenant } = useAuth();
   const { isDarkMode, currentTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
@@ -56,6 +56,11 @@ const LoginPage: React.FC = () => {
       if (hasCompletedOnboarding) {
         console.log('[LoginPage] Already authenticated with completed onboarding - redirecting to dashboard');
         navigate('/ops/cockpit', { replace: true });
+      } else if (liteTier) {
+        // CNAK/RFQ-lite: incomplete onboarding is their tier, not a blocker —
+        // they enter the (restricted) app, never forced into onboarding.
+        console.log(`[LoginPage] Lite tenant (${liteTier}) - redirecting to app`);
+        navigate('/ops/cockpit', { replace: true });
       } else if (currentTenant.is_owner) {
         console.log('[LoginPage] Already authenticated but onboarding not complete (owner) - redirecting to onboarding');
         navigate('/onboarding', { replace: true });
@@ -64,7 +69,7 @@ const LoginPage: React.FC = () => {
         navigate('/onboarding-pending', { replace: true });
       }
     }
-  }, [isAuthenticated, isLoading, navigate, hasCompletedOnboarding, currentTenant]);
+  }, [isAuthenticated, isLoading, navigate, hasCompletedOnboarding, liteTier, currentTenant]);
 
   // Check for message from navigate state (e.g., after registration)
   useEffect(() => {

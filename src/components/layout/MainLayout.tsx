@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import LiteRouteGate from '../lite/LiteRouteGate';
 
 // Routes that should auto-collapse the sidebar for more workspace
 const AUTO_COLLAPSE_ROUTES = [
@@ -64,7 +65,11 @@ const MainLayout: React.FC = () => {
         {/* Main content - Updated to fix scrollbar issue */}
         <div className="flex-grow rounded-lg overflow-hidden bg-page-background">
           <div className="h-full overflow-auto">
-            <Outlet />
+            {/* CNAK/RFQ-lite: restricted routes render the problem-led
+                cross-sell state instead of the feature (no-op for full tenants) */}
+            <LiteRouteGate>
+              <Outlet />
+            </LiteRouteGate>
           </div>
         </div>
       </div>

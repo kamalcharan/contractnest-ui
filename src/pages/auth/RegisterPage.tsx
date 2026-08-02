@@ -31,6 +31,27 @@ const RegisterPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const cnakRef = searchParams.get('ref');
 
+  // CNAK-lite: the review page stores its full return URL (with cnak+secret)
+  // in sessionStorage before redirecting here with only ?ref=<CNAK>. Recover
+  // the secret from that stored URL so the backend can AUTO-claim the
+  // contract on signup; without it the user falls back to a manual
+  // mobile-verified claim later.
+  const cnakSecret = React.useMemo(() => {
+    if (!cnakRef) return undefined;
+    try {
+      const stored = sessionStorage.getItem('contractnest_auth_redirect') || '';
+      const qs = stored.split('?')[1];
+      if (!qs) return undefined;
+      const params = new URLSearchParams(qs);
+      const storedCnak = (params.get('cnak') || '').toUpperCase();
+      const secret = params.get('secret') || undefined;
+      // Only trust the secret if it belongs to the same CNAK we arrived with
+      return storedCnak && storedCnak === cnakRef.toUpperCase() ? secret : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [cnakRef]);
+
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -154,6 +175,7 @@ const RegisterPage: React.FC = () => {
         firstName: formData.firstName,
         lastName: formData.lastName,
         workspaceName: formData.workspaceName.trim(),
+        ...(cnakRef ? { cnakRef, cnakSecret } : {}),
       });
       analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_SUCCESS, {
         workspace_name: formData.workspaceName,

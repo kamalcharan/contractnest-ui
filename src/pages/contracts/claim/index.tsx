@@ -54,8 +54,13 @@ const ClaimContractPage: React.FC = () => {
 
   // Get CNAK from URL if provided (e.g., /contracts/claim?code=CNAK-XXXXXX)
   const initialCnak = searchParams.get('code') || searchParams.get('cnak') || '';
+  // CNAK-lite v2: a bare CNAK no longer claims. Either the secret rides in on
+  // the URL (?secret=..., from a review-link hand-off — silent auto-verify),
+  // or the buyer types the mobile number the seller has on file.
+  const urlSecret = searchParams.get('secret') || '';
 
   const [cnak, setCnak] = useState(initialCnak);
+  const [mobile, setMobile] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [claimResult, setClaimResult] = useState<ClaimResponse | null>(null);
   const submissionInProgressRef = useRef(false);
@@ -112,6 +117,14 @@ const ClaimContractPage: React.FC = () => {
       return;
     }
 
+    // Verification: secret from the review link (silent), or the registered
+    // mobile number typed below — the backend rejects a bare CNAK.
+    const mobileDigits = mobile.replace(/\D/g, '');
+    if (!urlSecret && mobileDigits.length < 10) {
+      vaniToast.error('Enter the mobile number this contract was shared with (at least 10 digits)');
+      return;
+    }
+
     if (!currentTenant?.id) {
       vaniToast.error('No workspace selected. Please select a workspace first.');
       return;
@@ -122,7 +135,9 @@ const ClaimContractPage: React.FC = () => {
       setIsSubmitting(true);
 
       const response = await api.post<ClaimResponse>(API_ENDPOINTS.CONTRACTS.CLAIM, {
-        cnak: trimmedCnak
+        cnak: trimmedCnak,
+        ...(urlSecret ? { secret: urlSecret } : {}),
+        ...(mobileDigits.length >= 10 ? { mobile: mobileDigits } : {})
       });
 
       const result = response.data;
@@ -303,10 +318,53 @@ const ClaimContractPage: React.FC = () => {
                   </p>
                 </div>
 
+                {/* Mobile verification — hidden when the review-link secret is present */}
+                {!urlSecret && (
+                  <div className="mb-6">
+                    <label
+                      htmlFor="claim-mobile-input"
+                      className="block text-sm font-semibold mb-3 transition-colors"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      Registered Mobile Number
+                    </label>
+                    <div className="relative">
+                      <div
+                        className="absolute left-4 top-1/2 -translate-y-1/2 transition-colors"
+                        style={{ color: colors.utility.secondaryText }}
+                      >
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <input
+                        id="claim-mobile-input"
+                        type="tel"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="Mobile number the contract was shared with"
+                        className="w-full pl-12 pr-4 py-4 rounded-xl border-2 text-lg focus:outline-none transition-all"
+                        style={{
+                          backgroundColor: colors.utility.primaryBackground,
+                          borderColor: mobile
+                            ? (mobile.replace(/\D/g, '').length >= 10 ? colors.semantic.success : colors.semantic.warning)
+                            : colors.utility.primaryText + '20',
+                          color: colors.utility.primaryText,
+                        }}
+                        autoComplete="tel"
+                      />
+                    </div>
+                    <p
+                      className="text-sm mt-3 transition-colors"
+                      style={{ color: colors.utility.secondaryText }}
+                    >
+                      To verify it's you, enter the mobile number the contract owner has on file for you.
+                    </p>
+                  </div>
+                )}
+
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={!isValidCnak(cnak) || isSubmitting}
+                  disabled={!isValidCnak(cnak) || (!urlSecret && mobile.replace(/\D/g, '').length < 10) || isSubmitting}
                   className="w-full py-4 px-6 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   style={{
                     backgroundColor: isValidCnak(cnak) ? colors.brand.primary : (colors.utility.primaryText + '20'),
@@ -398,6 +456,27 @@ const ClaimContractPage: React.FC = () => {
                             </div>
                           )}
                         </div>
+                      )}
+
+                      {/* Registry nudge: the dashboard's registry-intel card
+                          lists the assets this contract covers and adds them
+                          to the buyer's registry in one tap. */}
+                      {!claimResult.already_claimed && (
+                        <button
+                          onClick={() => navigate('/ops/cockpit')}
+                          className="w-full mb-3 px-4 py-3 rounded-lg text-left text-sm transition-all hover:opacity-90"
+                          style={{
+                            backgroundColor: colors.brand.primary + '10',
+                            border: `1px dashed ${colors.brand.primary}66`,
+                            color: colors.utility.primaryText
+                          }}
+                        >
+                          <span className="font-semibold" style={{ color: colors.brand.primary }}>
+                            Next:
+                          </span>{' '}
+                          this contract lists the equipment it covers — add them to your
+                          registry from your dashboard in one tap.
+                        </button>
                       )}
 
                       <div className="flex gap-3">

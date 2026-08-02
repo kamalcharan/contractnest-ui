@@ -7,6 +7,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { MessageSquare, HelpCircle, Settings, Loader2 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { getGroupedSettingsMetadata, GroupedSettingsMetadata } from '../../utils/constants/settingsMenus';
+import { LITE_RESTRICTED_SETTINGS, getLiteCrossSellCopy, LiteCrossSellCopy } from '../../utils/constants/liteAccess';
+import TrialCrossSellModal from '../../components/lite/TrialCrossSellModal';
 
 // ============================================================================
 // Glassmorphic Group Card Component
@@ -76,6 +78,9 @@ interface GlassSettingsItemProps {
     onClick: () => void;
     isDarkMode: boolean;
     colors: any;
+    // CNAK/RFQ-lite: tile is trial-gated — shows a ✦ TRIAL badge; the click
+    // opens the cross-sell modal instead of navigating (handled by caller).
+    trialGated?: boolean;
 }
 
 const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
@@ -84,7 +89,8 @@ const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
     description,
     onClick,
     isDarkMode,
-    colors
+    colors,
+    trialGated = false
 }) => {
     return (
         <div
@@ -127,10 +133,22 @@ const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
                     {/* Text Content */}
                     <div className="flex flex-col">
                         <h3
-                            className="font-medium text-sm transition-colors"
+                            className="font-medium text-sm transition-colors flex items-center gap-2"
                             style={{ color: colors.utility.primaryText }}
                         >
                             {title}
+                            {trialGated && (
+                                <span
+                                    className="text-[9px] font-extrabold tracking-wide rounded-full px-2 py-0.5"
+                                    style={{
+                                        color: colors.brand.primary,
+                                        backgroundColor: `${colors.brand.primary}12`,
+                                        border: `1px solid ${colors.brand.primary}40`
+                                    }}
+                                >
+                                    ✦ TRIAL
+                                </span>
+                            )}
                         </h3>
                         <p
                             className="text-xs mt-0.5 transition-colors"
@@ -163,7 +181,7 @@ const GlassSettingsItem: React.FC<GlassSettingsItemProps> = ({
 // ============================================================================
 const SettingsPage = () => {
     const navigate = useNavigate();
-    const { currentTenant } = useAuth();
+    const { currentTenant, liteTier } = useAuth();
     const { isDarkMode, currentTheme } = useTheme();
 
     // Get theme colors
@@ -171,6 +189,8 @@ const SettingsPage = () => {
 
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<GroupedSettingsMetadata>({});
+    // CNAK/RFQ-lite: which cross-sell copy the trial modal is showing (null = closed)
+    const [trialCopy, setTrialCopy] = useState<LiteCrossSellCopy | null>(null);
 
     // Load settings from constants file
     useEffect(() => {
@@ -184,7 +204,14 @@ const SettingsPage = () => {
         return () => clearTimeout(timer);
     }, []);
 
-    const handleCardClick = (route: string | null, cardName: string) => {
+    const handleCardClick = (route: string | null, cardName: string, itemId?: string) => {
+        // CNAK/RFQ-lite: trial-gated tiles open the cross-sell modal instead
+        // of navigating. (The route itself is also guarded by LiteRouteGate,
+        // so a deep link can't slip past this.)
+        if (liteTier && itemId && LITE_RESTRICTED_SETTINGS[itemId]) {
+            setTrialCopy(getLiteCrossSellCopy(liteTier, LITE_RESTRICTED_SETTINGS[itemId]));
+            return;
+        }
         if (route) {
             navigate(route);
         }
@@ -371,9 +398,10 @@ const SettingsPage = () => {
                                                 icon={getIcon(item.card_icon_name)}
                                                 title={item.settings_type}
                                                 description={item.description_long || ''}
-                                                onClick={() => handleCardClick(item.route_path, item.settings_type)}
+                                                onClick={() => handleCardClick(item.route_path, item.settings_type, item.id)}
                                                 isDarkMode={isDarkMode}
                                                 colors={colors}
+                                                trialGated={Boolean(liteTier && LITE_RESTRICTED_SETTINGS[item.id])}
                                             />
                                         ))}
                                     </div>
@@ -383,6 +411,13 @@ const SettingsPage = () => {
                     })}
                 </div>
             </div>
+
+            {/* CNAK/RFQ-lite trial cross-sell modal */}
+            <TrialCrossSellModal
+                open={trialCopy !== null}
+                copy={trialCopy}
+                onClose={() => setTrialCopy(null)}
+            />
         </div>
     );
 };
