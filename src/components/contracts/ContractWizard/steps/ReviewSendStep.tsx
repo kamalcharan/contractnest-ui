@@ -89,6 +89,11 @@ export interface ReviewSendStepProps {
   // Sprint 1 contract-level discount — shown on the exported document chain
   discountType?: 'percent' | 'amount' | null;
   discountValue?: number;
+  // Cross-tenant buyer view: the seller's identity to render as Service
+  // Provider. Without it the document falls back to the viewing tenant's own
+  // profile — correct in the wizard (author IS the seller), wrong when a
+  // buyer opens a claimed contract (both parties rendered as the buyer).
+  providerOverride?: { name: string; logoUrl?: string | null; lines?: string[] } | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -162,6 +167,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   forcedViewMode,
   discountType = null,
   discountValue = 0,
+  providerOverride = null,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -264,9 +270,9 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
           : contractStatus === 'pending_acceptance'
             ? 'Awaiting acceptance'
             : `${contractStatus || 'draft'} — awaiting acceptance`,
-      providerName: tenantProfile?.business_name || 'Your Company',
-      providerLogoUrl: tenantProfile?.logo_url,
-      providerLines,
+      providerName: providerOverride?.name || tenantProfile?.business_name || 'Your Company',
+      providerLogoUrl: providerOverride ? (providerOverride.logoUrl ?? null) : tenantProfile?.logo_url,
+      providerLines: providerOverride ? (providerOverride.lines || []) : providerLines,
       customerName: isTemplate ? null : (buyerDisplayName === 'Not selected' ? null : buyerDisplayName),
       customerLines,
       durationValue,
@@ -282,7 +288,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
       discountType,
       discountValue,
     });
-  }, [tenantProfile, buyerDisplayName, buyerPrimaryEmail, buyerPrimaryPhone, contractName, contractStatus, contractNumber, startDateProp, rfqMode, isTemplate, durationValue, durationUnit, acceptanceMethod, currency, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, discountType, discountValue]);
+  }, [tenantProfile, providerOverride, buyerDisplayName, buyerPrimaryEmail, buyerPrimaryPhone, contractName, contractStatus, contractNumber, startDateProp, rfqMode, isTemplate, durationValue, durationUnit, acceptanceMethod, currency, selectedBlocks, paymentMode, emiMonths, perBlockPaymentType, billingCycleType, discountType, discountValue]);
 
   // ─── Group blocks by category ────────────────────────────────────
   // Billing-only blocks (fees/dues — no service visits) group under Billing,

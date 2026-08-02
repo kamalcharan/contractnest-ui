@@ -1,7 +1,7 @@
 // src/pages/contracts/detail/index.tsx
 // Contract 360° View — full lifecycle dashboard
 // R4: Buyer view + Document tab + edge cases (draft/cancelled/expired)
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
@@ -87,6 +87,7 @@ import type { CreateOrderResponse } from '@/hooks/queries/usePaymentGatewayQueri
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSendStep';
 import { useContractRole } from '@/hooks/useContractRole';
+import { useContact } from '@/hooks/useContacts';
 import { useContractHealth } from '@/hooks/useContractHealth';
 import ContractHealthCard from '@/components/contracts/ContractHealthCard';
 import SellerOverview from '@/components/contracts/SellerOverview';
@@ -2038,6 +2039,25 @@ const ContractDetailPage: React.FC = () => {
   // ─── Dual-persona role + health ───
   const { role, isSeller, isBuyer, permissions } = useContractRole(contract ?? null);
 
+  // ─── Buyer view: seller identity for the Document tab ───
+  // ReviewSendStep renders the viewing tenant's own profile as Service
+  // Provider (correct in the wizard where the author is the seller). A buyer
+  // opening a claimed contract would see themselves on both sides, so pass
+  // the real seller (resolved by the API into seller_company/seller_name,
+  // channels via the vendor contact in the buyer's workspace) as an override.
+  const { data: sellerContact } = useContact(isBuyer ? (contract?.seller_contact_id || '') : '');
+  const sellerProviderOverride = useMemo(() => {
+    if (!isBuyer || !contract) return null;
+    const channels = sellerContact?.contact_channels || [];
+    const email = channels.find((c) => c.channel_type === 'email')?.value;
+    const phone = channels.find((c) => c.channel_type === 'mobile' || c.channel_type === 'phone')?.value;
+    return {
+      name: contract.seller_company || contract.seller_name || 'Service Provider',
+      logoUrl: null,
+      lines: [phone, email].filter(Boolean) as string[],
+    };
+  }, [isBuyer, contract, sellerContact]);
+
   // ─── Edge cases: draft/cancelled/expired default to seller/creator view ───
   const isTerminalState = contract?.status === 'cancelled' || contract?.status === 'expired';
   const isDraft = contract?.status === 'draft';
@@ -2582,7 +2602,7 @@ const ContractDetailPage: React.FC = () => {
       case 'document':
         return (
           <div className="-mx-6 -mt-4">
-            <ReviewSendStep {...mapContractToReviewProps(contract)} forcedViewMode={showBuyerView ? 'client' : 'self'} />
+            <ReviewSendStep {...mapContractToReviewProps(contract)} forcedViewMode={showBuyerView ? 'client' : 'self'} providerOverride={sellerProviderOverride} />
           </div>
         );
       case 'audit':
