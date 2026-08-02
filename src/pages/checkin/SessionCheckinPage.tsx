@@ -289,6 +289,11 @@ const SessionCheckinPage: React.FC = () => {
   // reference once they switch back to this tab.
   const [paymentAttempted, setPaymentAttempted] = useState(false);
   const [showReturnNudge, setShowReturnNudge] = useState(false);
+  // Pre-departure alert: shown when the member taps "Open UPI app", BEFORE
+  // we hand them to GPay/PhonePe. The deep link gives no signal that they
+  // ever return, so the contract is made explicit up front: pay, note the
+  // UPI reference, come back and confirm — check-in isn't done until then.
+  const [showLeaveAlert, setShowLeaveAlert] = useState(false);
   const [copiedVpa, setCopiedVpa] = useState(false);
 
   // Resolve the token + load the check-in form on mount
@@ -762,7 +767,13 @@ const SessionCheckinPage: React.FC = () => {
       setCopiedVpa(true);
       window.setTimeout(() => setCopiedVpa(false), 2000);
     };
+    // First tap only raises the come-back alert; the actual app launch
+    // happens from the alert's confirm button (proceedToUpiApp).
     const openUpiApp = () => {
+      setShowLeaveAlert(true);
+    };
+    const proceedToUpiApp = () => {
+      setShowLeaveAlert(false);
       copyVpa();
       setPaymentAttempted(true);
       try { window.location.href = 'upi://pay'; } catch { /* no UPI app registered -- instructions below cover a manual open */ }
@@ -808,6 +819,45 @@ const SessionCheckinPage: React.FC = () => {
             <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
               Copies the UPI ID and tries to open your UPI app. If nothing opens, launch GPay / PhonePe / any UPI app yourself and choose "Pay to UPI ID."
             </p>
+
+            {/* Come-back alert — the one moment we have the member's full
+                attention before GPay swallows them. Bottom-sheet style on
+                mobile, plain overlay; no dependencies. */}
+            {showLeaveAlert && (
+              <div
+                role="dialog" aria-modal="true" aria-label="Before you go to your UPI app"
+                style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
+                  alignItems: 'flex-end', justifyContent: 'center',
+                  background: 'rgba(15,15,20,0.55)' }}
+                onClick={() => setShowLeaveAlert(false)}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: '100%', maxWidth: 430, background: '#fff',
+                    borderRadius: '18px 18px 0 0', padding: '20px 18px 18px' }}
+                >
+                  <div style={{ fontSize: 17, fontWeight: 800, color: BRAND.ink, marginBottom: 8 }}>
+                    Pay, then come back here 👋
+                  </div>
+                  <ol style={{ margin: 0, paddingLeft: 18, color: BRAND.sub, fontSize: 13.5, lineHeight: 1.7 }}>
+                    <li>Your UPI ID is copied — pay {money(amount, currency)} in your UPI app ("Pay to UPI ID")</li>
+                    <li><b style={{ color: BRAND.ink }}>Note the UPI reference number</b> from the payment screen</li>
+                    <li><b style={{ color: BRAND.ink }}>Return to this page</b> and enter it — your check-in is not recorded until you do</li>
+                  </ol>
+                  <button type="button" onClick={proceedToUpiApp}
+                    style={{ width: '100%', marginTop: 16, padding: 13, border: 'none', borderRadius: 12,
+                      background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+                    Got it — open UPI app
+                  </button>
+                  <button type="button" onClick={() => setShowLeaveAlert(false)}
+                    style={{ width: '100%', marginTop: 8, padding: 11, borderRadius: 12,
+                      border: `1.5px solid ${BRAND.line}`, background: '#fff',
+                      color: BRAND.sub, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div style={{ marginTop: 14 }}>
