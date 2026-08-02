@@ -35,3 +35,24 @@ export async function completeVaniStep(
     return false;
   }
 }
+
+/**
+ * Explicitly flip t_tenant_onboarding.is_completed via the dedicated
+ * POST /api/onboarding/complete endpoint (API → edge → unconditional update).
+ *
+ * WHY THIS EXISTS: completion used to depend on the edge function's
+ * step-counting rule firing off a fire-and-forget 'done' write that a hard
+ * navigation cancelled ~250ms later — so most tenants were never marked
+ * complete and got forced back into onboarding on every login. Callers at
+ * the end of the flow AWAIT this (bounded), so the flag actually lands.
+ * Idempotent: re-completing an already-complete record is a no-op update.
+ */
+export async function markOnboardingComplete(): Promise<boolean> {
+  try {
+    await api.post('/api/onboarding/complete');
+    return true;
+  } catch (err: any) {
+    console.error('[onboarding] Failed to mark onboarding complete:', err?.response?.data?.error || err?.message);
+    return false;
+  }
+}

@@ -205,6 +205,114 @@ api.interceptors.request.use(
   }
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// TOKEN REFRESH ON 401
+//
+// The Supabase access token expires (~1h) and, until this block existed,
+// NOTHING ever used the refresh_token that login stores: the first 401 after
+// expiry silently wiped auth storage (no logout, no redirect) and the app
+// kept running as a zombie on axios's in-memory Authorization default —
+// everything appeared fine until the next hard navigation re-initialised
+// AuthContext from the wiped storage and dumped the user on /login
+// ("logged off after creating a contract", because PlanStep's hand-off to
+// /ops/cockpit is the one hard reload in the express flow).
+//
+// Now: a 401 on any non-credential endpoint triggers ONE single-flight
+// refresh via POST /api/auth/refresh-token (existing endpoint, edge-backed);
+// the failed request is retried once with the new token. Only if the refresh
+// itself fails is the session truly dead — storage is cleared AND a
+// 'cn:auth-expired' event tells AuthContext to log out properly (state,
+// toast, navigate) instead of leaving a zombie.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Endpoints where a 401 means "credentials are wrong", not "token expired" —
+// refreshing would loop or mask a real failure. Everything else (including
+// /api/auth/user, which initAuth calls on every hard reload) is refreshable.
+const NON_REFRESHABLE_ENDPOINTS = [
+  '/api/auth/login',
+  '/api/auth/refresh-token',
+  '/api/auth/register',
+  '/api/auth/signout',
+  '/api/auth/reset-password',
+  '/api/auth/verify-password',
+];
+
+// Single-flight: concurrent 401s share one refresh call instead of racing,
+// which matters because Supabase rotates the refresh token on every use —
+// two parallel refreshes with the same token would invalidate each other.
+let refreshInFlight: Promise<string | null> | null = null;
+
+const readStoredRefreshToken = (): { token: string | null; store: Storage } => {
+  // Mirrors AuthContext: tokens live in localStorage when "remember me" is
+  // on, sessionStorage otherwise. Whichever holds the refresh token is the
+  // store the new pair must go back into.
+  const local = localStorage.getItem('refresh_token');
+  if (local) return { token: local, store: localStorage };
+  return { token: sessionStorage.getItem('refresh_token'), store: sessionStorage };
+};
+
+const refreshAuthToken = (): Promise<string | null> => {
+  if (!refreshInFlight) {
+    refreshInFlight = (async (): Promise<string | null> => {
+      const { token: refreshToken, store } = readStoredRefreshToken();
+      if (!refreshToken) return null;
+      try {
+        // Bare axios, not `api`: the instance interceptors must not run on
+        // the refresh call itself (no auth header needed, no retry recursion).
+        const resp = await axios.post(
+          `${API_URL}/api/auth/refresh-token`,
+          { refresh_token: refreshToken },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+        );
+        // Edge handler returns a flat payload; tolerate a {data:{...}} wrapper.
+        const payload = resp.data?.access_token ? resp.data : resp.data?.data;
+        const newAccess: string | undefined = payload?.access_token;
+        if (!newAccess) return null;
+        store.setItem('auth_token', newAccess);
+        if (payload?.refresh_token) store.setItem('refresh_token', payload.refresh_token);
+        api.defaults.headers.common['Authorization'] = `Bearer ${newAccess}`;
+        console.log('[API] Access token refreshed after 401');
+        return newAccess;
+      } catch (refreshErr: any) {
+        console.warn('[API] Token refresh failed:', refreshErr?.response?.data?.error || refreshErr?.message);
+        return null;
+      } finally {
+        // Reset AFTER settling so late subscribers of this flight still get
+        // its result, and the next expiry starts a fresh flight.
+        refreshInFlight = null;
+      }
+    })();
+  }
+  return refreshInFlight;
+};
+
+// The session is genuinely dead: clear every trace and hand control to
+// AuthContext (which listens for this event and does a clean state logout +
+// toast + navigate). The window fallback covers the pathological case where
+// no listener is mounted.
+const handleAuthExpired = () => {
+  localStorage.removeItem('auth_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('tenant_id');
+  sessionStorage.removeItem('auth_token');
+  sessionStorage.removeItem('refresh_token');
+  sessionStorage.removeItem('tenant_id');
+  sessionStorage.removeItem('session_id');
+  delete api.defaults.headers.common['Authorization'];
+
+  const currentPath = window.location.pathname;
+  const onPublicAuthPage =
+    currentPath.startsWith('/login') ||
+    currentPath.startsWith('/register') ||
+    currentPath.startsWith('/signup') ||
+    currentPath.startsWith('/forgot-password') ||
+    currentPath.startsWith('/reset-password');
+
+  if (!onPublicAuthPage) {
+    window.dispatchEvent(new CustomEvent('cn:auth-expired'));
+  }
+};
+
 // Response interceptor to handle maintenance mode, session conflicts, API down, and errors
 api.interceptors.response.use(
   (response) => {
@@ -255,7 +363,7 @@ api.interceptors.response.use(
 
     return response;
   },
-  (error) => {
+  async (error) => {
     // Debug logging for errors
     if (import.meta.env.VITE_DEBUG_MODE === 'true') {
       console.error('[API] Response error:', {
@@ -332,22 +440,31 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle regular 401
+    // Handle regular 401 — refresh once and retry, instead of the old
+    // silent storage wipe that left the app running as a zombie on axios's
+    // in-memory header until the next hard reload logged the user out.
     if (error.response?.status === 401) {
-      const isAuthEndpoint = error.config?.url?.includes('/auth/');
-      if (!isAuthEndpoint) {
-        const currentPath = window.location.pathname;
-        if (!currentPath.startsWith('/login') &&
-          !currentPath.startsWith('/register') &&
-          !currentPath.startsWith('/forgot-password')) {
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('tenant_id');
-          sessionStorage.removeItem('auth_token');
-          sessionStorage.removeItem('tenant_id');
-          sessionStorage.removeItem('session_id');
+      const originalRequest = error.config;
+      const url: string = originalRequest?.url || '';
+      const isNonRefreshable = NON_REFRESHABLE_ENDPOINTS.some((endpoint) => url.includes(endpoint));
 
-          return Promise.reject(error);
+      if (!isNonRefreshable && originalRequest && !originalRequest._authRetry) {
+        originalRequest._authRetry = true; // one retry per request, ever
+
+        const newToken = await refreshAuthToken();
+        if (newToken) {
+          // Re-issue through the instance: the request interceptor runs
+          // again and picks up the refreshed token + current headers.
+          originalRequest.headers = {
+            ...originalRequest.headers,
+            Authorization: `Bearer ${newToken}`,
+          };
+          return api(originalRequest);
         }
+
+        // Refresh failed → session is really over. Clean up properly and
+        // let AuthContext log the user out visibly (toast + /login).
+        handleAuthExpired();
       }
     }
 

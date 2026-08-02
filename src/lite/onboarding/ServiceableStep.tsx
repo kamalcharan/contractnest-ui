@@ -32,6 +32,7 @@ import { useKnowledgeTreeCoverage, knowledgeTreeKeys } from '@/hooks/queries/use
 import { resourceTemplateKeys } from '@/hooks/queries/useResourceTemplates';
 import { vaniToast } from '@/components/common/toast';
 import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
+import { readPendingSideActivation } from '@/utils/perspective/sideActivation';
 
 import ExpressShell from './ExpressShell';
 import { useGlobalResourceTemplates, type GlobalTemplate } from './useGlobalTemplates';
@@ -118,12 +119,36 @@ export const ServiceableStep: React.FC = () => {
   const personaId: PersonaId | null = normalisePersona(
     (formData as unknown as { persona?: string })?.persona || formData?.business_type_id
   );
-  const isSeller = personaId === 'seller' || personaId === 'both';
+  // SIDE ACTIVATION OVERRIDE. When the perspective toggle sent an existing
+  // tenant here to activate ONE side, this screen asks that side's question
+  // and seeds only that side's leg — regardless of persona (which is now
+  // 'both'). Without the override, persona 'both' would trigger the
+  // dual-intent rule and seed everything they SERVICE into what they OWN —
+  // wrong data for an activation. Fresh signups (no hand-off set) behave
+  // exactly as before.
+  const activationSide = readPendingSideActivation();
+
+  const isSeller =
+    activationSide === 'expense' ? false :
+    activationSide === 'revenue' ? true :
+    (personaId === 'seller' || personaId === 'both');
   // A pure buyer services nothing and gets no sellable catalog — their picks go
   // into the equipment and facility registries, and become what they ask
   // vendors to quote against. 'both' keeps the seller wording, because they do
-  // both and the catalog half is the one that needs explaining.
-  const isBuyerOnly = personaId === 'buyer';
+  // both and the catalog half is the one that needs explaining. An EXPENSE
+  // activation flips to the buyer wording deliberately: the question is about
+  // what they own, not what they service.
+  const isBuyerOnly =
+    activationSide === 'expense' ? true :
+    activationSide === 'revenue' ? false :
+    personaId === 'buyer';
+
+  // What the seeder should run for this walk: only the activated side's leg,
+  // or (fresh signups) whatever the persona implies — decided server-side.
+  const seedBusinessType: 'buyer' | 'seller' | undefined =
+    activationSide === 'expense' ? 'buyer' :
+    activationSide === 'revenue' ? 'seller' :
+    undefined;
 
   const hasKT = (t: GlobalTemplate) => (ktCoverage?.[t.id]?.variants_count ?? 0) > 0;
 
@@ -433,6 +458,9 @@ export const ServiceableStep: React.FC = () => {
           selectedFacilityTemplates: selFac,
           selectedServiceTemplates: selSvc,
           personaId,
+          // Side activation: VaniWorkingStep seeds ONLY this leg (and walks
+          // that side's tail) instead of the persona's default behaviour.
+          seedBusinessType,
           workIntent: null,
           fromExpress: true,
         },
@@ -478,8 +506,9 @@ export const ServiceableStep: React.FC = () => {
         </div>
       ) : pool.length === 0 ? (
         <p className="cnx-empty">
-          Nothing in the catalog matches your setup yet. Continue with the full form and you
-          can build your services by hand in Catalog Studio.
+          Nothing in the catalog matches your setup yet — that&apos;s fine, nothing is blocked.
+          Once you&apos;re in, you can build your services by hand in Catalog Studio and VaNi
+          will flag your line of business for coverage.
         </p>
       ) : (
         <>

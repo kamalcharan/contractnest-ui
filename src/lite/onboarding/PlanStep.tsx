@@ -38,7 +38,7 @@ import PlanCard from '@/components/businessmodel/tenants/pricing/PlanCard';
 import { fakePricingPlans } from '@/utils/fakejson/PricingPlans';
 import { useTenantProfile } from '@/hooks/useTenantProfile';
 import { vaniToast } from '@/components/common/toast';
-import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
+import { completeVaniStep, markOnboardingComplete } from '@/utils/onboarding/completeVaniStep';
 
 import ExpressShell from './ExpressShell';
 import { normalisePersona, type PersonaId } from './expressFlow';
@@ -78,15 +78,30 @@ export const PlanStep: React.FC = () => {
    * request went to test. A full load re-seeds AuthContext from the same key,
    * so the badge tells the truth and the tenant can switch to live themselves.
    */
-  const leaveOnboarding = (planId: string | null) => {
+  const leaveOnboarding = async (planId: string | null) => {
     if (leaving) return;
     setLeaving(true);
-    completeVaniStep('done', { selected_plan_id: planId });
     if (planId) vaniToast.success('Noted — we will confirm your plan with you.');
-    // Give the fire-and-forget step write a moment to leave the tab.
-    window.setTimeout(() => {
+
+    // AWAIT the completion writes before the hard navigation. The old
+    // fire-and-forget + 250ms timeout cancelled the in-flight POST on most
+    // networks (UI → API → edge → DB is two hops), so t_tenant_onboarding
+    // was never marked complete and every next login forced onboarding
+    // again. Both writes go out together and the whole wait is bounded at
+    // 4s so a dead network can never trap the tenant on this screen —
+    // markOnboardingComplete is the unconditional is_completed flip, the
+    // 'done' step write keeps step_data/completed_steps truthful.
+    try {
+      await Promise.race([
+        Promise.allSettled([
+          completeVaniStep('done', { selected_plan_id: planId }),
+          markOnboardingComplete(),
+        ]),
+        new Promise((resolve) => window.setTimeout(resolve, 4000)),
+      ]);
+    } finally {
       window.location.assign(COCKPIT_PATH);
-    }, 250);
+    }
   };
 
   return (

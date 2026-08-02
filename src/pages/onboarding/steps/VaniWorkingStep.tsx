@@ -20,6 +20,7 @@ import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
 import { useServedIndustriesManager } from '@/hooks/queries/useServedIndustries';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
+import { TenantSeedService } from '@/services/TenantSeedService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -161,6 +162,17 @@ const VaniWorkingStep: React.FC = () => {
   // Read personaId from route state first (sync) to avoid async formData race on task init
   const routePersonaId = incomingState.personaId as string | undefined;
   const personaId = normalizePersona(routePersonaId || (formData as any).persona || formData.business_type_id || '');
+
+  // SIDE ACTIVATION (perspective toggle → lite flow re-entry). When set by
+  // ServiceableStep, this walk seeds ONLY that side's leg and follows that
+  // side's tail — 'buyer' → registry → equipment-confirm, 'seller' → catalog
+  // → pricing-review — even though persona is now 'both'. Persona 'both'
+  // alone would dual-intent seed (service picks into the OWN registry too),
+  // which is wrong data for an activation. Fresh signups arrive without it
+  // and behave exactly as before.
+  const seedBusinessType = incomingState.seedBusinessType as 'buyer' | 'seller' | undefined;
+  const effectivePersona: PersonaId = (seedBusinessType as PersonaId | undefined) || personaId;
+
   const industryNames = servedIndustries.map(si => si.industry?.name || '').filter(Boolean);
   const industryIds = servedIndustries.map(si => si.industry_id);
   const companyName = formData.business_name?.trim() || currentTenant?.name || 'your company';
@@ -169,7 +181,7 @@ const VaniWorkingStep: React.FC = () => {
   const industryIdsRef = useRef<string[]>(industryIds);
   industryIdsRef.current = industryIds;
 
-  const tasks = buildTasks(personaId, industryNames, selectedEquipmentTemplates.length);
+  const tasks = buildTasks(effectivePersona, industryNames, selectedEquipmentTemplates.length);
 
   const [statuses, setStatuses] = useState<Record<string, StepStatus>>(() =>
     Object.fromEntries(tasks.map(t => [t.id, 'idle']))
@@ -281,7 +293,9 @@ const VaniWorkingStep: React.FC = () => {
           equipmentTemplateIds: selectedEquipmentTemplates.map((t: any) => t.id),
           facilityTemplateIds:  selectedFacilityTemplates.map((t: any) => t.id),
           serviceTemplateIds:   selectedServiceTemplates.map((t: any) => t.id),
-          businessType: personaId,
+          // effectivePersona: on a side activation this is the single leg to
+          // seed ('buyer'|'seller'); otherwise it IS the persona, unchanged.
+          businessType: effectivePersona,
           industryId,
           industryIds: industryIdsRef.current,
         });
@@ -339,23 +353,46 @@ const VaniWorkingStep: React.FC = () => {
       }
     }
 
-    // ── Sequences — real preflight check ─────────────────────────────────────
+    // ── Sequences — verify, explicit reseed if missing, verify again ─────────
+    // The old code waited 500ms and painted the tick green WITHOUT CHECKING
+    // ANYTHING. But the server-side seeding this relied on is non-fatal
+    // inside the template seed and (before the API fix shipped with this
+    // change) was skipped entirely on its no-coverage/error paths — verified
+    // live 2026-08-01: 84 of 119 tenants had ZERO sequence counters. A
+    // tenant without counters then creates contacts/contracts with NULL
+    // numbers, silently (get_next_formatted_sequence_v2 raises, its callers
+    // swallow the error). So: never a green tick without a verified counter.
     setStatus('sequences', 'running');
     setLiveOp('Checking sequence numbers…');
 
-    const { isSeeded: seqAlready, count: seqCount } = await checkSequencesAlreadySeeded();
-    if (seqAlready) {
+    let seqStatus = await checkSequencesAlreadySeeded();
+    if (seqStatus.isSeeded) {
       setStatus('sequences', 'skipped');
-      setDetail('sequences', `Already configured${seqCount > 0 ? ` · ${seqCount} sequences` : ''}`);
+      setDetail('sequences', `Already configured${seqStatus.count > 0 ? ` · ${seqStatus.count} sequences` : ''}`);
       setLiveOp('Sequences already configured — continuing…');
     } else {
+      // Missing → seed explicitly via the dedicated endpoint (seeds BOTH
+      // environments from the canonical seed data), then re-verify.
       setLiveOp('Configuring sequence numbers…');
-      // Sequences are seeded server-side as part of the industry seed call above.
-      // If not yet seeded, call seeds/status endpoint again after a short delay
-      // (sequences seeding happens inside the industry-confirmed seed call).
-      await new Promise(r => setTimeout(r, 500));
-      setStatus('sequences', 'done');
-      setDetail('sequences', tasks.find(t => t.id === 'sequences')!.detailDone);
+      try {
+        await TenantSeedService.seedSequences();
+      } catch (seqErr: any) {
+        console.warn('[VaniWorking] Explicit sequences seed failed:', seqErr?.message);
+      }
+      seqStatus = await checkSequencesAlreadySeeded();
+
+      if (seqStatus.isSeeded) {
+        setStatus('sequences', 'done');
+        setDetail('sequences', `${seqStatus.count > 0 ? `${seqStatus.count} sequences · ` : ''}test + live`);
+      } else {
+        setStatus('sequences', 'error');
+        setErrorMessages(prev => ({
+          ...prev,
+          sequences:
+            'Sequence numbers could not be configured — contract, invoice and contact numbering would fail. Retry, or seed them later from Settings → Sequencing.',
+        }));
+        return; // same contract as the other tasks: error state + Retry button
+      }
     }
     doneCount++;
     updateProgress(doneCount);
@@ -385,7 +422,9 @@ const VaniWorkingStep: React.FC = () => {
       industry_ids: industryIdsRef.current,
     });
 
-    const nextRoute = personaId === 'buyer'
+    // effectivePersona so a side activation walks the ACTIVATED side's tail:
+    // expense ('buyer') → equipment-confirm, revenue ('seller') → pricing.
+    const nextRoute = effectivePersona === 'buyer'
       ? '/onboarding/equipment-confirm'
       : '/onboarding/pricing-review';
 
@@ -427,9 +466,9 @@ const VaniWorkingStep: React.FC = () => {
   const doneCount = Object.values(statuses).filter(s => s === 'done' || s === 'skipped' || s === 'nocoverage').length;
   const etaSeconds = allDone ? 0 : Math.max(0, (totalTasks - doneCount) * 18);
 
-  const workingTitle = personaId === 'buyer'
+  const workingTitle = effectivePersona === 'buyer'
     ? 'Setting up your asset registry'
-    : personaId === 'both'
+    : effectivePersona === 'both'
     ? 'Setting up your catalog & registry'
     : 'Setting up your service catalog';
 
@@ -621,7 +660,7 @@ const VaniWorkingStep: React.FC = () => {
                 letterSpacing: 0.8, fontFamily: "'IBM Plex Mono', monospace",
                 color: 'rgba(255,255,255,.3)', marginBottom: 8,
               }}>
-                {personaId === 'buyer' ? 'Nodes Created' : 'Blocks Created'}
+                {effectivePersona === 'buyer' ? 'Nodes Created' : 'Blocks Created'}
               </div>
               <div style={{
                 fontSize: 52, fontWeight: 800, letterSpacing: -3, lineHeight: 1,
@@ -630,7 +669,7 @@ const VaniWorkingStep: React.FC = () => {
                 transition: 'all .3s ease',
                 animation: catalogBlocksSeeded > 0 || facilityNodesSeeded > 0 ? 'counterPop .3s ease both' : 'none',
               }}>
-                {personaId === 'buyer' ? facilityNodesSeeded : catalogBlocksSeeded}
+                {effectivePersona === 'buyer' ? facilityNodesSeeded : catalogBlocksSeeded}
               </div>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.3)', marginTop: 4 }}>
                 {allDone ? 'complete · test + live' : 'seeded so far'}
@@ -764,7 +803,7 @@ const VaniWorkingStep: React.FC = () => {
                 transition: 'all .3s ease',
               }}
             >
-              {personaId === 'buyer' ? 'Confirm your equipment →' : 'Next: Set your prices →'}
+              {effectivePersona === 'buyer' ? 'Confirm your equipment →' : 'Next: Set your prices →'}
             </button>
           </>
         )}

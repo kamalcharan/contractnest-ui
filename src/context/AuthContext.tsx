@@ -6,6 +6,8 @@ import { API_ENDPOINTS } from '../services/serviceURLs';
 import { vaniToast } from '../components/common/toast';
 import { setUserContext } from '../utils/sentry';
 import { sessionService } from '../services/sessionService';
+import { isRevenueSideReady, isExpenseSideReady } from '../utils/perspective/sideReadiness';
+import { setPendingSideActivation } from '../utils/perspective/sideActivation';
 
 // Constants for storage keys
 const STORAGE_KEYS = {
@@ -78,6 +80,9 @@ interface GoogleAuthData {
 // Perspective type — Revenue (client contracts) vs Expense (vendor contracts)
 export type Perspective = 'revenue' | 'expense';
 
+// Readiness of the perspective being switched INTO (see requestPerspectiveSwitch)
+export type PerspectiveReadiness = 'checking' | 'ready' | 'activation_needed';
+
 // Auth context interface
 interface AuthContextType {
   user: User | null;
@@ -109,8 +114,10 @@ interface AuthContextType {
   // Perspective switch modal
   showPerspectiveSwitchModal: boolean;
   pendingPerspective: Perspective | null;
+  pendingPerspectiveReadiness: PerspectiveReadiness;
   confirmPerspectiveSwitch: () => void;
   cancelPerspectiveSwitch: () => void;
+  activatePendingPerspective: () => void;
   // Google OAuth methods
   setGoogleAuthData: (data: GoogleAuthData) => void;
   setAuthToken: (token: string) => void;
@@ -181,6 +188,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Perspective switch modal state
   const [showPerspectiveSwitchModal, setShowPerspectiveSwitchModal] = useState<boolean>(false);
   const [pendingPerspective, setPendingPerspective] = useState<Perspective | null>(null);
+  // Readiness of the side being switched INTO: 'checking' while the probe
+  // runs, 'ready' → normal confirm, 'activation_needed' → empty-state offer.
+  const [pendingPerspectiveReadiness, setPendingPerspectiveReadiness] =
+    useState<PerspectiveReadiness>('ready');
+  // Monotonic token so a stale readiness probe can't update a modal that was
+  // cancelled/confirmed/superseded while it was in flight.
+  const perspectiveCheckSeqRef = useRef<number>(0);
 
   // Google OAuth state
   const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean>(false);
@@ -573,6 +587,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [isAuthenticated, isLocked]);
 
+  // ── Session expiry (dispatched by api.ts when a 401 can't be recovered by
+  // token refresh). Before this, api.ts silently wiped storage and the app
+  // kept running on axios's in-memory header — a zombie session that only
+  // died at the next hard reload, which read as a random logout. Now the
+  // user is logged out VISIBLY the moment the session is actually dead:
+  // state reset, a toast that says why, and a redirect to /login. No API
+  // signout call — the token is already invalid, and api.ts cleared storage.
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      console.warn('[AuthContext] Session expired (refresh failed) - logging out');
+      clearAllTimeouts();
+      sessionService.clearSession();
+      storage.clearAuth();
+      setUser(null);
+      setTenants([]);
+      setCurrentTenantState(null);
+      setIsAuthenticated(false);
+      setIsLocked(false);
+      setLockTime(null);
+      setRegistrationStatus(null);
+      setHasCompletedOnboarding(false);
+      vaniToast.error('Your session has expired — please sign in again.', { duration: 4000 });
+      navigate('/login');
+    };
+
+    window.addEventListener('cn:auth-expired', handleAuthExpired);
+    return () => window.removeEventListener('cn:auth-expired', handleAuthExpired);
+    // Registered once; everything used inside is either a stable setter or
+    // clears storage/timeouts irrespective of current closure state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Listen for lock/unlock events from other tabs
   useEffect(() => {
     if (!window.BroadcastChannel) return;
@@ -703,6 +749,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize auth state from storage
   useEffect(() => {
     const initAuth = async () => {
+      // Heal the register-flow store mismatch for sessions created before
+      // the register() fix: tokens were parked in sessionStorage while
+      // remember_me=true points every read at localStorage — the reload
+      // then found nothing and logged the brand-new tenant out. If the
+      // flag says localStorage but only sessionStorage has a token, move
+      // the whole auth set up before anything reads it.
+      if (
+        localStorage.getItem(STORAGE_KEYS.REMEMBER_ME) === 'true' &&
+        !localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) &&
+        sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN)
+      ) {
+        console.log('[AuthContext] Reconciling auth storage (session → local, remember_me=true)');
+        [
+          STORAGE_KEYS.AUTH_TOKEN,
+          STORAGE_KEYS.REFRESH_TOKEN,
+          STORAGE_KEYS.TENANT_ID,
+          STORAGE_KEYS.CURRENT_TENANT,
+          STORAGE_KEYS.USER_ID,
+          STORAGE_KEYS.USER_DATA,
+          STORAGE_KEYS.IS_ADMIN,
+        ].forEach((key) => {
+          const value = sessionStorage.getItem(key);
+          if (value !== null && localStorage.getItem(key) === null) {
+            localStorage.setItem(key, value);
+          }
+          sessionStorage.removeItem(key);
+        });
+      }
+
       const token = storage.getAuthToken();
       if (token) {
         try {
@@ -865,23 +940,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ── Perspective toggle (Revenue/Expense) ──────────────────────────
-  const togglePerspective = () => {
-    const target: Perspective = perspective === 'revenue' ? 'expense' : 'revenue';
+  //
+  // GATED SWITCH, both directions. Switching is only offered as a plain
+  // confirm when the target side actually has data behind it:
+  //   → Revenue: ≥1 catalog block (an expense-onboarded tenant has none)
+  //   → Expense: ≥1 OWN registry asset (a revenue-onboarded tenant has none;
+  //     their CLIENTS' assets don't count — see sideReadiness.ts)
+  // The modal opens in 'checking', resolves to 'ready' (normal confirm) or
+  // 'activation_needed' (empty-state offering to run the lite onboarding
+  // for the missing side).
+  const requestPerspectiveSwitch = (target: Perspective) => {
+    const seq = ++perspectiveCheckSeqRef.current;
     setPendingPerspective(target);
+    setPendingPerspectiveReadiness('checking');
     setShowPerspectiveSwitchModal(true);
+
+    const probe = target === 'revenue' ? isRevenueSideReady : isExpenseSideReady;
+    probe(currentTenant?.id || '', isLive).then((ready) => {
+      // A newer request/cancel/confirm supersedes this probe's result.
+      if (perspectiveCheckSeqRef.current !== seq) return;
+      setPendingPerspectiveReadiness(ready ? 'ready' : 'activation_needed');
+    });
+  };
+
+  const togglePerspective = () => {
+    requestPerspectiveSwitch(perspective === 'revenue' ? 'expense' : 'revenue');
   };
 
   // Set perspective directly (used by inline switchers on pages) — also shows modal
   const setPerspectiveDirectly = (p: Perspective) => {
     if (p === perspective) return;
-    setPendingPerspective(p);
-    setShowPerspectiveSwitchModal(true);
+    requestPerspectiveSwitch(p);
   };
 
   // Confirm perspective switch
   const confirmPerspectiveSwitch = () => {
     if (!pendingPerspective) return;
+    // Never blind-switch into a side that is still checking or needs
+    // activation — those states have their own affordances in the modal.
+    if (pendingPerspectiveReadiness !== 'ready') return;
 
+    perspectiveCheckSeqRef.current++;
     setShowPerspectiveSwitchModal(false);
 
     const label = pendingPerspective === 'revenue' ? 'Revenue' : 'Expense';
@@ -900,8 +999,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Cancel perspective switch
   const cancelPerspectiveSwitch = () => {
+    perspectiveCheckSeqRef.current++;
     setShowPerspectiveSwitchModal(false);
     setPendingPerspective(null);
+  };
+
+  // Activate the side behind the pending (unready) perspective: hand off to
+  // the lite onboarding flow, which is idempotent end to end — the seeder
+  // skips whatever already exists, so re-entering it as an existing tenant
+  // only ADDS the missing side. The sessionStorage hand-off makes that run
+  // side-aware: /start/serve asks the target side's question and the seeder
+  // runs ONLY the target leg (see utils/perspective/sideActivation.ts).
+  // BusinessPersonaStep pre-selects "Both" so the tenant keeps their
+  // existing side. Perspective is NOT switched here — after activation the
+  // flow's final hard reload re-derives it from the updated persona.
+  const activatePendingPerspective = () => {
+    const side = pendingPerspective;
+    if (side !== 'revenue' && side !== 'expense') return;
+    perspectiveCheckSeqRef.current++;
+    setShowPerspectiveSwitchModal(false);
+    setPendingPerspective(null);
+    setPendingSideActivation(side);
+    navigate('/start/business', { state: { activateSide: side } });
   };
 
   // Update user preferences
@@ -1097,11 +1216,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       storage.setRememberMe(true);
-      storage.setAuthToken(data.access_token, data.refresh_token);
+      setRememberMe(true);
+
+      // REGISTER-FLOW STORE MISMATCH FIX. The storage helper picks its store
+      // from THIS RENDER's rememberMe state — still false during a fresh
+      // registration — so storage.setAuthToken() would park the tokens in
+      // sessionStorage while the remember_me=true flag written above makes
+      // every RELOAD read localStorage. Result: the first hard navigation
+      // after signup (PlanStep → cockpit, or the buyer's RFQ hop) found no
+      // token and dumped the brand-new tenant on /login — the "system logged
+      // off after creating contract / opening the RFQ builder" bug. SPA
+      // navigation never noticed because the request interceptor checks both
+      // stores. Write the register session to localStorage DIRECTLY, matching
+      // the flag; initAuth also heals pre-fix sessions (see reconciliation).
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token);
+      }
+      api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
 
       setUser(data.user);
-      storage.setUserData(data.user);
-      storage.setUserId(data.user.id);
+      localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(data.user));
+      localStorage.setItem(STORAGE_KEYS.USER_ID, data.user.id);
       setRegistrationStatus('complete');
 
       const activeSessionKey = `active_session_${data.user.id}`;
@@ -1127,7 +1263,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.tenant) {
         setTenants([data.tenant]);
         setCurrentTenantState(data.tenant);
-        storage.setCurrentTenant(data.tenant);
+        // Same store-mismatch fix as the tokens above: write directly to
+        // localStorage (remember_me was just set true) instead of the
+        // render-stale storage helper.
+        localStorage.setItem(STORAGE_KEYS.CURRENT_TENANT, JSON.stringify(data.tenant));
+        localStorage.setItem(STORAGE_KEYS.TENANT_ID, data.tenant.id);
+        localStorage.setItem(STORAGE_KEYS.IS_ADMIN, String(data.tenant.is_admin || false));
+        api.defaults.headers.common['x-tenant-id'] = data.tenant.id;
       }
 
       setIsAuthenticated(true);
@@ -1426,8 +1568,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     cancelEnvironmentSwitch,
     showPerspectiveSwitchModal,
     pendingPerspective,
+    pendingPerspectiveReadiness,
     confirmPerspectiveSwitch,
     cancelPerspectiveSwitch,
+    activatePendingPerspective,
     setGoogleAuthData,
     setAuthToken,
     linkGoogleAccount,

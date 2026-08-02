@@ -80,7 +80,13 @@ const PLAN: JourneyStep = { id: 'plan', label: 'Your plan', path: '/start/plan',
  *   both    build -> prices -> terms -> assets -> lists -> done
  */
 export function journeyFor(persona: JourneyPersona): JourneyStep[] {
-  if (persona === 'buyer') return [BUSINESS, SERVE, BUILD, ASSETS, LISTS, DONE, CONTRACT, PLAN];
+  // Buyer ends at DONE. In this product the VENDOR authors contracts — a
+  // buyer's first act is an RFQ or claiming a CNAK, both offered on the done
+  // screen (VaniDoneStep 9B), which routes them OUT of onboarding. The rail
+  // used to promise "First contract" and "Your plan" steps a buyer never
+  // reached (and /start/contract cannot work for them: it authors from the
+  // tenant's own catalog, and a buyer has none).
+  if (persona === 'buyer') return [BUSINESS, SERVE, BUILD, ASSETS, LISTS, DONE];
   if (persona === 'both')
     return [BUSINESS, SERVE, BUILD, PRICES, TERMS, ASSETS, LISTS, DONE, CONTRACT, PLAN];
   // seller, and the unknown case: persona has not resolved yet on the very

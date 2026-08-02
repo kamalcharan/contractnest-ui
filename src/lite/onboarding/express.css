@@ -81,6 +81,21 @@
 }
 @keyframes cnx-pulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.06);opacity:1}}
 
+/* "VaNi Agent · AI · Active" — the same identity badge the long flow's
+   VaniIntroStep carries, so lite introduces VaNi as an AI, not a greeting. */
+.cnx-agentbadge{
+  align-self:center;display:inline-flex;align-items:center;gap:7px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--deep);background:var(--wash);border:1px solid rgba(255,107,43,.25);
+  border-radius:99px;padding:5px 12px;
+}
+.cnx-agentdot{
+  width:7px;height:7px;border-radius:50%;background:var(--deep);
+  animation:cnx-agentpulse 2s ease-in-out infinite;
+}
+@keyframes cnx-agentpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.72)}}
+
 .cnx-promises{display:flex;flex-direction:column;gap:10px}
 .cnx-promise{display:flex;gap:10px;align-items:flex-start;font-size:14px;color:var(--soft);line-height:1.45}
 .cnx-promisetick{flex:none;width:7px;height:7px;margin-top:7px;border-radius:50%;background:var(--deep)}

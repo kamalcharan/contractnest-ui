@@ -9,7 +9,7 @@
 // persona + business_type_id — so anything downstream reads the same data.
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
@@ -18,18 +18,30 @@ import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { vaniToast } from '@/components/common/toast';
 import { completeVaniStep } from '@/utils/onboarding/completeVaniStep';
+import { readPendingSideActivation } from '@/utils/perspective/sideActivation';
 
 import ExpressShell from './ExpressShell';
 import { PERSONAS, type PersonaId } from './expressFlow';
 
 export const BusinessPersonaStep: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentTenant } = useAuth();
   const { formData, fetchProfile } = useTenantProfile({ isOnboarding: true });
 
   const [businessName, setBusinessName] = useState('');
   const [persona, setPersona] = useState<PersonaId | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Set when the perspective toggle's empty state sends an existing tenant
+  // here to activate their other side (PerspectiveSwitchModal → AuthContext.
+  // activatePendingPerspective). Either direction: a tenant activating their
+  // missing side should keep the side they already have, so "Both" is the
+  // right default — pre-selected, not forced; they can still change it.
+  // Route state first, sessionStorage hand-off as the refresh-proof fallback.
+  const activateSide =
+    (location.state as { activateSide?: string } | null)?.activateSide
+    || readPendingSideActivation();
 
   useEffect(() => {
     fetchProfile?.();
@@ -45,7 +57,10 @@ export const BusinessPersonaStep: React.FC = () => {
     }
     const known = (formData as unknown as { persona?: PersonaId })?.persona
       || (formData?.business_type_id as PersonaId | undefined);
-    if (!persona && known) setPersona(known);
+    // Side activation wins over the stored persona: a tenant adding their
+    // missing side should land on "Both", not their old single-side answer.
+    if (!persona && (activateSide === 'revenue' || activateSide === 'expense')) setPersona('both');
+    else if (!persona && known) setPersona(known);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData, currentTenant]);
 
