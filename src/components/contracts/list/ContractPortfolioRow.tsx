@@ -308,7 +308,10 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
               textTransform: 'capitalize' as const,
             }}
           >
-            {c.contract_type || c.record_type || 'Client'}
+            {/* Relationship badge — this is what makes the old header
+                Client/Partner toggle redundant. No 'Client' fallback: a
+                missing type is a data gap, and guessing hides it. */}
+            {c.contract_type || c.record_type || '—'}
           </span>
 
           {/* ── Value ── */}

@@ -764,6 +764,21 @@ const AppContent: React.FC = () => {
             <Route path=":id/invoice/:invoiceId" element={<InvoiceViewPage />} />
           </Route>
 
+          {/* Requests (RFQ) — the same hub component in record_type='rfq' mode.
+              Its own route so it can be its own menu item: an RFQ has its own
+              lifecycle, and perspective decides whether these are requests you
+              SENT (expense) or RECEIVED and must quote (revenue). */}
+          <Route
+            path="/requests"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ContractsHubPage recordType="rfq" />} />
+          </Route>
+
           {/* Legacy support for old routes - redirect to new structure */}
           <Route path="/templates" element={<Navigate to="/service-contracts/templates" replace />} />
 

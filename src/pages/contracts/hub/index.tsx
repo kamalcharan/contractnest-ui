@@ -200,10 +200,90 @@ interface EmptyStateProps {
   perspective: Perspective;
   colors: any;
   onCreateType: (type: ContractType) => void;
+  /** Requests page (record_type='rfq') — different object, different copy,
+      and on Revenue no creation at all (you cannot raise an RFQ for yourself;
+      you can only receive one). */
+  isRfqView?: boolean;
+  /** Received requests waiting for a quote — shown as the primary pointer
+      instead of "create your first contract" when > 0 (CNAK-vendor case). */
+  pendingRequests?: number;
+  onShowRequests?: () => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ perspective, colors, onCreateType }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ perspective, colors, onCreateType, isRfqView = false, pendingRequests = 0, onShowRequests }) => {
   const label = perspective === 'revenue' ? 'client' : 'vendor';
+
+  // ── Requests page ──────────────────────────────────────────────
+  if (isRfqView) {
+    const received = perspective === 'revenue';
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center',
+        justifyContent:'center', padding:'80px 40px', textAlign:'center' }}>
+        <div style={{ width:72, height:72, borderRadius:16, display:'flex',
+          alignItems:'center', justifyContent:'center',
+          background: colors.brand.primary + '14', marginBottom:20 }}>
+          <FileText size={32} style={{ color: colors.brand.primary, opacity:0.6 }} />
+        </div>
+        <h3 style={{ fontSize:18, fontWeight:600, color: colors.utility.primaryText, marginBottom:8 }}>
+          {received ? 'No requests waiting' : 'No requests sent yet'}
+        </h3>
+        <p style={{ fontSize:13.5, color: colors.utility.secondaryText, marginBottom: received ? 0 : 20, maxWidth:400 }}>
+          {received
+            ? 'When a buyer sends you a request for quote, it lands here. Nothing to respond to right now.'
+            : 'Ask several vendors to quote the same scope, then compare their responses side by side.'}
+        </p>
+        {/* No create button on Revenue — raising an RFQ is a buyer action. */}
+        {!received && (
+          <button
+            onClick={() => onCreateType('vendor' as ContractType)}
+            style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 22px',
+              borderRadius:10, border:'none', background: colors.brand.primary, color:'#fff',
+              fontSize:13.5, fontWeight:700, cursor:'pointer' }}
+          >
+            <Plus size={16} /> New Request
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (pendingRequests > 0 && onShowRequests) {
+    return (
+      <div
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', padding: '80px 40px', textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: 72, height: 72, borderRadius: 16, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            background: colors.brand.primary + '14', marginBottom: 20,
+          }}
+        >
+          <FileText size={32} style={{ color: colors.brand.primary, opacity: 0.6 }} />
+        </div>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: colors.utility.primaryText, marginBottom: 8 }}>
+          No contracts yet — but you have {pendingRequests} request{pendingRequests === 1 ? '' : 's'} waiting
+        </h3>
+        <p style={{ fontSize: 13.5, color: colors.utility.secondaryText, marginBottom: 20, maxWidth: 380 }}>
+          A contract starts here: respond to the request with your quote, and when it's
+          awarded it becomes a tracked contract in this list.
+        </p>
+        <button
+          onClick={onShowRequests}
+          style={{
+            padding: '10px 22px', borderRadius: 10, border: 'none',
+            background: colors.brand.primary, color: '#fff',
+            fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          View request{pendingRequests === 1 ? '' : 's'} →
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -393,7 +473,13 @@ const Pagination: React.FC<PaginationProps> = ({
 
 const ITEMS_PER_PAGE = 25;
 
-const ContractsHubPage: React.FC = () => {
+export interface ContractsHubPageProps {
+  /** Which object this page lists. Set by the route: /contracts → 'contract',
+      /requests → 'rfq'. Requests is a separate menu item, not a toggle. */
+  recordType?: 'contract' | 'rfq';
+}
+
+const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contract' }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isDarkMode, currentTheme } = useTheme();
@@ -415,20 +501,20 @@ const ContractsHubPage: React.FC = () => {
   const activePerspective: Perspective = perspective;
   const perspectiveType = activePerspective === 'revenue' ? 'client' : 'vendor';
 
-  // ── Record type: contracts vs RFQs (requests), on BOTH sides now.
-  // Expense · Requests = RFQs this tenant SENT (buyer asking vendors to
-  // quote). Revenue · Requests = RFQs this tenant RECEIVED (it is the vendor
-  // being asked — an RFQ CNAK claimed by this tenant; the edge list flips the
-  // claimed record onto the vendor's revenue side). Responding is always the
-  // vendor's job, and for the vendor it is Revenue. Defaulting to 'contract'
-  // ALSO fixes a latent bug: the hub never passed record_type before, so RFQs
-  // leaked into the vendor-contract list with statuses the pills don't model.
-  const [recordType, setRecordType] = useState<'contract' | 'rfq'>(
-    searchParams.get('record') === 'rfq' ? 'rfq' : 'contract'
-  );
-  const effectiveRecordType: 'contract' | 'rfq' = recordType;
+  // ── Record type comes from the ROUTE, not a toggle.
+  // /contracts → 'contract'   /requests → 'rfq'
+  // Perspective then decides what a request MEANS, exactly as it does for
+  // Receivables/Payables: EXPENSE = requests this tenant SENT to vendors;
+  // REVENUE = requests it RECEIVED and must quote (the claimed-RFQ case —
+  // responding is always the vendor's job, and for the vendor that is
+  // revenue). One switch, no page-level modes.
+  const effectiveRecordType = recordType;
   const isRfqView = effectiveRecordType === 'rfq';
   const isReceivedRequestsView = isRfqView && activePerspective === 'revenue';
+
+  // Relationship filter (Revenue only): null = client + partner together.
+  // NEW capability — the removed header toggle never filtered the list.
+  const [relationshipFilter, setRelationshipFilter] = useState<'client' | 'partner' | null>(null);
 
   // ── Filter state — Active is the default status ──
   const [activeStatus, setActiveStatus] = useState<string | null>(
@@ -456,7 +542,11 @@ const ContractsHubPage: React.FC = () => {
   const [wizardContractType, setWizardContractType] = useState<ContractType>('client');
   // Revenue relationship chosen for a NEW contract: client (I serve them) or
   // partner (chapter members, associates — dues receivable). Expense is always vendor.
-  const [createRelationship, setCreateRelationship] = useState<'client' | 'partner'>('client');
+  // Contract type handed to the wizard by "New contract". The old header
+  // toggle set this — it was a CREATE-TYPE selector, never a list filter.
+  // With the toggle gone this is fixed at 'client' on Revenue; creating a
+  // PARTNER contract needs its own home (see COPY_INSTRUCTIONS: open decision).
+  const [createRelationship] = useState<'client' | 'partner'>('client');
 
   // ── Draft resume state ──
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
@@ -518,7 +608,9 @@ const ContractsHubPage: React.FC = () => {
   // ── Build API filters ──
   // Revenue mode: client + partner (both receivable — dues owed TO the tenant)
   // Expense mode: vendor (payable)
-  const perspectiveTypeFilter = activePerspective === 'revenue' ? 'client,partner' : 'vendor';
+  const perspectiveTypeFilter = activePerspective === 'revenue'
+    ? (relationshipFilter || 'client,partner')
+    : 'vendor';
   const filters: ContractListFilters = useMemo(() => {
     const f: ContractListFilters = {
       limit: ITEMS_PER_PAGE,
@@ -553,6 +645,18 @@ const ContractsHubPage: React.FC = () => {
   const totalCount = viewMode === 'flat'
     ? (contractsData?.total_count || 0)
     : (groupedData?.total_count || 0);
+
+  // ── Pending-requests probe ──
+  // One-row query for RFQ records on this perspective, used only to point an
+  // empty contracts list at waiting requests ("you have N requests waiting").
+  // Requests live at their own route now, so there is no view to auto-switch.
+  const { data: rfqProbeData } = useContracts(
+    { record_type: 'rfq' as any, contract_type: perspectiveTypeFilter as any, per_page: 1, page: 1 },
+    { enabled: effectiveRecordType === 'contract' }
+  );
+  const pendingRequestsCount = effectiveRecordType === 'contract'
+    ? (rfqProbeData?.total_count || 0)
+    : 0;
 
   // ── Pagination info ──
   const pageInfo = viewMode === 'flat' ? contractsData?.page_info : groupedData?.page_info;
@@ -616,16 +720,7 @@ const ContractsHubPage: React.FC = () => {
   // ── Toggle contracts ⇄ requests. Reset the status filter, because the
   // default 'active' is meaningless for an RFQ and 'sent' is meaningless for a
   // contract — start on "All" so the switch never lands on an empty list.
-  const handleRecordTypeChange = (next: 'contract' | 'rfq') => {
-    if (next === recordType) return;
-    setRecordType(next);
-    setActiveStatus(null);
-    setCurrentPage(1);
-    const params = new URLSearchParams(searchParams);
-    if (next === 'rfq') params.set('record', 'rfq'); else params.delete('record');
-    params.delete('status');
-    setSearchParams(params, { replace: true });
-  };
+  // (Record type is set by the route — there is no in-page switch to handle.)
 
   // ── URL sync ──
   const handleStatusClick = (status: string | null) => {
@@ -776,7 +871,9 @@ const ContractsHubPage: React.FC = () => {
                   margin: 0,
                 }}
               >
-                All Contracts
+                {isRfqView
+                  ? (activePerspective === 'revenue' ? 'Requests received' : 'Requests sent')
+                  : (activePerspective === 'revenue' ? 'Contracts' : 'Vendor contracts')}
               </h1>
               <span
                 style={{
@@ -790,9 +887,13 @@ const ContractsHubPage: React.FC = () => {
               </span>
             </div>
             <p style={{ fontSize: 12, color: colors.utility.secondaryText, marginTop: 4 }}>
-              {activePerspective === 'revenue'
-                ? (isRfqView ? 'Revenue · Requests received' : 'Revenue · Clients')
-                : isRfqView ? 'Expense · Requests (RFQ)' : 'Expense · Vendors'}
+              {isRfqView
+                ? (activePerspective === 'revenue'
+                    ? 'Requests from buyers — respond with your quote'
+                    : 'Requests you sent to vendors')
+                : (activePerspective === 'revenue'
+                    ? 'Contracts you deliver & bill'
+                    : "Contracts you've hired & pay")}
             </p>
           </div>
 
@@ -867,91 +968,12 @@ const ContractsHubPage: React.FC = () => {
               </button>
             )}
 
-            {/* Relationship radio — Revenue only (client vs partner) */}
-            {activePerspective === 'revenue' && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2,
-                  padding: 2,
-                  borderRadius: 9,
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  background: `${colors.utility.primaryText}06`,
-                }}
-                role="radiogroup"
-                aria-label="Contract relationship"
-              >
-                {(['client', 'partner'] as const).map((rel) => {
-                  const on = createRelationship === rel;
-                  return (
-                    <button
-                      key={rel}
-                      role="radio"
-                      aria-checked={on}
-                      onClick={() => setCreateRelationship(rel)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 7,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        background: on ? colors.brand.primary : 'transparent',
-                        color: on ? '#fff' : colors.utility.secondaryText,
-                        transition: 'all .15s',
-                      }}
-                    >
-                      {rel === 'client' ? 'Client' : 'Partner'}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* Relationship (Client/Partner) and Contracts/Requests toggles
+                REMOVED here — see the design note at the top of this file.
+                Relationship is shown as a badge on each row (it always was);
+                Requests is its own route + menu item. Perspective is the only
+                mode switch, and it lives in the header. */}
 
-            {/* Contracts ⇄ Requests toggle — both sides. Expense: requests
-                you sent. Revenue: requests you received (you are the vendor
-                being asked to quote). */}
-            {(
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2,
-                  padding: 2,
-                  borderRadius: 9,
-                  border: `1px solid ${colors.utility.primaryText}20`,
-                  background: `${colors.utility.primaryText}06`,
-                }}
-                role="radiogroup"
-                aria-label="Contracts or requests"
-              >
-                {([['contract', 'Contracts'], ['rfq', 'Requests']] as const).map(([key, label]) => {
-                  const on = recordType === key;
-                  return (
-                    <button
-                      key={key}
-                      role="radio"
-                      aria-checked={on}
-                      onClick={() => handleRecordTypeChange(key)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 7,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        background: on ? colors.brand.primary : 'transparent',
-                        color: on ? '#fff' : colors.utility.secondaryText,
-                        transition: 'all .15s',
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
 
             {/* Create button — label reflects the chosen relationship / record
                 type. Hidden on Revenue · Requests: you don't create a request
@@ -975,7 +997,7 @@ const ContractsHubPage: React.FC = () => {
             >
               <Plus size={14} />
               {activePerspective === 'revenue'
-                ? `New ${createRelationship === 'client' ? 'Client' : 'Partner'} Contract`
+                ? 'New Contract'
                 : isRfqView ? 'New Request' : 'New Contract'}
             </button>
             )}
@@ -998,7 +1020,7 @@ const ContractsHubPage: React.FC = () => {
           colors={colors}
         />
 
-        {/* ═══ CONTROLS: View mode + Sort ═══ */}
+        {/* ═══ CONTROLS: Relationship filter + View mode + Sort ═══ */}
         <div
           style={{
             display: 'flex',
@@ -1008,6 +1030,45 @@ const ContractsHubPage: React.FC = () => {
             gap: 8,
           }}
         >
+          {/* Relationship chips — REVENUE only (Expense is all vendors, so a
+              filter there would have a single option). This is genuinely new:
+              the old header Client|Partner control never filtered anything, it
+              only chose what the create button would make. Chips sit with the
+              other list controls, not up in the title row. */}
+          {activePerspective === 'revenue' && !isRfqView && (
+            <div style={{ display: 'flex', gap: 6, marginRight: 'auto' }}>
+              {([
+                [null, 'All'],
+                ['client', 'Clients'],
+                ['partner', 'Partners'],
+              ] as const).map(([key, label]) => {
+                const on = relationshipFilter === key;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => { setRelationshipFilter(key); setCurrentPage(1); }}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 20,
+                      border: on
+                        ? `1.5px solid ${colors.brand.primary}`
+                        : `1px solid ${colors.utility.primaryText}20`,
+                      background: on ? `${colors.brand.primary}12` : 'transparent',
+                      color: on ? colors.brand.primary : colors.utility.secondaryText,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <ViewModeToggle
             value={viewMode}
             onChange={setViewMode}
@@ -1047,7 +1108,10 @@ const ContractsHubPage: React.FC = () => {
             <EmptyState
               perspective={activePerspective}
               colors={colors}
+              isRfqView={isRfqView}
               onCreateType={() => handleCreateClick()}
+              pendingRequests={pendingRequestsCount}
+              onShowRequests={() => navigate('/requests')}
             />
           </div>
         ) : viewMode === 'grouped' ? (

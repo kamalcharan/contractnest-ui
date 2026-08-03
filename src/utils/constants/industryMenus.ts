@@ -102,6 +102,20 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
   },
+  // Requests (RFQ) — its OWN menu item, not a toggle inside Contracts.
+  // An RFQ is a different object with a different lifecycle (draft → sent →
+  // quotes in → awarded → converted). Visible on BOTH sides, because the
+  // two halves of an RFQ live on opposite sides:
+  //   EXPENSE → RAISE a request + track the ones you sent
+  //   REVENUE → VIEW requests you received and RESPOND with a quote
+  // The page enforces the difference (the "New Request" button only exists
+  // on expense); the menu must not hide the view/respond half.
+  {
+    id: 'requests',
+    label: 'Requests',
+    icon: 'Inbox',
+    path: '/requests'
+  },
   // VaNi — the real agent surface: Overview (landing + trial) and Briefing.
   // Autonomy & Credits joins when built (agreed end-state: 3 items).
   {

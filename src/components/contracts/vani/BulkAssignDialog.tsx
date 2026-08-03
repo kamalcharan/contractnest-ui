@@ -20,6 +20,12 @@ import vaniComposerService, { VaniParsedIntent, VaniComposeResult } from '@/serv
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 import type { TemplateSeed } from './VaNiComposerLauncher';
+import EventScheduleAdjuster from '@/components/contracts/EventScheduleAdjuster';
+import {
+  computeContractEvents,
+  type ContractEvent,
+  type ComputeEventsInput,
+} from '@/utils/service-contracts/contractEvents';
 
 interface BulkAssignDialogProps {
   isOpen: boolean;
@@ -112,6 +118,17 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   const [cadenceOverrides, setCadenceOverrides] = useState<Record<string, string>>({});
   const [result, setResult] = useState<VaniComposeResult | null>(null);
   const [assembling, setAssembling] = useState(false);
+
+  // Schedule adjustment for the SHARED template schedule. Every clone is built
+  // from the same draft and the same start date, so all clones compute an
+  // identical event series — one override map ({ eventId → Date }) therefore
+  // applies correctly to all of them, and mapWizardToRequest (used per item in
+  // submitBulk) applies it exactly as it does for a single wizard contract.
+  const [eventOverrides, setEventOverrides] = useState<Record<string, Date>>({});
+  // Open by default — the schedule is what the batch actually creates, so it
+  // should be reviewable without hunting for a disclosure control. Still
+  // collapsible for batches that take the generated dates as-is.
+  const [showSchedule, setShowSchedule] = useState(true);
 
   const { data: contacts, loading } = useContactList({
     search: search.trim().length >= 2 ? search.trim() : undefined,
@@ -219,6 +236,41 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
     updateIntent((i) => { i.duration = { value: isoDaysBetween(startDate, v), unit: 'days' }; });
   };
 
+  // ── Template schedule preview ──
+  // Same computation the wizard's Events Preview runs, fed from the assembled
+  // (buyer-independent) draft. This IS what each clone will generate, so
+  // adjusting it here adjusts every contract in the batch.
+  const templateEvents: ContractEvent[] = useMemo(() => {
+    const d: any = result?.draft;
+    if (!d || !Array.isArray(d.selectedBlocks) || d.selectedBlocks.length === 0) return [];
+    const input: ComputeEventsInput = {
+      startDate: new Date(startDate),
+      durationValue: d.durationValue,
+      durationUnit: d.durationUnit,
+      selectedBlocks: d.selectedBlocks,
+      paymentMode: d.paymentMode,
+      emiMonths: d.emiMonths,
+      perBlockPaymentType: d.perBlockPaymentType || {},
+      billingCycleType: d.billingCycleType,
+      grandTotal: d.grandTotal || d.totalValue || 0,
+      currency: d.currency,
+      baseSubtotal: d.baseSubtotal,
+      discountTotal: 0,
+    };
+    try {
+      return computeContractEvents(input);
+    } catch {
+      return []; // a half-assembled draft must never break the dialog
+    }
+  }, [result, startDate]);
+
+  // Start date / cadence changes re-derive the schedule, which invalidates any
+  // overrides keyed to the previous series — drop them rather than silently
+  // applying stale dates.
+  useEffect(() => {
+    setEventOverrides({});
+  }, [startDate, cadenceOverrides]);
+
   // ── Run the batch: clone the already-assembled draft per member → single
   //    bulk call. The template's assembled draft is buyer-independent, so it
   //    only needs to be built once (via the Preferences panel above), then
@@ -256,6 +308,10 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
             contractName,
             startDate,
             templateId: seed.match.template_id,
+            // Every clone shares this start date and draft, so it computes the
+            // same event ids and base dates — the one override map applies
+            // cleanly to all. mapWizardToRequest does the substitution.
+            eventOverrides,
           },
         };
       });
@@ -305,8 +361,11 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
+      {/* Near-fullscreen: this dialog carries a member list, batch preferences,
+          per-block cadence AND the schedule review — at 5xl/90vh everything
+          below the fold was effectively hidden. */}
       <DialogContent
-        className="sm:max-w-5xl rounded-xl max-h-[90vh] overflow-y-auto"
+        className="sm:max-w-[96vw] w-[96vw] rounded-xl h-[95vh] max-h-[95vh] overflow-y-auto"
         style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.border }}
       >
         <DialogHeader>
@@ -378,8 +437,8 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
               ))}
             </div>
 
-            {/* Member list */}
-            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '24rem' }}>
+            {/* Member list — taller now the dialog is near-fullscreen */}
+            <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '32rem' }}>
               {loading ? (
                 <div className="flex items-center justify-center py-8 gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" style={{ color: colors.brand.primary }} />
@@ -578,6 +637,95 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                     </div>
                   );
                 })}
+
+              {/* ── Schedule review — the template's computed events, adjustable
+                     once for the whole batch. Collapsed by default: most
+                     batches take the generated schedule as-is. ── */}
+              {templateEvents.length > 0 && (
+                <div className="mt-3 pt-3 border-t" style={{ borderColor: colors.utility.border }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedule((s) => !s)}
+                    className="flex items-center gap-2 text-[11px] font-semibold"
+                    style={{ color: colors.brand.primary }}
+                  >
+                    {showSchedule ? '▾' : '▸'} Review schedule
+                    <span style={{ color: colors.utility.secondaryText, fontWeight: 400 }}>
+                      {templateEvents.length} event{templateEvents.length === 1 ? '' : 's'} per contract
+                      {Object.keys(eventOverrides).length > 0
+                        ? ` · ${Object.keys(eventOverrides).length} adjusted`
+                        : ''}
+                    </span>
+                  </button>
+
+                  {showSchedule && (
+                    <div className="mt-3">
+                      <EventScheduleAdjuster
+                        events={templateEvents}
+                        eventOverrides={eventOverrides}
+                        onEventOverridesChange={setEventOverrides}
+                        appliesToNote={`applies to all ${selectedCount || 0} contract${selectedCount === 1 ? '' : 's'}`}
+                      />
+
+                      {/* Two-up on wide screens — the dialog is near-fullscreen
+                          now, so a single column of compact rows wastes it.
+                          Scrolls internally so a 12-event schedule doesn't
+                          push the Create button off-screen. */}
+                      <div
+                        className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 overflow-y-auto pr-1"
+                        style={{ maxHeight: '18rem' }}
+                      >
+                        {[...templateEvents]
+                          .sort((a, b) => {
+                            const da = (eventOverrides[a.id] || a.scheduled_date).getTime();
+                            const db = (eventOverrides[b.id] || b.scheduled_date).getTime();
+                            return da - db;
+                          })
+                          .map((ev) => {
+                            const eff = eventOverrides[ev.id] || ev.scheduled_date;
+                            const moved = !!eventOverrides[ev.id];
+                            const isBilling = ev.event_type === 'billing';
+                            return (
+                              <div
+                                key={ev.id}
+                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px]"
+                                style={{
+                                  borderColor: moved ? `${colors.brand.primary}40` : colors.utility.border,
+                                  backgroundColor: moved ? `${colors.brand.primary}08` : 'transparent',
+                                }}
+                              >
+                                <span
+                                  className="px-1.5 py-0.5 rounded font-semibold flex-none"
+                                  style={{
+                                    fontSize: 9,
+                                    textTransform: 'uppercase',
+                                    color: isBilling ? colors.brand.primary : colors.semantic.success,
+                                    backgroundColor: isBilling
+                                      ? `${colors.brand.primary}12`
+                                      : `${colors.semantic.success}12`,
+                                  }}
+                                >
+                                  {isBilling ? 'Billing' : 'Service'}
+                                </span>
+                                <span className="truncate" style={{ color: colors.utility.primaryText }}>
+                                  {ev.billing_cycle_label || ev.block_name}
+                                </span>
+                                <span className="ml-auto flex-none tabular-nums" style={{ color: colors.utility.secondaryText }}>
+                                  {eff.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                                {ev.amount ? (
+                                  <span className="flex-none tabular-nums" style={{ color: colors.utility.secondaryText }}>
+                                    {getCurrencySymbol(ev.currency || 'INR')}{Number(ev.amount).toLocaleString('en-IN')}
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

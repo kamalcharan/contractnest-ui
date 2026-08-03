@@ -21,6 +21,7 @@ import {
 import { findHolidayConflicts } from '@/utils/service-contracts/holidayResolver';
 import { useCadenceSettings } from '@/pages/settings/cadence/useCadenceSettings';
 import { EventCard } from '@/components/contracts/EventCard';
+import EventScheduleAdjuster from '@/components/contracts/EventScheduleAdjuster';
 
 export interface EventsPreviewStepProps {
   startDate: Date;
@@ -37,6 +38,10 @@ export interface EventsPreviewStepProps {
   onEventOverridesChange: (overrides: Record<string, Date>) => void;
   baseSubtotal?: number;
   discountTotal?: number;
+  /** Template mode: dates here are illustrative (re-derived per contract from
+      the real start date), so bulk adjustment would be misleading — the
+      adjuster is hidden. Per-event edit stays, as it always has. */
+  hideScheduleAdjuster?: boolean;
 }
 
 // ─── Helpers ───
@@ -72,6 +77,7 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
   onEventOverridesChange,
   baseSubtotal,
   discountTotal,
+  hideScheduleAdjuster = false,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -416,6 +422,17 @@ const EventsPreviewStep: React.FC<EventsPreviewStepProps> = ({
 
       {/* ═══ LEFT: Vertical Timeline ═══ */}
       <div className="flex-[2] min-w-0 pb-8">
+
+        {/* Bulk date adjustment — fills the same eventOverrides map the
+            per-event date editor below has always used. Hidden in template
+            mode, where these dates are illustrative only. */}
+        {!hideScheduleAdjuster && computedEvents.length > 0 && (
+          <EventScheduleAdjuster
+            events={computedEvents}
+            eventOverrides={eventOverrides}
+            onEventOverridesChange={onEventOverridesChange}
+          />
+        )}
 
         {/* Holiday-clash banner — sessions landing on a tenant holiday */}
         {activeConflicts.length > 0 && (

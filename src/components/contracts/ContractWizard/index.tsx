@@ -1650,6 +1650,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               onEventOverridesChange={handleEventOverridesChange}
               baseSubtotal={wizardState.baseSubtotal}
               discountTotal={wizardState.discountTotal}
+              hideScheduleAdjuster={isTemplateMode}
             />
           </div>
         );
