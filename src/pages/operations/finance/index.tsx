@@ -112,6 +112,10 @@ const FinancePage: React.FC = () => {
   const [contractFilter, setContractFilter] = useState<string>('all');
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  // Membership fees and ordinary receivables are chased differently, so they
+  // are separable here. Defaults to 'all' — this narrows the view, it does not
+  // change what Finance is.
+  const [audienceFilter, setAudienceFilter] = useState<'all' | 'group' | 'direct'>('all');
   const [expandedContracts, setExpandedContracts] = useState<Set<string>>(new Set());
   const [worklistPage, setWorklistPage] = useState(1);
   const [actioningId, setActioningId] = useState<string | null>(null);
@@ -154,6 +158,12 @@ const FinancePage: React.FC = () => {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [allEvents]);
 
+  // Only worth offering the group/direct split when the tenant has both kinds.
+  const hasBothAudiences = useMemo(
+    () => allEvents.some((e) => e.is_group_session) && allEvents.some((e) => !e.is_group_session),
+    [allEvents]
+  );
+
   // ── Filtering: contact/contract/search apply everywhere; month/overdue
   //    additionally apply to KPIs + worklist (timeline shows all months of
   //    the base set with the selected month highlighted) ──
@@ -162,6 +172,8 @@ const FinancePage: React.FC = () => {
     return allEvents.filter((e) => {
       if (contactFilter !== 'all' && (e.buyer_id || e.buyer_name || 'unknown') !== contactFilter) return false;
       if (contractFilter !== 'all' && e.contract_id !== contractFilter) return false;
+      if (audienceFilter === 'group' && !e.is_group_session) return false;
+      if (audienceFilter === 'direct' && e.is_group_session) return false;
       if (term) {
         const hay = [e.invoice_number, e.contract_number, e.contract_name, e.buyer_name, e.buyer_company, e.block_name]
           .filter(Boolean)
@@ -171,7 +183,7 @@ const FinancePage: React.FC = () => {
       }
       return true;
     });
-  }, [allEvents, contactFilter, contractFilter, searchTerm]);
+  }, [allEvents, contactFilter, contractFilter, searchTerm, audienceFilter]);
 
   const filteredEvents = useMemo(() => {
     return baseEvents.filter((e) => {
@@ -182,7 +194,7 @@ const FinancePage: React.FC = () => {
   }, [baseEvents, monthFilter, overdueOnly]);
 
   const hasActiveFilter =
-    monthFilter !== 'all' || contactFilter !== 'all' || contractFilter !== 'all' || overdueOnly || searchTerm.trim() !== '';
+    monthFilter !== 'all' || contactFilter !== 'all' || contractFilter !== 'all' || overdueOnly || audienceFilter !== 'all' || searchTerm.trim() !== '';
 
   // ── KPIs from the filtered event set ──
   const kpis = useMemo(() => {
@@ -510,6 +522,24 @@ const FinancePage: React.FC = () => {
                 >
                   Overdue only{overdueOnly ? ' ×' : ''}
                 </button>
+
+                {/* Group-session fees vs ordinary receivables. Rendered only
+                    when the tenant actually has both — a single-line dropdown
+                    offering a choice that cannot change anything is just noise
+                    on the many tenants that run no group sessions at all. */}
+                {hasBothAudiences && (
+                  <select
+                    value={audienceFilter}
+                    onChange={(e) => { setAudienceFilter(e.target.value as 'all' | 'group' | 'direct'); setWorklistPage(1); }}
+                    className="px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer"
+                    style={{ ...chipStyle(audienceFilter !== 'all'), backgroundColor: audienceFilter !== 'all' ? colors.brand.primary + '14' : colors.utility.primaryBackground }}
+                    aria-label="Filter by group session or direct"
+                  >
+                    <option value="all">All receivables</option>
+                    <option value="group">Group sessions</option>
+                    <option value="direct">Non group sessions</option>
+                  </select>
+                )}
 
                 <div className="relative flex-1 min-w-[200px]">
                   <Search
