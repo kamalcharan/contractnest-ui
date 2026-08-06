@@ -3,7 +3,7 @@
 // ============================================================================
 // A "group session" = a catalog block (config.audience='group'). Each block is
 // the group; drill-down:
-//   Overview (Groups | Payments tabs) → Group (KPIs · sessions table · series ·
+//   Overview (Groups | Payments | Dues tabs) → Group (KPIs · sessions table · series ·
 //   QR) → Occurrence (attendance table) / Roster (members table, expandable
 //   attendance history)
 // Redesigned 2026-07-22 in the AR/AP design language (owner-approved
@@ -16,6 +16,9 @@
 // membership_contract_id. Shared schedule per block (not per member).
 // Payment declarations are self-declared claims from member check-in; chair
 // Confirm records the receipt against the invoice (bbb-foundation/046).
+// The Dues tab is the whole year's collection position in one grid — every
+// member × every month of the April–March financial year, read from the
+// billing-event ledger (bbb-foundation/060_gs_dues_matrix), with CSV export.
 // Data via /api/group-sessions/*.
 // ============================================================================
 
@@ -25,7 +28,7 @@ import {
   Users, RefreshCw, AlertTriangle, Inbox, ChevronRight, ChevronLeft, ChevronDown,
   CalendarClock, CheckCircle2, CircleDollarSign, UserRound, ArrowLeft, TrendingUp,
   Wallet, Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw, Mic,
-  UserCog, Lock, Search, Download,
+  UserCog, Lock, Search, Download, Table2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -46,15 +49,19 @@ import {
   useConfirmDeclaration,
   useAssignChair,
   useAssignChairDefault,
+  useGroupSessionDues,
   type GsSessionRow,
   type GsOccurrenceRow,
+  type GsDuesRow,
 } from '@/hooks/queries/useGroupSessionsDashboard';
 import QRCard from '@/components/group-sessions/QRCard';
 
 const CHAIR_CLASSIFICATIONS = ['buyer', 'vendor', 'partner', 'team_member'];
 
 type ViewLevel = 'overview' | 'group' | 'occurrence' | 'roster';
-type OverviewTab = 'groups' | 'payments';
+type OverviewTab = 'groups' | 'payments' | 'dues';
+type DuesPlan = 'all' | 'monthly' | 'quarterly' | 'halfyearly' | 'yearly' | 'none';
+type DuesStanding = 'all' | 'owing' | 'clear';
 type OccFilter = 'upcoming' | 'past' | 'all';
 type RosterFilter = 'all' | 'overcap' | 'dues';
 type AttFilter = 'all' | 'present' | 'absent';
@@ -67,6 +74,24 @@ const OCC_COLS = '110px 44px minmax(160px,1.3fr) minmax(120px,1fr) 130px 32px';
 const ROSTER_COLS = 'minmax(180px,1.5fr) minmax(140px,1.1fr) 90px 150px 70px 120px 32px';
 const ATT_COLS = 'minmax(180px,1.4fr) 70px 90px 100px 120px';
 const PAY_COLS = 'minmax(180px,1.4fr) minmax(130px,1fr) minmax(130px,1fr) minmax(120px,.9fr) 190px';
+// Dues grid: fixed member/summary block, then one column per month. The month
+// count comes from the server (always 12), so the template is built at render
+// time rather than declared as a constant like the tables above.
+//
+// There is no Plan column — the plan pill sits under the member's name beside
+// the contract number, which buys a whole column of width back for the money.
+// Cells show the full figure with its currency symbol ("₹18,000", not "18k"),
+// so every column has to be wide enough for the largest instalment a yearly
+// payer can carry.
+const DUES_FIXED_COLS = 'minmax(230px,1.6fr) 96px 92px 100px 100px 100px';
+const DUES_MONTH_COL = '84px';
+const DUES_FIXED_PX = 230 + 96 + 92 + 100 + 100 + 100;
+// Three states have to stay distinguishable at a glance: paid / not-paid /
+// not-yet-due. The theme has one amber (`semantic.warning`, #F59E0B) and no
+// separate yellow, so the future tint is a local constant. Deliberately NOT
+// reusing semantic.warning for both — that is exactly the pair a chair scanning
+// the grid needs to tell apart.
+const DUES_FUTURE_COLOR = '#CA8A04';
 
 // CSV export — same client-side Blob/anchor pattern as TaxSummarySection,
 // no server round-trip, no new dependency.
@@ -142,6 +167,13 @@ const GroupSessionsPage: React.FC = () => {
   const [declGroup, setDeclGroup] = useState<string>('all');
   const [declSearch, setDeclSearch] = useState('');
   const [declPage, setDeclPage] = useState(1);
+  // Dues tab. The matrix is per block, so it needs its own group selection —
+  // it cannot ride `selectedSession`, which is only set once you drill in.
+  const [duesBlock, setDuesBlock] = useState<string | null>(null);
+  const [duesSearch, setDuesSearch] = useState('');
+  const [duesPlan, setDuesPlan] = useState<DuesPlan>('all');
+  const [duesStanding, setDuesStanding] = useState<DuesStanding>('all');
+  const [duesPage, setDuesPage] = useState(1);
   const [occFilter, setOccFilter] = useState<OccFilter>('upcoming');
   const [occPage, setOccPage] = useState(1);
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
@@ -155,6 +187,16 @@ const GroupSessionsPage: React.FC = () => {
   const occurrences = occurrencesQuery.data ?? [];
   const roster = rosterQuery.data ?? [];
   const declarations = declarationsQuery.data ?? [];
+
+  // Dues: default to the first group so the tab has content on first open
+  // instead of an empty "pick a group" state. Only fetched while the tab is
+  // showing — this is the heaviest read on the page.
+  const activeDuesBlock = duesBlock ?? sessions[0]?.block_id ?? null;
+  const duesQuery = useGroupSessionDues(activeDuesBlock, null, {
+    enabled: view === 'overview' && overviewTab === 'dues' && !!activeDuesBlock,
+  });
+  const duesMonths = duesQuery.data?.months ?? [];
+  const duesRows = duesQuery.data?.rows ?? [];
 
   const cadence = useMemo(() => {
     if (occurrences.length < 1) return 'Recurring';
@@ -211,6 +253,49 @@ const GroupSessionsPage: React.FC = () => {
       return true;
     });
   }, [declarations, declGroup, declSearch]);
+
+  const filteredDues = useMemo(() => {
+    const term = duesSearch.trim().toLowerCase();
+    return duesRows.filter((r) => {
+      if (duesPlan !== 'all' && r.plan !== duesPlan) return false;
+      // "Owing" is money already past its due date — NOT the whole unpaid
+      // balance. A member paying quarterly is not in arrears just because
+      // January is still ahead of them.
+      if (duesStanding === 'owing' && Number(r.due_total || 0) <= 0) return false;
+      if (duesStanding === 'clear' && Number(r.due_total || 0) > 0) return false;
+      if (term && !(r.name || '').toLowerCase().includes(term) && !(r.contract_number || '').toLowerCase().includes(term)) return false;
+      return true;
+    });
+  }, [duesRows, duesPlan, duesStanding, duesSearch]);
+
+  const duesTotals = useMemo(() => {
+    const t = { scheduled: 0, paid: 0, due: 0, future: 0, beyond: 0, beyondMembers: 0, discount: 0 };
+    filteredDues.forEach((r) => {
+      t.scheduled += Number(r.scheduled_total || 0);
+      t.paid += Number(r.paid_total || 0);
+      t.due += Number(r.due_total || 0);
+      t.future += Number(r.future_total || 0);
+      t.discount += Number(r.discount || 0);
+      if (Number(r.beyond_count || 0) > 0) { t.beyond += Number(r.beyond_total || 0); t.beyondMembers += 1; }
+    });
+    return t;
+  }, [filteredDues]);
+
+  const duesPlanCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    duesRows.forEach((r) => m.set(r.plan, (m.get(r.plan) || 0) + 1));
+    return m;
+  }, [duesRows]);
+
+  // Currency for the SUMMARY figures only. Each row prints its own contract's
+  // currency; the KPIs and column totals add rows together, so they are only
+  // meaningful when every row in view agrees. If a group ever mixes
+  // currencies, null suppresses the symbol rather than stamping ₹ on a total
+  // that is not rupees.
+  const duesCurrency = useMemo(() => {
+    const set = new Set(filteredDues.map((r) => r.currency || 'INR'));
+    return set.size === 1 ? Array.from(set)[0] : null;
+  }, [filteredDues]);
 
   const openGroup = (s: GsSessionRow) => { setSelectedSession(s); setView('group'); setShowAdd(false); setEditOccId(null); setOccFilter('upcoming'); setOccPage(1); };
   const openOccurrence = (o: GsOccurrenceRow) => { setSelectedOcc(o); setEditOccId(null); setAttFilter('all'); setAttSearch(''); setView('occurrence'); };
@@ -451,6 +536,13 @@ const GroupSessionsPage: React.FC = () => {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setOverviewTab('dues')}
+          className="px-4 py-1.5 rounded-lg text-[13px] font-bold inline-flex items-center gap-2"
+          style={overviewTab === 'dues' ? { backgroundColor: colors.utility.primaryText, color: colors.utility.primaryBackground } : sub}
+        >
+          <Table2 size={13} /> Dues
+        </button>
       </div>
 
       {overviewTab === 'groups' && (
@@ -597,8 +689,274 @@ const GroupSessionsPage: React.FC = () => {
           </p>
         </>
       )}
+
+      {overviewTab === 'dues' && renderDues()}
     </>
   );
+
+  // ─────────────────────────────────────────────
+  // Overview → Dues — member × month collection grid
+  // ─────────────────────────────────────────────
+  // Reads the billing-event ledger (gs_dues_matrix), which is the per-instalment
+  // record of truth. It is NOT the invoice: a member has one contract-level
+  // invoice whose amount_paid accumulates, so the invoice cannot say WHICH
+  // month a payment covered — the events can.
+  const renderDues = () => {
+    const nMonths = Math.max(duesMonths.length, 1);
+    const duesCols = `${DUES_FIXED_COLS} repeat(${nMonths}, ${DUES_MONTH_COL})`;
+    // fixed block + month columns + the 8px gap between every pair
+    const gridMinWidth = DUES_FIXED_PX + nMonths * 84 + (5 + nMonths) * 8 + 28;
+
+    // Summary figures span rows, so they use duesCurrency — null (mixed
+    // currencies) prints the bare number rather than a wrong symbol.
+    const sumMoney = (n: number) =>
+      duesCurrency ? money(n, duesCurrency) : Number(n).toLocaleString();
+
+    const planLabel = (p: GsDuesRow['plan']) =>
+      p === 'monthly' ? 'Monthly'
+        : p === 'quarterly' ? 'Quarterly'
+        : p === 'halfyearly' ? 'Half-yearly'
+        : p === 'yearly' ? 'Yearly'
+        : 'No schedule';
+
+    // Plan is derived from instalment spacing server-side, so it stays right
+    // even while every contract's billing_cycle_type still reads 'mixed'.
+    const planColor = (p: GsDuesRow['plan']) =>
+      p === 'none' ? colors.semantic.error : colors.brand.primary;
+
+    const cellColor = (status: string) =>
+      status === 'paid' ? colors.semantic.success
+        : status === 'future' ? DUES_FUTURE_COLOR
+        : colors.semantic.warning; // due + partial
+
+    // The legend swatch is rendered with the SAME tint/border/ink recipe as a
+    // real cell, not a solid block of the accent. A solid swatch reads far more
+    // saturated than the cells it is meant to key, so the legend and the grid
+    // look like different colours even though the hue is identical.
+    const swatchStyle = (accent: string): React.CSSProperties => ({
+      backgroundColor: accent + '22',
+      borderColor: accent + '45',
+      borderWidth: 1,
+      borderStyle: 'solid',
+    });
+
+    const exportCsv = () => {
+      const header = [
+        'Member', 'Contract', 'Plan', 'Instalments', 'Currency', 'Contract value', 'Discount', 'Net payable',
+        'Scheduled', 'Paid', 'Due now', 'Not yet due', 'Beyond window',
+        ...duesMonths.map((m) => `${m.label} ${m.year}`),
+      ];
+      // Every month cell exports as "amount (status)" so the CSV carries the
+      // same information the colours carry on screen — a CSV of bare numbers
+      // would lose exactly the thing this grid exists to show.
+      // Numbers stay unformatted in the CSV — a spreadsheet must be able to
+      // sum them. The currency travels in its own column instead.
+      const body = filteredDues.map((r) => [
+        r.name, r.contract_number, planLabel(r.plan), r.instalments, r.currency,
+        r.contract_value, r.discount, r.net,
+        r.scheduled_total, r.paid_total, r.due_total, r.future_total, r.beyond_total,
+        ...duesMonths.map((m) => {
+          const c = r.cells?.[m.key];
+          return c ? `${c.amount} (${c.status})` : '';
+        }),
+      ]);
+      const totalRow = [
+        `TOTAL (${filteredDues.length} members)`, '', '', '', duesCurrency || 'mixed', '', duesTotals.discount, '',
+        duesTotals.scheduled, duesTotals.paid, duesTotals.due, duesTotals.future, duesTotals.beyond,
+        ...duesMonths.map(() => ''),
+      ];
+      const name = sessions.find((s) => s.block_id === activeDuesBlock)?.name || 'group';
+      downloadCsv(
+        [header, ...body, totalRow].map((r) => r.map(csvCell).join(',')).join('\n'),
+        `dues-${name.toLowerCase().replace(/\s+/g, '-')}-${duesQuery.data?.fy_start || ''}.csv`
+      );
+    };
+
+    if (!activeDuesBlock) {
+      return (
+        <div className="flex flex-col items-center py-12 gap-2">
+          <Inbox size={28} style={sub} />
+          <p className="text-sm" style={sub}>No group to show dues for yet.</p>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {/* Group chips + plan / standing filters + search + export */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {sessions.length > 1 && sessions.map((s) => (
+            <button
+              key={s.block_id}
+              onClick={() => { setDuesBlock(s.block_id); setDuesPage(1); }}
+              className="px-3 py-1.5 rounded-full border text-xs font-semibold"
+              style={chipStyle(activeDuesBlock === s.block_id)}
+            >
+              {s.name}
+            </button>
+          ))}
+          {(['all', 'monthly', 'quarterly', 'halfyearly', 'yearly', 'none'] as DuesPlan[]).map((p) => {
+            const n = p === 'all' ? duesRows.length : (duesPlanCounts.get(p) || 0);
+            if (p !== 'all' && n === 0) return null;
+            return (
+              <button
+                key={p}
+                onClick={() => { setDuesPlan(p); setDuesPage(1); }}
+                className="px-3 py-1.5 rounded-full border text-xs font-semibold"
+                style={chipStyle(duesPlan === p)}
+              >
+                {p === 'all' ? 'All plans' : planLabel(p as GsDuesRow['plan'])} · {n}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => { setDuesStanding(duesStanding === 'owing' ? 'all' : 'owing'); setDuesPage(1); }}
+            className="px-3 py-1.5 rounded-full border text-xs font-semibold"
+            style={chipStyle(duesStanding === 'owing')}
+          >
+            In arrears · {duesRows.filter((r) => Number(r.due_total || 0) > 0).length}
+          </button>
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={sub} />
+            <input
+              value={duesSearch}
+              onChange={(e) => { setDuesSearch(e.target.value); setDuesPage(1); }}
+              placeholder="Search member or contract…"
+              className="w-full pl-9 pr-3 py-1.5 rounded-full border text-xs bg-transparent"
+              style={{ borderColor: colors.utility.secondaryText + '30', ...ink }}
+            />
+          </div>
+          <button
+            onClick={exportCsv}
+            disabled={!filteredDues.length}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: colors.utility.secondaryText + '30', ...sub }}
+          >
+            <Download size={13} /> Export CSV
+          </button>
+        </div>
+
+        {duesQuery.isLoading ? (
+          <div className="flex justify-center py-12"><LoadingSpinner /></div>
+        ) : duesQuery.isError ? (
+          <div className="flex flex-col items-center py-12 gap-2">
+            <AlertTriangle size={28} style={{ color: colors.semantic.error }} />
+            <p className="text-sm" style={sub}>Couldn't load dues.</p>
+            <button onClick={() => duesQuery.refetch()} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold" style={{ borderColor: colors.utility.secondaryText + '30', ...ink }}>
+              <RefreshCw size={13} /> Retry
+            </button>
+          </div>
+        ) : filteredDues.length === 0 ? (
+          <div className="flex flex-col items-center py-12 gap-2">
+            <Inbox size={28} style={sub} />
+            <p className="text-sm" style={sub}>{duesRows.length === 0 ? 'No members with a billing schedule in this group.' : 'Nothing matches these filters'}</p>
+          </div>
+        ) : (
+          <>
+            {/* Year summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <Kpi icon={<Wallet size={12} />} label="Scheduled" value={sumMoney(duesTotals.scheduled)} sub={duesCurrency ? `${filteredDues.length} members` : `${filteredDues.length} members · mixed currencies`} />
+              <Kpi icon={<CheckCircle2 size={12} />} label="Collected" value={sumMoney(duesTotals.paid)} tone="good" sub={duesTotals.scheduled ? `${Math.round((duesTotals.paid / duesTotals.scheduled) * 100)}% of scheduled` : undefined} />
+              <Kpi icon={<AlertTriangle size={12} />} label="In arrears" value={sumMoney(duesTotals.due)} tone="warn" sub="past due date" />
+              <Kpi icon={<CalendarClock size={12} />} label="Not yet due" value={sumMoney(duesTotals.future)} sub="future instalments" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mb-2 text-[11px]" style={sub}>
+              <span>
+                {duesQuery.data?.fy_start ? `${fmtDate(duesQuery.data.fy_start)} — ${fmtDate(duesQuery.data.fy_end)}` : ''}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-md" style={swatchStyle(colors.semantic.success)} /> Paid
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-md" style={swatchStyle(colors.semantic.warning)} /> Due / part-paid
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-md" style={swatchStyle(DUES_FUTURE_COLOR)} /> Not yet due
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <div className="space-y-1.5" style={{ minWidth: gridMinWidth }}>
+                <div className="grid items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={headStyle(duesCols)}>
+                  <span>Member</span>
+                  <span className="text-right">Value</span>
+                  <span className="text-right">Discount</span>
+                  <span className="text-right">Net</span>
+                  <span className="text-right">Paid</span>
+                  <span className="text-right">Arrears</span>
+                  {duesMonths.map((m) => (
+                    <span key={m.key} className="text-center">{m.label}</span>
+                  ))}
+                </div>
+
+                {pageSlice(filteredDues, duesPage).map((r) => (
+                  <div
+                    key={r.contact_id}
+                    onClick={() => r.contract_id && navigate(`/contracts/${r.contract_id}`)}
+                    className="grid items-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+                    style={rowStyle(duesCols)}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="h-8 w-8 rounded-lg flex-none inline-flex items-center justify-center text-[10px] font-bold border" style={{ backgroundColor: colors.brand.primary + '20', borderColor: colors.brand.primary + '40', color: colors.brand.primary }}>
+                        {initials(r.name)}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate" style={ink}>{r.name || '—'}</p>
+                        {/* Plan pill lives here rather than in its own column —
+                            it belongs to the member's identity, and folding it
+                            in returns that width to the money columns. */}
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                          <Pill label={`${planLabel(r.plan)}${r.instalments ? ` ×${r.instalments}` : ''}`} accent={planColor(r.plan)} />
+                          <span className="text-[10px] truncate" style={sub}>
+                            {r.contract_number || '—'}
+                            {r.beyond_count > 0 && ` · ${money(r.beyond_total, r.currency)} after Mar`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums text-right" style={ink}>{money(r.contract_value, r.currency)}</span>
+                    <span className="text-xs tabular-nums text-right" style={Number(r.discount) > 0 ? { color: colors.semantic.success } : sub}>
+                      {Number(r.discount) > 0 ? `−${money(r.discount, r.currency)}` : '—'}
+                    </span>
+                    <span className="text-xs font-bold tabular-nums text-right" style={ink}>{money(r.net, r.currency)}</span>
+                    <span className="text-xs font-bold tabular-nums text-right" style={{ color: colors.semantic.success }}>{money(r.paid_total, r.currency)}</span>
+                    <span className="text-xs font-bold tabular-nums text-right" style={Number(r.due_total) > 0 ? { color: colors.semantic.warning } : sub}>
+                      {Number(r.due_total) > 0 ? money(r.due_total, r.currency) : '—'}
+                    </span>
+
+                    {duesMonths.map((m) => {
+                      const c = r.cells?.[m.key];
+                      if (!c) return <span key={m.key} className="text-center text-[11px]" style={{ color: colors.utility.secondaryText + '55' }}>·</span>;
+                      const accent = cellColor(c.status);
+                      return (
+                        <span
+                          key={m.key}
+                          title={`${m.label} ${m.year} · ${money(c.amount, r.currency)} · ${c.status}${c.count > 1 ? ` · ${c.count} instalments` : ''}${c.status === 'partial' ? ` · ${money(c.paid, r.currency)} received` : ''}`}
+                          className="text-center text-[11px] font-bold tabular-nums rounded-md border py-1"
+                          style={{ backgroundColor: accent + '22', borderColor: accent + '45', color: accent }}
+                        >
+                          {money(c.amount, r.currency)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Pager page={duesPage} total={filteredDues.length} onPage={setDuesPage} noun="members" />
+
+            <p className="text-[11px] mt-3" style={sub}>
+              Read from each member's billing schedule, so a cell shows which month a payment actually covered —
+              the contract-level invoice only carries a running total and cannot.
+              {duesTotals.beyondMembers > 0 && ` ${duesTotals.beyondMembers} member${duesTotals.beyondMembers > 1 ? 's have' : ' has'} ${sumMoney(duesTotals.beyond)} of instalments falling after ${fmtDate(duesQuery.data?.fy_end)} — shown under the member's name, not in the grid.`}
+            </p>
+          </>
+        )}
+      </>
+    );
+  };
 
   // ─────────────────────────────────────────────
   // Group detail — sessions table + series/QR panels

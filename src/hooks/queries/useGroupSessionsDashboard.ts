@@ -90,6 +90,69 @@ export interface GsMemberResponse {
   billing: GsMemberBillingRow[];
 }
 
+// ── Dues matrix (gs_dues_matrix) ────────────────────────────────────────────
+
+/** One month column of the April–March financial year. */
+export interface GsDuesMonth {
+  /** 'YYYY-MM' — the key used to look this month up in a row's `cells`. */
+  key: string;
+  label: string;
+  year: number;
+  is_past: boolean;
+}
+
+export type GsDuesCellStatus = 'paid' | 'partial' | 'due' | 'future';
+
+export interface GsDuesCell {
+  amount: number;
+  paid: number;
+  /** Instalments landing in this month — normally 1, more if a cycle doubles up. */
+  count: number;
+  status: GsDuesCellStatus;
+}
+
+export interface GsDuesRow {
+  contact_id: string;
+  name: string | null;
+  contract_id: string;
+  contract_number: string | null;
+  contract_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  /** The CONTRACT's currency, per row — not a tenant-wide assumption. */
+  currency: string;
+  /** Derived from the spacing of this member's own billing events, NOT from
+   * t_contracts.billing_cycle_type — that column reads 'mixed' on every BBB
+   * contract, so trusting it would label everybody "Mixed". */
+  plan: 'monthly' | 'quarterly' | 'halfyearly' | 'yearly' | 'none';
+  instalments: number;
+  /** Gross contract value before any discount (t_contracts.total_value). */
+  contract_value: number;
+  discount: number;
+  /** Payable after discount (t_contracts.grand_total). */
+  net: number;
+  /** Sum of the member's billing events — what is actually scheduled to be
+   * collected. Can differ from `net` if events and contract totals drifted. */
+  scheduled_total: number;
+  paid_total: number;
+  due_total: number;
+  future_total: number;
+  /** Instalments falling OUTSIDE the April–March window — a mid-year joiner's
+   * schedule runs past March. Surfaced so the grid never silently loses money. */
+  beyond_total: number;
+  beyond_count: number;
+  cells: Record<string, GsDuesCell | undefined>;
+}
+
+export interface GsDuesResponse {
+  fy_start: string;
+  fy_end: string;
+  /** IST today, as the server computed it — the grid's due/future boundary. */
+  today: string;
+  months: GsDuesMonth[];
+  rows: GsDuesRow[];
+}
+
 // ── Query keys ─────────────────────────────────────────────────────────────
 
 export const gsDashboardKeys = {
@@ -102,6 +165,8 @@ export const gsDashboardKeys = {
     [...gsDashboardKeys.all, 'roster', tenantId, blockId] as const,
   member: (tenantId: string, memberId: string) =>
     [...gsDashboardKeys.all, 'member', tenantId, memberId] as const,
+  dues: (tenantId: string, blockId: string, fyStart: string) =>
+    [...gsDashboardKeys.all, 'dues', tenantId, blockId, fyStart] as const,
 };
 
 const unwrap = (response: any) => response?.data?.data ?? response?.data;
@@ -190,6 +255,39 @@ export const useGroupSessionMember = (
       };
     },
     enabled: !!currentTenant?.id && !!memberId && options?.enabled !== false,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+};
+
+/**
+ * Dues matrix: every member of a block × every month of the financial year.
+ *
+ * fyStart is optional — leave it out and the server derives the window from the
+ * earliest billing event on the roster, so the grid follows the data.
+ */
+export const useGroupSessionDues = (
+  blockId: string | null | undefined,
+  fyStart?: string | null,
+  options?: { enabled?: boolean }
+) => {
+  const { currentTenant } = useAuth();
+
+  return useQuery({
+    queryKey: gsDashboardKeys.dues(currentTenant?.id || '', blockId || '', fyStart || ''),
+    queryFn: async (): Promise<GsDuesResponse> => {
+      if (!currentTenant?.id) throw new Error('Missing tenant');
+      if (!blockId) throw new Error('Missing block');
+      const data = unwrap(await api.get(API_ENDPOINTS.GROUP_SESSIONS.DUES(blockId, fyStart)));
+      return {
+        fy_start: data?.fy_start ?? '',
+        fy_end: data?.fy_end ?? '',
+        today: data?.today ?? '',
+        months: Array.isArray(data?.months) ? data.months : [],
+        rows: Array.isArray(data?.rows) ? data.rows : [],
+      };
+    },
+    enabled: !!currentTenant?.id && !!blockId && options?.enabled !== false,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });

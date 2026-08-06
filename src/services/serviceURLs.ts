@@ -1275,7 +1275,15 @@ export const API_ENDPOINTS = {
     OCC_ADD: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/add`,
     OCC_MOVE: (id: string) => `/api/group-sessions/occurrence/${id}/move`,
     OCC_STATUS: (id: string) => `/api/group-sessions/occurrence/${id}/status`,
+    // Chair assignment. These two were referenced by useGroupSessionsDashboard
+    // but missing here, so the repo copy of this file failed to compile against
+    // its own hook — the deployed build is ahead of the checkout. Added back
+    // matching the live routes in groupSessionsDashboardRoutes.ts.
+    OCC_ASSIGN: (id: string) => `/api/group-sessions/occurrence/${id}/assign`,
+    OCC_ASSIGN_DEFAULT: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/assign-default`,
     ROSTER: (blockId: string) => `/api/group-sessions/roster/${blockId}`,
+    DUES: (blockId: string, fyStart?: string | null) =>
+      `/api/group-sessions/dues/${blockId}${fyStart ? `?fy=${fyStart}` : ''}`,
     MEMBER: (memberId: string) => `/api/group-sessions/member/${memberId}`,
     TOKEN: (blockId: string) => `/api/group-sessions/token/${blockId}`,
     OCC_ATTENDANCE: (id: string) => `/api/group-sessions/occurrence/${id}/attendance`,
