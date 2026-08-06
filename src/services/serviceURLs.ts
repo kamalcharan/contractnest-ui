@@ -729,6 +729,9 @@ export const API_ENDPOINTS = {
       DELETE: (id: string) => `/api/catalog-studio/templates/${id}`,
       SYSTEM: '/api/catalog-studio/templates/system',
       PUBLIC: '/api/catalog-studio/templates/public',
+      // The plan catalogue: published templates owned by the platform tenant,
+      // which is what a tenant subscribes to on /businessmodel/tenants/pricing-plans.
+      PLANS: '/api/catalog-studio/templates/plans',
       COVERAGE: '/api/catalog-studio/templates/coverage',
       COPY: (id: string) => `/api/catalog-studio/templates/${id}/copy`,
 

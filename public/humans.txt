@@ -12,7 +12,7 @@ Radix UI - https://www.radix-ui.com/
 Open Source Community
 
 /* SITE */
-Last update: 2025-08-08
+Last update: 2026-08-06
 Language: English
 Doctype: HTML5
 Standards: W3C compliant HTML5, CSS3, ES2022

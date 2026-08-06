@@ -18,7 +18,10 @@ export const useCatBlocksTest = () => {
   const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: ['cat-blocks-test'],
+    // Tenant MUST be part of the key. Without it the block list is cached
+    // tenant-agnostically, so switching tenant serves the previous tenant's
+    // blocks and deletions appear not to have taken effect until a hard refresh.
+    queryKey: ['cat-blocks-test', currentTenant?.id],
     queryFn: async () => {
       try {
         // ✅ No custom headers - api.ts interceptor handles auth

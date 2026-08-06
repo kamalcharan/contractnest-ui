@@ -11,6 +11,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Zap, Wrench, Package, FileText, File, Users } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { Block } from '@/types/catalogStudio';
 import { getCategoryById } from '@/utils/catalog-studio';
@@ -199,7 +200,11 @@ const buildConfigurableBlock = (
 };
 
 // ── Checklist sections (mock 9) ─────────────────────────────────────
-const SECTIONS: Array<{
+// The catalog renders ONLY what is listed here — a block whose categoryId
+// matches no section is unreachable in every path (chips, lists, search), not
+// merely hidden. A new block category must be added here or it cannot be
+// picked into a contract or a template.
+const ALL_SECTIONS: Array<{
   key: string;
   title: string;
   chipLabel: string;
@@ -207,6 +212,8 @@ const SECTIONS: Array<{
   cats: string[];
   priced: boolean;
   comingSoon?: boolean;
+  /** Platform tenant (is_admin) only — see SECTIONS inside the component. */
+  adminOnly?: boolean;
   typeLabelByCat?: Record<string, string>;
 }> = [
   { key: 'services', title: 'Services — from your catalog', chipLabel: 'Services', cats: ['service'], priced: true },
@@ -231,6 +238,19 @@ const SECTIONS: Array<{
     comingSoon: true,
     typeLabelByCat: { video: 'video block', image: 'image block', document: 'document block' },
   },
+  {
+    // ContractNest's own plan templates are built from these. A Credit Pack
+    // block grants notification credits, caps a resource, or toggles an add-on
+    // when the tenant pays — the rates live in the block's config.metering,
+    // authored in catalog-studio, never as constants in code.
+    key: 'metering',
+    title: 'Plan metering — platform only',
+    chipLabel: 'Credit Packs',
+    hint: 'grants credits, sets limits or toggles an add-on when the tenant pays',
+    cats: ['metering'],
+    priced: true,
+    adminOnly: true,
+  },
 ];
 
 const INITIAL_VISIBLE = 4;
@@ -248,6 +268,17 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
+  const { currentTenant } = useAuth();
+
+  // Platform-only sections are hidden from ordinary tenants. Same gate
+  // useBlockCategories applies in catalog-studio, so a Credit Pack block is
+  // authored and consumed by the same tenant that is allowed to see it.
+  // NOTE: this is a UI gate only — there is no server-side check stopping a
+  // crafted API call from attaching a metering block to a tenant's template.
+  const SECTIONS = useMemo(
+    () => ALL_SECTIONS.filter((s) => !s.adminOnly || currentTenant?.is_admin === true),
+    [currentTenant?.is_admin],
+  );
 
   // ── Sprint 1: unified-cycle mismatch, detected at selection time ────
   const cycleMismatch = useMemo(() => {

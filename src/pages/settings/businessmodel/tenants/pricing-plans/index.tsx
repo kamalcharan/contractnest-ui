@@ -1,319 +1,241 @@
 // src/pages/settings/businessmodel/tenants/pricing-plans/index.tsx
+//
+// The plan catalogue a tenant subscribes to.
+//
+// Every plan here is a CONTRACT TEMPLATE authored by the platform tenant in
+// catalog-studio — price, term, creation limits and notification credit grants
+// all come from that template's metering blocks. Nothing about the commercial
+// model is hardcoded in this file, which is the entire reason the model is
+// authored rather than coded.
+//
+// This page previously rendered `fakePricingPlans` from a fixture, and its
+// Subscribe button navigated to a route that was never registered. It is now
+// wired to /api/catalog-studio/templates/plans.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HelpCircle } from 'lucide-react';
+import { Check, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { analyticsService } from '@/services/analytics.service';
-
-// Import components
-import PlanCard from '@/components/businessmodel/tenants/pricing/PlanCard';
-
-// Import types and fake data
-import { PricingPlan } from '@/utils/constants/pricing';
-import { fakePricingPlans } from '@/utils/fakejson/PricingPlans';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
+import { usePlanTemplates, PlanTemplate } from '@/hooks/queries/usePlanTemplates';
+
+// Creation limits are the only capped resources — the product bills whoever
+// CREATES a contract or an RFQ; the counterparty consumes it for free.
+const LIMIT_LABELS: Record<string, string> = {
+  contracts: 'contracts',
+  rfqs: 'RFQs',
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  sms: 'SMS',
+  inapp: 'In-App',
+};
+
+const formatTerm = (term: PlanTemplate['term']): string | null => {
+  if (!term?.value || !term?.unit) return null;
+  const unit = term.value === 1 ? term.unit.replace(/s$/, '') : term.unit;
+  return `${term.value} ${unit}`;
+};
 
 const PricingPlansPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  
-  // State for plans and filters
-  const [loading, setLoading] = useState(true);
-  const [plans, setPlans] = useState<PricingPlan[]>([]);
-  const [selectedPlanType, setSelectedPlanType] = useState<'Per User' | 'Per Contract'>('Per User');
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('INR');
-  const [activePlanId, setActivePlanId] = useState<string | null>(null);
-  
-  // Track page view
+
+  const { data, isLoading, error } = usePlanTemplates();
+  const plans: PlanTemplate[] = data?.data?.plans ?? [];
+
   useEffect(() => {
     analyticsService.trackPageView('businessmodel/tenants/pricing-plans', 'Pricing Plans');
   }, []);
-  
-  // Fetch plans - in a real app this would be an API call
-  useEffect(() => {
-    const fetchPlans = async () => {
-      setLoading(true);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // Get visible plans only
-      const visiblePlans = fakePricingPlans.filter(
-        plan => plan.isVisible && !plan.isArchived
-      );
-      
-      setPlans(visiblePlans as PricingPlan[]);
 
-      // Simulate active plan (would come from user's subscription info)
-      // For demo, let's pretend the user has the Premium Plan
-      setActivePlanId('plan_2');
-      
-      setLoading(false);
-    };
-    
-    fetchPlans();
-  }, []);
-  
-  // Handle plan type toggle
-  const handlePlanTypeChange = (type: 'Per User' | 'Per Contract') => {
-    setSelectedPlanType(type);
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: colors.utility.secondaryBackground,
+    border: `1px solid ${colors.utility.primaryText}20`,
+    borderRadius: 16,
   };
-  
-  // Handle currency change
-  const handleCurrencyChange = (currency: string) => {
-    setSelectedCurrency(currency);
-  };
-  
-  // Handle subscribe action
-  const handleSubscribe = (planId: string) => {
-    navigate(`/businessmodel/tenants/pricing-plans/${planId}/subscribe?currency=${selectedCurrency}`);
-  };
-  
-  // Handle trial action
-  const handleStartTrial = (planId: string) => {
-    navigate(`/businessmodel/tenants/pricing-plans/${planId}/trial?currency=${selectedCurrency}`);
-  };
-  
-  // Handle upgrade/manage plan
-  const handleManagePlan = () => {
-    navigate('/businessmodel/tenants/subscription');
-  };
-  
-  // Filter plans by selected type
-  const filteredPlans = plans.filter(plan => 
-    plan.plan_type === selectedPlanType && 
-    plan.supportedCurrencies.includes(selectedCurrency)
-  );
-  
-  // Loading state
-  if (loading) {
+
+  if (isLoading) {
     return (
-      <div 
-        className="p-6 transition-colors"
-        style={{ backgroundColor: `${colors.utility.secondaryText}20` }}
-      >
-        <div 
-          className="h-8 rounded w-48 mb-4 animate-pulse"
-          style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
-        ></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => (
-            <div 
-              key={i} 
-              className="rounded-lg border overflow-hidden animate-pulse"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: `${colors.utility.primaryText}20`
-              }}
-            >
-              <div 
-                className="h-12"
-                style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
-              ></div>
-              <div className="p-6 space-y-4">
-                <div 
-                  className="h-6 rounded w-32"
-                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
-                ></div>
-                <div 
-                  className="h-24 rounded"
-                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
-                ></div>
-                <div 
-                  className="h-8 rounded"
-                  style={{ backgroundColor: `${colors.utility.secondaryText}40` }}
-                ></div>
-              </div>
-            </div>
-          ))}
+      <div className="p-6">
+        <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading plans…
         </div>
       </div>
     );
   }
-  
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div
+          className="flex items-start gap-2 p-4 rounded-xl text-sm"
+          style={{
+            backgroundColor: `${colors.semantic?.error || '#DC2626'}15`,
+            color: colors.utility.primaryText,
+          }}
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>Could not load plans. {(error as Error).message}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div 
-      className="p-6 transition-colors"
-      style={{ backgroundColor: `${colors.utility.secondaryText}10` }}
-    >
-      {/* Page Header */}
-      <div className="mb-8">
-        <h1 
-          className="text-2xl font-bold transition-colors"
-          style={{ color: colors.utility.primaryText }}
-        >
-          Choose Your Plan
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-1" style={{ color: colors.utility.primaryText }}>
+          Plans
         </h1>
-        <p 
-          className="transition-colors"
-          style={{ color: colors.utility.secondaryText }}
-        >
-          Select the pricing plan that best fits your needs
+        <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+          Choose a plan. You are billed for what you create — contracts and RFQs.
+          Anyone you share a record with can view and act on it at no cost to them.
         </p>
       </div>
-      
-      {/* Filter Options */}
-      <div className="flex flex-wrap items-center gap-4 mb-8">
-        {/* Plan Type Toggle */}
-        <div className="inline-flex rounded-md shadow-sm" role="group">
-          <button
-            type="button"
-            onClick={() => handlePlanTypeChange('Per User')}
-            className="px-4 py-2 text-sm font-medium rounded-l-md border transition-colors hover:opacity-80"
-            style={{
-              backgroundColor: selectedPlanType === 'Per User' 
-                ? colors.brand.primary 
-                : colors.utility.primaryBackground,
-              color: selectedPlanType === 'Per User' 
-                ? 'white' 
-                : colors.utility.primaryText,
-              borderColor: `${colors.utility.primaryText}30`
-            }}
-            onMouseEnter={(e) => {
-              if (selectedPlanType !== 'Per User') {
-                e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (selectedPlanType !== 'Per User') {
-                e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-              }
-            }}
-          >
-            User-based
-          </button>
-          <button
-            type="button"
-            onClick={() => handlePlanTypeChange('Per Contract')}
-            className="px-4 py-2 text-sm font-medium rounded-r-md border transition-colors hover:opacity-80"
-            style={{
-              backgroundColor: selectedPlanType === 'Per Contract' 
-                ? colors.brand.primary 
-                : colors.utility.primaryBackground,
-              color: selectedPlanType === 'Per Contract' 
-                ? 'white' 
-                : colors.utility.primaryText,
-              borderColor: `${colors.utility.primaryText}30`
-            }}
-            onMouseEnter={(e) => {
-              if (selectedPlanType !== 'Per Contract') {
-                e.currentTarget.style.backgroundColor = `${colors.utility.secondaryText}10`;
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (selectedPlanType !== 'Per Contract') {
-                e.currentTarget.style.backgroundColor = colors.utility.primaryBackground;
-              }
-            }}
-          >
-            Contract-based
-          </button>
-        </div>
-        
-        {/* Currency Selector */}
-        <div className="flex items-center space-x-2">
-          <span 
-            className="text-sm transition-colors"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            Currency:
+
+      {plans.length === 0 && (
+        <div
+          className="flex items-start gap-2 p-4 rounded-xl text-sm"
+          style={{ backgroundColor: `${colors.utility.primaryText}08`, color: colors.utility.secondaryText }}
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            No plans are published yet. Plans are authored in Catalog Studio by the
+            platform tenant and appear here once published.
           </span>
-          <select
-            value={selectedCurrency}
-            onChange={(e) => handleCurrencyChange(e.target.value)}
-            className="px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 transition-colors"
-            style={{
-              borderColor: `${colors.utility.secondaryText}40`,
-              backgroundColor: colors.utility.primaryBackground,
-              color: colors.utility.primaryText,
-              '--tw-ring-color': colors.brand.primary
-            } as React.CSSProperties}
-          >
-            <option value="INR">₹ INR</option>
-            <option value="USD">$ USD</option>
-            <option value="EUR">€ EUR</option>
-            <option value="GBP">£ GBP</option>
-          </select>
         </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {plans.map((plan) => {
+          const symbol = getCurrencySymbol(plan.currency);
+          const term = formatTerm(plan.term);
+          const isFree = plan.price === 0;
+
+          // Only surface caps that actually grant something. A 0 here is a real
+          // cap ("may not create any"), so listing it as a feature would read
+          // as a benefit when it is the opposite.
+          const limitEntries = Object.entries(plan.limits).filter(([, v]) => v > 0);
+          const grantEntries = Object.entries(plan.grants).filter(([, v]) => v > 0);
+
+          return (
+            <div key={plan.id} style={cardStyle} className="overflow-hidden flex flex-col">
+              <div className="p-5 pb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {isFree && <Sparkles className="w-4 h-4" style={{ color: colors.brand.primary }} />}
+                  <h2 className="text-lg font-bold" style={{ color: colors.utility.primaryText }}>
+                    {plan.name}
+                  </h2>
+                </div>
+
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-extrabold" style={{ color: colors.utility.primaryText }}>
+                    {isFree ? 'Free' : `${symbol}${plan.price.toLocaleString()}`}
+                  </span>
+                  {term && (
+                    <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                      / {term}
+                    </span>
+                  )}
+                </div>
+
+                {plan.description && (
+                  <p className="text-sm mt-2" style={{ color: colors.utility.secondaryText }}>
+                    {plan.description}
+                  </p>
+                )}
+              </div>
+
+              <div className="px-5 pb-5 flex-1">
+                <ul className="space-y-2">
+                  {limitEntries.map(([key, value]) => (
+                    <li
+                      key={key}
+                      className="flex items-start gap-2 text-sm"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      <Check
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                        style={{ color: colors.semantic?.success || '#0d9464' }}
+                      />
+                      <span>
+                        <strong>{value}</strong> {LIMIT_LABELS[key] || key}
+                      </span>
+                    </li>
+                  ))}
+
+                  {grantEntries.length > 0 && (
+                    <li className="flex items-start gap-2 text-sm" style={{ color: colors.utility.primaryText }}>
+                      <Check
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                        style={{ color: colors.semantic?.success || '#0d9464' }}
+                      />
+                      <span>
+                        {grantEntries.map(([ch, n]) => `${n} ${CHANNEL_LABELS[ch] || ch}`).join(' + ')}{' '}
+                        credits each time you create a contract or RFQ
+                      </span>
+                    </li>
+                  )}
+
+                  {plan.flags.map((flag) => (
+                    <li
+                      key={flag}
+                      className="flex items-start gap-2 text-sm"
+                      style={{ color: colors.utility.primaryText }}
+                    >
+                      <Check
+                        className="w-4 h-4 mt-0.5 shrink-0"
+                        style={{ color: colors.semantic?.success || '#0d9464' }}
+                      />
+                      <span>{flag.replace(/^addon_/, '').replace(/_/g, ' ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="px-5 pb-5">
+                {/* Activation is Sprint 1 step 7: subscribing must create the
+                    contact from this tenant's own record, raise the contract
+                    under the platform tenant, and apply the plan's metering to
+                    t_tenant_context. Until that exists the button stays
+                    disabled rather than navigating to a route that does not
+                    exist — which is what it did before. */}
+                <button
+                  type="button"
+                  disabled
+                  title="Activation is not wired up yet"
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold cursor-not-allowed"
+                  style={{
+                    backgroundColor: `${colors.utility.primaryText}10`,
+                    color: colors.utility.secondaryText,
+                  }}
+                >
+                  Subscribe
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
-      
-      {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {filteredPlans.length > 0 ? (
-          filteredPlans.map(plan => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              isActive={plan.id === activePlanId}
-              currency={selectedCurrency}
-              onSubscribe={() => handleSubscribe(plan.id)}
-              onStartTrial={() => handleStartTrial(plan.id)}
-              onManagePlan={handleManagePlan}
-            />
-          ))
-        ) : (
-          <div className="col-span-3 py-12 text-center">
-            <p 
-              className="transition-colors"
-              style={{ color: colors.utility.secondaryText }}
-            >
-              No plans available for the selected criteria.
-            </p>
-            <button
-              onClick={() => handlePlanTypeChange(selectedPlanType === 'Per User' ? 'Per Contract' : 'Per User')}
-              className="mt-4 px-4 py-2 rounded-md transition-colors hover:opacity-90"
-              style={{
-                backgroundColor: colors.brand.primary,
-                color: 'white'
-              }}
-            >
-              View {selectedPlanType === 'Per User' ? 'Contract' : 'User'}-based Plans
-            </button>
-          </div>
-        )}
-      </div>
-      
-      {/* Help Section */}
-      <div 
-        className="mt-12 p-6 rounded-lg border transition-colors"
-        style={{
-          backgroundColor: `${colors.brand.primary}10`,
-          borderColor: `${colors.brand.primary}20`
-        }}
-      >
-        <div className="flex items-start">
-          <HelpCircle 
-            className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5"
+
+      {plans.length > 0 && (
+        <p className="text-xs mt-5" style={{ color: colors.utility.secondaryText }}>
+          Subscribing is not active yet — plans are shown here for review.{' '}
+          <button
+            type="button"
+            onClick={() => navigate('/businessmodel/tenants/subscription')}
+            className="underline"
             style={{ color: colors.brand.primary }}
-          />
-          <div>
-            <h3 
-              className="font-medium mb-1 transition-colors"
-              style={{ color: colors.brand.primary }}
-            >
-              Need Help Choosing?
-            </h3>
-            <p 
-              className="text-sm transition-colors"
-              style={{ color: colors.brand.primary }}
-            >
-              Our team can help you select the right plan for your business needs. 
-              Contact us for a personalized consultation.
-            </p>
-            <button 
-              className="mt-3 px-4 py-2 rounded-md transition-colors hover:opacity-90 text-sm"
-              style={{
-                backgroundColor: colors.brand.primary,
-                color: 'white'
-              }}
-            >
-              Contact Sales
-            </button>
-          </div>
-        </div>
-      </div>
+          >
+            View current subscription
+          </button>
+        </p>
+      )}
     </div>
   );
 };

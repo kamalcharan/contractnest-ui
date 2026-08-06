@@ -60,6 +60,20 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
     { id: 2, label: 'Basic Info' },
     { id: 3, label: 'File Settings' },
   ],
+  // Credit Pack (platform only). No delivery, evidence or SLA — a metering
+  // block grants credits, sets limits or flips a flag; it is never performed.
+  // Pricing stays, because a Credit Pack is something the tenant buys.
+  //
+  // This is the map BlockWizardContent actually reads (WIZARD_STEPS). There is
+  // a second, near-identical steps map in pages/catalog-studio/data/wizard-steps.ts
+  // — keep the two in step or the wizard falls back to the 6-step service
+  // layout and lands on the "Step 5 Configuration" placeholder.
+  metering: [
+    { id: 1, label: 'Type' },
+    { id: 2, label: 'Basic Info' },
+    { id: 3, label: 'Metering' },
+    { id: 4, label: 'Pricing' },
+  ],
 };
 
 export const EVIDENCE_TYPES: EvidenceType[] = [

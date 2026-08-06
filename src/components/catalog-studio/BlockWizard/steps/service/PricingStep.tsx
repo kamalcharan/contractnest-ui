@@ -784,9 +784,13 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                               Total price
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-sm" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
+                                {/* `?? ''` and NOT `|| ''` — 0 is falsy, so `||`
+                                    blanked the field the instant a 0 was typed and
+                                    a genuinely free item (a Freemium plan, a zero-
+                                    rated Credit Pack) could not be priced. */}
                                 <input
                                   type="number"
-                                  value={record.amount || ''}
+                                  value={record.amount ?? ''}
                                   onChange={(e) => updatePricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
                                   className="w-36 pl-9 pr-2 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2"
                                   style={inputStyle}
@@ -848,7 +852,7 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
                                     <input
                                       type="number"
-                                      value={rate.amount || ''}
+                                      value={rate.amount ?? ''}
                                       disabled={!rate.enabled}
                                       onChange={(e) => updateCadenceRate(record.id, cad.id, { amount: parseFloat(e.target.value) || 0 })}
                                       className="w-full pl-7 pr-2 py-1.5 border rounded-lg text-xs font-semibold"
@@ -935,7 +939,7 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold" style={{ color: colors.utility.secondaryText }}>{currencySymbol}</span>
                               <input
                                 type="number"
-                                value={record.amount || ''}
+                                value={record.amount ?? ''}
                                 onChange={(e) => updatePricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
                                 className="w-full pl-10 pr-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2"
                                 style={inputStyle}
@@ -1228,7 +1232,7 @@ const PricingStep: React.FC<PricingStepProps> = ({ formData, onChange }) => {
                                       <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-sm" style={{ color: colors.utility.secondaryText }}>{sym}</span>
                                       <input
                                         type="number"
-                                        value={record.amount || ''}
+                                        value={record.amount ?? ''}
                                         onChange={(e) => updateVariantPricingRecord(record.id, 'amount', parseFloat(e.target.value) || 0)}
                                         className="w-full pl-10 pr-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2"
                                         style={inputStyle}

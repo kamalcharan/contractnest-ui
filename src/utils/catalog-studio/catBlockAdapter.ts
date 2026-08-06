@@ -159,6 +159,12 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       sessionDurationMinutes: (config.groupSession as { timing?: { durationMinutes?: number } } | undefined)?.timing?.durationMinutes,
       complimentary: config.complimentary,
       billingOnly: config.billingOnly,
+      // Metering (Credit Pack) — exposed flat so the wizard step reloads its
+      // values on edit, same fallback convention as the Group Session fields.
+      meteringMode: (config.metering as { mode?: string } | undefined)?.mode,
+      meteringGrants: (config.metering as { grants?: Record<string, number> } | undefined)?.grants,
+      meteringLimits: (config.metering as { limits?: Record<string, number> } | undefined)?.limits,
+      meteringFlag: (config.metering as { flag?: string } | undefined)?.flag,
       bufferTime: config.buffer || config.bufferTime,
       location: config.location,
       assignment: config.assignment,
@@ -376,6 +382,47 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
         startTime: (sessionStartTime as string | undefined) ?? existingGroupSession?.timing?.startTime,
         durationMinutes: sessionDurationMinutes ?? existingGroupSession?.timing?.durationMinutes,
       },
+    };
+  }
+
+  // Metering config (config.metering) — Credit Pack blocks only.
+  //
+  // This is what makes the grant rate configuration rather than a constant:
+  // the settlement hook reads config.metering when a platform contract is paid
+  // and writes t_tenant_context (limits, credit_grant_rates, add-on flags).
+  // Nothing about "15 credits per contract" is hardcoded anywhere in code.
+  //
+  // Grant keys are the notification_channels LOV sub_cat_name values
+  // (whatsapp / email / sms / inapp) and must stay in step with
+  // t_bm_credit_balance.channel and t_tenant_context.credit_grant_rates.
+  //
+  // limits are CREATION caps only (contracts for a seller, rfqs for a buyer),
+  // and 0 is a real value meaning "may not create any" — never a stand-in for
+  // unlimited. There is no unlimited plan; t_tenant_context holds the balance
+  // sheet of granted vs consumed against these numbers.
+  const meteringMode = getField(block, 'meteringMode') as string | undefined;
+  const meteringGrants = getField(block, 'meteringGrants') as Record<string, number> | undefined;
+  const meteringLimits = getField(block, 'meteringLimits') as Record<string, number> | undefined;
+  const meteringFlag = getField(block, 'meteringFlag') as string | undefined;
+  const existingMetering = (block.config as Record<string, unknown> | undefined)?.metering as
+    {
+      mode?: string;
+      grants?: Record<string, number>;
+      limits?: Record<string, number>;
+      flag?: string;
+    } | undefined;
+
+  if (
+    existingMetering ||
+    meteringMode !== undefined || meteringGrants !== undefined ||
+    meteringLimits !== undefined || meteringFlag !== undefined
+  ) {
+    config.metering = {
+      ...existingMetering,
+      mode: meteringMode ?? existingMetering?.mode,
+      grants: meteringGrants ?? existingMetering?.grants,
+      limits: meteringLimits ?? existingMetering?.limits,
+      flag: meteringFlag ?? existingMetering?.flag,
     };
   }
 

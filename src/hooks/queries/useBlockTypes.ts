@@ -191,10 +191,18 @@ export const useBlockTypes = () => {
  * Combines DB data with fallback to hardcoded categories
  */
 export const useBlockCategories = () => {
+  const { currentTenant } = useAuth();
   const { data, isLoading, error, isSuccess } = useBlockTypes();
 
-  // Map database results to BlockCategory format
-  const categories: BlockCategory[] = data?.data?.map(mapDetailToBlockCategory) || [];
+  // Map database results to BlockCategory format.
+  //
+  // Admin-only types are then filtered out for ordinary tenants. m_category_details
+  // has no tenant_id — it is platform-wide — so a type like metering ("Credit Pack"),
+  // which exists only to build ContractNest's own plan templates, cannot be scoped
+  // in the database and has to be gated here.
+  const isPlatformTenant = currentTenant?.is_admin === true;
+  const categories: BlockCategory[] = (data?.data?.map(mapDetailToBlockCategory) || [])
+    .filter((c) => !c.adminOnly || isPlatformTenant);
 
   return {
     categories,

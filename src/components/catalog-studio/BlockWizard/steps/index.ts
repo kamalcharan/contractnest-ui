@@ -27,3 +27,6 @@ export * from './checklist';
 
 // Document block steps
 export * from './document';
+
+// Metering (Credit Pack) block steps — platform tenant only
+export * from './metering';

@@ -38,6 +38,8 @@ import {
   ChecklistSettingsStep,
   // Document steps
   FileSettingsStep,
+  // Metering (Credit Pack) steps — platform tenant only
+  MeteringStep,
 } from './steps';
 
 // Import BusinessRulesStep for step 7
@@ -384,6 +386,16 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           case 3: return <StructureStep formData={formData} onChange={handleFormChange} />;
           case 4: return <ScheduleStep formData={formData} onChange={handleFormChange} />;
           case 5: return <AutomationStep formData={formData} onChange={handleFormChange} />;
+        }
+        break;
+
+      // Credit Pack (platform only). Metering replaces the delivery/evidence
+      // steps entirely — this block is bought, not performed — but keeps
+      // Pricing, because it is something a tenant pays for.
+      case 'metering':
+        switch (currentStep) {
+          case 3: return <MeteringStep formData={formData} onChange={handleFormChange} />;
+          case 4: return <PricingStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

@@ -97,6 +97,16 @@ export const BLOCK_CATEGORIES: BlockCategory[] = [
     bgColor: '#F8FAFC',
     description: 'File attachments',
   },
+  {
+    id: 'metering',
+    name: 'Credit Pack',
+    adminOnly: true, // platform tenant only — see MVP_CATEGORY_OVERRIDES
+    icon: 'Wallet',
+    count: 0,
+    color: '#0EA5E9',
+    bgColor: '#E0F2FE',
+    description: 'Grants credits, sets limits or toggles an add-on',
+  },
 ];
 
 // =================================================================
@@ -114,6 +124,11 @@ export const MVP_CATEGORY_OVERRIDES: Record<string, Partial<BlockCategory>> = {
   video: { comingSoon: true },
   image: { comingSoon: true },
   document: { comingSoon: true },
+  // Platform-only. Used to build ContractNest's own plan templates (Freemium,
+  // Quarterly, Yearly, VaNi, Credit Pack). Stored as a service block carrying
+  // config.metering — the engine branches on that config, never on this name,
+  // exactly as Group Session branches on config.audience.
+  metering: { adminOnly: true },
 };
 
 /** Apply the MVP flags to a category from any source (DB or fallback). */

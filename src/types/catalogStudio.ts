@@ -14,6 +14,14 @@ export interface BlockCategory {
   comingSoon?: boolean;
   /** MVP gate: exactly one block of this type may exist (e.g. Terms & Conditions). */
   singleton?: boolean;
+  /**
+   * Platform gate: only the ContractNest admin tenant may see or use this type.
+   * m_category_details has no tenant_id, so visibility cannot be scoped in the
+   * database — it is enforced in useBlockCategories() against
+   * currentTenant.is_admin. Used by the metering / "Credit Pack" type, which
+   * exists to build ContractNest's own plan templates.
+   */
+  adminOnly?: boolean;
 }
 
 // =================================================================

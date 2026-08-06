@@ -24,6 +24,15 @@ export const WIZARD_STEPS: Record<string, WizardStep[]> = {
     { id: 4, label: 'Schedule' },
     { id: 5, label: 'Automation' },
   ],
+  // Credit Pack (platform only). No delivery, evidence or SLA — a metering
+  // block grants credits, sets limits or flips a flag; it is never performed.
+  // Pricing stays, because a Credit Pack is something the tenant buys.
+  metering: [
+    { id: 1, label: 'Type' },
+    { id: 2, label: 'Basic Info' },
+    { id: 3, label: 'Metering' },
+    { id: 4, label: 'Pricing' },
+  ],
   text: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
