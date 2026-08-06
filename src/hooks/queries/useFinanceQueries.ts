@@ -115,6 +115,15 @@ export interface FinanceEvent {
   invoice_id: string;
   invoice_number: string;
   block_name: string | null;
+  /**
+   * True when the CONTRACT carries a group-session block (config.audience =
+   * 'group') — a membership fee rather than ordinary receivable.
+   *
+   * Deliberately not derived from `block_name`: billing events hang off the FEE
+   * block, so for a group-session contract block_name reads the fee block's
+   * name and the group block never appears here at all.
+   */
+  is_group_session: boolean;
   sequence_number: number | null;
   total_occurrences: number | null;
   billing_cycle_label: string | null;
