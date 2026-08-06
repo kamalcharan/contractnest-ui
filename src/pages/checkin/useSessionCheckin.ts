@@ -25,7 +25,16 @@ export interface BillingRow {
   amount_settled?: number; remaining?: number;
 }
 export interface AttendanceRow { date: string; status: string }
-export interface DeclarationRow { billing_event_id: string; status: string; upi_reference?: string; amount?: number }
+export interface DeclarationRow {
+  billing_event_id: string;
+  status: string;
+  upi_reference?: string;
+  amount?: number;
+  /** When the member declared it. Added by bbb-foundation/066 — without it the
+   * page cannot tell a payment declared minutes ago from one declared last
+   * month, which is what the same-day duplicate warning turns on. */
+  created_at?: string;
+}
 export interface CheckinTotals { total_amount: number; total_paid: number; balance: number }
 export interface CadenceRate { cycle: string; amount: number; enabled: boolean }
 export interface CadenceRateCard { rates: CadenceRate[]; baseAmount?: number; baseMonths?: number; defaultCadence?: string }

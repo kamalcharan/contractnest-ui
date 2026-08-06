@@ -103,12 +103,35 @@ export interface GsDuesMonth {
 
 export type GsDuesCellStatus = 'paid' | 'partial' | 'due' | 'future';
 
+/** One instalment inside a month cell. */
+export interface GsDuesCellEvent {
+  id: string;
+  /** Optimistic-concurrency token — PATCH /api/contract-events/:id needs it. */
+  version: number;
+  /** The event's REAL status code, matching m_event_status_config. */
+  status: string;
+  amount: number;
+  settled: number;
+  date: string;
+}
+
 export interface GsDuesCell {
   amount: number;
   paid: number;
   /** Instalments landing in this month — normally 1, more if a cycle doubles up. */
   count: number;
-  status: GsDuesCellStatus;
+  /** Representative status for the cell: the earliest still-open instalment,
+   * or — when nothing is open — the real terminal status (paid / waived /
+   * cancelled / bad_debt / adjustment), so it can be coloured from the
+   * tenant's own m_event_status_config rather than a hardcoded palette. */
+  status: string;
+  /** Whether anything in this month is still owed. */
+  is_open: boolean;
+  /** Whether the month has come round yet. */
+  is_past: boolean;
+  /** Every instalment in the month, so a status change targets the right one
+   * instead of guessing when a month carries more than one. */
+  events: GsDuesCellEvent[];
 }
 
 export interface GsDuesRow {
@@ -147,6 +170,10 @@ export interface GsDuesRow {
    * schedule runs past March. Surfaced so the grid never silently loses money. */
   beyond_total: number;
   beyond_count: number;
+  /** Amount on instalments that are terminal but NOT paid — waived, cancelled,
+   * bad debt, adjustment. Reported rather than dropped so a write-off reads as
+   * a decision somebody took, not as money that quietly went missing. */
+  written_off_total: number;
   /** False when this contract has no instalment inside the window at all — a
    * renewal signed for next year, still active but not part of this year's
    * collection position. Kept in the payload rather than filtered server-side

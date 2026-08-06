@@ -44,7 +44,12 @@ const fmtDate = (iso?: string) => {
 };
 const money = (n?: number, c = 'INR') =>
   `${c === 'INR' ? '₹' : c + ' '}${Number(n || 0).toLocaleString()}`;
-const isOpen = (s: string) => ['scheduled', 'due', 'overdue'].includes(s);
+// Statuses that still represent money owed. An ALLOWLIST on purpose — the
+// terminal write-offs (waived, cancelled, bad_debt, adjustment) must never be
+// chased, and "anything that isn't paid" would chase all of them.
+// partial_payment belongs here: part of it is still outstanding, and leaving it
+// out hid the remainder from the member entirely.
+const isOpen = (s: string) => ['scheduled', 'due', 'overdue', 'partial_payment'].includes(s);
 const initialOf = (s?: string) => (s || '?').trim().charAt(0).toUpperCase() || '?';
 
 // Fields the shell renders itself (the prominent Present/Apologies control),
@@ -295,6 +300,16 @@ const SessionCheckinPage: React.FC = () => {
   // UPI reference, come back and confirm — check-in isn't done until then.
   const [showLeaveAlert, setShowLeaveAlert] = useState(false);
   const [copiedVpa, setCopiedVpa] = useState(false);
+  // "Did you pay?" gate. Tapping "Open UPI app" tells us the member LEFT for
+  // their UPI app; it tells us nothing about whether money moved. Before they
+  // continue to check-in we make them say which it was, because the deep link
+  // never reports back.
+  //
+  // This exists because the opposite assumption was live and wrong: intent used
+  // to be inferred from the tap alone, so 29 of the first 33 declarations were
+  // recorded with no UPI reference at all — 19 of which the chair then had to
+  // reject by hand.
+  const [showPaidGate, setShowPaidGate] = useState(false);
 
   // Resolve the token + load the check-in form on mount
   useEffect(() => {
@@ -387,6 +402,88 @@ const SessionCheckinPage: React.FC = () => {
   const targetDue = openDues[0] || null;
   const [showSchedule, setShowSchedule] = useState(false);
 
+  // ── Same-day duplicate guard ────────────────────────────────────────────
+  // Members re-declare: they tap through twice, or come back unsure whether the
+  // first one registered. Live, one member produced three declarations for the
+  // SAME instalment inside four minutes, two of which the chair confirmed.
+  //
+  // The database has partial unique indexes (migration 052) but they only cover
+  // status='pending' and they discard the second row SILENTLY via ON CONFLICT
+  // DO NOTHING — so the member is told nothing and assumes it worked. This warns
+  // instead, and points them at the chair, which is the only place a correction
+  // can actually be made.
+  //
+  // "Today" is computed in IST rather than from the device clock, matching every
+  // other date decision in this product (migration 048).
+  const istDay = (value: string | number | Date): string =>
+    new Date(new Date(value).getTime() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+  const declarations = history?.declarations || [];
+  const todayIst = istDay(Date.now());
+
+  // Same member + same instalment + today, in ANY status. Deliberately not
+  // limited to 'pending': a confirmed or rejected declaration from this morning
+  // is exactly the case where re-entering causes the damage.
+  const declaredTodayForDue = useMemo(
+    () => (!targetDue ? null : declarations.find(
+      (d) => d.billing_event_id === targetDue.event_id && d.created_at && istDay(d.created_at) === todayIst
+    ) || null),
+    [declarations, targetDue?.event_id, todayIst]
+  );
+
+  // A repeated UPI reference is the one unambiguous proof of a double entry —
+  // the same bank transaction cannot legitimately be declared twice. Checked
+  // across every instalment, not just this one.
+  const duplicateRefDecl = useMemo(() => {
+    const ref = upiRef.trim();
+    if (!ref) return null;
+    return declarations.find((d) => (d.upi_reference || '').trim() === ref) || null;
+  }, [declarations, upiRef]);
+
+  const [showDupAlert, setShowDupAlert] = useState<null | 'same-day' | 'same-ref'>(null);
+
+  // ── Payment history as months, matching the Dues grid ───────────────────
+  // A due date ("01 Apr 2026") is not what a member is looking for — they want
+  // "have I paid April". Same three states and the same colours as Operations →
+  // Group Sessions → Dues, so the chair and the member are reading one language.
+  const PAY_COL = { paid: '#2E7D32', due: '#F57C00' } as const;
+  type PayState = keyof typeof PAY_COL;
+  const monthShort = (d?: string | null) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-IN', { month: 'short' }).toUpperCase();
+  };
+  // Arrears: unpaid AND already past its due date. This is what a member owes
+  // today, and it is deliberately NOT the rest of the year — quoting the full
+  // annual figure to someone in August overstates what is due of them.
+  // Identical rule to gs_dues_matrix's due_total and Finance's overdue, so the
+  // member, the chair and the ledger all read the same number.
+  const arrearsDues = useMemo(
+    () => openDues.filter((d) => d.date && istDay(d.date) <= todayIst),
+    [openDues, todayIst]
+  );
+  const arrearsTotal = useMemo(
+    () => arrearsDues.reduce((sum, d) => sum + Number(d.remaining ?? d.amount ?? 0), 0),
+    [arrearsDues]
+  );
+
+  // Up to and including the current month only — months that have not come
+  // round yet are not history, and showing them invites a member to think they
+  // are behind on payments that are not due. So every cell here is either
+  // settled or owed; there is no third state.
+  const monthCells = useMemo(
+    () => billingTimeline
+      .filter((e) => e.date && istDay(e.date) <= todayIst)
+      .map((e) => ({
+        key: e.event_id,
+        month: monthShort(e.date),
+        amount: e.remaining ?? e.amount,
+        state: (e.status === 'paid' ? 'paid' : 'due') as PayState,
+        label: e.label,
+        date: e.date,
+      })),
+    [billingTimeline, todayIst]
+  );
+
   // Auto-target the next due the moment it's known — paying it isn't a
   // decision the member makes among options, so there's nothing to tap
   // before the "Pay" action becomes available.
@@ -420,8 +517,16 @@ const SessionCheckinPage: React.FC = () => {
   // card can render) -- they are not by themselves a signal of payment intent.
   // Only tapping "Pay now" or typing a UPI reference means a payment was
   // actually intended.
-  const hasMemberPaymentIntent = !!payEventId && (paymentAttempted || !!upiRef);
-  const hasGuestPaymentIntent = !!selectedServiceId && (paymentAttempted || !!upiRef);
+  // A declaration is written ONLY when a UPI reference was actually entered.
+  //
+  // `paymentAttempted` used to be enough on its own, which meant merely tapping
+  // "Open UPI app" — and then skipping, or wandering off and coming back —
+  // recorded a payment the member never made. Leaving for the app is not
+  // evidence of paying; a reference is. `paymentAttempted` still drives the
+  // come-back nudge and the "Did you pay?" gate below, it just no longer
+  // fabricates a payment.
+  const hasMemberPaymentIntent = !!payEventId && !!upiRef.trim();
+  const hasGuestPaymentIntent = !!selectedServiceId && !!upiRef.trim();
   const hasAnyPaymentIntent = hasMemberPaymentIntent || (isGuestPath && hasGuestPaymentIntent);
 
   // Shared by identify() (typed phone) and the on-mount device recognition
@@ -791,6 +896,21 @@ const SessionCheckinPage: React.FC = () => {
     }
     return (
       <div style={{ marginTop: 14, borderTop: `1px solid #F1F1F3`, paddingTop: 14 }}>
+        {/* Shown BEFORE the pay controls, not after. A member who already paid
+            today needs to know that on arrival — warning them only once they
+            have tapped "Open UPI app" is too late to stop the second payment,
+            which is the thing this is here to prevent. */}
+        {declaredTodayForDue && (
+          <div style={{ marginBottom: 12, background: '#FEF3C7', border: '1px solid #F59E0B66', borderRadius: 10, padding: 11 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: '#92400E' }}>You already recorded this today</div>
+            <div style={{ fontSize: 12, color: '#92400E', marginTop: 3, lineHeight: 1.5 }}>
+              A payment of {money(declaredTodayForDue.amount, currency)} for {targetDue?.label} was recorded
+              earlier today{declaredTodayForDue.upi_reference ? ` (ref ${declaredTodayForDue.upi_reference})` : ''}
+              {declaredTodayForDue.status ? `, currently ${declaredTodayForDue.status}` : ''}.
+              You don't need to pay again — please speak to the chair if something looks wrong.
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.ink, marginBottom: 8 }}>
           Pay {money(amount, currency)} via your UPI app
         </div>
@@ -814,7 +934,7 @@ const SessionCheckinPage: React.FC = () => {
             <button type="button" onClick={openUpiApp}
               style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 12,
                 background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
-              Open UPI app
+              Open UPI app · Pay {money(amount, currency)}
             </button>
             <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
               Copies the UPI ID and tries to open your UPI app. If nothing opens, launch GPay / PhonePe / any UPI app yourself and choose "Pay to UPI ID."
@@ -874,7 +994,14 @@ const SessionCheckinPage: React.FC = () => {
             )}
             <label style={labelStyle}>UPI reference</label>
             <input value={upiRef} onChange={(e) => { setUpiRef(e.target.value); setShowReturnNudge(false); }} placeholder="e.g. 4098XXXX2231" style={inputStyle} autoFocus />
-            <button type="button" onClick={() => { if (upiRef.trim()) setPaymentStepDone(true); }} disabled={!upiRef.trim()}
+            <button type="button" onClick={() => {
+                if (!upiRef.trim()) return;
+                // The reference clash is the louder of the two — same bank
+                // transaction, so it is a duplicate regardless of the date.
+                if (duplicateRefDecl) { setShowDupAlert('same-ref'); return; }
+                if (declaredTodayForDue) { setShowDupAlert('same-day'); return; }
+                setPaymentStepDone(true);
+              }} disabled={!upiRef.trim()}
               style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 12,
                 background: upiRef.trim() ? BRAND.accent : '#9CA3AF', color: '#fff', fontWeight: 800, fontSize: 15,
                 cursor: upiRef.trim() ? 'pointer' : 'not-allowed' }}>
@@ -883,6 +1010,60 @@ const SessionCheckinPage: React.FC = () => {
             <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
               The chair will confirm it offline once you check in.
             </p>
+
+            {showDupAlert && (
+              <div
+                role="dialog" aria-modal="true" aria-label="This looks like a repeat entry"
+                style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
+                  alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(15,15,20,0.55)' }}
+                onClick={() => setShowDupAlert(null)}
+              >
+                <div onClick={(e) => e.stopPropagation()}
+                  style={{ width: '100%', maxWidth: 430, background: '#fff',
+                    borderRadius: '18px 18px 0 0', padding: '20px 18px 18px' }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: BRAND.ink, marginBottom: 8 }}>
+                    {showDupAlert === 'same-ref'
+                      ? 'That reference is already recorded'
+                      : 'You already recorded this today'}
+                  </div>
+                  <p style={{ fontSize: 13.5, color: BRAND.sub, margin: '0 0 4px', lineHeight: 1.6 }}>
+                    {showDupAlert === 'same-ref' ? (
+                      <>UPI reference <b style={{ color: BRAND.ink }}>{upiRef.trim()}</b> has already been
+                      submitted{duplicateRefDecl?.status ? ` and is ${duplicateRefDecl.status}` : ''}. The
+                      same transaction can only count once.</>
+                    ) : (
+                      <>A payment for <b style={{ color: BRAND.ink }}>{targetDue?.label}</b> was already
+                      recorded earlier today. Submitting again will not add to it.</>
+                    )}
+                  </p>
+                  <p style={{ fontSize: 13.5, color: BRAND.sub, margin: '0 0 16px', lineHeight: 1.6 }}>
+                    <b style={{ color: BRAND.ink }}>Please speak to the chair</b> if something needs
+                    correcting — they can adjust it from their side.
+                  </p>
+
+                  {/* Continues to check-in WITHOUT recording anything: upiRef is
+                      cleared, and intent is derived from it, so no second
+                      declaration can be created. Attendance still counts. */}
+                  <button type="button"
+                    onClick={() => {
+                      setShowDupAlert(null);
+                      setUpiRef('');
+                      setPaymentAttempted(false);
+                      setPaymentStepDone(true);
+                    }}
+                    style={{ width: '100%', padding: 13, border: 'none', borderRadius: 12,
+                      background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+                    Got it — continue to check-in
+                  </button>
+                  <button type="button" onClick={() => setShowDupAlert(null)}
+                    style={{ width: '100%', marginTop: 8, padding: 11, borderRadius: 12,
+                      border: `1.5px solid ${BRAND.line}`, background: '#fff',
+                      color: BRAND.sub, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
+                    Back — let me check the reference
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1206,7 +1387,7 @@ const SessionCheckinPage: React.FC = () => {
                     </div>
                   )}
 
-                  {paidEvents.length > 0 && (
+                  {monthCells.length > 0 && (
                     <div style={{ marginBottom: 4 }}>
                       <button
                         type="button"
@@ -1216,38 +1397,54 @@ const SessionCheckinPage: React.FC = () => {
                           cursor: 'pointer' }}>
                         <span style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.ink }}>
                           Payment History
-                          <span style={{ fontWeight: 500, color: BRAND.sub }}> - {paidEvents.length} paid</span>
+                          <span style={{ fontWeight: 500, color: BRAND.sub }}> - {paidEvents.length} of {monthCells.length} paid</span>
                         </span>
                         <span style={{ fontSize: 12, color: BRAND.sub }}>{showSchedule ? '▲' : '▼'}</span>
                       </button>
                       {showSchedule && (
-                        <div style={{ marginTop: 4 }}>
-                          {paidEvents.map((e) => (
-                            <div key={e.event_id}
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 4px', borderTop: `1px solid #F1F1F3` }}>
-                              <div>
-                                <div style={{ fontSize: 13, color: BRAND.ink }}>{e.label}</div>
-                                <div style={{ fontSize: 11.5, color: BRAND.sub, marginTop: 1 }}>{fmtDate(e.date)}</div>
+                        <div style={{ marginTop: 10 }}>
+                          {/* Month strip, same colours as the Dues grid. Scrolls
+                              sideways rather than wrapping — a 12-month row on a
+                              phone has to scroll, and wrapping loses the sense
+                              of a single timeline running left to right. */}
+                          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                            {monthCells.map((c) => (
+                              <div key={c.key} title={`${c.label} · ${fmtDate(c.date)}`}
+                                style={{ flex: 'none', minWidth: 62, textAlign: 'center',
+                                  border: `1px solid ${PAY_COL[c.state]}55`, background: `${PAY_COL[c.state]}18`,
+                                  borderRadius: 10, padding: '7px 6px' }}>
+                                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.4, color: PAY_COL[c.state] }}>{c.month}</div>
+                                <div style={{ fontSize: 12, fontWeight: 800, color: PAY_COL[c.state], marginTop: 2 }}>
+                                  {money(c.amount, targetDue?.currency)}
+                                </div>
                               </div>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: BRAND.ok }}>
-                                ✓ {money(e.amount_settled ?? e.amount, e.currency)}
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+                            {([['paid', 'Paid'], ['due', 'Due']] as [PayState, string][]).map(([k, lbl]) => (
+                              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: BRAND.sub }}>
+                                <span style={{ width: 11, height: 11, borderRadius: 4, background: `${PAY_COL[k]}18`, border: `1px solid ${PAY_COL[k]}55` }} />
+                                {lbl}
                               </span>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {(paidEvents.length > 0 && (targetDue || openDues.length === 0)) && (
+                  {(monthCells.length > 0 && (targetDue || openDues.length === 0)) && (
                     <div style={{ height: 1, background: BRAND.line, margin: '14px 0' }} />
                   )}
 
                   {openDues.length === 0 ? (
                     <p style={{ color: BRAND.ok, fontSize: 14, margin: 0 }}>All dues are settled.</p>
                   ) : targetDue && (
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.sub, letterSpacing: 0.4, marginBottom: 6 }}>CURRENT</div>
+                    /* Tinted and bordered so the one card that needs action
+                       stands out from the neutral tiles above it. */
+                    <div style={{ background: BRAND.accentSoft, border: `1.5px solid ${BRAND.accent}55`,
+                      borderRadius: 14, padding: '12px 14px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: BRAND.accentInk, letterSpacing: 0.4, marginBottom: 6 }}>CURRENT</div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{ fontWeight: 800, fontSize: 15, color: BRAND.ink }}>{targetDue.label}</div>
@@ -1257,6 +1454,29 @@ const SessionCheckinPage: React.FC = () => {
                           {money(targetDue.remaining ?? targetDue.amount, targetDue.currency)}
                         </div>
                       </div>
+
+                      {/* What is owed AS OF TODAY — every instalment already
+                          past its due date and still unpaid. NOT the rest of the
+                          year: a member who has paid nothing by August owes
+                          Apr–Aug, and telling them the full annual figure
+                          overstates what is actually due of them right now.
+                          Same rule the Dues grid and Finance use for arrears
+                          (unpaid AND due date passed), so all three agree.
+
+                          Hidden when only one instalment is overdue, since it
+                          would just repeat the amount directly above. */}
+                      {arrearsDues.length > 1 && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${BRAND.accent}55` }}>
+                          <div style={{ fontSize: 12.5, color: BRAND.sub }}>
+                            Pending till now
+                            <span style={{ color: BRAND.sub }}> · {arrearsDues.length} instalments</span>
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: BRAND.accentInk }}>
+                            {money(arrearsTotal, targetDue.currency)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1297,11 +1517,66 @@ const SessionCheckinPage: React.FC = () => {
               )}
 
               {err && <p style={{ color: BRAND.err, fontSize: 13 }}>{err}</p>}
-              <button onClick={() => setPaymentStepDone(true)}
+              {/* Continuing is only intercepted for someone who actually left
+                  for their UPI app and came back with nothing entered — that is
+                  the one case where we genuinely cannot tell what happened.
+                  Anyone who never tapped Pay skips straight through. */}
+              <button onClick={() => {
+                  if (paymentAttempted && !upiRef.trim()) { setShowPaidGate(true); return; }
+                  setPaymentStepDone(true);
+                }}
                 style={{ width: '100%', marginTop: 4, padding: 12, background: 'none', border: 'none',
                   color: BRAND.sub, fontWeight: 700, fontSize: 13.5, cursor: 'pointer' }}>
                 Skip for now — continue to check-in →
               </button>
+
+              {showPaidGate && (
+                <div
+                  role="dialog" aria-modal="true" aria-label="Did you complete the payment?"
+                  style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex',
+                    alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(15,15,20,0.55)' }}
+                  onClick={() => setShowPaidGate(false)}
+                >
+                  <div onClick={(e) => e.stopPropagation()}
+                    style={{ width: '100%', maxWidth: 430, background: '#fff',
+                      borderRadius: '18px 18px 0 0', padding: '20px 18px 18px' }}>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: BRAND.ink, marginBottom: 6 }}>
+                      Did you complete the payment?
+                    </div>
+                    <p style={{ fontSize: 13.5, color: BRAND.sub, margin: '0 0 16px', lineHeight: 1.6 }}>
+                      You opened your UPI app but haven't entered a reference number, so we can't
+                      tell whether the payment went through.
+                    </p>
+
+                    <button type="button"
+                      onClick={() => { setShowPaidGate(false); setShowReturnNudge(true); }}
+                      style={{ width: '100%', padding: 13, border: 'none', borderRadius: 12,
+                        background: BRAND.accent, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer' }}>
+                      Yes — I'll enter the reference
+                    </button>
+
+                    {/* Clearing paymentAttempted matters: it stops the come-back
+                        nudge re-firing for a payment they just told us never
+                        happened. */}
+                    <button type="button"
+                      onClick={() => {
+                        setShowPaidGate(false);
+                        setPaymentAttempted(false);
+                        setShowReturnNudge(false);
+                        setUpiRef('');
+                        setPaymentStepDone(true);
+                      }}
+                      style={{ width: '100%', marginTop: 8, padding: 12, borderRadius: 12,
+                        border: `1.5px solid ${BRAND.line}`, background: '#fff',
+                        color: BRAND.ink, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                      No — I haven't paid yet
+                    </button>
+                    <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', margin: '10px 0 0' }}>
+                      Either way your attendance is recorded. Nothing is charged from here.
+                    </p>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
