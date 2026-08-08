@@ -21,6 +21,7 @@ import { useMasterDataOptions } from '@/hooks/useMasterData';
 import { vaniToast } from '@/components/common/toast';
 import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getPhonePlaceholder } from '@/utils/validation/contactValidation';
+import { SALUTATIONS, DEFAULT_SALUTATION } from '@/utils/constants/contacts';
 
 interface Props {
   contact: Contact & { compliance_numbers?: any[] };
@@ -154,13 +155,15 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
         {/* IDENTITY */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
           <SectionCard colors={colors} icon={UserRound} title="Identity" active={editing === 'identity'}
-            onEdit={editHandler('identity', { salutation: contact.salutation || '', name: contact.name || '', company_name: contact.company_name || '', designation: contact.designation || '' })}>
+            onEdit={editHandler('identity', { salutation: contact.salutation || DEFAULT_SALUTATION, name: contact.name || '', company_name: contact.company_name || '', designation: contact.designation || '' })}>
             {editing === 'identity' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {!isCorp && (
                   <div><FieldLabel colors={colors}>Salutation</FieldLabel>
-                    <select value={draft.salutation} onChange={e => setDraft({ ...draft, salutation: e.target.value })} style={input as any}>
-                      {['', 'Mr', 'Ms', 'Mrs', 'Dr'].map(s => <option key={s} value={s}>{s || '—'}</option>)}
+                    {/* Same list Create uses, same codes get written — no
+                        blank option, so this is never left unset. */}
+                    <select value={draft.salutation || DEFAULT_SALUTATION} onChange={e => setDraft({ ...draft, salutation: e.target.value })} style={input as any}>
+                      {SALUTATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select></div>
                 )}
                 <div><FieldLabel colors={colors}>{isCorp ? 'Company name' : 'Full name'}</FieldLabel>
@@ -171,11 +174,15 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                   <input style={input} value={draft.designation} onChange={e => setDraft({ ...draft, designation: e.target.value })} placeholder="e.g. Director" /></div>
                 {bar(() => save(isCorp
                   ? { company_name: draft.company_name, designation: draft.designation }
-                  : { name: draft.name, salutation: draft.salutation || undefined, designation: draft.designation }))}
+                  : { name: draft.name, salutation: draft.salutation || DEFAULT_SALUTATION, designation: draft.designation }))}
               </div>
             ) : (
               <div>
-                {!isCorp && contact.salutation && <KV colors={colors} k="Salutation">{contact.salutation}</KV>}
+                {!isCorp && contact.salutation && (
+                  <KV colors={colors} k="Salutation">
+                    {SALUTATIONS.find(s => s.value === contact.salutation)?.label || contact.salutation}
+                  </KV>
+                )}
                 <KV colors={colors} k={isCorp ? 'Company' : 'Full name'}>{isCorp ? contact.company_name : contact.name}</KV>
                 <KV colors={colors} k="Type">{isCorp ? 'Corporate' : 'Individual'}</KV>
                 {contact.designation && <KV colors={colors} k="Designation">{contact.designation}</KV>}

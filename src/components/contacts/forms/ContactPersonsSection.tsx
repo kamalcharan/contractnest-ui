@@ -8,10 +8,12 @@ import ContactChannelsSection from './ContactChannelsSection';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import {
   SALUTATIONS,
+  DEFAULT_SALUTATION,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   PLACEHOLDER_TEXTS,
-  VALIDATION_RULES
+  VALIDATION_RULES,
+  formatContactDisplayName
 } from '../../../utils/constants/contacts';
 
 type SalutationType = typeof SALUTATIONS[number]['value'];
@@ -175,12 +177,13 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
     }
   };
 
-  // Get person display name
-  const getPersonDisplayName = (person: ContactPerson): string => {
-    const salutation = person.salutation ?
-      SALUTATIONS.find(s => s.value === person.salutation)?.label + ' ' : '';
-    return `${salutation}${person.name}`.trim() || 'New Contact Person';
-  };
+  // Get person display name — a ContactPerson is always an individual.
+  // formatContactDisplayName's own fallback is "Unnamed Contact"; this row
+  // is mid-entry rather than saved, so it keeps its own placeholder instead.
+  const getPersonDisplayName = (person: ContactPerson): string =>
+    person.name
+      ? formatContactDisplayName({ type: 'individual', salutation: person.salutation, name: person.name })
+      : 'New Contact Person';
 
   // Get primary contact channel for person
   const getPrimaryChannel = (channels: ContactChannel[], type: string) => {
@@ -559,7 +562,7 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [personData, setPersonData] = useState<Omit<ContactPerson, 'id'>>({
-    salutation: person?.salutation || undefined,
+    salutation: person?.salutation || DEFAULT_SALUTATION,
     name: person?.name || '',
     designation: person?.designation || '',
     department: person?.department || '',
@@ -677,16 +680,15 @@ const ContactPersonModal: React.FC<ContactPersonModalProps> = ({
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>Salutation</label>
                     <select
-                      value={personData.salutation || ''}
+                      value={personData.salutation || DEFAULT_SALUTATION}
                       onChange={(e) => setPersonData(prev => ({
                         ...prev,
-                        salutation: e.target.value as SalutationType || undefined
+                        salutation: e.target.value as SalutationType
                       }))}
                       className="w-full p-2 border rounded-md"
                       style={inputStyle}
                       disabled={loading}
                     >
-                      <option value="">Select</option>
                       {SALUTATIONS.map(option => (
                         <option key={option.value} value={option.value}>
                           {option.label}

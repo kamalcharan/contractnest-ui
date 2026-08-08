@@ -74,7 +74,7 @@ export interface ContactTag {
  */
 export interface ContactPerson {
   id?: string;
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
   name: string;
   designation?: string;
   department?: string;
@@ -102,7 +102,7 @@ export interface Contact {
   classifications: string[]; // ['buyer', 'seller', 'vendor', 'partner', 'team_member']
   
   // Individual fields
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
   name?: string;
   designation?: string;    // For individual contacts working at companies
   department?: string;     // For individual contacts working at companies
@@ -175,7 +175,7 @@ export interface CreateContactRequest {
   status?: 'active' | 'inactive' | 'archived';
   
   // Individual fields
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
   name?: string;
   designation?: string;              // NEW: For individuals working at companies
   department?: string;               // NEW: For individuals working at companies
@@ -215,7 +215,7 @@ export interface UpdateContactRequest {
   status?: 'active' | 'inactive' | 'archived';
   
   // Individual fields
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
   name?: string;
   designation?: string;              // NEW: For individuals working at companies
   department?: string;               // NEW: For individuals working at companies
@@ -457,7 +457,7 @@ export interface ContactFormData {
   status: 'active' | 'inactive' | 'archived';
   
   // Individual fields
-  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+  salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
   name?: string;
   designation?: string;              // NEW: For individuals working at companies
   department?: string;               // NEW: For individuals working at companies

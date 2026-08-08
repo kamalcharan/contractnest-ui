@@ -50,6 +50,7 @@ import {
   categoryHasPricing,
   getCategoryById,
 } from '@/utils/catalog-studio/categories';
+import { formatContactDisplayName } from '@/utils/constants/contacts';
 
 // ─── Props ───────────────────────────────────────────────────────────
 
@@ -118,14 +119,6 @@ const getDurationInMonths = (value: number, unit: string): number => {
   if (unit === 'months') return value;
   if (unit === 'years') return value * 12;
   return Math.ceil(value / 30);
-};
-
-const SALUTATION_LABELS: Record<string, string> = {
-  mr: 'Mr.',
-  ms: 'Ms.',
-  mrs: 'Mrs.',
-  dr: 'Dr.',
-  prof: 'Prof.',
 };
 
 const CATEGORY_ICONS: Record<string, React.FC<{ className?: string; style?: React.CSSProperties }>> = {
@@ -223,9 +216,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   const buyerDisplayName = useMemo(() => {
     if (!buyerContact) return buyerName || 'Not selected';
     if (buyerContact.type === 'corporate') return buyerContact.company_name || buyerContact.name || buyerName;
-    const salutation = buyerContact.salutation ? SALUTATION_LABELS[buyerContact.salutation] || '' : '';
-    const name = buyerContact.name || buyerName;
-    return salutation ? `${salutation} ${name}` : name;
+    return formatContactDisplayName({ ...buyerContact, name: buyerContact.name || buyerName });
   }, [buyerContact, buyerName]);
 
   const buyerPrimaryAddress = useMemo(() => {

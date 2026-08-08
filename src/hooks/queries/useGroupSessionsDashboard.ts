@@ -43,11 +43,17 @@ export interface GsOccurrenceRow {
   /** Chair assigned to this occurrence (also backs a real appointment — see gs_schedule_assign) */
   assigned_to: string | null;
   assigned_to_name: string | null;
+  /** Live-joined from t_contacts — null if assigned_to doesn't resolve to a
+   * live contact (a handful of historical assignments predate this join and
+   * point at an id that no longer exists; the name still shows, just without
+   * a salutation prefix, same as before this field existed). */
+  assigned_to_salutation: string | null;
 }
 
 export interface GsRosterRow {
   contact_id: string;
   name: string | null;
+  salutation: string | null;
   membership_contract_id: string | null;
   contract_name: string | null;
   start_date: string | null;
@@ -137,6 +143,7 @@ export interface GsDuesCell {
 export interface GsDuesRow {
   contact_id: string;
   name: string | null;
+  salutation: string | null;
   contract_id: string;
   contract_number: string | null;
   contract_name: string | null;
@@ -435,6 +442,8 @@ export const useAssignChairDefault = () => {
 export interface GsOccAttendanceMember {
   contact_id: string;
   name: string | null;
+  /** null for guests — no contact-level salutation to draw on. */
+  salutation: string | null;
   /** 'guest' = checked in with no contract on this block (visitor/prospect) — dues don't apply. */
   type: 'member' | 'guest';
   membership_contract_id: string | null;
@@ -523,6 +532,7 @@ export interface GsDeclaration {
   id: string;
   member_contact_id: string | null;
   member_name: string | null;
+  member_salutation: string | null;
   billing_event_id: string | null;
   label: string | null;
   due_date: string | null;

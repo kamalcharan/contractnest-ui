@@ -2,7 +2,8 @@
 
 import api from './api';
 import { API_ENDPOINTS, buildContactListURL } from './serviceURLs';
-import { 
+import { formatContactDisplayName } from '../utils/constants/contacts';
+import {
   Contact, 
   CreateContactRequest, 
   UpdateContactRequest, 
@@ -621,12 +622,7 @@ private transformContactForUI(apiContact: any): Contact {
    * Get contact display name for UI
    */
   private getContactDisplayName(contact: any): string {
-    if (contact.type === 'corporate') {
-      return contact.company_name || 'Unnamed Company';
-    } else {
-      const salutation = contact.salutation ? `${contact.salutation}. ` : '';
-      return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
-    }
+    return formatContactDisplayName(contact);
   }
 
   /**

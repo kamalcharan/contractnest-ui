@@ -17,7 +17,7 @@ export interface CheckinResolve {
   tenant_id?: string; contract_id?: string; contract_name?: string; business_name?: string; today?: string;
   occurrence?: CheckinOccurrence | null; next_occurrence?: { event_id: string; date: string } | null;
 }
-export interface CheckinMember { contact_id: string; name: string; membership_contract_id: string | null }
+export interface CheckinMember { contact_id: string; name: string; salutation?: string | null; membership_contract_id: string | null }
 export interface BillingRow {
   event_id: string; label: string; date: string; amount: number; currency: string;
   status: string; sub_type?: string; seq?: number;

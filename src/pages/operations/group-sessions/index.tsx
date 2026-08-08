@@ -58,6 +58,13 @@ import {
 import { useStatusMap, useTransitionMap } from '@/hooks/queries/useEventStatusConfigQueries';
 import { useContractEventOperations } from '@/hooks/queries/useContractEventQueries';
 import QRCard from '@/components/group-sessions/QRCard';
+import { formatContactDisplayName } from '@/utils/constants/contacts';
+
+// Every screen in this file shows an individual (never corporate), so this
+// is just formatContactDisplayName with the type branch pre-filled — same
+// canonical formatter Contacts uses, not a private reimplementation.
+const displayName = (person: { name: string | null; salutation?: string | null }): string =>
+  formatContactDisplayName({ type: 'individual', name: person.name, salutation: person.salutation });
 
 const CHAIR_CLASSIFICATIONS = ['buyer', 'vendor', 'partner', 'team_member'];
 
@@ -227,8 +234,14 @@ const GroupSessionsPage: React.FC = () => {
     const upcoming = occurrences.filter((o) => !o.is_past && o.status !== 'cancelled');
     const next = upcoming.find((o) => o.assigned_to_name);
     if (!next) return null;
+    // Compare on the raw stored name, not the formatted one — two
+    // occurrences assigned to the same person always share the same
+    // assigned_to_name regardless of salutation formatting.
     const matching = upcoming.filter((o) => o.assigned_to_name === next.assigned_to_name).length;
-    return { name: next.assigned_to_name as string, count: matching, total: upcoming.length };
+    return {
+      name: displayName({ name: next.assigned_to_name, salutation: next.assigned_to_salutation }),
+      count: matching, total: upcoming.length,
+    };
   }, [occurrences]);
 
   const overview = useMemo(() => {
@@ -508,6 +521,12 @@ const GroupSessionsPage: React.FC = () => {
 
     const confirm = () => {
       if (!pickedId || !pickedContact) return;
+      // Deliberately the BARE name, unchanged — assigned_to_name is a stored
+      // snapshot, same convention as buyer_name/member_name elsewhere in this
+      // file. Salutation is added at render time only, via the live join in
+      // gs_dash_occurrences — baking it in here would go stale exactly like a
+      // frozen name would, plus double up with the separately-tracked
+      // assigned_to_salutation on next render.
       const name = pickedContact.company_name || pickedContact.name || pickedContact.displayName || 'Unnamed';
       onAssign(pickedId, name);
       setEditing(false);
@@ -677,7 +696,8 @@ const GroupSessionsPage: React.FC = () => {
               onClick={() => {
                 const header = ['Member', 'Group', 'Amount', 'Currency', 'Reference', 'Declared At'];
                 const rows = filteredDeclarations.map((d) => [
-                  d.member_name, d.block_name, d.amount, d.currency, d.upi_reference, d.created_at,
+                  d.member_name ? displayName({ name: d.member_name, salutation: d.member_salutation }) : d.member_name,
+                  d.block_name, d.amount, d.currency, d.upi_reference, d.created_at,
                 ]);
                 downloadCsv([header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n'), `payments-to-confirm-${new Date().toISOString().slice(0, 10)}.csv`);
               }}
@@ -707,7 +727,7 @@ const GroupSessionsPage: React.FC = () => {
                         {initials(d.member_name)}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold truncate" style={ink}>{d.member_name || '—'}</p>
+                        <p className="text-xs font-bold truncate" style={ink}>{d.member_name ? displayName({ name: d.member_name, salutation: d.member_salutation }) : '—'}</p>
                         <p className="text-[10px]" style={sub}>declared {fmtShort(d.created_at)} · self-declared</p>
                       </div>
                     </div>
@@ -827,7 +847,7 @@ const GroupSessionsPage: React.FC = () => {
       // Numbers stay unformatted in the CSV — a spreadsheet must be able to
       // sum them. The currency travels in its own column instead.
       const body = filteredDues.map((r) => [
-        r.name, r.contract_number, r.start_date?.slice(0, 10) || '', r.end_date?.slice(0, 10) || '',
+        r.name ? displayName(r) : r.name, r.contract_number, r.start_date?.slice(0, 10) || '', r.end_date?.slice(0, 10) || '',
         planLabel(r.plan), r.plan_source, r.instalments, r.currency,
         r.contract_value, r.discount, r.net,
         r.scheduled_total, r.paid_total, r.due_total, r.future_total, r.beyond_total,
@@ -980,7 +1000,7 @@ const GroupSessionsPage: React.FC = () => {
                         {initials(r.name)}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-xs font-bold truncate" style={ink}>{r.name || '—'}</p>
+                        <p className="text-xs font-bold truncate" style={ink}>{r.name ? displayName(r) : '—'}</p>
                         {/* Plan pill lives here rather than in its own column —
                             it belongs to the member's identity, and folding it
                             in returns that width to the money columns. */}
@@ -1058,7 +1078,7 @@ const GroupSessionsPage: React.FC = () => {
               >
                 <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl border p-5"
                   style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '18' }}>
-                  <p className="text-sm font-bold" style={ink}>{markCell.row.name}</p>
+                  <p className="text-sm font-bold" style={ink}>{displayName(markCell.row)}</p>
                   <p className="text-xs mb-4" style={sub}>
                     {markCell.monthLabel} · {markCell.row.contract_number}
                   </p>
@@ -1121,7 +1141,7 @@ const GroupSessionsPage: React.FC = () => {
                     Mark as {statusLabel(markConfirm.to)}?
                   </p>
                   <p className="text-xs mb-1" style={sub}>
-                    <b style={ink}>{markConfirm.row.name}</b> · {markConfirm.monthLabel} ·{' '}
+                    <b style={ink}>{displayName(markConfirm.row)}</b> · {markConfirm.monthLabel} ·{' '}
                     <b style={ink}>{money(markConfirm.event.amount, markConfirm.row.currency)}</b>
                   </p>
                   <p className="text-xs mb-4" style={sub}>
@@ -1240,7 +1260,7 @@ const GroupSessionsPage: React.FC = () => {
                       <span className="text-[11px] tabular-nums" style={sub}>{o.seq ?? '—'}</span>
                       <div className="min-w-0">
                         {o.assigned_to_name ? (
-                          <p className="text-xs font-semibold truncate" style={ink}>{o.assigned_to_name}</p>
+                          <p className="text-xs font-semibold truncate" style={ink}>{displayName({ name: o.assigned_to_name, salutation: o.assigned_to_salutation })}</p>
                         ) : (
                           <p className="text-[11px]" style={sub}>unassigned</p>
                         )}
@@ -1373,7 +1393,7 @@ const GroupSessionsPage: React.FC = () => {
                         <span className="h-8 w-8 rounded-lg flex-none inline-flex items-center justify-center text-xs font-bold border" style={{ backgroundColor: colors.brand.primary + '20', borderColor: colors.brand.primary + '40', color: colors.brand.primary }}>
                           {initials(m.name)}
                         </span>
-                        <p className="text-xs font-bold truncate" style={ink}>{m.name || '—'}</p>
+                        <p className="text-xs font-bold truncate" style={ink}>{m.name ? displayName(m) : '—'}</p>
                       </div>
                       <span className="text-[11px] truncate" style={sub}>{m.contract_name || '—'}</span>
                       <span className="text-xs font-bold tabular-nums" style={{ color: overCap ? colors.semantic.error : colors.utility.primaryText }}>{m.attended}/{m.overall}</span>
@@ -1488,8 +1508,18 @@ const GroupSessionsPage: React.FC = () => {
             busy={assignChair.isPending}
             buttonLabel="Assign chair"
             changeLabel="Change"
-            onAssign={(id, name) => { assignChair.mutate({ id: o.event_id, contactId: id, contactName: name }); setSelectedOcc({ ...o, assigned_to: id, assigned_to_name: name }); }}
-            onRemove={() => { assignChair.mutate({ id: o.event_id, contactId: undefined, contactName: undefined }); setSelectedOcc({ ...o, assigned_to: null, assigned_to_name: null }); }}
+            onAssign={(id, name) => {
+              assignChair.mutate({ id: o.event_id, contactId: id, contactName: name });
+              // assigned_to_salutation reset to null, not carried over — it's
+              // the PREVIOUS chair's value until the invalidateQueries above
+              // lands; showing no prefix briefly is safe, showing the wrong
+              // one is not.
+              setSelectedOcc({ ...o, assigned_to: id, assigned_to_name: name, assigned_to_salutation: null });
+            }}
+            onRemove={() => {
+              assignChair.mutate({ id: o.event_id, contactId: undefined, contactName: undefined });
+              setSelectedOcc({ ...o, assigned_to: null, assigned_to_name: null, assigned_to_salutation: null });
+            }}
           />
         </div>
         )}
@@ -1499,7 +1529,7 @@ const GroupSessionsPage: React.FC = () => {
             <div className="flex items-center gap-3 px-4 py-3">
               <div className="w-9 h-9 rounded-lg grid place-items-center flex-none" style={{ backgroundColor: colors.semantic.success + '18', color: colors.semantic.success }}><CalendarClock size={17} /></div>
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold" style={ink}>Appointment · {o.assigned_to_name}</div>
+                <div className="text-[13px] font-semibold" style={ink}>Appointment · {displayName({ name: o.assigned_to_name, salutation: o.assigned_to_salutation })}</div>
                 <div className="text-[11.5px]" style={sub}>{fmtDate(o.date)} · chairs this session</div>
               </div>
               <Pill label="Accepted" accent={colors.semantic.success} />
@@ -1558,7 +1588,7 @@ const GroupSessionsPage: React.FC = () => {
                     <span className="h-8 w-8 rounded-lg flex-none inline-flex items-center justify-center text-xs font-bold border" style={{ backgroundColor: colors.brand.primary + '20', borderColor: colors.brand.primary + '40', color: colors.brand.primary }}>
                       {initials(m.name)}
                     </span>
-                    <p className="text-xs font-bold truncate" style={ink}>{m.name || '—'}</p>
+                    <p className="text-xs font-bold truncate" style={ink}>{m.name ? displayName(m) : '—'}</p>
                   </div>
                   <div><Pill label={m.type === 'guest' ? 'Guest' : 'Member'} accent={m.type === 'guest' ? colors.brand.primary : colors.utility.secondaryText} /></div>
                   <div>{m.type === 'guest' ? <span style={sub}>—</span> : <Pill label={m.dues_pending ? 'Due' : 'Paid'} accent={m.dues_pending ? colors.semantic.warning : colors.semantic.success} />}</div>

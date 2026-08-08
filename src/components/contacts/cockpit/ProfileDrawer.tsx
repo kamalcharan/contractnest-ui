@@ -36,7 +36,7 @@ import ContactTagsSection from '@/components/contacts/forms/ContactTagsSection';
 import ContactClassificationSelector from '@/components/contacts/forms/ContactClassificationSelector';
 
 // Import constants
-import { CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG, getClassificationColors } from '@/utils/constants/contacts';
+import { CONTACT_CHANNEL_TYPES, CONTACT_CLASSIFICATION_CONFIG, getClassificationColors, formatContactDisplayName } from '@/utils/constants/contacts';
 
 // Types
 interface ContactChannel {
@@ -573,13 +573,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   };
 
   // Get display name
-  const getDisplayName = () => {
-    if (contact.type === 'corporate') {
-      return contact.company_name || 'Unnamed Company';
-    }
-    const salutation = contact.salutation ? `${contact.salutation}. ` : '';
-    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
-  };
+  const getDisplayName = () => formatContactDisplayName(contact);
 
   // Format channel display
   const formatChannelValue = (channel: ContactChannel) => {

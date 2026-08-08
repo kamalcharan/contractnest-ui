@@ -21,8 +21,15 @@ export const SALUTATIONS = [
   { value: 'mrs', label: 'Mrs.' },
   { value: 'ms', label: 'Ms.' },
   { value: 'dr', label: 'Dr.' },
-  { value: 'prof', label: 'Prof.' }
+  { value: 'prof', label: 'Prof.' },
+  { value: 'smt', label: 'Smt.' },
+  { value: 'sri', label: 'Sri' }
 ] as const;
+
+// The default when an individual contact has no salutation chosen — never
+// left blank. Individual-only: formatContactDisplayName below never applies
+// a salutation to a corporate contact, and neither should this default.
+export const DEFAULT_SALUTATION = 'sri' as const;
 
 // Contact Status Management (requirement #4, #7)
 export const CONTACT_STATUS = {

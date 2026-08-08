@@ -61,6 +61,7 @@ import {
  USER_ACCOUNT_STATUS,
  USER_STATUS_MESSAGES,
  SALUTATIONS,
+ DEFAULT_SALUTATION,
  VALIDATION_RULES,
  ERROR_MESSAGES,
  SUCCESS_MESSAGES,
@@ -80,7 +81,7 @@ interface ContactFormData {
  type: 'individual' | 'corporate';
  classifications: any[]; // Can be objects from UI or strings
  status: 'active' | 'inactive' | 'archived';
- salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof';
+ salutation?: 'mr' | 'ms' | 'mrs' | 'dr' | 'prof' | 'smt' | 'sri';
  name?: string;
  company_name?: string;
  company_registration_number?: string;
@@ -508,6 +509,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
    type: CONTACT_FORM_TYPES.INDIVIDUAL,
    classifications: [],
    status: CONTACT_STATUS.ACTIVE,
+   salutation: DEFAULT_SALUTATION,
    contact_channels: [],
    addresses: [],
    compliance_numbers: [],
@@ -549,7 +551,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        type: existingContact.type as 'individual' | 'corporate',
        classifications: transformedClassifications,
        status: existingContact.status as 'active' | 'inactive' | 'archived',
-       salutation: existingContact.salutation as any,
+       salutation: (existingContact.salutation as any) || DEFAULT_SALUTATION,
        name: existingContact.name,
        company_name: existingContact.company_name,
        company_registration_number: existingContact.company_registration_number,
@@ -926,7 +928,7 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
        const resetData = {
          ...prev,
          ...updates,
-         salutation: undefined,
+         salutation: DEFAULT_SALUTATION,
          name: undefined,
          company_name: undefined,
          company_registration_number: undefined,
@@ -1190,9 +1192,9 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                      >
                        Salutation
                      </label>
-                     <select 
-                       value={formData.salutation || ''}
-                       onChange={(e) => updateFormData({ salutation: e.target.value as any || undefined })}
+                     <select
+                       value={formData.salutation || DEFAULT_SALUTATION}
+                       onChange={(e) => updateFormData({ salutation: e.target.value as any })}
                        disabled={isSaving}
                        className="w-full p-2 border rounded-md disabled:opacity-50 transition-colors"
                        style={{
@@ -1201,7 +1203,9 @@ const ContactCreateForm: React.FC<ContactFormProps> = ({
                          color: colors.utility.primaryText
                        }}
                      >
-                       <option value="">Select</option>
+                       {/* No blank option — a salutation is always forced to a
+                           real value, defaulting to Sri rather than being left
+                           empty. */}
                        {SALUTATIONS.map(option => (
                          <option key={option.value} value={option.value}>
                            {option.label}

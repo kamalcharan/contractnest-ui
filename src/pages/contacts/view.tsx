@@ -41,7 +41,7 @@ import ContactProfileTab from '@/components/contacts/view/ContactProfileTab';
 import type { ExplainerTab } from '@/utils/explainerRegistry';
 
 // Constants
-import { USER_STATUS_MESSAGES, BUSINESS_RULES } from '@/utils/constants/contacts';
+import { USER_STATUS_MESSAGES, BUSINESS_RULES, formatContactDisplayName } from '@/utils/constants/contacts';
 
 // Types
 interface ContactChannel {
@@ -152,9 +152,7 @@ const ContactViewPage: React.FC = () => {
   // Get display name
   const getContactDisplayName = (): string => {
     if (!contact) return '';
-    if (contact.type === 'corporate') return contact.company_name || 'Unnamed Company';
-    const salutation = contact.salutation ? `${contact.salutation}. ` : '';
-    return `${salutation}${contact.name || ''}`.trim() || 'Unnamed Contact';
+    return formatContactDisplayName(contact);
   };
 
   // Get primary channel

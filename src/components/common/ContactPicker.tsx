@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, X, User, Building2, Loader2, ChevronsUpDown } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useContactList, useContact, type Contact } from '@/hooks/useContacts';
+import { formatContactDisplayName } from '@/utils/constants/contacts';
 
 interface ContactPickerProps {
   value: string | undefined;            // contact ID
@@ -96,9 +97,15 @@ const ContactPicker: React.FC<ContactPickerProps> = ({
   };
 
   // ── Display name helper ──
+  // Minimal change on purpose: only the individual-with-a-name case now goes
+  // through the canonical formatter (adds the salutation this never had).
+  // Every other branch — corporate, and the no-name fallback to
+  // contact.displayName — is untouched, byte-for-byte the same as before.
   const getDisplayName = (contact: Contact): string => {
     if (contact.company_name) return contact.company_name;
-    return contact.name || contact.displayName || 'Unnamed Contact';
+    return contact.name
+      ? formatContactDisplayName({ type: 'individual', name: contact.name, salutation: contact.salutation })
+      : (contact.displayName || 'Unnamed Contact');
   };
 
   const getSubline = (contact: Contact): string => {

@@ -24,6 +24,7 @@ import EventsPreviewStep from './steps/EventsPreviewStep';
 import EvidencePolicyStep, { type EvidencePolicyType, type SelectedForm } from './steps/EvidencePolicyStep';
 import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } from './steps/AssetSelectionStep';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
+import { useAllowanceWarning } from '@/hooks/useAllowanceWarning';
 import { categoryHasPricing, getCategoryById } from '@/utils/catalog-studio/categories';
 import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
 import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
@@ -129,6 +130,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
   // API mutation
   const { createContract, updateContract, updateStatus, sendNotification, isCreating, isUpdating, setSilentMode } = useContractOperations();
   const { addToast } = useVaNiToast();
+
+  // Plan allowance heads-up, once on open. Advisory only — nothing below is
+  // gated on it, and the create path is untouched. Template mode is excluded:
+  // authoring a template does not consume a contract.
+  useAllowanceWarning('contracts', isOpen && !isTemplateMode);
 
   // Gateway status for pre-payment dialog (online option)
   const { hasActiveGateway: wizardHasGateway, providerDisplayName: wizardGatewayName } = useGatewayStatus();

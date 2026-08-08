@@ -22,6 +22,7 @@ import {
 } from './useSessionCheckin';
 import { countries } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getFullPhoneNumber, getPhonePlaceholder } from '@/utils/validation/contactValidation';
+import { formatContactDisplayName } from '@/utils/constants/contacts';
 
 // ── brand tokens (Option A: the configurable skeleton) ──────────────────────
 const BRAND = {
@@ -1340,7 +1341,7 @@ const SessionCheckinPage: React.FC = () => {
           <Card>
             <div style={{ fontWeight: 800, color: BRAND.ink, fontSize: 16 }}>
               {member
-                ? `Welcome, ${member.name}`
+                ? `Welcome, ${formatContactDisplayName({ type: 'individual', name: member.name, salutation: member.salutation })}`
                 : notFoundKind === 'substitute'
                   ? `${subName} (substitute)`
                   : `${firstTimerName} (guest)`}
