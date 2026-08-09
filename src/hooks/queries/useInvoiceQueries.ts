@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
+import { financeKeys } from '@/hooks/queries/useFinanceQueries';
+import { useInvalidateContactCockpit } from '@/hooks/queries/useContactCockpit';
 import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse, CancelInvoicePayload, CancelInvoiceResponse, CancelReceiptPayload, CancelReceiptResponse } from '@/types/contracts';
 
 // =================================================================
@@ -122,6 +124,89 @@ export const useRecordPayment = (contractId: string | undefined) => {
         captureException(error, {
           tags: { component: 'useRecordPayment' },
           extra: { contractId, tenantId: currentTenant?.id },
+        });
+      },
+    },
+  });
+};
+
+// =================================================================
+// MUTATION: Create Adhoc Invoice (no contract — settled at creation)
+// =================================================================
+
+export interface AdhocLineItemPayload {
+  block_id?: string | null;
+  name: string;
+  qty: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface CreateAdhocInvoicePayload {
+  contact_id: string;
+  currency: string;
+  line_items: AdhocLineItemPayload[];
+  tax_amount?: number;
+  payment_method: string;
+  payment_date?: string | null;
+  reference_number?: string | null;
+  notes?: string | null;
+  /** When set, stamps the source Group Session declaration with the
+   * resulting invoice id (same transaction) so the Payments-to-confirm
+   * panel can switch that row from "Invoice" to "Confirm". */
+  declaration_id?: string | null;
+}
+
+export interface CreateAdhocInvoiceResponse {
+  invoice_id: string;
+  invoice_number: string;
+  receipt_id: string;
+  receipt_number: string;
+  contact_id: string;
+  amount: number;
+  tax_amount: number;
+  total_amount: number;
+  currency: string;
+  status: string;
+  declaration_id?: string | null;
+}
+
+/**
+ * Create a contact-less invoice (Group Sessions Payments-to-confirm / Contact
+ * Financials "Adhoc Service" entry points). Invoice + settling receipt are
+ * created together server-side (create_adhoc_invoice) — always fully paid,
+ * no separate record-payment step. Invalidates the receivables/cockpit
+ * queries that surface it so Finance updates immediately.
+ */
+export const useCreateAdhocInvoice = () => {
+  const { currentTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const { invalidateForContact } = useInvalidateContactCockpit();
+
+  return useMutation({
+    mutationFn: async (payload: CreateAdhocInvoicePayload): Promise<CreateAdhocInvoiceResponse> => {
+      if (!currentTenant?.id) {
+        throw new Error('Missing tenant');
+      }
+
+      const response = await api.post(API_ENDPOINTS.INVOICES.ADHOC, payload);
+      const result = response.data?.data || response.data;
+
+      if (result?.success === false) {
+        throw new Error(result.error || 'Failed to create invoice');
+      }
+
+      return result;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: financeKeys.all });
+      invalidateForContact(variables.contact_id);
+    },
+    meta: {
+      onError: (error: any) => {
+        captureException(error, {
+          tags: { component: 'useCreateAdhocInvoice' },
+          extra: { tenantId: currentTenant?.id },
         });
       },
     },

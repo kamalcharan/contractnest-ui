@@ -28,7 +28,7 @@ import {
   Users, RefreshCw, AlertTriangle, Inbox, ChevronRight, ChevronLeft, ChevronDown,
   CalendarClock, CheckCircle2, CircleDollarSign, UserRound, ArrowLeft, TrendingUp,
   Wallet, Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw, Mic,
-  UserCog, Lock, Search, Download, Table2,
+  UserCog, Lock, Search, Download, Table2, Receipt,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -57,6 +57,8 @@ import {
 } from '@/hooks/queries/useGroupSessionsDashboard';
 import { useStatusMap, useTransitionMap } from '@/hooks/queries/useEventStatusConfigQueries';
 import { useContractEventOperations } from '@/hooks/queries/useContractEventQueries';
+import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
+import AdHocInvoiceDialog from '@/components/finance/AdHocInvoiceDialog';
 import QRCard from '@/components/group-sessions/QRCard';
 import { formatContactDisplayName } from '@/utils/constants/contacts';
 
@@ -343,6 +345,23 @@ const GroupSessionsPage: React.FC = () => {
   }>(null);
   const [markConfirm, setMarkConfirm] = useState<null | {
     row: GsDuesRow; monthLabel: string; event: GsDuesCellEvent; to: string;
+  }>(null);
+
+  // A real receipt (cash, UPI, cheque…) — distinct from the status chips
+  // above, which only relabel an instalment (waived/cancelled/etc.) and never
+  // touch amount_settled or the invoice balance. Recording a payment goes
+  // through the same RecordPaymentDialog the Contract Detail page uses, so
+  // settlement stays in one place instead of a second, parallel write path.
+  const [recordPaymentTarget, setRecordPaymentTarget] = useState<null | {
+    contractId: string; eventIds: string[];
+  }>(null);
+
+  // Contact-less invoice, created from the Payments-to-confirm panel or the
+  // Contacts Financials tab (AdHocServiceCard) — no membership contract
+  // required, invoice + receipt created together, always fully paid.
+  const [adhocInvoiceTarget, setAdhocInvoiceTarget] = useState<null | {
+    contactId: string; contactName: string | null; declarationId?: string | null;
+    initialItems?: Array<{ blockId?: string | null; name: string; qty?: number; unitPrice: number }>;
   }>(null);
 
   const statusColor = (code: string) =>
@@ -744,22 +763,63 @@ const GroupSessionsPage: React.FC = () => {
                       )}
                     </div>
                     <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        disabled={confirmDeclaration.isPending}
-                        onClick={() => confirmDeclaration.mutate({ id: d.id, confirm: true })}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
-                        style={{ backgroundColor: colors.semantic.success, color: '#fff' }}
-                      >
-                        <Check size={13} /> Confirm
-                      </button>
-                      <button
-                        disabled={confirmDeclaration.isPending}
-                        onClick={() => confirmDeclaration.mutate({ id: d.id, confirm: false })}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50"
-                        style={{ ...sub, borderColor: colors.utility.primaryText + '22' }}
-                      >
-                        Reject
-                      </button>
+                      {/* Guest fees (no billing_event_id) have nothing for
+                          Confirm to record against — it would silently flip
+                          the status with no ledger action. So: no invoice yet
+                          -> only "Invoice" (+ Reject) is offered; once
+                          create_adhoc_invoice has stamped this declaration,
+                          Confirm reappears exactly like a normal contract due. */}
+                      {d.is_guest_fee && !d.adhoc_invoice_id ? (
+                        d.member_contact_id && (
+                          <button
+                            onClick={() => setAdhocInvoiceTarget({
+                              contactId: d.member_contact_id as string,
+                              contactName: d.member_name,
+                              declarationId: d.id,
+                              // Already declared at check-in — seed the item
+                              // from what's known rather than making the
+                              // chair re-enter it from scratch.
+                              initialItems: [{ name: d.label || d.block_name || 'Guest Participation Fee', unitPrice: d.amount || 0, qty: 1 }],
+                            })}
+                            title="Create a contact-less invoice for this member"
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1"
+                            style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+                          >
+                            <Receipt size={13} /> Invoice
+                          </button>
+                        )
+                      ) : (
+                        <>
+                          {d.adhoc_invoice_id && (
+                            <span className="text-[10px] font-mono mr-1" style={sub} title="Invoice already created for this declaration">
+                              {d.adhoc_invoice_number || 'Invoiced'}
+                            </span>
+                          )}
+                          <button
+                            disabled={confirmDeclaration.isPending}
+                            onClick={() => confirmDeclaration.mutate({ id: d.id, confirm: true })}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-50"
+                            style={{ backgroundColor: colors.semantic.success, color: '#fff' }}
+                          >
+                            <Check size={13} /> Confirm
+                          </button>
+                        </>
+                      )}
+                      {/* Once an invoice already exists for this declaration,
+                          rejecting it would leave real, recorded money behind
+                          a "rejected" declaration — nothing reverses the
+                          invoice, so that's a worse gap than just hiding the
+                          button. Confirm is the only closing action from here. */}
+                      {!d.adhoc_invoice_id && (
+                        <button
+                          disabled={confirmDeclaration.isPending}
+                          onClick={() => confirmDeclaration.mutate({ id: d.id, confirm: false })}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:opacity-50"
+                          style={{ ...sub, borderColor: colors.utility.primaryText + '22' }}
+                        >
+                          Reject
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1083,6 +1143,25 @@ const GroupSessionsPage: React.FC = () => {
                     {markCell.monthLabel} · {markCell.row.contract_number}
                   </p>
 
+                  {/* A real receipt, distinct from the status chips below —
+                      this creates a real receipt and settles the invoice.
+                      Hidden once nothing here is still owed. */}
+                  {markCell.events.some((ev) => ev.amount - ev.settled > 0.001) && (
+                    <button
+                      onClick={() => {
+                        setRecordPaymentTarget({
+                          contractId: markCell.row.contract_id,
+                          eventIds: markCell.events.map((ev) => ev.id),
+                        });
+                        setMarkCell(null);
+                      }}
+                      className="w-full mb-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5"
+                      style={{ backgroundColor: colors.semantic.success, color: '#fff' }}
+                    >
+                      <Wallet size={13} /> Record Payment
+                    </button>
+                  )}
+
                   {markCell.events.map((ev) => {
                     const allowed = billingTransitions[ev.status] || [];
                     return (
@@ -1163,6 +1242,19 @@ const GroupSessionsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {recordPaymentTarget && (
+              <RecordPaymentDialog
+                isOpen={!!recordPaymentTarget}
+                onClose={() => setRecordPaymentTarget(null)}
+                contractId={recordPaymentTarget.contractId}
+                preselectedEventIds={recordPaymentTarget.eventIds}
+                onSuccess={() => {
+                  setRecordPaymentTarget(null);
+                  duesQuery.refetch();
+                }}
+              />
             )}
 
             <Pager page={duesPage} total={filteredDues.length} onPage={setDuesPage} noun={memberCount === filteredDues.length ? 'members' : 'contracts'} size={DUES_PAGE_SIZE} />
@@ -1626,6 +1718,21 @@ const GroupSessionsPage: React.FC = () => {
       {view === 'group' && selectedSession && renderGroup()}
       {view === 'roster' && selectedSession && renderRoster()}
       {view === 'occurrence' && selectedOcc && selectedSession && renderOccurrence()}
+
+      {adhocInvoiceTarget && (
+        <AdHocInvoiceDialog
+          isOpen={!!adhocInvoiceTarget}
+          onClose={() => setAdhocInvoiceTarget(null)}
+          contactId={adhocInvoiceTarget.contactId}
+          contactName={adhocInvoiceTarget.contactName}
+          declarationId={adhocInvoiceTarget.declarationId}
+          initialItems={adhocInvoiceTarget.initialItems}
+          onSuccess={() => {
+            setAdhocInvoiceTarget(null);
+            declarationsQuery.refetch();
+          }}
+        />
+      )}
     </div>
   );
 };
