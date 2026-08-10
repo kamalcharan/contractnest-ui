@@ -14,14 +14,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, Sparkles, AlertCircle, Loader2, CheckCircle2, Wallet, RefreshCw } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
-import { usePlanTemplates, PlanTemplate } from '@/hooks/queries/usePlanTemplates';
-import { useSubscribeToPlan } from '@/hooks/mutations/useSubscribeToPlan';
-import { usePackTemplates, PackTemplate } from '@/hooks/queries/usePackTemplates';
-import { usePurchasePack } from '@/hooks/mutations/usePurchasePack';
+import { usePlanTemplates, PlanTemplate, planTemplateKeys } from '@/hooks/queries/usePlanTemplates';
+import { useSubscribeToPlan, PlanSubscriptionResult } from '@/hooks/mutations/useSubscribeToPlan';
+import { usePackTemplates, PackTemplate, packTemplateKeys } from '@/hooks/queries/usePackTemplates';
+import { usePurchasePack, PackPurchaseResult } from '@/hooks/mutations/usePurchasePack';
+import { useCreateOrder, type VerifyPaymentResponse } from '@/hooks/queries/usePaymentGatewayQueries';
+import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 
 // Creation limits are the only capped resources — the product bills whoever
@@ -48,6 +52,8 @@ const PricingPlansPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { addToast } = useVaNiToast();
   const { data, isLoading, error } = usePlanTemplates();
@@ -62,24 +68,130 @@ const PricingPlansPage: React.FC = () => {
 
   const subscribe = useSubscribeToPlan();
   // Tracked per plan so only the clicked card shows a spinner, not all of them.
+  // Stays set for the ENTIRE flow — including the Razorpay popup — not just
+  // the initial create call, so a second click can't fire while payment is
+  // still being collected.
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   // The plan pending confirmation in the switch modal — separate from
   // pendingPlanId, which only tracks the in-flight mutation itself.
   const [switchTarget, setSwitchTarget] = useState<PlanTemplate | null>(null);
+
+  const { data: packData, isLoading: packsLoading } = usePackTemplates();
+  const packs: PackTemplate[] = packData?.data?.packs ?? [];
+  const purchasePack = usePurchasePack();
+  const [pendingPackId, setPendingPackId] = useState<string | null>(null);
+
+  // The contract currently being paid for via the Razorpay popup — shared by
+  // both plans and packs, since only one checkout can be open at a time.
+  const [payingContractId, setPayingContractId] = useState<string | null>(null);
+  const createOrder = useCreateOrder(payingContractId ?? undefined);
+
+  // useRazorpayCheckout's callbacks are fixed at hook-creation time, but the
+  // display label ("Quarterly" vs "Website Touchpoint") is only known per
+  // click — a ref lets the checkout's own handler read whichever label is
+  // current without re-creating the hook (and its SDK-loading effect) on
+  // every click.
+  const payingLabelRef = useRef<string>('');
+
+  const clearPaymentState = () => {
+    setPendingPlanId(null);
+    setPendingPackId(null);
+    setPayingContractId(null);
+  };
+
+  const razorpay = useRazorpayCheckout({
+    contractId: payingContractId ?? undefined,
+    businessName: 'ContractNest',
+    prefill: { email: user?.email },
+    // Money actually landed — the create call only raised the contract and
+    // its invoice; limits/credits/flags are applied server-side
+    // (fn_apply_contract_entitlements / fn_apply_topup_grants) inside
+    // verify_gateway_payment's own transaction, so by the time this fires
+    // the entitlement is already live — this just refetches so the UI
+    // catches up.
+    onPaymentVerified: (_result: VerifyPaymentResponse) => {
+      queryClient.invalidateQueries({ queryKey: planTemplateKeys.list(undefined) });
+      queryClient.invalidateQueries({ queryKey: packTemplateKeys.list(undefined) });
+      queryClient.invalidateQueries({ queryKey: ['tenant-context'] });
+      queryClient.invalidateQueries({ queryKey: ['business-model'] });
+      addToast({
+        type: 'success',
+        title: `${payingLabelRef.current} is active`,
+        message: 'Payment received — your plan is live.',
+      });
+      clearPaymentState();
+    },
+    // The contract + invoice already exist (created before checkout opened);
+    // only the entitlement is missing. Nothing to roll back here — the
+    // tenant can retry payment from this same card, so no card ever ends up
+    // stuck between "Subscribe" and "Current plan".
+    onPaymentFailed: clearPaymentState,
+    onDismiss: () => {
+      addToast({
+        type: 'warning',
+        title: 'Payment not completed',
+        message: `${payingLabelRef.current} is on hold until payment clears. Retry any time from this page.`,
+      });
+      clearPaymentState();
+    },
+  });
+
+  // Shared by both plans and packs: given a create-call result that requires
+  // payment, raise the Razorpay order against the invoice already generated
+  // server-side and open the checkout popup. Free plans/packs never call
+  // this — their entitlement was already applied instantly.
+  const collectPayment = async (
+    contractId: string,
+    invoiceId: string,
+    amount: number,
+    currency: string,
+    label: string,
+  ) => {
+    payingLabelRef.current = label;
+    setPayingContractId(contractId);
+    try {
+      const order = await createOrder.mutateAsync({ invoice_id: invoiceId, amount, currency });
+      razorpay.openCheckout(order);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Could not start payment',
+        message: err?.message || 'Please try again.',
+      });
+      clearPaymentState();
+    }
+  };
 
   const handleSubscribe = (plan: PlanTemplate) => {
     setPendingPlanId(plan.id);
     subscribe.mutate(
       { templateId: plan.id },
       {
-        onSuccess: (result) => {
+        onSuccess: async (result: PlanSubscriptionResult) => {
           // No local "subscribed" flag — the query is invalidated by the
           // mutation, so the card re-renders from current_plan_id.
-          addToast({
-            type: 'success',
-            title: result.was_switch ? `Switched to ${result.plan_name}` : `You are on ${result.plan_name}`,
-            message: `Contract ${result.contract_number} is active.`,
-          });
+          const label = result.was_switch ? `Switched to ${result.plan_name}` : `You are on ${result.plan_name}`;
+          if (result.requires_payment && result.invoice_id) {
+            addToast({
+              type: 'info',
+              title: label,
+              message: `Contract ${result.contract_number} raised — complete payment to activate.`,
+            });
+            await collectPayment(
+              result.contract_id,
+              result.invoice_id,
+              result.invoice_amount ?? 0,
+              result.invoice_currency ?? 'INR',
+              result.plan_name,
+            );
+          } else {
+            addToast({
+              type: 'success',
+              title: label,
+              message: `Contract ${result.contract_number} is active.`,
+            });
+            setPendingPlanId(null);
+          }
         },
         onError: (err: Error) => {
           addToast({
@@ -87,8 +199,8 @@ const PricingPlansPage: React.FC = () => {
             title: 'Could not subscribe',
             message: err.message,
           });
+          setPendingPlanId(null);
         },
-        onSettled: () => setPendingPlanId(null),
       },
     );
   };
@@ -103,24 +215,33 @@ const PricingPlansPage: React.FC = () => {
     handleSubscribe(plan);
   };
 
-  const { data: packData, isLoading: packsLoading } = usePackTemplates();
-  const packs: PackTemplate[] = packData?.data?.packs ?? [];
-  const purchasePack = usePurchasePack();
-  const [pendingPackId, setPendingPackId] = useState<string | null>(null);
-
   const handleBuyPack = (pack: PackTemplate) => {
     setPendingPackId(pack.id);
     purchasePack.mutate(
       { templateId: pack.id },
       {
-        onSuccess: (result) => {
-          addToast({
-            type: 'success',
-            title: `${result.pack_name} purchased`,
-            message: result.credits_pending
-              ? `Contract ${result.contract_number} raised. Credits land once the invoice is paid.`
-              : `Contract ${result.contract_number}. Credits are in your balance now.`,
-          });
+        onSuccess: async (result: PackPurchaseResult) => {
+          if (result.credits_pending && result.invoice_id) {
+            addToast({
+              type: 'info',
+              title: `${result.pack_name} raised`,
+              message: `Contract ${result.contract_number} — complete payment to unlock.`,
+            });
+            await collectPayment(
+              result.contract_id,
+              result.invoice_id,
+              result.invoice_amount ?? 0,
+              result.invoice_currency ?? 'INR',
+              result.pack_name,
+            );
+          } else {
+            addToast({
+              type: 'success',
+              title: `${result.pack_name} purchased`,
+              message: `Contract ${result.contract_number}. Credits are in your balance now.`,
+            });
+            setPendingPackId(null);
+          }
         },
         onError: (err: Error) => {
           addToast({
@@ -128,8 +249,8 @@ const PricingPlansPage: React.FC = () => {
             title: 'Could not complete purchase',
             message: err.message,
           });
+          setPendingPackId(null);
         },
-        onSettled: () => setPendingPackId(null),
       },
     );
   };
@@ -501,21 +622,36 @@ const PricingPlansPage: React.FC = () => {
                           </span>
                         </li>
                       ) : (
-                        grantEntries.map(([ch, n]) => (
-                          <li
-                            key={ch}
-                            className="flex items-start gap-2 text-sm"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            <Check
-                              className="w-4 h-4 mt-0.5 shrink-0"
-                              style={{ color: colors.semantic?.success || '#0d9464' }}
-                            />
-                            <span>
-                              <strong>{n}</strong> {CHANNEL_LABELS[ch] || ch} credits
-                            </span>
-                          </li>
-                        ))
+                        <>
+                          {grantEntries.map(([ch, n]) => (
+                            <li
+                              key={ch}
+                              className="flex items-start gap-2 text-sm"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              <Check
+                                className="w-4 h-4 mt-0.5 shrink-0"
+                                style={{ color: colors.semantic?.success || '#0d9464' }}
+                              />
+                              <span>
+                                <strong>{n}</strong> {CHANNEL_LABELS[ch] || ch} credits
+                              </span>
+                            </li>
+                          ))}
+                          {pack.flags.map((flag) => (
+                            <li
+                              key={flag}
+                              className="flex items-start gap-2 text-sm capitalize"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              <Check
+                                className="w-4 h-4 mt-0.5 shrink-0"
+                                style={{ color: colors.semantic?.success || '#0d9464' }}
+                              />
+                              <span>{flag.replace(/^addon_extend_/, '').replace(/_/g, ' ')} channel unlocked</span>
+                            </li>
+                          ))}
+                        </>
                       )}
                     </ul>
                   </div>
