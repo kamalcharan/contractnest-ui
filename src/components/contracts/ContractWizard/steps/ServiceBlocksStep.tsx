@@ -710,7 +710,19 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   );
 
   const instanceFor = useCallback(
-    (block: Block) => selectedBlocks.find((b) => b.id === instanceIdFor(block)),
+    (block: Block) => {
+      const found = selectedBlocks.find((b) => b.id === instanceIdFor(block));
+      // TEMP DEBUG — remove once the metering checkbox mismatch is diagnosed.
+      if (block.categoryId === 'metering') {
+        console.log('[DEBUG metering match]', {
+          candidateName: block.name,
+          candidateId: instanceIdFor(block),
+          found: !!found,
+          selectedBlockIds: selectedBlocks.map((b) => ({ id: b.id, name: b.name, categoryId: b.categoryId })),
+        });
+      }
+      return found;
+    },
     [selectedBlocks, instanceIdFor],
   );
 

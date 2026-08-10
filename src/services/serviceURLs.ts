@@ -691,6 +691,21 @@ export const API_ENDPOINTS = {
   // =================================================================
   // CATALOG STUDIO ENDPOINTS
   // =================================================================
+  // =================================================================
+  // TENANT CONTEXT — the tenant's own balance sheet: plan, what it may
+  // create vs what it has used, notification credit pools, add-on flags.
+  // Backed by get_tenant_context, whose subscription block is resolved
+  // from the plan CONTRACT, not the legacy t_bm_* tables.
+  // =================================================================
+  TENANT_CONTEXT: {
+    BASE: '/api/tenant-context',
+    CAN_SEND: (channel: string) => `/api/tenant-context/can-send/${channel}`,
+    // Notifications parked because the tenant ran out of credits. The route
+    // and its RPC have existed since jtd-framework/003; nothing ever called
+    // it from the tenant side because nothing ever parked a message.
+    WAITING_JTDS: '/api/tenant-context/waiting-jtds',
+  },
+
   CATALOG_STUDIO: {
     // Health check
     HEALTH: '/api/catalog-studio/health',
@@ -729,6 +744,18 @@ export const API_ENDPOINTS = {
       DELETE: (id: string) => `/api/catalog-studio/templates/${id}`,
       SYSTEM: '/api/catalog-studio/templates/system',
       PUBLIC: '/api/catalog-studio/templates/public',
+      // The plan catalogue: published templates owned by the platform tenant,
+      // which is what a tenant subscribes to on /businessmodel/tenants/pricing-plans.
+      PLANS: '/api/catalog-studio/templates/plans',
+      // Subscribe the CALLING tenant to a plan. The subscriber comes from the
+      // request context server-side, so the body carries only the plan id.
+      SUBSCRIBE: '/api/catalog-studio/templates/subscribe',
+      // The credit-pack catalogue: published templates owned by the platform
+      // tenant, same idea as PLANS but filtered to category='topup_pack'.
+      PACKS: '/api/catalog-studio/templates/packs',
+      // Buy the CALLING tenant a credit pack. Same subscriber-from-context
+      // rule as SUBSCRIBE.
+      PACKS_PURCHASE: '/api/catalog-studio/templates/packs/purchase',
       COVERAGE: '/api/catalog-studio/templates/coverage',
       COPY: (id: string) => `/api/catalog-studio/templates/${id}/copy`,
 
@@ -1275,26 +1302,13 @@ export const API_ENDPOINTS = {
     OCC_ADD: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/add`,
     OCC_MOVE: (id: string) => `/api/group-sessions/occurrence/${id}/move`,
     OCC_STATUS: (id: string) => `/api/group-sessions/occurrence/${id}/status`,
-    // Chair assignment. These two were referenced by useGroupSessionsDashboard
-    // but missing here, so the repo copy of this file failed to compile against
-    // its own hook — the deployed build is ahead of the checkout. Added back
-    // matching the live routes in groupSessionsDashboardRoutes.ts.
-    OCC_ASSIGN: (id: string) => `/api/group-sessions/occurrence/${id}/assign`,
-    OCC_ASSIGN_DEFAULT: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/assign-default`,
     ROSTER: (blockId: string) => `/api/group-sessions/roster/${blockId}`,
-    DUES: (blockId: string, fyStart?: string | null) =>
-      `/api/group-sessions/dues/${blockId}${fyStart ? `?fy=${fyStart}` : ''}`,
     MEMBER: (memberId: string) => `/api/group-sessions/member/${memberId}`,
     TOKEN: (blockId: string) => `/api/group-sessions/token/${blockId}`,
     OCC_ATTENDANCE: (id: string) => `/api/group-sessions/occurrence/${id}/attendance`,
     OCC_MARK: (id: string) => `/api/group-sessions/occurrence/${id}/mark`,
     MEMBER_BLOCK: (memberId: string, blockId: string) => `/api/group-sessions/member/${memberId}/block/${blockId}`,
     DUE_PAID: (billingEventId: string) => `/api/group-sessions/due/${billingEventId}/paid`,
-  },
-  // Standalone (non-contract-scoped) invoice operations. Contract-linked
-  // invoice/payment endpoints stay under CONTRACTS above.
-  INVOICES: {
-    ADHOC: '/api/invoices/adhoc',
   },
   SMART_FORMS: {
     // Convenience: admin template endpoints (same as ADMIN.SMART_FORMS)

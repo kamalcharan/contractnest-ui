@@ -839,6 +839,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       const savedState = (tpl?.settings as any)?.wizard_state;
       if (tpl && savedState) {
         const restored = deserializeWizardState(savedState);
+        console.log('[DEBUG hydrate]', restored.selectedBlocks.map(b => ({ id: b.id, name: b.name, categoryId: b.categoryId })));
         setWizardState({
           ...restored,
           path: 'template',

@@ -11,6 +11,14 @@
 // The subscriber is never sent from here — it is resolved from the request
 // context server-side, so a tenant cannot subscribe another by tampering
 // with the payload. Only the plan id travels.
+//
+// The SAME call also handles switching plans: if the tenant already has a
+// DIFFERENT active plan, subscribe_tenant_to_plan ends it (audit-trailed
+// cancellation) and raises the new one, forfeiting unused allowance/credits
+// — was_switch in the result tells the caller which happened, so the UI can
+// say "switched to X" instead of "subscribed to X". Requesting the plan
+// you're already on is still refused (ALREADY_SUBSCRIBED) — that's a no-op,
+// not a switch.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -26,6 +34,10 @@ export interface PlanSubscriptionResult {
   limits: Record<string, number>;
   grants: Record<string, number>;
   flags: string[];
+  /** True when this call replaced an existing plan rather than a first subscribe. */
+  was_switch: boolean;
+  /** The superseded contract's id, set only when was_switch is true. */
+  previous_contract_id: string | null;
 }
 
 export interface SubscribeError {

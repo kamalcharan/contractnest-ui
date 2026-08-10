@@ -18,17 +18,32 @@ export interface PlanTemplate {
   id: string;
   name: string;
   description: string | null;
+  /**
+   * The template's category — 'service_delivery' for the three capped plans,
+   * 'per_contract' for the one pay-as-you-go template. Only 'per_contract' is
+   * acted on by the UI today, but this is returned generically rather than a
+   * one-off boolean so a future distinct category doesn't need another field.
+   */
+  category: string;
   currency: string;
-  /** 0 is a real price — the Free tier — not "unpriced". */
+  /** 0 is a real price — the Free tier — not "unpriced". Also 0, differently,
+   *  for the 'per_contract' template: nothing is paid upfront there either. */
   price: number;
   term: { value: number | null; unit: string | null };
   /**
    * What the plan may CREATE, e.g. { contracts: 3, rfqs: 0 }.
-   * 0 means zero. There is no unlimited plan.
+   * 0 means zero. There is no unlimited plan. Empty for 'per_contract' — it
+   * has no cap, that is the point of the mode.
    */
   limits: Record<string, number>;
   /** Notification credits granted per creation event, keyed by channel. */
   grants: Record<string, number>;
+  /**
+   * Paise charged per creation, keyed the same as limits — only populated on
+   * the 'per_contract' template. trg_fn_wallet_charge (DB) reads the SAME
+   * template row live, so this is never a stale copy of the real rate.
+   */
+  rates: Record<string, number>;
   /** Add-on flags the plan switches on, e.g. addon_vani_ai. */
   flags: string[];
   updated_at: string | null;

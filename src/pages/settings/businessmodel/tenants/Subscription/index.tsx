@@ -94,13 +94,40 @@ const SubscriptionPage: React.FC = () => {
     );
   }
 
-  if (error || !ctx?.success) {
+  if (error) {
     return (
       <div className="p-6">
         <div className="flex items-start gap-2 p-4 rounded-xl text-sm"
              style={{ backgroundColor: `${colors.semantic?.error || '#DC2626'}15`, color: ink }}>
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>Could not load your account. {(error as Error)?.message || 'Please try again.'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // A tenant with no t_tenant_context row yet — never subscribed, not a
+  // failure. get_tenant_context reports this as success:false with no
+  // limits/usage/credits payload at all, so this renders BEFORE any of the
+  // sections below that assume those objects exist, rather than trying to
+  // make every one of them null-safe.
+  if (!ctx?.success) {
+    return (
+      <div className="p-6 max-w-5xl">
+        <div style={surface} className="p-10 flex flex-col items-center text-center gap-3">
+          <Sparkles className="w-6 h-6" style={{ color: colors.brand.primary }} />
+          <h1 className="text-2xl font-extrabold" style={{ color: ink }}>No plan yet</h1>
+          <p className="text-sm max-w-sm" style={{ color: dim }}>
+            Pick a plan to start creating contracts and RFQs.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/businessmodel/tenants/pricing-plans')}
+            className="mt-2 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-1.5"
+            style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+          >
+            See plans <ArrowUpRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     );

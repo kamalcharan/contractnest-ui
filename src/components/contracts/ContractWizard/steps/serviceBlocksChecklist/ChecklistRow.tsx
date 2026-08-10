@@ -512,7 +512,7 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
-                  Visits
+                  Quantity
                 </label>
                 <div className="flex items-center gap-2">
                   <input
