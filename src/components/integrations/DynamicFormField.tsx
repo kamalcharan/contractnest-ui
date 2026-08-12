@@ -1,17 +1,14 @@
 // src/components/integrations/DynamicFormField.tsx
 import React from 'react';
-import { Eye, EyeOff, Upload, Loader2, X, ImageIcon } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { captureException } from '@/utils/sentry';
 import { useTheme } from '@/contexts/ThemeContext';
-import { vaniToast } from '@/components/common/toast';
-import api from '@/services/api';
-import { API_ENDPOINTS } from '@/services/serviceURLs';
 
 // Define ConfigField interface locally to avoid import issues
 interface ConfigField {
   name: string;
-  type: 'text' | 'password' | 'email' | 'boolean' | 'select' | 'number' | 'image';
+  type: 'text' | 'password' | 'email' | 'boolean' | 'select' | 'number';
   required: boolean;
   sensitive: boolean;
   description: string | null;
@@ -36,8 +33,6 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
   disabled = false
 }) => {
   const [passwordVisible, setPasswordVisible] = React.useState(false);
-  const [uploading, setUploading] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { isDarkMode, currentTheme } = useTheme();
   
   // Get theme colors
@@ -83,113 +78,11 @@ const DynamicFormField: React.FC<DynamicFormFieldProps> = ({
     }
   };
   
-  // Handle QR/image file selection → upload → store the returned URL
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      vaniToast.error('Please select an image file');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      vaniToast.error('Image must be under 5MB');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('qr_image', file);
-      const response = await api.post(API_ENDPOINTS.INTEGRATIONS.UPLOAD_QR, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      const url = response.data?.qr_image_url;
-      if (url) {
-        onChange(url);
-        vaniToast.success('QR code uploaded');
-      } else {
-        vaniToast.error('Upload succeeded but no URL was returned');
-      }
-    } catch (error: any) {
-      captureException(error, {
-        tags: { component: 'DynamicFormField', action: 'handleFileSelect' },
-        extra: { field_name: field.name }
-      });
-      vaniToast.error(error.response?.data?.error || 'Failed to upload QR code');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   // Render different field types
   const renderField = () => {
     const formattedValue = getFormattedValue();
-
+    
     switch (field.type) {
-      case 'image':
-        return (
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/jpg"
-              onChange={handleFileSelect}
-              disabled={disabled || uploading}
-              className="hidden"
-              id={`${field.name}-file-input`}
-            />
-            {formattedValue ? (
-              <div className="flex items-center gap-3">
-                <img
-                  src={formattedValue}
-                  alt={field.display_name}
-                  className="w-16 h-16 rounded-md object-contain border"
-                  style={{ borderColor: `${colors.utility.secondaryText}40`, backgroundColor: colors.utility.secondaryBackground }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={disabled || uploading}
-                  className={cn(
-                    "px-3 py-1.5 text-sm rounded-md border transition-colors flex items-center gap-1.5",
-                    (disabled || uploading) && "opacity-60 cursor-not-allowed"
-                  )}
-                  style={{ borderColor: `${colors.utility.secondaryText}40`, color: colors.utility.primaryText }}
-                >
-                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                  Replace
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange('')}
-                  disabled={disabled || uploading}
-                  className="p-1.5 rounded-md transition-colors"
-                  style={{ color: colors.utility.secondaryText }}
-                  title="Remove"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || uploading}
-                className={cn(
-                  "w-full p-4 border-2 border-dashed rounded-md flex flex-col items-center justify-center gap-2 transition-colors",
-                  (disabled || uploading) && "opacity-60 cursor-not-allowed"
-                )}
-                style={{ borderColor: `${colors.utility.secondaryText}40`, color: colors.utility.secondaryText }}
-              >
-                {uploading ? <Loader2 size={20} className="animate-spin" /> : <ImageIcon size={20} />}
-                <span className="text-sm">{uploading ? 'Uploading...' : `Upload ${field.display_name}`}</span>
-              </button>
-            )}
-          </div>
-        );
-
       case 'password':
         return (
           <div className="relative">

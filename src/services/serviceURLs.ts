@@ -562,8 +562,7 @@ export const API_ENDPOINTS = {
     DETAIL: (type: string, providerId: string) => `/api/integrations/${type}/${providerId}`,
     TEST: '/api/integrations/test',
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`,
-    DELETE: (id: string) => `/api/integrations/${id}`,
-    UPLOAD_QR: '/api/integrations/upload-qr'
+    DELETE: (id: string) => `/api/integrations/${id}`
   },
   
   // BUSINESS MODEL ENDPOINTS - PRESERVED
