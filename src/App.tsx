@@ -196,6 +196,11 @@ import OpsCockpitPage from './pages/ops/cockpit';
 import FinancePage from './pages/operations/finance';
 import OpsServiceSchedulePage from './pages/operations/services';
 import GroupSessionsPage from './pages/operations/group-sessions';
+import InvoicesRedirect from './pages/invoices';
+import InvoiceComposerPage from './pages/invoices/composer';
+import StandaloneInvoicePage from './pages/invoices/view';
+import MoneyInPage from './pages/money-in';
+import ToPayPage from './pages/to-pay';
 import OpsAppointmentsPage from './pages/operations/appointments';
 import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
@@ -671,6 +676,42 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<GroupSessionsPage />} />
+          </Route>
+
+          {/* Money In / To Pay — one money workspace per perspective.
+              /invoices stays alive: index redirects to Money In, while the
+              composer and the document viewer remain real destinations. */}
+          <Route
+            path="/money-in"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<MoneyInPage />} />
+          </Route>
+          <Route
+            path="/to-pay"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ToPayPage />} />
+          </Route>
+          <Route
+            path="/invoices"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<InvoicesRedirect />} />
+            <Route path="new" element={<InvoiceComposerPage />} />
+            <Route path=":invoiceId" element={<StandaloneInvoicePage />} />
           </Route>
 
           {/* Operations → Appointments — Stage 3 */}

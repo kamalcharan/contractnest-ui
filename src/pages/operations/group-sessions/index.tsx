@@ -772,15 +772,11 @@ const GroupSessionsPage: React.FC = () => {
                       {d.is_guest_fee && !d.adhoc_invoice_id ? (
                         d.member_contact_id && (
                           <button
-                            onClick={() => setAdhocInvoiceTarget({
-                              contactId: d.member_contact_id as string,
-                              contactName: d.member_name,
-                              declarationId: d.id,
-                              // Already declared at check-in — seed the item
-                              // from what's known rather than making the
-                              // chair re-enter it from scratch.
-                              initialItems: [{ name: d.label || d.block_name || 'Guest Participation Fee', unitPrice: d.amount || 0, qty: 1 }],
-                            })}
+                            // A4 (2026-08-13): the modal is retired in favour of the
+                            // full-page composer, which seeds itself from the
+                            // declaration (contact, item, amount, UPI ref) and stamps
+                            // it via create_adhoc_invoice exactly as before.
+                            onClick={() => navigate(`/invoices/new?from=declaration:${d.id}`)}
                             title="Create a contact-less invoice for this member"
                             className="px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1"
                             style={{ backgroundColor: colors.brand.primary, color: '#fff' }}

@@ -11,6 +11,12 @@ export interface MenuItem {
   hasSubmenu?: boolean;
   submenuItems?: MenuItem[];
   defaultOpen?: boolean; // For submenus that should be open by default
+  /** Perspective-scoped nav: one money workspace per side. revenueOnly
+   *  items render only in Revenue mode (Money In — who owes you);
+   *  expenseOnly items only in Expense mode (To Pay — what you owe).
+   *  The routes themselves stay reachable for cross-links. */
+  revenueOnly?: boolean;
+  expenseOnly?: boolean;
 }
 
 // Default menu structure
@@ -101,6 +107,24 @@ export const defaultMenuItems: MenuItem[] = [
       // { id: 'contracts-invite', label: 'Invite Sellers', icon: 'UserPlus', path: '/contracts/invite' },
       { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
+  },
+  // Money In / To Pay — ONE money workspace per side (owner decision,
+  // 2026-08-13). Money In merges receivables + invoices: buyer stories with
+  // instalments, documents and receipts inside; invoices are reached from
+  // rows, not from a separate nav item. To Pay is its expense-side mirror.
+  {
+    id: 'money-in',
+    label: 'Money In',
+    icon: 'Wallet',
+    path: '/money-in',
+    revenueOnly: true
+  },
+  {
+    id: 'to-pay',
+    label: 'To Pay',
+    icon: 'Banknote',
+    path: '/to-pay',
+    expenseOnly: true
   },
   // Requests (RFQ) — its OWN menu item, not a toggle inside Contracts.
   // An RFQ is a different object with a different lifecycle (draft → sent →

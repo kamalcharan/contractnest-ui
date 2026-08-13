@@ -371,7 +371,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   // Get user data and industry from auth context
-  const { user, currentTenant, isAuthenticated, hasCompletedOnboarding, liteTier } = useAuth();
+  const { user, currentTenant, isAuthenticated, hasCompletedOnboarding, liteTier, perspective } = useAuth();
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const [logoError, setLogoError] = useState(false);
@@ -401,6 +401,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
     if (!item.adminOnly) {
       // Hide 'getting-started' if onboarding complete or not owner
       if (item.id === 'getting-started' && !showGettingStarted) {
+        return false;
+      }
+      // Perspective-scoped items: one money workspace per side — see
+      // MenuItem.revenueOnly / expenseOnly for the rationale.
+      if (item.revenueOnly && perspective !== 'revenue') {
+        return false;
+      }
+      if (item.expenseOnly && perspective !== 'expense') {
         return false;
       }
       return isRevealed(item.id);

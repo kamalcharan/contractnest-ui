@@ -1321,7 +1321,17 @@ export const API_ENDPOINTS = {
     OCC_ADD: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/add`,
     OCC_MOVE: (id: string) => `/api/group-sessions/occurrence/${id}/move`,
     OCC_STATUS: (id: string) => `/api/group-sessions/occurrence/${id}/status`,
+    // Chair assignment and the dues matrix. These three are referenced by
+    // useGroupSessionsDashboard but have now been dropped from this file twice
+    // by whole-file copies built from a stale baseline — losing them does not
+    // fail the build, it fails at runtime as "X is not a function", which
+    // surfaces only as "Couldn't load dues" on the Dues tab. Keep them in step
+    // with the live routes in groupSessionsDashboardRoutes.ts.
+    OCC_ASSIGN: (id: string) => `/api/group-sessions/occurrence/${id}/assign`,
+    OCC_ASSIGN_DEFAULT: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/assign-default`,
     ROSTER: (blockId: string) => `/api/group-sessions/roster/${blockId}`,
+    DUES: (blockId: string, fyStart?: string | null) =>
+      `/api/group-sessions/dues/${blockId}${fyStart ? `?fy=${fyStart}` : ''}`,
     MEMBER: (memberId: string) => `/api/group-sessions/member/${memberId}`,
     TOKEN: (blockId: string) => `/api/group-sessions/token/${blockId}`,
     OCC_ATTENDANCE: (id: string) => `/api/group-sessions/occurrence/${id}/attendance`,
