@@ -46,6 +46,7 @@ import {
   type FinanceInvoice,
   type FinanceEvent
 } from '@/hooks/queries/useFinanceQueries';
+import PaymentDeclarationsCard from '@/components/operations/finance/PaymentDeclarationsCard';
 
 type ViewMode = 'receivables' | 'payables';
 
@@ -720,6 +721,11 @@ const FinancePage: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* ── Offline-UPI payments declared on the public contract page,
+                 awaiting the tenant's confirmation (renders nothing when
+                 there are none — same convention as Drafts below) ── */}
+          <PaymentDeclarationsCard />
 
           {/* ── Drafts pending approval ── */}
           {drafts.length > 0 && (

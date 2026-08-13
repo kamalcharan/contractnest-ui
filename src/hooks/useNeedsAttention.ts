@@ -699,8 +699,10 @@ export function useNeedsAttention(
 
     // ── Route to evaluator based on state + perspective ──
 
-    // PENDING ACCEPTANCE — Payment (manual)
-    if (status === 'pending_acceptance' && acceptance === 'manual') {
+    // PENDING ACCEPTANCE — Payment-gated.
+    // 'payment' is the real value; 'manual' is accepted for contracts created
+    // before the mapper stopped squashing payment → manual (see migration 036).
+    if (status === 'pending_acceptance' && (acceptance === 'payment' || acceptance === 'manual')) {
       if (perspective === 'buyer') {
         return { ...evaluateBuyerPaymentView(contract, invoices, summary, computedEventCount), isLoading };
       }

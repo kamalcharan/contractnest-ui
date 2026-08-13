@@ -40,6 +40,7 @@ import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { getCategoryById, categoryHasPricing } from '@/utils/catalog-studio/categories';
 import ContractDocument, { buildDocFromSavedContract } from '@/components/contracts/document/ContractDocument';
+import PublicPaymentSection from '@/components/contracts/review/PublicPaymentSection';
 import { CADENCE_CYCLES, cadenceTermMath } from '@/utils/catalog-studio/cadencePricing';
 import type { CadenceRate } from '@/utils/catalog-studio/cadencePricing';
 import { durationToDays } from '@/utils/service-contracts/contractEvents';
@@ -454,12 +455,26 @@ const ContractReviewPage: React.FC = () => {
       }>;
   }, [contract]);
 
+  // Payment-gated contract awaiting the buyer: acceptance IS the payment.
+  // The Accept button is replaced by the payment section, and the server
+  // (respond_to_contract) refuses a plain accept anyway (PAYMENT_REQUIRED).
+  // 'manual' is the legacy spelling of 'payment' — contracts created before
+  // the mapper stopped squashing payment → manual (migration 036) still carry
+  // it, and they are payment-gated exactly the same way.
+  const isPaymentGated = (contract?.acceptance_method === 'payment' || contract?.acceptance_method === 'manual')
+    && contract?.status === 'pending_acceptance'
+    && (contract?.grand_total || contract?.total_value || 0) > 0;
+
   // The buyer may change plans only while the contract awaits their sign-off.
   // EMI contracts keep the seller's proposal: EMI events are contract-level
   // and would not regenerate on a cadence switch (stale-schedule hazard).
+  // Payment-gated contracts also keep the proposal: the payable invoice is
+  // generated from the proposed plan the moment the payment step loads, so a
+  // later cadence switch would desync the invoice from the picked plan.
   const cadencePickerActive = cadenceChoices.length > 0
     && contract?.status === 'pending_acceptance'
-    && contract?.payment_mode !== 'emi';
+    && contract?.payment_mode !== 'emi'
+    && !isPaymentGated;
 
   // Contract with the buyer's picks applied — drives the on-screen document
   // and displayed totals so the buyer signs exactly what they see.
@@ -806,6 +821,31 @@ const ContractReviewPage: React.FC = () => {
         </div>
       )}
 
+      {/* ═══ PAYMENT STEP (payment-gated contracts only) ═══
+          Razorpay checkout and/or offline-UPI declare, or the "seller has
+          been notified" fallback when the tenant has neither configured.
+          Replaces the Accept button in the action bar below. */}
+      {isPaymentGated && responseState === 'idle' && (
+        <div style={{ maxWidth: 860, margin: '16px auto 0', padding: '0 16px' }}>
+          <PublicPaymentSection
+            cnak={cnak || ''}
+            secret={secret || ''}
+            tenantName={profile?.business_name || tenant?.name || 'The seller'}
+            buyerName={access?.accessor_name || contract.buyer_name}
+            buyerEmail={access?.accessor_email || contract.buyer_email}
+            buyerPhone={contract.buyer_phone}
+            brandPrimary={brandPrimary}
+            logoUrl={profile?.logo_url}
+            paperBg={paperBg}
+            borderColor={borderColor}
+            inkText={inkText}
+            inkSub={inkSub}
+            paperShadow={paperShadow}
+            onPaid={() => setResponseState('accepted')}
+          />
+        </div>
+      )}
+
       {/* ═══ THE DOCUMENT ═══
           The professional ContractDocument — the exact page the PDF exports
           (docRef is what handleDownloadPdf captures). Fixed 794px paper width;
@@ -924,7 +964,9 @@ const ContractReviewPage: React.FC = () => {
                 <p style={{ fontSize: 14, fontWeight: 600, color: colors.text }}>{paymentLabel}</p>
                 <p style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2, textTransform: 'capitalize' }}>
                   {contract.acceptance_method === 'digital_signature' ? 'Signoff Required'
-                    : contract.acceptance_method === 'manual' ? 'Payment Acceptance'
+                    /* 'manual' is the legacy spelling of payment-gated, from
+                       before the mapper stopped squashing it (migration 036) */
+                    : (contract.acceptance_method === 'payment' || contract.acceptance_method === 'manual') ? 'Payment Required'
                     : contract.acceptance_method === 'auto' ? 'Auto Accept' : contract.acceptance_method || '—'}
                 </p>
               </div>
@@ -1122,14 +1164,23 @@ const ContractReviewPage: React.FC = () => {
           <ThumbsDown size={18} />
           Reject
         </button>
-        <button
-          onClick={() => handleRespond('accept')}
-          disabled={submitting}
-          style={{ padding: '12px 32px', borderRadius: 10, border: 'none', backgroundColor: '#22c55e', color: '#ffffff', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, opacity: submitting ? 0.6 : 1 }}
-        >
-          {submitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <ThumbsUp size={18} />}
-          Accept Contract
-        </button>
+        {isPaymentGated ? (
+          // Payment-gated: acceptance happens through the payment section
+          // above; a plain accept is refused server-side (PAYMENT_REQUIRED).
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, backgroundColor: `${brandPrimary}0C`, border: `1px solid ${brandPrimary}30`, fontSize: 13, fontWeight: 600, color: brandPrimary }}>
+            <CreditCard size={16} />
+            Accepted on payment — see the payment step above
+          </div>
+        ) : (
+          <button
+            onClick={() => handleRespond('accept')}
+            disabled={submitting}
+            style={{ padding: '12px 32px', borderRadius: 10, border: 'none', backgroundColor: '#22c55e', color: '#ffffff', cursor: submitting ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, opacity: submitting ? 0.6 : 1 }}
+          >
+            {submitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <ThumbsUp size={18} />}
+            Accept Contract
+          </button>
+        )}
       </div>
 
       {/* The document renders visibly above (same docRef the PDF export

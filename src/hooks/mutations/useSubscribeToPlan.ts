@@ -38,6 +38,12 @@ export interface PlanSubscriptionResult {
   was_switch: boolean;
   /** The superseded contract's id, set only when was_switch is true. */
   previous_contract_id: string | null;
+  /** Null for a free plan — nothing to pay, entitlements are already active. */
+  invoice_id: string | null;
+  invoice_amount: number | null;
+  invoice_currency: string | null;
+  /** true for any priced plan — limits/credits only land once invoice_id is paid. */
+  requires_payment: boolean;
 }
 
 export interface SubscribeError {

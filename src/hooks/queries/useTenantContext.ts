@@ -16,6 +16,40 @@ import { useAuth } from '@/context/AuthContext';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 
+/**
+ * The plan's actual BILLING RHYTHM, derived from its billing events rather
+ * than from the contract term (get_subscription_billing_rhythm, migration
+ * 037).
+ *
+ * This exists because the term and the rhythm are different facts and the
+ * page was showing the wrong one: a quarterly plan on a 12-month contract
+ * reported "365 days left", counting to the end of the contract instead of
+ * to the next payment. What a subscriber needs is the next instalment.
+ *
+ * `source` says which copy of the schedule answered:
+ *   'events'   — t_contract_events, materialised when the contract activated
+ *   'computed' — t_contracts.computed_events, all that exists while the
+ *                contract is still pending its first payment
+ *   'none'     — no billing schedule at all (a free plan)
+ */
+export interface SubscriptionRhythm {
+  success: boolean;
+  source: 'events' | 'computed' | 'none';
+  cycle: string | null;
+  currency?: string | null;
+  total_installments: number;
+  paid_installments: number;
+  next_due_date?: string | null;
+  next_due_amount?: number | null;
+  /** Days to the NEXT INSTALMENT. Negative when overdue. IST-based. */
+  days_to_next?: number | null;
+  is_overdue?: boolean;
+  last_paid_date?: string | null;
+  /** Nothing paid yet AND still gated — the plan is not live whatever the dates say. */
+  awaiting_first_payment: boolean;
+  schedule?: Array<{ sequence: number; date: string; amount: number; status: string }>;
+}
+
 export interface TenantContextSubscription {
   id: string | null;
   contract_id: string | null;
@@ -28,6 +62,8 @@ export interface TenantContextSubscription {
   amount: number | null;
   currency: string | null;
   next_billing_date: string | null;
+  /** Absent on API builds predating migration 037 — the page falls back to the term. */
+  rhythm?: SubscriptionRhythm | null;
 }
 
 export interface TenantContext {

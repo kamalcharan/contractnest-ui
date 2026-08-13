@@ -23,6 +23,8 @@ export interface PackTemplate {
   price: number;
   /** Credits granted once, on payment, keyed by channel. Empty for a wallet top-up. */
   grants: Record<string, number>;
+  /** Addon flags this pack unlocks on payment (e.g. addon_extend_website). Empty for a plain credit/wallet pack. */
+  flags: string[];
   /**
    * Set only for a wallet top-up template — the amount (in paise) credited
    * to t_tenant_context.wallet_balance_paise on payment. 0 for a credit pack.

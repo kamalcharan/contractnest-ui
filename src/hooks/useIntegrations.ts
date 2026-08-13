@@ -21,7 +21,7 @@ export type ConnectionStatus = 'Connected' | 'Failed' | 'Pending' | 'Not Configu
 
 export interface ConfigField {
   name: string;
-  type: 'text' | 'password' | 'email' | 'boolean' | 'select' | 'number';
+  type: 'text' | 'password' | 'email' | 'boolean' | 'select' | 'number' | 'image';
   required: boolean;
   sensitive: boolean;
   description: string | null;

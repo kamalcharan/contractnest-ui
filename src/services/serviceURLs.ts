@@ -562,7 +562,8 @@ export const API_ENDPOINTS = {
     DETAIL: (type: string, providerId: string) => `/api/integrations/${type}/${providerId}`,
     TEST: '/api/integrations/test',
     TOGGLE_STATUS: (id: string) => `/api/integrations/${id}/status`,
-    DELETE: (id: string) => `/api/integrations/${id}`
+    DELETE: (id: string) => `/api/integrations/${id}`,
+    UPLOAD_QR: '/api/integrations/upload-qr'
   },
   
   // BUSINESS MODEL ENDPOINTS - PRESERVED
@@ -697,6 +698,16 @@ export const API_ENDPOINTS = {
   // Backed by get_tenant_context, whose subscription block is resolved
   // from the plan CONTRACT, not the legacy t_bm_* tables.
   // =================================================================
+  // BILLING — the tenant's plan state and money owed.
+  // OVERVIEW is one read behind BOTH the Subscription page and the Billing
+  // page (get_tenant_billing_overview, migration 038). Deliberately one
+  // call: those two pages disagreeing about whether you owe money would be
+  // worse than either being marginally slower.
+  // =================================================================
+  BILLING: {
+    OVERVIEW: '/api/billing/overview',
+  },
+
   TENANT_CONTEXT: {
     BASE: '/api/tenant-context',
     CAN_SEND: (channel: string) => `/api/tenant-context/can-send/${channel}`,
@@ -1033,6 +1044,12 @@ export const API_ENDPOINTS = {
      // Public access (no auth required)
    PUBLIC_VALIDATE: '/api/contracts/public/validate',
     PUBLIC_RESPOND: '/api/contracts/public/respond',
+    // Public payment collection (CNAK-scoped, no auth)
+    PUBLIC_PAYMENT_CONTEXT: '/api/contracts/public/payment-context',
+    PUBLIC_CREATE_ORDER: '/api/contracts/public/create-order',
+    PUBLIC_VERIFY_PAYMENT: '/api/contracts/public/verify-payment',
+    PUBLIC_OFFLINE_UPI_CONFIG: '/api/contracts/public/offline-upi-config',
+    PUBLIC_DECLARE_PAYMENT: '/api/contracts/public/declare-payment',
 
 
     // CNAK Claim endpoint
@@ -1142,6 +1159,8 @@ export const API_ENDPOINTS = {
     CREATE_LINK: '/api/payments/create-link',
     VERIFY_PAYMENT: '/api/payments/verify-payment',
     STATUS: '/api/payments/status',
+    DECLARATIONS: '/api/payments/declarations',
+    CONFIRM_DECLARATION: (id: string) => `/api/payments/declarations/${id}/confirm`,
   },
 
   // =================================================================

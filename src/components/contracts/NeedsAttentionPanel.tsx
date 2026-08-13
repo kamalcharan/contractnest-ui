@@ -340,7 +340,7 @@ export const NeedsAttentionPanel: React.FC<NeedsAttentionPanelProps> = ({
           <>
             {isPendingAcceptance && (
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginTop: 4, marginBottom: -4 }}>
-                {'\uD83D\uDD12'} After {contract?.acceptance_method === 'manual' ? 'Payment' : 'Acceptance'}
+                {'\uD83D\uDD12'} After {(contract?.acceptance_method === 'payment' || contract?.acceptance_method === 'manual') ? 'Payment' : 'Acceptance'}
               </div>
             )}
             {locked.map((step) => (

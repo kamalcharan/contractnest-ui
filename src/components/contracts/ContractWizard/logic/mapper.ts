@@ -9,10 +9,23 @@
 import { computeContractEvents, type ContractEvent } from '@/utils/service-contracts/contractEvents';
 import type { ContractWizardState, ContractType } from './state';
 
-// Map wizard acceptance_method to API-accepted values
-// API accepts: 'manual' | 'auto' | 'digital_signature'
+// Map wizard acceptance_method to the stored value.
+//
+// 'payment' is stored AS 'payment'. It used to be squashed into 'manual',
+// which the t_contracts CHECK constraint has always accepted as a DISTINCT
+// value — so one column meant two different things ("gated on payment" and
+// "handled offline by hand") and nothing could tell them apart. Everything
+// that needs to reason about payment gating —
+//   · record_invoice_payment  (auto-activate once fully paid)
+//   · fn_apply_contract_entitlements (defer entitlements until paid)
+//   · respond_to_contract     (refuse a plain accept while unpaid)
+// — keys off 'payment', so the translation made all three unreachable.
+//
+// The wizard only ever offers payment | signoff | auto: there is no UI path
+// that means "offline/manual", which is why every historical 'manual' row is
+// really a payment-accepted contract (migrated in 036).
 export const ACCEPTANCE_METHOD_API_MAP: Record<string, string> = {
-  payment: 'manual',
+  payment: 'payment',
   signoff: 'digital_signature',
   auto: 'auto',
 };

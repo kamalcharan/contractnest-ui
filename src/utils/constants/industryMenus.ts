@@ -195,6 +195,16 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
 
+  // Extend — customer touchpoints (Website / WhatsApp / Email): publish a
+  // template as a public buy link. Paid feature (touchpoint add-ons).
+  {
+    id: 'extend',
+    label: 'Extend',
+    icon: 'Share2',
+    path: '/extend',
+    hasSubmenu: false
+  },
+
   // HIDDEN: Service Catalog - commented out for now
   /*
   {

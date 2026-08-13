@@ -14,14 +14,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Check, Sparkles, AlertCircle, Loader2, CheckCircle2, Wallet, RefreshCw } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
-import { usePlanTemplates, PlanTemplate } from '@/hooks/queries/usePlanTemplates';
-import { useSubscribeToPlan } from '@/hooks/mutations/useSubscribeToPlan';
-import { usePackTemplates, PackTemplate } from '@/hooks/queries/usePackTemplates';
-import { usePurchasePack } from '@/hooks/mutations/usePurchasePack';
+import { usePlanTemplates, PlanTemplate, planTemplateKeys } from '@/hooks/queries/usePlanTemplates';
+import { useSubscribeToPlan, PlanSubscriptionResult } from '@/hooks/mutations/useSubscribeToPlan';
+import { usePackTemplates, PackTemplate, packTemplateKeys } from '@/hooks/queries/usePackTemplates';
+import { usePurchasePack, PackPurchaseResult } from '@/hooks/mutations/usePurchasePack';
+import { useCreateOrder, type VerifyPaymentResponse } from '@/hooks/queries/usePaymentGatewayQueries';
+import { useRazorpayCheckout } from '@/hooks/useRazorpayCheckout';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 
 // Creation limits are the only capped resources — the product bills whoever
@@ -44,10 +48,32 @@ const formatTerm = (term: PlanTemplate['term']): string | null => {
   return `${term.value} ${unit}`;
 };
 
+// What the buyer is actually charged, and how often — the headline number on
+// a card is the PAYMENT, not the term total. Quarterly bills ₹5,999 four
+// times; leading with ₹23,996 made a mid-priced plan look like the dearest
+// one and hid what leaves the account on day one.
+const CYCLE_SUFFIX: Record<string, string> = {
+  monthly: '/mo',
+  quarterly: '/quarter',
+  halfyearly: '/6 mo',
+  annual: '/yr',
+  yearly: '/yr',
+};
+
+const CYCLE_NOUN: Record<string, string> = {
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  halfyearly: 'half-yearly',
+  annual: 'annually',
+  yearly: 'annually',
+};
+
 const PricingPlansPage: React.FC = () => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { addToast } = useVaNiToast();
   const { data, isLoading, error } = usePlanTemplates();
@@ -60,26 +86,163 @@ const PricingPlansPage: React.FC = () => {
   const currentContractNumber = data?.data?.current_contract_number ?? null;
   const isSubscribed = !!currentPlanId;
 
+  // ── B6: can the seller actually take the money? ──────────────────────
+  //
+  // Checked BEFORE anything is bought, not at the checkout step. Previously
+  // the only way to find out was to subscribe — which raised a real contract
+  // AND a real invoice — and then fail on "Could not start payment", leaving
+  // the tenant holding an invoice nobody could collect against.
+  //
+  // `undefined` means an older API build that predates this field. That is
+  // "unknown", NOT "cannot": defaulting it to blocked would disable
+  // purchasing for everyone the moment the UI shipped ahead of the edge
+  // function. Only an explicit `online: false` gates the page.
+  const seller = data?.data?.seller;
+  const canPurchase = seller ? seller.online : true;
+  const sellerName = seller?.name || 'The provider';
+  const sellerTakesOfflineOnly = !!seller && !seller.online && seller.offline_upi;
+
   const subscribe = useSubscribeToPlan();
   // Tracked per plan so only the clicked card shows a spinner, not all of them.
+  // Stays set for the ENTIRE flow — including the Razorpay popup — not just
+  // the initial create call, so a second click can't fire while payment is
+  // still being collected.
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   // The plan pending confirmation in the switch modal — separate from
   // pendingPlanId, which only tracks the in-flight mutation itself.
   const [switchTarget, setSwitchTarget] = useState<PlanTemplate | null>(null);
 
+  const { data: packData, isLoading: packsLoading } = usePackTemplates();
+  const packs: PackTemplate[] = packData?.data?.packs ?? [];
+  const purchasePack = usePurchasePack();
+  const [pendingPackId, setPendingPackId] = useState<string | null>(null);
+
+  // The contract currently being paid for via the Razorpay popup — shared by
+  // both plans and packs, since only one checkout can be open at a time.
+  const [payingContractId, setPayingContractId] = useState<string | null>(null);
+  const createOrder = useCreateOrder(payingContractId ?? undefined);
+
+  // useRazorpayCheckout's callbacks are fixed at hook-creation time, but the
+  // display label ("Quarterly" vs "Website Touchpoint") is only known per
+  // click — a ref lets the checkout's own handler read whichever label is
+  // current without re-creating the hook (and its SDK-loading effect) on
+  // every click.
+  const payingLabelRef = useRef<string>('');
+
+  const clearPaymentState = () => {
+    setPendingPlanId(null);
+    setPendingPackId(null);
+    setPayingContractId(null);
+  };
+
+  const razorpay = useRazorpayCheckout({
+    contractId: payingContractId ?? undefined,
+    businessName: 'ContractNest',
+    prefill: { email: user?.email },
+    // Money actually landed — the create call only raised the contract and
+    // its invoice; limits/credits/flags are applied server-side
+    // (fn_apply_contract_entitlements / fn_apply_topup_grants) inside
+    // verify_gateway_payment's own transaction, so by the time this fires
+    // the entitlement is already live — this just refetches so the UI
+    // catches up.
+    onPaymentVerified: (_result: VerifyPaymentResponse) => {
+      queryClient.invalidateQueries({ queryKey: planTemplateKeys.list(undefined) });
+      queryClient.invalidateQueries({ queryKey: packTemplateKeys.list(undefined) });
+      queryClient.invalidateQueries({ queryKey: ['tenant-context'] });
+      queryClient.invalidateQueries({ queryKey: ['business-model'] });
+      addToast({
+        type: 'success',
+        title: `${payingLabelRef.current} is active`,
+        message: 'Payment received — your plan is live.',
+      });
+      clearPaymentState();
+    },
+    // The contract + invoice already exist (created before checkout opened);
+    // only the entitlement is missing. Nothing to roll back here — the
+    // tenant can retry payment from this same card, so no card ever ends up
+    // stuck between "Subscribe" and "Current plan".
+    onPaymentFailed: clearPaymentState,
+    onDismiss: () => {
+      addToast({
+        type: 'warning',
+        title: 'Payment not completed',
+        message: `${payingLabelRef.current} is on hold until payment clears. Retry any time from this page.`,
+      });
+      clearPaymentState();
+    },
+  });
+
+  // Shared by both plans and packs: given a create-call result that requires
+  // payment, raise the Razorpay order against the invoice already generated
+  // server-side and open the checkout popup. Free plans/packs never call
+  // this — their entitlement was already applied instantly.
+  const collectPayment = async (
+    contractId: string,
+    invoiceId: string,
+    amount: number,
+    currency: string,
+    label: string,
+  ) => {
+    payingLabelRef.current = label;
+    setPayingContractId(contractId);
+    try {
+      const order = await createOrder.mutateAsync({ invoice_id: invoiceId, amount, currency });
+      razorpay.openCheckout(order);
+    } catch (err: any) {
+      addToast({
+        type: 'error',
+        title: 'Could not start payment',
+        message: err?.message || 'Please try again.',
+      });
+      clearPaymentState();
+    }
+  };
+
   const handleSubscribe = (plan: PlanTemplate) => {
+    // B6. A FREE plan is unaffected — there is nothing to collect, so an
+    // unconfigured gateway is irrelevant to it. Only a priced plan is gated,
+    // and it is gated here rather than at checkout so no contract and no
+    // invoice are created for a purchase that cannot complete.
+    if (plan.price > 0 && !canPurchase) {
+      addToast({
+        type: 'info',
+        title: `${sellerName} will be in touch`,
+        message: sellerTakesOfflineOnly
+          ? `${sellerName} does not take card payments online. They have your request and will contact you to complete ${plan.name}.`
+          : `Online payment is not set up for ${plan.name} yet. ${sellerName} has your request and will contact you with the next steps.`,
+      });
+      return;
+    }
+
     setPendingPlanId(plan.id);
     subscribe.mutate(
       { templateId: plan.id },
       {
-        onSuccess: (result) => {
+        onSuccess: async (result: PlanSubscriptionResult) => {
           // No local "subscribed" flag — the query is invalidated by the
           // mutation, so the card re-renders from current_plan_id.
-          addToast({
-            type: 'success',
-            title: result.was_switch ? `Switched to ${result.plan_name}` : `You are on ${result.plan_name}`,
-            message: `Contract ${result.contract_number} is active.`,
-          });
+          const label = result.was_switch ? `Switched to ${result.plan_name}` : `You are on ${result.plan_name}`;
+          if (result.requires_payment && result.invoice_id) {
+            addToast({
+              type: 'info',
+              title: label,
+              message: `Contract ${result.contract_number} raised — complete payment to activate.`,
+            });
+            await collectPayment(
+              result.contract_id,
+              result.invoice_id,
+              result.invoice_amount ?? 0,
+              result.invoice_currency ?? 'INR',
+              result.plan_name,
+            );
+          } else {
+            addToast({
+              type: 'success',
+              title: label,
+              message: `Contract ${result.contract_number} is active.`,
+            });
+            setPendingPlanId(null);
+          }
         },
         onError: (err: Error) => {
           addToast({
@@ -87,8 +250,8 @@ const PricingPlansPage: React.FC = () => {
             title: 'Could not subscribe',
             message: err.message,
           });
+          setPendingPlanId(null);
         },
-        onSettled: () => setPendingPlanId(null),
       },
     );
   };
@@ -103,24 +266,44 @@ const PricingPlansPage: React.FC = () => {
     handleSubscribe(plan);
   };
 
-  const { data: packData, isLoading: packsLoading } = usePackTemplates();
-  const packs: PackTemplate[] = packData?.data?.packs ?? [];
-  const purchasePack = usePurchasePack();
-  const [pendingPackId, setPendingPackId] = useState<string | null>(null);
-
   const handleBuyPack = (pack: PackTemplate) => {
+    // Same gate as plans (B6). Every pack is priced, so there is no free case
+    // to exempt here.
+    if (!canPurchase) {
+      addToast({
+        type: 'info',
+        title: `${sellerName} will be in touch`,
+        message: `${pack.name} cannot be bought online right now. ${sellerName} has your request and will contact you with the next steps.`,
+      });
+      return;
+    }
+
     setPendingPackId(pack.id);
     purchasePack.mutate(
       { templateId: pack.id },
       {
-        onSuccess: (result) => {
-          addToast({
-            type: 'success',
-            title: `${result.pack_name} purchased`,
-            message: result.credits_pending
-              ? `Contract ${result.contract_number} raised. Credits land once the invoice is paid.`
-              : `Contract ${result.contract_number}. Credits are in your balance now.`,
-          });
+        onSuccess: async (result: PackPurchaseResult) => {
+          if (result.credits_pending && result.invoice_id) {
+            addToast({
+              type: 'info',
+              title: `${result.pack_name} raised`,
+              message: `Contract ${result.contract_number} — complete payment to unlock.`,
+            });
+            await collectPayment(
+              result.contract_id,
+              result.invoice_id,
+              result.invoice_amount ?? 0,
+              result.invoice_currency ?? 'INR',
+              result.pack_name,
+            );
+          } else {
+            addToast({
+              type: 'success',
+              title: `${result.pack_name} purchased`,
+              message: `Contract ${result.contract_number}. Credits are in your balance now.`,
+            });
+            setPendingPackId(null);
+          }
         },
         onError: (err: Error) => {
           addToast({
@@ -128,8 +311,8 @@ const PricingPlansPage: React.FC = () => {
             title: 'Could not complete purchase',
             message: err.message,
           });
+          setPendingPackId(null);
         },
-        onSettled: () => setPendingPackId(null),
       },
     );
   };
@@ -140,10 +323,23 @@ const PricingPlansPage: React.FC = () => {
 
   // The 'per_contract' plan card has no Subscribe action of its own — funding
   // the wallet IS what switches billing_mode to per_contract (see
-  // fn_apply_topup_grants's wallet branch), so its button scrolls down to the
-  // wallet top-up purchase instead of pretending to be a second Subscribe.
+  // fn_apply_topup_grants's wallet branch).
+  //
+  // B7. That button used to call scrollToPacks(). Scrolling is not an action:
+  // it moved the page and left the user to work out, unaided, which of the
+  // cards further down was the one that actually starts pay-as-you-go — and
+  // it never said anywhere that a wallet starts at ₹1,000. The button now
+  // BUYS the wallet top-up directly, and the card states the minimum before
+  // it is clicked.
+  //
+  // There is exactly one wallet_topup template (₹1,000), and migration 037
+  // stops a smaller one from ever being published, so "the wallet top-up" is
+  // unambiguous. If more denominations are ever added this picks the
+  // cheapest, which is the correct "get started" amount.
   const packsRef = useRef<HTMLDivElement>(null);
-  const scrollToPacks = () => packsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const walletTopup = packs
+    .filter((p) => p.wallet_paise > 0)
+    .sort((a, b) => a.wallet_paise - b.wallet_paise)[0] ?? null;
 
   const cardStyle: React.CSSProperties = {
     backgroundColor: colors.utility.secondaryBackground,
@@ -196,6 +392,34 @@ const PricingPlansPage: React.FC = () => {
           </p>
         )}
       </div>
+
+      {/* B6. Said once, up front, rather than as a per-card failure. The
+          catalogue stays fully visible and free plans stay usable — the only
+          thing withdrawn is the promise that a priced plan can be paid for
+          right now, which is a promise the system cannot currently keep. */}
+      {!canPurchase && plans.length > 0 && (
+        <div
+          className="flex items-start gap-2 p-4 rounded-xl text-sm mb-5"
+          style={{
+            backgroundColor: `${colors.semantic?.warning || '#D97706'}12`,
+            border: `1px solid ${colors.semantic?.warning || '#D97706'}40`,
+            color: colors.utility.primaryText,
+          }}
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: colors.semantic?.warning || '#D97706' }} />
+          <div>
+            <span className="font-semibold">
+              {sellerTakesOfflineOnly
+                ? `${sellerName} does not take card payments online.`
+                : `Online payment is not available right now.`}
+            </span>{' '}
+            <span style={{ color: colors.utility.secondaryText }}>
+              You can still choose a plan below — {sellerName} will be notified and
+              will contact you to complete it. Free plans activate immediately, as usual.
+            </span>
+          </div>
+        </div>
+      )}
 
       {plans.length === 0 && (
         <div
@@ -281,18 +505,52 @@ const PricingPlansPage: React.FC = () => {
                       />
                       <span>No cap, no term — pay only for what you create</span>
                     </li>
+
+                    {/* B7. The minimum is stated as a feature of the model,
+                        not as fine print discovered at the payment step. */}
+                    {walletTopup && (
+                      <li className="flex items-start gap-2 text-sm" style={{ color: colors.utility.primaryText }}>
+                        <Check
+                          className="w-4 h-4 mt-0.5 shrink-0"
+                          style={{ color: colors.semantic?.success || '#0d9464' }}
+                        />
+                        <span>
+                          Starts with a{' '}
+                          <strong>
+                            {getCurrencySymbol(walletTopup.currency)}
+                            {(walletTopup.wallet_paise / 100).toLocaleString()}
+                          </strong>{' '}
+                          wallet top-up — the minimum. Each contract or RFQ you create is
+                          drawn from that balance; top up again whenever it runs low.
+                        </span>
+                      </li>
+                    )}
                   </ul>
                 </div>
 
                 <div className="px-5 pb-5">
                   <button
                     type="button"
-                    onClick={scrollToPacks}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                    // Buys the wallet top-up outright. No scroll, no hunting
+                    // for the right card further down the page.
+                    onClick={() => walletTopup && handleBuyPack(walletTopup)}
+                    disabled={!walletTopup || !!pendingPackId || !canPurchase}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
                   >
-                    Get started
+                    {!walletTopup
+                      ? 'Unavailable'
+                      : !canPurchase
+                        ? 'Not available online'
+                        : pendingPackId === walletTopup.id
+                          ? 'Starting…'
+                          : `Add ${getCurrencySymbol(walletTopup.currency)}${(walletTopup.wallet_paise / 100).toLocaleString()} & get started`}
                   </button>
+                  {walletTopup && canPurchase && (
+                    <p className="text-[11px] mt-2 text-center" style={{ color: colors.utility.secondaryText }}>
+                      One payment now. Nothing recurring.
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -302,6 +560,15 @@ const PricingPlansPage: React.FC = () => {
           const term = formatTerm(plan.term);
           const isFree = plan.price === 0;
           const isCurrent = currentPlanId === plan.id;
+
+          // Instalment-billed plans lead with the payment; single-payment
+          // plans lead with the price (they are the same number there).
+          const billing = plan.billing;
+          const isInstalment = !!billing && billing.cycle !== 'prepaid' && billing.installments > 1;
+          const headlineAmount = isInstalment ? billing!.installment_amount : plan.price;
+          const headlineSuffix = isInstalment
+            ? (CYCLE_SUFFIX[billing!.cycle] || `/${billing!.cycle}`)
+            : (term ? `/ ${term}` : null);
 
           // Only surface caps that actually grant something. A 0 here is a real
           // cap ("may not create any"), so listing it as a feature would read
@@ -330,14 +597,37 @@ const PricingPlansPage: React.FC = () => {
 
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-3xl font-extrabold" style={{ color: colors.utility.primaryText }}>
-                    {isFree ? 'Free' : `${symbol}${plan.price.toLocaleString()}`}
+                    {isFree ? 'Free' : `${symbol}${headlineAmount.toLocaleString()}`}
                   </span>
-                  {term && (
+                  {!isFree && headlineSuffix && (
                     <span className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                      / {term}
+                      {headlineSuffix}
                     </span>
                   )}
                 </div>
+
+                {/* The full commitment, spelled out. An instalment plan's term
+                    total is the number that actually matters when comparing
+                    cards, so it stays visible — just not as the headline. */}
+                {!isFree && isInstalment && (
+                  <p className="text-xs mt-1.5" style={{ color: colors.utility.secondaryText }}>
+                    {billing!.installments} payments billed {CYCLE_NOUN[billing!.cycle] || billing!.cycle}
+                    {term ? ` over ${term}` : ''} ·{' '}
+                    <strong style={{ color: colors.utility.primaryText }}>
+                      {symbol}{plan.price.toLocaleString()} total
+                    </strong>
+                  </p>
+                )}
+                {!isFree && !isInstalment && term && (
+                  <p className="text-xs mt-1.5" style={{ color: colors.utility.secondaryText }}>
+                    One payment, upfront · covers {term}
+                  </p>
+                )}
+                {isFree && (
+                  <p className="text-xs mt-1.5" style={{ color: colors.utility.secondaryText }}>
+                    No card required{term ? ` · renews every ${term}` : ''}
+                  </p>
+                )}
 
                 {plan.description && (
                   <p className="text-sm mt-2" style={{ color: colors.utility.secondaryText }}>
@@ -412,29 +702,55 @@ const PricingPlansPage: React.FC = () => {
                     Current plan
                   </div>
                 ) : isSubscribed ? (
-                  <button
-                    type="button"
-                    onClick={() => setSwitchTarget(plan)}
-                    disabled={pendingPlanId !== null}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{
-                      backgroundColor: `${colors.utility.primaryText}10`,
-                      color: colors.utility.primaryText,
-                    }}
-                  >
-                    Switch
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSwitchTarget(plan)}
+                      disabled={pendingPlanId !== null}
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{
+                        backgroundColor: `${colors.utility.primaryText}10`,
+                        color: colors.utility.primaryText,
+                      }}
+                    >
+                      Switch to {plan.name}
+                    </button>
+                    {/* The cost of switching, before the click — not only
+                        inside the confirm modal. Switching forfeits the
+                        current plan's unused allowance, which is not
+                        something to discover after committing. */}
+                    <p className="text-[11px] mt-1.5 text-center" style={{ color: colors.utility.secondaryText }}>
+                      Ends your current plan · unused allowance is forfeited
+                    </p>
+                  </>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSubscribe(plan)}
-                    disabled={pendingPlanId !== null}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
-                  >
-                    {pendingPlanId === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {pendingPlanId === plan.id ? 'Subscribing…' : 'Subscribe'}
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleSubscribe(plan)}
+                      disabled={pendingPlanId !== null}
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: colors.brand.primary, color: '#fff' }}
+                    >
+                      {pendingPlanId === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {/* B6. A priced plan that cannot be paid for online is
+                          not "Subscribe" — the word promises an outcome the
+                          click cannot deliver. It asks instead, and the line
+                          below says what happens next. A free plan is
+                          untouched: nothing to collect, so it still
+                          subscribes instantly. */}
+                      {pendingPlanId === plan.id
+                        ? 'Subscribing…'
+                        : (!isFree && !canPurchase)
+                          ? 'Request this plan'
+                          : 'Subscribe'}
+                    </button>
+                    {!isFree && !canPurchase && (
+                      <p className="text-[11px] mt-1.5 text-center" style={{ color: colors.utility.secondaryText }}>
+                        {sellerName} will contact you to complete payment
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -501,21 +817,36 @@ const PricingPlansPage: React.FC = () => {
                           </span>
                         </li>
                       ) : (
-                        grantEntries.map(([ch, n]) => (
-                          <li
-                            key={ch}
-                            className="flex items-start gap-2 text-sm"
-                            style={{ color: colors.utility.primaryText }}
-                          >
-                            <Check
-                              className="w-4 h-4 mt-0.5 shrink-0"
-                              style={{ color: colors.semantic?.success || '#0d9464' }}
-                            />
-                            <span>
-                              <strong>{n}</strong> {CHANNEL_LABELS[ch] || ch} credits
-                            </span>
-                          </li>
-                        ))
+                        <>
+                          {grantEntries.map(([ch, n]) => (
+                            <li
+                              key={ch}
+                              className="flex items-start gap-2 text-sm"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              <Check
+                                className="w-4 h-4 mt-0.5 shrink-0"
+                                style={{ color: colors.semantic?.success || '#0d9464' }}
+                              />
+                              <span>
+                                <strong>{n}</strong> {CHANNEL_LABELS[ch] || ch} credits
+                              </span>
+                            </li>
+                          ))}
+                          {pack.flags.map((flag) => (
+                            <li
+                              key={flag}
+                              className="flex items-start gap-2 text-sm capitalize"
+                              style={{ color: colors.utility.primaryText }}
+                            >
+                              <Check
+                                className="w-4 h-4 mt-0.5 shrink-0"
+                                style={{ color: colors.semantic?.success || '#0d9464' }}
+                              />
+                              <span>{flag.replace(/^addon_extend_/, '').replace(/_/g, ' ')} channel unlocked</span>
+                            </li>
+                          ))}
+                        </>
                       )}
                     </ul>
                   </div>
@@ -585,7 +916,15 @@ const SwitchConfirmModal: React.FC<{
   if (!isOpen || !targetPlan) return null;
 
   const symbol = getCurrencySymbol(targetPlan.currency);
-  const priceLabel = targetPlan.price === 0 ? 'Free' : `${symbol}${targetPlan.price.toLocaleString()}`;
+  const b = targetPlan.billing;
+  const isInstalment = !!b && b.cycle !== 'prepaid' && b.installments > 1;
+  // What is actually charged NOW — an instalment plan does not bill its term
+  // total on day one, and saying it does would overstate the immediate cost.
+  const priceLabel = targetPlan.price === 0
+    ? 'Free'
+    : isInstalment
+      ? `${symbol}${b!.installment_amount.toLocaleString()} now (${b!.installments} × ${symbol}${b!.installment_amount.toLocaleString()}, ${symbol}${targetPlan.price.toLocaleString()} over the term)`
+      : `${symbol}${targetPlan.price.toLocaleString()}`;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">

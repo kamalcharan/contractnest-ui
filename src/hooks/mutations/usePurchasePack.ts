@@ -23,7 +23,13 @@ export interface PackPurchaseResult {
   amount: number;
   currency: string;
   grants: Record<string, number>;
+  /** Addon flags this pack grants (e.g. addon_extend_website) — empty for a plain credit/wallet pack. */
+  flags: string[];
   credits_pending: boolean;
+  /** Null for a free pack — nothing to pay, grants are already applied. */
+  invoice_id: string | null;
+  invoice_amount: number | null;
+  invoice_currency: string | null;
 }
 
 export interface PurchaseError {
