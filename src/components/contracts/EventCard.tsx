@@ -203,7 +203,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   const TypeIcon = isGroupSession ? Users : isSparePart ? Package : isService ? Wrench : Receipt;
   const typeLabel = isGroupSession
     ? 'Group Session'
-    : isService ? 'Service Delivery' : isSparePart ? 'Spare Part' : (event.billing_cycle_label || 'Billing');
+    : isService ? 'Service Delivery' : isSparePart ? 'Spare Part' : (event.billing_cycle_label || 'Billing').replace(/\s+\d+\/\d+\s*$/, '');
 
   const handleCardClick = () => {
     if (onViewContract) {
@@ -374,7 +374,7 @@ export const EventCard: React.FC<EventCardProps> = ({
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CalendarDays className="w-4 h-4" style={{ color: colors.brand?.secondary || accent }} />
-            <span className="text-xs font-medium" style={{ color: colors.utility.primaryText }}>
+            <span className="text-sm font-semibold" style={{ color: colors.utility.primaryText }}>
               {formatEventDate(event.scheduled_date)}
             </span>
           </div>

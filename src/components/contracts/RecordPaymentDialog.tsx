@@ -707,9 +707,9 @@ const RecordPaymentDialog: React.FC<RecordPaymentDialogProps> = ({
               </span>
               <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                  {e.billing_cycle_label || `Event ${e.sequence_number}`}
+                  {(e.billing_cycle_label || `Event ${e.sequence_number}`).replace(/\s+\d+\/\d+\s*$/, '')}
                 </div>
-                <div className="text-[9px] mt-0.5" style={{ color: colors.utility.secondaryText }}>
+                <div className="text-[11px] font-medium mt-0.5" style={{ color: colors.utility.secondaryText }}>
                   {new Date(e.scheduled_date).toLocaleDateString()}
                   {settled && ' · Settled'}
                 </div>

@@ -22,13 +22,13 @@
 // Data via /api/group-sessions/*.
 // ============================================================================
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, RefreshCw, AlertTriangle, Inbox, ChevronRight, ChevronLeft, ChevronDown,
   CalendarClock, CheckCircle2, CircleDollarSign, UserRound, ArrowLeft, TrendingUp,
   Wallet, Repeat, Pencil, Ban, X, Check, CalendarPlus, Plus, RotateCcw, Mic,
-  UserCog, Lock, Search, Download, Table2, Receipt,
+  UserCog, Lock, Search, Download, Table2, Receipt, FileText,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -189,6 +189,11 @@ const GroupSessionsPage: React.FC = () => {
   const [duesPlan, setDuesPlan] = useState<DuesPlan>('all');
   const [duesStanding, setDuesStanding] = useState<DuesStanding>('all');
   const [duesPage, setDuesPage] = useState(1);
+  // Horizontal scroll for the month columns — the native scrollbar sits below
+  // all the rows, unreachable without scrolling the whole page down first, so
+  // the sticky header carries its own always-visible Left/Right controls.
+  const duesScrollRef = useRef<HTMLDivElement>(null);
+  const scrollDuesBy = (dx: number) => duesScrollRef.current?.scrollBy({ left: dx, behavior: 'smooth' });
   const [occFilter, setOccFilter] = useState<OccFilter>('upcoming');
   const [occPage, setOccPage] = useState(1);
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
@@ -990,10 +995,10 @@ const GroupSessionsPage: React.FC = () => {
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div ref={duesScrollRef} className="overflow-x-auto">
               <div className="space-y-1.5" style={{ minWidth: gridMinWidth }}>
-                <div className="grid items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={headStyle(duesCols)}>
-                  <span>Member</span>
+                <div className="grid items-center gap-2 px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ ...headStyle(duesCols), position: 'sticky', top: 0, zIndex: 20, backgroundColor: colors.utility.primaryBackground }}>
+                  <span style={{ position: 'sticky', left: 0, zIndex: 30, backgroundColor: colors.utility.primaryBackground }}>Member</span>
                   <span className="text-right">Value</span>
                   <span className="text-right">Discount</span>
                   <span className="text-right">Net</span>
@@ -1002,6 +1007,27 @@ const GroupSessionsPage: React.FC = () => {
                   {duesMonths.map((m) => (
                     <span key={m.key} className="text-center">{m.label}</span>
                   ))}
+                  {/* Always-visible horizontal scroll controls — pinned to the
+                      sticky header itself (not the scroll container), so they
+                      never require reaching the native scrollbar below the rows. */}
+                  <div className="absolute right-2 top-2 flex items-center gap-1" style={{ zIndex: 40 }}>
+                    <button
+                      onClick={() => scrollDuesBy(-240)}
+                      title="Scroll left"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded-md border hover:brightness-95 transition-all"
+                      style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '20', color: colors.utility.secondaryText }}
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <button
+                      onClick={() => scrollDuesBy(240)}
+                      title="Scroll right"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded-md border hover:brightness-95 transition-all"
+                      style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '20', color: colors.utility.secondaryText }}
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {pageSlice(filteredDues, duesPage, DUES_PAGE_SIZE).map((r) => (
@@ -1009,11 +1035,10 @@ const GroupSessionsPage: React.FC = () => {
                     /* keyed by CONTRACT — a contact can hold two at renewal,
                        and keying by contact would collide and drop a row */
                     key={r.contract_id}
-                    onClick={() => r.contract_id && navigate(`/contracts/${r.contract_id}`)}
-                    className="grid items-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+                    className="grid items-center gap-2 px-3 py-2.5 rounded-lg border transition-colors"
                     style={rowStyle(duesCols)}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0" style={{ position: 'sticky', left: 0, zIndex: 10, backgroundColor: colors.utility.secondaryBackground }}>
                       <span className="h-8 w-8 rounded-lg flex-none inline-flex items-center justify-center text-[10px] font-bold border" style={{ backgroundColor: colors.brand.primary + '20', borderColor: colors.brand.primary + '40', color: colors.brand.primary }}>
                         {initials(r.name)}
                       </span>
@@ -1029,12 +1054,22 @@ const GroupSessionsPage: React.FC = () => {
                               accent={planColor(r.plan)}
                             />
                           </span>
-                          <span className="text-[10px] truncate" style={sub}>
+                          <span className="text-[10px] truncate inline-flex items-center gap-1" style={sub}>
                             {r.contract_number || '—'}
                             {/* Only shown when this contact holds more than one
                                 contract in the window — otherwise it is noise. */}
                             {duesRepeatContacts.has(r.contact_id) && ` · ${fmtShort(r.start_date)}–${fmtShort(r.end_date)}`}
                             {r.beyond_count > 0 && ` · ${money(r.beyond_total, r.currency)} after Mar`}
+                            {r.contract_id && (
+                              <button
+                                onClick={() => navigate(`/contracts/${r.contract_id}`)}
+                                title="View contract"
+                                className="inline-flex items-center justify-center rounded-md hover:brightness-90 transition-all flex-none"
+                                style={{ color: colors.brand.primary }}
+                              >
+                                <FileText size={12} />
+                              </button>
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1063,8 +1098,7 @@ const GroupSessionsPage: React.FC = () => {
                       return (
                         <span
                           key={m.key}
-                          onClick={markable ? (e) => {
-                            e.stopPropagation();   // the row itself opens the contract
+                          onClick={markable ? () => {
                             setMarkCell({ row: r, monthLabel: `${m.label} ${m.year}`, events: c.events || [] });
                           } : undefined}
                           title={`${m.label} ${m.year} · ${money(c.amount, r.currency)} · ${statusLabel(c.status)}`
