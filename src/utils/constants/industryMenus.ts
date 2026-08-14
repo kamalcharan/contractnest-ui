@@ -45,7 +45,13 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: true,
     submenuItems: [
       { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
-      { id: 'ops-finance', label: 'Finance (AR/AP)', icon: 'Wallet', path: '/ops/finance' },
+      // HIDDEN 2026-08-14: superseded by Money In (/money-in) + To Pay (/to-pay),
+      // which read the same get_tenant_receivables/get_tenant_payables RPCs.
+      // ⚠ "Collected this month" (visible on this page, all-time only on Money
+      // In) has NOT been ported yet — that KPI is lost while this is hidden.
+      // See CLAUDE.md "Finance (AR/AP) menu is superseded" / review item 1.
+      // Page left in place; do not delete pages/operations/finance/ yet.
+      // { id: 'ops-finance', label: 'Finance (AR/AP)', icon: 'Wallet', path: '/ops/finance' },
       { id: 'ops-services', label: 'Event Schedule', icon: 'CalendarClock', path: '/ops/services' },
       { id: 'ops-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions' },
       { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
@@ -110,13 +116,28 @@ export const defaultMenuItems: MenuItem[] = [
   },
   // Money In / To Pay — ONE money workspace per side (owner decision,
   // 2026-08-13). Money In merges receivables + invoices: buyer stories with
-  // instalments, documents and receipts inside; invoices are reached from
-  // rows, not from a separate nav item. To Pay is its expense-side mirror.
+  // instalments, documents and receipts inside. To Pay is its expense mirror.
   {
     id: 'money-in',
     label: 'Money In',
     icon: 'Wallet',
     path: '/money-in',
+    revenueOnly: true
+  },
+  // Invoices — the document register (owner request, 2026-08-14). Money In is
+  // still the money surface: it answers "who owes me and what do I do about
+  // it", grouped by buyer and scoped to the live picture. That deliberately
+  // cannot answer "where is INV-10059", because settled and cancelled
+  // documents have no place in a story about open money. This entry is the
+  // flat, searchable list of every invoice, and is reached from Money In too.
+  // Kept as its OWN top-level item rather than a submenu under Money In,
+  // because making Money In a submenu parent would turn it into a toggle and
+  // cost it its one-click route (see Sidebar: hasSubmenu items link to '#').
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: 'Receipt',
+    path: '/invoices',
     revenueOnly: true
   },
   {
@@ -154,29 +175,35 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-briefing', label: 'Briefing', icon: 'Sunrise', path: '/vani/briefing' }
     ]
   },
-  // VaNi (old) — mock/reference pages parked here until the cleanup pass removes them
-  {
-    id: 'vani-old',
-    label: 'VaNi (old)',
-    icon: 'Archive',
-    path: '/vani/dashboard',
-    hasSubmenu: true,
-    defaultOpen: false, // reference only — must not auto-expand and crowd the sidebar
-    submenuItems: [
-      { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
-      { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
-      { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },
-      { id: 'vani-templates', label: 'Templates', icon: 'FileText', path: '/vani/templates' },
-      { id: 'vani-channels', label: 'Channels', icon: 'MessageSquare', path: '/vani/channels' },
-      { id: 'vani-bbb-chat', label: 'BBB Chat', icon: 'MessageCircle', path: '/vani/channels/bbb/chat' },
-      { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
-      { id: 'vani-webhooks', label: 'Webhooks', icon: 'Webhook', path: '/vani/webhooks' },
-      { id: 'vani-receivables', label: 'Accounts Receivable', icon: 'Wallet', path: '/vani/finance/receivables' },
-      { id: 'vani-service-schedule', label: 'Service Schedule', icon: 'CalendarCheck', path: '/vani/operations/services' },
-      { id: 'vani-rules', label: 'Process Rules', icon: 'ListChecks', path: '/vani/rules' },
-      { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
-    ]
-  },
+  // HIDDEN 2026-08-14: VaNi (old) — mock/reference pages, per the block's own
+  // prior comment ("parked here until the cleanup pass removes them") this
+  // was always the intended end state, confirmed by the owner. Includes
+  // vani-receivables (/vani/finance/receivables), the 100% mock Accounts
+  // Receivable page — retire it in the same cleanup pass, per CLAUDE.md
+  // "Finance (AR/AP) menu is superseded". Pages left in place; delete only in
+  // the owner's later code-cleanup pass, not now.
+  // {
+  //   id: 'vani-old',
+  //   label: 'VaNi (old)',
+  //   icon: 'Archive',
+  //   path: '/vani/dashboard',
+  //   hasSubmenu: true,
+  //   defaultOpen: false, // reference only — must not auto-expand and crowd the sidebar
+  //   submenuItems: [
+  //     { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
+  //     { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
+  //     { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },
+  //     { id: 'vani-templates', label: 'Templates', icon: 'FileText', path: '/vani/templates' },
+  //     { id: 'vani-channels', label: 'Channels', icon: 'MessageSquare', path: '/vani/channels' },
+  //     { id: 'vani-bbb-chat', label: 'BBB Chat', icon: 'MessageCircle', path: '/vani/channels/bbb/chat' },
+  //     { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
+  //     { id: 'vani-webhooks', label: 'Webhooks', icon: 'Webhook', path: '/vani/webhooks' },
+  //     { id: 'vani-receivables', label: 'Accounts Receivable', icon: 'Wallet', path: '/vani/finance/receivables' },
+  //     { id: 'vani-service-schedule', label: 'Service Schedule', icon: 'CalendarCheck', path: '/vani/operations/services' },
+  //     { id: 'vani-rules', label: 'Process Rules', icon: 'ListChecks', path: '/vani/rules' },
+  //     { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
+  //   ]
+  // },
   // HIDDEN: Templates, Tasks - commented out for now
   /*
   {

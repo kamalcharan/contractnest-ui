@@ -25,41 +25,21 @@ import {
   CheckCircle2,
   Clock,
   Wallet,
+  Loader2,
+  Settings2,
 } from 'lucide-react';
 import type { Invoice } from '@/types/contracts';
+import { useInvoiceDetail, useSendInvoice, sendRefusal } from '@/pages/invoices/useInvoiceDetail';
+import { formatCurrency, formatDate, formatPaymentMode, stripHtml } from '@/utils/format';
+import { SideCard } from '@/pages/invoices/ui';
 
 // ═══════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════
 
-const formatCurrency = (value?: number, currency?: string) => {
-  if (!value && value !== 0) return '\u2014';
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency || 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value);
-};
-
-const formatDate = (d?: string) => {
-  if (!d) return '\u2014';
-  return new Date(d).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
-// Block descriptions are stored as HTML (template editor) — print plain text
-const stripHtml = (value?: string) => (value || '').replace(/<[^>]+>/g, '').trim();
-
-const formatPaymentMode = (mode?: string, emiMonths?: number) => {
-  if (!mode) return '';
-  if (mode === 'emi') return `EMI (${emiMonths || 0} months)`;
-  if (mode === 'defined') return 'As per billing schedule';
-  return mode.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-};
+// formatCurrency / formatDate / formatPaymentMode / stripHtml moved to
+// utils/format.ts in Part 2 — they were duplicated in pages/invoices/ui.tsx.
+// Same implementations, byte for byte: this page renders identically.
 
 // Recurring blocks store the per-cycle rate in unit_price and the full-term
 // value in total_price (e.g. monthly ₹1,500 × 12 = ₹18,000) while quantity
@@ -110,12 +90,66 @@ const InvoiceViewPage: React.FC = () => {
   const { profile: tenantProfile, loading: profileLoading } = useTenantProfile();
   const { hasActiveGateway } = useGatewayStatus();
 
-  const isLoading = contractLoading || invoicesLoading || profileLoading;
-  const invoice = invoiceData?.invoices?.find((inv: Invoice) => inv.id === invoiceId);
+  // Send Invoice. The channel choice is deliberately NOT a picker here — one
+  // button, one obvious action. WhatsApp becomes an option once its provider
+  // template is proven (see migration 070's closing note).
+  const sendInvoice = useSendInvoice();
+  const [ruleOff, setRuleOff] = useState<string | null>(null);
+
+  const handleSend = async () => {
+    if (!invoiceId) return;
+    setRuleOff(null);
+    try {
+      await sendInvoice.mutateAsync({ invoiceId, channel: 'email' });
+    } catch (err: any) {
+      const refusal = sendRefusal(err);
+      if (refusal?.reason === 'rule_disabled') {
+        // Not an error the user caused — it is a setting, one screen away.
+        setRuleOff(refusal.message);
+        return;
+      }
+      addToast({
+        type: 'error',
+        title: 'Not sent',
+        message: refusal?.message || 'The invoice could not be sent. Please try again.',
+      });
+    }
+  };
+
+  // The document, straight off the invoice record (get_invoice_detail). This
+  // makes the page CONTRACT-OPTIONAL: an ad-hoc invoice has no contract to
+  // route through and no blocks to build line items from, so it previously
+  // had no page at all. Contract invoices keep their existing behaviour —
+  // contract data still wins wherever it exists.
+  const { data: doc, isLoading: docLoading } = useInvoiceDetail(invoiceId);
+
+  const isLoading = contractLoading || invoicesLoading || profileLoading || docLoading;
+
+  // Prefer the contract's own invoice row (unchanged path); fall back to the
+  // document payload when there is no contract.
+  const contractInvoice = invoiceData?.invoices?.find((inv: Invoice) => inv.id === invoiceId);
+  const invoice: any = contractInvoice || (doc ? {
+    ...doc,
+    receipts_count: (doc as any).receipts_count ?? (doc.receipts?.length || 0),
+  } : undefined);
 
   // ─── Derived Data ───
   const currency = invoice?.currency || contract?.currency || 'INR';
-  const blocks = contract?.blocks || [];
+  // Contract invoices render their lines from the contract's BLOCKS; ad-hoc
+  // invoices carry their own line_items. Blocks win when present so nothing
+  // about the existing page changes.
+  const contractBlocks = contract?.blocks || [];
+  const blocks: any[] = contractBlocks.length > 0
+    ? contractBlocks
+    : ((doc?.line_items || []).map((li: any) => ({
+        id: li.name,
+        block_name: li.name,
+        category_name: null,
+        block_description: null,
+        unit_price: li.unit_price,
+        quantity: li.qty,
+        total_price: li.amount,
+      })));
 
   // Build seller address string
   const buildAddress = useCallback(() => {
@@ -189,7 +223,9 @@ const InvoiceViewPage: React.FC = () => {
   }
 
   // ─── Error / Not Found ───
-  if (contractError || !contract || !invoice) {
+  // Only a missing INVOICE is fatal now — an ad-hoc invoice legitimately has
+  // no contract, and contractError is expected when contractId is absent.
+  if (!invoice || (contractId && (contractError || !contract))) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <AlertTriangle className="h-12 w-12" style={{ color: colors.semantic.error }} />
@@ -200,7 +236,7 @@ const InvoiceViewPage: React.FC = () => {
           The invoice you are looking for does not exist or could not be loaded.
         </p>
         <button
-          onClick={() => navigate(`/contracts/${contractId}`)}
+          onClick={() => navigate(contractId ? `/contracts/${contractId}` : '/money-in')}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
           style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
         >
@@ -213,7 +249,7 @@ const InvoiceViewPage: React.FC = () => {
   const statusConfig = getStatusConfig(invoice.status);
   const StatusIcon = statusConfig.icon;
   const balance = invoice.total_amount - (invoice.amount_paid || 0);
-  const grandTotal = contract.grand_total || ((contract.total_value || 0) + (contract.tax_total || 0));
+  const grandTotal = contract?.grand_total || ((contract?.total_value || 0) + (contract?.tax_total || 0)) || invoice.total_amount;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: colors.utility.mainBackground }}>
@@ -242,7 +278,7 @@ const InvoiceViewPage: React.FC = () => {
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => navigate(`/contracts/${contractId}`)}
+              onClick={() => navigate(contractId ? `/contracts/${contractId}` : '/money-in')}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors hover:opacity-80"
               style={{
                 backgroundColor: colors.utility.mainBackground,
@@ -257,9 +293,9 @@ const InvoiceViewPage: React.FC = () => {
                 Invoice {invoice.invoice_number}
               </h1>
               <div className="flex items-center gap-2 text-xs" style={{ color: colors.utility.secondaryText }}>
-                <span>{contract.title}</span>
+                <span>{contract?.title || doc?.contract_title || 'Ad-hoc invoice'}</span>
                 <span>&middot;</span>
-                <span>{contract.contract_number}</span>
+                <span>{contract?.contract_number || doc?.contract_number || 'No contract'}</span>
               </div>
             </div>
           </div>
@@ -385,16 +421,19 @@ const InvoiceViewPage: React.FC = () => {
                   </h3>
                   <div className="space-y-1">
                     <div className="text-sm font-bold text-gray-800">
-                      {contract.buyer_name || '\u2014'}
+                      {contract?.buyer_name || doc?.contact_name || '\u2014'}
                     </div>
-                    {contract.buyer_company && (
+                    {contract?.buyer_company && (
                       <div className="text-sm text-gray-600">{contract.buyer_company}</div>
                     )}
-                    {contract.buyer_email && (
+                    {contract?.buyer_email && (
                       <div className="text-sm text-gray-500">{contract.buyer_email}</div>
                     )}
-                    {contract.buyer_phone && (
+                    {contract?.buyer_phone && (
                       <div className="text-sm text-gray-500">{contract.buyer_phone}</div>
+                    )}
+                    {!contract && (
+                      <div className="text-sm text-gray-500">No membership contract &mdash; settled directly</div>
                     )}
                   </div>
                 </div>
@@ -411,11 +450,11 @@ const InvoiceViewPage: React.FC = () => {
                         {formatCurrency(balance > 0 ? balance : invoice.total_amount, currency)}
                       </span>
                     </div>
-                    {contract.payment_mode && (
+                    {(contract?.payment_mode || invoice.payment_mode) && (
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-500">Payment Mode</span>
                         <span className="font-medium text-gray-700">
-                          {formatPaymentMode(contract.payment_mode, contract.emi_months)}
+                          {formatPaymentMode(contract?.payment_mode || invoice.payment_mode, contract?.emi_months ?? invoice.emi_total ?? undefined)}
                         </span>
                       </div>
                     )}
@@ -532,12 +571,12 @@ const InvoiceViewPage: React.FC = () => {
                   <div className="flex justify-between py-2 text-sm">
                     <span className="text-gray-500">Subtotal</span>
                     <span className="font-semibold text-gray-800">
-                      {formatCurrency(invoice.amount || contract.total_value, currency)}
+                      {formatCurrency(invoice.amount ?? contract?.total_value, currency)}
                     </span>
                   </div>
 
                   {/* Tax Breakdown */}
-                  {contract.tax_breakdown && contract.tax_breakdown.length > 0 ? (
+                  {contract?.tax_breakdown && contract.tax_breakdown.length > 0 ? (
                     contract.tax_breakdown.map((tax, i) => (
                       <div key={i} className="flex justify-between py-1.5 text-sm">
                         <span className="text-gray-500">
@@ -593,13 +632,13 @@ const InvoiceViewPage: React.FC = () => {
               </div>
 
               {/* ─── Notes ─── */}
-              {(invoice.notes || contract.notes) && (
+              {(invoice.notes || contract?.notes) && (
                 <div className="pt-6 border-t border-gray-200">
                   <h3 className="text-[0.65rem] font-bold uppercase tracking-widest text-gray-400 mb-2">
                     Note
                   </h3>
                   <p className="text-sm text-gray-500 leading-relaxed">
-                    {invoice.notes || contract.notes}
+                    {invoice.notes || contract?.notes}
                   </p>
                 </div>
               )}
@@ -661,15 +700,55 @@ const InvoiceViewPage: React.FC = () => {
 
                 {/* Send Invoice */}
                 <button
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all hover:opacity-80"
+                  onClick={handleSend}
+                  disabled={sendInvoice.isPending}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold border transition-all hover:opacity-80 disabled:opacity-50"
                   style={{
                     borderColor: colors.utility.primaryText + '20',
                     color: colors.utility.primaryText,
                     backgroundColor: 'transparent',
                   }}
                 >
-                  <Send className="h-4 w-4" /> Send Invoice
+                  {sendInvoice.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Sending…
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" /> Send Invoice
+                    </>
+                  )}
                 </button>
+
+                {/* The rule is off. This is a setting, not a failure, so it
+                    offers the way to fix it rather than shouting an error. */}
+                {ruleOff && (
+                  <div className="rounded-lg border px-3 py-2.5 text-xs"
+                    style={{ borderColor: '#F59E0B55', backgroundColor: '#F59E0B12', color: colors.utility.primaryText }}>
+                    <p className="mb-1.5">{ruleOff}</p>
+                    <button onClick={() => navigate('/settings/configure/automation-rules')}
+                      className="font-bold inline-flex items-center gap-1" style={{ color: colors.brand.primary }}>
+                      <Settings2 className="h-3 w-3" /> Open Automation Rules
+                    </button>
+                  </div>
+                )}
+
+                {/* Scenario 2: no payment method configured at all. The
+                    invoice still sends and offline capture still works — this
+                    only points at where to set collection up. */}
+                {!hasActiveGateway && (
+                  <div className="rounded-lg border px-3 py-2.5 text-xs"
+                    style={{ borderColor: colors.brand.primary + '45', backgroundColor: colors.brand.primary + '0d', color: colors.utility.primaryText }}>
+                    <p className="mb-1.5">
+                      No payment method is set up, so this invoice goes out without a way to pay online.
+                      You can still record payment here once it arrives.
+                    </p>
+                    <button onClick={() => navigate('/settings/integrations')}
+                      className="font-bold inline-flex items-center gap-1" style={{ color: colors.brand.primary }}>
+                      <Settings2 className="h-3 w-3" /> Set up payments
+                    </button>
+                  </div>
+                )}
 
                 {/* Add Payment — only if not fully paid */}
                 {invoice.status !== 'paid' && balance > 0 && (
@@ -693,25 +772,8 @@ const InvoiceViewPage: React.FC = () => {
             </div>
 
             {/* Payment Summary Card */}
-            <div
-              className="rounded-xl border overflow-hidden"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: colors.utility.primaryText + '15',
-              }}
-            >
-              <div
-                className="px-4 py-3 border-b"
-                style={{ borderColor: colors.utility.primaryText + '10' }}
-              >
-                <h3
-                  className="text-[0.65rem] font-bold uppercase tracking-wider"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Payment Summary
-                </h3>
-              </div>
-              <div className="p-4 space-y-3">
+            <SideCard title="Payment Summary" clip>
+              <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span style={{ color: colors.utility.secondaryText }}>Invoice Total</span>
                   <span className="font-bold" style={{ color: colors.utility.primaryText }}>
@@ -748,28 +810,11 @@ const InvoiceViewPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-            </div>
+            </SideCard>
 
             {/* Invoice Details Card */}
-            <div
-              className="rounded-xl border overflow-hidden"
-              style={{
-                backgroundColor: colors.utility.secondaryBackground,
-                borderColor: colors.utility.primaryText + '15',
-              }}
-            >
-              <div
-                className="px-4 py-3 border-b"
-                style={{ borderColor: colors.utility.primaryText + '10' }}
-              >
-                <h3
-                  className="text-[0.65rem] font-bold uppercase tracking-wider"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Invoice Details
-                </h3>
-              </div>
-              <div className="p-4 space-y-2.5">
+            <SideCard title="Invoice Details" clip>
+              <div className="space-y-2.5">
                 {[
                   {
                     label: 'Type',
@@ -810,7 +855,7 @@ const InvoiceViewPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-            </div>
+            </SideCard>
           </div>
         </div>
       </div>
@@ -819,12 +864,12 @@ const InvoiceViewPage: React.FC = () => {
       <RecordPaymentDialog
         isOpen={isPaymentDialogOpen}
         onClose={() => setIsPaymentDialogOpen(false)}
-        contractId={contract.id}
+        contractId={contract?.id || ''}
         hasActiveGateway={hasActiveGateway}
         grandTotal={grandTotal}
-        currency={contract.currency}
-        paymentMode={contract.payment_mode}
-        emiMonths={contract.emi_months}
+        currency={contract?.currency || currency}
+        paymentMode={contract?.payment_mode}
+        emiMonths={contract?.emi_months}
         onSuccess={() => {
           setIsPaymentDialogOpen(false);
           addToast({

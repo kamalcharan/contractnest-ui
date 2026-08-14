@@ -518,7 +518,7 @@ export const API_ENDPOINTS = {
     // =================================================================
     // SMART FORMS — Admin Form Template Management
     // =================================================================
-    SMART_FORMS: {
+  SMART_FORMS: {
       LIST: '/api/admin/forms',
       GET: (id: string) => `/api/admin/forms/${id}`,
       CREATE: '/api/admin/forms',
@@ -1321,12 +1321,9 @@ export const API_ENDPOINTS = {
     OCC_ADD: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/add`,
     OCC_MOVE: (id: string) => `/api/group-sessions/occurrence/${id}/move`,
     OCC_STATUS: (id: string) => `/api/group-sessions/occurrence/${id}/status`,
-    // Chair assignment and the dues matrix. These three are referenced by
-    // useGroupSessionsDashboard but have now been dropped from this file twice
-    // by whole-file copies built from a stale baseline — losing them does not
-    // fail the build, it fails at runtime as "X is not a function", which
-    // surfaces only as "Couldn't load dues" on the Dues tab. Keep them in step
-    // with the live routes in groupSessionsDashboardRoutes.ts.
+    // ⚠ Dropped THREE TIMES by whole-file copies from stale baselines —
+    // losing these fails at runtime only ("Couldn't load dues"). Keep in
+    // step with groupSessionsDashboardRoutes.ts.
     OCC_ASSIGN: (id: string) => `/api/group-sessions/occurrence/${id}/assign`,
     OCC_ASSIGN_DEFAULT: (blockId: string) => `/api/group-sessions/occurrences/${blockId}/assign-default`,
     ROSTER: (blockId: string) => `/api/group-sessions/roster/${blockId}`,
@@ -1338,6 +1335,25 @@ export const API_ENDPOINTS = {
     OCC_MARK: (id: string) => `/api/group-sessions/occurrence/${id}/mark`,
     MEMBER_BLOCK: (memberId: string, blockId: string) => `/api/group-sessions/member/${memberId}/block/${blockId}`,
     DUE_PAID: (billingEventId: string) => `/api/group-sessions/due/${billingEventId}/paid`,
+  },
+  // Standalone (non-contract-scoped) invoice operations. Contract-linked
+  // invoice/payment endpoints stay under CONTRACTS above.
+  // ⚠ Deleted on 2026-08-10 by a stale whole-file copy; restored 2026-08-13.
+  // MUST stay at the TOP LEVEL of API_ENDPOINTS — this file's indentation is
+  // inconsistent, so match by brace depth, not by leading spaces.
+  // Extend — customer touchpoints (website / WhatsApp / email storefronts).
+  // Backed by contractnest-api/src/routes/extendRoutes.ts, which has been
+  // registered and working the whole time; only this block was missing, which
+  // is why /extend 404'd and useTouchpoints threw on EXTEND.TOUCHPOINTS.
+  EXTEND: {
+    TOUCHPOINTS: '/api/extend/touchpoints',
+    TOUCHPOINT: (id: string) => `/api/extend/touchpoints/${id}`,
+  },
+
+  INVOICES: {
+    ADHOC: '/api/invoices/adhoc',
+    DETAIL: (id: string) => `/api/invoices/${id}`,
+    SEND: (id: string) => `/api/invoices/${id}/send`,
   },
   SMART_FORMS: {
     // Convenience: admin template endpoints (same as ADMIN.SMART_FORMS)
