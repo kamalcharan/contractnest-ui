@@ -271,6 +271,48 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
     setEventOverrides({});
   }, [startDate, cadenceOverrides]);
 
+  // ── Same-person detection across the SELECTED members ──
+  // A contact may legitimately hold any number of contracts, so nothing here
+  // blocks or skips anyone. What IS worth flagging is the same HUMAN sitting
+  // in the batch twice under two contact records — duplicate rows from an
+  // import, a re-registration, a slightly different spelling. The reliable
+  // signal is a shared mobile number or email address, not the name.
+  // Purely advisory: the user decides whether that is intended.
+  const duplicateWarnings = useMemo(() => {
+    const byChannel = new Map<string, { label: string; kind: string; names: string[] }>();
+    for (const id of selectedIds) {
+      const c: any = selected[id];
+      const channels: any[] = c?.contact_channels || [];
+      // One entry per (contact, channel value) — a contact listing the same
+      // number twice must not look like two people.
+      const seenOnThisContact = new Set<string>();
+      for (const ch of channels) {
+        const type = String(ch?.channel_type || '').toLowerCase();
+        if (type !== 'mobile' && type !== 'email' && type !== 'whatsapp') continue;
+        const raw = String(ch?.value || '').trim();
+        if (!raw) continue;
+        // Normalise: emails case-insensitively; phone numbers down to their
+        // last 10 digits so +91-98495 02193, 09849502193 and 9849502193 all
+        // collapse to the same person.
+        const normalised = type === 'email'
+          ? raw.toLowerCase()
+          : raw.replace(/\D/g, '').slice(-10);
+        if (!normalised || (type !== 'email' && normalised.length < 10)) continue;
+        const key = `${type === 'email' ? 'email' : 'phone'}:${normalised}`;
+        if (seenOnThisContact.has(key)) continue;
+        seenOnThisContact.add(key);
+        const entry = byChannel.get(key) || {
+          label: raw,
+          kind: type === 'email' ? 'email address' : 'mobile number',
+          names: [],
+        };
+        entry.names.push(contactDisplayName(c));
+        byChannel.set(key, entry);
+      }
+    }
+    return Array.from(byChannel.values()).filter((e) => e.names.length > 1);
+  }, [selectedIds, selected]);
+
   // ── Run the batch: clone the already-assembled draft per member → single
   //    bulk call. The template's assembled draft is buyer-independent, so it
   //    only needs to be built once (via the Preferences panel above), then
@@ -760,6 +802,30 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
                 {progress.some((r) => r.status === 'error') ? ` · ${progress.filter((r) => r.status === 'error').length} failed` : ''}
               </p>
             )}
+          </div>
+        )}
+
+        {/* ── SAME-PERSON ADVISORY ──
+            Not a limit: a contact may hold any number of contracts. This only
+            flags the same human appearing twice in the batch under two contact
+            records (shared mobile/email), which is almost always duplicate
+            contact data rather than intent. Nothing is blocked or skipped. */}
+        {!running && !finished && duplicateWarnings.length > 0 && (
+          <div
+            className="mt-3 rounded-lg px-3 py-2.5"
+            style={{ backgroundColor: '#F59E0B14', border: '1px solid #F59E0B55' }}
+          >
+            <p className="text-xs font-semibold mb-1" style={{ color: '#B45309' }}>
+              Possible duplicate {duplicateWarnings.length === 1 ? 'person' : 'people'} in this batch
+            </p>
+            {duplicateWarnings.map((d, i) => (
+              <p key={i} className="text-xs" style={{ color: colors.utility.secondaryText }}>
+                {d.names.join(' and ')} share the {d.kind} <strong>{d.label}</strong>
+              </p>
+            ))}
+            <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
+              Each will still get its own contract — deselect one if that isn&apos;t intended.
+            </p>
           </div>
         )}
 

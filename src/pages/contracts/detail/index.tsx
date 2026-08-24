@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import { useContract, useContractOperations } from '@/hooks/queries/useContractQueries';
 import { useContractInvoices, useCancelInvoice, useCancelReceipt } from '@/hooks/queries/useInvoiceQueries';
+import { useContractDetailsV2 } from '@/hooks/queries/useContractDetailsV2';
 import {
   useSetContractCredit,
   useBuyerPendingCredits,
@@ -2007,7 +2008,22 @@ const ContractDetailPage: React.FC = () => {
   const [tabInitialized, setTabInitialized] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
-  const { data: contract, isLoading, error } = useContract(id || null);
+  // ── JTD Nucleus Step 3: ONE aggregate call feeds the whole page ──
+  // useContractDetailsV2 fetches contract+events+cnak+invoices in a single
+  // round-trip and SEEDS the caches of useContract / events / invoices —
+  // so those hooks (below, disabled in V2 mode) resolve from the seeded
+  // cache instead of firing their own requests. State-aware polling keeps
+  // the page live (15s pending / 60s active / off terminal).
+  // ?useV1=1 on the URL restores the previous per-query fetching exactly.
+  const useV1Details = new URLSearchParams(window.location.search).get('useV1') === '1';
+  const detailsQ = useContractDetailsV2(useV1Details ? null : (id || null));
+  const {
+    data: contract,
+    isLoading: contractV1Loading,
+    error: contractV1Error,
+  } = useContract(id || null, { enabled: useV1Details });
+  const isLoading = useV1Details ? contractV1Loading : (detailsQ.isLoading && !contract);
+  const error = useV1Details ? contractV1Error : (detailsQ.error as Error | null);
   const { data: nomenclatureResponse, isLoading: nomenclatureLoading, error: nomenclatureError } = useGlobalMasterData('cat_contract_nomenclature', true);
   const nomenclatureItems = nomenclatureResponse?.data || [];
 
@@ -2025,7 +2041,9 @@ const ContractDetailPage: React.FC = () => {
       console.log('[NomenclatureDebug] form_settings type:', typeof matched?.form_settings);
     }
   }, [nomenclatureResponse, nomenclatureItems, nomenclatureLoading, nomenclatureError, contract]);
-  const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id });
+  // Disabled in V2 mode — the details aggregate seeds this exact cache key,
+  // and a disabled query still reads the seeded cache.
+  const { data: invoiceData } = useContractInvoices(id || undefined, { enabled: !!id && useV1Details });
   const pageSummary = invoiceData?.summary;
   const pageInvoices = invoiceData?.invoices || [];
   const isFullyPaid = (pageSummary?.collection_percentage ?? 0) >= 100 && (pageSummary?.invoice_count ?? 0) > 0;

@@ -79,11 +79,19 @@ const downloadCsv = (csv: string, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
-const TaxSummarySection: React.FC = () => {
+interface TaxSummarySectionProps {
+  /** Optional side filter: 'receivable' (output GST — Money In) or
+   * 'payable' (input GST — To Pay). Absent = both, exactly as before. */
+  invoiceType?: 'receivable' | 'payable';
+  /** Optional heading override (defaults to the original title). */
+  title?: string;
+}
+
+const TaxSummarySection: React.FC<TaxSummarySectionProps> = ({ invoiceType, title }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const { data, isLoading, isError } = useTaxSummary();
+  const { data, isLoading, isError } = useTaxSummary({ invoiceType });
   const months = data?.months || [];
 
   // Tenant may have declared "No Tax" (not tax-registered) in Tax Settings —
@@ -103,7 +111,7 @@ const TaxSummarySection: React.FC = () => {
         <div>
           <CardTitle className="text-base flex items-center gap-2" style={{ color: colors.utility.primaryText }}>
             <Receipt className="h-4 w-4" style={{ color: colors.brand.primary }} />
-            Taxes — tax records
+            {title || 'Taxes — tax records'}
           </CardTitle>
           <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
             Month-wise, by invoice issue date. "Collected" is an approximate split of tax within amounts received.

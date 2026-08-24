@@ -26,6 +26,7 @@ import AssetSelectionStep, { type EquipmentDetailItem, type CoverageTypeItem } f
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { useAllowanceWarning } from '@/hooks/useAllowanceWarning';
 import { categoryHasPricing, getCategoryById } from '@/utils/catalog-studio/categories';
+import { computeCadenceViolations } from '@/utils/service-contracts/contractEvents';
 import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
 import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
 import vaniComposerService from '@/services/vaniComposerService';
@@ -736,12 +737,60 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     if (isLastStep) {
       // Template mode: final action saves the template — no contract is created
       if (isTemplateMode) {
+        // Cadence-fit gate on template SAVE too. The blocks-step gate covers
+        // normal authoring, but the edit-from-review shortcut jumps
+        // details → review without re-passing the blocks step — without this
+        // check that path could save a template whose cadence can't fit its
+        // duration, and a bad template poisons every future assignment
+        // (single and bulk) at scale.
+        const templateCadenceViolations = computeCadenceViolations({
+          durationValue: wizardState.durationValue,
+          durationUnit: wizardState.durationUnit,
+          selectedBlocks: wizardState.selectedBlocks,
+          paymentMode: wizardState.paymentMode,
+        });
+        if (templateCadenceViolations.length > 0) {
+          const extra = templateCadenceViolations.length > 1 ? ` (+${templateCadenceViolations.length - 1} more block${templateCadenceViolations.length > 2 ? 's' : ''} affected)` : '';
+          addToast({
+            type: 'error',
+            title: "Schedule doesn't fit the template duration",
+            duration: 10000,
+            message: `${templateCadenceViolations[0].message} Reduce the count, shorten the cycle, or extend the duration.${extra}`,
+          });
+          return;
+        }
         const saved = await handleSaveTemplate();
         if (saved) {
           resetWizard();
           onClose();
         }
         return;
+      }
+
+      // Cadence-fit backstop before ANY submission path (including the
+      // auto-accept pre-payment dialog below). The blocks step has its own
+      // gate, but the edit-from-review shortcut (returnToReviewRef) can jump
+      // details → review without re-passing the blocks step — this catches
+      // that path. A block whose cadence can't fit the duration must never
+      // submit: pricing would bill the full quantity while the event
+      // schedule truncates at contract end (invoice ≠ schedule).
+      if (!isRfqMode) {
+        const cadenceViolations = computeCadenceViolations({
+          durationValue: wizardState.durationValue,
+          durationUnit: wizardState.durationUnit,
+          selectedBlocks: wizardState.selectedBlocks,
+          paymentMode: wizardState.paymentMode,
+        });
+        if (cadenceViolations.length > 0) {
+          const extra = cadenceViolations.length > 1 ? ` (+${cadenceViolations.length - 1} more block${cadenceViolations.length > 2 ? 's' : ''} affected)` : '';
+          addToast({
+            type: 'error',
+            title: "Schedule doesn't fit the contract duration",
+            duration: 10000,
+            message: `${cadenceViolations[0].message} Reduce the count, shorten the cycle, or extend the contract duration.${extra}`,
+          });
+          return;
+        }
       }
 
       // Auto-accept: show pre-payment dialog instead of creating immediately
@@ -885,6 +934,32 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
             });
             return;
           }
+        }
+      }
+
+      // Cadence-fit gate on the blocks step: refuse any block whose visit or
+      // billing cadence cannot fit inside the contract duration. Without this
+      // the contradiction slips through and each engine resolves it its own
+      // way — pricing bills the full quantity, billing events truncate at
+      // end_date, service events overrun past it (the CN-1002 ₹9,150-invoice
+      // vs ₹1,950-schedule mismatch). Fix here: reduce the count, shorten
+      // the cycle, or go back and extend the duration.
+      if (currentStepId === 'blocks' && !isRfqMode) {
+        const cadenceViolations = computeCadenceViolations({
+          durationValue: wizardState.durationValue,
+          durationUnit: wizardState.durationUnit,
+          selectedBlocks: wizardState.selectedBlocks,
+          paymentMode: wizardState.paymentMode,
+        });
+        if (cadenceViolations.length > 0) {
+          const extra = cadenceViolations.length > 1 ? ` (+${cadenceViolations.length - 1} more block${cadenceViolations.length > 2 ? 's' : ''} affected)` : '';
+          addToast({
+            type: 'error',
+            title: "Schedule doesn't fit the contract duration",
+            duration: 10000,
+            message: `${cadenceViolations[0].message} Reduce the count, shorten the cycle, or extend the contract duration.${extra}`,
+          });
+          return;
         }
       }
 

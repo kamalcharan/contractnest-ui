@@ -8,6 +8,8 @@ import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { captureException } from '@/utils/sentry';
 import { financeKeys } from '@/hooks/queries/useFinanceQueries';
 import { useInvalidateContactCockpit } from '@/hooks/queries/useContactCockpit';
+import { contractKeys } from '@/hooks/queries/useContractQueries';
+import { contractEventKeys } from '@/hooks/queries/useContractEventQueries';
 import type { Invoice, InvoiceSummary, RecordPaymentPayload, RecordPaymentResponse, CancelInvoicePayload, CancelInvoiceResponse, CancelReceiptPayload, CancelReceiptResponse } from '@/types/contracts';
 
 // =================================================================
@@ -101,10 +103,17 @@ export const useRecordPayment = (contractId: string | undefined) => {
         throw new Error('Missing tenant or contract ID');
       }
 
-      const response = await api.post(
-        API_ENDPOINTS.CONTRACTS.RECORD_PAYMENT(contractId),
-        payload
-      );
+      // V2 default on this branch (JTD Nucleus Step 4): payment settles
+      // against n_jtd JOB rows (allocations carry jtd_id, job status →
+      // paid / partial_payment) via record_invoice_payment_v2, which
+      // delegates receipt/invoice/auto-activation to the untouched V1
+      // core. Same request/response shape. ?useV1=1 falls back.
+      const useV1 = new URLSearchParams(window.location.search).get('useV1') === '1';
+      const paymentEndpoint = useV1
+        ? API_ENDPOINTS.CONTRACTS.RECORD_PAYMENT(contractId)
+        : `/api/v2/contracts/${contractId}/record-payment`;
+
+      const response = await api.post(paymentEndpoint, payload);
 
       const result = response.data?.data || response.data;
 
@@ -117,6 +126,20 @@ export const useRecordPayment = (contractId: string | undefined) => {
     onSuccess: () => {
       if (contractId) {
         queryClient.invalidateQueries({ queryKey: invoiceKeys.byContract(contractId) });
+        // A full payment can AUTO-ACTIVATE the contract (payment-acceptance
+        // flow: record_invoice_payment → update_contract_status → events
+        // materialize + settle). Without these, the contract view kept
+        // showing pending_acceptance and stale dues after paying — the
+        // "activation didn't happen" bug was pure UI staleness (the DB had
+        // activated atomically with the receipt).
+        queryClient.invalidateQueries({ queryKey: contractKeys.detail(contractId) });
+        queryClient.invalidateQueries({ queryKey: contractKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: contractEventKeys.all });
+        // JTD Nucleus Step 3/4: the contract view renders from the V2
+        // aggregate (jobs) — refetch it so the paid job flips on screen.
+        // Literal key (not an import from useContractDetailsV2) to keep
+        // this module free of a circular dependency.
+        queryClient.invalidateQueries({ queryKey: ['contract-details-v2'] });
       }
     },
     meta: {

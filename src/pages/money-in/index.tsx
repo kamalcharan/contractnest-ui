@@ -25,6 +25,7 @@ import { useReceivables, type FinanceEvent, type FinanceInvoice } from '@/hooks/
 import { useInvoiceTheme, Pill, useStatusMeta } from '../invoices/ui';
 import { fmtMoney, fmtDate, daysSince, daysUntil } from '@/utils/format';
 import { usePendingDeclarations } from '@/hooks/queries/useGroupSessionsDashboard';
+import GstMonthCard from '@/components/finance/GstMonthCard';
 
 type Lens = 'everything' | 'late' | 'risk' | 'docs' | 'upcoming' | 'settled';
 
@@ -358,6 +359,9 @@ const MoneyInPage: React.FC = () => {
           </Signal>
         )}
       </div>
+
+      {/* ── GST this month (output tax on sales) → /taxes ── */}
+      <GstMonthCard side="receivable" />
 
       {/* ── paperwork strip — live pending guest-fee declarations ── */}
       {waitingReceipts.length > 0 && (

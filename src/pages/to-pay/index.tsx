@@ -12,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { usePayables, type FinanceInvoice } from '@/hooks/queries/useFinanceQueries';
 import { fmtMoney, fmtDate, useInvoiceTheme } from '../invoices/ui';
+import GstMonthCard from '@/components/finance/GstMonthCard';
 
 const ToPayPage: React.FC = () => {
   const navigate = useNavigate();
@@ -113,6 +114,9 @@ const ToPayPage: React.FC = () => {
       <p className="text-sm mt-3" style={sub}>
         {situation.upcoming30 > 0 ? `${situation.upcoming30} bill${situation.upcoming30 === 1 ? '' : 's'} due in the next 30 days.` : 'Nothing due in the next 30 days.'}
       </p>
+
+      {/* ── GST this month (input tax on bills) → /taxes ── */}
+      <GstMonthCard side="payable" />
 
       {vendors.length > 0 && (
         <div className="mt-9 mb-2 pb-3" style={{ borderBottom: hairline }}>

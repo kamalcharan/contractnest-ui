@@ -42,6 +42,12 @@ export interface PlanSubscriptionResult {
   invoice_id: string | null;
   invoice_amount: number | null;
   invoice_currency: string | null;
+  /** The FIRST INSTALMENT — what checkout collects (owner rule 2026-08-20:
+   * a quarterly plan asks for one quarter). invoice_amount stays the full
+   * term; the invoice is paid down instalment by instalment, and the first
+   * successful payment activates the plan. Falls back to invoice_amount
+   * server-side, so it is never null on a priced plan. */
+  due_now?: number | null;
   /** true for any priced plan — limits/credits only land once invoice_id is paid. */
   requires_payment: boolean;
 }

@@ -128,6 +128,95 @@ function cycleToPeriodDays(cycle: string, customDays?: number): number {
   }
 }
 
+// ─── Cadence-fit validation (wizard gate) ───
+
+export interface CadenceViolation {
+  blockId: string;
+  blockName: string;
+  eventType: EventType;   // which leg overflows: 'service' visits or 'billing' cycles
+  count: number;          // occurrences configured (block quantity)
+  cycleDays: number;      // days between occurrences
+  spanDays: number;       // day the LAST occurrence lands on: (count − 1) × cycleDays
+  contractDays: number;   // contract duration in days
+  message: string;
+}
+
+/**
+ * Detects blocks whose cadence cannot fit inside the contract duration —
+ * the configs where the three engines otherwise disagree: pricing honors
+ * quantity in full, the billing-events branch truncates at end_date
+ * (`if (date > endDate) break` below), and the service-events branch has
+ * no end clamp at all and overruns. The wizard must refuse these configs
+ * instead of letting each engine resolve the contradiction differently.
+ *
+ * Branch conditions mirror computeContractEvents 1:1 — a change there
+ * must be reflected here or the gate will block/allow the wrong configs.
+ */
+export function computeCadenceViolations(input: {
+  durationValue: number;
+  durationUnit: string;
+  selectedBlocks: ConfigurableBlock[];
+  paymentMode: 'prepaid' | 'emi' | 'defined';
+}): CadenceViolation[] {
+  const { durationValue, durationUnit, selectedBlocks, paymentMode } = input;
+  const totalDays = durationToDays(durationValue, durationUnit);
+  const violations: CadenceViolation[] = [];
+
+  for (const block of selectedBlocks) {
+    const qty = block.quantity || 1;
+    if (qty <= 1 || block.unlimited) continue;
+
+    // A visit-generating block: quantity means VISITS, and its recurring
+    // bill count is derived from the term in the recurring branch below —
+    // so only its SERVICE leg can overflow, never its billing leg.
+    const blockGeneratesVisits =
+      categoryNeedsServiceEvents(block.categoryId || '') &&
+      !block.config?.billingOnly &&
+      !!(block.serviceCycleDays && block.serviceCycleDays > 0);
+
+    // Service leg — same conditions as the service-events branch
+    if (blockGeneratesVisits && block.serviceCycleDays) {
+      const spanDays = (qty - 1) * block.serviceCycleDays;
+      if (spanDays > totalDays) {
+        violations.push({
+          blockId: block.id, blockName: block.name, eventType: 'service',
+          count: qty, cycleDays: block.serviceCycleDays, spanDays, contractDays: totalDays,
+          message: `"${block.name}": ${qty} service visits every ${block.serviceCycleDays} days span ~${spanDays} days, but the contract runs ${totalDays} days.`,
+        });
+      }
+    }
+
+    // Billing leg — only per-block ('defined') billing uses block cycles.
+    // Excluded, because neither can overflow:
+    //  · cadence-priced blocks derive their count FROM the duration and clamp;
+    //  · visit-generating blocks — when their billing cycle DIFFERS from the
+    //    service cycle the bill count derives from the term (fits by
+    //    construction); when the two cycles MATCH, bills = visits = quantity
+    //    and the service-leg check above already tests exactly the same
+    //    product ((qty−1) × cycleDays), so re-checking here would be
+    //    redundant, never missing.
+    // Only quantity-driven billing (fee/billing-only, spares) reaches here.
+    if (paymentMode === 'defined' && !blockGeneratesVisits && categoryHasPricing(block.categoryId || '') && !(block.config as any)?.cadencePricing) {
+      const blockCycle = block.cycle || 'prepaid';
+      if (blockCycle !== 'prepaid' && blockCycle !== 'postpaid') {
+        const periodDays = cycleToPeriodDays(blockCycle, block.customCycleDays);
+        if (periodDays > 0) {
+          const spanDays = (qty - 1) * periodDays;
+          if (spanDays > totalDays) {
+            violations.push({
+              blockId: block.id, blockName: block.name, eventType: 'billing',
+              count: qty, cycleDays: periodDays, spanDays, contractDays: totalDays,
+              message: `"${block.name}": ${qty} billing cycles of ${periodDays} days span ~${spanDays} days, but the contract runs ${totalDays} days.`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
 /** Human-readable cycle label */
 function cycleLabel(cycle: string): string {
   switch (cycle) {
@@ -383,15 +472,43 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         }
       } else {
         // Recurring: monthly, fortnightly, quarterly, custom.
-        // The block's quantity is the user-intended number of billing
-        // occurrences (BAU "×12 Monthly" = 12 invoices), so honor it directly.
-        // Otherwise the count drifts to ceil(days/periodDays) — e.g. a 1-year
-        // monthly block would bill ceil(365/30)=13× at ₹1,384.62 instead of
-        // 12× ₹1,500. Fall back to the date-derived count only when quantity
-        // isn't a meaningful multi-count (qty ≤ 1).
+        //
+        // THE RULE (owner-confirmed 2026-08-16): quantity is the COUNT and the
+        // cycle is the SPACING — "qty 1, cycle 15d" = 1 occurrence; "qty 3,
+        // cycle 15d" = 3 occurrences 15 days apart. Price follows the same
+        // rule (totalPrice = unitPrice × quantity, set in ServiceBlocksStep),
+        // so count and money always come from the SAME source and can never
+        // disagree.
+        //
+        // Previously the count was date-derived whenever qty ≤ 1
+        // (ceil(term ÷ period)) while the PRICE still came from quantity —
+        // two different sources — so a ₹600 block with a 30-day cycle over a
+        // year was DIVIDED into 13 × ₹46.15 instead of billed once. That
+        // divide-instead-of-multiply mismatch is the same class of bug as
+        // CN-1002 (pricing and scheduling disagreeing).
+        //
+        // ONE exception, and only one: a visit-generating block whose BILLING
+        // cycle differs from its SERVICE cycle carries two genuinely different
+        // schedules that a single quantity field cannot express — there
+        // quantity means VISITS (it pairs with the service cycle) and the bill
+        // count derives from the term ("18 visits every 18 days, billed
+        // monthly, 1-year term" = 18 visits but 12 monthly bills). When the
+        // two cycles MATCH they are one schedule, so bills = visits = qty.
+        // Mirrors computeCadenceViolations' billing-leg skip — change together.
         const periodDays = cycleToPeriodDays(blockCycle, block.customCycleDays);
         const qty = block.quantity || 0;
-        const count = qty > 1 ? qty : countRecurringPeriods(totalDays, periodDays);
+        const serviceCycleDays = block.serviceCycleDays || 0;
+        const blockGeneratesVisits = categoryNeedsServiceEvents(block.categoryId || '')
+          && !block.config?.billingOnly
+          && serviceCycleDays > 0
+          && qty > 1;
+        // Two distinct schedules only when the cadences actually differ.
+        // ROUND, not ceil — "monthly over 1 year" must mean 12 bills
+        // (365/30 ceils to 13; quarterly would ceil to 5).
+        const billsAreSeparateFromVisits = blockGeneratesVisits && periodDays !== serviceCycleDays;
+        const count = billsAreSeparateFromVisits
+          ? Math.max(1, Math.round(totalDays / periodDays))
+          : Math.max(1, qty);
         const perPeriodAmount = Math.round((blockTotal / count) * 100) / 100;
 
         const startIdx = events.length;

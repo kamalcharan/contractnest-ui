@@ -201,6 +201,7 @@ import InvoiceComposerPage from './pages/invoices/composer';
 import ExtendPage from './pages/extend';
 import MoneyInPage from './pages/money-in';
 import ToPayPage from './pages/to-pay';
+import TaxesPage from './pages/taxes';
 import OpsAppointmentsPage from './pages/operations/appointments';
 import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
@@ -715,6 +716,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ToPayPage />} />
+          </Route>
+          {/* /taxes — GST records (month-wise, receivable/payable lenses),
+              reached from the GST cards on Money In and To Pay. */}
+          <Route
+            path="/taxes"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<TaxesPage />} />
           </Route>
           <Route
             path="/invoices"

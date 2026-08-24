@@ -173,7 +173,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
         </p>
         {toast.message && (
           <p
-            className="text-xs mt-0.5 truncate"
+            className="text-xs mt-0.5 break-words"
             style={{ color: isDarkMode ? '#9CA3AF' : colors.utility.secondaryText }}
           >
             {toast.message}

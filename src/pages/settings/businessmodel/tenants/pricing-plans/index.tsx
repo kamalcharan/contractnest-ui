@@ -231,7 +231,10 @@ const PricingPlansPage: React.FC = () => {
             await collectPayment(
               result.contract_id,
               result.invoice_id,
-              result.invoice_amount ?? 0,
+              // The FIRST INSTALMENT activates the plan — not the whole term.
+              // A quarterly plan asks for one quarter (same rule the
+              // Subscription resume page already applies via due_now).
+              result.due_now ?? result.invoice_amount ?? 0,
               result.invoice_currency ?? 'INR',
               result.plan_name,
             );

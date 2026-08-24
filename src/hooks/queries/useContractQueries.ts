@@ -150,7 +150,14 @@ export const useGroupedContracts = (
 /**
  * Hook to fetch a single contract by ID (with blocks, vendors, attachments, history)
  */
-export const useContract = (contractId: string | null) => {
+export const useContract = (
+  contractId: string | null,
+  // Additive option (default unchanged). The V2 details aggregate
+  // (useContractDetailsV2) seeds this hook's exact cache key and passes
+  // enabled:false so the data comes from ONE aggregate call instead of a
+  // second fetch — a disabled query still reads the seeded cache.
+  options?: { enabled?: boolean }
+) => {
   const { currentTenant } = useAuth();
 
   return useQuery({
@@ -169,7 +176,7 @@ export const useContract = (contractId: string | null) => {
 
       return data;
     },
-    enabled: !!contractId && !!currentTenant?.id,
+    enabled: !!contractId && !!currentTenant?.id && (options?.enabled !== false),
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: 3,
@@ -242,7 +249,15 @@ export const useContractOperations = () => {
         throw new Error('No tenant selected');
       }
 
-      const response = await api.post(API_ENDPOINTS.CONTRACTS.CREATE, contractData, {
+      // JTD Nucleus initiative, Milestone 1 — V2 is the default on this
+      // branch (confirmed via edge logs that an opt-in ?useV2=1 param
+      // was easy to forget and silently fell through to V1). ?useV1=1
+      // opts back out if ever needed. Before any real cutover, this
+      // needs to flip back to opt-in — flagged, not done here.
+      const useV1 = new URLSearchParams(window.location.search).get('useV1') === '1';
+      const createEndpoint = useV1 ? API_ENDPOINTS.CONTRACTS.CREATE : '/api/v2/contracts';
+
+      const response = await api.post(createEndpoint, contractData, {
         headers: {
           'x-idempotency-key': `create-contract-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         },
@@ -354,10 +369,15 @@ export const useContractOperations = () => {
         throw new Error('No tenant selected');
       }
 
-      const response = await api.patch(
-        API_ENDPOINTS.CONTRACTS.UPDATE_STATUS(contractId),
-        statusData
-      );
+      // V2 default on this branch (JTD Nucleus): activation materializes
+      // n_jtd JOB rows from computed_events inside the RPC before the
+      // untouched V1 status engine runs — covers the wizard's
+      // draft→update→activate path (the CN-1019 gap). ?useV1=1 falls back.
+      const useV1 = new URLSearchParams(window.location.search).get('useV1') === '1';
+      const statusEndpoint = useV1
+        ? API_ENDPOINTS.CONTRACTS.UPDATE_STATUS(contractId)
+        : `/api/v2/contracts/${contractId}/status`;
+      const response = await api.patch(statusEndpoint, statusData);
 
       return response.data?.data || response.data;
     },
@@ -367,6 +387,10 @@ export const useContractOperations = () => {
       if (updatedContract.id) {
         queryClient.invalidateQueries({ queryKey: contractKeys.detail(updatedContract.id) });
       }
+      // Refresh the one-call contract view aggregate (literal key to avoid a
+      // circular import with useContractDetailsV2, which imports contractKeys
+      // from this file).
+      queryClient.invalidateQueries({ queryKey: ['contract-details-v2'] });
 
       const displayStatus = (updatedContract.to_status || updatedContract.status || 'updated')
         .replace(/_/g, ' ');

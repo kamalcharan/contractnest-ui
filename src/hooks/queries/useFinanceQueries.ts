@@ -204,7 +204,8 @@ export const financeKeys = {
   all: ['finance'] as const,
   receivables: (tenantId: string) => [...financeKeys.all, 'receivables', tenantId] as const,
   payables: (tenantId: string) => [...financeKeys.all, 'payables', tenantId] as const,
-  taxSummary: (tenantId: string) => [...financeKeys.all, 'tax-summary', tenantId] as const
+  taxSummary: (tenantId: string, invoiceType?: string) =>
+    [...financeKeys.all, 'tax-summary', tenantId, invoiceType ?? 'all'] as const
 };
 
 // ─────────────────────────────────────────────
@@ -251,16 +252,19 @@ export const usePayables = (options?: { enabled?: boolean }) => {
  * same for both revenue/expense perspective since it reads t_invoices
  * scoped to tenant_id, not by_buyer/by_vendor).
  */
-export const useTaxSummary = (options?: { enabled?: boolean }) => {
+export const useTaxSummary = (options?: { enabled?: boolean; invoiceType?: 'receivable' | 'payable' }) => {
   const { currentTenant } = useAuth();
 
   return useQuery({
-    queryKey: financeKeys.taxSummary(currentTenant?.id || ''),
+    queryKey: financeKeys.taxSummary(currentTenant?.id || '', options?.invoiceType),
     queryFn: async (): Promise<TaxSummaryResponse> => {
       if (!currentTenant?.id) {
         throw new Error('Missing tenant');
       }
-      const response = await api.get(FINANCE_ENDPOINTS.TAX_SUMMARY);
+      const url = options?.invoiceType
+        ? `${FINANCE_ENDPOINTS.TAX_SUMMARY}?invoice_type=${options.invoiceType}`
+        : FINANCE_ENDPOINTS.TAX_SUMMARY;
+      const response = await api.get(url);
       return response.data?.data || response.data;
     },
     enabled: !!currentTenant?.id && (options?.enabled !== false),

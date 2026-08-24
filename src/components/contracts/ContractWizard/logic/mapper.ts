@@ -75,7 +75,13 @@ export function computeEventsForApi(state: ContractWizardState): any[] | undefin
       scheduled_date: scheduledDate instanceof Date
         ? scheduledDate.toISOString()
         : new Date(scheduledDate).toISOString(),
-      amount: event.amount || undefined,
+      // ?? not || — a ₹0 block (complimentary / included-at-no-charge) has a
+      // GENUINE amount of 0, and `0 || undefined` silently dropped it, storing
+      // NULL. A billing event with no amount reads as "unpriced" downstream
+      // instead of "free", so zero-price blocks must persist an explicit 0.
+      // Mirrors contractnest-api/src/services/contractEventsDerivationService.ts
+      // — change together (parity contract).
+      amount: event.amount ?? undefined,
       currency: event.currency || state.currency,
       assigned_to: event.assigned_to || undefined,
       assigned_to_name: event.assigned_to_name || undefined,
