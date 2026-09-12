@@ -1,145 +1,155 @@
 // src/components/catalog-studio/BlockWizard/steps/service/EvidenceStep.tsx
-// Updated: Show only Upload Form, OTP Confirmation, Service Form
-// Two-column layout with explanation card
+// B2.4 — REAL evidence picker (mocks removed). One choice per service block:
+//   automatic  → no explicit config; activation resolver walks the D9 ladder
+//                (equipment-type form → contract fallback → platform default)
+//   form       → a specific approved smart form (rung 1 of the ladder);
+//                optional "also require upload" makes it form AND photo (D4)
+//   upload     → photo/document proof only, no form
+//   none       → explicit opt-out, nothing required
+// Persisted in formData (evidencePolicy / evidenceFormTemplateId /
+// evidenceFormName / evidenceRequireUpload) → catBlockAdapter writes
+// config.evidence = { policy, formTemplateId, requireUpload } → snapshots
+// into contracts → resolve_contract_form_mappings reads it at activation.
+// OTP stays a separate toggle (formData.requiresOTP, existing field).
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Upload,
   Shield,
-  FileText,
   Check,
   Lightbulb,
   CheckCircle2,
   ClipboardList,
-  Info,
+  Wand2,
+  Ban,
   ChevronDown,
-  // Hidden icons (preserved for future use)
-  // Camera,
-  // Pen,
-  // MapPin,
-  // Clock,
+  AlertTriangle,
 } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
+import { useApprovedFormTemplates } from '../../../../../hooks/queries/useFormTemplates';
 
-interface EvidenceConfig {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  description: string;
-  enabled: boolean;
-  when?: 'before' | 'during' | 'after' | 'any';
-  required?: boolean;
-  hasDropdown?: boolean;
-  dropdownValue?: string;
-}
+type EvidencePolicy = 'automatic' | 'form' | 'upload' | 'none';
 
 interface EvidenceStepProps {
   formData: {
-    evidenceRequired?: boolean;
-    evidenceTypes?: string[];
-    selectedServiceForm?: string;
+    evidencePolicy?: string;
+    evidenceFormTemplateId?: string;
+    evidenceFormName?: string;
+    evidenceRequireUpload?: boolean;
+    requiresOTP?: boolean;
   };
   onChange: (field: string, value: unknown) => void;
 }
-
-// Mock service forms - in production, this would come from an API
-const availableServiceForms = [
-  { id: 'form-1', name: 'General Service Report' },
-  { id: 'form-2', name: 'Maintenance Checklist' },
-  { id: 'form-3', name: 'Installation Verification' },
-  { id: 'form-4', name: 'Quality Inspection Form' },
-  { id: 'form-5', name: 'Customer Feedback Form' },
-];
 
 const EvidenceStep: React.FC<EvidenceStepProps> = ({ formData, onChange }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // Only show: Upload Form, OTP Confirmation, Service Form
-  const [evidenceItems, setEvidenceItems] = useState<EvidenceConfig[]>([
-    {
-      id: 'upload-form',
-      name: 'Upload Form',
-      icon: <Upload className="w-5 h-5" />,
-      description: 'Allow technician to upload documents or forms',
-      enabled: false,
-      when: 'after',
-      required: false,
-    },
-    {
-      id: 'otp',
-      name: 'OTP Confirmation',
-      icon: <Shield className="w-5 h-5" />,
-      description: 'Customer OTP verification for service confirmation',
-      enabled: false,
-      when: 'after',
-      required: false,
-    },
-    {
-      id: 'service-form',
-      name: 'Service Form',
-      icon: <ClipboardList className="w-5 h-5" />,
-      description: 'Fill a structured form during or after service',
-      enabled: false,
-      when: 'after',
-      required: false,
-      hasDropdown: true,
-      dropdownValue: '',
-    },
-  ]);
+  const { data: templates = [], isLoading, isError } = useApprovedFormTemplates();
 
-  // HIDDEN: Original evidence items (preserved for future use)
-  /*
-  const hiddenEvidenceItems = [
-    { id: 'photo-before', name: 'Before Photo', icon: <Camera className="w-5 h-5" />, description: 'Capture photo before starting service', enabled: true, when: 'before', required: true },
-    { id: 'photo-after', name: 'After Photo', icon: <Camera className="w-5 h-5" />, description: 'Capture photo after completion', enabled: true, when: 'after', required: true },
-    { id: 'signature', name: 'Customer Signature', icon: <Pen className="w-5 h-5" />, description: 'Digital signature for confirmation', enabled: true, when: 'after', required: true },
-    { id: 'gps', name: 'GPS Location', icon: <MapPin className="w-5 h-5" />, description: 'Auto-capture service location', enabled: false, when: 'before', required: false },
-    { id: 'timestamp', name: 'Time Tracking', icon: <Clock className="w-5 h-5" />, description: 'Record start and end time', enabled: true, when: 'any', required: true },
-    { id: 'report', name: 'Service Report', icon: <FileText className="w-5 h-5" />, description: 'Generate detailed work report', enabled: false, when: 'after', required: false },
-  ];
-  */
+  // Top-level (wizard edits) with meta fallback (editing an existing block
+  // whose choice lives under meta.evidence*) — same convention as DeliveryStep.
+  const meta = (formData as { meta?: Record<string, unknown> }).meta || {};
+  const storedPolicy =
+    (formData.evidencePolicy ?? (meta.evidencePolicy as string | undefined)) as string | undefined;
+  // 'both' (stored) renders as the form choice with the upload checkbox on;
+  // 'automatic' is an explicit sentinel (clears a previously saved choice).
+  const policy: EvidencePolicy =
+    storedPolicy === 'both' || storedPolicy === 'form' ? 'form'
+    : storedPolicy === 'upload' ? 'upload'
+    : storedPolicy === 'none' ? 'none'
+    : 'automatic';
+  const requireUpload =
+    storedPolicy === 'both' ||
+    (formData.evidenceRequireUpload ?? (meta.evidenceRequireUpload as boolean | undefined)) === true;
+  const selectedFormId =
+    (formData.evidenceFormTemplateId ?? (meta.evidenceFormTemplateId as string | undefined)) || '';
+  const selectedTemplate = templates.find((t) => t.id === selectedFormId);
 
-  const [selectedForm, setSelectedForm] = useState<string>(formData.selectedServiceForm || '');
-
-  const toggleEvidence = (id: string) => {
-    const updated = evidenceItems.map((item) =>
-      item.id === id ? { ...item, enabled: !item.enabled } : item
-    );
-    setEvidenceItems(updated);
-    onChange('evidenceTypes', updated.filter((i) => i.enabled).map((i) => i.id));
-  };
-
-  const toggleRequired = (id: string) => {
-    const updated = evidenceItems.map((item) =>
-      item.id === id ? { ...item, required: !item.required } : item
-    );
-    setEvidenceItems(updated);
+  const setPolicy = (next: EvidencePolicy) => {
+    if (next === 'automatic') {
+      // Explicit sentinel — undefined would fall back to a stale meta value on edit
+      onChange('evidencePolicy', 'automatic');
+      onChange('evidenceFormTemplateId', '');
+      onChange('evidenceFormName', '');
+      onChange('evidenceRequireUpload', false);
+      return;
+    }
+    if (next === 'form') {
+      onChange('evidencePolicy', requireUpload ? 'both' : 'form');
+      return;
+    }
+    // upload / none clear any picked form
+    onChange('evidencePolicy', next);
+    onChange('evidenceFormTemplateId', '');
+    onChange('evidenceFormName', '');
+    onChange('evidenceRequireUpload', false);
   };
 
   const handleFormSelect = (formId: string) => {
-    setSelectedForm(formId);
-    onChange('selectedServiceForm', formId);
-    // Also enable the service-form evidence type when a form is selected
-    if (formId && !evidenceItems.find(i => i.id === 'service-form')?.enabled) {
-      toggleEvidence('service-form');
+    const tpl = templates.find((t) => t.id === formId);
+    onChange('evidenceFormTemplateId', formId);
+    onChange('evidenceFormName', tpl?.name || '');
+    if (formId && policy !== 'form') {
+      onChange('evidencePolicy', requireUpload ? 'both' : 'form');
     }
   };
 
-  const enabledCount = evidenceItems.filter((i) => i.enabled).length;
-
-  // Styles
-  const cardStyle = {
-    backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-    borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB',
-    boxShadow: isDarkMode ? 'none' : '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)'
+  const handleRequireUpload = (checked: boolean) => {
+    onChange('evidenceRequireUpload', checked);
+    onChange('evidencePolicy', checked ? 'both' : 'form');
   };
+
+  const cardStyle = (active: boolean) => ({
+    backgroundColor: active
+      ? `${colors.brand.primary}08`
+      : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
+    borderColor: active
+      ? colors.brand.primary
+      : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
+    boxShadow: active
+      ? `0 0 0 1px ${colors.brand.primary}20`
+      : (isDarkMode ? 'none' : '0 1px 2px 0 rgb(0 0 0 / 0.05)'),
+  });
 
   const inputStyle = {
     backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#F9FAFB',
     borderColor: isDarkMode ? colors.utility.secondaryBackground : '#D1D5DB',
-    color: colors.utility.primaryText
+    color: colors.utility.primaryText,
   };
+
+  const choices: Array<{
+    id: EvidencePolicy;
+    name: string;
+    icon: React.ReactNode;
+    description: string;
+  }> = [
+    {
+      id: 'automatic',
+      name: 'Automatic (recommended)',
+      icon: <Wand2 className="w-5 h-5" />,
+      description:
+        'No fixed form here — at activation the system picks the equipment type’s form when one exists, else the contract’s forms, else the platform’s General Service Completion form.',
+    },
+    {
+      id: 'form',
+      name: 'Specific smart form',
+      icon: <ClipboardList className="w-5 h-5" />,
+      description: 'Technicians fill this exact form on every visit of this service.',
+    },
+    {
+      id: 'upload',
+      name: 'Photo / document upload only',
+      icon: <Upload className="w-5 h-5" />,
+      description: 'Proof is an upload (photos, reports) — no structured form.',
+    },
+    {
+      id: 'none',
+      name: 'No evidence needed',
+      icon: <Ban className="w-5 h-5" />,
+      description: 'This service completes without any proof capture.',
+    },
+  ];
 
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-200">
@@ -147,327 +157,227 @@ const EvidenceStep: React.FC<EvidenceStepProps> = ({ formData, onChange }) => {
         Evidence Collection
       </h2>
       <p className="text-sm mb-6" style={{ color: colors.utility.secondaryText }}>
-        Configure what proof of service completion is required.
+        Choose what proof of service completion this block requires.
       </p>
 
-      {/* TWO-COLUMN LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left Column (3/5) - Evidence Options */}
-        <div className="lg:col-span-3 space-y-5">
-          {/* Summary Card */}
-          <div
-            className="p-5 rounded-xl border"
-            style={cardStyle}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: colors.brand.primary }}
-                >
-                  <FileText className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <div className="font-semibold text-base" style={{ color: colors.utility.primaryText }}>
-                    Evidence Collection
+        {/* Left Column — choice cards */}
+        <div className="lg:col-span-3 space-y-4">
+          {choices.map((choice) => {
+            const active = policy === choice.id;
+            return (
+              <div
+                key={choice.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setPolicy(choice.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPolicy(choice.id); }}
+                className="p-5 border-2 rounded-xl transition-all cursor-pointer"
+                style={cardStyle(active)}
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: active ? colors.brand.primary : `${colors.brand.primary}15` }}
+                  >
+                    <div style={{ color: active ? '#FFFFFF' : colors.brand.primary }}>{choice.icon}</div>
                   </div>
-                  <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                    {enabledCount} evidence type{enabledCount !== 1 ? 's' : ''} enabled
-                  </div>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.evidenceRequired !== false}
-                  onChange={(e) => onChange('evidenceRequired', e.target.checked)}
-                  className="w-5 h-5 rounded"
-                  style={{ accentColor: colors.brand.primary }}
-                />
-                <span className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
-                  Required
-                </span>
-              </label>
-            </div>
-          </div>
 
-          {/* Evidence Type Cards */}
-          <div className="space-y-4">
-            {evidenceItems.map((item) => {
-              const isEnabled = item.enabled;
-
-              return (
-                <div
-                  key={item.id}
-                  className="p-5 border-2 rounded-xl transition-all"
-                  style={{
-                    backgroundColor: isEnabled
-                      ? `${colors.brand.primary}08`
-                      : (isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF'),
-                    borderColor: isEnabled
-                      ? colors.brand.primary
-                      : (isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB'),
-                    boxShadow: isEnabled
-                      ? `0 0 0 1px ${colors.brand.primary}20`
-                      : (isDarkMode ? 'none' : '0 1px 2px 0 rgb(0 0 0 / 0.05)')
-                  }}
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{
-                        backgroundColor: isEnabled ? colors.brand.primary : `${colors.brand.primary}15`,
-                      }}
-                    >
-                      <div style={{ color: isEnabled ? '#FFFFFF' : colors.brand.primary }}>
-                        {item.icon}
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-semibold" style={{ color: colors.utility.primaryText }}>
+                        {choice.name}
+                      </div>
+                      <div
+                        className="w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0"
+                        style={{
+                          backgroundColor: active
+                            ? colors.brand.primary
+                            : (isDarkMode ? colors.utility.primaryBackground : '#E5E7EB'),
+                          color: active ? '#FFFFFF' : colors.utility.secondaryText,
+                        }}
+                      >
+                        {active && <Check className="w-4 h-4" />}
                       </div>
                     </div>
+                    <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                      {choice.description}
+                    </div>
 
-                    {/* Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="font-semibold" style={{ color: colors.utility.primaryText }}>
-                          {item.name}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => toggleEvidence(item.id)}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                          style={{
-                            backgroundColor: isEnabled ? colors.brand.primary : (isDarkMode ? colors.utility.primaryBackground : '#E5E7EB'),
-                            color: isEnabled ? '#FFFFFF' : colors.utility.secondaryText
-                          }}
-                        >
-                          {isEnabled && <Check className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
-                        {item.description}
-                      </div>
+                    {/* Form picker — only inside the "Specific smart form" card */}
+                    {choice.id === 'form' && active && (
+                      <div
+                        className="mt-4 pt-4 border-t animate-in fade-in slide-in-from-top-2 duration-200"
+                        style={{ borderColor: isDarkMode ? colors.utility.primaryBackground : '#E5E7EB' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label className="block text-sm font-medium mb-2" style={{ color: colors.utility.primaryText }}>
+                          Select form <span style={{ color: colors.semantic.error }}>*</span>
+                        </label>
 
-                      {/* Expanded Options when enabled */}
-                      {isEnabled && (
-                        <div
-                          className="mt-4 pt-4 border-t animate-in fade-in slide-in-from-top-2 duration-200"
-                          style={{ borderColor: isDarkMode ? colors.utility.primaryBackground : '#E5E7EB' }}
-                        >
-                          <div className="flex items-center gap-4 flex-wrap">
-                            {/* When dropdown */}
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>
-                                When:
-                              </span>
-                              <select
-                                value={item.when}
-                                className="px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2"
-                                style={inputStyle}
-                              >
-                                <option value="before">Before service</option>
-                                <option value="during">During service</option>
-                                <option value="after">After service</option>
-                                <option value="any">Any time</option>
-                              </select>
-                            </div>
-
-                            {/* Required toggle */}
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={item.required}
-                                onChange={() => toggleRequired(item.id)}
-                                className="w-4 h-4 rounded"
-                                style={{ accentColor: colors.brand.primary }}
-                              />
-                              <span className="text-sm" style={{ color: colors.utility.primaryText }}>
-                                Required
-                              </span>
-                            </label>
+                        {isLoading ? (
+                          <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                            Loading approved forms…
+                          </p>
+                        ) : isError ? (
+                          <p className="text-sm flex items-center gap-1.5" style={{ color: colors.semantic.error }}>
+                            <AlertTriangle className="w-4 h-4" />
+                            Couldn&apos;t load forms — try again, or pick Automatic for now.
+                          </p>
+                        ) : templates.length === 0 ? (
+                          <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                            No approved forms yet. Approve one under Admin → Forms, or pick Automatic.
+                          </p>
+                        ) : (
+                          <div className="relative">
+                            <select
+                              value={selectedFormId}
+                              onChange={(e) => handleFormSelect(e.target.value)}
+                              className="w-full px-4 py-3 border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 pr-10"
+                              style={inputStyle}
+                            >
+                              <option value="">Choose a form...</option>
+                              {templates.map((form) => (
+                                <option key={form.id} value={form.id}>
+                                  {form.name} (v{form.version})
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
+                              style={{ color: colors.utility.secondaryText }}
+                            />
                           </div>
+                        )}
 
-                          {/* Service Form Dropdown - Only for service-form type */}
-                          {item.id === 'service-form' && (
-                            <div className="mt-4">
-                              <label
-                                className="block text-sm font-medium mb-2"
-                                style={{ color: colors.utility.primaryText }}
-                              >
-                                Select Form <span style={{ color: colors.semantic.error }}>*</span>
-                              </label>
-                              <div className="relative">
-                                <select
-                                  value={selectedForm}
-                                  onChange={(e) => handleFormSelect(e.target.value)}
-                                  className="w-full px-4 py-3 border rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 pr-10"
-                                  style={inputStyle}
-                                >
-                                  <option value="">Choose a form...</option>
-                                  {availableServiceForms.map((form) => (
-                                    <option key={form.id} value={form.id}>
-                                      {form.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
-                                  style={{ color: colors.utility.secondaryText }}
-                                />
-                              </div>
-                              {selectedForm && (
-                                <p className="text-xs mt-2 flex items-center gap-1" style={{ color: colors.semantic.success }}>
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Form selected: {availableServiceForms.find(f => f.id === selectedForm)?.name}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                        {selectedTemplate && (
+                          <p className="text-xs mt-2 flex items-center gap-1" style={{ color: colors.semantic.success }}>
+                            <CheckCircle2 className="w-3 h-3" />
+                            Form selected: {selectedTemplate.name}
+                          </p>
+                        )}
+
+                        {/* D4 combo: form AND upload both required to prove a visit */}
+                        <label className="flex items-center gap-2 cursor-pointer mt-4">
+                          <input
+                            type="checkbox"
+                            checked={requireUpload}
+                            onChange={(e) => handleRequireUpload(e.target.checked)}
+                            className="w-4 h-4 rounded"
+                            style={{ accentColor: colors.brand.primary }}
+                          />
+                          <span className="text-sm" style={{ color: colors.utility.primaryText }}>
+                            Also require a photo/document upload with the form
+                          </span>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
 
-          {/* HIDDEN: Photo Settings Section */}
-          {/*
-          <div className="border-t pt-6" style={{ borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB' }}>
-            <h4 className="text-sm font-semibold mb-4" style={{ color: colors.utility.primaryText }}>Photo Settings</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.utility.primaryText }}>Min Photos Required</label>
-                <select className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2" style={inputStyle}>
-                  <option value="1">At least 1</option>
-                  <option value="2">At least 2</option>
-                  <option value="3">At least 3</option>
-                  <option value="5">At least 5</option>
-                </select>
+          {/* OTP — independent of the form choice (existing behavior field) */}
+          <div className="p-5 border-2 rounded-xl transition-all" style={cardStyle(formData.requiresOTP === true)}>
+            <div className="flex items-start gap-4">
+              <div
+                className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: formData.requiresOTP ? colors.brand.primary : `${colors.brand.primary}15` }}
+              >
+                <div style={{ color: formData.requiresOTP ? '#FFFFFF' : colors.brand.primary }}>
+                  <Shield className="w-5 h-5" />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1" style={{ color: colors.utility.primaryText }}>Photo Quality</label>
-                <select className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2" style={inputStyle}>
-                  <option value="standard">Standard</option>
-                  <option value="high">High Resolution</option>
-                  <option value="compressed">Compressed</option>
-                </select>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="font-semibold" style={{ color: colors.utility.primaryText }}>
+                    OTP Confirmation
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChange('requiresOTP', !formData.requiresOTP)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                    style={{
+                      backgroundColor: formData.requiresOTP
+                        ? colors.brand.primary
+                        : (isDarkMode ? colors.utility.primaryBackground : '#E5E7EB'),
+                      color: formData.requiresOTP ? '#FFFFFF' : colors.utility.secondaryText,
+                    }}
+                  >
+                    {formData.requiresOTP && <Check className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                  Customer OTP verification for service confirmation — works with any evidence choice above.
+                </div>
               </div>
-            </div>
-            <div className="mt-4 space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" defaultChecked className="w-4 h-4 rounded" style={{ accentColor: colors.brand.primary }} />
-                <span className="text-sm" style={{ color: colors.utility.primaryText }}>Add timestamp watermark to photos</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" defaultChecked className="w-4 h-4 rounded" style={{ accentColor: colors.brand.primary }} />
-                <span className="text-sm" style={{ color: colors.utility.primaryText }}>Add location watermark to photos</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" className="w-4 h-4 rounded" style={{ accentColor: colors.brand.primary }} />
-                <span className="text-sm" style={{ color: colors.utility.primaryText }}>Allow photo from gallery (not just camera)</span>
-              </label>
             </div>
           </div>
-          */}
         </div>
 
-        {/* Right Column (2/5) - Explanation Card */}
+        {/* Right Column — explainer */}
         <div className="lg:col-span-2">
           <div
             className="p-6 rounded-xl border h-full"
             style={{
               backgroundColor: isDarkMode ? `${colors.semantic.info}10` : '#EFF6FF',
-              borderColor: isDarkMode ? `${colors.semantic.info}30` : '#BFDBFE'
+              borderColor: isDarkMode ? `${colors.semantic.info}30` : '#BFDBFE',
             }}
           >
             <div className="flex items-start gap-3 mb-4">
-              <div
-                className="p-2.5 rounded-xl"
-                style={{
-                  backgroundColor: isDarkMode ? colors.semantic.info : '#2563EB',
-                }}
-              >
+              <div className="p-2.5 rounded-xl" style={{ backgroundColor: isDarkMode ? colors.semantic.info : '#2563EB' }}>
                 <Lightbulb className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h4 className="font-semibold text-base" style={{ color: isDarkMode ? colors.utility.primaryText : '#1E3A8A' }}>
-                  Evidence Types Explained
-                </h4>
-              </div>
+              <h4 className="font-semibold text-base" style={{ color: isDarkMode ? colors.utility.primaryText : '#1E3A8A' }}>
+                How this plays out
+              </h4>
             </div>
 
-            <div className="space-y-4 text-sm" style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}>
-              <div className="space-y-3">
-                <div className="flex items-start gap-2">
-                  <Upload className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
-                  <div>
-                    <strong>Upload Form</strong>
-                    <p className="text-xs mt-0.5 opacity-80">
-                      Technicians can upload documents, photos, or files as proof of service completion
-                    </p>
-                  </div>
+            <div className="space-y-3 text-sm" style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}>
+              <div className="flex items-start gap-2">
+                <Wand2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
+                <div>
+                  <strong>Automatic</strong>
+                  <p className="text-xs mt-0.5 opacity-80">
+                    When a contract with this block goes active, the system resolves the right form:
+                    the equipment type&apos;s own form if one exists, else forms chosen on the contract,
+                    else the platform default. Every visit always has something to fill.
+                  </p>
                 </div>
-
-                <div className="flex items-start gap-2">
-                  <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
-                  <div>
-                    <strong>OTP Confirmation</strong>
-                    <p className="text-xs mt-0.5 opacity-80">
-                      Customer receives an OTP to verify service start or completion. Adds accountability.
-                    </p>
-                  </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <ClipboardList className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
+                <div>
+                  <strong>Specific form</strong>
+                  <p className="text-xs mt-0.5 opacity-80">
+                    Pins this block to one form regardless of equipment. Tick the upload checkbox to
+                    demand the form <em>and</em> a photo before a visit counts as proven.
+                  </p>
                 </div>
-
-                <div className="flex items-start gap-2">
-                  <ClipboardList className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
-                  <div>
-                    <strong>Service Form</strong>
-                    <p className="text-xs mt-0.5 opacity-80">
-                      A structured form that technicians fill during service. Great for checklists and inspections.
-                    </p>
-                  </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Upload className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
+                <div>
+                  <strong>Upload only / None</strong>
+                  <p className="text-xs mt-0.5 opacity-80">
+                    Upload-only skips forms entirely; None skips all proof. Neither pulls in a fallback form.
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div
-              className="mt-5 p-4 rounded-xl"
-              style={{
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-              }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Info className="w-4 h-4" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
-                <span className="font-semibold text-sm" style={{ color: isDarkMode ? colors.utility.primaryText : '#1E3A8A' }}>
-                  Why Evidence Matters
-                </span>
-              </div>
-              <ul className="text-xs space-y-1" style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}>
-                <li>• Builds trust with customers</li>
-                <li>• Provides proof for disputes</li>
-                <li>• Ensures quality compliance</li>
-                <li>• Creates audit trail for records</li>
-              </ul>
-            </div>
-
-            <div
-              className="mt-4 p-4 rounded-xl"
-              style={{
-                backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF',
-              }}
-            >
+            <div className="mt-5 p-4 rounded-xl" style={{ backgroundColor: isDarkMode ? colors.utility.secondaryBackground : '#FFFFFF' }}>
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="w-4 h-4" style={{ color: isDarkMode ? colors.semantic.info : '#2563EB' }} />
                 <span className="font-semibold text-sm" style={{ color: isDarkMode ? colors.utility.primaryText : '#1E3A8A' }}>
-                  Best Practices
+                  Applies to new contracts
                 </span>
               </div>
-              <ul className="text-xs space-y-1" style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}>
-                <li>• Use OTP for high-value services</li>
-                <li>• Service forms work great for inspections</li>
-                <li>• Upload forms for documentation needs</li>
-              </ul>
+              <p className="text-xs" style={{ color: isDarkMode ? colors.utility.secondaryText : '#1D4ED8' }}>
+                The choice is snapshotted into each contract when it is created and resolved when the
+                contract activates. Already-active contracts keep their existing setup.
+              </p>
             </div>
           </div>
         </div>

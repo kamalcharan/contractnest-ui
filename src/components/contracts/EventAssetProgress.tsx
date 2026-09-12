@@ -29,19 +29,34 @@ const EventAssetProgress: React.FC<EventAssetProgressProps> = ({ assets, colors 
   const total = assets.length;
   const hasBlocked = assets.some((a) => a.status === 'blocked_placeholder');
 
+  // Which equipment this visit covers — always visible, so "Start Service" /
+  // "Book appointment" on a multi-equipment contract is unambiguous without
+  // having to expand the chip.
+  const names = assets.map((a) => a.asset_name);
+  const coversLabel = names.slice(0, 2).join(', ') + (names.length > 2 ? ` +${names.length - 2} more` : '');
+
   return (
     <div className="mt-1.5">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full transition-colors hover:opacity-80"
-        style={{
-          backgroundColor: hasBlocked ? '#f59e0b18' : proven === total ? '#05966915' : colors.utility.primaryText + '08',
-          color: hasBlocked ? '#d97706' : proven === total ? colors.semantic.success : colors.utility.secondaryText,
-        }}
-      >
-        {proven}/{total} asset{total > 1 ? 's' : ''} proven
-        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full transition-colors hover:opacity-80"
+          style={{
+            backgroundColor: hasBlocked ? '#f59e0b18' : proven === total ? '#05966915' : colors.utility.primaryText + '08',
+            color: hasBlocked ? '#d97706' : proven === total ? colors.semantic.success : colors.utility.secondaryText,
+          }}
+        >
+          {proven}/{total} asset{total > 1 ? 's' : ''} proven
+          <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        <span
+          className="text-[11px] truncate max-w-[240px]"
+          style={{ color: colors.utility.secondaryText }}
+          title={names.join(', ')}
+        >
+          Covers: {coversLabel}
+        </span>
+      </div>
 
       {expanded && (
         <div

@@ -12,7 +12,7 @@
 //   "Last serviced <date> · <assignee>"  | View logbook · Attach · remove
 
 import React from 'react';
-import { BookOpen, Link2, Trash2 } from 'lucide-react';
+import { BookOpen, Link2, Trash2, Pencil, Archive, RotateCcw, FileText } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
 import type { MachineServiceState } from './fleetTypes';
 import { formatShortDate } from './fleetTypes';
@@ -33,6 +33,24 @@ interface MachineCardProps {
   onAttach?: () => void;
   /** Present only when the machine has visits to show */
   onOpenLogbook?: () => void;
+
+  // ── Registry mode (all optional — the contract view passes none of these,
+  //    so its rendering is unchanged). One card, both situations. ──
+  /** Override the status pill text ("Active" / "Inactive" in the registry) */
+  pillLabel?: string;
+  /** 'muted' renders the pill gray (Inactive) — default keeps success green */
+  pillTone?: 'success' | 'muted';
+  /** Live contracts this asset is attached to — rendered as CN-#### chips */
+  contractRefs?: { id: string; contract_number: string }[];
+  onOpenContract?: (contractId: string) => void;
+  /** Footer note when there are no visits at all (registry: not in a contract yet) */
+  noVisitsNote?: string;
+  /** Dim the card (deactivated asset) */
+  dimmed?: boolean;
+  onEdit?: () => void;
+  /** Registry never hard-deletes — this soft-hides (is_active=false) */
+  onDeactivate?: () => void;
+  onReactivate?: () => void;
 }
 
 const cap = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
@@ -51,6 +69,15 @@ const MachineCard: React.FC<MachineCardProps> = ({
   onRemove,
   onAttach,
   onOpenLogbook,
+  pillLabel,
+  pillTone,
+  contractRefs,
+  onOpenContract,
+  noVisitsNote,
+  dimmed,
+  onEdit,
+  onDeactivate,
+  onReactivate,
 }) => {
   const behind = !!state && state.overdueCount > 0;
   const hasVisits = !!state && state.totalVisits > 0;
@@ -87,11 +114,12 @@ const MachineCard: React.FC<MachineCardProps> = ({
       ? `Last serviced ${formatShortDate(state.lastProven.dateKey)}${state.lastProven.assignee ? ` · ${state.lastProven.assignee}` : ''}`
       : hasVisits
         ? 'Not serviced yet'
-        : '';
+        : noVisitsNote || '';
   const showLogbookBtn = !isPlaceholder && hasVisits && !!onOpenLogbook;
   const showAttachBtn = isPlaceholder && canAttach && !!onAttach;
   const showRemoveBtn = canRemove && !!onRemove;
-  const hasFooter = !!footerText || showLogbookBtn || showAttachBtn || showRemoveBtn;
+  const showRegistryBtns = !!onEdit || !!onDeactivate || !!onReactivate;
+  const hasFooter = !!footerText || showLogbookBtn || showAttachBtn || showRemoveBtn || showRegistryBtns;
 
   return (
     <div
@@ -100,7 +128,7 @@ const MachineCard: React.FC<MachineCardProps> = ({
         backgroundColor: isPlaceholder ? '#f59e0b08' : colors.utility.secondaryBackground,
         borderColor: isPlaceholder ? '#f59e0b50' : colors.utility.primaryText + '14',
         borderStyle: isPlaceholder ? 'dashed' : 'solid',
-        opacity: removing ? 0.6 : 1,
+        opacity: removing ? 0.6 : dimmed ? 0.65 : 1,
       }}
     >
       {/* Top row: identity + pill */}
@@ -118,10 +146,12 @@ const MachineCard: React.FC<MachineCardProps> = ({
           style={
             isPlaceholder
               ? { backgroundColor: '#f59e0b18', color: '#d97706' }
-              : { backgroundColor: colors.semantic.success + '15', color: colors.semantic.success }
+              : pillTone === 'muted'
+                ? { backgroundColor: colors.utility.secondaryText + '18', color: colors.utility.secondaryText }
+                : { backgroundColor: colors.semantic.success + '15', color: colors.semantic.success }
           }
         >
-          {isPlaceholder ? 'Awaiting asset' : 'Attached'}
+          {pillLabel || (isPlaceholder ? 'Awaiting asset' : 'Attached')}
         </span>
       </div>
 
@@ -129,6 +159,29 @@ const MachineCard: React.FC<MachineCardProps> = ({
       {metaParts.length > 0 && (
         <div className="text-[10.5px] mt-1 truncate" style={{ color: colors.utility.secondaryText + 'cc' }}>
           {metaParts.join(' · ')}
+        </div>
+      )}
+
+      {/* Registry mode: live contracts this asset is attached to */}
+      {contractRefs && contractRefs.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+          {contractRefs.slice(0, 3).map((c) => (
+            <button
+              key={c.id}
+              onClick={(e) => { e.stopPropagation(); onOpenContract?.(c.id); }}
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors hover:opacity-80"
+              style={{ backgroundColor: colors.brand.primary + '12', color: colors.brand.primary }}
+              title={`Open contract ${c.contract_number}`}
+            >
+              <FileText className="h-2.5 w-2.5" />
+              {c.contract_number}
+            </button>
+          ))}
+          {contractRefs.length > 3 && (
+            <span className="text-[10px] font-medium" style={{ color: colors.utility.secondaryText }}>
+              +{contractRefs.length - 3} more
+            </span>
+          )}
         </div>
       )}
 
@@ -208,6 +261,46 @@ const MachineCard: React.FC<MachineCardProps> = ({
             >
               <Link2 className="h-3 w-3" />
               Attach asset
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-90"
+              style={smallBtn(colors.brand.primary + '12', colors.brand.primary)}
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+          )}
+          {onReactivate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onReactivate();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-90"
+              style={smallBtn(colors.semantic.success + '12', colors.semantic.success)}
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reactivate
+            </button>
+          )}
+          {onDeactivate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeactivate();
+              }}
+              className="p-1.5 rounded-lg transition-colors hover:opacity-80"
+              style={{ color: colors.semantic.error, backgroundColor: colors.semantic.error + '10' }}
+              aria-label="Deactivate"
+              title="Deactivate"
+            >
+              <Archive className="h-3 w-3" />
             </button>
           )}
           {showRemoveBtn && (

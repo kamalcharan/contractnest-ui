@@ -11,7 +11,7 @@
 // - Stay-open placeholder attach flow
 // - "Show only awaiting" filter
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Wrench, Plus, X, Search, Package, Building2, LayoutGrid, TableIcon, CheckCircle2 } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
 import { isPlaceholderDetail } from '@/components/contracts/ContractWizard/steps/AssetSelectionStep';
@@ -313,6 +313,33 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
   const canAdd = contractId && (isSeller || (isBuyer && allowBuyerToAdd));
 
+  // Category prefill for the create dialog. The contract context usually
+  // already knows what is being added: prefer the placeholder being attached
+  // (its coverage category is fixed); otherwise, when the contract covers
+  // exactly ONE equipment category, default to it. Multi-category contracts
+  // with no placeholder context leave the dropdown for the user.
+  const addFormDefaults = useMemo(() => {
+    const subCatOf = (rid: string | null | undefined) =>
+      rid ? resourceIdToSubCategory.get(rid) || null : null;
+    if (attachingPlaceholder?.category_id) {
+      return {
+        subCategory:
+          subCatOf(attachingPlaceholder.category_id) ||
+          attachingPlaceholder.category_name || null,
+        assetTypeId: attachingPlaceholder.category_id,
+      };
+    }
+    const catIds = new Set<string>();
+    for (const d of equipmentDetails) {
+      if (d.category_id) catIds.add(d.category_id);
+    }
+    if (catIds.size === 1) {
+      const only = [...catIds][0];
+      return { subCategory: subCatOf(only), assetTypeId: only };
+    }
+    return { subCategory: null, assetTypeId: null };
+  }, [attachingPlaceholder, equipmentDetails, resourceIdToSubCategory]);
+
   // Display index among same-category items ("2 of 3") — only meaningful once
   // a category has more than one instance (real or placeholder).
   const displayIndexById = useMemo(() => {
@@ -416,7 +443,26 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     // the slot it already fills.
     if (attachingPlaceholder) {
       if (attachingPlaceholder.category_id) {
-        filtered = filtered.filter((a) => a.asset_type_id === attachingPlaceholder.category_id);
+        // R6: registry assets link to their type via asset_type_id holding a
+        // RESOURCE id (manual adds) OR a TEMPLATE id (buyer adds), or via
+        // template_id only (seeded instances). Exact-id matching alone hid
+        // valid existing units → empty picker → duplicate creation. Match by
+        // id on either field, then by shared sub-category; if nothing matches
+        // at all, fall back to the unnarrowed list rather than hiding units.
+        const cid = attachingPlaceholder.category_id;
+        const phSubCat = resourceIdToSubCategory.get(cid) || null;
+        const narrowed = filtered.filter((a) => {
+          if (a.asset_type_id === cid || a.template_id === cid) return true;
+          if (phSubCat) {
+            const aSubCat =
+              resourceIdToSubCategory.get(a.asset_type_id || '') ||
+              resourceIdToSubCategory.get(a.template_id || '') ||
+              null;
+            if (aSubCat && aSubCat === phSubCat) return true;
+          }
+          return false;
+        });
+        if (narrowed.length > 0) filtered = narrowed;
       }
       filtered = filtered.filter((a) => !existingAssetIds.has(a.id));
     }
@@ -439,7 +485,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     }
 
     return filtered;
-  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType, attachingPlaceholder, existingAssetIds]);
+  }, [assets, searchQuery, showPicker, isSeller, buyerId, pickerResourceType, attachingPlaceholder, existingAssetIds, resourceIdToSubCategory]);
 
   // ── Handlers ──────────────────────────────────────────────────
 
@@ -516,21 +562,48 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     }
   }, [contractId, removeMutation]);
 
-  // "+ Add Equipment" — create in registry via form dialog and auto-add to contract
+  // "+ Add Equipment" — create in registry via form dialog and auto-add to contract.
+  // When the dialog was opened from an attach flow, the new asset REPLACES the
+  // placeholder being attached (same rule as picking an existing asset) —
+  // otherwise it is a genuinely new extra unit.
   const handleCreateSubmit = useCallback(
     async (data: AssetFormData) => {
       if (!contractId) return;
       try {
         const created = await createMutation.mutateAsync(data);
-        // Auto-add the newly created asset to the contract
         const item = assetToDetail(created, tenantId, role, resourceIdToSubCategory);
-        await addMutation.mutateAsync({ contractId, equipmentItem: item });
+        await addMutation.mutateAsync({
+          contractId,
+          equipmentItem: item,
+          replacesItemId: attachingPlaceholder?.id,
+        });
         setIsAddFormOpen(false);
+        if (attachingPlaceholder) {
+          // Mirror the pick-existing flow: advance to the next open placeholder
+          // (same category first), or close the picker when none remain.
+          const remaining = equipmentDetails.filter(
+            (d) => d.id !== attachingPlaceholder.id && isPlaceholderDetail(d as any),
+          );
+          if (remaining.length > 0) {
+            const next =
+              (attachingPlaceholder.category_id &&
+                remaining.find((d) => d.category_id === attachingPlaceholder.category_id)) ||
+              remaining[0];
+            setAttachedNote(`Attached "${created.name}" — now attaching: ${next.category_name}`);
+            setAttachingPlaceholder(next);
+            setPickerResourceType(next.resource_type === 'entity' ? 'entity' : 'equipment');
+            setSearchQuery('');
+          } else {
+            setAttachedNote(null);
+            setAttachingPlaceholder(null);
+            setShowPicker(false);
+          }
+        }
       } catch {
         /* toast handled by hooks */
       }
     },
-    [createMutation, tenantId, role, resourceIdToSubCategory, contractId, addMutation]
+    [createMutation, tenantId, role, resourceIdToSubCategory, contractId, addMutation, attachingPlaceholder, equipmentDetails]
   );
 
   /** Card click → open the machine logbook drawer (buttons keep their own actions) */
@@ -547,6 +620,23 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   const handleCloseLogbook = useCallback(() => setLogbookMachineId(null), []);
 
   const isLoading = assetsLoading || resourcesLoading;
+
+  // Attach-flow shortcut: when "Attach asset" opened the picker for a
+  // placeholder and there is NOTHING to pick (no matching registry unit),
+  // skip the dead-end list and open the Add Equipment slider directly —
+  // category/type/client already prefilled by addFormDefaults. Guarded to
+  // fire once per placeholder so Cancel returns to the picker instead of
+  // looping the dialog open again.
+  const autoOpenedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!showPicker || !attachingPlaceholder || isLoading || isAddFormOpen) return;
+    if (searchQuery) return;
+    if (displayAssets.length > 0) return;
+    if (autoOpenedForRef.current === attachingPlaceholder.id) return;
+    autoOpenedForRef.current = attachingPlaceholder.id;
+    setAddFormMode(attachingPlaceholder.resource_type === 'entity' ? 'entity' : 'equipment');
+    setIsAddFormOpen(true);
+  }, [showPicker, attachingPlaceholder, isLoading, isAddFormOpen, searchQuery, displayAssets]);
 
   // ── Render helpers ────────────────────────────────────────────
 
@@ -778,7 +868,18 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
           {/* Picker body — equipment card grid */}
           <div className="px-5 py-4">
-            {isLoading ? (
+            {isAddFormOpen && attachingPlaceholder ? (
+              // Attach flow jumped straight into the add-asset form — keep the
+              // background quiet instead of showing a stale empty-state/grid.
+              <div
+                className="flex items-center gap-2.5 py-3 text-sm"
+                style={{ color: colors.utility.secondaryText }}
+              >
+                <Package className="h-4 w-4 flex-shrink-0" style={{ color: colors.brand.primary }} />
+                Registering a new {attachingPlaceholder.resource_type === 'entity' ? 'facility' : 'unit'} for
+                the "{attachingPlaceholder.category_name}" slot…
+              </div>
+            ) : isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <VaNiLoader size="sm" message="Loading equipment..." />
               </div>
@@ -977,7 +1078,10 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         isSubmitting={createMutation.isPending}
         defaultOwnershipType={isBuyer ? 'self' : 'client'}
         lockedContactId={isBuyer ? undefined : buyerId}
+        lockedContactName={isBuyer ? undefined : (buyerId ? contactNameMap.get(buyerId) : undefined)}
         registryMode={addFormMode}
+        defaultSubCategory={addFormDefaults.subCategory}
+        defaultAssetTypeId={addFormDefaults.assetTypeId}
       />
     </div>
   );

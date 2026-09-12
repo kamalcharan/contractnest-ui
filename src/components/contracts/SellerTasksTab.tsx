@@ -37,6 +37,8 @@ import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 import { EventCard } from '@/components/contracts/EventCard';
 import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
 import ServiceExecutionDrawer from '@/components/contracts/ServiceExecutionDrawer';
+import type { EvidencePolicyType, EvidenceSelectedForm } from '@/components/contracts/ServiceExecutionDrawer';
+import { useContractFormMappings } from '@/hooks/queries/useFormTemplates';
 
 // ═══════════════════════════════════════════════════
 // PROPS
@@ -111,6 +113,44 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
   // ── Data hooks ──
   const { data: contractData } = useContract(contractId);
   const { data: invoiceData } = useContractInvoices(contractId);
+
+  // B2.5 — resolved form mappings (written at activation by the D9 ladder).
+  // Wizard-level smart_form selection wins when present; otherwise the
+  // resolved mappings drive the drawer's Evidence section (e.g. the platform
+  // default "General Service Completion" on contracts that never picked one).
+  const { data: contractFormMappings } = useContractFormMappings(contractId);
+
+  const effectiveEvidence = useMemo<{ policy: EvidencePolicyType; forms: EvidenceSelectedForm[] }>(() => {
+    const wizardPolicy = ((contractData as any)?.evidence_policy_type
+      || (contractData as any)?.metadata?.evidence_policy_type
+      || 'none') as EvidencePolicyType;
+    const rawWizardForms = (contractData as any)?.evidence_selected_forms
+      || (contractData as any)?.metadata?.evidence_selected_forms;
+    const wizardForms: EvidenceSelectedForm[] = Array.isArray(rawWizardForms) ? rawWizardForms : [];
+
+    if (wizardPolicy === 'smart_form' && wizardForms.length > 0) {
+      return { policy: wizardPolicy, forms: wizardForms };
+    }
+
+    if (contractFormMappings && contractFormMappings.length > 0) {
+      // Block-level rows arrive first from the API; dedupe by template
+      // (the same form can be mapped by several blocks).
+      const seen = new Set<string>();
+      const forms: EvidenceSelectedForm[] = [];
+      for (const m of contractFormMappings) {
+        if (seen.has(m.form_template_id)) continue;
+        seen.add(m.form_template_id);
+        forms.push({
+          form_template_id: m.form_template_id,
+          name: m.form_name,
+          sequence: forms.length + 1,
+        });
+      }
+      return { policy: 'smart_form', forms };
+    }
+
+    return { policy: wizardPolicy, forms: wizardForms };
+  }, [contractData, contractFormMappings]);
   // Once an invoice exists, dues are settled via Record Payment (not re-invoiced),
   // so the contract-level "Generate Invoice" button is hidden.
   const hasInvoice = (invoiceData?.invoices?.length || 0) > 0;
@@ -709,15 +749,8 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
           events={servicePanel.events}
           allContractEvents={allEvents}
           currency={currency}
-          evidencePolicyType={
-            (contractData as any)?.evidence_policy_type ||
-            (contractData as any)?.metadata?.evidence_policy_type ||
-            'none'
-          }
-          evidenceSelectedForms={
-            (contractData as any)?.evidence_selected_forms ||
-            (contractData as any)?.metadata?.evidence_selected_forms
-          }
+          evidencePolicyType={effectiveEvidence.policy}
+          evidenceSelectedForms={effectiveEvidence.forms}
           statusDefsByType={statusDefsByType}
           transitionsByType={transitionsByType}
           onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}

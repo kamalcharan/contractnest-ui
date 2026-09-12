@@ -1034,7 +1034,10 @@ export const API_ENDPOINTS = {
     BUYER_REMOVE_EQUIPMENT: (id: string) => `/api/contracts/${id}/buyer-equipment`,
     SELLER_ADD_EQUIPMENT: (id: string) => `/api/contracts/${id}/seller-equipment`,
     SELLER_REMOVE_EQUIPMENT: (id: string) => `/api/contracts/${id}/seller-equipment`,
-    EVENT_ASSETS: (id: string) => `/api/contracts/${id}/event-assets`,
+    EVENT_ASSETS: (id: string) => `/api/v2/contracts/${id}/event-assets`, // B1: served by contracts-v2 (jtd-grain rows)
+    // B3.3: mark one asset of a visit proven (cascades event → ticket completion)
+    EVENT_ASSET_PROVE: (id: string, assetId: string) =>
+      `/api/v2/contracts/${id}/event-assets/${assetId}/prove`,
 
     // Dashboard stats
     STATS: '/api/contracts/stats',
@@ -1175,6 +1178,8 @@ export const API_ENDPOINTS = {
       CREATE: '/api/service-execution',
       GET: (ticketId: string) => `/api/service-execution/${ticketId}`,
       UPDATE: (ticketId: string) => `/api/service-execution/${ticketId}`,
+      // B3.5 — beyond-scope on-the-fly invoice for a ticket
+      INVOICE: (ticketId: string) => `/api/service-execution/${ticketId}/invoice`,
 
       LIST_WITH_FILTERS: (filters: ServiceTicketFilters = {}) => {
         const params = new URLSearchParams();
@@ -1363,6 +1368,19 @@ export const API_ENDPOINTS = {
       CREATE: '/api/admin/forms',
       UPDATE: (id: string) => `/api/admin/forms/${id}`,
     },
+    // Approved templates for tenant-facing pickers (B2.4 block wizard)
+    TEMPLATES: (filters: { status?: string; search?: string } = {}) => {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.search) params.append('search', filters.search);
+      const qs = params.toString();
+      return qs ? `/api/forms/templates?${qs}` : '/api/forms/templates';
+    },
+    // Resolved form mappings for a contract (B2.5 — execution surface read path)
+    MAPPINGS: (contractId: string) =>
+      `/api/forms/mappings?contract_id=${encodeURIComponent(contractId)}`,
+    // Single template with schema (B3.4 — form-fill renderer)
+    TEMPLATE_DETAIL: (id: string) => `/api/forms/templates/${id}`,
     // Tenant form selections (bookmarks)
     SELECTIONS: {
       LIST: '/api/forms/selections',
@@ -1390,12 +1408,14 @@ export const API_ENDPOINTS = {
   // =================================================================
   CLIENT_ASSET_REGISTRY: {
     BASE: '/api/client-asset-registry',
-    LIST_WITH_FILTERS: (filters: { contact_id?: string; resource_type_id?: string; status?: string; ownership_type?: string; limit?: number; offset?: number } = {}) => {
+    LIST_WITH_FILTERS: (filters: { contact_id?: string; resource_type_id?: string; status?: string; ownership_type?: string; include_inactive?: boolean; with_contracts?: boolean; limit?: number; offset?: number } = {}) => {
       const params = new URLSearchParams();
       if (filters.contact_id) params.append('contact_id', filters.contact_id);
       if (filters.resource_type_id) params.append('resource_type_id', filters.resource_type_id);
       if (filters.status) params.append('status', filters.status);
       if (filters.ownership_type) params.append('ownership_type', filters.ownership_type);
+      if (filters.include_inactive) params.append('include_inactive', 'true');
+      if (filters.with_contracts) params.append('with_contracts', 'true');
       if (filters.limit) params.append('limit', String(filters.limit));
       if (filters.offset) params.append('offset', String(filters.offset));
       const qs = params.toString();

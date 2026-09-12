@@ -49,6 +49,8 @@ import type {
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 import { EventCard } from '@/components/contracts/EventCard';
 import ServiceExecutionDrawer from '@/components/contracts/ServiceExecutionDrawer';
+import type { EvidencePolicyType, EvidenceSelectedForm } from '@/components/contracts/ServiceExecutionDrawer';
+import { useContractFormMappings } from '@/hooks/queries/useFormTemplates';
 import ServiceTicketDetail from '@/components/contracts/ServiceTicketDetail';
 import type { TicketDetailState } from '@/components/contracts/ServiceTicketDetail';
 
@@ -559,6 +561,45 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
 
   const { data: eventAssetsByEvent = {} } = useContractEventAssets(contractId);
 
+  // B2.5 — resolved form mappings (written at activation by the D9 ladder).
+  // The contract-level wizard fields win when explicitly set to smart_form
+  // with forms; otherwise the resolved mappings drive the drawer, so
+  // contracts that never picked a form still surface their resolved
+  // requirement (e.g. the platform default "General Service Completion").
+  const { data: contractFormMappings } = useContractFormMappings(contractId);
+
+  const effectiveEvidence = useMemo<{ policy: EvidencePolicyType; forms: EvidenceSelectedForm[] }>(() => {
+    const wizardPolicy = (contractData?.evidence_policy_type
+      || contractData?.metadata?.evidence_policy_type
+      || 'none') as EvidencePolicyType;
+    const rawWizardForms = contractData?.evidence_selected_forms
+      || contractData?.metadata?.evidence_selected_forms;
+    const wizardForms: EvidenceSelectedForm[] = Array.isArray(rawWizardForms) ? rawWizardForms : [];
+
+    if (wizardPolicy === 'smart_form' && wizardForms.length > 0) {
+      return { policy: wizardPolicy, forms: wizardForms };
+    }
+
+    if (contractFormMappings && contractFormMappings.length > 0) {
+      // Block-level rows arrive first from the API; dedupe by template
+      // (the same form can be mapped by several blocks).
+      const seen = new Set<string>();
+      const forms: EvidenceSelectedForm[] = [];
+      for (const m of contractFormMappings) {
+        if (seen.has(m.form_template_id)) continue;
+        seen.add(m.form_template_id);
+        forms.push({
+          form_template_id: m.form_template_id,
+          name: m.form_name,
+          sequence: forms.length + 1,
+        });
+      }
+      return { policy: 'smart_form', forms };
+    }
+
+    return { policy: wizardPolicy, forms: wizardForms };
+  }, [contractData, contractFormMappings]);
+
   const { data: serviceStatuses } = useEventStatuses('service');
   const { data: billingStatuses } = useEventStatuses('billing');
   const { data: sparePartStatuses } = useEventStatuses('spare_part');
@@ -663,10 +704,10 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
   const handleViewTicket = useCallback((ticketId: string, ticketNumber: string, assignedTo: string, completedAt: string, events: ContractEvent[]) => {
     setTicketDetail({
       isOpen: true, ticketId, ticketNumber, assignedTo, completedAt, events,
-      evidencePolicyType: contractData?.evidence_policy_type || contractData?.metadata?.evidence_policy_type || 'none',
-      evidenceSelectedForms: contractData?.evidence_selected_forms || contractData?.metadata?.evidence_selected_forms || [],
+      evidencePolicyType: effectiveEvidence.policy,
+      evidenceSelectedForms: effectiveEvidence.forms,
     });
-  }, []);
+  }, [effectiveEvidence]);
 
   // ─── Loading ───
   if (isLoading) {
@@ -908,8 +949,8 @@ const OperationsTab: React.FC<OperationsTabProps> = ({
         events={servicePanel.events}
         allContractEvents={eventsData?.items || []}
         currency={currency}
-        evidencePolicyType={contractData?.evidence_policy_type || contractData?.metadata?.evidence_policy_type || 'none'}
-        evidenceSelectedForms={contractData?.evidence_selected_forms || contractData?.metadata?.evidence_selected_forms}
+        evidencePolicyType={effectiveEvidence.policy}
+        evidenceSelectedForms={effectiveEvidence.forms}
         statusDefsByType={statusDefsByType}
         transitionsByType={transitionsByType}
         onClose={() => setServicePanel({ isOpen: false, date: '', events: [] })}

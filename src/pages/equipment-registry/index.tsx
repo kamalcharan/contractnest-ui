@@ -3,7 +3,7 @@
   // Sidebar groups equipment by sub_category from t_category_resources_master
 
   import React, { useState, useEffect, useMemo } from 'react';
-  import { useSearchParams } from 'react-router-dom';
+  import { useSearchParams, useNavigate } from 'react-router-dom';
   import {
     Plus, Search, X, Download, Package, Layers,
   } from 'lucide-react';
@@ -30,11 +30,18 @@
 
   // Types
   import type { TenantAsset, AssetRegistryFilters, AssetFormData } from '@/types/assetRegistry';
+  import { STATUS_CONFIG } from '@/types/assetRegistry';
+  import type { ContractEquipmentDetail } from '@/types/contracts';
+  import type { MachineServiceState } from '@/components/contracts/fleet/fleetTypes';
 
   // Components
-  import EquipmentCard from './EquipmentCard';
+  // ONE card for both surfaces: the registry renders the contract view's
+  // MachineCard itself (owner directive — single card, adapted per situation).
+  // EquipmentCard remains only as the picker (Add/Added/Remove) card.
+  import MachineCard from '@/components/contracts/fleet/MachineCard';
   import EquipmentFormDialog from './EquipmentFormDialog';
   import EquipmentEmptyState from './EmptyState';
+  import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
   // ── Types ───────────────────────────────────────────────────────
   export type RegistryMode = 'equipment' | 'entity';
@@ -89,6 +96,7 @@
 
   const EquipmentPage: React.FC<EquipmentPageProps> = ({ registryMode = 'equipment' }) => {
     const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
     const { currentTenant, perspective } = useAuth();
     const { isDarkMode, currentTheme } = useTheme();
     const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -203,6 +211,11 @@
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingAsset, setEditingAsset] = useState<TenantAsset | null>(null);
+    // R2: Active (default) vs Inactive view. R1: product confirm for deactivation.
+    const [activeFilter, setActiveFilter] = useState<'active' | 'inactive'>('active');
+    const [deactivateTarget, setDeactivateTarget] = useState<TenantAsset | null>(null);
+    // R5: narrow the grid to one client's equipment ('' = all clients)
+    const [contactFilter, setContactFilter] = useState<string>('');
 
     // ── Data: Assets (filtered by ownership_type based on perspective) ──
     const ownershipType = registryMode === 'equipment'
@@ -210,8 +223,15 @@
       : undefined;
 
     const filters: AssetRegistryFilters = useMemo(
-      () => ({ limit: 500, offset: 0, ...(ownershipType ? { ownership_type: ownershipType } : {}) }),
-      [ownershipType]
+      () => ({
+        limit: 500,
+        offset: 0,
+        with_contracts: true, // R4: contract chips on cards
+        ...(ownershipType ? { ownership_type: ownershipType } : {}),
+        ...(activeFilter === 'inactive' ? { include_inactive: true } : {}),
+        ...(contactFilter ? { contact_id: contactFilter } : {}), // R5: client filter
+      }),
+      [ownershipType, activeFilter, contactFilter]
     );
 
     const {
@@ -261,6 +281,20 @@
       }
     }, [selectedSubCategory, searchQuery, setSearchParams, searchParams]);
 
+    // R7: resolve an asset's category/type DISPLAY NAME for the card's sub line
+    // (same three-way id resolution as assetSubCategory below).
+    const categoryIdToName = useMemo(() => {
+      const m = new Map<string, string>();
+      for (const r of equipmentResources) m.set(r.id, r.name);
+      for (const t of templateResources) if (!m.has(t.id)) m.set(t.id, t.name);
+      return m;
+    }, [equipmentResources, templateResources]);
+
+    const assetCategoryName = (a: TenantAsset): string | undefined =>
+      categoryIdToName.get(a.asset_type_id || '') ||
+      categoryIdToName.get(a.template_id || '') ||
+      undefined;
+
     // Resolve an asset's sub-category. asset_type_id may hold a resource id
     // (manual adds) OR a template id (buyer adds); seeded/onboarding instances
     // carry only template_id. Check all three so no item silently lands in "Other".
@@ -275,9 +309,11 @@
       if (isError) return [];
       return assets.filter((a) =>
         modeConfig.typeIds.includes((a.resource_type_id || '').toLowerCase()) &&
-        (!ownershipType || (a.ownership_type || '') === ownershipType)
+        (!ownershipType || (a.ownership_type || '') === ownershipType) &&
+        // R2: Active view shows active assets; Inactive view only deactivated ones
+        (activeFilter === 'inactive' ? !a.is_active : a.is_active)
       );
-    }, [assets, isError, modeConfig.typeIds, ownershipType]);
+    }, [assets, isError, modeConfig.typeIds, ownershipType, activeFilter]);
 
     // ── Client-side filtered assets ─────────────────────────────────
     const displayAssets = useMemo(() => {
@@ -355,11 +391,35 @@
       setIsEditOpen(true);
     };
 
-    const handleDelete = async (asset: TenantAsset) => {
-      if (!window.confirm(`Are you sure you want to remove "${asset.name}"?`))
+    // R1: product confirm dialog instead of window.confirm. The button reads
+    // "Deactivate" because nothing is ever hard-deleted (edge soft-deletes).
+    const handleDelete = (asset: TenantAsset) => {
+      setDeactivateTarget(asset);
+    };
+
+    const targetContracts = deactivateTarget?.contracts || [];
+    const targetBlocked = targetContracts.length > 0;
+
+    const confirmDeactivate = async () => {
+      if (!deactivateTarget) return;
+      if (targetBlocked) {
+        // Informational variant — just dismiss
+        setDeactivateTarget(null);
         return;
+      }
       try {
-        await deleteMutation.mutateAsync(asset.id);
+        await deleteMutation.mutateAsync(deactivateTarget.id);
+      } catch (err: any) {
+        /* toast handled by hook (409 ASSET_IN_CONTRACT message included) */
+      } finally {
+        setDeactivateTarget(null);
+      }
+    };
+
+    // R2: bring a deactivated asset back
+    const handleReactivate = async (asset: TenantAsset) => {
+      try {
+        await updateMutation.mutateAsync({ id: asset.id, data: { is_active: true } });
       } catch (err: any) {
         /* toast handled by hook */
       }
@@ -642,6 +702,55 @@
               </div>
 
               <div className="flex items-center gap-2">
+                {/* R5: client filter — hidden for "my equipment" (self) view where
+                    assets have no owning contact */}
+                {ownershipType !== 'self' && contactsList.length > 0 && (
+                  <select
+                    value={contactFilter}
+                    onChange={(e) => setContactFilter(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border text-xs font-medium max-w-[180px]"
+                    style={{
+                      borderColor: colors.utility.primaryText + '20',
+                      backgroundColor: colors.utility.primaryBackground,
+                      color: contactFilter ? colors.brand.primary : colors.utility.secondaryText,
+                    }}
+                    title="Filter by client"
+                  >
+                    <option value="">All clients</option>
+                    {[...contactsList]
+                      .sort((a, b) =>
+                        (a.displayName || a.company_name || a.name || '').localeCompare(
+                          b.displayName || b.company_name || b.name || ''
+                        )
+                      )
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.displayName || c.company_name || c.name || 'Unknown'}
+                        </option>
+                      ))}
+                  </select>
+                )}
+
+                {/* R2: Active / Inactive view toggle */}
+                <div
+                  className="flex items-center rounded-lg border overflow-hidden"
+                  style={{ borderColor: colors.utility.primaryText + '20' }}
+                >
+                  {(['active', 'inactive'] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setActiveFilter(f)}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        backgroundColor: activeFilter === f ? colors.brand.primary : 'transparent',
+                        color: activeFilter === f ? '#FFFFFF' : colors.utility.secondaryText,
+                      }}
+                    >
+                      {f === 'active' ? 'Active' : 'Inactive'}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Search */}
                 <div className="relative">
                   <Search
@@ -710,18 +819,68 @@
                 <VaNiLoader size="sm" message={`Loading ${modeConfig.itemLabel}...`} />
               </div>
             ) : displayAssets.length > 0 ? (
-              /* Equipment Grid */
+              /* Equipment Grid — same MachineCard as the contract Equipment tab */
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {displayAssets.map((asset) => (
-                  <EquipmentCard
-                    key={asset.id}
-                    asset={asset}
-                    clientName={asset.owner_contact_id ? contactNameMap.get(asset.owner_contact_id) : undefined}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    disabled={isMutating}
-                  />
-                ))}
+                {displayAssets.map((asset) => {
+                  // Adapt the registry asset to the card's contract-detail shape
+                  const detail: ContractEquipmentDetail = {
+                    id: asset.id,
+                    asset_registry_id: asset.id,
+                    resource_type: (asset.resource_type_id || '').toLowerCase() === 'asset' ? 'entity' : 'equipment',
+                    category_id: asset.asset_type_id,
+                    category_name: assetCategoryName(asset) || '',
+                    item_name: asset.name,
+                    quantity: 1,
+                    make: asset.make,
+                    model: asset.model,
+                    serial_number: asset.serial_number,
+                    condition: asset.condition,
+                    criticality: asset.criticality,
+                    location: asset.location,
+                  };
+
+                  // Aggregated visits state from the edge (with_contracts=true);
+                  // one synthesized overdue visit carries the "Due: <date> (missed)" text
+                  const svc = asset.service_state;
+                  const state: MachineServiceState | null = svc && svc.total_visits > 0 ? {
+                    machineId: asset.id,
+                    visits: svc.first_overdue_date
+                      ? [{ key: 'overdue', row: null, event: null, dateKey: svc.first_overdue_date, isProven: false, isOverdue: true, isLocked: false }]
+                      : [],
+                    provenCount: svc.proven_count,
+                    totalVisits: svc.total_visits,
+                    overdueCount: svc.overdue_count,
+                    nextDueDate: svc.next_due_date,
+                    lastProven: svc.last_proven_date ? { dateKey: svc.last_proven_date, assignee: null } : null,
+                  } : null;
+
+                  const firstContract = asset.contracts?.[0];
+
+                  return (
+                    <MachineCard
+                      key={asset.id}
+                      colors={colors}
+                      detail={detail}
+                      isPlaceholder={false}
+                      state={state}
+                      hasServiceData={!!state}
+                      clientName={asset.owner_contact_id ? contactNameMap.get(asset.owner_contact_id) : undefined}
+                      canRemove={false}
+                      canAttach={false}
+                      removing={false}
+                      pillLabel={!asset.is_active ? 'Inactive' : (STATUS_CONFIG[asset.status]?.label || 'Active')}
+                      pillTone={!asset.is_active ? 'muted' : 'success'}
+                      dimmed={!asset.is_active}
+                      contractRefs={asset.contracts}
+                      onOpenContract={(cid) => navigate(`/contracts/${cid}`)}
+                      noVisitsNote={(asset.contracts?.length || 0) > 0 ? 'No visits scheduled yet' : 'Not in any contract yet'}
+                      onOpenLogbook={state && firstContract ? () => navigate(`/contracts/${firstContract.id}`) : undefined}
+                      onEdit={asset.is_active && !isMutating ? () => handleEdit(asset) : undefined}
+                      onDeactivate={asset.is_active && !isMutating ? () => handleDelete(asset) : undefined}
+                      onReactivate={!asset.is_active && !isMutating ? () => handleReactivate(asset) : undefined}
+                    />
+                  );
+                })}
               </div>
             ) : searchQuery && !isError ? (
               /* No search results */
@@ -750,6 +909,19 @@
                   Clear Search
                 </Button>
               </div>
+            ) : activeFilter === 'inactive' && !isError ? (
+              /* Inactive view, nothing deactivated */
+              <div
+                className="rounded-lg border p-12 text-center"
+                style={{
+                  backgroundColor: colors.utility.secondaryBackground,
+                  borderColor: colors.utility.primaryText + '15',
+                }}
+              >
+                <p className="text-sm" style={{ color: colors.utility.secondaryText }}>
+                  No inactive {modeConfig.itemLabel}. Deactivated items appear here and can be reactivated.
+                </p>
+              </div>
             ) : (
               /* Empty state */
               <EquipmentEmptyState
@@ -772,6 +944,28 @@
           isSubmitting={createMutation.isPending}
           registryMode={registryMode}
           defaultOwnershipType={ownershipType || 'client'}
+        />
+
+        {/* R1: deactivation confirm (or "in contract" blocker) — replaces window.confirm */}
+        <ConfirmationDialog
+          isOpen={!!deactivateTarget}
+          onClose={() => setDeactivateTarget(null)}
+          onConfirm={confirmDeactivate}
+          title={
+            targetBlocked
+              ? 'Cannot deactivate yet'
+              : `Deactivate "${deactivateTarget?.name}"?`
+          }
+          description={
+            targetBlocked
+              ? `"${deactivateTarget?.name}" is attached to ${targetContracts
+                  .map((c) => c.contract_number)
+                  .join(', ')}. Remove it from the contract first, then deactivate it here.`
+              : 'It will be hidden from pickers, wizards and lists. Nothing is deleted — you can reactivate it any time from the Inactive filter.'
+          }
+          confirmText={targetBlocked ? 'Got it' : 'Deactivate'}
+          type={targetBlocked ? 'info' : 'danger'}
+          isLoading={deleteMutation.isPending}
         />
 
         <EquipmentFormDialog

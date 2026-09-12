@@ -39,6 +39,11 @@ interface EquipmentFormDialogProps {
   mode: 'create' | 'edit';
   asset?: TenantAsset;
   defaultSubCategory?: string | null;
+  /** Pre-select the exact equipment type (resource id) — used when the caller
+   *  already knows it, e.g. adding from a contract placeholder whose coverage
+   *  category is fixed. Also derives the category when defaultSubCategory is
+   *  not given. */
+  defaultAssetTypeId?: string | null;
   resourceTypeId?: string;
   categories?: Array<{ id: string; name: string; sub_category?: string | null; resource_type_id?: string }>;
   onSubmit: (data: AssetFormData) => Promise<void>;
@@ -58,6 +63,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
   mode,
   asset,
   defaultSubCategory,
+  defaultAssetTypeId = null,
   resourceTypeId,
   categories = [],
   onSubmit,
@@ -155,13 +161,28 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
         ownership_type: lockedContactId ? 'client' : defaultOwnershipType,
         // Auto-set owner when locked (wizard context)
         ...(lockedContactId ? { owner_contact_id: lockedContactId } : {}),
+        // Pre-select the exact type when the caller already knows it
+        // (contract placeholder / single-coverage context)
+        ...(defaultAssetTypeId
+          ? {
+              asset_type_id: defaultAssetTypeId,
+              resource_type_id:
+                categories.find((c) => c.id === defaultAssetTypeId)?.resource_type_id ||
+                resourceTypeId || '',
+            }
+          : {}),
       });
-      // Pre-select sub_category from sidebar selection
-      setSelectedFormSubCategory(defaultSubCategory || '');
+      // Pre-select sub_category: explicit prop wins; else derive it from the
+      // known equipment type so the category dropdown is never left empty
+      // when the caller's context already fixes it.
+      setSelectedFormSubCategory(
+        defaultSubCategory ||
+        (defaultAssetTypeId ? resourceIdToSubCategory.get(defaultAssetTypeId) || '' : '')
+      );
       setSpecRows([]);
     }
     setErrors({});
-  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, resourceIdToSubCategory, lockedContactId, defaultOwnershipType]);
+  }, [isOpen, mode, asset, resourceTypeId, defaultSubCategory, defaultAssetTypeId, categories, resourceIdToSubCategory, lockedContactId, defaultOwnershipType]);
 
   // Auto-select equipment type if only 1 in the selected sub_category
   useEffect(() => {

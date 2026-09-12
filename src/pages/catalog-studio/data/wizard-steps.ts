@@ -2,13 +2,16 @@
 import { WizardStep, EvidenceType } from '../types';
 
 export const WIZARD_STEPS: Record<string, WizardStep[]> = {
+  // Kept in step with utils/catalog-studio/wizard-data.ts (the map the
+  // wizard actually reads) — B2.4 inserted Evidence at step 5.
   service: [
     { id: 1, label: 'Type' },
     { id: 2, label: 'Basic Info' },
-    { id: 3, label: 'Delivery' },
-    { id: 4, label: 'Pricing' },
+    { id: 3, label: 'Resources' },
+    { id: 4, label: 'Delivery' },
     { id: 5, label: 'Evidence' },
-    { id: 6, label: 'Rules' },
+    { id: 6, label: 'Pricing' },
+    { id: 7, label: 'Business Rules' },
   ],
   spare: [
     { id: 1, label: 'Type' },

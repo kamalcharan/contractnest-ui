@@ -26,17 +26,23 @@ import {
   ArrowLeft,
   Trash2,
   Briefcase,
+  CheckCircle2,
+  Lock,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   useContractEventOperations,
+  useContractEventAssets,
 } from '@/hooks/queries/useContractEventQueries';
+import FormFillModal from '@/components/contracts/FormFillModal';
 import {
   useCreateServiceTicket,
+  useCreateBeyondScopeInvoice,
 } from '@/hooks/queries/useServiceExecution';
 import { useContactsForResourceDropdown } from '@/hooks/queries/useContactsResource';
 import { useCatBlocksTest } from '@/hooks/queries/useCatBlocksTest';
 import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
+import { getCurrencySymbol } from '@/utils/constants/currencies';
 import type { Block } from '@/types/catalogStudio';
 import type {
   ContractEvent,
@@ -63,6 +69,10 @@ interface BeyondScopeItem {
   description?: string;
   categoryId: string;
   isFlyBy?: boolean;
+  // B3.5 — billed amount for this beyond-scope line (prefilled from the
+  // catalog block's price; editable). Ticket creation raises an on-the-fly
+  // invoice from these lines (tax applied server-side from settings).
+  amount?: number;
 }
 
 export interface ServiceExecutionDrawerProps {
@@ -130,6 +140,7 @@ interface BeyondScopePanelProps {
   onAddBlock: (block: Block) => void;
   onAddFlyBy: (type: 'service' | 'spare') => void;
   onRemoveItem: (id: string) => void;
+  onUpdateAmount: (id: string, amount: number) => void;
   onClose: () => void;
 }
 
@@ -140,6 +151,7 @@ const BeyondScopePanel: React.FC<BeyondScopePanelProps> = ({
   onAddBlock,
   onAddFlyBy,
   onRemoveItem,
+  onUpdateAmount,
   onClose,
 }) => {
   const [blockSearch, setBlockSearch] = useState('');
@@ -416,6 +428,25 @@ const BeyondScopePanel: React.FC<BeyondScopePanelProps> = ({
                           Fly-by
                         </span>
                       )}
+                      {/* B3.5 — billed amount (tax added server-side from settings) */}
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
+                          {getCurrencySymbol(currency)}
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={item.amount ?? ''}
+                          onChange={(e) => onUpdateAmount(item.id, e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                          className="w-24 rounded border px-1.5 py-0.5 text-[11px]"
+                          style={{
+                            backgroundColor: colors.utility.primaryBackground,
+                            borderColor: `${colors.utility.primaryText}15`,
+                            color: colors.utility.primaryText,
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                     <button
                       onClick={() => onRemoveItem(item.id)}
@@ -514,11 +545,20 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
   const [statusDropdownId, setStatusDropdownId] = useState<string | null>(null);
   const [teamSearch, setTeamSearch] = useState('');
+  // B3.4 — which evidence form is open in the fill modal (null = closed)
+  const [openFormTemplate, setOpenFormTemplate] = useState<{ id: string; name: string } | null>(null);
 
   // ─── Hooks ───
   const { options: teamMembers, isLoading: loadingTeam, error: teamError } = useContactsForResourceDropdown(teamSearch || undefined);
   const createTicket = useCreateServiceTicket();
+  const createBeyondScopeInvoice = useCreateBeyondScopeInvoice();
   const { updateStatus, changingStatusEventId } = useContractEventOperations();
+
+  // Per-asset rows for this contract, keyed by event id (shared query cache
+  // with the tab that opened the drawer). Shows WHICH equipment a visit
+  // covers — critical on multi-equipment contracts where "Start Service"
+  // would otherwise be ambiguous.
+  const { data: eventAssetsByEvent = {} } = useContractEventAssets(contractId, { enabled: isOpen });
 
   // ─── Derived ───
   const deliverables = useMemo(
@@ -580,8 +620,14 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
         name: block.name,
         description: block.description,
         categoryId: block.categoryId,
+        amount: typeof (block as any).price === 'number' ? (block as any).price : 0,
       }];
     });
+  }, []);
+
+  // B3.5 — edit a beyond-scope line's billed amount
+  const handleUpdateBeyondScopeAmount = useCallback((id: string, amount: number) => {
+    setBeyondScopeItems((prev) => prev.map((b) => (b.id === id ? { ...b, amount } : b)));
   }, []);
 
   const handleRemoveBeyondScope = useCallback((id: string) => {
@@ -601,18 +647,38 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
   const handleCreateTicket = useCallback(async () => {
     setIsSubmitting(true);
     try {
-      await createTicket.mutateAsync({
+      const ticket = await createTicket.mutateAsync({
         contract_id: contractId,
         event_ids: drawerEvents.map((e) => e.id),
-        assigned_to_id: assigneeId || undefined,
+        assigned_to: assigneeId || undefined,
         assigned_to_name: assigneeName || undefined,
         notes: notes || undefined,
+        // This drawer IS Start Service — ticket is born in_progress (B3.1)
+        start_now: true,
       });
+
+      // B3.5 — beyond-scope lines with a real amount become their own
+      // on-the-fly invoice (unpaid, ticket provenance, tax from settings).
+      // Zero-amount lines are documentation-only and are not billed.
+      const billable = beyondScopeItems.filter((b) => (b.amount ?? 0) > 0);
+      if (ticket?.id && billable.length > 0) {
+        await createBeyondScopeInvoice.mutateAsync({
+          ticketId: ticket.id,
+          contract_id: contractId,
+          line_items: billable.map((b) => ({
+            name: b.name,
+            description: b.description,
+            amount: b.amount as number,
+            block_id: b.isFlyBy ? undefined : b.id,
+          })),
+          notes: notes || undefined,
+        });
+      }
       onClose();
     } finally {
       setIsSubmitting(false);
     }
-  }, [createTicket, contractId, drawerEvents, assigneeId, assigneeName, notes, onClose]);
+  }, [createTicket, createBeyondScopeInvoice, beyondScopeItems, contractId, drawerEvents, assigneeId, assigneeName, notes, onClose]);
 
   // Get available transitions for an event using props or fallback
   const getTransitions = (event: ContractEvent): string[] => {
@@ -656,9 +722,11 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
             name: `Custom ${type === 'spare' ? 'Spare Part' : 'Service'}`,
             categoryId: type === 'spare' ? 'spare_part' : 'service',
             isFlyBy: true,
+            amount: 0,
           }]);
         }}
         onRemoveItem={handleRemoveBeyondScope}
+        onUpdateAmount={handleUpdateBeyondScopeAmount}
         onClose={() => setShowBeyondScope(false)}
       />
     );
@@ -939,6 +1007,44 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
                             </button>
                           )}
                         </div>
+
+                        {/* Covered equipment — which assets this visit is for */}
+                        {event.event_type === 'service' && (eventAssetsByEvent[event.id]?.length || 0) > 0 && (
+                          <div className="mt-2 pt-2 border-t" style={{ borderColor: `${colors.utility.primaryText}08` }}>
+                            <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: colors.utility.secondaryText }}>
+                              Covers {eventAssetsByEvent[event.id].length} asset{eventAssetsByEvent[event.id].length > 1 ? 's' : ''}
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {eventAssetsByEvent[event.id].map((a) => {
+                                const isProven = a.status === 'proven';
+                                const isBlocked = a.status === 'blocked_placeholder';
+                                const chipColor = isProven
+                                  ? colors.semantic.success
+                                  : isBlocked
+                                    ? '#d97706'
+                                    : colors.utility.secondaryText;
+                                return (
+                                  <span
+                                    key={a.id}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                                    style={{
+                                      backgroundColor: isProven ? '#05966915' : isBlocked ? '#f59e0b18' : `${colors.utility.primaryText}08`,
+                                      color: chipColor,
+                                    }}
+                                    title={isBlocked ? 'Awaiting asset — attach the real asset' : a.status.replace(/_/g, ' ')}
+                                  >
+                                    {isProven ? (
+                                      <CheckCircle2 className="w-2.5 h-2.5" />
+                                    ) : isBlocked ? (
+                                      <Lock className="w-2.5 h-2.5" />
+                                    ) : null}
+                                    {a.asset_name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1282,6 +1388,7 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
                               </p>
                             </div>
                             <button
+                              onClick={() => setOpenFormTemplate({ id: form.form_template_id, name: form.name })}
                               className="px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-90"
                               style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
                             >
@@ -1372,6 +1479,19 @@ const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* B3.4 — evidence form fill (submission bound to one asset, then proven) */}
+      {openFormTemplate && (
+        <FormFillModal
+          isOpen={!!openFormTemplate}
+          onClose={() => setOpenFormTemplate(null)}
+          contractId={contractId}
+          formTemplateId={openFormTemplate.id}
+          formName={openFormTemplate.name}
+          serviceEvents={drawerEvents.filter((e) => e.event_type === 'service')}
+          eventAssetsByEvent={eventAssetsByEvent}
+        />
+      )}
 
       <style>{`
         @keyframes slideInRight {

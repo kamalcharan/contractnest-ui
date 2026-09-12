@@ -44,6 +44,7 @@ import {
 
 // Import BusinessRulesStep for step 7
 import BusinessRulesStep from './steps/service/BusinessRulesStep';
+import EvidenceStep from './steps/service/EvidenceStep';
 
 // =================================================================
 // TYPES
@@ -140,9 +141,18 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
     if (type === 'service') {
       // Step 3 - Resources: No mandatory fields (independent is default)
       // Step 4 - Delivery: No mandatory fields (cycles are optional)
-      // Step 5 - Pricing: Price is required
-      // Supports both independent pricing (pricingRecords) and resource-based pricing (resourcePricingRecords)
+      // Step 5 - Evidence: a smart-form choice needs an actual form picked
       if (step === 5) {
+        const evidencePolicy = (data as { evidencePolicy?: string }).evidencePolicy;
+        const evidenceFormId = (data as { evidenceFormTemplateId?: string }).evidenceFormTemplateId;
+        if ((evidencePolicy === 'form' || evidencePolicy === 'both') && !evidenceFormId) {
+          errors.push('Select a smart form, or change the evidence choice');
+        }
+        return errors;
+      }
+      // Step 6 - Pricing: Price is required
+      // Supports both independent pricing (pricingRecords) and resource-based pricing (resourcePricingRecords)
+      if (step === 6) {
         const pricingMode = data.meta?.pricingMode as string | undefined;
         const selectedVariants = data.meta?.selectedVariants as Array<{ variant_id: string }> | undefined;
         const variantPricingMode = data.meta?.variantPricingMode as string | undefined;
@@ -152,23 +162,23 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           // Per Variant: each variant must have pricing
           const variantPricingRecords = data.meta?.variantPricingRecords as Array<{ amount: number }> | undefined;
           const valid = variantPricingRecords && variantPricingRecords.length > 0 &&
-                        variantPricingRecords.some(r => r.amount > 0);
+                        variantPricingRecords.some(r => Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0);
           if (!valid) {
-            errors.push('Enter price for at least one variant in Variant Pricing');
+            errors.push('Enter price for at least one variant in Variant Pricing (0 is allowed)');
           }
         } else if (hasVariants) {
           // Same for All with variants: base price applies to all variants
           const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
           const valid = pricingRecords && pricingRecords.length > 0 &&
-                        pricingRecords.some(r => r.amount > 0);
+                        pricingRecords.some(r => Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0);
           if (!valid) {
-            errors.push('Enter a base price — it will apply to all variants');
+            errors.push('Enter a base price — it will apply to all variants (0 is allowed)');
           }
         } else if (pricingMode === 'resource_based') {
           // Resource-based without variants: need resource pricing
           const resourcePricingRecords = data.meta?.resourcePricingRecords as Array<{ pricePerUnit: number }> | undefined;
           const valid = resourcePricingRecords && resourcePricingRecords.length > 0 &&
-                        resourcePricingRecords.some(r => r.pricePerUnit > 0);
+                        resourcePricingRecords.some(r => Number.isFinite(Number(r.pricePerUnit)) && Number(r.pricePerUnit) >= 0);
           if (!valid) {
             errors.push('Enter price per unit for at least one resource');
           }
@@ -176,9 +186,9 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           // Independent pricing
           const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
           const valid = pricingRecords && pricingRecords.length > 0 &&
-                        pricingRecords.some(r => r.amount > 0);
+                        pricingRecords.some(r => Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0);
           if (!valid) {
-            errors.push('Enter a price in Currency-Specific Pricing');
+            errors.push('Enter a price in Currency-Specific Pricing (0 is allowed)');
           }
         }
 
@@ -190,7 +200,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
           });
         }
       }
-      // Step 6 - Business Rules: No mandatory fields
+      // Step 7 - Business Rules: No mandatory fields
     }
 
     if (type === 'spare') {
@@ -198,7 +208,7 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
       if (step === 3) {
         const pricingRecords = data.meta?.pricingRecords as Array<{ amount: number }> | undefined;
         const hasValidPrice = pricingRecords && pricingRecords.length > 0 &&
-                              pricingRecords.some(r => r.amount > 0);
+                              pricingRecords.some(r => Number.isFinite(Number(r.amount)) && Number(r.amount) >= 0);
         if (!hasValidPrice) {
           errors.push('Price is required');
         }
@@ -370,8 +380,9 @@ const BlockWizardContent: React.FC<BlockWizardContentProps> = ({
         switch (currentStep) {
           case 3: return <ResourceDependencyStep formData={formData} onChange={handleFormChange} />;
           case 4: return <DeliveryStep formData={formData} onChange={handleFormChange} />;
-          case 5: return <PricingStep formData={formData} onChange={handleFormChange} />;
-          case 6: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
+          case 5: return <EvidenceStep formData={formData} onChange={handleFormChange} />;
+          case 6: return <PricingStep formData={formData} onChange={handleFormChange} />;
+          case 7: return <BusinessRulesStep formData={formData} onChange={handleFormChange} />;
         }
         break;
 

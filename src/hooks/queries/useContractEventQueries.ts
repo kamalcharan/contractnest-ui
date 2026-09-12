@@ -143,6 +143,55 @@ export const useContractEventAssets = (contractId: string | null, options?: { en
 };
 
 /**
+ * B3.3/B3.4 — mark one asset of a visit proven (optionally binding the form
+ * submission that proved it). Server cascades: all proven → event completed
+ * → all ticket events closed → ticket completed. Invalidates the asset rows,
+ * event lists and the V2 contract aggregate so chips/cards refresh.
+ */
+export const useMarkEventAssetProven = (contractId: string) => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (params: {
+      eventAssetId: string;
+      formSubmissionId?: string;
+      evidenceId?: string;
+      provenByName?: string;
+    }) => {
+      const response = await api.post(
+        API_ENDPOINTS.CONTRACTS.EVENT_ASSET_PROVE(contractId, params.eventAssetId),
+        {
+          form_submission_id: params.formSubmissionId,
+          evidence_id: params.evidenceId,
+          proven_by_name: params.provenByName,
+        }
+      );
+      return response.data?.data || response.data;
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: [...contractEventKeys.all, 'event-assets', contractId] });
+      queryClient.invalidateQueries({ queryKey: contractEventKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['contract-details-v2'] });
+      queryClient.invalidateQueries({ queryKey: ['service-execution'] });
+      toast({
+        title: data?.event_completed ? 'Visit completed' : 'Asset proven',
+        description: data?.event_completed
+          ? 'All assets proven — the visit is marked completed.'
+          : `Proof recorded. ${data?.remaining_assets ?? ''} asset(s) remaining on this visit.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Could not mark proven',
+        description: error?.response?.data?.error || error.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    },
+  });
+};
+
+/**
  * Hook to fetch contract events for a specific customer (contact)
  */
 export const useContractEventsForCustomer = (

@@ -478,6 +478,38 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
               Billing-only
             </span>
           )}
+          {/* B2.6 — evidence requirement preview (display only; the D9
+              resolver decides for real at contract activation) */}
+          {priced && instance.categoryId === 'service' && (() => {
+            const ev: any = (block as any)?.meta?.evidence || (block as any)?.config?.evidence || {};
+            const policy: string | undefined = (block as any)?.evidencePolicy ?? ev.policy;
+            const formName: string | undefined = (block as any)?.evidenceFormName ?? ev.formName;
+            const withUpload = policy === 'both' || ev.requireUpload === true || (block as any)?.evidenceRequireUpload === true;
+            let label: string;
+            let title: string;
+            if (policy === 'none') {
+              label = 'No evidence form';
+              title = 'This block opted out of evidence forms.';
+            } else if (policy === 'upload') {
+              label = 'Upload proof only';
+              title = 'Proof is an upload (photo/document); no form.';
+            } else if ((policy === 'form' || policy === 'both') && formName) {
+              label = `Form: ${formName}${withUpload ? ' + upload' : ''}`;
+              title = 'Set on the catalog block; snapshots into the contract at activation.';
+            } else {
+              label = 'Form: auto (default)';
+              title = 'Resolved at activation — a machine-type (KT) form if one matches the covered equipment, otherwise the platform default "General Service Completion".';
+            }
+            return (
+              <span
+                className="rounded-full px-2.5 py-0.5 font-semibold"
+                style={{ backgroundColor: '#3B82F612', color: '#2563EB' }}
+                title={title}
+              >
+                {label}
+              </span>
+            );
+          })()}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}

@@ -184,8 +184,8 @@ export const useDeleteAsset = () => {
       queryClient.removeQueries({ queryKey: assetRegistryKeys.detail(deletedId) });
       queryClient.invalidateQueries({ queryKey: assetRegistryKeys.lists() });
 
-      vaniToast.success('Equipment Removed', {
-        message: 'The equipment has been deactivated.',
+      vaniToast.success('Equipment Deactivated', {
+        message: 'It is hidden from pickers and lists. Reactivate it any time from the Inactive filter.',
         duration: 4000,
       });
     },
@@ -195,9 +195,9 @@ export const useDeleteAsset = () => {
         extra: { tenantId: currentTenant?.id },
       });
 
-      vaniToast.error('Delete Failed', {
-        message: error.message || 'Failed to remove equipment.',
-        duration: 5000,
+      vaniToast.error('Deactivate Failed', {
+        message: error.message || 'Failed to deactivate equipment.',
+        duration: 6000,
       });
     },
   });

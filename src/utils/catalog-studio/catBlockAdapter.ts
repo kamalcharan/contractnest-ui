@@ -147,6 +147,13 @@ export const catBlockToBlock = (catBlock: CatBlock): Block => {
       deliveryMode: config.deliveryMode || config.location?.type,
       serviceCycles: config.serviceCycles,
       audience: config.audience,
+      // Evidence (B2.4) — kept whole for pass-through, plus flat fields the
+      // wizard's Evidence step reads via formData (getField falls back to meta)
+      evidence: config.evidence,
+      evidencePolicy: (config.evidence as { policy?: string } | undefined)?.policy,
+      evidenceFormTemplateId: (config.evidence as { formTemplateId?: string } | undefined)?.formTemplateId,
+      evidenceFormName: (config.evidence as { formName?: string } | undefined)?.formName,
+      evidenceRequireUpload: (config.evidence as { requireUpload?: boolean } | undefined)?.requireUpload,
       // Group Session attendance policy (max no-shows / substitute check-ins
       // tolerated before flagging) — exposed flat so getField()'s top-level
       // wizard field falls back to this on edit, same as other scalars.
@@ -296,6 +303,29 @@ const buildServiceConfig = (block: Partial<Block>): Record<string, unknown> => {
   // Buffer time
   const bufferTime = getField(block, 'bufferTime') || getField(block, 'schedulingBuffer');
   if (bufferTime) config.buffer = bufferTime;
+
+  // Evidence (B2.4) — the shape the activation resolver's rung 1 reads
+  // (resolve_contract_form_mappings: custom_fields.config.evidence).
+  // policy: 'form' | 'both' | 'upload' | 'none'; ABSENT = Automatic (ladder).
+  // 'automatic' is the wizard's explicit clear sentinel (never persisted);
+  // no wizard value at all carries a previously saved meta.evidence through.
+  const evidencePolicy = getField(block, 'evidencePolicy') as string | undefined;
+  const evidenceMeta = (block.meta as { evidence?: Record<string, unknown> } | undefined)?.evidence;
+  if (evidencePolicy === 'automatic') {
+    // Explicitly cleared — write no evidence key
+  } else if (evidencePolicy) {
+    const evidenceFormId = getField(block, 'evidenceFormTemplateId') as string | undefined;
+    const evidenceFormName = getField(block, 'evidenceFormName') as string | undefined;
+    config.evidence = {
+      policy: evidencePolicy,
+      ...(evidenceFormId ? { formTemplateId: evidenceFormId } : {}),
+      ...(evidenceFormName ? { formName: evidenceFormName } : {}),
+      requireUpload: evidencePolicy === 'both' || getField(block, 'evidenceRequireUpload') === true,
+    };
+  } else if (evidenceMeta) {
+    // Edit path where the Evidence step was never touched — keep what was saved
+    config.evidence = evidenceMeta;
+  }
 
   // Location/Delivery mode - wizard sets at top level
   const deliveryMode = getField(block, 'deliveryMode');
