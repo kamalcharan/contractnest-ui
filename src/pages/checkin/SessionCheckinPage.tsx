@@ -14,6 +14,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import {buildUpiPaymentIntent,copyUpiId} from './upiPayment';
 import {
   sessionCheckinApi, getOrCreateDeviceToken, forgetDeviceToken,
   type CheckinResolve, type CheckinMember, type CheckinHistory, type BillingRow,
@@ -220,6 +221,7 @@ const SessionCheckinPage: React.FC = () => {
   const [resolve, setResolve] = useState<CheckinResolve | null>(null);
   const [form, setForm] = useState<CheckinForm | null>(null);
   const [payCfg, setPayCfg] = useState<CheckinPaymentConfig | null>(null);
+  const [upiHelp,setUpiHelp] = useState<string|null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -850,27 +852,18 @@ const SessionCheckinPage: React.FC = () => {
   // Shared UPI pay button + QR + reference field -- used by both the
   // member-dues Payment step and the guest-service Payment step, so the
   // deep-link/QR/return-nudge logic only lives in one place.
-  // A hand-built upi://pay link/QR is unsigned -- GPay (and likely other UPI
-  // apps) rejects payments to this tenant's VPA with "Payments to this
-  // receiver are not allowed by UPI network" when it arrives that way, even
-  // though the exact same VPA works fine via the bank's own signed QR poster.
-  // Only the bank/PSP holds the signing key, so we can't reproduce that here.
-  // The reliable path is the member's own UPI app's built-in "Pay to UPI ID"
-  // entry -- that's the app itself constructing a first-party request, not
-  // an external deep link, so the same rejection doesn't apply.
-  // Gated sequence, not everything shown at once: (1) copy the UPI ID and
-  // tap "Open UPI app" -- only then does (2) the reference field + "Confirm
-  // payment" appear, and only confirming that advances past this step.
-  // "Open UPI app" best-effort launches the device's UPI app via a bare
-  // upi://pay (no payee params, so nothing for GPay's signature check to
-  // reject) -- if nothing opens (desktop, no UPI app registered), the
-  // instructions below already cover opening it manually.
+  // A bare upi://pay is not a payment request. Supply the actual public
+  // integration details and amount. A bank/app can still reject a valid
+  // intent; never claim we know its reason or bypass receiver restrictions.
+  // Returning here does not verify payment. Existing declaration, duplicate
+  // checks and attendance submission remain unchanged.
   const renderPayBlock = (amount: number, currency: string | undefined) => {
     const canPay = !!payCfg?.configured && !!payCfg.upi_id;
-    const copyVpa = () => {
+    const copyVpa = async () => {
       if (!payCfg?.upi_id) return;
-      navigator.clipboard?.writeText(payCfg.upi_id).catch(() => { /* clipboard unavailable -- VPA is still shown for manual copy */ });
-      setCopiedVpa(true);
+      const copied=await copyUpiId(payCfg.upi_id,navigator.clipboard);
+      setCopiedVpa(copied);
+      setUpiHelp(copied?null:'Copy was unavailable. Press and hold the UPI ID above to copy it manually.');
       window.setTimeout(() => setCopiedVpa(false), 2000);
     };
     // First tap only raises the come-back alert; the actual app launch
@@ -880,9 +873,15 @@ const SessionCheckinPage: React.FC = () => {
     };
     const proceedToUpiApp = () => {
       setShowLeaveAlert(false);
-      copyVpa();
-      setPaymentAttempted(true);
-      try { window.location.href = 'upi://pay'; } catch { /* no UPI app registered -- instructions below cover a manual open */ }
+      try {
+        const reference='CN'+crypto.randomUUID().replace(/-/g,'');
+        const uri=buildUpiPaymentIntent({upiId:payCfg?.upi_id||'',payeeName:payCfg?.payee_name||'',amount,currency:currency||'',reference});
+        setUpiHelp(null);
+        setPaymentAttempted(true);
+        // Keep navigation synchronous with the user gesture; clipboard is a
+        // separate explicit control, not a race with leaving the browser.
+        window.location.href=uri;
+      } catch(error) {setUpiHelp(error instanceof Error?error.message:'Unable to open a UPI app. Use Pay to UPI ID manually.');}
     };
     if (!canPay) {
       return (
@@ -930,6 +929,17 @@ const SessionCheckinPage: React.FC = () => {
           </button>
         </div>
 
+        {upiHelp && <p role="alert" style={{fontSize:13,color:'#92400E',lineHeight:1.5}}>{upiHelp}</p>}
+        <details style={{marginTop:12,fontSize:12.5,color:BRAND.sub,lineHeight:1.6}}>
+          <summary style={{cursor:'pointer',fontWeight:700}}>App link failed, or already paid?</summary>
+          <p>First check your UPI app’s transaction history to avoid paying twice. If no payment succeeded, copy the UPI ID above, open your app yourself and choose “Pay to UPI ID”, or use the organiser’s bank-issued QR. Confirm the recipient and amount before paying.</p>
+          <p>If your app says the receiver is blocked or not allowed, contact the organiser to check with their bank. A website cannot override that restriction.</p>
+          <button type="button" onClick={()=>{setPaymentAttempted(true);setShowLeaveAlert(false);}}
+            style={{padding:'10px 12px',border:`1px solid ${BRAND.line}`,borderRadius:8,background:'#fff',color:BRAND.ink,cursor:'pointer',fontWeight:700}}>
+            I have paid — enter my UPI reference
+          </button>
+        </details>
+
         {!paymentAttempted ? (
           <>
             <button type="button" onClick={openUpiApp}
@@ -938,7 +948,7 @@ const SessionCheckinPage: React.FC = () => {
               Open UPI app · Pay {money(amount, currency)}
             </button>
             <p style={{ fontSize: 12, color: BRAND.sub, textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
-              Copies the UPI ID and tries to open your UPI app. If nothing opens, launch GPay / PhonePe / any UPI app yourself and choose "Pay to UPI ID."
+              Opens a payment request with the payee and amount. Check the recipient in your UPI app before paying.
             </p>
 
             {/* Come-back alert — the one moment we have the member's full
@@ -961,7 +971,7 @@ const SessionCheckinPage: React.FC = () => {
                     Pay, then come back here 👋
                   </div>
                   <ol style={{ margin: 0, paddingLeft: 18, color: BRAND.sub, fontSize: 13.5, lineHeight: 1.7 }}>
-                    <li>Your UPI ID is copied — pay {money(amount, currency)} in your UPI app ("Pay to UPI ID")</li>
+                    <li>Check the recipient and amount ({money(amount, currency)}) in your UPI app before approving</li>
                     <li><b style={{ color: BRAND.ink }}>Note the UPI reference number</b> from the payment screen</li>
                     <li><b style={{ color: BRAND.ink }}>Return to this page</b> and enter it — your check-in is not recorded until you do</li>
                   </ol>
