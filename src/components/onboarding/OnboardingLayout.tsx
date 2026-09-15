@@ -27,7 +27,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode, currentTheme } = useTheme();
-  const { currentTenant, user } = useAuth();
+  const { currentTenant, user, markOnboardingComplete } = useAuth();
 
   const {
     isLoading,
@@ -166,8 +166,9 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   // Redirect if onboarding is already complete
   useEffect(() => {
     if (!isLoading && isOnboardingComplete && !isCompletePage) {
+      markOnboardingComplete();
       toast.success('Onboarding already completed!');
-      navigate('/ops/cockpit');
+      navigate('/');
     }
   }, [isOnboardingComplete, isLoading, isCompletePage, navigate]);
 
@@ -321,7 +322,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   };
 
   const handleClose = () => {
-    navigate('/ops/cockpit');
+    navigate('/');
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -376,7 +377,7 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
             {error}
           </p>
           <button
-            onClick={() => navigate('/ops/cockpit')}
+            onClick={() => navigate('/')}
             className="px-6 py-2 rounded-md transition-colors hover:opacity-90"
             style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
           >

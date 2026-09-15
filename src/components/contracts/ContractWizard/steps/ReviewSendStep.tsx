@@ -87,6 +87,8 @@ export interface ReviewSendStepProps {
   nomenclatureName?: string | null;
   // Force a specific view mode (hides the Self/Client toggle)
   forcedViewMode?: 'self' | 'client';
+  /** Product-led final review supplies its own lifecycle controls. */
+  documentOnly?: boolean;
   // Sprint 1 contract-level discount — shown on the exported document chain
   discountType?: 'percent' | 'amount' | null;
   discountValue?: number;
@@ -158,6 +160,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
   vendorNames = [],
   nomenclatureName,
   forcedViewMode,
+  documentOnly = false,
   discountType = null,
   discountValue = 0,
   providerOverride = null,
@@ -944,7 +947,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
     <div className="h-full flex flex-col" style={{ backgroundColor: canvasBg }}>
       {/* Scrollable content — 65/35 two-column grid */}
       <div className="flex-1 overflow-y-auto">
-        <div className={`max-w-[1400px] mx-auto px-4 pt-6 pb-6 ${rfqMode ? '' : 'grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6'}`}>
+        <div className={`max-w-[1400px] mx-auto px-4 pt-6 pb-6 ${rfqMode || documentOnly ? '' : 'grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6'}`}>
 
         {/* ═══ LEFT COLUMN: Paper Canvas ═══ */}
         <div className="min-w-0">
@@ -1714,7 +1717,7 @@ const ReviewSendStep: React.FC<ReviewSendStepProps> = ({
         </div>{/* end left column */}
 
         {/* ═══ RIGHT COLUMN: Acceptance Flow Panel ═══ */}
-        {!rfqMode && (
+        {!rfqMode && !documentOnly && (
           <div className="lg:sticky lg:top-6 self-start">
             {renderAcceptancePanel()}
           </div>

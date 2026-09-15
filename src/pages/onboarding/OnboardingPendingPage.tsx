@@ -171,7 +171,7 @@ const OnboardingPendingPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { isDarkMode, currentTheme } = useTheme();
-  const { currentTenant, logout, user } = useAuth();
+  const { currentTenant, logout, user, markOnboardingComplete } = useAuth();
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -205,7 +205,8 @@ const OnboardingPendingPage: React.FC = () => {
 
       // If onboarding is now complete, redirect to dashboard
       if (response.onboarding?.is_completed || !response.needs_onboarding) {
-        navigate('/ops/cockpit');
+        markOnboardingComplete();
+        navigate('/');
         return;
       }
 

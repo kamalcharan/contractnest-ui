@@ -194,6 +194,8 @@ import ContractCreatePage from './pages/contracts/create';
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
+import ExperiencePage from './pages/experience';
+import EntryRedirect from './utils/navigation/EntryRedirect';
 import FinancePage from './pages/operations/finance';
 import OpsServiceSchedulePage from './pages/operations/services';
 import GroupSessionsPage from './pages/operations/group-sessions';
@@ -209,6 +211,8 @@ import InviteSellersPage from './pages/contracts/invite';
 
 // Contracts Hub + Detail + Invoice View + Public Review
 import ContractsHubPage from './pages/contracts/hub';
+import ContractsExperiencePage from './pages/contracts/experience';
+import CreateContractExperiencePage from './pages/contracts/experience/create';
 import RfqBuilderPage from './pages/contracts/rfq/RfqBuilderPage';
 import ContractDetailPage from './pages/contracts/detail';
 import InvoiceViewPage from './pages/contracts/invoice';
@@ -326,10 +330,7 @@ const SmartHomePage: React.FC = () => {
     // THIRD STATE (CNAK/RFQ-lite): incomplete onboarding of type 'cnak'/'rfq'
     // enters the app anyway — the incompleteness IS the lite tier, and the
     // app renders restricted for it. Completing onboarding clears the tier.
-    if (!hasCompletedOnboarding && !liteTier) {
-      return <Navigate to="/onboarding" replace />;
-    }
-    return <Navigate to="/ops/cockpit" replace />;
+    return <EntryRedirect key={currentTenant.id} />;
   }
 
   if (isAuthenticated && !currentTenant) {
@@ -634,6 +635,11 @@ const AppContent: React.FC = () => {
             <Route path=":id" element={<PDFViewPage />} />
           </Route>
 
+          {/* Home shares the same navigation and access gates as existing screens. */}
+          <Route path="/experience" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            <Route index element={<ExperiencePage />} />
+          </Route>
+
           {/* NEW: Ops Cockpit Route */}
           <Route
             path="/ops/cockpit"
@@ -824,6 +830,11 @@ const AppContent: React.FC = () => {
   <Route path="templates-list" element={<CatalogStudioTemplatesListPage />} />
 </Route>
 
+          {/* New contracts experience; original contracts routes remain unchanged. */}
+          <Route path="/ncontracts" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            <Route index element={<ContractsExperiencePage />} />
+          </Route>
+
           {/* Contracts Hub — All Contracts page */}
           <Route
             path="/contracts"
@@ -834,6 +845,8 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ContractsHubPage />} />
+            <Route path="experience" element={<ContractsExperiencePage />} />
+            <Route path="experience/create" element={<CreateContractExperiencePage />} />
             <Route path="rfq/new" element={<RfqBuilderPage />} />
             <Route path=":id" element={<ContractDetailPage />} />
             <Route path="claim" element={<ClaimContractPage />} />

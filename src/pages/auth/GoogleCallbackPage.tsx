@@ -1,6 +1,7 @@
 // src/pages/auth/GoogleCallbackPage.tsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { safeDestination } from '@/utils/navigation/entry';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { supabase } from '../../utils/supabase';
@@ -116,7 +117,7 @@ const GoogleCallbackPage: React.FC = () => {
       const callbackProcessed = sessionStorage.getItem('google_callback_processed');
       if (callbackProcessed === 'true') {
         console.log('🔄 Callback already processed, redirecting...');
-        navigate('/ops/cockpit', { replace: true });
+        navigate('/', { replace: true });
         return;
       }
 
@@ -207,7 +208,7 @@ const GoogleCallbackPage: React.FC = () => {
         
         console.log('✅ Unlock flow completed, redirecting to:', returnUrl || '/dashboard');
         // Navigate directly without re-processing auth
-        window.location.href = returnUrl || '/ops/cockpit';
+        window.location.href = safeDestination(returnUrl) || '/';
         return; // Exit here for unlock flow
       }
 
@@ -377,7 +378,7 @@ const GoogleCallbackPage: React.FC = () => {
           api.defaults.headers.common['x-tenant-id'] = targetTenant.id;
         }
         
-        navigate('/ops/cockpit', { replace: true });
+        navigate('/', { replace: true });
       }
       
     } catch (error: any) {

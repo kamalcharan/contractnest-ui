@@ -54,6 +54,8 @@ const NavItem: React.FC<NavItemProps> = ({ item, collapsed, badge }) => {
     <div className="mb-1">
       <NavLink
         to={item.hasSubmenu ? '#' : item.path}
+        data-navigation-toggle={item.hasSubmenu || undefined}
+        aria-expanded={item.hasSubmenu ? isSubmenuOpen : undefined}
         className={({ isActive }) => `
           flex items-center gap-3 px-4 py-3 rounded-lg transition-all sidebar-nav-item
           ${item.hasSubmenu && isSubmenuOpen ? 'submenu-open' : ''}
@@ -207,6 +209,8 @@ const VaNiNavItem: React.FC<{ item: MenuItem; collapsed: boolean }> = ({ item, c
     <div className="mb-1 mx-1">
       <NavLink
         to={hasSubmenu ? '#' : item.path}
+        data-navigation-toggle={hasSubmenu || undefined}
+        aria-expanded={hasSubmenu ? isSubmenuOpen : undefined}
         className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group"
         style={{
           background: isActive
@@ -374,8 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
   const { user, currentTenant, isAuthenticated, hasCompletedOnboarding, liteTier, perspective } = useAuth();
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
-  const [logoError, setLogoError] = useState(false);
-  const [iconError, setIconError] = useState(false);
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
 
   // Get theme colors
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -438,60 +441,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
 
   // Render logo or text based on collapsed state and image availability
   const renderLogo = () => {
-    if (collapsed) {
-      if (!iconError) {
-        return (
-          <img
-            src="/assets/images/contractnest-icon.png"
-            alt="CN"
-            className="h-8 w-8"
-            onError={() => setIconError(true)}
-          />
-        );
-      } else {
-        // Fallback for collapsed state if image fails to load
-        return (
-          <div
-            className="h-8 w-8 rounded-full flex items-center justify-center text-white"
-            style={{ backgroundColor: colors.brand.primary }}
-          >
-            <span className="font-bold">CN</span>
-          </div>
-        );
-      }
-    } else {
-      if (!logoError) {
-        return (
-          <div className="flex items-center">
-            <img
-              src="/assets/images/contractnest-logo.png"
-              alt="ContractNest"
-              className="h-8"
-              onError={() => setLogoError(true)}
-            />
-          </div>
-        );
-      } else {
-        // Fallback for expanded state if image fails to load
-        // Theme-stable design: icon badge + text
-        return (
-          <div className="flex items-center gap-2">
-            <span
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-              style={{ backgroundColor: colors.brand.primary }}
-            >
-              CN
-            </span>
-            <span
-              className="text-xl font-bold tracking-tight"
-              style={{ color: colors.utility.primaryText }}
-            >
-              ContractNest
-            </span>
-          </div>
-        );
-      }
-    }
+    const variant = collapsed
+      ? (isDarkMode ? 'contractnest-mark-ondark.svg' : 'contractnest-mark-primary.svg')
+      : (isDarkMode ? 'contractnest-logo-horizontal-ondark.svg' : 'contractnest-logo-horizontal.svg');
+    const source = `/assets/images/contractnest/svg/${variant}`;
+    return <div className="flex items-center justify-center" style={{height:48, width:collapsed ? 48 : 208, maxWidth:'100%'}}>
+      {failedLogo !== source ? <img key={source} src={source} alt="ContractNest"
+        width={collapsed ? 48 : 208} height={collapsed ? 32 : 48}
+        style={{display:'block',width:collapsed ? 48 : 208,height:collapsed ? 32 : 48,maxWidth:'100%',objectFit:'contain'}}
+        onError={() => setFailedLogo(source)} />
+        : <span className="font-bold" style={{color:colors.utility.primaryText,fontSize:collapsed ? 16 : 22}}>{collapsed ? 'CN' : 'ContractNest'}</span>}
+    </div>;
   };
 
   return (
@@ -506,7 +466,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed = false }) => {
       }}
     >
       <div
-        className="flex items-center justify-between p-4 border-b transition-colors"
+        className={`flex items-center justify-between py-3 border-b transition-colors ${collapsed ? 'px-2' : 'px-4'}`}
         style={{ borderColor: `${colors.utility.primaryText}20` }}
       >
         <div className="mx-auto">

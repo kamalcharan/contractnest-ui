@@ -49,7 +49,8 @@ export function computeEventsForApi(state: ContractWizardState): any[] | undefin
     emiMonths: state.emiMonths,
     perBlockPaymentType: state.perBlockPaymentType,
     billingCycleType: state.billingCycleType,
-    grandTotal: state.grandTotal || state.totalValue,
+    // Zero is a real total (for example a 100% discount), not missing data.
+    grandTotal: state.grandTotal,
     currency: state.currency,
     baseSubtotal: state.baseSubtotal,
     discountTotal: state.discountTotal,

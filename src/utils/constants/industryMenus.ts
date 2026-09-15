@@ -21,6 +21,7 @@ export interface MenuItem {
 
 // Default menu structure
 export const defaultMenuItems: MenuItem[] = [
+{ id: 'home', label: 'Home', icon: 'Home', path: '/experience' },
 {
   id: 'getting-started',
   label: 'Getting Started',
@@ -99,6 +100,8 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   */
+  // Parallel entry for the product-led experience, available in both perspectives.
+  { id: 'ncontracts', label: 'NContracts', icon: 'FileText', path: '/ncontracts' },
   // Contracts menu
   {
     id: 'contracts',

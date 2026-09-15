@@ -1,5 +1,6 @@
 // src/components/auth/ProtectedRoute.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
+import { rememberDestination } from '@/utils/navigation/entry';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import LoadingSpinner from '../ui/LoadingSpinner';
@@ -15,6 +16,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { isAuthenticated, isLoading, currentTenant } = useAuth();
   const location = useLocation();
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || (requireTenant && !currentTenant))) {
+      rememberDestination(location.pathname + location.search + location.hash);
+    }
+  }, [isLoading, isAuthenticated, requireTenant, currentTenant, location.pathname, location.search, location.hash]);
 
   // Show loading spinner while checking authentication
   if (isLoading) {

@@ -37,6 +37,10 @@ import { catBlocksToBlocks } from '@/utils/catalog-studio/catBlockAdapter';
 import ChecklistRow from './serviceBlocksChecklist/ChecklistRow';
 import VaNiInlineBanner from './serviceBlocksChecklist/VaNiInlineBanner';
 import StickyTotalBar from './serviceBlocksChecklist/StickyTotalBar';
+import ServicesCatalog from '../experience/ServicesCatalog';
+import CommitmentEditor from '../experience/CommitmentEditor';
+import { useServiceCatalog } from '../experience/useServiceCatalog';
+import { catalogForCoverage, isAgreementTerms } from '../experience/serviceCatalogModel';
 import { recommendBlocks } from './serviceBlocksChecklist/recommend';
 
 // Coverage type from AssetSelectionStep
@@ -67,6 +71,7 @@ interface ContactPerson {
 }
 
 export interface ServiceBlocksStepProps {
+  experience?: boolean;
   // Blocks state
   selectedBlocks: ConfigurableBlock[];
   currency: string;
@@ -256,6 +261,7 @@ const ALL_SECTIONS: Array<{
 const INITIAL_VISIBLE = 4;
 
 const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
+  experience = false,
   selectedBlocks,
   currency,
   onBlocksChange,
@@ -305,10 +311,10 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   );
 
   useEffect(() => {
-    if (hasCoverageTypes && !coverageTypes.find((ct) => ct.id === activeCoverageTabId)) {
+    if (hasCoverageTypes && !(experience && activeCoverageTabId === '__unassigned') && !coverageTypes.find((ct) => ct.id === activeCoverageTabId)) {
       setActiveCoverageTabId(coverageTypes[0]?.id || null);
     }
-  }, [coverageTypes, activeCoverageTabId, hasCoverageTypes]);
+  }, [coverageTypes, activeCoverageTabId, hasCoverageTypes, experience]);
 
   const activeCoverageType = useMemo(
     () => coverageTypes.find((ct) => ct.id === activeCoverageTabId) || null,
@@ -361,11 +367,18 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   ];
 
   // ── Catalog blocks (same source as library + recommender) ──────────
-  const { data: catData, isLoading: catalogLoading } = useCatBlocksTest();
-  const allCatalogBlocks: Block[] = useMemo(() => {
+  const { data: catData, isLoading: catalogLoading } = useCatBlocksTest({ enabled: !experience });
+  const serviceCatalog = useServiceCatalog(experience);
+  const catalogConversion = useMemo(() => {
+    if (experience) {
+      if (!serviceCatalog.ready) return {blocks:[] as Block[],error:null};
+      try { return {blocks:catalogForCoverage(serviceCatalog.raw,activeCoverageType,serviceCatalog.resources,serviceCatalog.templates,currency),error:null}; }
+      catch (error) { return {blocks:[] as Block[],error:error as Error}; }
+    }
     const raw = (catData as any)?.data?.blocks || (catData as any)?.blocks || [];
-    try { return catBlocksToBlocks(raw); } catch { return []; }
-  }, [catData]);
+    try { return { blocks: catBlocksToBlocks(raw), error: false }; } catch { return { blocks: [] as Block[], error: true }; }
+  }, [catData, experience, serviceCatalog.raw, serviceCatalog.resources, serviceCatalog.templates, serviceCatalog.ready, activeCoverageType, currency]);
+  const allCatalogBlocks = catalogConversion.blocks;
 
   // ── Derived: blocks for active coverage scope ──────────────────────
   const blocksForActiveTab = useMemo(() => {
@@ -754,6 +767,22 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
   // ── Render ─────────────────────────────────────────────────────────
   const dim = colors.utility.secondaryText;
+
+  if (experience) return <ServicesCatalog catalog={allCatalogBlocks.filter(b => !selectedBlocks.some(s => isAgreementTerms(s) && s.id === b.id))} selected={selectedBlocks} coverage={coverageTypes} currency={currency}
+    scope={activeCoverageTabId} onScope={id => { setActiveCoverageTabId(id); setExpandedBlockId(null); }}
+    loading={serviceCatalog.loading} error={!!serviceCatalog.error || !!catalogConversion.error} retry={serviceCatalog.retry} sections={SECTIONS} flyByTypes={flyByMenuOptions}
+    errorMessage={serviceCatalog.error instanceof Error ? serviceCatalog.error.message : catalogConversion.error instanceof Error ? catalogConversion.error.message : undefined}
+    preview={block => buildConfigurableBlock(block, { currency, activeCoverageType, activeCoverageTabId, hasCoverageTypes, durationDays: contractDuration * 30 })}
+    instance={instanceFor} add={handleAddBlock} remove={handleRemoveBlock} addFlyBy={handleAddFlyByBlock}
+    update={handleUpdateBlock} expanded={expandedBlockId} expand={handleToggleExpand}
+    mismatch={cycleMismatch ? <div role="status"><p>Selected lines use different billing cycles. The unified cycle needs review.</p><button onClick={handleAlignAll}>Align to {majorityLabel}</button></div> : null}
+    editor={(instance, block) => <CommitmentEditor key={instance.id} colors={colors} isDarkMode={isDarkMode} currency={currency} instance={instance} block={block}
+      checked priced={instance.isFlyBy ? ['service', 'spare'].includes(instance.flyByType || '') : instance.categoryId === 'billing' || categoryHasPricing(instance.categoryId || '')}
+      flyBy={!!instance.isFlyBy} expanded durationMonths={contractDuration}
+      coverageUnitCount={coverageTypes.find(c => c.id === instance.coverageTypeId)?.unit_count}
+      onSplitByUnits={instance.isFlyBy ? () => handleSplitByUnits(instance.id) : undefined}
+      onToggle={() => handleRemoveBlock(instance.id)} onToggleExpand={() => handleToggleExpand(instance.id)}
+      onUpdate={updates => handleUpdateBlock(instance.id, updates.config?.customPrice > 0 ? { ...updates, config: { ...updates.config, complimentary: false } } : updates)} onRemove={() => handleRemoveBlock(instance.id)}/>} />;
 
   return (
     <div className="h-full flex flex-col" style={{ backgroundColor: colors.utility.primaryBackground }}>

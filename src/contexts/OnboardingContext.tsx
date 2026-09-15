@@ -43,7 +43,7 @@ interface OnboardingProviderProps {
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentTenant, isAuthenticated, user } = useAuth();
+  const { currentTenant, isAuthenticated, user, markOnboardingComplete } = useAuth();
   
   // Initialize state
   const [state, setState] = useState<OnboardingContextState>({
@@ -149,11 +149,12 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
 
     // If onboarding is completed and user is still on onboarding path or pending path
     if (isCompleted) {
+      markOnboardingComplete();
       if (isOnboardingPath && location.pathname !== '/onboarding/complete') {
-        navigate('/ops/cockpit');
+        navigate('/');
       }
       if (isOnboardingPendingPath) {
-        navigate('/ops/cockpit');
+        navigate('/');
       }
     }
   };
@@ -168,8 +169,9 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       const response = await onboardingService.initialize();
       
       if (response.is_completed) {
+        markOnboardingComplete();
         toast.success('Onboarding already completed');
-        navigate('/ops/cockpit');
+        navigate('/');
       } else {
         toast.success('Let\'s get started!');
         await fetchStatus();
@@ -306,13 +308,14 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       
       if (response.success) {
         toast.success('Welcome aboard! 🎉');
+        markOnboardingComplete();
         setState(prev => ({
           ...prev,
           isLoading: false,
           needsOnboarding: false,
           onboarding: prev.onboarding ? { ...prev.onboarding, is_completed: true } : null
         }));
-        navigate('/ops/cockpit');
+        navigate('/');
       } else {
         throw new Error(response.message || 'Failed to complete onboarding');
       }

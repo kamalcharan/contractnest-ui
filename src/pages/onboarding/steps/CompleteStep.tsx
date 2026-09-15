@@ -37,7 +37,7 @@ const CompleteStep: React.FC = () => {
       // Mark onboarding as complete in AuthContext (updates state + sessionStorage)
       markOnboardingComplete();
       // Navigate to dashboard after completion
-      navigate('/ops/cockpit');
+      navigate('/');
     } catch (error) {
       console.error('Error completing onboarding:', error);
       setIsCompleting(false);

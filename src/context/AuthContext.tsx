@@ -115,7 +115,7 @@ interface AuthContextType {
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   register: (userData: RegisterFormData) => Promise<void>;
   logout: () => void;
-  setCurrentTenant: (tenant: Tenant) => void;
+  setCurrentTenant: (tenant: Tenant) => Promise<void>;
   clearError: () => void;
   resetPassword: (email: string) => Promise<boolean>;
   toggleEnvironment: () => void;
@@ -993,8 +993,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       vaniToast.success(`Switched to ${newIsLive ? 'Live' : 'Test'} environment`, { duration: 2000 });
     }, 500);
 
-    // PRODUCTION FIX: Full page reload clears React Query cache automatically
-    window.location.href = '/ops/cockpit';
+    // Full reload clears environment caches, then resolves the correct Home/Lite entry.
+    window.location.href = '/';
   };
 
   // Cancel environment switch
@@ -1250,7 +1250,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // state: checkOnboardingStatus just derived it this tick.
           if (liteTierRef.current) {
             console.log(`Lite tenant (${liteTierRef.current}) — entering app with restricted access`);
-            navigate('/ops/cockpit');
+            navigate('/');
           } else if (tenant.is_owner) {
             // FIX: Check if user is owner before redirecting to onboarding
             // Only owners can complete onboarding, invited users should see pending page
@@ -1261,7 +1261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             navigate('/onboarding-pending');
           }
         } else {
-          navigate('/ops/cockpit');
+          navigate('/');
         }
       }
 
@@ -1386,7 +1386,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (claim && !claim.success) {
           console.warn('CNAK auto-claim did not succeed at signup:', claim.error);
         }
-        navigate('/ops/cockpit');
+        navigate('/');
       } else {
         // Check if new user should go through onboarding
         const shouldOnboard = data.user?.user_metadata?.should_onboard !== false;
@@ -1394,7 +1394,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setHasCompletedOnboarding(false);
           navigate('/onboarding');
         } else {
-          navigate('/ops/cockpit');
+          navigate('/');
         }
       }
     } catch (err: any) {
@@ -1591,6 +1591,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Set current tenant
   const updateCurrentTenant = async (tenant: Tenant) => {
+    setIsLoading(true);
+    try {
     const normalizedTenant = {
       ...tenant,
       is_admin: tenant.is_admin || false
@@ -1620,6 +1622,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTimeout(() => {
       refreshData();
     }, 100);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Reset password request

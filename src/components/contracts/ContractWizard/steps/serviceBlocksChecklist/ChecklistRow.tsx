@@ -25,6 +25,7 @@ import {
 } from '@/utils/catalog-studio/cadencePricing';
 
 export interface ChecklistRowProps {
+  editorOnly?: boolean;
   colors: any;
   isDarkMode: boolean;
   currency: string;
@@ -103,6 +104,7 @@ const cycleLabel = (cycle: string, customDays?: number): string => {
 };
 
 const ChecklistRow: React.FC<ChecklistRowProps> = ({
+  editorOnly = false,
   colors,
   isDarkMode,
   currency,
@@ -346,6 +348,7 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
       }}
     >
       {/* Row top: checkbox + name + price */}
+      {!editorOnly && <>
       <div
         className="flex items-center gap-3 px-3.5 py-3"
         style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
@@ -443,7 +446,8 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
         </div>
       </div>
 
-      {/* Compact config summary line (checked only) */}
+      </>}
+      {/* Compact config summary line (checked only); also retained in the experience editor. */}
       {checked && instance && (
         <div className="flex items-center gap-2 flex-wrap px-3.5 pb-3 pl-[46px] text-[12px]" style={{ color: dim }}>
           {priced && (
@@ -510,14 +514,14 @@ const ChecklistRow: React.FC<ChecklistRowProps> = ({
               </span>
             );
           })()}
-          <button
+          {!editorOnly && <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
             className="ml-auto font-bold text-[12px]"
             style={{ color: colors.brand.primary }}
           >
             {expanded ? 'Close' : 'Edit'}
-          </button>
+          </button>}
         </div>
       )}
 

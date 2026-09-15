@@ -63,7 +63,7 @@ const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
     
     try {
       // Set the new tenant
-      setCurrentTenant(tenant);
+      await setCurrentTenant(tenant);
       
       // Close dropdown
       setIsOpen(false);
@@ -75,7 +75,7 @@ const TenantSwitcher: React.FC<TenantSwitcherProps> = ({
       localStorage.setItem('recent_tenants', JSON.stringify(updated));
       
       // Navigate to dashboard to trigger data refresh
-      navigate('/ops/cockpit');
+      navigate('/');
       
       // Show success message using react-hot-toast
       toast.success(`Switched to ${tenant.name}`, {

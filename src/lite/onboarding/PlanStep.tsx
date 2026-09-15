@@ -44,7 +44,7 @@ import ExpressShell from './ExpressShell';
 import { normalisePersona, type PersonaId } from './expressFlow';
 
 /** Where onboarding hands over to the product. */
-const COCKPIT_PATH = '/ops/cockpit';
+const COCKPIT_PATH = '/';
 
 export const PlanStep: React.FC = () => {
   const location = useLocation();

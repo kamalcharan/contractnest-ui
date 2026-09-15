@@ -133,10 +133,10 @@ const SelectTenantPage: React.FC = () => {
     setSelectedTenant(tenant);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (selectedTenant) {
-      setCurrentTenant(selectedTenant);
-      navigate('/ops/cockpit');
+      await setCurrentTenant(selectedTenant);
+      navigate('/');
     }
   };
 

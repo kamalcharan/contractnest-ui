@@ -82,6 +82,8 @@ export interface ContractWizardState {
   evidenceSelectedForms: SelectedForm[];
   // Events Preview: user-adjusted dates
   eventOverrides: Record<string, Date>;
+  // Experience-only review receipt in draft metadata; not an activation flag.
+  eventsReview?: {signature?:string; keptHolidayKeys:string[]};
 }
 
 // Initial wizard state factory (needs fresh Date each time)
@@ -188,5 +190,6 @@ export function sanitizeStateForTemplate(state: ContractWizardState): ContractWi
     coverageTypes: [],
     allowBuyerToAdd: false,
     eventOverrides: {},
+    eventsReview: undefined,
   };
 }

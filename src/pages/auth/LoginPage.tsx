@@ -6,6 +6,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Shield } from 'lucide-react';
 import { vaniToast } from '../../components/common/toast';
 import { supabase } from '../../utils/supabase';
+import { rememberDestination } from '@/utils/navigation/entry';
 // Import analytics
 import { analyticsService, AUTH_EVENTS, UI_EVENTS } from '../../services/analytics';
 
@@ -39,35 +40,17 @@ const LoginPage: React.FC = () => {
   }, []);
 
   // FIXED: Redirect if already authenticated - but RESPECT onboarding status
+  useEffect(() => {
+    const from = location.state?.from;
+    if (from?.pathname) rememberDestination(from.pathname + (from.search || '') + (from.hash || ''));
+  }, [location.state]);
   // This handles the case where user navigates to /login while already authenticated
   // The login() function in AuthContext handles onboarding redirects during login flow
   // This useEffect only handles direct navigation to /login when already logged in
   useEffect(() => {
     if (isAuthenticated && !isLoading && currentTenant) {
-      // Check for contract review redirect (from public review page)
-      const authRedirect = sessionStorage.getItem('contractnest_auth_redirect');
-      if (authRedirect) {
-        sessionStorage.removeItem('contractnest_auth_redirect');
-        navigate(authRedirect, { replace: true });
-        return;
-      }
-
-      // Check onboarding status before redirecting
-      if (hasCompletedOnboarding) {
-        console.log('[LoginPage] Already authenticated with completed onboarding - redirecting to dashboard');
-        navigate('/ops/cockpit', { replace: true });
-      } else if (liteTier) {
-        // CNAK/RFQ-lite: incomplete onboarding is their tier, not a blocker —
-        // they enter the (restricted) app, never forced into onboarding.
-        console.log(`[LoginPage] Lite tenant (${liteTier}) - redirecting to app`);
-        navigate('/ops/cockpit', { replace: true });
-      } else if (currentTenant.is_owner) {
-        console.log('[LoginPage] Already authenticated but onboarding not complete (owner) - redirecting to onboarding');
-        navigate('/onboarding', { replace: true });
-      } else {
-        console.log('[LoginPage] Already authenticated but onboarding not complete (non-owner) - redirecting to pending');
-        navigate('/onboarding-pending', { replace: true });
-      }
+      // Root resolves onboarding, Lite, and a safe direct-link destination once.
+      navigate('/', { replace: true });
     }
   }, [isAuthenticated, isLoading, navigate, hasCompletedOnboarding, liteTier, currentTenant]);
 

@@ -3,7 +3,10 @@
 // Phase 1: Frontend computation for Events Preview step
 
 import type { ConfigurableBlock } from '@/components/catalog-studio/BlockCardConfigurable';
-import { categoryHasPricing } from '@/utils/catalog-studio/categories';
+import { categoryHasPricing as catalogueCategoryHasPricing } from '@/utils/catalog-studio/categories';
+
+// Catalogue fee blocks use a payment editor, but are priced contract lines.
+const categoryHasPricing = (id: string) => id === 'billing' || catalogueCategoryHasPricing(id);
 
 // ─── Categories needing an occurrence/attendance schedule ───
 // Deliberately excludes 'session' (Group Sessions): those get exactly one
@@ -128,6 +131,20 @@ function cycleToPeriodDays(cycle: string, customDays?: number): number {
   }
 }
 
+/**
+ * Resolve delivery spacing without inventing a default. Older contracts use
+ * the block's recurring cycle for delivery as well as billing when no
+ * independent service cadence was configured. An explicit service cadence
+ * always wins; prepaid/postpaid never imply a delivery schedule.
+ */
+export function resolveServiceScheduleDays(block: ConfigurableBlock): number {
+  if (block.serviceCycleDays && block.serviceCycleDays > 0) return block.serviceCycleDays;
+  const cycle = block.cycle || '';
+  return ['monthly', 'fortnightly', 'quarterly', 'custom'].includes(cycle)
+    ? cycleToPeriodDays(cycle, block.customCycleDays)
+    : 0;
+}
+
 // ─── Cadence-fit validation (wizard gate) ───
 
 export interface CadenceViolation {
@@ -169,19 +186,20 @@ export function computeCadenceViolations(input: {
     // A visit-generating block: quantity means VISITS, and its recurring
     // bill count is derived from the term in the recurring branch below —
     // so only its SERVICE leg can overflow, never its billing leg.
+    const serviceScheduleDays = resolveServiceScheduleDays(block);
     const blockGeneratesVisits =
       categoryNeedsServiceEvents(block.categoryId || '') &&
       !block.config?.billingOnly &&
-      !!(block.serviceCycleDays && block.serviceCycleDays > 0);
+      serviceScheduleDays > 0;
 
     // Service leg — same conditions as the service-events branch
-    if (blockGeneratesVisits && block.serviceCycleDays) {
-      const spanDays = (qty - 1) * block.serviceCycleDays;
+    if (blockGeneratesVisits) {
+      const spanDays = (qty - 1) * serviceScheduleDays;
       if (spanDays > totalDays) {
         violations.push({
           blockId: block.id, blockName: block.name, eventType: 'service',
-          count: qty, cycleDays: block.serviceCycleDays, spanDays, contractDays: totalDays,
-          message: `"${block.name}": ${qty} service visits every ${block.serviceCycleDays} days span ~${spanDays} days, but the contract runs ${totalDays} days.`,
+          count: qty, cycleDays: serviceScheduleDays, spanDays, contractDays: totalDays,
+          message: `"${block.name}": ${qty} service visits every ${serviceScheduleDays} days span ~${spanDays} days, but the contract runs ${totalDays} days.`,
         });
       }
     }
@@ -268,11 +286,12 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     if (block.config?.billingOnly) continue;
 
     const qty = block.quantity || 1;
+    const serviceScheduleDays = resolveServiceScheduleDays(block);
 
-    if (block.serviceCycleDays && block.serviceCycleDays > 0 && qty > 1) {
+    if (serviceScheduleDays > 0 && qty > 1) {
       // Recurring service: qty events, each serviceCycleDays apart
       for (let i = 0; i < qty; i++) {
-        const dayOffset = i * block.serviceCycleDays;
+        const dayOffset = i * serviceScheduleDays;
         const date = addDays(startDate, dayOffset);
 
         events.push({
@@ -353,7 +372,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     // Per-block billing: each block generates its own billing events
     for (const block of selectedBlocks) {
       const hasPricing = categoryHasPricing(block.categoryId || '');
-      if (!hasPricing || block.unlimited) continue;
+      if (!hasPricing) continue;
 
       const blockCycle = block.cycle || 'prepaid';
       const blockTotal = (block.totalPrice || 0) * discountFactor;
@@ -497,7 +516,7 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         // Mirrors computeCadenceViolations' billing-leg skip — change together.
         const periodDays = cycleToPeriodDays(blockCycle, block.customCycleDays);
         const qty = block.quantity || 0;
-        const serviceCycleDays = block.serviceCycleDays || 0;
+        const serviceCycleDays = resolveServiceScheduleDays(block);
         const blockGeneratesVisits = categoryNeedsServiceEvents(block.categoryId || '')
           && !block.config?.billingOnly
           && serviceCycleDays > 0
@@ -506,14 +525,20 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
         // ROUND, not ceil — "monthly over 1 year" must mean 12 bills
         // (365/30 ceils to 13; quarterly would ceil to 5).
         const billsAreSeparateFromVisits = blockGeneratesVisits && periodDays !== serviceCycleDays;
-        const count = billsAreSeparateFromVisits
+        const count = (billsAreSeparateFromVisits || block.unlimited)
           ? Math.max(1, Math.round(totalDays / periodDays))
           : Math.max(1, qty);
         const perPeriodAmount = Math.round((blockTotal / count) * 100) / 100;
 
         const startIdx = events.length;
         for (let i = 0; i < count; i++) {
-          const date = addDays(startDate, i * periodDays);
+          const periodStart = addDays(startDate, i * periodDays);
+          const periodEnd = addDays(startDate, (i + 1) * periodDays);
+          const date = input.perBlockPaymentType[block.id] === 'postpaid'
+            ? (periodEnd > endDate ? new Date(endDate) : periodEnd) : periodStart;
+          // An end-of-period payment may close on the contract end, but
+          // never invent a period whose start lies beyond the term.
+          if (periodStart > endDate) break;
           // Don't generate events past the contract end
           if (date > endDate) break;
 
@@ -555,6 +580,23 @@ export function computeContractEvents(input: ComputeEventsInput): ContractEvent[
     return 0;
   });
 
+  // Round currency amounts once. A complete per-line schedule may leave a
+  // few cents after distributing a before-tax discount; only that bounded
+  // rounding residue belongs on the final payment. Never cover a missing
+  // period or a genuine total mismatch with a balancing payment.
+  const bills = events.filter(e => e.event_type === 'billing');
+  bills.forEach(e => { if (e.amount !== undefined) e.amount = Math.round(e.amount * 100) / 100; });
+  if (paymentMode === 'defined' && bills.length) {
+    const counts = new Map<string, number>();
+    bills.forEach(e => counts.set(e.block_id, (counts.get(e.block_id) ?? 0) + 1));
+    const complete = bills.every(e => counts.get(e.block_id) === e.total_occurrences);
+    const residue = Math.round((grandTotal - bills.reduce((n,e) => n + (e.amount ?? 0),0)) * 100) / 100;
+    const last = bills[bills.length - 1];
+    const limit = selectedBlocks.filter(b => categoryHasPricing(b.categoryId || '')).length * 0.01;
+    if (complete && Math.abs(residue) <= limit + 0.000001 && (last.amount ?? 0) + residue >= 0) {
+      last.amount = Math.round(((last.amount ?? 0) + residue) * 100) / 100;
+    }
+  }
   return events;
 }
 

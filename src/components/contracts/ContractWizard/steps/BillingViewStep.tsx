@@ -126,7 +126,7 @@ const BillingViewStep: React.FC<BillingViewStepProps> = ({
 
   // Filter to only billable blocks (categories that have pricing)
   const billableBlocks = useMemo(
-    () => selectedBlocks.filter((b) => categoryHasPricing(b.categoryId || '')),
+    () => selectedBlocks.filter((b) => b.categoryId === 'billing' || categoryHasPricing(b.categoryId || '')),
     [selectedBlocks]
   );
 
