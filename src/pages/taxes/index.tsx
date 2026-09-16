@@ -57,7 +57,7 @@ const TaxesPage: React.FC = () => {
             Month-wise GST, by invoice issue date — {active.blurb}.
           </p>
         </div>
-        <button onClick={() => navigate('/tax-settings')}
+        <button onClick={() => navigate('/settings/tax-settings')}
                 className="flex-none inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-full border mt-1"
                 style={{ color: brand, borderColor: `${brand}45` }}>
           <Settings2 size={13} /> Tax settings
