@@ -100,9 +100,18 @@ export const defaultMenuItems: MenuItem[] = [
     ]
   },
   */
-  // Parallel entry for the product-led experience, available in both perspectives.
-  { id: 'ncontracts', label: 'NContracts', icon: 'FileText', path: '/ncontracts' },
-  // Contracts menu
+  // The product-led experience IS the Contracts entry (owner, 2026-09-16).
+  // Id stays 'ncontracts' so menu state and the industryMenuOverrides keyed on
+  // the old 'contracts' id (hidden below) remain untangled — every industry
+  // sees the plain "Contracts" label, per the domain-agnostic decision.
+  { id: 'ncontracts', label: 'Contracts', icon: 'FileText', path: '/ncontracts' },
+  // Claim Contract promoted to the main menu from the hidden classic group
+  // (owner, 2026-09-16). Same id as before so nothing keyed on it changes.
+  { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' },
+  /* HIDDEN 2026-09-16 (owner): classic Contracts menu. The /contracts routes
+     stay registered — the hub, /contracts/:id and the wizard remain reachable
+     from the experience pages; only this menu entry is hidden. Un-hide by
+     uncommenting this block (and remove the top-level Claim entry above).
   {
     id: 'contracts',
     label: 'Contracts',
@@ -117,6 +126,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' }
     ]
   },
+  */
   // Money In / To Pay — ONE money workspace per side (owner decision,
   // 2026-08-13). Money In merges receivables + invoices: buyer stories with
   // instalments, documents and receipts inside. To Pay is its expense mirror.

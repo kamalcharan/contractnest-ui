@@ -173,8 +173,6 @@ import ResourcesPage from './pages/settings/Resources';
 // Equipment Registry (P1) — standalone page under Operations
 import EquipmentPage from './pages/equipment-registry';
 
-// Facility Registry — standalone page under Operations (shares code with Equipment Registry)
-import EntityRegistryPage from './pages/entity-registry';
 
 // Service Contracts - Templates
 import MyTemplatesPage from './pages/service-contracts/templates';
@@ -786,11 +784,11 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            {/* Use the mode-aware EquipmentPage in 'entity' mode: it surfaces the
-                seeded facility catalog (t_category_resources_master via resource
-                templates), matching how equipment-registry works. The old
-                EntityRegistryPage read only the empty instance table, so seeded
-                facilities never showed. */}
+            {/* Mode-aware EquipmentPage in 'entity' mode: surfaces the seeded
+                facility catalog (t_category_resources_master via resource
+                templates), same as equipment-registry. (The old standalone
+                EntityRegistryPage was deleted in the 2026-09 cleanup — it read
+                only the empty instance table, so seeded facilities never showed.) */}
             <Route index element={<EquipmentPage registryMode="entity" />} />
           </Route>
 

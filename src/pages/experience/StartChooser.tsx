@@ -32,7 +32,7 @@ export default function StartChooser({ perspective, compact = false, onAction }:
       {startActions(perspective).map((id, index) => {
         const choice = choices[id];
         const Icon = choice.icon;
-        return <button key={id} ref={id === 'record' ? recordButton : undefined} className={`xp-choice ${index === 0 ? 'xp-choice-featured' : ''}`}
+        return <button key={id} ref={id === 'record' ? recordButton : undefined} className={`xp-choice xp-choice-${id} ${index === 0 ? 'xp-choice-featured' : ''}`}
           aria-expanded={id === 'record' ? recordOpen : undefined} aria-controls={id === 'record' ? 'existing-entry' : undefined}
           onClick={() => { if (id === 'record') setRecordOpen(open => !open); else onAction(id); }}>
           <span className="xp-choice-top"><span className="xp-choice-icon"><Icon size={23} strokeWidth={1.6} /></span><span className="xp-choice-hint">{choice.hint}</span><ArrowUpRight className="xp-choice-arrow" size={18} /></span>

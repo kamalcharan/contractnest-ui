@@ -63,6 +63,10 @@ export interface CheckinForm {
 
 export interface CheckinPaymentConfig {
   ok: boolean; configured: boolean; upi_id?: string; payee_name?: string;
+  // Only present when the receiving VPA is registered as a UPI merchant
+  // account (decoded from the bank's own QR) — a personal/P2P VPA has
+  // neither, and the intent is built without the merchant fields.
+  org_id?: string; mcc?: string;
 }
 
 export interface SubmitPayload {

@@ -10,10 +10,20 @@ import { contractDestination, readableStatus, textOnBrand, type StartAction } fr
 import { useExperience } from './useExperience';
 import StartChooser from './StartChooser';
 import TenantAccountNotice from './TenantAccountNotice';
+import SupportCard from './SupportCard';
 import { measureStart } from './measurement';
 import './experience.css';
 
 const ContractWizard = lazy(() => import('@/components/contracts/ContractWizard'));
+
+// Status → color meaning for the list pills. Unknown statuses stay neutral —
+// color must inform, never guess.
+const statusVariant = (status: string): string =>
+  ['active', 'completed', 'accepted'].includes(status) ? 'good'
+    : status === 'draft' ? 'warn'
+    : status.startsWith('pending') || ['sent', 'in_review', 'awarded'].includes(status) ? 'info'
+    : ['expired', 'cancelled', 'canceled', 'terminated', 'rejected'].includes(status) ? 'bad'
+    : 'neutral';
 
 function WorkspaceContent() {
   const { currentTenant, perspective, isLive } = useAuth();
@@ -52,20 +62,20 @@ function WorkspaceContent() {
           {loading || (!!profile && !error && query.isPending) ? <div className="xp-state" role="status"><span className="xp-loading" />Loading your {revenue ? 'revenue' : 'expense'} agreements…</div>
             : unavailable ? <div className="xp-state" role="alert"><h3>We couldn’t load your workspace.</h3><p>Your records haven’t changed. Refresh to try again.</p><button className="xp-button" onClick={refresh}>Try again</button></div>
             : !profile ? <div className="xp-state"><h3>Start with your business profile.</h3><p>Add your business context so this workspace can reflect the services you provide and receive.</p><Link className="xp-button" to="/settings/business-profile">Open business profile<ArrowRight size={16} /></Link></div>
-            : empty ? <div className="xp-state"><FileText size={30} aria-hidden="true" /><h3>No {revenue ? 'revenue' : 'expense'} agreements here yet.</h3><p>This is your {isLive ? 'Live' : 'Test'} workspace. Agreements on your other perspective or environment are separate.</p><Link className="xp-button" to="/contracts">Open contracts<ArrowRight size={16} /></Link></div>
+            : empty ? <div className="xp-state"><FileText size={30} aria-hidden="true" /><h3>No {revenue ? 'revenue' : 'expense'} agreements here yet.</h3><p>This is your {isLive ? 'Live' : 'Test'} workspace. Agreements on your other perspective or environment are separate.</p><Link className="xp-button" to="/ncontracts">Open contracts<ArrowRight size={16} /></Link></div>
             : ready ? <><p className="xp-list-caption">{query.data.items.length} most recently updated of {query.data.total} agreements in this view</p>
               <div className="xp-contract-list">{query.data.items.map(contract => <Link className="xp-contract" key={contract.id} to={contractDestination(contract)}>
                 <span className="xp-contract-icon"><FileText size={19} /></span>
                 <span className="xp-contract-copy"><strong>{contract.title || contract.name || contract.contract_number}</strong><span>{contract.contract_number}{contract.nomenclature_name ? ` · ${contract.nomenclature_name}` : ''}</span></span>
-                <span className="xp-status">{readableStatus(contract.status)}</span><ArrowUpRight size={17} aria-hidden="true" />
+                <span className={`xp-status xp-status-${statusVariant(contract.status)}`}>{readableStatus(contract.status)}</span><ArrowUpRight size={17} aria-hidden="true" />
               </Link>)}</div>
-              <div className="xp-panel-footer"><span>Drafts open in Contracts, where you can resume the wizard.</span><Link className="xp-text-link" to="/contracts">View all<ArrowRight size={15} /></Link></div></> : null}
+              <div className="xp-panel-footer"><span>Drafts open in Contracts, where you can resume the wizard.</span><Link className="xp-text-link" to="/ncontracts">View all<ArrowRight size={15} /></Link></div></> : null}
         </section>
         <div className="xp-workspace-links" aria-label="Workspace shortcuts">
         <section className="xp-panel xp-foundation"><p className="xp-eyebrow">BUILT AROUND YOUR BUSINESS</p><h2>Your starting point</h2>
           <p className="xp-muted">Your existing setup shapes the work. No second setup to complete.</p>
-          <Link className="xp-foundation-link" to="/settings/business-profile"><span className="xp-small-icon"><BriefcaseBusiness size={18} /></span><span><strong>Business profile</strong><small>Industries and service coverage</small></span><ArrowUpRight size={16} /></Link>
-          {revenue && <Link className="xp-foundation-link" to="/catalog-studio/blocks"><span className="xp-small-icon"><Layers size={18} /></span><span><strong>Your service catalogue</strong><small>Services, pricing, and configuration</small></span><ArrowUpRight size={16} /></Link>}
+          <Link className="xp-foundation-link" to="/settings/business-profile"><span className="xp-small-icon xp-chip xp-chip-brand"><BriefcaseBusiness size={18} /></span><span><strong>Business profile</strong><small>Industries and service coverage</small></span><ArrowUpRight size={16} /></Link>
+          {revenue && <Link className="xp-foundation-link" to="/catalog-studio/blocks"><span className="xp-small-icon xp-chip xp-chip-warning"><Layers size={18} /></span><span><strong>Your service catalogue</strong><small>Services, pricing, and configuration</small></span><ArrowUpRight size={16} /></Link>}
           <div className="xp-note"><Check size={16} /><span>Names, scope, and prices come from your records. Each contract keeps its agreed terms.</span></div>
         </section>
         <section className="xp-panel xp-foundation"><p className="xp-eyebrow">KEEP GOING</p><h2>Open your workspace</h2>
@@ -77,6 +87,7 @@ function WorkspaceContent() {
       </div>
       <aside className="xp-secondary-column" aria-label="Workspace account">
         <TenantAccountNotice />
+        <SupportCard />
         <p className="xp-footnote">Change perspective or environment using the controls above. Your theme follows you throughout the product.</p>
       </aside>
     </div>
@@ -93,6 +104,11 @@ export default function ExperiencePage() {
     '--xp-text': colors.utility.primaryText, '--xp-muted': colors.utility.secondaryText,
     '--xp-brand': colors.brand.primary, '--xp-on-brand': textOnBrand(colors.brand.primary),
     '--xp-success': colors.semantic.success,
+    // Full semantic palette (vibrancy pass, owner 2026-09-16) — every accent
+    // below derives from the tenant's own theme, light and dark alike.
+    '--xp-warning': colors.semantic.warning,
+    '--xp-info': colors.semantic.info,
+    '--xp-error': colors.semantic.error,
   } as CSSProperties;
   if (isLoading) return <div role="status">Loading workspace…</div>;
   if (!hasCompletedOnboarding && !liteTier) return <Navigate replace to={currentTenant?.is_owner ? '/onboarding' : '/onboarding-pending'} />;

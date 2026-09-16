@@ -44,13 +44,21 @@ interface ContactPersonsSectionProps {
   onChange: (contactPersons: ContactPerson[]) => void;
   disabled?: boolean;
   contactType?: 'individual' | 'corporate';
+  /** Renders without its own outer card, header/badge and info/tip boxes —
+   *  for embedding inside another section's own card (e.g. the contact
+   *  detail page's "Linked contacts" card), which already provides a title
+   *  and card chrome, so this component's own copy would just double up.
+   *  Defaults to false: the create-contact page (and any other existing
+   *  caller) renders exactly as before. */
+  embedded?: boolean;
 }
 
 const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
   value,
   onChange,
   disabled = false,
-  contactType = 'corporate'
+  contactType = 'corporate',
+  embedded = false
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
@@ -205,22 +213,23 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
   const sectionTitle = isCorporate ? 'Contact Persons' : 'Alternative Contact Person';
   const sectionBadge = isCorporate ? 'Corporate' : 'Stand-in';
 
-  return (
+  const sectionBody = (
     <>
-      <div className="rounded-2xl shadow-sm border p-6" style={glassStyle}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>{sectionTitle}</h2>
-            <div
-              className="px-2 py-1 text-xs rounded-full"
-              style={{
-                backgroundColor: `${colors.brand.primary}20`,
-                color: colors.brand.primary
-              }}
-            >
-              {sectionBadge}
+        <div className={embedded ? "flex items-center justify-end mb-3" : "flex items-center justify-between mb-4"}>
+          {!embedded && (
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold" style={{ color: colors.utility.primaryText }}>{sectionTitle}</h2>
+              <div
+                className="px-2 py-1 text-xs rounded-full"
+                style={{
+                  backgroundColor: `${colors.brand.primary}20`,
+                  color: colors.brand.primary
+                }}
+              >
+                {sectionBadge}
+              </div>
             </div>
-          </div>
+          )}
           {value.length < 10 && (
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -237,20 +246,22 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
           )}
         </div>
 
-        <div
-          className="mb-4 p-3 rounded-xl border"
-          style={{
-            backgroundColor: `${colors.brand.primary}10`,
-            borderColor: `${colors.brand.primary}20`,
-          }}
-        >
-          <p className="text-sm" style={{ color: colors.brand.primary }}>
-            <Building2 className="inline h-4 w-4 mr-1" />
-            {isCorporate
-              ? 'Add individual contact persons who work for this corporate entity.'
-              : 'Add an alternative contact who can stand in for this person — e.g. for replacement attendance or when they are unreachable.'}
-          </p>
-        </div>
+        {!embedded && (
+          <div
+            className="mb-4 p-3 rounded-xl border"
+            style={{
+              backgroundColor: `${colors.brand.primary}10`,
+              borderColor: `${colors.brand.primary}20`,
+            }}
+          >
+            <p className="text-sm" style={{ color: colors.brand.primary }}>
+              <Building2 className="inline h-4 w-4 mr-1" />
+              {isCorporate
+                ? 'Add individual contact persons who work for this corporate entity.'
+                : 'Add an alternative contact who can stand in for this person — e.g. for replacement attendance or when they are unreachable.'}
+            </p>
+          </div>
+        )}
 
         {/* Contact Person Cards */}
         {value.length === 0 ? (
@@ -435,7 +446,7 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
         )}
 
         {/* Summary Information */}
-        {value.length > 0 && (
+        {!embedded && value.length > 0 && (
           <div
             className="mt-4 p-3 rounded-xl border"
             style={{
@@ -460,7 +471,7 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
         )}
 
         {/* Validation Messages */}
-        {value.length > 0 && !value.some(p => p.is_primary) && (
+        {!embedded && value.length > 0 && !value.some(p => p.is_primary) && (
           <div
             className="mt-4 p-3 rounded-xl border"
             style={{
@@ -474,7 +485,7 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
           </div>
         )}
 
-        {value.length >= 10 && (
+        {!embedded && value.length >= 10 && (
           <div
             className="mt-4 p-3 rounded-xl border"
             style={{
@@ -487,7 +498,14 @@ const ContactPersonsSection: React.FC<ContactPersonsSectionProps> = ({
             </p>
           </div>
         )}
-      </div>
+    </>
+  );
+
+  return (
+    <>
+      {embedded ? sectionBody : (
+        <div className="rounded-2xl shadow-sm border p-6" style={glassStyle}>{sectionBody}</div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog

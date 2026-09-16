@@ -23,6 +23,12 @@ const contactsCache: Map<string, CacheEntry<any[]>> = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
 // Generate cache key from filters
+// tags / user_status / show_duplicates were added to ContactFilters without
+// being added here, so toggling any of them produced the SAME key as
+// whatever was cached before — the hook served the stale prior response
+// instead of ever calling the API again. Concretely: the "Possible
+// duplicates" checkbox looked like it was ignoring the filter, when the
+// filter itself (and the backend) was working correctly the whole time.
 const generateCacheKey = (tenantId: string, isLive: boolean, filters: any): string => {
   const filterKey = JSON.stringify({
     page: filters.page || 1,
@@ -31,6 +37,9 @@ const generateCacheKey = (tenantId: string, isLive: boolean, filters: any): stri
     type: filters.type,
     search: filters.search,
     classifications: filters.classifications,
+    tags: filters.tags,
+    user_status: filters.user_status,
+    show_duplicates: filters.show_duplicates,
     sort_by: filters.sort_by,
     sort_order: filters.sort_order
   });

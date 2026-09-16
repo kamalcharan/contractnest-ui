@@ -414,7 +414,10 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
 
           const duplicateResult = await checkDuplicatesHook.mutate(duplicateCheckData);
 
-          if (duplicateResult?.has_duplicates && duplicateResult.duplicates?.length > 0) {
+          // was has_duplicates (snake_case) — the API returns hasDuplicates
+          // (camelCase), so this check was always false and the warning
+          // below never fired, no matter what the duplicate check found.
+          if (duplicateResult?.hasDuplicates && duplicateResult.duplicates?.length > 0) {
             // Show duplicate warning
             setDuplicateContacts(duplicateResult.duplicates);
             setShowDuplicateWarning(true);

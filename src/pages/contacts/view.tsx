@@ -1,5 +1,10 @@
 // src/pages/contacts/view.tsx - Contact Dashboard
-// Tabbed layout: Overview | Contracts | Assets | Financials | Timeline
+// Redesigned shell (owner-approved playground, 2026-09-16): identity hero +
+// summary strip + pill tabs. All existing machinery preserved — cockpit hook,
+// tab components, drawers, status flow, explainer. The floating ActionIsland
+// is retired (2026-09-16): New contract lives in the hero, the reach line is
+// actionable (tel / wa.me / mailto), and editing is inline in the Profile tab
+// (no Edit button / ProfileDrawer — owner call, same day).
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -17,6 +22,17 @@ import {
   DollarSign,
   HelpCircle,
   UserRound,
+  Phone,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Plus,
+  ShoppingCart,
+  Package,
+  Handshake,
+  Users,
+  Tag,
+  LucideIcon,
 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,7 +44,6 @@ import { useContactCockpit } from '@/hooks/queries/useContactCockpit';
 
 // Components
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
-import { ActionIsland, ProfileDrawer } from '@/components/contacts/cockpit';
 
 // Dashboard Tab Components
 import OverviewTab from '@/components/contacts/dashboard/OverviewTab';
@@ -41,7 +56,29 @@ import ContactProfileTab from '@/components/contacts/view/ContactProfileTab';
 import type { ExplainerTab } from '@/utils/explainerRegistry';
 
 // Constants
-import { USER_STATUS_MESSAGES, BUSINESS_RULES, formatContactDisplayName } from '@/utils/constants/contacts';
+import {
+  USER_STATUS_MESSAGES,
+  BUSINESS_RULES,
+  formatContactDisplayName,
+  CONTACT_CLASSIFICATION_CONFIG,
+  getClassificationThemeColor,
+} from '@/utils/constants/contacts';
+
+// Lucide icon mapping for classification icons (matches constants)
+const CLASSIFICATION_ICON_MAP: Record<string, LucideIcon> = {
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Handshake,
+  Users,
+};
+
+const getClassificationVisual = (classificationId: string) => {
+  const config = CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === classificationId);
+  const { themeColor } = getClassificationThemeColor(config?.colorKey || 'default');
+  const Icon = (config?.lucideIcon && CLASSIFICATION_ICON_MAP[config.lucideIcon]) || Tag;
+  return { label: config?.label || classificationId, color: themeColor, Icon };
+};
 
 // Types
 interface ContactChannel {
@@ -104,12 +141,13 @@ const ContactViewPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const { toast } = useToast();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
+  const line = colors.utility.primaryText + '15';
+  const infoHue = colors.semantic?.info || '#3573E8';
 
   // State
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [isStatusMenuOpen, setIsStatusMenuOpen] = useState(false);
-  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
   const [daysAhead, setDaysAhead] = useState(7);
   const [isExplainerOpen, setIsExplainerOpen] = useState(false);
 
@@ -191,6 +229,18 @@ const ContactViewPage: React.FC = () => {
     }
   };
 
+  // "New contract" — same mapping ActionIsland uses; first classification wins
+  // here, the island keeps the full per-classification menu.
+  const handleNewContract = () => {
+    if (!contact) return;
+    const type = classifications.includes('vendor') && !classifications.includes('client')
+      ? 'vendor'
+      : classifications.includes('partner') && classifications.length === 1
+        ? 'partner'
+        : 'client';
+    navigate(`/contracts/create?contactId=${contact.id}&contractType=${type}`);
+  };
+
   // Loading State
   if (loading) {
     return (
@@ -239,138 +289,279 @@ const ContactViewPage: React.FC = () => {
   const userStatusInfo = contact.user_account_status ?
     USER_STATUS_MESSAGES[contact.user_account_status as keyof typeof USER_STATUS_MESSAGES] : null;
   const primaryEmail = getPrimaryChannel('email');
-  const primaryPhone = getPrimaryChannel('mobile');
+  const primaryPhone = getPrimaryChannel('mobile') || getPrimaryChannel('phone');
+  const primaryCity: string | undefined = contact.addresses?.[0]?.city || undefined;
+
+  // Hero visuals from the PRIMARY classification (fixed product colors)
+  const heroVisual = getClassificationVisual(classifications[0] || 'default');
+  const HeroIcon = classifications[0] ? heroVisual.Icon : (contact.type === 'corporate' ? Building2 : User);
+  const memberSince = contact.created_at
+    ? new Date(contact.created_at).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+    : null;
+
+  // Summary strip values (cockpit data; strip renders only with activity)
+  const activeContracts = cockpitData?.contracts?.by_status?.['active'] ?? 0;
+  const totalContracts = cockpitData?.contracts?.total ?? 0;
+  const outstanding = cockpitData?.outstanding ?? 0;
+  const nextEvent = cockpitData?.upcoming_events?.[0];
+  const nextEventDate = nextEvent
+    ? new Date(nextEvent.scheduled_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : null;
+
+  const statTile = (label: string, value: React.ReactNode, sub: string, warn = false) => (
+    <div
+      className="rounded-2xl border px-4 py-3.5"
+      style={{
+        borderColor: warn ? colors.semantic.warning + '60' : line,
+        backgroundColor: warn ? colors.semantic.warning + '10' : colors.utility.secondaryBackground,
+      }}
+    >
+      <p className="text-[10px] font-bold tracking-[0.12em] mb-1.5" style={{ color: colors.utility.secondaryText }}>{label}</p>
+      <p
+        className="text-lg font-semibold tracking-tight"
+        style={{ color: warn ? colors.semantic.warning : colors.utility.primaryText, fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </p>
+      <p className="text-[11px] mt-0.5 truncate" style={{ color: colors.utility.secondaryText }} title={sub}>{sub}</p>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ backgroundColor: colors.utility.primaryBackground }}>
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* STICKY HEADER */}
+      {/* IDENTITY HERO — classification-tinted gradient band */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <header
-        className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b"
-        style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '15' }}
+        className="flex-shrink-0 px-4 md:px-6 py-4 border-b"
+        style={{
+          borderColor: line,
+          background: `linear-gradient(120deg, ${heroVisual.color}1E, ${colors.utility.secondaryBackground} 55%, ${infoHue}12)`,
+        }}
       >
-        {/* Left: Back + Contact Info */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-3 md:gap-4 flex-wrap">
           <button
             onClick={() => navigate('/contacts')}
-            className="p-2 rounded-xl border transition-colors hover:opacity-80"
-            style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.primaryText + '15' }}
+            className="p-2 rounded-xl border transition-colors hover:opacity-80 mt-1"
+            style={{ backgroundColor: colors.utility.primaryBackground, borderColor: line }}
+            aria-label="Back to contacts"
           >
             <ArrowLeft className="h-5 w-5" style={{ color: colors.utility.secondaryText }} />
           </button>
 
-          <div className="flex items-center gap-4">
-            {/* Avatar */}
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg"
-              style={{ background: `linear-gradient(135deg, ${colors.brand.primary} 0%, ${colors.brand.secondary} 100%)`, color: '#fff' }}
-            >
-              {contact.type === 'corporate'
-                ? (contact.company_name?.substring(0, 2).toUpperCase() || 'CO')
-                : (contact.name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'UN')}
+          {/* Avatar — primary-classification color + product icon */}
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center border flex-shrink-0"
+            style={{
+              backgroundColor: heroVisual.color + '20',
+              color: heroVisual.color,
+              borderColor: heroVisual.color + '40',
+            }}
+          >
+            <HeroIcon className="h-6 w-6" />
+          </div>
+
+          {/* Identity */}
+          <div className="flex-1 min-w-[220px]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight" style={{ color: colors.utility.primaryText }}>
+                {getContactDisplayName()}
+              </h1>
+              {contact.type === 'corporate' ? (
+                <Building2 className="h-4 w-4" style={{ color: colors.utility.secondaryText }} />
+              ) : (
+                <User className="h-4 w-4" style={{ color: colors.utility.secondaryText }} />
+              )}
+              {contact.contact_number && (
+                <span
+                  className="px-2 py-0.5 rounded-md text-xs font-semibold"
+                  style={{
+                    fontFamily: 'ui-monospace, monospace',
+                    backgroundColor: colors.utility.primaryBackground,
+                    color: colors.utility.secondaryText,
+                    border: `1px solid ${line}`,
+                  }}
+                >
+                  {contact.contact_number}
+                </span>
+              )}
+
+              {/* Status pill + menu (unchanged flow) */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsStatusMenuOpen(o => !o)}
+                  disabled={updateStatusHook.loading}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase transition-opacity hover:opacity-80 disabled:opacity-60"
+                  style={{
+                    backgroundColor: contact.status === 'active' ? colors.semantic.success + '20' : contact.status === 'inactive' ? colors.semantic.warning + '20' : colors.semantic.error + '20',
+                    color: contact.status === 'active' ? colors.semantic.success : contact.status === 'inactive' ? colors.semantic.warning : colors.semantic.error,
+                  }}
+                >
+                  {updateStatusHook.loading
+                    ? <Loader2 className="h-3 w-3 animate-spin" />
+                    : <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />}
+                  {contact.status}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+
+                {isStatusMenuOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-1 py-1 rounded-lg shadow-xl border min-w-[140px] z-10 normal-case"
+                    style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
+                  >
+                    {(['active', 'inactive', 'archived'] as const).map(statusOption => (
+                      <button
+                        key={statusOption}
+                        type="button"
+                        onClick={() => {
+                          setIsStatusMenuOpen(false);
+                          if (statusOption === contact.status) return;
+                          if (statusOption === 'archived') {
+                            setShowArchiveDialog(true);
+                          } else {
+                            handleStatusUpdate(statusOption);
+                          }
+                        }}
+                        className="w-full flex items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-left transition-colors hover:opacity-80"
+                        style={{ color: colors.utility.primaryText }}
+                      >
+                        <span className="capitalize">{statusOption}</span>
+                        {statusOption === contact.status && <Check className="h-3 w-3" style={{ color: colors.brand.primary }} />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold" style={{ color: colors.utility.primaryText }}>{getContactDisplayName()}</h1>
-                {contact.type === 'corporate' ? (
-                  <Building2 className="h-4 w-4" style={{ color: colors.brand.primary }} />
-                ) : (
-                  <User className="h-4 w-4" style={{ color: colors.brand.primary }} />
-                )}
-                {contact.contact_number && (
+            {/* Badges: classifications (fixed product colors + icons) · tags · member-since */}
+            <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+              {classifications.map(cls => {
+                const v = getClassificationVisual(cls);
+                const BadgeIcon = v.Icon;
+                return (
                   <span
-                    className="px-2 py-0.5 rounded-md text-xs font-semibold"
+                    key={cls}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold border"
                     style={{
-                      fontFamily: 'ui-monospace, monospace',
-                      backgroundColor: colors.utility.primaryBackground,
-                      color: colors.utility.secondaryText,
-                      border: `1px solid ${colors.utility.primaryText}15`,
+                      backgroundColor: v.color + '15',
+                      color: v.color,
+                      borderColor: v.color + '40',
                     }}
                   >
-                    {contact.contact_number}
+                    <BadgeIcon className="h-3 w-3" />
+                    {v.label}
                   </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
-                {primaryEmail && <span>{primaryEmail.value}</span>}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsStatusMenuOpen(o => !o)}
-                    disabled={updateStatusHook.loading}
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold uppercase transition-opacity hover:opacity-80 disabled:opacity-60"
-                    style={{
-                      backgroundColor: contact.status === 'active' ? '#22c55e20' : contact.status === 'inactive' ? '#f59e0b20' : '#ef444420',
-                      color: contact.status === 'active' ? '#22c55e' : contact.status === 'inactive' ? '#f59e0b' : '#ef4444'
-                    }}
-                  >
-                    {updateStatusHook.loading
-                      ? <Loader2 className="h-3 w-3 animate-spin" />
-                      : <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'currentColor' }} />}
-                    {contact.status}
-                    <ChevronDown className="h-3 w-3" />
-                  </button>
+                );
+              })}
+              {(Array.isArray(contact.tags) ? contact.tags : []).slice(0, 4).map((tag: any, idx: number) => (
+                <span
+                  key={tag.tag_value || idx}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold border"
+                  style={{ borderColor: line, color: colors.utility.secondaryText }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.tag_color || colors.utility.secondaryText }} />
+                  {tag.tag_label || tag.tag_value}
+                </span>
+              ))}
+              {memberSince && (
+                <span
+                  className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold border"
+                  style={{ borderColor: line, color: colors.utility.secondaryText }}
+                >
+                  Since {memberSince}
+                </span>
+              )}
+            </div>
 
-                  {isStatusMenuOpen && (
-                    <div
-                      className="absolute top-full left-0 mt-1 py-1 rounded-lg shadow-xl border min-w-[140px] z-10 normal-case"
-                      style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}
-                    >
-                      {(['active', 'inactive', 'archived'] as const).map(statusOption => (
-                        <button
-                          key={statusOption}
-                          type="button"
-                          onClick={() => {
-                            setIsStatusMenuOpen(false);
-                            if (statusOption === contact.status) return;
-                            if (statusOption === 'archived') {
-                              setShowArchiveDialog(true);
-                            } else {
-                              handleStatusUpdate(statusOption);
-                            }
-                          }}
-                          className="w-full flex items-center justify-between gap-3 px-3 py-2 text-xs font-semibold text-left transition-colors hover:opacity-80"
-                          style={{ color: colors.utility.primaryText }}
-                        >
-                          <span className="capitalize">{statusOption}</span>
-                          {statusOption === contact.status && <Check className="h-3 w-3" style={{ color: colors.brand.primary }} />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Classification Badges */}
-                {classifications.map(cls => {
-                  const clsConfig: Record<string, { label: string; color: string }> = {
-                    client: { label: 'Client', color: '#10B981' },
-                    vendor: { label: 'Vendor', color: '#3B82F6' },
-                    partner: { label: 'Partner', color: '#8B5CF6' },
-                  };
-                  const cfg = clsConfig[cls];
-                  if (!cfg) return null;
-                  return (
-                    <span
-                      key={cls}
-                      className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                      style={{ backgroundColor: cfg.color + '15', color: cfg.color }}
-                    >
-                      {cfg.label}
-                    </span>
-                  );
-                })}
-              </div>
+            {/* Reach: icon + value, per the approved directory pattern */}
+            {/* Actionable reach line — replaces the retired floating ActionIsland:
+                call / WhatsApp / email open the device's own apps directly. */}
+            <div className="flex items-center gap-4 flex-wrap mt-2 text-[13px]" style={{ color: colors.utility.secondaryText }}>
+              {primaryPhone && (
+                <a href={`tel:${primaryPhone.value}`} className="inline-flex items-center gap-1.5 hover:underline" title={`Call ${primaryPhone.value}`}>
+                  <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                  {primaryPhone.value}
+                </a>
+              )}
+              {primaryPhone && (
+                <a
+                  href={`https://wa.me/${primaryPhone.value.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 hover:underline"
+                  style={{ color: colors.semantic.success }}
+                  title="Open WhatsApp chat"
+                >
+                  <MessageCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                  WhatsApp
+                </a>
+              )}
+              {primaryEmail && (
+                <a href={`mailto:${primaryEmail.value}`} className="inline-flex items-center gap-1.5 min-w-0 hover:underline" title={`Email ${primaryEmail.value}`}>
+                  <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate max-w-[240px]">{primaryEmail.value}</span>
+                </a>
+              )}
+              {primaryCity && (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                  {primaryCity}
+                </span>
+              )}
             </div>
           </div>
+
+          {/* Actions — no Edit button: every field is inline-editable in the
+              Profile tab (owner call 2026-09-16, ProfileDrawer retired here) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {contact.status === 'active' && (
+              <button
+                onClick={handleNewContract}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-transform hover:scale-105"
+                style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
+              >
+                <Plus className="h-4 w-4" />
+                New contract
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Summary strip — the cockpit answer before any tab is opened */}
+        {hasActivity && cockpitData && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4">
+            {statTile(
+              'ACTIVE CONTRACTS',
+              activeContracts,
+              totalContracts > activeContracts ? `${totalContracts} total` : (cockpitData.contracts?.contracts?.[0]?.name || 'All agreements')
+            )}
+            {statTile(
+              'OPEN DUES',
+              formatCurrency(outstanding),
+              outstanding > 0 ? 'Outstanding across invoices' : 'Nothing outstanding',
+              outstanding > 0
+            )}
+            {statTile(
+              'NEXT EVENT',
+              nextEventDate || '—',
+              nextEvent ? `${nextEvent.block_name}${nextEvent.is_today ? ' · today' : ''}` : `Nothing in the next ${daysAhead} days`
+            )}
+            {statTile(
+              'LIFETIME VALUE',
+              formatCurrency(cockpitData.ltv || 0),
+              `${cockpitData.events?.completed ?? 0} of ${cockpitData.events?.total ?? 0} events completed`
+            )}
+          </div>
+        )}
       </header>
 
       {/* Status Warnings */}
       {contact.status === 'inactive' && (
-        <div className="px-6 py-3 border-b" style={{ backgroundColor: '#f59e0b15', borderColor: '#f59e0b40' }}>
-          <div className="flex items-center gap-2 text-sm" style={{ color: '#f59e0b' }}>
+        <div className="px-6 py-3 border-b flex-shrink-0" style={{ backgroundColor: colors.semantic.warning + '15', borderColor: colors.semantic.warning + '40' }}>
+          <div className="flex items-center gap-2 text-sm" style={{ color: colors.semantic.warning }}>
             <AlertCircle className="h-4 w-4" />
             <span className="font-medium">Contact is Inactive</span>
             <span>• {BUSINESS_RULES.INACTIVE_CONTACT_RESTRICTIONS.join(' • ')}</span>
@@ -379,7 +570,7 @@ const ContactViewPage: React.FC = () => {
       )}
 
       {contact.status === 'archived' && (
-        <div className="px-6 py-3 border-b" style={{ backgroundColor: colors.utility.secondaryText + '15', borderColor: colors.utility.secondaryText + '40' }}>
+        <div className="px-6 py-3 border-b flex-shrink-0" style={{ backgroundColor: colors.utility.secondaryText + '15', borderColor: colors.utility.secondaryText + '40' }}>
           <div className="flex items-center gap-2 text-sm" style={{ color: colors.utility.secondaryText }}>
             <Archive className="h-4 w-4" />
             <span className="font-medium">Contact is Archived</span>
@@ -389,14 +580,11 @@ const ContactViewPage: React.FC = () => {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* TAB BAR */}
+      {/* TAB PILLS */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       <div
-        className="flex-shrink-0 flex items-center gap-1 px-6 border-b"
-        style={{
-          backgroundColor: colors.utility.secondaryBackground,
-          borderColor: colors.utility.primaryText + '10',
-        }}
+        className="flex-shrink-0 flex items-center gap-2 px-4 md:px-6 py-3 border-b overflow-x-auto"
+        style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '10' }}
       >
         {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.key;
@@ -405,19 +593,25 @@ const ContactViewPage: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-colors relative"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-colors whitespace-nowrap"
               style={{
-                color: isActive ? colors.brand.primary : colors.utility.secondaryText,
+                backgroundColor: isActive ? colors.brand.primary : colors.utility.primaryBackground,
+                borderColor: isActive ? colors.brand.primary : line,
+                color: isActive ? '#ffffff' : colors.utility.secondaryText,
               }}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
-              {/* Active indicator */}
-              {isActive && (
-                <div
-                  className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
-                  style={{ backgroundColor: colors.brand.primary }}
-                />
+              {tab.key === 'contracts' && totalContracts > 0 && (
+                <span
+                  className="text-[10px] font-bold px-1.5 rounded-full"
+                  style={{
+                    backgroundColor: isActive ? '#ffffff30' : colors.brand.primary + '18',
+                    color: isActive ? '#ffffff' : colors.brand.primary,
+                  }}
+                >
+                  {totalContracts}
+                </span>
               )}
             </button>
           );
@@ -447,7 +641,11 @@ const ContactViewPage: React.FC = () => {
       <div className="flex-1 overflow-y-auto">
         {/* Profile Tab — identity-first, inline section edit (no cockpit needed) */}
         {activeTab === 'profile' && (
-          <ContactProfileTab contact={contact as any} colors={colors} onSaved={refetch} readOnly={contact.status === 'archived'} />
+          // hardRefresh (not refetch) — refetch() serves the 10-minute single-
+          // contact cache, which still holds pre-save data (same reason the
+          // status-update handler above uses hardRefresh). Without it, a
+          // saved field only appears after a full page reload.
+          <ContactProfileTab contact={contact as any} colors={colors} onSaved={hardRefresh} readOnly={contact.status === 'archived'} />
         )}
 
         {/* Cockpit loading skeleton (analytics tabs only) */}
@@ -518,30 +716,6 @@ const ContactViewPage: React.FC = () => {
           />
         )}
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* ACTION ISLAND */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <ActionIsland
-        contactId={contact.id}
-        contactName={getContactDisplayName()}
-        classifications={classifications}
-        contactStatus={contact.status}
-        primaryEmail={primaryEmail?.value}
-        primaryPhone={primaryPhone?.value}
-        phoneCountryCode={primaryPhone?.country_code}
-        onProfileClick={() => setIsProfileDrawerOpen(true)}
-      />
-
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* PROFILE DRAWER */}
-      {/* ═══════════════════════════════════════════════════════════════════ */}
-      <ProfileDrawer
-        isOpen={isProfileDrawerOpen}
-        onClose={() => setIsProfileDrawerOpen(false)}
-        contact={contact}
-        onRefresh={refetch}
-      />
 
       {/* Explainer Drawer */}
       <ExplainerDrawer

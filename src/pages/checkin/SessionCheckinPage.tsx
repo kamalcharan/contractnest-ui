@@ -875,7 +875,7 @@ const SessionCheckinPage: React.FC = () => {
       setShowLeaveAlert(false);
       try {
         const reference='CN'+crypto.randomUUID().replace(/-/g,'');
-        const uri=buildUpiPaymentIntent({upiId:payCfg?.upi_id||'',payeeName:payCfg?.payee_name||'',amount,currency:currency||'',reference});
+        const uri=buildUpiPaymentIntent({upiId:payCfg?.upi_id||'',payeeName:payCfg?.payee_name||'',amount,currency:currency||'',reference,orgId:payCfg?.org_id,mcc:payCfg?.mcc});
         setUpiHelp(null);
         setPaymentAttempted(true);
         // Keep navigation synchronous with the user gesture; clipboard is a

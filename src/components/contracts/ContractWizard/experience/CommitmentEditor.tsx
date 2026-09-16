@@ -709,7 +709,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                   />
                   <div
                     className="text-[11.5px] font-semibold mt-1"
-                    style={{ color: discounted ? '#0d9464' : dim }}
+                    style={{ color: discounted ? (colors.semantic?.success || '#0d9464') : dim }}
                   >
                     {hasList
                       ? discounted
@@ -743,8 +743,8 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                 = <span style={{ color: colors.brand.primary }}>{sym}{cadenceMath.termTotal.toLocaleString()}</span> over {durationMonths} months
               </div>
               {cadenceMath.remMonths > 0 && (
-                <div className="mt-2 pt-2 border-t border-dashed" style={{ borderColor: '#F59E0B60' }}>
-                  <div className="text-[11px] font-semibold mb-1" style={{ color: '#B45309' }}>
+                <div className="mt-2 pt-2 border-t border-dashed" style={{ borderColor: (colors.semantic?.warning || '#F59E0B') + '60' }}>
+                  <div className="text-[11px] font-semibold mb-1" style={{ color: colors.semantic?.warning || '#B45309' }}>
                     {cadenceMath.remMonths} month{cadenceMath.remMonths > 1 ? 's' : ''} left over — you decide the final payment
                   </div>
                   <div className="flex items-center gap-2">
@@ -763,7 +763,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                         });
                       }}
                       className="w-28 rounded-lg px-2.5 py-1.5 text-[12.5px]"
-                      style={{ ...inputStyle, borderColor: '#F59E0B60' }}
+                      style={{ ...inputStyle, borderColor: (colors.semantic?.warning || '#F59E0B') + '60' }}
                     />
                     <button
                       type="button"
@@ -771,7 +771,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                         onUpdate({ config: { ...instance!.config, cadenceFinalPayment: undefined } as any })
                       }
                       className="text-[10.5px] font-bold underline"
-                      style={{ color: '#B45309' }}
+                      style={{ color: colors.semantic?.warning || '#B45309' }}
                     >
                       pro-rata suggestion: {sym}{cadenceMath.suggestedFinal.toLocaleString()}
                     </button>

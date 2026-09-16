@@ -1,27 +1,39 @@
 // ============================================================================
-// ContactProfileTab — identity-first profile with inline section edit
+// ContactProfileTab — playground-approved grouping (2026-09-16)
 // ============================================================================
-// Redesign of the contact detail: leads with WHO the contact is (channels,
-// people, addresses, tags, compliance, notes) rather than analytics. Each
-// section edits in place and saves only its own fields — the update RPC
+// Cards match the approved contact-profile playground exactly:
+//   CONTACT DETAILS (channels + address, one card, one edit flow)
+//   LINKED CONTACTS (alternates/substitutes — editable via the product's
+//   existing Alternative Contact Person section; see savePersons())
+//   BUSINESS (company / designation / compliance, one edit flow)
+//   TAGS & ROLES · NOTES · EXTERNAL DATA
+// IDENTITY stays as its own inline-editable card (owner call, 2026-09-16):
+// it owns salutation + name (company name for corporates); BUSINESS owns
+// designation + compliance — no field is editable from two cards.
+//
+// Each section edits in place and saves only its own fields — the update RPC
 // (update_contact_idempotent_v2) COALESCEs scalars and skips null arrays, so
 // partial section saves never drop other data.
-//
-// Reuses existing infra only: useUpdateContact (PUT /api/contacts/:id),
-// useMasterDataOptions('Tags') for the tag LOV, and the country/phone utils.
 //
 // Layout wrappers (SectionCard / EditBar / KV) live at MODULE scope on purpose:
 // defining them inside the component recreates their type every render, which
 // makes React remount the subtree and drop input focus while typing.
 
 import React, { useState } from 'react';
-import { Pencil, Check, X, Plus, Trash2, Phone, Mail, MapPin, Users, ShieldCheck, StickyNote, Tag, UserRound, Hash } from 'lucide-react';
+import { Pencil, Check, X, Plus, Trash2, Phone, Mail, MapPin, Users, StickyNote, Tag, Hash, Briefcase, MessageCircle, UserRound } from 'lucide-react';
 import { useUpdateContact, type Contact } from '@/hooks/useContacts';
+import ContactPersonsSection from '@/components/contacts/forms/ContactPersonsSection';
 import { useMasterDataOptions } from '@/hooks/useMasterData';
 import { vaniToast } from '@/components/common/toast';
 import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getPhonePlaceholder } from '@/utils/validation/contactValidation';
-import { SALUTATIONS, DEFAULT_SALUTATION } from '@/utils/constants/contacts';
+import { CONTACT_CLASSIFICATION_CONFIG, getClassificationThemeColor, SALUTATIONS, DEFAULT_SALUTATION } from '@/utils/constants/contacts';
+
+// Fixed product classification colors/labels (same source as the directory)
+const clsColor = (id: string) =>
+  getClassificationThemeColor(CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === id)?.colorKey || 'default').themeColor;
+const clsLabel = (id: string) =>
+  CONTACT_CLASSIFICATION_CONFIG.find(c => c.id === id)?.label || id;
 
 interface Props {
   contact: Contact & { compliance_numbers?: any[] };
@@ -30,7 +42,7 @@ interface Props {
   readOnly?: boolean;
 }
 
-type SectionKey = 'identity' | 'channels' | 'tags' | 'addresses' | 'compliance' | 'notes';
+type SectionKey = 'identity' | 'details' | 'tags' | 'business' | 'notes' | 'persons';
 
 const COUNTRY_LIST = [...countries].sort((a, b) => (a.code === 'IN' ? -1 : b.code === 'IN' ? 1 : a.name.localeCompare(b.name)));
 const ccFromDial = (dial?: string) => COUNTRY_LIST.find(c => `+${c.phoneCode}` === dial || c.code === dial)?.code || 'IN';
@@ -55,21 +67,33 @@ const localDigits = (value: string, cc: string): string => {
   return digits;
 };
 
+const CHANNEL_LABELS: Record<string, string> = { mobile: 'Mobile', phone: 'Phone', whatsapp: 'WhatsApp', email: 'Email' };
+const channelIcon = (type: string) =>
+  type === 'email' ? Mail : type === 'whatsapp' ? MessageCircle : Phone;
+
 const labelStyle = (colors: any): React.CSSProperties => ({ fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase', color: colors.utility.secondaryText });
 const inputStyle = (colors: any): React.CSSProperties => ({ width: '100%', border: `1px solid ${colors.utility.primaryText}33`, background: colors.utility.primaryBackground, color: colors.utility.primaryText, borderRadius: 9, padding: '9px 11px', fontSize: 13.5, outline: 'none', boxSizing: 'border-box' });
 
 // ── module-scope wrappers (stable identity → inputs keep focus) ──
 const SectionCard: React.FC<{
-  colors: any; icon: React.ElementType; title: string; active?: boolean;
+  colors: any; icon: React.ElementType; title: string; accent?: string; active?: boolean;
   onEdit?: () => void; editLabel?: string; children: React.ReactNode;
-}> = ({ colors, icon: Icon, title, active, onEdit, editLabel = 'Edit', children }) => (
+}> = ({ colors, icon: Icon, title, accent, active, onEdit, editLabel = 'Edit', children }) => (
   <section style={{
-    background: colors.utility.secondaryBackground, borderRadius: 14, padding: 17,
+    background: colors.utility.secondaryBackground, borderRadius: 16, padding: 17,
     border: `1px solid ${active ? colors.brand.primary : colors.utility.primaryText + '12'}`,
     boxShadow: active ? `0 0 0 3px ${colors.brand.primary}1f` : 'none',
   }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 13 }}>
-      <Icon className="h-4 w-4" style={{ color: colors.utility.secondaryText }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 13 }}>
+      {/* Tinted icon chip — same accent language as /experience and the directory */}
+      <span style={{
+        width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', flex: 'none',
+        color: accent || colors.utility.secondaryText,
+        background: `${accent || colors.utility.secondaryText}16`,
+        border: `1px solid ${accent || colors.utility.secondaryText}30`,
+      }}>
+        <Icon className="h-4 w-4" />
+      </span>
       <h3 style={labelStyle(colors)}>{title}</h3>
       {onEdit && !active && (
         <button onClick={onEdit} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', color: colors.brand.primary, fontWeight: 750, fontSize: 12, cursor: 'pointer' }}>
@@ -89,9 +113,19 @@ const EditBar: React.FC<{ colors: any; loading: boolean; onSave: () => void; onC
 );
 
 const KV: React.FC<{ colors: any; k: string; children: React.ReactNode }> = ({ colors, k, children }) => (
-  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, alignItems: 'start', padding: '5px 0' }}>
+  <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10, alignItems: 'start', padding: '6px 0' }}>
     <span style={{ color: colors.utility.secondaryText, fontSize: 12, fontWeight: 600 }}>{k}</span>
     <span style={{ color: colors.utility.primaryText, fontSize: 13.5 }}>{children}</span>
+  </div>
+);
+
+// Playground row: icon · muted label · value (used by CONTACT DETAILS)
+const DetailRow: React.FC<{ colors: any; icon: React.ElementType; label: string; children: React.ReactNode; trailing?: React.ReactNode }> = ({ colors, icon: Icon, label, children, trailing }) => (
+  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0' }}>
+    <Icon className="h-3.5 w-3.5" style={{ color: colors.utility.secondaryText, flex: 'none', marginTop: 3 }} />
+    <span style={{ color: colors.utility.secondaryText, fontSize: 12, fontWeight: 600, width: 76, flex: 'none', marginTop: 1 }}>{label}</span>
+    <span style={{ color: colors.utility.primaryText, fontSize: 13.5, flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontVariantNumeric: 'tabular-nums' }}>{children}</span>
+    {trailing}
   </div>
 );
 
@@ -143,64 +177,127 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
   const kStyle: React.CSSProperties = { color: colors.utility.secondaryText, fontSize: 12, fontWeight: 600 };
   const vStyle: React.CSSProperties = { color: colors.utility.primaryText, fontSize: 13.5 };
   const bar = (onSave: () => void) => <EditBar colors={colors} loading={loading} onSave={onSave} onCancel={cancel} />;
+  const info = colors.semantic?.info || '#3573E8';
+
+  const detailsInitial = () => ({
+    list: channels.map(c => {
+      const cc = ccFromDial((c as any).country_code);
+      const channelType = c.channel_type || 'mobile';
+      return { channel_type: channelType, value: channelType === 'email' ? c.value : localDigits(c.value, cc), cc, is_primary: c.is_primary };
+    }),
+    a: addresses[0]
+      ? { ...addresses[0], country_code: ccFromDial(addresses[0].country_code) }
+      : { type: 'billing', address_line1: '', address_line2: '', city: '', state_code: '', country_code: 'IN', postal_code: '' },
+  });
+
+  // ── Linked contacts (Alternative Contact Person) ──────────────────────
+  // Reuses the product's existing ContactPersonsSection (same UI as the
+  // create-contact page). update_contact_idempotent_v2 accepted
+  // p_contact_persons long before this feature but its body never read it
+  // (fixed live, migration 078_update_contact_idempotent_v2_persons — full-
+  // replace semantics, same convention the RPC already uses for channels/
+  // addresses): a person with an id is updated, one without an id is
+  // inserted as a new child (individual · team_member ·
+  // parent_contact_ids=[this contact]), and any existing child left out of
+  // the array is unlinked, never deleted. Save sends the whole current list
+  // in one PUT — no client-side diffing needed now that the RPC does it.
+  const personsInitial = () => ({
+    list: persons.map((p: any) => ({
+      id: p.id,
+      salutation: p.salutation || undefined,
+      name: p.name || '',
+      designation: p.designation || undefined,
+      department: p.department || undefined,
+      is_primary: false,
+      contact_channels: (p.contact_channels || []).map((ch: any) => ({
+        id: ch.id, channel_type: ch.channel_type, value: ch.value,
+        country_code: ch.country_code || undefined,
+        is_primary: !!ch.is_primary, is_verified: !!ch.is_verified,
+      })),
+      notes: p.notes || undefined,
+    })),
+  });
+
+  const cleanPersonChannels = (list: any[]) =>
+    (list || [])
+      .filter((ch: any) => ch.channel_type && ch.value)
+      .map((ch: any) => ({
+        channel_type: ch.channel_type,
+        value: ch.value,
+        ...(ch.country_code ? { country_code: ch.country_code } : {}),
+        is_primary: !!ch.is_primary,
+        is_verified: !!ch.is_verified,
+      }));
+
+  const savePersons = async () => {
+    const list: any[] = (draft?.list || []).filter((p: any) => p.name);
+    const isNew = (p: any) => !p.id || String(p.id).startsWith('temp_');
+    try {
+      await mutate({ contactId: contact.id, updates: {
+        contact_persons: list.map((p: any) => ({
+          ...(isNew(p) ? {} : { id: p.id }),
+          name: p.name,
+          salutation: p.salutation,
+          designation: p.designation,
+          department: p.department,
+          notes: p.notes,
+          contact_channels: cleanPersonChannels(p.contact_channels),
+        })),
+      } as any });
+      vaniToast.success('Linked contacts saved');
+      setEditing(null); setDraft(null);
+      onSaved();
+    } catch (e: any) {
+      vaniToast.error(e?.response?.data?.error || e?.message || 'Could not save linked contacts');
+    }
+  };
 
   return (
-    // Extra bottom padding — ActionIsland (Profile/Contract/Email/WhatsApp
-    // pill) is position:fixed at the viewport bottom with no space of its
-    // own reserved in the page; without this, the last section can end up
-    // sitting directly under it on short-content contacts.
-    <div className="p-6" style={{ maxWidth: 1120, margin: '0 auto', paddingBottom: 100 }}>
+    // The floating ActionIsland was retired (2026-09-16) — its actions live
+    // in the identity hero now — so no reserved space is needed at the bottom.
+    <div className="p-6" style={{ maxWidth: 1120, margin: '0 auto', paddingBottom: 28 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 14 }}>
 
-        {/* IDENTITY */}
+        {/* ── IDENTITY — salutation + name (company for corporates) ── */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
-          <SectionCard colors={colors} icon={UserRound} title="Identity" active={editing === 'identity'}
-            onEdit={editHandler('identity', { salutation: contact.salutation || DEFAULT_SALUTATION, name: contact.name || '', company_name: contact.company_name || '', designation: contact.designation || '' })}>
+          <SectionCard colors={colors} icon={UserRound} title="Identity" accent={colors.brand.primary} active={editing === 'identity'}
+            onEdit={editHandler('identity', { salutation: contact.salutation || DEFAULT_SALUTATION, name: contact.name || '', company_name: contact.company_name || '' })}>
             {editing === 'identity' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {!isCorp && (
                   <div><FieldLabel colors={colors}>Salutation</FieldLabel>
-                    {/* Same list Create uses, same codes get written — no
-                        blank option, so this is never left unset. */}
                     <select value={draft.salutation || DEFAULT_SALUTATION} onChange={e => setDraft({ ...draft, salutation: e.target.value })} style={input as any}>
-                      {SALUTATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      {SALUTATIONS.map(sal => <option key={sal.value} value={sal.value}>{sal.label}</option>)}
                     </select></div>
                 )}
                 <div><FieldLabel colors={colors}>{isCorp ? 'Company name' : 'Full name'}</FieldLabel>
                   {isCorp
                     ? <input style={input} value={draft.company_name} onChange={e => setDraft({ ...draft, company_name: e.target.value })} />
                     : <input style={input} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />}</div>
-                <div><FieldLabel colors={colors}>Designation</FieldLabel>
-                  <input style={input} value={draft.designation} onChange={e => setDraft({ ...draft, designation: e.target.value })} placeholder="e.g. Director" /></div>
                 {bar(() => save(isCorp
-                  ? { company_name: draft.company_name, designation: draft.designation }
-                  : { name: draft.name, salutation: draft.salutation || DEFAULT_SALUTATION, designation: draft.designation }))}
+                  ? { company_name: draft.company_name }
+                  : { name: draft.name, salutation: draft.salutation || DEFAULT_SALUTATION }))}
               </div>
             ) : (
               <div>
                 {!isCorp && contact.salutation && (
                   <KV colors={colors} k="Salutation">
-                    {SALUTATIONS.find(s => s.value === contact.salutation)?.label || contact.salutation}
+                    {SALUTATIONS.find(sal => sal.value === contact.salutation)?.label || contact.salutation}
                   </KV>
                 )}
                 <KV colors={colors} k={isCorp ? 'Company' : 'Full name'}>{isCorp ? contact.company_name : contact.name}</KV>
                 <KV colors={colors} k="Type">{isCorp ? 'Corporate' : 'Individual'}</KV>
-                {contact.designation && <KV colors={colors} k="Designation">{contact.designation}</KV>}
                 <KV colors={colors} k="Added">{new Date(contact.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</KV>
               </div>
             )}
           </SectionCard>
         </div>
 
-        {/* CHANNELS */}
+        {/* ── CONTACT DETAILS — channels + address, one card (playground) ── */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
-          <SectionCard colors={colors} icon={Phone} title="Contact channels" active={editing === 'channels'}
-            onEdit={editHandler('channels', { list: channels.map(c => {
-              const cc = ccFromDial((c as any).country_code);
-              const channelType = c.channel_type || 'mobile';
-              return { channel_type: channelType, value: channelType === 'email' ? c.value : localDigits(c.value, cc), cc, is_primary: c.is_primary };
-            }) })}>
-            {editing === 'channels' ? (
+          <SectionCard colors={colors} icon={Phone} title="Contact details" accent={info} active={editing === 'details'}
+            onEdit={editHandler('details', detailsInitial())}>
+            {editing === 'details' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {draft.list.map((ch: any, i: number) => (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 8, borderBottom: `1px solid ${colors.utility.primaryText}10` }}>
@@ -223,6 +320,19 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: `1px dashed ${colors.utility.primaryText}33`, borderRadius: 9, padding: '8px', color: colors.utility.secondaryText, fontWeight: 650, fontSize: 13, cursor: 'pointer' }}>
                   <Plus className="h-4 w-4" /> Add channel
                 </button>
+                <FieldLabel colors={colors}>Address</FieldLabel>
+                <input style={input} placeholder="Address line 1" value={draft.a.address_line1 || ''} onChange={e => setDraft({ ...draft, a: { ...draft.a, address_line1: e.target.value } })} />
+                <input style={input} placeholder="Address line 2 (optional)" value={draft.a.address_line2 || ''} onChange={e => setDraft({ ...draft, a: { ...draft.a, address_line2: e.target.value } })} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={input} placeholder="City" value={draft.a.city || ''} onChange={e => setDraft({ ...draft, a: { ...draft.a, city: e.target.value } })} />
+                  <input style={{ ...input, width: 110 }} placeholder="PIN" value={draft.a.postal_code || ''} onChange={e => setDraft({ ...draft, a: { ...draft.a, postal_code: e.target.value } })} />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input style={input} placeholder="State code" value={draft.a.state_code || ''} onChange={e => setDraft({ ...draft, a: { ...draft.a, state_code: e.target.value } })} />
+                  <select style={{ ...input, width: 110 }} value={draft.a.country_code || 'IN'} onChange={e => setDraft({ ...draft, a: { ...draft.a, country_code: e.target.value } })}>
+                    {COUNTRY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                  </select>
+                </div>
                 {bar(() => {
                   for (const ch of draft.list) {
                     if (ch.channel_type === 'email' || !ch.value) continue;
@@ -235,32 +345,132 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                     is_primary: c.is_primary,
                   }));
                   if (list.length && !list.some((c: any) => c.is_primary)) list[0].is_primary = true;
-                  save({ contact_channels: list });
+                  const hasAddr = [draft.a.address_line1, draft.a.city, draft.a.postal_code].some((v: string) => (v || '').trim());
+                  save({
+                    contact_channels: list,
+                    ...(hasAddr ? { addresses: [{ ...draft.a, type: draft.a.type || 'billing', is_primary: true }] } : {}),
+                  });
                 })}
               </div>
             ) : (
               <div>
-                {channels.length === 0 && <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No channels yet.</div>}
-                {channels.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '8px 0', borderTop: i ? `1px solid ${colors.utility.primaryText}0d` : 'none' }}>
-                    <span style={{ width: 30, height: 30, borderRadius: 8, background: colors.utility.primaryBackground, display: 'grid', placeItems: 'center', color: colors.utility.secondaryText, flex: 'none' }}>
-                      {c.channel_type === 'email' ? <Mail className="h-4 w-4" /> : <Phone className="h-4 w-4" />}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...vStyle, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{(c as any).country_code && c.channel_type !== 'email' ? `${(c as any).country_code} ${localDigits(c.value, ccFromDial((c as any).country_code))}` : c.value}</div>
-                      <div style={{ fontSize: 11.5, color: colors.utility.secondaryText, textTransform: 'capitalize' }}>{c.channel_type}</div>
-                    </div>
-                    {c.is_primary && <span style={{ fontSize: 10, fontWeight: 800, color: colors.semantic.success, background: `${colors.semantic.success}18`, padding: '2px 7px', borderRadius: 999, textTransform: 'uppercase' }}>Primary</span>}
-                  </div>
+                {channels.length === 0 && addresses.length === 0 && (
+                  <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No contact details yet.</div>
+                )}
+                {channels.map((c, i) => {
+                  const RowIcon = channelIcon(c.channel_type);
+                  const value = (c as any).country_code && c.channel_type !== 'email'
+                    ? `${(c as any).country_code} ${localDigits(c.value, ccFromDial((c as any).country_code))}`
+                    : c.value;
+                  return (
+                    <DetailRow key={i} colors={colors} icon={RowIcon} label={CHANNEL_LABELS[c.channel_type] || c.channel_type}
+                      trailing={c.is_primary ? <span style={{ fontSize: 10, fontWeight: 800, color: colors.semantic.success, background: `${colors.semantic.success}18`, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', flex: 'none' }}>Primary</span> : undefined}>
+                      {value}
+                    </DetailRow>
+                  );
+                })}
+                {addresses.map((a: any, i: number) => (
+                  <DetailRow key={`addr-${i}`} colors={colors} icon={MapPin} label="Address">
+                    {[a.address_line1, a.address_line2, a.city, a.postal_code].filter(Boolean).join(', ')}
+                    <span style={{ color: colors.utility.secondaryText }}>{a.state_code ? ` · ${a.state_code}` : ''}</span>
+                  </DetailRow>
                 ))}
               </div>
             )}
           </SectionCard>
         </div>
 
-        {/* TAGS & CLASSIFICATIONS */}
+        {/* ── LINKED CONTACTS — alternates/stand-ins. Edit embeds the product's
+            existing Alternative Contact Person section (ContactPersonsSection)
+            in `embedded` mode — it renders its own full card (glass background,
+            its own title/badge/Add button, tip boxes) when used standalone on
+            the create page; embedded=true drops all of that so it reads as
+            plain rows inside THIS card instead of a card nested in a card
+            (owner feedback: "still a mess" persisted even after widening).
+            Persistence notes on savePersons(). ── */}
+        {/* Full width while editing — the person grid (avatars, channels,
+            actions) still benefits from room even without the outer card
+            (owner feedback: "UI is cramped" at the normal span-4). ── */}
+        <div style={{ gridColumn: editing === 'persons' ? 'span 12' : 'span 4' }} className={editing === 'persons' ? 'cn-col-12' : 'cn-col'}>
+          <SectionCard colors={colors} icon={Users} title="Linked contacts" accent="#7C5AC2" active={editing === 'persons'}
+            onEdit={editHandler('persons', personsInitial())}
+            editLabel={persons.length === 0 ? 'Add' : 'Edit'}>
+            {editing === 'persons' ? (
+              <div>
+                <ContactPersonsSection
+                  value={draft.list}
+                  onChange={(list: any) => setDraft({ list })}
+                  contactType={contact.type}
+                  embedded
+                  disabled={loading}
+                />
+                <EditBar colors={colors} loading={loading} onSave={savePersons} onCancel={cancel} />
+              </div>
+            ) : persons.length === 0 ? (
+              <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No alternate contacts yet. Add someone who can stand in for this person — substitutes captured at check-in also appear here.</div>
+            ) : (
+              <>
+                {persons.map((p, i) => {
+                  const role = (p.tags || []).find((t: any) => ['substitute', 'guest'].includes((t.tag_value || '').toLowerCase()));
+                  const phone = (p.contact_channels || []).find(c => c.channel_type !== 'email');
+                  return (
+                    <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderTop: i ? `1px solid ${colors.utility.primaryText}0d` : 'none' }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', fontWeight: 750, fontSize: 12.5, color: '#7C5AC2', background: '#7C5AC222', flex: 'none' }}>{(p.name || '?').slice(0, 2).toUpperCase()}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ ...vStyle, fontWeight: 650 }}>{p.name}</div>
+                        <div style={{ fontSize: 11.5, color: colors.utility.secondaryText }}>{[role ? (role.tag_label || role.tag_value) : null, phone?.value || (p.contact_channels || [])[0]?.value].filter(Boolean).join(' · ') || '—'}</div>
+                      </div>
+                      {role && <span style={{ fontSize: 10.5, fontWeight: 750, color: '#7C5AC2', background: '#7C5AC222', padding: '3px 9px', borderRadius: 999, textTransform: 'capitalize', display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#7C5AC2' }} />{role.tag_label || role.tag_value}</span>}
+                    </div>
+                  );
+                })}
+                <p style={{ fontSize: 11.5, color: colors.utility.secondaryText, lineHeight: 1.6, margin: '10px 0 0', borderTop: `1px solid ${colors.utility.primaryText}0d`, paddingTop: 10 }}>
+                  Linked contacts also appear on the Contacts page when filtered by their tag.
+                </p>
+              </>
+            )}
+          </SectionCard>
+        </div>
+
+        {/* ── BUSINESS — company / designation / compliance, one card (playground) ── */}
         <div style={{ gridColumn: 'span 4' }} className="cn-col">
-          <SectionCard colors={colors} icon={Tag} title="Tags & roles" active={editing === 'tags'}
+          <SectionCard colors={colors} icon={Briefcase} title="Business" accent="#6366F1" active={editing === 'business'}
+            editLabel={(isCorp || contact.designation || compliance.length) ? 'Edit' : 'Add'}
+            onEdit={editHandler('business', {
+              designation: contact.designation || '',
+              gstin: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('GST'))?.value || '',
+              pan: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('PAN'))?.value || '',
+            })}>
+            {editing === 'business' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div><FieldLabel colors={colors}>Designation</FieldLabel>
+                  <input style={input} value={draft.designation} onChange={e => setDraft({ ...draft, designation: e.target.value })} placeholder="e.g. Managing Partner" /></div>
+                <div><FieldLabel colors={colors}>GSTIN</FieldLabel><input style={input} value={draft.gstin} onChange={e => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })} placeholder="22ABCDE1234F1Z5" /></div>
+                <div><FieldLabel colors={colors}>PAN</FieldLabel><input style={input} value={draft.pan} onChange={e => setDraft({ ...draft, pan: e.target.value.toUpperCase() })} placeholder="ABCDE1234F" /></div>
+                {bar(() => {
+                  const arr: any[] = [];
+                  if (draft.gstin.trim()) arr.push({ type: 'GSTIN', label: 'GSTIN', value: draft.gstin.trim() });
+                  if (draft.pan.trim()) arr.push({ type: 'PAN', label: 'PAN', value: draft.pan.trim() });
+                  save({ designation: draft.designation, compliance_numbers: arr });
+                })}
+              </div>
+            ) : (
+              <div>
+                {contact.designation && <KV colors={colors} k="Designation">{contact.designation}</KV>}
+                {compliance.map((c: any, i: number) => (
+                  <KV colors={colors} key={i} k={c.type || c.label || 'Number'}><span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}>{c.value}</span></KV>
+                ))}
+                {!contact.designation && compliance.length === 0 && (
+                  <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No business details yet.</div>
+                )}
+              </div>
+            )}
+          </SectionCard>
+        </div>
+
+        {/* ── TAGS & ROLES ── */}
+        <div style={{ gridColumn: 'span 4' }} className="cn-col">
+          <SectionCard colors={colors} icon={Tag} title="Tags & roles" accent={colors.semantic?.warning || '#C77414'} active={editing === 'tags'}
             onEdit={editHandler('tags', { tags: tags.map(t => t.tag_value), classifications: [...(contact.classifications || [])] })}>
             {editing === 'tags' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -269,9 +479,10 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                     {['client', 'vendor', 'partner', 'supplier', 'customer', 'lead'].map(cl => {
                       const on = draft.classifications.includes(cl);
+                      const c = clsColor(cl);
                       return <button key={cl} onClick={() => setDraft({ ...draft, classifications: on ? draft.classifications.filter((x: string) => x !== cl) : [...draft.classifications, cl] })}
                         style={{ textTransform: 'capitalize', fontSize: 12, fontWeight: 700, padding: '5px 11px', borderRadius: 999, cursor: 'pointer',
-                          border: `1px solid ${on ? colors.brand.primary : colors.utility.primaryText + '30'}`, background: on ? `${colors.brand.primary}18` : 'transparent', color: on ? colors.brand.primary : colors.utility.secondaryText }}>{cl}</button>;
+                          border: `1px solid ${on ? c : colors.utility.primaryText + '30'}`, background: on ? `${c}18` : 'transparent', color: on ? c : colors.utility.secondaryText }}>{clsLabel(cl)}</button>;
                     })}
                   </div>
                 </div>
@@ -299,7 +510,7 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
                   <div style={{ ...kStyle, marginBottom: 7 }}>Classifications</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                     {(contact.classifications || []).length === 0 && <span style={{ fontSize: 12.5, color: colors.utility.secondaryText }}>None</span>}
-                    {(contact.classifications || []).map(cl => <span key={cl} style={{ textTransform: 'capitalize', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: `${colors.brand.primary}14`, color: colors.brand.primary }}>{cl}</span>)}
+                    {(contact.classifications || []).map(cl => { const c = clsColor(cl); return <span key={cl} style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: `${c}15`, color: c, border: `1px solid ${c}40` }}>{clsLabel(cl)}</span>; })}
                   </div>
                 </div>
                 <div>
@@ -315,94 +526,9 @@ const ContactProfileTab: React.FC<Props> = ({ contact, colors, onSaved, readOnly
           </SectionCard>
         </div>
 
-        {/* PEOPLE & ALTERNATES (read-only) */}
-        {!sparse && (
-          <div style={{ gridColumn: 'span 6' }} className="cn-col-6">
-            <SectionCard colors={colors} icon={Users} title="People & alternates">
-              {persons.length === 0 ? (
-                <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No alternate contacts. Substitutes and stand-ins captured at check-in appear here.</div>
-              ) : persons.map((p, i) => {
-                const role = (p.tags || []).find((t: any) => ['substitute', 'guest'].includes((t.tag_value || '').toLowerCase()));
-                const phone = (p.contact_channels || []).find(c => c.channel_type !== 'email');
-                return (
-                  <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '9px 0', borderTop: i ? `1px solid ${colors.utility.primaryText}0d` : 'none' }}>
-                    <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', fontWeight: 750, fontSize: 12.5, color: '#7C5AC2', background: '#7C5AC222', flex: 'none' }}>{(p.name || '?').slice(0, 2).toUpperCase()}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ ...vStyle, fontWeight: 650 }}>{p.name}</div>
-                      <div style={{ fontSize: 11.5, color: colors.utility.secondaryText }}>{phone?.value || (p.contact_channels || [])[0]?.value || '—'}</div>
-                    </div>
-                    {role && <span style={{ fontSize: 10.5, fontWeight: 750, color: '#7C5AC2', background: '#7C5AC222', padding: '3px 9px', borderRadius: 999, textTransform: 'capitalize' }}>{role.tag_label || role.tag_value}</span>}
-                  </div>
-                );
-              })}
-            </SectionCard>
-          </div>
-        )}
-
-        {/* ADDRESSES */}
-        {!sparse && (
-          <div style={{ gridColumn: 'span 6' }} className="cn-col-6">
-            <SectionCard colors={colors} icon={MapPin} title="Addresses" active={editing === 'addresses'} editLabel={addresses.length ? 'Edit' : 'Add'}
-              onEdit={editHandler('addresses', { a: addresses[0] ? { ...addresses[0], country_code: ccFromDial(addresses[0].country_code) } : { type: 'billing', address_line1: '', city: '', state_code: '', country_code: 'IN', postal_code: '' } })}>
-              {editing === 'addresses' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <input style={input} placeholder="Address line 1" value={draft.a.address_line1 || ''} onChange={e => setDraft({ a: { ...draft.a, address_line1: e.target.value } })} />
-                  <input style={input} placeholder="Address line 2 (optional)" value={draft.a.address_line2 || ''} onChange={e => setDraft({ a: { ...draft.a, address_line2: e.target.value } })} />
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input style={input} placeholder="City" value={draft.a.city || ''} onChange={e => setDraft({ a: { ...draft.a, city: e.target.value } })} />
-                    <input style={{ ...input, width: 120 }} placeholder="PIN" value={draft.a.postal_code || ''} onChange={e => setDraft({ a: { ...draft.a, postal_code: e.target.value } })} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input style={input} placeholder="State code" value={draft.a.state_code || ''} onChange={e => setDraft({ a: { ...draft.a, state_code: e.target.value } })} />
-                    <select style={{ ...input, width: 120 }} value={draft.a.country_code || 'IN'} onChange={e => setDraft({ a: { ...draft.a, country_code: e.target.value } })}>
-                      {COUNTRY_LIST.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                    </select>
-                  </div>
-                  {bar(() => save({ addresses: [{ ...draft.a, type: draft.a.type || 'billing', is_primary: true }] }))}
-                </div>
-              ) : addresses.length === 0 ? (
-                <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No address on file.</div>
-              ) : (
-                addresses.map((a: any, i: number) => (
-                  <div key={i} style={{ padding: '6px 0' }}>
-                    <div style={{ ...kStyle, textTransform: 'capitalize', marginBottom: 2 }}>{a.type || 'Address'}</div>
-                    <div style={vStyle}>{[a.address_line1, a.address_line2, a.city, a.postal_code].filter(Boolean).join(', ')}
-                      <span style={{ color: colors.utility.secondaryText }}>{a.state_code ? ` · ${a.state_code}` : ''}{a.country_code ? `, ${a.country_code}` : ''}</span></div>
-                  </div>
-                ))
-              )}
-            </SectionCard>
-          </div>
-        )}
-
-        {/* COMPLIANCE */}
-        {!sparse && (
-          <div style={{ gridColumn: 'span 6' }} className="cn-col-6">
-            <SectionCard colors={colors} icon={ShieldCheck} title="Compliance" active={editing === 'compliance'} editLabel={compliance.length ? 'Edit' : 'Add'}
-              onEdit={editHandler('compliance', { gstin: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('GST'))?.value || '', pan: compliance.find((c: any) => (c.type || c.label || '').toUpperCase().includes('PAN'))?.value || '' })}>
-              {editing === 'compliance' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div><FieldLabel colors={colors}>GSTIN</FieldLabel><input style={input} value={draft.gstin} onChange={e => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })} placeholder="22ABCDE1234F1Z5" /></div>
-                  <div><FieldLabel colors={colors}>PAN</FieldLabel><input style={input} value={draft.pan} onChange={e => setDraft({ ...draft, pan: e.target.value.toUpperCase() })} placeholder="ABCDE1234F" /></div>
-                  {bar(() => {
-                    const arr: any[] = [];
-                    if (draft.gstin.trim()) arr.push({ type: 'GSTIN', label: 'GSTIN', value: draft.gstin.trim() });
-                    if (draft.pan.trim()) arr.push({ type: 'PAN', label: 'PAN', value: draft.pan.trim() });
-                    save({ compliance_numbers: arr });
-                  })}
-                </div>
-              ) : compliance.length === 0 ? (
-                <div style={{ color: colors.utility.secondaryText, fontSize: 13 }}>No compliance numbers.</div>
-              ) : compliance.map((c: any, i: number) => (
-                <KV colors={colors} key={i} k={c.type || c.label || 'Number'}><span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}>{c.value}</span></KV>
-              ))}
-            </SectionCard>
-          </div>
-        )}
-
-        {/* NOTES */}
-        <div style={{ gridColumn: 'span 12' }} className="cn-col-12">
-          <SectionCard colors={colors} icon={StickyNote} title="Notes" active={editing === 'notes'} editLabel={contact.notes ? 'Edit' : 'Add'}
+        {/* ── NOTES ── */}
+        <div style={{ gridColumn: 'span 4' }} className="cn-col">
+          <SectionCard colors={colors} icon={StickyNote} title="Notes" accent={colors.brand.primary} active={editing === 'notes'} editLabel={contact.notes ? 'Edit' : 'Add'}
             onEdit={editHandler('notes', { notes: contact.notes || '' })}>
             {editing === 'notes' ? (
               <div>
