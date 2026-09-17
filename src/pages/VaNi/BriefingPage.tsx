@@ -131,7 +131,7 @@ const BriefingPage: React.FC = () => {
         title: 'Due services without a ticket',
         icon: <Wrench size={16} />,
         count: n.unticketed_service_events?.count ?? 0,
-        action: { label: 'Open Service Schedule', path: '/ops/services' },
+        action: { label: 'Open Commitments Register', path: '/ops/services' },
         rows: (n.unticketed_service_events?.items ?? []).map((e) => ({
           id: e.id,
           primary: e.block_name || 'Service event',

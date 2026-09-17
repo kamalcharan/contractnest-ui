@@ -1,24 +1,31 @@
 // src/components/ops/JobCard.tsx
 //
-// THE card of the Ops cockpit (Collections lane). One component renders every
-// row of the board in both views — the list (full width) and the lanes
-// (compact) — so the content, the evidence line and the ACTIONS are identical
-// wherever a job appears. `compact` changes layout density only.
+// THE card of the Ops cockpit (Collections + Services lanes). One component
+// renders every row of the board in both views — the list (full width) and
+// the lanes (compact) — so the content, the evidence line and the ACTIONS are
+// identical wherever a row appears. `compact` changes layout density only.
+//
+// Vocabulary: a Collections row is A PAYMENT DUE in any shape — an instalment
+// under an invoice, an invoice that is one instalment, or a whole invoice
+// with no schedule (kinds invoice_overdue / invoice_ahead, 017). Every row
+// that has an invoice shows its number, and that number opens the invoice.
+// A Services row is A SERVICE — on site or virtual — never "a visit".
 //
 // Actions are derived from the row's `kind` in ONE place (actionsFor), and
 // every action is a tool with an actor (spec §4). A payment that is not yet
 // due can be nudged early: the tool records it as an off-ladder heads-up
-// (rung 0) and the ladder still fires on schedule.
+// (rung 0) and the ladder still fires on schedule. A whole-invoice row has no
+// payment job, so no ladder: its tool is the existing per-invoice send.
 //
 // The card owns its two inline panels (Assign call, Pause) so lanes get them
 // too; the Log-a-call sheet is a modal the page owns (one at a time).
 
 import React, { useState } from 'react';
-import { ArrowUpRight, Check, Mail, MessageCircle, PhoneCall, UserPlus, PauseCircle, PlayCircle, RefreshCw, X, IndianRupee, CalendarClock, History } from 'lucide-react';
+import { ArrowUpRight, Check, Mail, MessageCircle, PhoneCall, UserPlus, PauseCircle, PlayCircle, RefreshCw, X, IndianRupee, CalendarClock, History, Wrench, CalendarCheck, Play, CheckCircle2, Share2, Copy, FileText } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useInvoiceTheme } from '@/pages/invoices/ui';
 import { fmtMoney, fmtDate } from '@/utils/format';
-import type { BoardCard, BoardKind, WlChannel, WlTeamMember } from '@/hooks/queries/useCollectionsQueries';
+import type { BoardCard, BoardKind, WlChannel, WlTeamMember, AskChannel, AskVisitSlotResult } from '@/hooks/queries/useCollectionsQueries';
 
 export type PauseReason = 'promise' | 'dispute' | 'manual';
 
@@ -34,7 +41,28 @@ export interface JobCardActions {
   onOpen: (card: BoardCard) => void;
   /** Opens the contract's activity timeline (History drawer). */
   onHistory: (card: BoardCard) => void;
+  // ── services lane (the card id is the service event id) ──
+  onAssignVisit: (card: BoardCard, userId: string) => Promise<unknown> | void;
+  /** scheduledAt is a local date-time (YYYY-MM-DDTHH:mm, IST); confirmed = agreed with the customer. */
+  onSchedule: (card: BoardCard, scheduledAt: string, confirmed: boolean) => Promise<unknown> | void;
+  onConfirmSlot: (card: BoardCard) => void;
+  onStartVisit: (card: BoardCard) => void;
+  onCompleteVisit: (card: BoardCard, notes: string) => Promise<unknown> | void;
+  /**
+   * Ask the customer to confirm the slot (migration 015). `share` returns the
+   * message + /slot/:token link so the card can open wa.me or copy it; email /
+   * whatsapp queue a real send. Resolves to the tool's result, or void on refusal.
+   */
+  onAskCustomer: (card: BoardCard, channel: AskChannel) => Promise<AskVisitSlotResult | void>;
+  // ── invoices (017) ──
+  /** Opens the invoice document (any collections row that carries an invoice). */
+  onViewInvoice: (card: BoardCard) => void;
+  /** Whole-invoice rows only: the existing per-invoice payment request (POST /api/invoices/:id/send). */
+  onSendInvoice: (card: BoardCard, channel: 'email' | 'whatsapp') => void;
 }
+
+const isVisit = (c: BoardCard) => c.lane === 'services';
+const isInvoice = (c: BoardCard) => c.kind === 'invoice_overdue' || c.kind === 'invoice_ahead';
 
 export interface LadderInfo {
   rule_enabled: boolean;
@@ -43,6 +71,8 @@ export interface LadderInfo {
 }
 
 export interface JobCardProps {
+  /** Channels with a registered provider template for slot requests; Share is always offered. */
+  askChannels?: Array<'email' | 'whatsapp'>;
   card: BoardCard;
   compact?: boolean;
   busy?: boolean;
@@ -80,8 +110,23 @@ export const kindLabel = (c: BoardCard, meId?: string): string => {
     case 'ladder_exhausted': return 'Ladder done';
     case 'overdue_no_ladder': return 'Overdue';
     case 'awaiting_activation': return 'Awaiting payment';
+    case 'invoice_overdue': return 'Invoice overdue';
+    case 'invoice_ahead': return c.days === 0 ? 'Invoice due today' : 'Invoice coming due';
+    case 'visit_in_progress': return 'Service in progress';
+    case 'visit_overdue': return 'Service overdue';
+    case 'visit_today': return 'Service today';
+    case 'visit_scheduled': return c.slot_state === 'confirmed' ? 'Slot confirmed' : c.slot_state === 'proposed' ? (c.visit?.ask?.asked_at ? 'Awaiting customer' : 'Slot proposed') : 'Service scheduled';
+    case 'slot_to_confirm': return 'Customer proposed a slot';
     default: return c.kind;
   }
+};
+
+/** Local date-time (IST wall clock) for a datetime-local input: tomorrow 10:00, or the visit's own time if in the future. */
+const defaultSlot = (c: BoardCard): string => {
+  const at = c.visit?.slot?.at || c.visit?.scheduled_at;
+  const d = at && new Date(at).getTime() > Date.now() ? new Date(at) : (() => { const t = new Date(); t.setDate(t.getDate() + 1); t.setHours(10, 0, 0, 0); return t; })();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 /** The ladder as a sentence — the rung pill's tooltip. */
@@ -93,9 +138,39 @@ export const ladderText = (ladder?: LadderInfo): string => {
 /** What the row wants you to know, as one line. Same text in both views. */
 export const evidence = (c: BoardCard, ladder?: LadderInfo, meId?: string): string => {
   const bits: string[] = [];
+  if (isVisit(c)) {
+    const v = c.visit;
+    if (v?.block_name) bits.push(`${v.block_name}${v.sequence && v.of ? ` · service ${v.sequence} of ${v.of}` : ''}`);
+    const when = v?.slot?.at || v?.scheduled_at;
+    if (when) bits.push(`${c.kind === 'visit_overdue' ? 'was due' : 'scheduled'} ${fmtTime(when)}`);
+    if (c.days_overdue > 0) bits.push(`${c.days_overdue} days overdue`);
+    bits.push(v?.assigned_to ? (v.assigned_to === meId ? 'with you' : `with ${v.assigned_to_name || 'a technician'}`) : 'no technician yet');
+    const ask = v?.ask;
+    if (c.kind === 'visit_in_progress') bits.push(v?.ticket?.number ? `in progress · ${v.ticket.number}` : 'in progress');
+    else if (c.kind === 'slot_to_confirm') {
+      const r = ask?.response;
+      bits.push(`customer suggested ${fmtTime(r?.proposed_at)}${r?.note ? ` — “${r.note}”` : ''} · confirm or propose another`);
+    } else if (c.slot_state === 'confirmed') {
+      bits.push(ask?.response?.action === 'accept' ? `customer confirmed ${fmtDate(ask.response.at)}` : 'slot confirmed with the customer');
+    } else if (c.slot_state === 'proposed') {
+      bits.push(ask?.asked_at ? `asked ${fmtDate(ask.asked_at)}${(ask.count || 0) > 1 ? ` ×${ask.count}` : ''} · no reply yet` : 'slot proposed, not yet sent to the customer');
+    } else {
+      bits.push(ask?.declined ? `customer said not needed ${fmtDate(ask.declined.at)}${ask.declined.note ? ` — “${ask.declined.note}”` : ''}` : 'no slot agreed yet');
+    }
+    return bits.join(' · ');
+  }
   if (c.kind === 'awaiting_activation') {
     bits.push(`awaiting the activation payment · sent ${fmtDate(c.awaiting?.since)}`);
     if (c.awaiting?.start_date) bits.push(`starts ${fmtDate(c.awaiting.start_date)}`);
+    return bits.join(' · ');
+  }
+  if (isInvoice(c)) {
+    // a whole invoice with no instalment schedule under it — the balance is the amount shown
+    bits.push(c.status === 'partially_paid' ? 'whole invoice · part paid, balance shown' : 'whole invoice · no instalment schedule');
+    if (c.due_date) bits.push(c.kind === 'invoice_ahead' ? (c.days === 0 ? 'due today' : c.days === 1 ? 'due tomorrow' : `due ${fmtDate(c.due_date)} · in ${c.days} days`) : `due ${fmtDate(c.due_date)}`);
+    if (c.days_overdue > 0) bits.push(`${c.days_overdue} days overdue`);
+    bits.push(c.nudge_count ? `sent ${c.nudge_count}×` : 'never sent');
+    if (c.last_nudge_at) bits.push(`last ${channelLabel(c.last_channel)} ${fmtDate(c.last_nudge_at)}${c.last_status === 'failed' ? ' · failed' : ''}`);
     return bits.join(' · ');
   }
   if (c.cycle_label) bits.push(c.cycle_label);
@@ -144,7 +219,12 @@ export const evidence = (c: BoardCard, ladder?: LadderInfo, meId?: string): stri
   return bits.join(' · ');
 };
 
-type ActionKey = 'confirm' | 'review' | 'retry' | 'email' | 'whatsapp' | 'call' | 'assign' | 'followup' | 'pause' | 'resume';
+type ActionKey =
+  | 'confirm' | 'review' | 'retry' | 'email' | 'whatsapp' | 'call' | 'assign' | 'followup' | 'pause' | 'resume'
+  // whole-invoice rows (017): the per-invoice send
+  | 'send_email' | 'send_whatsapp'
+  // services lane
+  | 'assign_visit' | 'schedule' | 'confirm_slot' | 'start_visit' | 'complete_visit' | 'ask_customer';
 
 /**
  * The single source of truth for which buttons a kind gets, and which is primary.
@@ -156,6 +236,25 @@ export const actionsFor = (c: BoardCard): { actions: ActionKey[]; primary: Actio
   const rungCh = c.rung?.channel;
   const nudgePrimary: ActionKey | null = rungCh === 'email' ? 'email' : rungCh === 'whatsapp' ? 'whatsapp' : rungCh === 'call' ? 'assign' : null;
   switch (c.kind) {
+    // ── services: Assign · Schedule/Reschedule · Confirm slot · Start visit · Mark done ──
+    case 'visit_in_progress': return { actions: ['complete_visit', 'assign_visit'], primary: 'complete_visit' };
+    // the customer suggested another time on /slot/:token — confirm it (they get the confirmation) or propose again
+    case 'slot_to_confirm': return { actions: ['confirm_slot', 'schedule', 'assign_visit', 'start_visit'], primary: 'confirm_slot' };
+    case 'visit_overdue':
+    case 'visit_today':
+    case 'visit_scheduled': {
+      const a: ActionKey[] = ['start_visit', 'schedule'];
+      if (c.slot_state !== 'confirmed') a.push('ask_customer');
+      if (c.slot_state === 'proposed') a.push('confirm_slot');
+      a.push('assign_visit', 'complete_visit');
+      const asked = !!c.visit?.ask?.asked_at;
+      const primary: ActionKey | null =
+        c.kind !== 'visit_scheduled' ? 'start_visit'
+        : c.slot_state === 'proposed' ? (asked ? 'confirm_slot' : 'ask_customer')
+        : c.slot_state === 'none' ? 'ask_customer'
+        : null;
+      return { actions: a, primary };
+    }
     case 'declaration_pending': return { actions: ['confirm', 'review'], primary: 'confirm' };
     case 'send_failed': return { actions: ['retry', c.failed?.channel === 'whatsapp' ? 'email' : 'whatsapp', 'call', 'followup', 'pause'], primary: 'retry' };
     case 'call_open': return { actions: ['call', 'email', 'whatsapp', 'pause'], primary: 'call' };
@@ -166,11 +265,14 @@ export const actionsFor = (c: BoardCard): { actions: ActionKey[]; primary: Actio
     case 'ladder_exhausted':
     case 'overdue_no_ladder': return { actions: ['email', 'whatsapp', 'call', 'assign', 'followup', 'pause'], primary: null };
     case 'awaiting_activation': return { actions: [], primary: null };
+    // a whole invoice: no payment job, so no ladder — send the invoice (the primary follows the last channel used)
+    case 'invoice_overdue': return { actions: ['send_email', 'send_whatsapp'], primary: c.last_channel === 'whatsapp' ? 'send_whatsapp' : 'send_email' };
+    case 'invoice_ahead': return { actions: ['send_email', 'send_whatsapp'], primary: null };
     default: return { actions: [], primary: null };
   }
 };
 
-const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team, ladder, meId, actions }) => {
+const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team, ladder, meId, actions, askChannels }) => {
   const { colors, ink, sub } = useInvoiceTheme();
   const brand = colors.brand.primary;
   const green = colors.semantic.success;
@@ -179,19 +281,25 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
   const mono: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
   const hairline = `${colors.utility.primaryText}14`;
 
-  const [panel, setPanel] = useState<'assign' | 'pause' | 'followup' | null>(null);
+  const [panel, setPanel] = useState<'assign' | 'pause' | 'followup' | 'assign_visit' | 'schedule' | 'complete' | 'ask' | null>(null);
+  const [askResult, setAskResult] = useState<AskVisitSlotResult | null>(null);
+  const [askDone, setAskDone] = useState<'wa' | 'copy' | null>(null);
   const [assignTo, setAssignTo] = useState<string>(meId || '');
   const [assignDue, setAssignDue] = useState<string>('');
   const [followUpDue, setFollowUpDue] = useState<string>(() => tomorrowISO());
+  const [slotAt, setSlotAt] = useState<string>(() => defaultSlot(c));
+  const [slotConfirmed, setSlotConfirmed] = useState<boolean>(false);
+  const [doneNotes, setDoneNotes] = useState<string>('');
   const [pauseReason, setPauseReason] = useState<PauseReason>('manual');
   const [pauseUntil, setPauseUntil] = useState<string>('');
   const [panelBusy, setPanelBusy] = useState(false);
 
   const kc: string =
-    c.kind === 'declaration_pending' || c.kind === 'awaiting_activation' ? amber
+    c.kind === 'declaration_pending' || c.kind === 'awaiting_activation' || c.kind === 'slot_to_confirm' ? amber
     : c.kind === 'paused' ? colors.utility.secondaryText
-    : c.kind === 'call_open' ? brand
-    : c.kind === 'payment_ahead' || c.kind === 'rung_ahead' ? green
+    : c.kind === 'call_open' || c.kind === 'visit_in_progress' ? brand
+    : c.kind === 'payment_ahead' || c.kind === 'rung_ahead' || c.kind === 'invoice_ahead' || c.kind === 'visit_today' ? green
+    : c.kind === 'visit_scheduled' ? (c.slot_state === 'confirmed' ? green : c.slot_state === 'proposed' ? amber : colors.utility.secondaryText)
     : red;
   const isRungPill = c.kind === 'rung_due' || c.kind === 'rung_ahead';
   const { actions: keys, primary } = actionsFor(c);
@@ -215,6 +323,39 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
     if (!meId || !followUpDue) return;
     setPanelBusy(true);
     try { await actions.onAssign(c, meId, followUpDue); setPanel(null); } finally { setPanelBusy(false); }
+  };
+  const submitAssignVisit = async () => {
+    if (!assignTo) return;
+    setPanelBusy(true);
+    try { await actions.onAssignVisit(c, assignTo); setPanel(null); } finally { setPanelBusy(false); }
+  };
+  const submitSchedule = async () => {
+    if (!slotAt) return;
+    setPanelBusy(true);
+    try { await actions.onSchedule(c, slotAt, slotConfirmed); setPanel(null); } finally { setPanelBusy(false); }
+  };
+  // Share = the tool records the ask and returns message + link; we then hand it to WhatsApp or the clipboard.
+  const shareAsk = async (how: 'wa' | 'copy') => {
+    setPanelBusy(true);
+    try {
+      const r = await actions.onAskCustomer(c, 'share');
+      if (!r) return;
+      setAskResult(r); setAskDone(how);
+      const text = r.message?.body || r.link;
+      if (how === 'wa') {
+        window.open(`https://wa.me/${(r.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      } else {
+        try { await navigator.clipboard.writeText(text); } catch { /* clipboard blocked — the link is shown below */ }
+      }
+    } finally { setPanelBusy(false); }
+  };
+  const sendAsk = async (channel: 'email' | 'whatsapp') => {
+    setPanelBusy(true);
+    try { const r = await actions.onAskCustomer(c, channel); if (r) setPanel(null); } finally { setPanelBusy(false); }
+  };
+  const submitComplete = async () => {
+    setPanelBusy(true);
+    try { await actions.onCompleteVisit(c, doneNotes.trim()); setPanel(null); setDoneNotes(''); } finally { setPanelBusy(false); }
   };
   const submitPause = async () => {
     if (pauseReason === 'promise' && !pauseUntil) return;
@@ -244,6 +385,17 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
       case 'followup': return meId ? <Btn key={k} onClick={() => setPanel(panel === 'followup' ? null : 'followup')} icon={<CalendarClock size={s} />} label="Follow up" title="Set a dated follow-up for yourself" /> : null;
       case 'pause': return <Btn key={k} onClick={() => setPanel(panel === 'pause' ? null : 'pause')} icon={<PauseCircle size={s} />} label="Pause" />;
       case 'resume': return <Btn key={k} primary={p} onClick={() => actions.onResume(c)} icon={<PlayCircle size={s} />} label="Resume" />;
+      // whole-invoice rows: the existing per-invoice payment request
+      case 'send_email': return <Btn key={k} primary={p} onClick={() => actions.onSendInvoice(c, 'email')} icon={<Mail size={s} />} label={c.nudge_count ? 'Send again · email' : 'Send invoice · email'} title="Email the invoice with the amount due and how to pay" />;
+      case 'send_whatsapp': return <Btn key={k} primary={p} onClick={() => actions.onSendInvoice(c, 'whatsapp')} icon={<MessageCircle size={s} />} label={c.nudge_count ? 'Send again · WhatsApp' : 'Send invoice · WhatsApp'} title="Send the invoice on WhatsApp with the amount due and how to pay" />;
+      // services
+      case 'assign_visit': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'assign_visit' ? null : 'assign_visit'); setAssignTo(c.visit?.assigned_to || meId || ''); }} icon={<UserPlus size={s} />} label={c.visit?.assigned_to ? 'Reassign' : 'Assign'} title="Technician for this service" />;
+      case 'schedule': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'schedule' ? null : 'schedule'); setSlotAt(defaultSlot(c)); setSlotConfirmed(c.slot_state === 'confirmed'); }} icon={<CalendarClock size={s} />} label={c.slot_state === 'none' ? 'Schedule' : 'Reschedule'} title="Propose or move the slot" />;
+      case 'confirm_slot': return <Btn key={k} primary={p} onClick={() => actions.onConfirmSlot(c)} icon={<CalendarCheck size={s} />} label="Confirm slot" title="The customer agreed to this slot — they get a confirmation" />;
+      case 'start_visit': return <Btn key={k} primary={p} onClick={() => actions.onStartVisit(c)} icon={<Play size={s} />} label="Start service" title="Opens a service ticket and marks the service in progress" />;
+      case 'complete_visit': return <Btn key={k} primary={p} onClick={() => setPanel(panel === 'complete' ? null : 'complete')} icon={<CheckCircle2 size={s} />} label="Mark done" title="Completes the ticket and the service" />;
+      case 'ask_customer': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'ask' ? null : 'ask'); setAskResult(null); setAskDone(null); }} icon={<Share2 size={s} />}
+        label={c.visit?.ask?.asked_at ? 'Ask again' : 'Ask customer'} title="Send the customer a link to confirm the slot or suggest another time" />;
       default: return null;
     }
   };
@@ -259,6 +411,12 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
   const name = clean(c.buyer_name) || c.contract_number;
   const openBtn = (
     <span className={`inline-flex items-center gap-3 ${compact ? '' : 'ml-auto'}`}>
+      {/* every collections row that carries an invoice shows its number, and the number opens the document */}
+      {c.invoice_id && (
+        <button onClick={() => actions.onViewInvoice(c)} className={`inline-flex items-center gap-1 font-bold ${compact ? 'text-[11px]' : 'text-xs'}`} style={{ ...mono, color: brand }} title="View the invoice">
+          <FileText size={compact ? 12 : 13} /> {c.invoice_number || 'Invoice'}
+        </button>
+      )}
       <button onClick={() => actions.onHistory(c)} className={`inline-flex items-center gap-1 font-bold ${compact ? 'text-[11px]' : 'text-xs'}`} style={{ color: brand }} title="What has already been tried on this contract">
         <History size={compact ? 12 : 13} /> History
       </button>
@@ -289,6 +447,54 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
           <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
         </div>
       )}
+      {panel === 'assign_visit' && (
+        <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
+          <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)} style={{ ...inputStyle, minWidth: compact ? 140 : 200, flex: compact ? 1 : undefined }} aria-label="Technician">
+            <option value="">Technician…</option>
+            {team.map((m) => <option key={m.user_id} value={m.user_id}>{m.name || m.user_id}</option>)}
+          </select>
+          <Btn primary onClick={submitAssignVisit} label={panelBusy ? '…' : 'Assign'} />
+          <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
+        </div>
+      )}
+      {panel === 'schedule' && (
+        <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
+          <input type="datetime-local" value={slotAt} onChange={(e) => setSlotAt(e.target.value)} style={inputStyle} aria-label="Visit slot" />
+          <label className="inline-flex items-center gap-1.5 text-[11.5px] font-bold" style={sub}>
+            <input type="checkbox" checked={slotConfirmed} onChange={(e) => setSlotConfirmed(e.target.checked)} /> Agreed with the customer
+          </label>
+          <Btn primary onClick={submitSchedule} label={panelBusy ? '…' : slotConfirmed ? 'Confirm slot' : 'Propose slot'} />
+          <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
+        </div>
+      )}
+      {panel === 'ask' && (
+        <div className={`mt-2.5 rounded-xl border p-2.5 ${compact ? '' : 'ml-5'}`} style={{ borderColor: hairline, backgroundColor: colors.utility.primaryBackground }}>
+          <p className="text-[11.5px] leading-snug" style={sub}>
+            {c.slot_state === 'none'
+              ? <>Proposes <b>{fmtTime(c.visit?.scheduled_at)}</b> (10:00 on the planned day) and sends {name} a link to confirm or suggest another time.</>
+              : <>Sends {name} a link to confirm <b>{fmtTime(c.visit?.slot?.at || c.visit?.scheduled_at)}</b> or suggest another time.</>}
+          </p>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <Btn primary onClick={() => shareAsk('wa')} icon={<MessageCircle size={12} />} label={panelBusy ? '…' : 'Share on WhatsApp'} title="Opens WhatsApp with the message ready to send from your number" />
+            <Btn onClick={() => shareAsk('copy')} icon={<Copy size={12} />} label="Copy message" title="Copy the message and link to paste anywhere" />
+            {askChannels?.includes('whatsapp') && <Btn onClick={() => sendAsk('whatsapp')} icon={<MessageCircle size={12} />} label="Send on WhatsApp" title="Sent from the business number by ContractNest" />}
+            {askChannels?.includes('email') && <Btn onClick={() => sendAsk('email')} icon={<Mail size={12} />} label="Send by email" title="Sent by ContractNest" />}
+            <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Close" />
+          </div>
+          {askResult && (
+            <p className="mt-2 text-[11px] break-all" style={sub}>
+              {askDone === 'copy' ? 'Copied · ' : askDone === 'wa' ? 'WhatsApp opened · ' : ''}link: <a href={askResult.link} target="_blank" rel="noreferrer" className="font-bold" style={{ color: brand }}>{askResult.link}</a>
+            </p>
+          )}
+        </div>
+      )}
+      {panel === 'complete' && (
+        <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
+          <input value={doneNotes} onChange={(e) => setDoneNotes(e.target.value)} placeholder="What was done (optional)" style={{ ...inputStyle, flex: 1, minWidth: 160 }} aria-label="Completion notes" />
+          <Btn primary onClick={submitComplete} label={panelBusy ? '…' : 'Mark done'} />
+          <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
+        </div>
+      )}
       {panel === 'pause' && (
         <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
           <select value={pauseReason} onChange={(e) => setPauseReason(e.target.value as PauseReason)} style={{ ...inputStyle, flex: compact ? 1 : undefined }} aria-label="Why pause">
@@ -312,7 +518,9 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
       <div className="rounded-xl border px-3 py-2.5" style={{ borderColor: hairline, backgroundColor: colors.utility.primaryBackground, borderLeft: `3px solid ${kc}66` }}>
         <div className="flex items-start justify-between gap-2">
           <p className="text-[13px] font-bold leading-snug min-w-0" style={ink}>
-            {(c.kind === 'payment_ahead') && <IndianRupee size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3, color: green }} />}
+            {(c.kind === 'payment_ahead' || c.kind === 'invoice_ahead') && <IndianRupee size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3, color: green }} />}
+            {c.kind === 'invoice_overdue' && <FileText size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3, color: kc }} />}
+            {isVisit(c) && <Wrench size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3, color: kc }} />}
             <span className="break-words">{name}</span>
           </p>
           {pill}
@@ -344,8 +552,10 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
           <p className="text-[12.5px] mt-0.5" style={{ color: c.days_overdue > 0 && c.kind !== 'declaration_pending' ? red : colors.utility.secondaryText }}>{evidence(c, ladder, meId)}</p>
         </div>
         <div className="text-right flex-none">
-          <p className="text-lg font-extrabold tabular-nums" style={ink}>{c.amount != null ? fmtMoney(c.amount, c.currency) : ''}</p>
-          <p className="text-[10px] truncate max-w-[140px]" style={{ ...sub, ...mono }}>{c.invoice_number || c.block_name || ''}</p>
+          {isVisit(c)
+            ? <p className="text-[12px] font-bold truncate max-w-[160px]" style={ink}><Wrench size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4, color: kc }} />{c.visit?.sequence && c.visit?.of ? `Service ${c.visit.sequence}/${c.visit.of}` : 'Service'}</p>
+            : <p className="text-lg font-extrabold tabular-nums" style={ink}>{c.amount != null ? fmtMoney(c.amount, c.currency) : ''}</p>}
+          <p className="text-[10px] truncate max-w-[160px]" style={{ ...sub, ...mono }}>{isVisit(c) ? (c.visit?.assigned_to_name || 'unassigned') : isInvoice(c) ? 'whole invoice' : (c.invoice_number ? `${c.invoice_number}${c.sequence && c.of ? ` · ${c.sequence}/${c.of}` : ''}` : c.block_name || '')}</p>
         </div>
         {pill}
       </div>

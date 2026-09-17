@@ -5,10 +5,12 @@
 // jtd_escalate_payment_call, jtd_pause_dunning, jtd_resume_dunning) over
 // /api/jtd/collections. Spec: specs/OPS-JTD-TOOLS-SPEC.md §4, §5.
 //
-// The board is ONE row model: every open payment job is exactly one card with
-// a `kind` (its state), an `anchor_at` (when it wants attention) and a
-// `bucket` (overdue · today · b1 · b2 · b3 · parked). Filters, facet counts
-// and per-bucket paging are computed server-side so the numbers always agree.
+// The board is ONE row model: every open payment due — an instalment under an
+// invoice, an invoice that is one instalment, or a whole invoice with no
+// schedule (017) — and every open service is exactly one card with a `kind`
+// (its state), an `anchor_at` (when it wants attention) and a `bucket`
+// (overdue · today · b1 · b2 · b3 · parked). Filters, facet counts and
+// per-bucket paging are computed server-side so the numbers always agree.
 //
 // Every tool is invoked with the signed-in user as the actor; VaNi will call
 // the same RPCs with its own id later. Nothing here computes balances or
@@ -34,7 +36,56 @@ export type BoardKind =
   | 'rung_ahead'
   | 'ladder_exhausted'
   | 'overdue_no_ladder'
-  | 'awaiting_activation';
+  | 'awaiting_activation'
+  /**
+   * A WHOLE-INVOICE due (migration 017): an open invoice with no billing
+   * schedule under it — Money In's rule. No payment job, so no ladder: its
+   * tools are View invoice and Send invoice (the existing per-invoice send).
+   */
+  | 'invoice_overdue'
+  | 'invoice_ahead'
+  // services lane (migration 014)
+  | 'visit_in_progress'
+  | 'visit_overdue'
+  | 'visit_today'
+  | 'visit_scheduled'
+  /** the customer suggested another time on /slot/:token — the team confirms (migration 015) */
+  | 'slot_to_confirm';
+
+export type BoardLane = 'collections' | 'services';
+export type SlotState = 'confirmed' | 'proposed' | 'none';
+
+/** The services block on a visit row. The row's `id`/`job_id` is the service event id. */
+export interface VisitInfo {
+  block_name?: string;
+  sequence?: number;
+  of?: number;
+  scheduled_at?: string;
+  notes?: string;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  /** The appointment = the agreed (or proposed) slot with the customer. */
+  slot?: { id: string; status: 'requested' | 'accepted' | 'rescheduled' | 'no_response' | string; at?: string; confirmed: boolean };
+  /** An open service ticket linked to this visit. */
+  ticket?: { id: string; number?: string; status: 'created' | 'assigned' | 'in_progress' | string };
+  /** The customer loop (migration 015): when we asked, how often, and what the customer answered on /slot/:token. */
+  ask?: {
+    asked_at?: string;
+    count?: number;
+    response?: CustomerSlotResponse;
+    /** the customer's last "not needed" on a now-retired appointment */
+    declined?: CustomerSlotResponse;
+  };
+}
+
+export interface CustomerSlotResponse {
+  action: 'accept' | 'propose' | 'decline';
+  at: string;
+  proposed_at?: string;
+  note?: string;
+}
+
+export type AskChannel = 'share' | 'email' | 'whatsapp';
 
 export type BucketKey = 'overdue' | 'today' | 'b1' | 'b2' | 'b3' | 'parked';
 
@@ -48,8 +99,15 @@ export interface WlRung {
 /** One row of the board. Optional fields are absent (jsonb_strip_nulls) rather than null. */
 export interface BoardCard {
   id: string;
+  lane: BoardLane;
   kind: BoardKind;
   bucket: BucketKey;
+  /** Who owns the row: the call task's assignee (collections) or the technician (services). */
+  owner_id?: string;
+  owner_name?: string;
+  /** services only */
+  slot_state?: SlotState;
+  visit?: VisitInfo;
   /** anchor date − today (IST). Negative = overdue attention. Absent for parked rows. */
   days?: number;
   anchor_at?: string;
@@ -130,6 +188,8 @@ export interface BoardFilters {
   to?: string;
   bands?: [number, number];
   kinds?: BoardKind[];
+  lanes?: BoardLane[];
+  slot?: SlotState;
   channel?: WlChannel;
   age?: '0-7' | '8-30' | '31-90' | '90+';
   cycle?: string;
@@ -148,15 +208,22 @@ export interface CollectionsBoard {
   buckets: BoardBucket[];
   facets: {
     kinds: Partial<Record<BoardKind, number>>;
+    lanes: Partial<Record<BoardLane, number>>;
+    slots: Partial<Record<SlotState, number>>;
     channels: Partial<Record<WlChannel, number>>;
     ages: Record<'0-7' | '8-30' | '31-90' | '90+', number>;
     cycles: Record<string, number>;
-    who: Record<'team' | 'mine' | 'unassigned', number>;
+    /** `unassigned_visits` ignores the lane and kind filters — the headline's "no technician yet" signal. */
+    who: Record<'team' | 'mine' | 'unassigned', number> & { unassigned_visits?: number };
+    /** "N need you" per lane over the window only (no other filter) — the focus strip. */
+    needs_by_lane: Partial<Record<BoardLane, number>>;
   };
   counts: { in_window: number; matched: number };
   happened: WlHappened[];
   team: WlTeamMember[];
   ladder: { rule_enabled: boolean; vani_enabled: boolean; rungs: Array<{ step: number; after_days: number; channel: WlChannel }> };
+  /** Channels with a REGISTERED provider template for slot requests (email · whatsapp). Share always works. */
+  ask_channels?: Array<'email' | 'whatsapp'>;
   generated_at: string;
 }
 
@@ -234,6 +301,19 @@ export const REASON_COPY: Record<string, string> = {
   assignee_not_in_tenant: 'That person is not in your team.',
   call_already_open: 'A call or follow-up is already open for this payment — log it first.',
   due_in_past: 'Pick a date from today onwards.',
+  // services lane
+  visit_not_found: 'That visit could not be found.',
+  visit_closed: 'That visit is already completed or cancelled.',
+  visit_in_progress: 'That visit is in progress — finish it before moving it.',
+  visit_already_started: 'That visit has already been started.',
+  no_customer: 'This contract has no customer to ask.',
+  group_contract: 'Group contracts have no single customer to ask.',
+  already_assigned: 'That technician is already on this visit.',
+  already_confirmed: 'The slot is already confirmed with the customer.',
+  no_slot_to_confirm: 'Propose a slot first, then confirm it.',
+  scheduled_at_required: 'Pick a date and time.',
+  slot_in_past: 'Pick a slot from today onwards.',
+  downstream_refused: 'The visit could not be updated — it may have changed under you. Refresh and retry.',
   invalid_reason: 'Pick a reason for pausing.',
   actor_required: 'Sign in again and retry.',
 };
@@ -254,6 +334,8 @@ const toParams = (f: BoardFilters): Record<string, string> => {
   if (f.to) p.to = f.to;
   if (f.bands) p.bands = f.bands.join(',');
   if (f.kinds?.length) p.kinds = f.kinds.join(',');
+  if (f.lanes?.length) p.lanes = f.lanes.join(',');
+  if (f.slot) p.slot = f.slot;
   if (f.channel) p.channel = f.channel;
   if (f.age) p.age = f.age;
   if (f.cycle) p.cycle = f.cycle;
@@ -285,6 +367,143 @@ export const useCollectionsBoard = (filters: BoardFilters, options?: { enabled?:
 };
 
 /** A contract's activity timeline — read by the Audit tab and the card's History drawer. */
+// ── Commitments Register · Activity (migration 016): tenant-wide timeline ──
+export type ActivityGroup = 'appointments' | 'followups' | 'calls' | 'reminders' | 'visits' | 'payments' | 'other';
+export interface RegisterActivityRow extends ActivityRow {
+  group: ActivityGroup;
+  contract_id: string;
+  contract_number?: string;
+  buyer_name?: string;
+  who_id?: string;
+}
+export interface RegisterActivityFilters {
+  from?: string;   // YYYY-MM-DD (IST day) — the RPC defaults to the last 30 days
+  to?: string;
+  groups?: ActivityGroup[];
+  who?: string;    // user id: the actor, or the assignee of a task
+  q?: string;
+  contract_id?: string;
+  limit?: number;
+  offset?: number;
+}
+export interface RegisterActivity {
+  success: boolean;
+  today: string;
+  window: { from: string; to: string };
+  rows: RegisterActivityRow[];
+  total: number;
+  /** over the window and Who/q, ignoring the group filter — the chips stay a stable map */
+  counts: Record<ActivityGroup | 'all', number>;
+  team: WlTeamMember[];
+  generated_at: string;
+}
+
+export const useActivityRegister = (filters: RegisterActivityFilters, opts?: { enabled?: boolean }) => {
+  const { currentTenant } = useAuth();
+  const key = JSON.stringify(filters);
+  return useQuery({
+    queryKey: [...collectionsKeys.all, 'register-activity', currentTenant?.id || '', key],
+    queryFn: async (): Promise<RegisterActivity> => {
+      if (!currentTenant?.id) throw new Error('No tenant selected');
+      const params: Record<string, string> = {};
+      if (filters.from) params.from = filters.from;
+      if (filters.to) params.to = filters.to;
+      if (filters.groups?.length) params.groups = filters.groups.join(',');
+      if (filters.who) params.who = filters.who;
+      if (filters.q) params.q = filters.q;
+      if (filters.contract_id) params.contract_id = filters.contract_id;
+      params.limit = String(filters.limit ?? 50);
+      params.offset = String(filters.offset ?? 0);
+      const response = await api.get(`${BASE}/activity`, { params });
+      return unwrap<RegisterActivity>(response);
+    },
+    enabled: !!currentTenant?.id && opts?.enabled !== false,
+    placeholderData: keepPreviousData,
+    staleTime: 20 * 1000,
+  });
+};
+
+// ── Commitments Register · Follow-ups (migration 017): call tasks, open or closed ──
+export type TaskKind = 'follow_up' | 'escalation';
+export interface OpsTask {
+  id: string;
+  kind: TaskKind | string;
+  state: 'open' | 'closed';
+  status: string;
+  due_on: string;
+  due_at?: string;
+  overdue: boolean;
+  /** due_on − today (IST) */
+  days: number;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  set_by_type?: string;
+  set_by_name?: string;
+  set_at: string;
+  notes?: string;
+  job_id?: string;
+  contract_id?: string;
+  contract_number?: string;
+  buyer_id?: string;
+  buyer_name?: string;
+  invoice_id?: string;
+  invoice_number?: string;
+  amount?: number;
+  currency?: string;
+  cycle_label?: string;
+  payment_status?: string;
+  payment_due?: string;
+  closed_at?: string;
+  outcome?: string;
+  outcome_notes?: string;
+  closed_by?: string;
+}
+export interface OpsTasksFilters {
+  from?: string;
+  to?: string;
+  who?: string;
+  kind?: TaskKind;
+  state?: 'open' | 'closed' | 'all';
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+export interface OpsTasks {
+  success: boolean;
+  today: string;
+  rows: OpsTask[];
+  total: number;
+  /** over from/to, who, kind, q — ignoring the state filter */
+  counts: { all: number; open: number; closed: number; overdue: number; follow_up: number; escalation: number };
+  team: WlTeamMember[];
+  generated_at: string;
+}
+
+export const useOpsTasks = (filters: OpsTasksFilters, opts?: { enabled?: boolean }) => {
+  const { currentTenant } = useAuth();
+  const key = JSON.stringify(filters);
+  return useQuery({
+    queryKey: [...collectionsKeys.all, 'tasks', currentTenant?.id || '', key],
+    queryFn: async (): Promise<OpsTasks> => {
+      if (!currentTenant?.id) throw new Error('No tenant selected');
+      const params: Record<string, string> = {};
+      if (filters.from) params.from = filters.from;
+      if (filters.to) params.to = filters.to;
+      if (filters.who) params.who = filters.who;
+      if (filters.kind) params.kind = filters.kind;
+      if (filters.state) params.state = filters.state;
+      if (filters.q) params.q = filters.q;
+      params.limit = String(filters.limit ?? 100);
+      params.offset = String(filters.offset ?? 0);
+      const response = await api.get(`${BASE}/tasks`, { params });
+      return unwrap<OpsTasks>(response);
+    },
+    enabled: !!currentTenant?.id && opts?.enabled !== false,
+    placeholderData: keepPreviousData,
+    staleTime: 20 * 1000,
+  });
+};
+
 export const useContractActivity = (
   contractId: string | null | undefined,
   opts?: { sources?: ActivitySource[]; limit?: number; offset?: number; enabled?: boolean }
@@ -391,6 +610,82 @@ export const usePauseDunning = () =>
     (v) => ({ reason: v.reason, until: v.until ?? null, note: v.note ?? null }),
     (_r, v) => (v.reason === 'promise' ? `Reminders paused until ${v.until}` : 'Reminders paused'),
     'Could not pause reminders'
+  );
+
+// ── Services lane: visit tools (migration 014). eventId = the board row id. ──
+const fmtSlot = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+
+export const useAssignVisit = () =>
+  useToolMutation<{ eventId: string; assignTo: string; note?: string }, { success: boolean; assigned_to_name: string | null }>(
+    (v) => `${BASE}/visits/${v.eventId}/assign`,
+    (v) => ({ assign_to: v.assignTo, note: v.note ?? null }),
+    (r) => `Visit assigned to ${r.assigned_to_name || 'a technician'}`,
+    'Could not assign the visit'
+  );
+
+export const useScheduleVisit = () =>
+  useToolMutation<
+    { eventId: string; scheduledAt: string; confirmed: boolean; note?: string },
+    { success: boolean; scheduled_at: string; confirmed: boolean; appointment_status: string }
+  >(
+    (v) => `${BASE}/visits/${v.eventId}/schedule`,
+    (v) => ({ scheduled_at: v.scheduledAt, confirmed: v.confirmed, note: v.note ?? null }),
+    (r) => (r.confirmed ? `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified` : `Slot proposed for ${fmtSlot(r.scheduled_at)} — awaiting the customer`),
+    'Could not schedule the visit'
+  );
+
+export const useConfirmVisitSlot = () =>
+  useToolMutation<{ eventId: string; note?: string }, { success: boolean; scheduled_at: string }>(
+    (v) => `${BASE}/visits/${v.eventId}/confirm-slot`,
+    (v) => ({ note: v.note ?? null }),
+    (r) => `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified`,
+    'Could not confirm the slot'
+  );
+
+export const useStartVisit = () =>
+  useToolMutation<{ eventId: string; note?: string }, { success: boolean; ticket_number: string | null; assigned_to_name: string | null }>(
+    (v) => `${BASE}/visits/${v.eventId}/start`,
+    (v) => ({ note: v.note ?? null }),
+    (r) => `Visit started${r.ticket_number ? ` · ${r.ticket_number}` : ''}`,
+    'Could not start the visit'
+  );
+
+export const useCompleteVisit = () =>
+  useToolMutation<{ eventId: string; notes?: string }, { success: boolean; ticket_number: string | null }>(
+    (v) => `${BASE}/visits/${v.eventId}/complete`,
+    (v) => ({ notes: v.notes ?? null }),
+    (r) => `Visit marked done${r.ticket_number ? ` · ${r.ticket_number}` : ''}`,
+    'Could not complete the visit'
+  );
+
+export interface AskVisitSlotResult {
+  success: boolean;
+  appointment_id: string;
+  channel: AskChannel;
+  scheduled_at: string;
+  slot_text: string;
+  link: string;
+  message?: { subject?: string | null; body?: string | null } | null;
+  recipient_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  communication_id?: string | null;
+}
+
+/**
+ * Ask the customer to confirm the slot (migration 015). `share` sends nothing —
+ * it returns the message + /slot/:token link so the card can open wa.me or copy;
+ * email/whatsapp queue a real send (needs a registered template — see ask_channels).
+ */
+export const useAskVisitSlot = () =>
+  useToolMutation<{ eventId: string; channel: AskChannel; note?: string }, AskVisitSlotResult>(
+    (v) => `${BASE}/visits/${v.eventId}/ask`,
+    (v) => ({ channel: v.channel, note: v.note ?? null }),
+    (r) => (r.channel === 'share'
+      ? `Slot ${fmtSlot(r.scheduled_at)} proposed — share the link with ${r.recipient_name || 'the customer'}`
+      : `Asked ${r.recipient_name || 'the customer'} ${r.channel === 'whatsapp' ? 'on WhatsApp' : 'by email'} to confirm ${fmtSlot(r.scheduled_at)}`),
+    'Could not ask the customer'
   );
 
 export const useResumeDunning = () =>

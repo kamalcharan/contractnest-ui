@@ -37,37 +37,31 @@ export const defaultMenuItems: MenuItem[] = [
   //   path: '/dashboard',
   //   hasSubmenu: false
   // },
-  // Operations menu - moved after Dashboard for better UX
-  {
-    id: 'operations',
-    label: 'Operations',
-    icon: 'Activity',
-    path: '/ops/cockpit',
-    hasSubmenu: true,
-    submenuItems: [
-      { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
-      // TEMPORARY (2026-09-16): staging entry for the commitments list that will
-      // become /ops/cockpit itself once every lane is in. Remove at the swap.
-      { id: 'ops-cockpit-next', label: 'Ops (preview)', icon: 'ListChecks', path: '/ops/cockpit/next' },
-      // HIDDEN 2026-08-14: superseded by Money In (/money-in) + To Pay (/to-pay),
-      // which read the same get_tenant_receivables/get_tenant_payables RPCs.
-      // ⚠ "Collected this month" (visible on this page, all-time only on Money
-      // In) has NOT been ported yet — that KPI is lost while this is hidden.
-      // See CLAUDE.md "Finance (AR/AP) menu is superseded" / review item 1.
-      // Page left in place; do not delete pages/operations/finance/ yet.
-      // { id: 'ops-finance', label: 'Finance (AR/AP)', icon: 'Wallet', path: '/ops/finance' },
-      { id: 'ops-services', label: 'Event Schedule', icon: 'CalendarClock', path: '/ops/services' },
-      { id: 'ops-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions' },
-      { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
-      { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
-      { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
-      { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' }
-      // HIDDEN: Activity Feed, Reports - commented out
-      // { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' }
-      // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
-    ]
-  },
-  // REMOVED: Contacts menu - now available under Operations > Entities
+  // 2026-09-17 (ops-menu-flatten, owner): the "Operations" group is gone — its entries are main menus,
+  // in the same place and order. Ids kept so nothing keyed on them changes.
+  // 2026-09-17 (ops-cockpit-swap): /ops/cockpit IS the Ops board (revenue side); /ops/cockpit/next redirects here.
+  { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
+  // HIDDEN 2026-08-14: superseded by Money In (/money-in) + To Pay (/to-pay),
+  // which read the same get_tenant_receivables/get_tenant_payables RPCs.
+  // ⚠ "Collected this month" (visible on this page, all-time only on Money
+  // In) has NOT been ported yet — that KPI is lost while this is hidden.
+  // See CLAUDE.md "Finance (AR/AP) menu is superseded" / review item 1.
+  // Page left in place; do not delete pages/operations/finance/ yet.
+  // { id: 'ops-finance', label: 'Finance (AR/AP)', icon: 'Wallet', path: '/ops/finance' },
+  // 2026-09-17 (commitments-register): Event Schedule became the Commitments Register — every commitment in
+  // every status + the Activity timeline (appointments, follow-ups, calls, reminders). Ops = what needs you now.
+  { id: 'ops-services', label: 'Commitments Register', icon: 'CalendarClock', path: '/ops/services' },
+  { id: 'ops-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions' },
+  // RETIRED 2026-09-17 (ops-appointments-loop): the appointment is the service's slot on the Ops board
+  // (Services focus · Schedule · Ask customer · Confirm slot); /ops/appointments redirects there.
+  // { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
+  { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
+  { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
+  { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' },
+  // HIDDEN: Activity Feed, Reports - commented out
+  // { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' }
+  // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
+  // REMOVED: Contacts menu with sub-lists - Contacts is a main menu above (id 'entities', /contacts)
   /*
   {
     id: 'contacts',
@@ -198,10 +192,13 @@ export const defaultMenuItems: MenuItem[] = [
   // Receivable page — retire it in the same cleanup pass, per CLAUDE.md
   // "Finance (AR/AP) menu is superseded". Pages left in place; delete only in
   // the owner's later code-cleanup pass, not now.
-  // VISIBLE FOR REVIEW (2026-09-16, owner request): the old VaNi group is un-hidden
-  // so all its reference pages (mock data) can be reviewed while the JTD tools /
-  // collections-ladder spec is finalised — see specs/OPS-JTD-TOOLS-SPEC.md. Re-hide
-  // by commenting this block out again once the review is done.
+  // WAS VISIBLE FOR REVIEW (2026-09-16, owner request) while the JTD tools /
+  // collections-ladder spec was finalised. RE-HIDDEN 2026-09-17 (owner request,
+  // batch ops-cockpit-swap): the review is done — the Ops board, the ladder tools
+  // and the automation rules replaced what these mock pages sketched. Routes and
+  // page files stay in place for the later code-cleanup pass; nothing else
+  // references the 'vani-old' id.
+  /*
   {
     id: 'vani-old',
     label: 'VaNi (old)',
@@ -224,6 +221,7 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
     ]
   },
+  */
   // HIDDEN: Templates, Tasks - commented out for now
   /*
   {

@@ -243,7 +243,7 @@ export const LITE_MENUS: Record<LiteFlavor, LiteMenuConfig> = {
       { id: 'lite-dashboard', label: 'Dashboard', icon: 'Gauge', path: '/ops/cockpit' },
       { id: 'lite-contracts', label: 'Contracts', icon: 'FileText', path: '/contracts' },
       { id: 'lite-claim', label: 'Claim a Contract', icon: 'KeyRound', path: '/contracts/claim' },
-      { id: 'lite-service-events', label: 'Service Events', icon: 'CalendarClock', path: '/ops/services' },
+      { id: 'lite-service-events', label: 'Commitments Register', icon: 'CalendarClock', path: '/ops/services' },
       { id: 'lite-contacts', label: 'Contacts', icon: 'Building2', path: '/contacts' },
       { id: 'lite-equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
       { id: 'lite-facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' }
@@ -251,7 +251,7 @@ export const LITE_MENUS: Record<LiteFlavor, LiteMenuConfig> = {
     grow: [
       { id: 'lite-rfq', label: 'RFQs to Vendors', icon: 'Send', path: '/contracts/rfq/new', copyKey: 'rfq' },
       { id: 'lite-finance', label: 'Finance · Payables', icon: 'Wallet', path: '/ops/finance', copyKey: 'finance' },
-      { id: 'lite-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments', copyKey: 'appointments' },
+      // 2026-09-17 (ops-cockpit-swap): Appointments is the visit's slot on the Ops board; the route redirects there
       { id: 'lite-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions', copyKey: 'group-sessions' }
     ]
   },
@@ -265,11 +265,11 @@ export const LITE_MENUS: Record<LiteFlavor, LiteMenuConfig> = {
     ],
     grow: [
       { id: 'lite-finance', label: 'Finance · AR/AP', icon: 'Wallet', path: '/ops/finance', copyKey: 'finance' },
-      { id: 'lite-events', label: 'Event Schedule', icon: 'CalendarClock', path: '/ops/services', copyKey: 'events' },
+      { id: 'lite-events', label: 'Commitments Register', icon: 'CalendarClock', path: '/ops/services', copyKey: 'events' },
       { id: 'lite-catalog', label: 'Catalog Studio', icon: 'LayoutGrid', path: '/catalog-studio/configure', copyKey: 'catalog' },
       { id: 'lite-equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry', copyKey: 'registry' },
       { id: 'lite-facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry', copyKey: 'registry' },
-      { id: 'lite-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments', copyKey: 'appointments' },
+      // 2026-09-17 (ops-cockpit-swap): Appointments is the visit's slot on the Ops board; the route redirects there
       { id: 'lite-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions', copyKey: 'group-sessions' }
     ]
   }

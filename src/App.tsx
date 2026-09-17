@@ -45,6 +45,7 @@ import SessionCheckinPage from './pages/checkin/SessionCheckinPage'; // [batch3-
 import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [batch3-checkin]
 import VendorQuotePage from './pages/quote/VendorQuotePage'; // [rfq] public vendor quote response
 import ServiceReportPage from './pages/report/ServiceReportPage'; // [B3.6] public service report (token link)
+import VisitSlotPage from './pages/visit-slot/VisitSlotPage'; // [ops-appointments-loop] public: customer confirms a visit slot (token link)
 
 // Catalog Pages
 
@@ -191,12 +192,14 @@ import ContractCreatePage from './pages/contracts/create';
 // Contract Preview, PDF View, Ops Cockpit, Invite Sellers
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
-import OpsCockpitPage from './pages/ops/cockpit';
-import OpsCommitmentsPage from './pages/ops/cockpit/Commitments';
+// /ops/cockpit: the Ops board for the revenue side, the original cockpit for the
+// expense side — picked by perspective in Home.tsx (batch ops-cockpit-swap).
+import OpsHome from './pages/ops/cockpit/Home';
 import ExperiencePage from './pages/experience';
 import EntryRedirect from './utils/navigation/EntryRedirect';
 import FinancePage from './pages/operations/finance';
-import OpsServiceSchedulePage from './pages/operations/services';
+// Commitments Register (batch commitments-register) — replaces the Event Schedule page at the same route
+import CommitmentsRegisterPage from './pages/ops/register';
 import GroupSessionsPage from './pages/operations/group-sessions';
 import InvoiceRegisterPage from './pages/invoices';
 import InvoiceComposerPage from './pages/invoices/composer';
@@ -204,8 +207,6 @@ import ExtendPage from './pages/extend';
 import MoneyInPage from './pages/money-in';
 import ToPayPage from './pages/to-pay';
 import TaxesPage from './pages/taxes';
-import OpsAppointmentsPage from './pages/operations/appointments';
-import AppointmentsPage from './pages/appointments';
 import InviteSellersPage from './pages/contracts/invite';
 
 // Contracts Hub + Detail + Invoice View + Public Review
@@ -391,6 +392,8 @@ const AppContent: React.FC = () => {
           <Route path="/quote/:cnak/:secret" element={<VendorQuotePage />} />
           {/* [B3.6] public service report — no auth, gated by the per-ticket report_token */}
           <Route path="/report/service/:token" element={<ServiceReportPage />} />
+          {/* [ops-appointments-loop] public slot page — no auth, gated by the per-appointment slot_token */}
+          <Route path="/slot/:token" element={<VisitSlotPage />} />
           <Route path="/session-checkin" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<ChairCheckinPage />} />
           </Route>
@@ -639,7 +642,9 @@ const AppContent: React.FC = () => {
             <Route index element={<ExperiencePage />} />
           </Route>
 
-          {/* NEW: Ops Cockpit Route */}
+          {/* Ops Cockpit — the landing page. Revenue side: the Ops board
+              (Collections + Services on one row model, ?focus=collections|services
+              deep link). Expense side: the original cockpit, until To Pay covers it. */}
           <Route
             path="/ops/cockpit"
             element={
@@ -648,22 +653,11 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route index element={<OpsCockpitPage />} />
+            <Route index element={<OpsHome />} />
           </Route>
 
-          {/* TEMPORARY staging route (2026-09-16): the commitments list that will
-              replace the cockpit body above once every lane is in. At the swap,
-              /ops/cockpit renders OpsCommitmentsPage and this route is removed. */}
-          <Route
-            path="/ops/cockpit/next"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<OpsCommitmentsPage />} />
-          </Route>
+          {/* The 2026-09-16 staging route — swapped into /ops/cockpit on 2026-09-17; kept as a redirect for bookmarks */}
+          <Route path="/ops/cockpit/next" element={<Navigate to="/ops/cockpit" replace />} />
 
           {/* Operations → Finance (AR/AP) — Stage 1 */}
           <Route
@@ -677,7 +671,8 @@ const AppContent: React.FC = () => {
             <Route index element={<FinancePage />} />
           </Route>
 
-          {/* Operations → Service Schedule — Stage 2 */}
+          {/* Operations → Commitments Register (was Event Schedule): every event in every status + the Activity timeline.
+              Ops is what needs you now; this is everything that was and is committed. Same route so lite menus and links hold. */}
           <Route
             path="/ops/services"
             element={
@@ -686,7 +681,7 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route index element={<OpsServiceSchedulePage />} />
+            <Route index element={<CommitmentsRegisterPage />} />
           </Route>
 
           {/* Operations → Group Sessions dashboard (generic per tenant) */}
@@ -766,17 +761,11 @@ const AppContent: React.FC = () => {
             <Route path=":invoiceId" element={<InvoiceViewPage />} />
           </Route>
 
-          {/* Operations → Appointments — Stage 3 */}
-          <Route
-            path="/ops/appointments"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<OpsAppointmentsPage />} />
-          </Route>
+          {/* Operations → Appointments — RETIRED 2026-09-17 (ops-appointments-loop).
+              The appointment is the visit's slot on the Ops board (Services focus):
+              Schedule · Ask customer · Confirm slot, with the customer answering on
+              /slot/:token. The kanban never held an accepted slot (163 of 164 expired). */}
+          <Route path="/ops/appointments" element={<Navigate to="/ops/cockpit?focus=services" replace />} />
 
           {/* Equipment Registry — standalone page under Operations */}
           <Route
@@ -807,17 +796,8 @@ const AppContent: React.FC = () => {
             <Route index element={<EquipmentPage registryMode="entity" />} />
           </Route>
 
-          {/* Appointments — scaffold showing existing widget + placeholder */}
-          <Route
-            path="/appointments"
-            element={
-              <ProtectedRoute>
-                <MainLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AppointmentsPage />} />
-          </Route>
+          {/* /appointments — the Cycle-2 scaffold is retired (ops-appointments-loop); appointments live on the Ops board */}
+          <Route path="/appointments" element={<Navigate to="/ops/cockpit?focus=services" replace />} />
 
           {/* NEW: Invite Sellers Route */}
           <Route
