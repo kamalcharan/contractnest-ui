@@ -192,6 +192,7 @@ import ContractCreatePage from './pages/contracts/create';
 import ContractPreviewPage from './pages/contracts/preview';
 import PDFViewPage from './pages/contracts/pdf-view';
 import OpsCockpitPage from './pages/ops/cockpit';
+import OpsCommitmentsPage from './pages/ops/cockpit/Commitments';
 import ExperiencePage from './pages/experience';
 import EntryRedirect from './utils/navigation/EntryRedirect';
 import FinancePage from './pages/operations/finance';
@@ -648,6 +649,20 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<OpsCockpitPage />} />
+          </Route>
+
+          {/* TEMPORARY staging route (2026-09-16): the commitments list that will
+              replace the cockpit body above once every lane is in. At the swap,
+              /ops/cockpit renders OpsCommitmentsPage and this route is removed. */}
+          <Route
+            path="/ops/cockpit/next"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OpsCommitmentsPage />} />
           </Route>
 
           {/* Operations → Finance (AR/AP) — Stage 1 */}

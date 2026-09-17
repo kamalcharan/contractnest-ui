@@ -133,8 +133,10 @@ export interface VaniComposeResult {
 }
 
 export interface VaniEntitlement {
+  /** Mirrors the tenant-table truth (t_tenants.vani_enabled via vani_is_enabled). */
   entitled: boolean;
-  mode: 'open' | 'subscription';
+  /** 'tenant' on current API builds; 'open' | 'subscription' on older ones. */
+  mode: 'open' | 'subscription' | 'tenant';
   llm_enabled: boolean;
 }
 

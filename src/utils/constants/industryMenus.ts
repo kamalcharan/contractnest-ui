@@ -46,6 +46,9 @@ export const defaultMenuItems: MenuItem[] = [
     hasSubmenu: true,
     submenuItems: [
       { id: 'ops-cockpit', label: 'Ops Cockpit', icon: 'Gauge', path: '/ops/cockpit' },
+      // TEMPORARY (2026-09-16): staging entry for the commitments list that will
+      // become /ops/cockpit itself once every lane is in. Remove at the swap.
+      { id: 'ops-cockpit-next', label: 'Ops (preview)', icon: 'ListChecks', path: '/ops/cockpit/next' },
       // HIDDEN 2026-08-14: superseded by Money In (/money-in) + To Pay (/to-pay),
       // which read the same get_tenant_receivables/get_tenant_payables RPCs.
       // ⚠ "Collected this month" (visible on this page, all-time only on Money
@@ -195,28 +198,32 @@ export const defaultMenuItems: MenuItem[] = [
   // Receivable page — retire it in the same cleanup pass, per CLAUDE.md
   // "Finance (AR/AP) menu is superseded". Pages left in place; delete only in
   // the owner's later code-cleanup pass, not now.
-  // {
-  //   id: 'vani-old',
-  //   label: 'VaNi (old)',
-  //   icon: 'Archive',
-  //   path: '/vani/dashboard',
-  //   hasSubmenu: true,
-  //   defaultOpen: false, // reference only — must not auto-expand and crowd the sidebar
-  //   submenuItems: [
-  //     { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
-  //     { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
-  //     { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },
-  //     { id: 'vani-templates', label: 'Templates', icon: 'FileText', path: '/vani/templates' },
-  //     { id: 'vani-channels', label: 'Channels', icon: 'MessageSquare', path: '/vani/channels' },
-  //     { id: 'vani-bbb-chat', label: 'BBB Chat', icon: 'MessageCircle', path: '/vani/channels/bbb/chat' },
-  //     { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
-  //     { id: 'vani-webhooks', label: 'Webhooks', icon: 'Webhook', path: '/vani/webhooks' },
-  //     { id: 'vani-receivables', label: 'Accounts Receivable', icon: 'Wallet', path: '/vani/finance/receivables' },
-  //     { id: 'vani-service-schedule', label: 'Service Schedule', icon: 'CalendarCheck', path: '/vani/operations/services' },
-  //     { id: 'vani-rules', label: 'Process Rules', icon: 'ListChecks', path: '/vani/rules' },
-  //     { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
-  //   ]
-  // },
+  // VISIBLE FOR REVIEW (2026-09-16, owner request): the old VaNi group is un-hidden
+  // so all its reference pages (mock data) can be reviewed while the JTD tools /
+  // collections-ladder spec is finalised — see specs/OPS-JTD-TOOLS-SPEC.md. Re-hide
+  // by commenting this block out again once the review is done.
+  {
+    id: 'vani-old',
+    label: 'VaNi (old)',
+    icon: 'Archive',
+    path: '/vani/dashboard',
+    hasSubmenu: true,
+    defaultOpen: false, // reference only — must not auto-expand and crowd the sidebar
+    submenuItems: [
+      { id: 'vani-dashboard', label: 'Dashboard', icon: 'LayoutDashboard', path: '/vani/dashboard' },
+      { id: 'vani-jobs', label: 'Jobs', icon: 'Briefcase', path: '/vani/jobs' },
+      { id: 'vani-events', label: 'Business Events', icon: 'CalendarClock', path: '/vani/events' },
+      { id: 'vani-templates', label: 'Templates', icon: 'FileText', path: '/vani/templates' },
+      { id: 'vani-channels', label: 'Channels', icon: 'MessageSquare', path: '/vani/channels' },
+      { id: 'vani-bbb-chat', label: 'BBB Chat', icon: 'MessageCircle', path: '/vani/channels/bbb/chat' },
+      { id: 'vani-analytics', label: 'Analytics', icon: 'BarChart2', path: '/vani/analytics' },
+      { id: 'vani-webhooks', label: 'Webhooks', icon: 'Webhook', path: '/vani/webhooks' },
+      { id: 'vani-receivables', label: 'Accounts Receivable', icon: 'Wallet', path: '/vani/finance/receivables' },
+      { id: 'vani-service-schedule', label: 'Service Schedule', icon: 'CalendarCheck', path: '/vani/operations/services' },
+      { id: 'vani-rules', label: 'Process Rules', icon: 'ListChecks', path: '/vani/rules' },
+      { id: 'vani-chat', label: 'Chat', icon: 'MessagesSquare', path: '/vani/chat' }
+    ]
+  },
   // HIDDEN: Templates, Tasks - commented out for now
   /*
   {

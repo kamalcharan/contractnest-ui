@@ -119,6 +119,22 @@ export interface TenantContext {
      * mid-work. Do not turn this into a disabled button.
      */
     over_limit: boolean;
+    /**
+     * Tenant-level VaNi switch — THE truth for whether VaNi (automation) is
+     * on for this tenant. Computed server-side by vani_is_enabled(): admin
+     * tenant, or t_tenants.vani_enabled not yet past vani_enabled_until.
+     * Absent (undefined) on API builds predating migration vani-agent/003 —
+     * treat undefined as false.
+     */
+    vani_enabled?: boolean;
+  };
+  /** Detail behind flags.vani_enabled. Absent on older API builds. */
+  vani?: {
+    enabled: boolean;
+    /** ISO timestamp when a trial lapses; null = open-ended. */
+    until: string | null;
+    /** 'trial' | 'plan' | 'admin' | 'admin_tenant' | null */
+    source: string | null;
   };
 }
 

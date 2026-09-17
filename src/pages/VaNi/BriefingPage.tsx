@@ -25,6 +25,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTenantContext } from '@/hooks/queries/useTenantContext';
 import {
   useVaniEntitlement,
   useVaniBriefing,
@@ -68,8 +69,12 @@ const BriefingPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
+  // Gate on the tenant-table truth (t_tenants.vani_enabled via the
+  // tenant-context API); the entitlement query only supplies trial detail
+  // for the locked panel's copy. The API's 403 on /briefing is the backstop.
+  const tenantCtx = useTenantContext();
   const entitlementQuery = useVaniEntitlement();
-  const entitled = entitlementQuery.data?.entitled === true;
+  const entitled = tenantCtx.data?.flags?.vani_enabled === true;
 
   const briefingQuery = useVaniBriefing({ enabled: entitled });
   const briefing = briefingQuery.data;
@@ -139,8 +144,8 @@ const BriefingPage: React.FC = () => {
 
   const totalNeeds = needsGroups.reduce((sum, g) => sum + g.count, 0);
 
-  // ── Entitlement loading ──────────────────────────────────────────────────
-  if (entitlementQuery.isLoading) {
+  // ── Status loading (tenant flag + trial detail) ──────────────────────────
+  if (tenantCtx.isLoading || entitlementQuery.isLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
         <LoadingSpinner size="lg" />

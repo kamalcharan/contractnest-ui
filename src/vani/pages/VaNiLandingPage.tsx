@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useVaniEntitlement, useStartVaniTrial } from "@/hooks/queries/useVaniDeskQueries";
+import { useTenantContext } from "@/hooks/queries/useTenantContext";
 
 // ═══════════════════════════════════════════════════════
 //  VaNi Landing Page — Coming Soon
@@ -103,23 +104,31 @@ export default function VaNiLandingPage() {
   const [scrollY, setScrollY] = useState(0);
   const navigate = useNavigate();
 
-  // ── 1-week trial (real entitlement over /api/vani) ──
+  // ── VaNi status: the tenant-table truth (t_tenants.vani_enabled) via the
+  // tenant-context API. This page is the ONLY lever that switches VaNi on
+  // (the trial CTA → start_vani_trial writes the flag); every other surface
+  // just reads flags.vani_enabled. The entitlement query only supplies the
+  // "trial already used" detail for the CTA copy.
+  const tenantCtx = useTenantContext();
   const entitlementQuery = useVaniEntitlement();
   const startTrial = useStartVaniTrial();
   const ent = entitlementQuery.data;
-  const subscribed = ent?.status === "active";
-  const trialActive = ent?.trial_active === true;
-  const trialUsed = ent?.has_subscription === true && !trialActive && !subscribed;
-  const trialDaysLeft = trialActive && ent?.trial_ends
-    ? Math.max(0, Math.ceil((new Date(ent.trial_ends).getTime() - Date.now()) / 86_400_000))
+  const vaniOn = tenantCtx.data?.flags?.vani_enabled === true;
+  const vaniUntil = tenantCtx.data?.vani?.until ?? null;
+  const subscribed = vaniOn && !vaniUntil;          // open-ended: plan / admin / admin tenant
+  const trialActive = vaniOn && !!vaniUntil;        // time-boxed: trial
+  const trialUsed = !vaniOn && ent?.has_subscription === true;
+  const trialDaysLeft = trialActive && vaniUntil
+    ? Math.max(0, Math.ceil((new Date(vaniUntil).getTime() - Date.now()) / 86_400_000))
     : 0;
+  const statusLoading = tenantCtx.isLoading || entitlementQuery.isLoading;
 
   const handleTrialClick = async () => {
-    if (trialActive || subscribed) {
+    if (vaniOn) {
       navigate("/vani/briefing");
       return;
     }
-    if (trialUsed || startTrial.isPending || entitlementQuery.isLoading) return;
+    if (trialUsed || startTrial.isPending || statusLoading) return;
     try {
       const data = await startTrial.mutateAsync();
       if (data?.started_now || data?.trial_active) navigate("/vani/briefing");
@@ -128,7 +137,7 @@ export default function VaNiLandingPage() {
     }
   };
 
-  const trialCtaLabel = entitlementQuery.isLoading
+  const trialCtaLabel = statusLoading
     ? "Checking your access…"
     : startTrial.isPending
       ? "Starting your trial…"
@@ -139,7 +148,8 @@ export default function VaNiLandingPage() {
           : trialUsed
             ? "Trial ended — write to connect@vikuna.io"
             : "Start your 1-week free trial";
-  const trialCtaDisabled = entitlementQuery.isLoading || startTrial.isPending || trialUsed;
+  const trialCtaDisabled = statusLoading || startTrial.isPending || trialUsed;
+  const ctaBusy = statusLoading || startTrial.isPending;
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -175,7 +185,7 @@ export default function VaNiLandingPage() {
           <div className="vani-fade-up" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "6px 20px", borderRadius: 40, background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)", marginBottom: 32, animationDelay: "0.1s" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#8b5cf6", animation: "pulse 2s infinite" }} />
             <span style={{ fontSize: 13, color: "#a78bfa", fontWeight: 500 }}>
-              {trialActive ? `Trial active · ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left` : subscribed ? "Active" : trialUsed ? "Trial ended" : "1-week free trial"}
+              {trialActive ? `VaNi is on · trial, ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left` : subscribed ? "VaNi is on" : trialUsed ? "VaNi is off · trial ended" : "VaNi is off · 1-week free trial"}
             </span>
             <span style={{ fontSize: 13, color: "#6d28d9" }}>·</span>
             <span style={{ fontFamily: "'Noto Sans Devanagari', sans-serif", fontSize: 14, color: "#c4b5fd" }}>वाणी</span>
@@ -194,9 +204,9 @@ export default function VaNiLandingPage() {
 
           <div className="vani-fade-up" style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap", animationDelay: "0.4s" }}>
             <button onClick={handleTrialClick} disabled={trialCtaDisabled}
-              style={{ padding: "14px 36px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 16, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: entitlementQuery.isLoading || startTrial.isPending ? 0.7 : 1, fontFamily: "inherit" }}
+              style={{ padding: "14px 36px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 16, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: ctaBusy ? 0.7 : 1, fontFamily: "inherit" }}
             >
-              {(entitlementQuery.isLoading || startTrial.isPending) && (
+              {ctaBusy && (
                 <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "spinSlow 0.8s linear infinite" }} />
               )}
               {trialCtaLabel}
@@ -383,17 +393,17 @@ export default function VaNiLandingPage() {
             <div style={{ position: "absolute", bottom: -40, left: -40, width: 160, height: 160, borderRadius: "50%", background: "radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)" }} />
             <div style={{ position: "relative", zIndex: 1 }}>
               <div style={{ fontSize: 56, marginBottom: 20 }}>🚀</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: 3, marginBottom: 12 }}>{trialActive || subscribed ? "VaNi is with you" : "1-week free trial"}</div>
-              <h2 style={{ fontSize: 36, fontWeight: 900, letterSpacing: -1, margin: "0 0 12px" }}>{trialActive || subscribed ? "VaNi is reporting for work" : "Meet your virtual employee"}</h2>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: 3, marginBottom: 12 }}>{vaniOn ? "VaNi is with you" : "1-week free trial"}</div>
+              <h2 style={{ fontSize: 36, fontWeight: 900, letterSpacing: -1, margin: "0 0 12px" }}>{vaniOn ? "VaNi is reporting for work" : "Meet your virtual employee"}</h2>
               <p style={{ fontSize: 16, color: "#a1a1aa", lineHeight: 1.7, maxWidth: 420, margin: "0 auto 28px" }}>
-                {trialActive || subscribed
-                  ? "Your daily Briefing shows what VaNi handled automatically and what needs your decision."
-                  : "Try VaNi free for one week — see your daily Briefing of what it handles automatically and what needs your eye."}
+                {vaniOn
+                  ? "Your daily Briefing shows what VaNi handled automatically and what needs your decision. Your automation rules run for you."
+                  : "Try VaNi free for one week — see your daily Briefing of what it handles automatically and what needs your eye. Automation is part of VaNi."}
               </p>
               <button onClick={handleTrialClick} disabled={trialCtaDisabled}
-                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: entitlementQuery.isLoading || startTrial.isPending ? 0.7 : 1, fontFamily: "inherit" }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "14px 32px", borderRadius: 14, border: "none", background: trialUsed ? "rgba(139,92,246,0.25)" : "linear-gradient(135deg, #10b981, #059669)", color: "#fff", fontSize: 15, fontWeight: 700, cursor: trialCtaDisabled ? "default" : "pointer", boxShadow: trialUsed ? "none" : "0 8px 30px rgba(16,185,129,0.3)", opacity: ctaBusy ? 0.7 : 1, fontFamily: "inherit" }}
               >
-                {(entitlementQuery.isLoading || startTrial.isPending) && (
+                {ctaBusy && (
                   <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", animation: "spinSlow 0.8s linear infinite" }} />
                 )}
                 {trialCtaLabel}

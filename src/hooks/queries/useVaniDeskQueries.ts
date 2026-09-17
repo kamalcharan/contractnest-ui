@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { vaniToast } from '@/components/common/toast';
+import { tenantContextKeys } from '@/hooks/queries/useTenantContext';
 
 export const VANI_ENDPOINTS = {
   ENTITLEMENT: '/api/vani/entitlement',
@@ -18,13 +19,19 @@ export const VANI_ENDPOINTS = {
 };
 
 export interface VaniEntitlement {
+  /** Mirrors the tenant-table truth (vani_is_enabled). Prefer useTenantContext().flags.vani_enabled for gating. */
   entitled: boolean;
-  mode: 'open' | 'subscription';
+  /** 'tenant' since batch vani-landing-tenant-flag; older API builds report 'open' | 'subscription'. */
+  mode: 'open' | 'subscription' | 'tenant';
   has_subscription: boolean;
   status: string | null; // 'trial' | 'active' | 'expired' | ...
   trial_start_date: string | null;
   trial_ends: string | null;
   trial_active: boolean;
+  /** When VaNi lapses (trial); null = open-ended. Absent on older API builds. */
+  until?: string | null;
+  /** 'trial' | 'plan' | 'admin' | 'admin_tenant' | null. Absent on older API builds. */
+  source?: string | null;
 }
 
 export interface VaniBriefingItemInvoice {
@@ -138,6 +145,9 @@ export const useStartVaniTrial = () => {
         vaniToast.warning('Your VaNi trial has already been used', { duration: 4000 });
       }
       queryClient.invalidateQueries({ queryKey: vaniDeskKeys.all });
+      // The trial flips t_tenants.vani_enabled — every surface reading
+      // flags.vani_enabled (landing, Automation Rules, Briefing) must refetch.
+      queryClient.invalidateQueries({ queryKey: tenantContextKeys.all });
     },
     onError: (error: any) => {
       vaniToast.error(`Could not start the trial: ${extractErrorMessage(error)}`, {
@@ -150,15 +160,31 @@ export const useStartVaniTrial = () => {
 // ── Automation rules (Settings → Automation Rules) ─────────────────────────
 // Read is free for every tenant; editing needs VaNi entitlement (403 otherwise).
 
+/**
+ * A rule field is a number, an integer array (a schedule — e.g. the payment
+ * ladder's days-after-due, a group session's days-before) or a string
+ * (platform settings such as a link base URL). update_vani_rule validates
+ * numbers and integer arrays against `constraints`; strings are read-only.
+ */
+export type VaniRuleValue = number | string | number[];
+
+export interface VaniRuleConstraint {
+  min?: number;
+  max?: number;
+  /** Array fields only: allowed length. */
+  min_items?: number;
+  max_items?: number;
+}
+
 export interface VaniRule {
   rule_key: string;
   name: string;
   description: string;
-  domain: 'services' | 'finance' | string;
-  config: Record<string, number>;
+  domain: 'services' | 'finance' | 'contracts' | 'notifications' | string;
+  config: Record<string, VaniRuleValue>;
   is_enabled: boolean;
-  defaults: Record<string, number>;
-  constraints: Record<string, { min?: number; max?: number }>;
+  defaults: Record<string, VaniRuleValue>;
+  constraints: Record<string, VaniRuleConstraint>;
   version: number;
   is_customized: boolean;
 }
@@ -184,7 +210,7 @@ export const useVaniRules = (options?: { enabled?: boolean }) => {
 
 export interface UpdateVaniRuleParams {
   ruleKey: string;
-  config?: Record<string, number>;
+  config?: Record<string, VaniRuleValue>;
   is_enabled?: boolean;
   expected_version?: number;
 }

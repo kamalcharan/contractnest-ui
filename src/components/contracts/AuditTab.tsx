@@ -2,6 +2,14 @@
 // Audit Trail Tab — shows real audit log entries from API
 // Filterable by category, chronological with rich entries
 // Wired to real API via useContractAuditLog + falls back to contract.history
+//
+// 2026-09-17 (Ops cockpit step 6): the tab is now ONE timeline. The five
+// original categories still come from the service-execution audit log via
+// useContractAuditLog, untouched. Two more categories come from the JTD
+// activity reader (jtd_contract_activity, the same one the cockpit's History
+// drawer reads): "Collections" — every reminder with its delivery status,
+// call, follow-up, pause, declaration — and "Billing events" — the
+// billing-event audit rows. "All" is the true union.
 
 import React, { useState, useMemo } from 'react';
 import {
@@ -20,10 +28,14 @@ import {
   Package,
   Loader2,
   AlertTriangle,
+  MessageCircle,
+  Receipt,
 } from 'lucide-react';
 import type { ContractDetail } from '@/types/contracts';
 import { useContractAuditLog } from '@/hooks/queries/useServiceExecution';
 import type { AuditLogEntry } from '@/hooks/queries/useServiceExecution';
+import { useContractActivity, type ActivityRow, type RenderedMessage } from '@/hooks/queries/useCollectionsQueries';
+import { MessageToggle } from '@/components/ops/HistoryDrawer';
 
 // ═══════════════════════════════════════════════════
 // TYPES
@@ -34,7 +46,9 @@ export interface AuditTabProps {
   colors: any;
 }
 
-type AuditCategory = 'all' | 'status' | 'content' | 'assignment' | 'evidence' | 'billing';
+type AuditCategory = 'all' | 'status' | 'content' | 'assignment' | 'evidence' | 'billing' | 'collections' | 'billing_events';
+/** Categories served by the JTD activity reader rather than the service-execution audit log. */
+const ACTIVITY_CATEGORIES: AuditCategory[] = ['collections', 'billing_events'];
 
 interface AuditDisplayEntry {
   id: string;
@@ -46,6 +60,9 @@ interface AuditDisplayEntry {
   timestamp: string;
   icon: React.ElementType;
   iconColor: string;
+  /** For a sent communication: the message as it went (rendered template copy). */
+  message?: RenderedMessage;
+  channel?: string;
 }
 
 // ═══════════════════════════════════════════════════
@@ -81,6 +98,8 @@ const CATEGORY_CONFIG: Record<Exclude<AuditCategory, 'all'>, { label: string; ic
   assignment: { label: 'Assignments', icon: UserCheck, color: '#3B82F6' },
   evidence: { label: 'Evidence', icon: Camera, color: '#06B6D4' },
   billing: { label: 'Billing', icon: DollarSign, color: '#F59E0B' },
+  collections: { label: 'Collections', icon: MessageCircle, color: '#10B981' },
+  billing_events: { label: 'Billing events', icon: Receipt, color: '#F97316' },
 };
 
 const CATEGORY_ICON_MAP: Record<string, { icon: React.ElementType; color: string }> = {
@@ -89,6 +108,31 @@ const CATEGORY_ICON_MAP: Record<string, { icon: React.ElementType; color: string
   assignment: { icon: UserCheck, color: '#3B82F6' },
   evidence: { icon: Camera, color: '#06B6D4' },
   billing: { icon: DollarSign, color: '#F59E0B' },
+  collections: { icon: MessageCircle, color: '#10B981' },
+  billing_events: { icon: Receipt, color: '#F97316' },
+};
+
+// Convert a JTD activity row (collections / billing events) to a display entry
+const mapActivityRow = (row: ActivityRow): AuditDisplayEntry => {
+  const category: Exclude<AuditCategory, 'all'> = row.source === 'billing' ? 'billing_events' : 'collections';
+  const iconInfo = CATEGORY_ICON_MAP[category];
+  const failed = row.status === 'failed' || row.status === 'rejected';
+  let detail: AuditDisplayEntry['detail'] = undefined;
+  if (row.from || row.to) detail = { from: row.from || '—', to: row.to || '—' };
+  else if (row.detail || row.status) detail = [row.status ? `status: ${row.status}` : '', row.detail || ''].filter(Boolean).join(' · ');
+  return {
+    id: `activity-${row.id}`,
+    category,
+    action: row.kind,
+    description: row.title,
+    detail,
+    performedBy: row.actor_type === 'vani' ? 'VaNi' : (row.actor_name || (row.actor_type === 'system' ? 'System' : 'Someone')),
+    timestamp: row.at,
+    icon: iconInfo.icon,
+    iconColor: failed ? '#EF4444' : iconInfo.color,
+    message: row.message,
+    channel: row.channel,
+  };
 };
 
 // Convert API audit log entry to display entry
@@ -154,28 +198,32 @@ const AuditTab: React.FC<AuditTabProps> = ({ contract, colors }) => {
   const [filter, setFilter] = useState<AuditCategory>('all');
   const [showCount, setShowCount] = useState(15);
 
-  // Fetch real audit log from API
+  // Fetch real audit log from API (the five original categories — unchanged)
   const { data: auditData, isLoading, error } = useContractAuditLog(
     contract.id || null,
-    { category: filter !== 'all' ? filter : undefined, per_page: 100 }
+    { category: filter !== 'all' && !ACTIVITY_CATEGORIES.includes(filter) ? filter : undefined, per_page: 100 }
   );
+  // Collections + billing-event activity from the JTD reader (shared with the cockpit's History drawer)
+  const { data: activityData } = useContractActivity(contract.id || null, { sources: ['collections', 'billing'], limit: 300 });
 
-  // Build display entries: API data + contract history fallback
+  // Build display entries: API data + JTD activity + contract history fallback
   const allEntries = useMemo(() => {
     const apiEntries = (auditData?.items || []).map(mapAuditEntry);
+    const activityEntries = (activityData?.rows || []).map(mapActivityRow);
     const historyEntries = mapHistoryEntries(contract);
 
     // Merge: API entries take priority, add history entries that don't overlap
     const apiIds = new Set(apiEntries.map(e => e.id));
     const merged = [
       ...apiEntries,
+      ...activityEntries,
       ...historyEntries.filter(h => !apiIds.has(h.id)),
     ];
 
     // Sort newest first
     merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return merged;
-  }, [auditData, contract]);
+  }, [auditData, activityData, contract]);
 
   const filtered = useMemo(() => {
     if (filter === 'all') return allEntries;
@@ -186,15 +234,19 @@ const AuditTab: React.FC<AuditTabProps> = ({ contract, colors }) => {
 
   // Category counts — use API counts if available, otherwise compute
   const categoryCounts = useMemo(() => {
+    // The activity reader's counts are for the whole contract, not the page.
+    const activityCounts = activityData
+      ? { collections: activityData.counts.collections, billing_events: activityData.counts.billing }
+      : {};
     if (auditData?.category_counts) {
-      return { all: allEntries.length, ...auditData.category_counts };
+      return { all: allEntries.length, ...auditData.category_counts, ...activityCounts };
     }
     const counts: Record<string, number> = { all: allEntries.length };
     allEntries.forEach(e => {
       counts[e.category] = (counts[e.category] || 0) + 1;
     });
-    return counts;
-  }, [allEntries, auditData]);
+    return { ...counts, ...activityCounts };
+  }, [allEntries, auditData, activityData]);
 
   const filterOptions: { key: AuditCategory; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -203,6 +255,8 @@ const AuditTab: React.FC<AuditTabProps> = ({ contract, colors }) => {
     { key: 'assignment', label: 'Assignments' },
     { key: 'evidence', label: 'Evidence' },
     { key: 'billing', label: 'Billing' },
+    { key: 'collections', label: 'Collections' },
+    { key: 'billing_events', label: 'Billing events' },
   ];
 
   if (isLoading) {
@@ -326,6 +380,7 @@ const AuditTab: React.FC<AuditTabProps> = ({ contract, colors }) => {
                     </div>
                   )
                 )}
+                {entry.message && <MessageToggle message={entry.message} channel={entry.channel} colors={colors} />}
                 <div className="flex items-center gap-2 text-[10px]" style={{ color: colors.utility.secondaryText }}>
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" />
