@@ -154,6 +154,20 @@ interface ValidateResponse {
   access?: ContractAccessData;
   contract?: FullContractData;
   tenant?: TenantData;
+  // contracts/080: an already accepted / rejected / expired grant answers
+  // with its facts instead of a bare error, so the page can say so.
+  already_responded?: boolean;
+  claimed?: boolean;
+  responded_at?: string | null;
+}
+
+interface RespondedState {
+  status: string;
+  claimed: boolean;
+  respondedAt: string | null;
+  contractName: string;
+  contractNumber: string;
+  sellerName: string;
 }
 
 // ═══════════════════════════════════════════════════
@@ -210,14 +224,22 @@ const ContractReviewPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const cnak = searchParams.get('cnak');
-  const secret = searchParams.get('secret');
+  // Links arrive mangled from WhatsApp button templates: "??cnak=…" when the
+  // template already carried a '?', and "…&secret=abc?fbclid=…" when WhatsApp
+  // appended its click id to a link it thought had no query string.
+  const param = (name: string) => {
+    const raw = searchParams.get(name) ?? searchParams.get(`?${name}`);
+    return raw ? raw.split('?')[0].trim() || null : null;
+  };
+  const cnak = param('cnak');
+  const secret = param('secret');
 
   // State
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contractData, setContractData] = useState<ValidateResponse | null>(null);
+  const [responded, setResponded] = useState<RespondedState | null>(null);
   const [responseState, setResponseState] = useState<'idle' | 'accepted' | 'rejected'>('idle');
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -251,6 +273,17 @@ const ContractReviewPage: React.FC = () => {
 
       const data = response.data;
       if (!data.valid) {
+        if (data.already_responded) {
+          setResponded({
+            status: data.status || 'accepted',
+            claimed: !!data.claimed,
+            respondedAt: data.responded_at || null,
+            contractName: data.contract?.name || '',
+            contractNumber: data.contract?.contract_number || '',
+            sellerName: data.tenant?.name || 'the issuing party',
+          });
+          return;
+        }
         setError(data.error || 'Invalid access link');
         return;
       }
@@ -597,6 +630,48 @@ const ContractReviewPage: React.FC = () => {
           <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: brandPrimary }} />
           <p style={{ marginTop: 16, fontSize: 14, color: colors.textSecondary }}>Verifying access...</p>
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
+
+  // Already answered (contracts/080): say what happened, not "Access Error".
+  if (responded && !contractData) {
+    const accepted = responded.status === 'accepted';
+    const expired = responded.status === 'expired';
+    const when = responded.respondedAt ? new Date(responded.respondedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+    const claimHref = cnak && secret ? `/contracts/claim?cnak=${encodeURIComponent(cnak)}&secret=${encodeURIComponent(secret)}` : '/contracts/claim';
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: canvasBg, color: colors.utility.primaryText }}>
+        <div style={{ maxWidth: 560, padding: 48, textAlign: 'center', backgroundColor: paperBg, borderRadius: 16, border: `1px solid ${borderColor}`, boxShadow: paperShadow }}>
+          {accepted ? <CheckCircle size={56} style={{ color: '#22c55e', marginBottom: 20 }} /> : expired ? <AlertTriangle size={56} style={{ color: '#f59e0b', marginBottom: 20 }} /> : <XCircle size={56} style={{ color: '#ef4444', marginBottom: 20 }} />}
+          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
+            {accepted ? 'Already accepted' : expired ? 'This link has expired' : 'Contract declined'}
+          </h2>
+          {(responded.contractName || responded.contractNumber) && (
+            <p style={{ fontSize: 14, color: colors.utility.secondaryText, marginBottom: 8 }}>
+              {responded.contractName}{responded.contractNumber ? ` (${responded.contractNumber})` : ''} · from {responded.sellerName}
+            </p>
+          )}
+          <p style={{ fontSize: 14, color: colors.utility.secondaryText, marginBottom: 24 }}>
+            {accepted
+              ? `This contract was accepted${when ? ` on ${when}` : ''} and is active. ${responded.claimed ? 'It is already in a ContractNest workspace — log in to open it.' : 'Add it to your ContractNest workspace to track it.'}`
+              : expired
+                ? `Ask ${responded.sellerName} to send a fresh review link.`
+                : `This contract was declined${when ? ` on ${when}` : ''}. ${responded.sellerName} has been notified.`}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {accepted && !responded.claimed && (
+              <button onClick={() => navigate(claimHref)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, border: 'none', backgroundColor: brandPrimary, color: '#FFFFFF', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>
+                <Download size={16} />
+                Add to my ContractHub
+              </button>
+            )}
+            <button onClick={() => navigate('/login')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, border: `1px solid ${borderColor}`, backgroundColor: 'transparent', color: colors.utility.primaryText, cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>
+              <LogIn size={16} />
+              Log in
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -200,6 +200,8 @@ import EntryRedirect from './utils/navigation/EntryRedirect';
 import FinancePage from './pages/operations/finance';
 // Commitments Register (batch commitments-register) — replaces the Event Schedule page at the same route
 import CommitmentsRegisterPage from './pages/ops/register';
+// Timeboard (batch ops-timeboard, 2026-09-18): the Plan's cards on a clock — week / day-by-person / agenda, drag to propose or confirm.
+import TimeboardPage from './pages/ops/timeboard';
 import GroupSessionsPage from './pages/operations/group-sessions';
 import InvoiceRegisterPage from './pages/invoices';
 import InvoiceComposerPage from './pages/invoices/composer';
@@ -682,6 +684,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<CommitmentsRegisterPage />} />
+          </Route>
+
+          {/* Operations → Timeboard: every hour, every person, every commitment (revenue side; same readers as the Plan tab) */}
+          <Route
+            path="/ops/timeboard"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<TimeboardPage />} />
           </Route>
 
           {/* Operations → Group Sessions dashboard (generic per tenant) */}

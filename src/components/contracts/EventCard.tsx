@@ -520,7 +520,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                 ) : (
                   <CalendarDays className="w-3 h-3" />
                 )}
-                Book appointment
+                Propose slot
               </button>
             )}
           </div>

@@ -288,6 +288,18 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     }
   }, [fullContactData, selectedPersonId, useCompanyContact, onSelectBuyer]);
 
+  // A corporate contact with no contact persons is a valid recipient on its
+  // own (owner decision 2026-09-17): its company mobile/email carry the
+  // agreement. Select the company contact silently instead of leaving the
+  // draft in a state that a later chapter refuses.
+  useEffect(() => {
+    if (isChangingBuyer || fullContactLoading || useCompanyContact || selectedPersonId) return;
+    if (!fullContactData || fullContactData.id !== selectedBuyerId || fullContactData.type !== 'corporate') return;
+    if ((fullContactData.contact_persons || []).length > 0) return;
+    setUseCompanyContact(true);
+    onSelectBuyer(fullContactData.id, fullContactData.company_name || fullContactData.name, undefined, undefined, true);
+  }, [isChangingBuyer, fullContactLoading, useCompanyContact, selectedPersonId, fullContactData, selectedBuyerId, onSelectBuyer]);
+
   // Handle contact person selection
   const handleSelectContactPerson = useCallback((person: ContactPerson) => {
     setSelectedPersonId(person.id);

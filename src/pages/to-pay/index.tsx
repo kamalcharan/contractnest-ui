@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { usePayables, type FinanceInvoice } from '@/hooks/queries/useFinanceQueries';
 import { fmtMoney, fmtDate, useInvoiceTheme } from '../invoices/ui';
 import GstMonthCard from '@/components/finance/GstMonthCard';
+import PaySheet from '@/components/ops/PaySheet';
 
 const ToPayPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +27,8 @@ const ToPayPage: React.FC = () => {
   const [lens, setLens] = useState<'all' | 'late'>('all');
 
   const payablesQuery = usePayables({ enabled: perspective === 'expense' });
+  // Pay / declare from here — the same sheet the Ops board and the contract page use (batch ops-expense-board)
+  const [payFor, setPayFor] = useState<{ contractId: string; sellerName: string } | null>(null);
   const data = payablesQuery.data;
 
   const mono: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' };
@@ -165,7 +168,14 @@ const ToPayPage: React.FC = () => {
                     </div>
                   );
                 })}
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-2 pt-2 flex-wrap">
+                  {v.bills[0] && v.bills.some((b) => b.balance > 0.001) && (
+                    <button onClick={() => setPayFor({ contractId: v.bills.find((b) => b.balance > 0.001)!.contract_id, sellerName: v.name })}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-full"
+                      style={{ backgroundColor: brand, color: '#fff' }}>
+                      Pay / declare
+                    </button>
+                  )}
                   {v.bills[0] && (
                     <button onClick={() => navigate(`/contracts/${v.bills[0].contract_id}/invoice/${v.bills[0].id}`)}
                       className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-full border"
@@ -187,6 +197,14 @@ const ToPayPage: React.FC = () => {
       <p className="mt-10 text-[10px] uppercase tracking-[0.18em] text-center" style={{ ...sub, ...mono }}>
         expense side · the reverse of money in
       </p>
+      {payFor && (
+        <PaySheet
+          contractId={payFor.contractId}
+          sellerName={payFor.sellerName}
+          onClose={() => setPayFor(null)}
+          onDone={() => { setPayFor(null); payablesQuery.refetch(); }}
+        />
+      )}
     </div>
   );
 };

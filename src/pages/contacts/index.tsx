@@ -907,11 +907,18 @@ const ContactsPage: React.FC = () => {
                         >
                           {contact.displayName}
                         </p>
-                        {contact.type === 'corporate' ? (
-                          <Building2 className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} title="Corporate" />
-                        ) : (
-                          <User className="h-3.5 w-3.5 flex-shrink-0" style={{ color: colors.utility.secondaryText }} title="Individual" />
-                        )}
+                        {/* Type is said, not hinted (owner, 2026-09-17): a labelled chip, not a bare icon */}
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border whitespace-nowrap"
+                          style={{
+                            color: colors.utility.secondaryText,
+                            borderColor: colors.utility.primaryText + '20',
+                            backgroundColor: colors.utility.secondaryBackground
+                          }}
+                        >
+                          {contact.type === 'corporate' ? <Building2 className="h-3 w-3" /> : <User className="h-3 w-3" />}
+                          {contact.type === 'corporate' ? 'Company' : 'Individual'}
+                        </span>
                         {contact.contact_number && (
                           <span className="text-[10px] font-mono" style={{ color: colors.utility.secondaryText }}>
                             {contact.contact_number}
@@ -949,6 +956,30 @@ const ContactsPage: React.FC = () => {
                         )}
                         {!phone && !email && <span>No contact channel</span>}
                       </div>
+                      {/* A person linked under a company (parent_contact_ids) says so; the name opens the company */}
+                      {Array.isArray(contact.parent_links) && contact.parent_links.length > 0 && (
+                        <div
+                          className="flex items-center gap-1.5 flex-wrap text-xs mt-1"
+                          style={{ color: colors.utility.secondaryText }}
+                        >
+                          <Building2 className="h-3 w-3 flex-shrink-0" />
+                          <span>Linked to</span>
+                          {contact.parent_links.map((parent, idx) => (
+                            <React.Fragment key={parent.id}>
+                              {idx > 0 && <span>·</span>}
+                              <button
+                                type="button"
+                                className="font-medium hover:underline"
+                                style={{ color: colors.brand.primary }}
+                                title={`Open ${parent.name}`}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/contacts/${parent.id}`); }}
+                              >
+                                {parent.name}
+                              </button>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Tag dots */}

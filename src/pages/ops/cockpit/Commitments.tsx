@@ -29,7 +29,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowUpRight, Search, RefreshCw, Mail, MessageCircle, PhoneCall, UserPlus, List, LayoutGrid, Sparkles, X, CalendarRange, Wrench, CalendarCheck, CalendarClock, Play, CheckCircle2, Share2, FileText } from 'lucide-react';
+import { ArrowUpRight, Search, RefreshCw, Mail, MessageCircle, PhoneCall, UserPlus, List, LayoutGrid, Sparkles, X, CalendarRange, Wrench, CalendarCheck, CalendarClock, Play, CheckCircle2, Share2, FileText, IndianRupee } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
@@ -49,6 +49,7 @@ import {
   useStartVisit,
   useCompleteVisit,
   useAskVisitSlot,
+  useRespondSlot,
   collectionsKeys,
   type BoardCard,
   type BoardBucket,
@@ -63,6 +64,7 @@ import {
 import JobCard, { clean, fmtTime, type JobCardActions, type PauseReason } from '@/components/ops/JobCard';
 import LogCallSheet from '@/components/ops/LogCallSheet';
 import HistoryDrawer from '@/components/ops/HistoryDrawer';
+import PaySheet from '@/components/ops/PaySheet';
 import { useInvoiceTheme } from '../../invoices/ui';
 // the existing per-invoice payment request (/invoices viewer's Send) — whole-invoice rows reuse it
 import { useSendInvoice, sendRefusal } from '../../invoices/useInvoiceDetail';
@@ -70,8 +72,27 @@ import { fmtMoney, fmtDate } from '@/utils/format';
 
 // ── kinds grouped the way a person thinks about them ─────────────────────────
 type Group = 'reminders' | 'invoices' | 'confirm' | 'calls' | 'failed' | 'paused' | 'awaiting' | 'ahead'
-  | 'visits_overdue' | 'visits_today' | 'in_progress' | 'slots_to_confirm' | 'visits_scheduled';
-const GROUPS: Array<{ key: Group; lane: BoardLane; label: string; kinds: BoardKind[] }> = [
+  | 'visits_overdue' | 'visits_today' | 'in_progress' | 'slots_to_confirm' | 'visits_scheduled'
+  // expense side (migration 021)
+  | 'bills_overdue' | 'bills_declared' | 'bills_due' | 'slots_offered' | 'svc_today' | 'svc_in_progress' | 'svc_awaited' | 'svc_scheduled' | 'to_accept';
+type GroupDef = { key: Group; lane: BoardLane; label: string; kinds: BoardKind[] };
+/** EXPENSE: what needs the buyer — pay, receive, accept. Same board, buyer verbs. */
+const EXPENSE_GROUPS: GroupDef[] = [
+  { key: 'bills_overdue', lane: 'payables', label: 'Overdue bills', kinds: ['bill_overdue'] },
+  { key: 'bills_declared', lane: 'payables', label: 'Declared · awaiting confirmation', kinds: ['bill_declared'] },
+  { key: 'bills_due', lane: 'payables', label: 'Coming due', kinds: ['bill_due'] },
+  { key: 'slots_offered', lane: 'services', label: 'Slots to answer', kinds: ['slot_offered'] },
+  { key: 'svc_today', lane: 'services', label: 'Services today', kinds: ['service_today'] },
+  { key: 'svc_in_progress', lane: 'services', label: 'In progress', kinds: ['service_in_progress'] },
+  { key: 'svc_awaited', lane: 'services', label: 'Services awaited', kinds: ['service_awaited'] },
+  { key: 'svc_scheduled', lane: 'services', label: 'Services scheduled', kinds: ['service_scheduled'] },
+  { key: 'to_accept', lane: 'acceptance', label: 'To accept', kinds: ['to_accept'] },
+];
+const EXPENSE_NEEDS_KINDS: BoardKind[] = ['bill_overdue', 'slot_offered', 'service_today', 'to_accept'];
+const EXPENSE_LANES: Array<{ key: BoardLane | null; label: string }> = [
+  { key: null, label: 'All' }, { key: 'payables', label: 'To pay' }, { key: 'services', label: 'Services' }, { key: 'acceptance', label: 'To accept' },
+];
+const GROUPS: GroupDef[] = [
   { key: 'reminders', lane: 'collections', label: 'Reminders due', kinds: ['rung_due', 'overdue_no_ladder', 'ladder_exhausted'] },
   { key: 'invoices', lane: 'collections', label: 'Invoices overdue', kinds: ['invoice_overdue'] },
   { key: 'confirm', lane: 'collections', label: 'To confirm', kinds: ['declaration_pending'] },
@@ -103,6 +124,7 @@ const PAGE = 20;
 const VIEW_KEY = 'ops.board.view';
 const HORIZON_KEY = 'ops.board.horizon';
 const LANE_KEY = 'ops.board.lane';
+const LANE_KEY_EXPENSE = 'ops.board.lane.expense';
 const readPref = <T,>(key: string, ok: (v: unknown) => v is T, fallback: T): T => {
   try {
     const raw = window.localStorage.getItem(key);
@@ -114,8 +136,8 @@ const readPref = <T,>(key: string, ok: (v: unknown) => v is T, fallback: T): T =
 const writePref = (key: string, v: unknown) => { try { window.localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } };
 const isView = (v: unknown): v is View => v === 'list' || v === 'lanes';
 const isHorizon = (v: unknown): v is Horizon => (HORIZONS as number[]).includes(v as number);
-const isLane = (v: unknown): v is BoardLane | null => v === null || v === 'collections' || v === 'services';
-const laneName = (l: BoardLane | null) => (l === 'collections' ? 'Collections' : l === 'services' ? 'Services' : 'All');
+const isLane = (v: unknown): v is BoardLane | null => v === null || v === 'collections' || v === 'services' || v === 'payables' || v === 'acceptance';
+const laneName = (l: BoardLane | null) => (l === 'collections' ? 'Collections' : l === 'services' ? 'Services' : l === 'payables' ? 'To pay' : l === 'acceptance' ? 'To accept' : 'All');
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const sum = (o: Partial<Record<string, number>> | undefined, keys: string[]) => keys.reduce((a, k) => a + (o?.[k] ?? 0), 0);
@@ -138,6 +160,12 @@ const OpsCommitmentsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentTenant, perspective, user } = useAuth() as any;
+  // The board serves BOTH sides since batch ops-expense-board: revenue = collect · deliver, expense = pay · receive · accept.
+  const expense: boolean = perspective === 'expense';
+  const groups = expense ? EXPENSE_GROUPS : GROUPS;
+  const lanesDef = expense ? EXPENSE_LANES : LANES;
+  const needsKinds = expense ? EXPENSE_NEEDS_KINDS : NEEDS_KINDS;
+  const laneKey = expense ? LANE_KEY_EXPENSE : LANE_KEY;
   const { colors, ink, sub } = useInvoiceTheme();
   const brand = colors.brand.primary;
   const green = colors.semantic.success;
@@ -158,7 +186,10 @@ const OpsCommitmentsPage: React.FC = () => {
 
   // ── filters ────────────────────────────────────────────────────────────────
   // The lane is the FOCUS (the strip above the headline), not a filter: it persists and survives "clear".
-  const [lane, setLaneState] = useState<BoardLane | null>(() => readPref(LANE_KEY, isLane, null));
+  const [lane, setLaneState] = useState<BoardLane | null>(() => {
+    const l = readPref(laneKey, isLane, null);
+    return l && !lanesDef.some((x) => x.key === l) ? null : l;
+  });
   const [group, setGroup] = useState<Group | null>(null);
   const [slot, setSlot] = useState<SlotState | ''>('');
   const [channel, setChannel] = useState<WlChannel | ''>('');
@@ -174,8 +205,8 @@ const OpsCommitmentsPage: React.FC = () => {
   // Switching lane drops a kind filter that belongs to the other lane (it would empty the board) and lane-specific selects.
   const setLane = (l: BoardLane | null) => {
     setLaneState(l);
-    writePref(LANE_KEY, l);
-    if (l && group && GROUPS.find((g) => g.key === group)?.lane !== l) setGroup(null);
+    writePref(laneKey, l);
+    if (l && group && groups.find((g) => g.key === group)?.lane !== l) setGroup(null);
     if (l === 'collections') setSlot('');
     if (l === 'services') { setChannel(''); setCycle(''); }
   };
@@ -185,7 +216,7 @@ const OpsCommitmentsPage: React.FC = () => {
     const f = params.get('focus');
     const qp = params.get('q');
     let touched = false;
-    if (f === 'collections' || f === 'services' || f === 'all') { setLane(f === 'all' ? null : f); params.delete('focus'); touched = true; }
+    if (f === 'all' || (isLane(f) && lanesDef.some((x) => x.key === f))) { setLane(f === 'all' ? null : (f as BoardLane)); params.delete('focus'); touched = true; }
     // ?q=CN-1003 — the Commitments Register opens the exact card this way
     if (qp && qp.trim()) { setSearch(qp.trim().slice(0, 80)); params.delete('q'); touched = true; }
     if (touched) setParams(params, { replace: true });
@@ -194,10 +225,11 @@ const OpsCommitmentsPage: React.FC = () => {
 
   const filters = useMemo<BoardFilters>(() => {
     const f: BoardFilters = { limit: PAGE };
+    if (expense) f.perspective = 'expense';
     if (range) { f.from = range.from; f.to = range.to; f.bands = bandsForSpan(Math.max(daysBetween(range.from, range.to), 1)); }
     else { f.horizon = horizon; f.bands = BANDS[horizon]; }
     if (lane) f.lanes = [lane];
-    if (group) f.kinds = GROUPS.find((g) => g.key === group)!.kinds;
+    if (group) f.kinds = groups.find((g) => g.key === group)!.kinds;
     if (slot) f.slot = slot;
     if (channel) f.channel = channel;
     if (age) f.age = age;
@@ -206,13 +238,13 @@ const OpsCommitmentsPage: React.FC = () => {
     if (q) f.q = q;
     if (Object.keys(limits).length) f.limits = limits;
     return f;
-  }, [range, horizon, lane, group, slot, channel, age, cycle, who, q, limits]);
+  }, [expense, range, horizon, lane, group, slot, channel, age, cycle, who, q, limits]);
   const anyFilter = !!(group || slot || channel || age || cycle || who !== 'team' || q);
   const clearFilters = () => { setGroup(null); setSlot(''); setChannel(''); setAge(''); setCycle(''); setWho('team'); setSearch(''); setQ(''); };
 
   // ── data + tools ───────────────────────────────────────────────────────────
-  const enabled = perspective === 'revenue';
-  const board = useCollectionsBoard(filters, { enabled });
+  const board = useCollectionsBoard(filters);
+  const respondSlot = useRespondSlot();
   const nudge = useNudgePayment();
   const logCall = useLogPaymentCall();
   const escalate = useEscalatePaymentCall();
@@ -231,6 +263,7 @@ const OpsCommitmentsPage: React.FC = () => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [callFor, setCallFor] = useState<BoardCard | null>(null);
   const [historyFor, setHistoryFor] = useState<BoardCard | null>(null);
+  const [payFor, setPayFor] = useState<BoardCard | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: collectionsKeys.all });
 
   // One action in flight at a time; the hooks toast and refetch.
@@ -300,6 +333,13 @@ const OpsCommitmentsPage: React.FC = () => {
     onConfirmSlot: (c) => { run(c.id, () => confirmSlot.mutateAsync({ eventId: c.id })); },
     onStartVisit: (c) => { run(c.id, () => startVisit.mutateAsync({ eventId: c.id })); },
     onCompleteVisit: (c, notes) => run(c.id, () => completeVisit.mutateAsync({ eventId: c.id, notes: notes || undefined })),
+    // ── expense side (migration 021): the buyer's verbs ──
+    onPay: (c) => setPayFor(c),
+    onRespondSlot: (c, action, proposedAt, note) => {
+      if (!c.appointment_id) { toast.error('No appointment to answer on this service'); return; }
+      return run(c.id, () => respondSlot.mutateAsync({ appointmentId: c.appointment_id!, action, proposedAt, note }));
+    },
+    onReviewAccept: (c) => { if (c.review_link_suffix) navigate(`/contract-review?${c.review_link_suffix}`); else navigate(`/contracts/claim?cnak=${encodeURIComponent(c.cnak || '')}`); },
     // the card needs the result (message + link) to open WhatsApp / copy, so this one returns it
     onAskCustomer: async (c, channel) => {
       if (busyId) return;
@@ -338,18 +378,6 @@ const OpsCommitmentsPage: React.FC = () => {
   };
 
   // ── guards ─────────────────────────────────────────────────────────────────
-  if (perspective === 'expense') {
-    return (
-      <div className="p-8 max-w-2xl mx-auto">
-        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ ...sub, ...mono }}>ops · revenue side</p>
-        <h1 className="text-xl font-extrabold mb-2" style={ink}>You're on the expense side right now</h1>
-        <p className="text-sm mb-5" style={sub}>Ops lists what needs your action on money owed <i>to you</i>. What you owe others lives in To Pay.</p>
-        <button onClick={() => navigate('/to-pay')} className="text-sm font-bold inline-flex items-center gap-1.5" style={{ color: brand }}>
-          Go to To Pay <ArrowUpRight size={14} />
-        </button>
-      </div>
-    );
-  }
   const data = board.data;
   if (board.isPending && !data) return <div className="py-24 flex justify-center"><LoadingSpinner size="lg" /></div>;
   if (!data) {
@@ -366,7 +394,17 @@ const OpsCommitmentsPage: React.FC = () => {
   // ── numbers (facets ignore the kind filter, so the sentence stays stable) ──
   const k = data.facets.kinds;
   const n = {
-    needs: sum(k, NEEDS_KINDS),
+    needs: sum(k, needsKinds),
+    // expense side
+    billsOverdue: k.bill_overdue ?? 0,
+    billsDeclared: k.bill_declared ?? 0,
+    billsDue: k.bill_due ?? 0,
+    slotsOffered: k.slot_offered ?? 0,
+    svcToday: k.service_today ?? 0,
+    svcInProgress: k.service_in_progress ?? 0,
+    svcAwaited: k.service_awaited ?? 0,
+    svcScheduled: k.service_scheduled ?? 0,
+    toAccept: k.to_accept ?? 0,
     reminders: sum(k, ['rung_due', 'overdue_no_ladder', 'ladder_exhausted']),
     invoices: k.invoice_overdue ?? 0,
     invoicesAhead: k.invoice_ahead ?? 0,
@@ -386,20 +424,23 @@ const OpsCommitmentsPage: React.FC = () => {
   };
   const windowText = range ? `between ${fmtDate(range.from)} and ${fmtDate(range.to)}` : `in the next ${horizon} days`;
   // "3 services, 2 payments, 1 invoice and 1 reminder fall due …" — one verb, agreeing with the whole subject.
-  const ahead = ([
+  const ahead = ((expense ? [
+    { v: n.billsDue, one: 'bill', g: 'bills_due' },
+    { v: n.svcScheduled, one: 'service', g: 'svc_scheduled' },
+  ] : [
     { v: n.visitsAhead, one: 'service', g: 'visits_scheduled' },
     { v: n.payments, one: 'payment', g: 'ahead' },
     { v: n.invoicesAhead, one: 'invoice', g: 'ahead' },
     { v: n.rungsAhead, one: 'reminder', g: 'ahead' },
-  ] as Array<{ v: number; one: string; g: Group }>).filter((p) => p.v > 0);
+  ]) as Array<{ v: number; one: string; g: Group }>).filter((p) => p.v > 0);
   const aheadTotal = ahead.reduce((a, p) => a + p.v, 0);
   const ladder = data.ladder;
   const buckets = data.buckets.filter((b) => b.count > 0 || b.key === 'overdue' || b.key === 'today');
   // Focus strip numbers: window only, never moved by filters (the reader computes them that way).
-  const needsByLane = { collections: data.facets.needs_by_lane?.collections ?? 0, services: data.facets.needs_by_lane?.services ?? 0 };
-  const needsFor = (l: BoardLane | null) => (l ? needsByLane[l] : needsByLane.collections + needsByLane.services);
+  const needsByLane = data.facets.needs_by_lane || {};
+  const needsFor = (l: BoardLane | null) => (l ? (needsByLane[l] ?? 0) : lanesDef.reduce((a, x) => a + (x.key ? (needsByLane[x.key] ?? 0) : 0), 0));
   // The feed follows the focus: payment and invoice rows for Collections, service rows for Services, both on All — one timeline, newest first.
-  const feed = [...data.happened]
+  const feed = (expense ? [] : [...data.happened])
     .filter((h) => !lane || (lane === 'services') === h.kind.startsWith('visit_'))
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   const bucketColor = (key: BucketKey) => (key === 'overdue' ? red : key === 'today' ? green : key === 'parked' ? colors.utility.secondaryText : colors.utility.primaryText);
@@ -434,7 +475,7 @@ const OpsCommitmentsPage: React.FC = () => {
           <div className={lanes ? 'space-y-2' : 'space-y-2.5'}>
             {b.cards.map((c) => (
               <JobCard key={c.id} card={c} compact={lanes} busy={busyId === c.id} locked={!!busyId && busyId !== c.id}
-                team={data.team} ladder={ladder} meId={user?.id} actions={actions} askChannels={data.ask_channels} />
+                team={data.team} ladder={ladder} meId={user?.id} actions={actions} askChannels={data.ask_channels} showHistory={!expense} />
             ))}
           </div>
         )}
@@ -453,8 +494,8 @@ const OpsCommitmentsPage: React.FC = () => {
       <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-3" style={{ ...sub, ...mono }}>
         ops · {currentTenant?.name || 'your business'} · {fmtDate(data.today)} · where to focus
       </p>
-      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="tablist" aria-label="Focus">
-        {LANES.map((l) => {
+      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(${lanesDef.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Focus">
+        {lanesDef.map((l) => {
           const on = lane === l.key;
           const c = needsFor(l.key);
           return (
@@ -463,7 +504,7 @@ const OpsCommitmentsPage: React.FC = () => {
               style={on ? { backgroundColor: brand, borderColor: brand, color: '#fff' }
                         : { backgroundColor: colors.utility.secondaryBackground, borderColor: hairline, color: colors.utility.primaryText }}>
               <span className="flex items-center gap-1.5 text-[12px] font-extrabold uppercase tracking-[0.12em]" style={mono}>
-                {l.key === 'services' && <Wrench size={12} />}{l.label}
+                {l.key === 'services' && <Wrench size={12} />}{l.key === 'payables' && <IndianRupee size={12} />}{l.key === 'acceptance' && <FileText size={12} />}{l.label}
               </span>
               <span className="block mt-1 text-[15px] font-bold tabular-nums" style={{ opacity: c ? 1 : 0.6 }}>
                 {c ? `${c} need you` : 'nothing needs you'}
@@ -477,7 +518,16 @@ const OpsCommitmentsPage: React.FC = () => {
       <div className="flex items-start justify-between gap-6 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-[26px] sm:text-[30px] leading-snug font-medium max-w-2xl" style={ink}>
-            {n.needs === 0 ? <>Nothing needs you{lane ? ` in ${laneName(lane)}` : ''} right now. </> : <>
+            {n.needs === 0 ? <>Nothing needs you{lane ? ` in ${laneName(lane)}` : ''} right now. </> : expense ? <>
+              <Num v={n.needs} color={red} g={null} /> need you —{' '}
+              {n.billsOverdue > 0 && <><Num v={n.billsOverdue} color={red} g="bills_overdue" /> {n.billsOverdue === 1 ? 'bill' : 'bills'} overdue, </>}
+              {n.slotsOffered > 0 && <><Num v={n.slotsOffered} color={amber} g="slots_offered" /> {n.slotsOffered === 1 ? 'slot' : 'slots'} to answer, </>}
+              {n.toAccept > 0 && <><Num v={n.toAccept} color={amber} g="to_accept" /> {n.toAccept === 1 ? 'contract' : 'contracts'} to accept, </>}
+              {n.svcToday > 0 && <><Num v={n.svcToday} color={green} g="svc_today" /> {n.svcToday === 1 ? 'service' : 'services'} today, </>}
+              {n.svcAwaited > 0 && <><Num v={n.svcAwaited} color={red} g="svc_awaited" /> {n.svcAwaited === 1 ? 'service' : 'services'} still awaited, </>}
+              {n.svcInProgress > 0 && <><Num v={n.svcInProgress} color={brand} g="svc_in_progress" /> in progress, </>}
+              {n.billsDeclared > 0 && <><Num v={n.billsDeclared} color={amber} g="bills_declared" /> declared {n.billsDeclared === 1 ? 'payment' : 'payments'} awaiting confirmation. </>}
+            </> : <>
               <Num v={n.needs} color={red} g={null} /> need you —{' '}
               {n.reminders > 0 && <><Num v={n.reminders} color={red} g="reminders" /> {n.reminders === 1 ? 'reminder' : 'reminders'} due, </>}
               {n.invoices > 0 && <><Num v={n.invoices} color={red} g="invoices" /> {n.invoices === 1 ? 'invoice' : 'invoices'} overdue, </>}
@@ -503,7 +553,7 @@ const OpsCommitmentsPage: React.FC = () => {
                 </>
               : <>Nothing falls due {windowText}.</>}
           </h1>
-          {lane !== 'collections' && n.unassignedVisits > 0 && (
+          {!expense && lane !== 'collections' && n.unassignedVisits > 0 && (
             <button onClick={() => { setLane('services'); setWho('unassigned'); }}
               className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-bold" style={{ color: amber }}>
               <Wrench size={13} /> {plural(n.unassignedVisits, 'service')} {n.unassignedVisits === 1 ? 'has' : 'have'} no technician yet <ArrowUpRight size={12} />
@@ -520,7 +570,11 @@ const OpsCommitmentsPage: React.FC = () => {
       {/* ── controls card: VaNi · window · view · search · filters ── */}
       <div className="mt-6 rounded-2xl border px-4 py-3.5" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: hairline }}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        {lane === 'services' ? (
+        {expense ? (
+          <span className="inline-flex items-center gap-1.5 px-3 min-h-[36px] text-[11.5px] font-bold" style={sub}>
+            <IndianRupee size={12} /> Your providers run the reminders · this is what needs you
+          </span>
+        ) : lane === 'services' ? (
           // VaNi speaks about payment reminders; on Services it has nothing to say yet.
           <span className="inline-flex items-center gap-1.5 px-3 min-h-[36px] text-[11.5px] font-bold" style={sub}>
             <Wrench size={12} /> Services · run by your team
@@ -566,13 +620,13 @@ const OpsCommitmentsPage: React.FC = () => {
       )}
 
       {/* ── lane filters: never mixed. On All, one labelled row per lane; on a lane, only its own row. ── */}
-      {(lane ? [lane] : (['collections', 'services'] as BoardLane[])).map((l) => {
-        const chips = GROUPS.filter((g) => g.lane === l).map((g) => {
+      {(lane ? [lane] : lanesDef.filter((x) => x.key).map((x) => x.key as BoardLane)).map((l) => {
+        const chips = groups.filter((g) => g.lane === l).map((g) => {
           const c = sum(k, g.kinds);
           if (!c && group !== g.key) return null;
-          const color = g.key === 'ahead' || g.key === 'visits_scheduled' || g.key === 'visits_today' ? green
-            : g.key === 'confirm' || g.key === 'awaiting' || g.key === 'slots_to_confirm' ? amber
-            : g.key === 'calls' || g.key === 'in_progress' ? brand
+          const color = g.key === 'ahead' || g.key === 'visits_scheduled' || g.key === 'visits_today' || g.key === 'bills_due' || g.key === 'svc_today' || g.key === 'svc_scheduled' ? green
+            : g.key === 'confirm' || g.key === 'awaiting' || g.key === 'slots_to_confirm' || g.key === 'bills_declared' || g.key === 'slots_offered' || g.key === 'to_accept' ? amber
+            : g.key === 'calls' || g.key === 'in_progress' || g.key === 'svc_in_progress' ? brand
             : g.key === 'paused' ? colors.utility.secondaryText : red;
           return <Chip key={g.key} on={group === g.key} onClick={() => setGroup(group === g.key ? null : g.key)} color={color}>{g.label} <span className="tabular-nums opacity-80">{c}</span></Chip>;
         }).filter(Boolean);
@@ -589,7 +643,7 @@ const OpsCommitmentsPage: React.FC = () => {
               </select>
             )}
           </>
-        ) : (
+        ) : l !== 'services' ? null : (
           Object.keys(data.facets.slots).length > 0 && (
             <select value={slot} onChange={(e) => setSlot(e.target.value as SlotState | '')} style={selectStyle} aria-label="Customer slot">
               <option value="">Any slot</option>
@@ -604,7 +658,7 @@ const OpsCommitmentsPage: React.FC = () => {
           <div key={l} className="mt-3 flex items-center gap-2 flex-wrap">
             {!lane && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.18em] w-24" style={{ ...sub, ...mono }}>
-                {l === 'services' && <Wrench size={11} />}{laneName(l)}
+                {l === 'services' && <Wrench size={11} />}{l === 'payables' && <IndianRupee size={11} />}{l === 'acceptance' && <FileText size={11} />}{laneName(l)}
               </span>
             )}
             {chips}
@@ -619,13 +673,13 @@ const OpsCommitmentsPage: React.FC = () => {
           <option value="">Any age</option>
           {(['0-7', '8-30', '31-90', '90+'] as const).map((a) => <option key={a} value={a}>Overdue {a === '90+' ? '90+' : a} days · {data.facets.ages[a] ?? 0}</option>)}
         </select>
-        <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: `${colors.utility.primaryText}30`, backgroundColor: colors.utility.primaryBackground }} role="group" aria-label="Who">
+        {!expense && <div className="inline-flex rounded-full border p-0.5" style={{ borderColor: `${colors.utility.primaryText}30`, backgroundColor: colors.utility.primaryBackground }} role="group" aria-label="Who">
           {(['team', 'mine', 'unassigned'] as const).map((w) => (
             <Seg key={w} on={who === w} onClick={() => setWho(w)} title={w === 'mine' ? 'Calls and services assigned to me' : w === 'unassigned' ? 'No call assigned · no technician yet' : 'Everyone'}>
               {w === 'team' ? 'Team' : w === 'mine' ? 'Mine' : 'Unassigned'} <span className="tabular-nums opacity-80">{data.facets.who[w] ?? 0}</span>
             </Seg>
           ))}
-        </div>
+        </div>}
         {anyFilter && (
           <button onClick={clearFilters} className="inline-flex items-center gap-1 px-3 min-h-[36px] rounded-full text-[11px] font-bold uppercase tracking-wider" style={{ ...mono, color: brand, backgroundColor: `${brand}14` }}>
             showing {data.counts.matched} of {data.counts.in_window} · clear <X size={12} />
@@ -653,23 +707,41 @@ const OpsCommitmentsPage: React.FC = () => {
       )}
       </div>
 
-      {/* ── WHAT HAPPENED ── */}
-      <div className="flex items-baseline gap-3 mb-2.5 mt-10">
+      {/* ── WHAT HAPPENED (revenue only — the buyer's own answers show on each card) ── */}
+      {!expense && <div className="flex items-baseline gap-3 mb-2.5 mt-10">
         <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ ...mono, color: colors.utility.primaryText }}>what happened</p>
         <p className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ ...sub, ...mono }}>{feed.length ? `${lane ? `${laneName(lane).toLowerCase()} · ` : ''}last ${Math.min(feed.length, 12)}` : `nothing yet${lane ? ` in ${laneName(lane)}` : ''}`}</p>
-      </div>
+      </div>}
       {feed.length > 0 && (
         <div className="rounded-2xl border divide-y max-w-4xl" style={{ borderColor: hairline, backgroundColor: colors.utility.secondaryBackground }}>
           {feed.slice(0, 12).map((h) => <HappenedRow key={h.id} h={h} />)}
         </div>
       )}
 
+      {expense ? (
+        <p className="mt-10 text-[11px] leading-relaxed text-center" style={sub}>
+          What you owe, with balances and documents, lives in{' '}
+          <button onClick={() => navigate('/to-pay')} className="font-bold" style={{ color: brand }}>To Pay</button>; contracts you were sent that are not here yet can be added from{' '}
+          <button onClick={() => navigate('/contracts/claim')} className="font-bold" style={{ color: brand }}>Claim a contract</button>.
+        </p>
+      ) : (
       <p className="mt-10 text-[11px] leading-relaxed text-center" style={sub}>
         Collections and Services are live lanes; Sessions join next. Balances and ageing live in{' '}
         <button onClick={() => navigate('/money-in')} className="font-bold" style={{ color: brand }}>Money In</button>; every invoice is in the{' '}
         <button onClick={() => navigate('/invoices')} className="font-bold" style={{ color: brand }}>invoice register</button>; the ladder is set under{' '}
         <button onClick={() => navigate('/settings/configure/automation-rules')} className="font-bold" style={{ color: brand }}>Automation Rules</button>.
       </p>
+      )}
+
+      {payFor && (
+        <PaySheet
+          cnak={payFor.cnak || null}
+          contractId={payFor.contract_id}
+          sellerName={clean(payFor.seller_name) || payFor.contract_number}
+          onClose={() => setPayFor(null)}
+          onDone={() => { setPayFor(null); refresh(); }}
+        />
+      )}
 
       {historyFor && (
         <HistoryDrawer
@@ -710,7 +782,7 @@ const EmptyBucket: React.FC<{ bucket: BoardBucket; compact: boolean; lane: Board
   const brand = colors.brand.primary;
   const green = colors.semantic.success;
   const hairline = `${colors.utility.primaryText}14`;
-  const things = lane === 'collections' ? 'payments' : lane === 'services' ? 'services' : 'payments or services';
+  const things = lane === 'collections' ? 'payments' : lane === 'services' ? 'services' : lane === 'payables' ? 'bills' : lane === 'acceptance' ? 'acceptance requests' : 'payments or services';
   const dayNum = new Date(`${today}T00:00:00`).getDate() || new Date().getDate();
 
   let title: string; let body: string; let art: 'clear' | 'today' | 'window';
@@ -722,7 +794,9 @@ const EmptyBucket: React.FC<{ bucket: BoardBucket; compact: boolean; lane: Board
     title = 'All clear';
     body = lane === 'services' ? 'No service is behind schedule. A service whose planned day has passed without being started or marked done would sit here.'
       : lane === 'collections' ? 'No payment is past its due date. An overdue instalment would sit here with its next reminder rung; an overdue invoice with no schedule, with its send buttons.'
-      : 'Nothing is past due — no late payment or invoice, no service behind schedule.';
+      : lane === 'payables' ? 'No bill is past its due date. An overdue bill would sit here with Pay now.'
+      : lane === 'acceptance' ? 'Nothing is waiting for your acceptance.'
+      : 'Nothing is past due — no late bill or payment, no service behind schedule.';
     art = 'clear';
   } else if (bucket.key === 'today') {
     title = 'A quiet today';

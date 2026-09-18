@@ -47,6 +47,10 @@ export interface Appointment {
   buyer_name: string | null;
   buyer_phone: string | null;
   buyer_email: string | null;
+  /** 022: when the customer was last sent the slot link (null = never asked), how many times, and what they answered */
+  asked_at?: string | null;
+  ask_count?: number;
+  customer_response?: { action?: string; at?: string; proposed_at?: string; note?: string } | null;
 }
 
 export const appointmentKeys = {

@@ -19,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns';
 import UserStatusBadge, { UserRoleBadge } from '@/components/users/UserStatusBadge';
 import { cn } from '@/lib/utils';
 import { useUsers } from '@/hooks/useUsers';
+import AvailabilityCard from '@/components/users/AvailabilityCard';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
@@ -362,6 +363,8 @@ const UserViewPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                {/* 024: working hours & leave — what Ops checks a service slot against */}
+                {id && <AvailabilityCard userId={id} />}
               </div>
             )}
             {activeTab === 'permissions' && (

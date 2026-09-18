@@ -14,6 +14,10 @@
 //                 (get_appointments_list — the record the old kanban was).
 //   Follow-ups    every call task, open or closed — follow-ups you set
 //                 yourself and calls assigned to teammates (jtd_tasks, 017).
+//   Plan          (023) every day ahead with its commitments lined up, slotted
+//                 or not — the same cards and verbs as Ops, day by day, with
+//                 what VaNi would do with each day (buttons when VaNi is on,
+//                 greyed when it is off). components/ops/PlanView.tsx.
 //   Activity      the tenant-wide timeline — appointments asked/confirmed/
 //                 moved/declined, follow-ups, calls, reminders with delivery
 //                 status, services assigned/started/done, declarations — by
@@ -21,9 +25,9 @@
 // Same idiom as the board (theme tokens, controls card, chips, 44px targets).
 // Never a balance, a total or an ageing sum — Money In is the ledger.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Search, RefreshCw, X, Users, List as ListIcon, ChevronDown, ChevronRight, Sparkles, Wrench, IndianRupee, CalendarCheck, CalendarClock, PhoneCall, FileText } from 'lucide-react';
+import { ArrowUpRight, Search, RefreshCw, X, Users, List as ListIcon, ChevronDown, ChevronRight, Sparkles, Wrench, IndianRupee, CalendarCheck, CalendarClock, CalendarRange, PhoneCall, FileText } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/context/AuthContext';
 import { useInvoiceTheme, useStatusMeta } from '../../invoices/ui';
@@ -35,6 +39,7 @@ import { useAppointments, type Appointment } from '@/hooks/queries/useAppointmen
 import { useActivityRegister, useOpsTasks, type ActivityGroup, type RegisterActivityRow, type OpsTask, type TaskKind } from '@/hooks/queries/useCollectionsQueries';
 import { rowVisual, statusColor, MessageToggle } from '@/components/ops/HistoryDrawer';
 import { clean, fmtTime } from '@/components/ops/JobCard';
+import PlanView from '@/components/ops/PlanView';
 
 // ── the row the events API returns: the event + contract/contact context ────
 interface EventRow {
@@ -67,7 +72,7 @@ interface EventRow {
   days_overdue?: number;
 }
 
-type Tab = 'events' | 'activity';
+type Tab = 'events' | 'plan' | 'activity';
 type Lane = 'all' | 'collections' | 'services' | 'appointments' | 'followups';
 type When = 'all' | 'past' | 'today' | 'next7' | 'next30' | 'custom';
 const PER_PAGE = 100;
@@ -83,7 +88,7 @@ const SERVICE_TRANSITIONS: Record<string, string[]> = {
 };
 const CLOSED = new Set(['completed', 'cancelled', 'paid', 'waived', 'adjustment', 'bad_debt']);
 const APPT_STATUSES: Array<{ code: string; label: string }> = [
-  { code: 'requested', label: 'Asked' }, { code: 'accepted', label: 'Confirmed' }, { code: 'rescheduled', label: 'Customer proposed' },
+  { code: 'requested', label: 'Slot proposed' }, { code: 'accepted', label: 'Confirmed' }, { code: 'rescheduled', label: 'Customer proposed' },
   { code: 'no_response', label: 'No response' }, { code: 'declined', label: 'Not needed' }, { code: 'completed', label: 'Completed' }, { code: 'cancelled', label: 'Cancelled' },
 ];
 const APPT_CLOSED = new Set(['completed', 'declined', 'cancelled', 'no_response']);
@@ -94,7 +99,7 @@ const GROUPS: Array<{ key: ActivityGroup; label: string }> = [
 ];
 
 const TAB_KEY = 'ops.register.tab';
-const readTab = (): Tab => { try { const v = window.localStorage.getItem(TAB_KEY); return v === 'activity' ? 'activity' : 'events'; } catch { return 'events'; } };
+const readTab = (): Tab => { try { const v = window.localStorage.getItem(TAB_KEY); return v === 'activity' ? 'activity' : v === 'plan' ? 'plan' : 'events'; } catch { return 'events'; } };
 const isoDay = (d: Date) => { const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const today0 = () => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; };
@@ -137,6 +142,9 @@ const CommitmentsRegisterPage: React.FC = () => {
   const hairline = `${colors.utility.primaryText}14`;
 
   const [tab, setTabState] = useState<Tab>(readTab);
+  // the Plan tab owns its own query; it reports fetching + a refetch handle up so the header's Refresh works for it too
+  const [planFetching, setPlanFetching] = useState(false);
+  const planRefresh = useRef<(() => void) | null>(null);
   const setTab = (t: Tab) => { setTabState(t); try { window.localStorage.setItem(TAB_KEY, t); } catch { /* ignore */ } };
 
   // ── Events tab state ──
@@ -366,7 +374,8 @@ const CommitmentsRegisterPage: React.FC = () => {
 
   // ── Appointments row ──
   const ApptLine: React.FC<{ a: Appointment; indent?: boolean }> = ({ a, indent }) => {
-    const st = APPT_STATUSES.find((s) => s.code === a.status);
+    // 022: "Asked" only when the customer actually got the link (asked_at); a bare row is a slot we proposed
+    const st = a.status === 'requested' && a.asked_at ? { code: 'requested', label: `Asked${a.ask_count && a.ask_count > 1 ? ` ×${a.ask_count}` : ''}` } : APPT_STATUSES.find((s) => s.code === a.status);
     const c = a.status === 'accepted' ? green : a.status === 'requested' || a.status === 'rescheduled' ? amber : APPT_CLOSED.has(a.status) ? colors.utility.secondaryText : brand;
     const closed = APPT_CLOSED.has(a.status);
     return (
@@ -468,8 +477,8 @@ const CommitmentsRegisterPage: React.FC = () => {
   };
 
   const laneQuery = lane === 'appointments' ? appointments : lane === 'followups' ? tasks : eventsQuery;
-  const fetching = tab === 'events' ? (laneQuery.isFetching || (eventsLane && receivables.isFetching)) : activity.isFetching;
-  const refresh = () => (tab === 'events' ? (laneQuery.refetch(), eventsLane && receivables.refetch()) : activity.refetch());
+  const fetching = tab === 'events' ? (laneQuery.isFetching || (eventsLane && receivables.isFetching)) : tab === 'activity' ? activity.isFetching : planFetching;
+  const refresh = () => (tab === 'events' ? (laneQuery.refetch(), eventsLane && receivables.refetch()) : tab === 'activity' ? activity.refetch() : planRefresh.current?.());
   const headers: string[] =
     lane === 'appointments' ? [grouped ? 'Contract' : 'Customer · contract', 'Service', 'Slot', 'Status', 'Who', 'Where', '']
     : lane === 'followups' ? [grouped ? 'Contract' : 'Customer · contract', 'About', 'Due', 'State', 'Who', 'Invoice · set by', '']
@@ -495,10 +504,13 @@ const CommitmentsRegisterPage: React.FC = () => {
       {/* tabs */}
       <div className="mt-5 inline-flex rounded-full border p-0.5" style={{ borderColor: `${brand}45`, backgroundColor: colors.utility.primaryBackground }} role="tablist">
         <Seg on={tab === 'events'} onClick={() => setTab('events')}>Commitments{laneCount && tab === 'events' ? <span className="tabular-nums opacity-80">{laneCount}</span> : null}</Seg>
+        {perspective !== 'expense' && <Seg on={tab === 'plan'} onClick={() => setTab('plan')}><CalendarRange size={12} /> Plan</Seg>}
         <Seg on={tab === 'activity'} onClick={() => setTab('activity')}>Activity{activity.data ? <span className="tabular-nums opacity-80">{activity.data.counts.all}</span> : null}</Seg>
       </div>
 
-      {tab === 'events' ? (
+      {tab === 'plan' ? (
+        <PlanView onFetching={setPlanFetching} refreshRef={planRefresh} />
+      ) : tab === 'events' ? (
         <>
           <div className="mt-4 rounded-2xl border px-4 py-3.5" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: hairline }}>
             <div className="flex items-center gap-2 flex-wrap">

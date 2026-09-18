@@ -15,9 +15,13 @@ export interface CadenceSettings {
   weekly_holidays: number[];          // 0=Sun .. 6=Sat
   default_shift: 'next' | 'previous';
   holidays: HolidayDate[];
+  /** 024: the organisation's working day (HH:MM, IST) and how long a service visit is assumed to take */
+  work_start: string;
+  work_end: string;
+  default_visit_minutes: number;
 }
 
-const EMPTY: CadenceSettings = { weekly_holidays: [0], default_shift: 'next', holidays: [] };
+const EMPTY: CadenceSettings = { weekly_holidays: [0], default_shift: 'next', holidays: [], work_start: '09:00', work_end: '18:00', default_visit_minutes: 60 };
 
 export function useCadenceSettings() {
   const [settings, setSettings] = useState<CadenceSettings>(EMPTY);
@@ -32,6 +36,9 @@ export function useCadenceSettings() {
         weekly_holidays: Array.isArray(data.weekly_holidays) ? data.weekly_holidays : [],
         default_shift: data.default_shift === 'previous' ? 'previous' : 'next',
         holidays: Array.isArray(data.holidays) ? data.holidays : [],
+        work_start: typeof data.work_start === 'string' ? data.work_start : '09:00',
+        work_end: typeof data.work_end === 'string' ? data.work_end : '18:00',
+        default_visit_minutes: Number.isFinite(Number(data.default_visit_minutes)) ? Number(data.default_visit_minutes) : 60,
       });
     }
   };
@@ -61,6 +68,23 @@ export function useCadenceSettings() {
       return true;
     } catch (err: any) {
       setError(err?.response?.data?.message || err.message || 'Failed to save');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  /** 024: working hours + default visit length → PUT /api/settings/cadence/hours */
+  const saveHours = useCallback(async (workStart: string, workEnd: string, defaultVisitMinutes: number) => {
+    try {
+      setSaving(true); setError(null);
+      const res = await api.put(API_ENDPOINTS.CADENCE_SETTINGS.UPDATE_HOURS, {
+        work_start: workStart, work_end: workEnd, default_visit_minutes: defaultVisitMinutes,
+      });
+      apply(res.data?.data || res.data);
+      return true;
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || err?.response?.data?.message || err.message || 'Failed to save working hours');
       return false;
     } finally {
       setSaving(false);
@@ -97,7 +121,7 @@ export function useCadenceSettings() {
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
-  return { settings, loading, saving, error, fetchSettings, save, addHoliday, removeHoliday };
+  return { settings, loading, saving, error, fetchSettings, save, saveHours, addHoliday, removeHoliday };
 }
 
 export default useCadenceSettings;

@@ -17,7 +17,7 @@
 // totals — the cockpit lists decisions and commitments, Money In is the ledger.
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { vaniToast } from '@/components/common/toast/VaNiToast';  // the app mounts VaNiToast only — the other toast library's calls render nothing here
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
@@ -50,10 +50,28 @@ export type BoardKind =
   | 'visit_today'
   | 'visit_scheduled'
   /** the customer suggested another time on /slot/:token — the team confirms (migration 015) */
-  | 'slot_to_confirm';
+  | 'slot_to_confirm'
+  // ── EXPENSE side (migration 021, jtd_ops_board_expense): what needs the BUYER ──
+  /** a bill I owe: an instalment or a whole invoice on a contract I claimed */
+  | 'bill_overdue' | 'bill_due'
+  /** I declared an offline payment — the seller has not confirmed it yet */
+  | 'bill_declared'
+  /** the seller proposed a time for a service at my place — answer it */
+  | 'slot_offered'
+  | 'service_in_progress' | 'service_awaited' | 'service_today' | 'service_scheduled'
+  /** a contract addressed to me is waiting for my acceptance (review link in-app) */
+  | 'to_accept';
 
-export type BoardLane = 'collections' | 'services';
+/** Revenue: collections · services. Expense: payables · services · acceptance. */
+export type BoardLane = 'collections' | 'services' | 'payables' | 'acceptance';
+export type Perspective = 'revenue' | 'expense';
 export type SlotState = 'confirmed' | 'proposed' | 'none';
+/** 024: one reason a slot clashes (jtd_slot_check) — a warning, never a refusal. */
+export interface SlotClash { kind: 'weekly_off' | 'holiday' | 'leave' | 'outside_hours' | 'overlap' | string; detail: string; event_id?: string }
+export const clashLabel = (c: SlotClash): string =>
+  c.kind === 'weekly_off' ? 'day off' : c.kind === 'holiday' ? 'holiday' : c.kind === 'leave' ? 'on leave' : c.kind === 'outside_hours' ? 'outside hours' : c.kind === 'overlap' ? 'overlaps' : 'clash';
+/** " · ⚠ overlaps AC servicing · CN-1010 at 14:00" for a tool result's warnings, or ''. */
+export const warningsText = (w?: SlotClash[] | null): string => (w && w.length ? ` · ⚠ ${w.map((x) => x.detail).join('; ')}` : '');
 
 /** The services block on a visit row. The row's `id`/`job_id` is the service event id. */
 export interface VisitInfo {
@@ -68,6 +86,10 @@ export interface VisitInfo {
   slot?: { id: string; status: 'requested' | 'accepted' | 'rescheduled' | 'no_response' | string; at?: string; confirmed: boolean };
   /** An open service ticket linked to this visit. */
   ticket?: { id: string; number?: string; status: 'created' | 'assigned' | 'in_progress' | string };
+  /** 024: how long the visit takes (the block's config.duration, else the tenant default) */
+  duration_minutes?: number;
+  /** 024: why the slot clashes for the technician — absent when it does not */
+  clashes?: SlotClash[];
   /** The customer loop (migration 015): when we asked, how often, and what the customer answered on /slot/:token. */
   ask?: {
     asked_at?: string;
@@ -142,6 +164,16 @@ export interface BoardCard {
   call_task?: { id: string; assigned_to?: string; assigned_to_name?: string; due_at?: string; kind?: 'follow_up' | 'escalation' | string };
   failed?: { reminder_id?: string; channel?: string; error?: string; at?: string };
   awaiting?: { status: string; since: string; start_date?: string };
+  // ── expense side (migration 021) ──
+  /** The seller as this tenant sees it (also placed in buyer_name so the card title reads the same). */
+  seller_name?: string;
+  seller_tenant_id?: string;
+  /** The contract's CNAK — the buyer's key to the in-app pay / declare flow (my-access → secret). */
+  cnak?: string;
+  /** to_accept only: "cnak=…&secret=…" — opens /contract-review in-app. */
+  review_link_suffix?: string;
+  /** services rows: the open appointment to answer (accept · propose · decline). */
+  appointment_id?: string;
 }
 
 export interface BoardBucket {
@@ -183,6 +215,8 @@ export interface WlTeamMember {
 }
 
 export interface BoardFilters {
+  /** expense → jtd_ops_board_expense (the buyer's board); default revenue */
+  perspective?: Perspective;
   horizon?: number;
   from?: string;
   to?: string;
@@ -201,6 +235,7 @@ export interface BoardFilters {
 
 export interface CollectionsBoard {
   success: boolean;
+  perspective?: Perspective;
   today: string;
   is_live: boolean;
   window: { from: string | null; to: string; horizon_days: number | null; bands: [number, number] };
@@ -316,6 +351,10 @@ export const REASON_COPY: Record<string, string> = {
   downstream_refused: 'The visit could not be updated — it may have changed under you. Refresh and retry.',
   invalid_reason: 'Pick a reason for pausing.',
   actor_required: 'Sign in again and retry.',
+  // plan view (023)
+  vani_off: 'VaNi is not on for this business — place and ask one by one, or open VaNi.',
+  day_passed: 'That day has passed — reschedule those services one by one.',
+  day_required: 'Pick a day.',
 };
 
 const errorMessage = (error: any, fallback: string): string => {
@@ -329,6 +368,7 @@ const unwrap = <T,>(response: any): T => (response.data?.data ?? response.data) 
 /** BoardFilters → the GET query string the controller expects. */
 const toParams = (f: BoardFilters): Record<string, string> => {
   const p: Record<string, string> = {};
+  if (f.perspective === 'expense') p.perspective = 'expense';
   if (f.horizon) p.horizon = String(f.horizon);
   if (f.from) p.from = f.from;
   if (f.to) p.to = f.to;
@@ -540,11 +580,11 @@ const useToolMutation = <TVars, TResult = any>(
       return unwrap<TResult>(response);
     },
     onSuccess: (result, vars) => {
-      toast.success(successText(result, vars), { duration: 3500 });
+      vaniToast.success(successText(result, vars), { duration: 3500 });
       queryClient.invalidateQueries({ queryKey: collectionsKeys.all });
     },
     onError: (error: any) => {
-      toast.error(errorMessage(error, fallback), { duration: 5000 });
+      vaniToast.error(errorMessage(error, fallback), { duration: 5000 });
       queryClient.invalidateQueries({ queryKey: collectionsKeys.all });
     },
   });
@@ -620,18 +660,18 @@ export const useAssignVisit = () =>
   useToolMutation<{ eventId: string; assignTo: string; note?: string }, { success: boolean; assigned_to_name: string | null }>(
     (v) => `${BASE}/visits/${v.eventId}/assign`,
     (v) => ({ assign_to: v.assignTo, note: v.note ?? null }),
-    (r) => `Visit assigned to ${r.assigned_to_name || 'a technician'}`,
+    (r) => `Visit assigned to ${r.assigned_to_name || 'a technician'}${warningsText((r as any).warnings)}`,
     'Could not assign the visit'
   );
 
 export const useScheduleVisit = () =>
   useToolMutation<
     { eventId: string; scheduledAt: string; confirmed: boolean; note?: string },
-    { success: boolean; scheduled_at: string; confirmed: boolean; appointment_status: string }
+    { success: boolean; scheduled_at: string; confirmed: boolean; appointment_status: string; warnings?: SlotClash[] }
   >(
     (v) => `${BASE}/visits/${v.eventId}/schedule`,
     (v) => ({ scheduled_at: v.scheduledAt, confirmed: v.confirmed, note: v.note ?? null }),
-    (r) => (r.confirmed ? `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified` : `Slot proposed for ${fmtSlot(r.scheduled_at)} — awaiting the customer`),
+    (r) => (r.confirmed ? `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified` : `Slot proposed for ${fmtSlot(r.scheduled_at)} — awaiting the customer`) + warningsText(r.warnings),
     'Could not schedule the visit'
   );
 
@@ -639,7 +679,7 @@ export const useConfirmVisitSlot = () =>
   useToolMutation<{ eventId: string; note?: string }, { success: boolean; scheduled_at: string }>(
     (v) => `${BASE}/visits/${v.eventId}/confirm-slot`,
     (v) => ({ note: v.note ?? null }),
-    (r) => `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified`,
+    (r) => `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified${warningsText((r as any).warnings)}`,
     'Could not confirm the slot'
   );
 
@@ -688,10 +728,151 @@ export const useAskVisitSlot = () =>
     'Could not ask the customer'
   );
 
+/**
+ * Expense side (migration 021): the buyer answers the seller's proposed slot
+ * from the board — same tool as the public /slot/:token page.
+ */
+export const useRespondSlot = () =>
+  useToolMutation<
+    { appointmentId: string; action: 'accept' | 'propose' | 'decline'; proposedAt?: string; note?: string },
+    { success: boolean; state?: string; scheduled_at?: string | null }
+  >(
+    (v) => `${BASE}/slots/${v.appointmentId}/respond`,
+    (v) => ({ action: v.action, proposed_at: v.proposedAt ?? null, note: v.note ?? null }),
+    (r, v) => (v.action === 'accept' ? `Slot confirmed${r.scheduled_at ? ` for ${fmtSlot(r.scheduled_at)}` : ''} — the provider is notified`
+      : v.action === 'propose' ? `You suggested ${fmtSlot(r.scheduled_at)} — waiting for the provider to confirm`
+      : 'Marked as not needed — the provider is notified'),
+    'Could not answer the slot'
+  );
+
 export const useResumeDunning = () =>
   useToolMutation<{ jobId: string; note?: string }, { success: boolean; next_dunning_at: string | null }>(
     (v) => `${BASE}/payments/${v.jobId}/resume`,
     (v) => ({ note: v.note ?? null }),
     () => 'Reminders resumed',
     'Could not resume reminders'
+  );
+
+// ── Commitments Register · Plan tab (migration jtd-nucleus/023) ─────────────
+/** What a list of cards needs — jtd__plan_counts. `to_place` / `proposed` / `reminders_due` are also what VaNi would place / ask / send. */
+export interface PlanCounts {
+  total: number;
+  needs_you: number;
+  services: number;
+  to_place: number;
+  proposed: number;
+  asked: number;
+  to_confirm: number;
+  confirmed: number;
+  in_progress: number;
+  unassigned_services: number;
+  /** 024: services whose slot clashes for the technician (outside hours, day off, leave, overlap) */
+  clashes: number;
+  payments: number;
+  followups: number;
+  reminders_due: number;
+  declarations: number;
+}
+export interface PlanDay {
+  day: string;        // YYYY-MM-DD (IST)
+  dow: string;        // Mon … Sun
+  is_today: boolean;
+  counts: PlanCounts;
+  cards: BoardCard[]; // the same rows the board renders — JobCard, same verbs
+}
+export interface PlanFilters {
+  from?: string;      // YYYY-MM-DD; defaults to today
+  to?: string;        // defaults to from + 13; at most 120 days
+  lanes?: BoardLane[];
+  who?: 'team' | 'mine' | 'unassigned';
+  q?: string;
+}
+export interface OpsPlan {
+  success: boolean;
+  today: string;
+  is_live: boolean;
+  window: { from: string; to: string; days: number };
+  filters: Record<string, unknown>;
+  days: PlanDay[];
+  /** anchored before the window — overdue, carried over */
+  carried: { counts: PlanCounts; cards: BoardCard[] };
+  /** no anchor at all (the board's parked bucket) */
+  parked: { counts: PlanCounts; cards: BoardCard[] };
+  totals: PlanCounts;
+  /** a bucket held more rows than the reader could carry (500) — narrow the window */
+  truncated: boolean;
+  team: WlTeamMember[];
+  ladder: CollectionsBoard['ladder'];
+  ask_channels?: Array<'email' | 'whatsapp'>;
+  /** vani_is_enabled(tenant): the leverage buttons show only when true */
+  vani_enabled: boolean;
+  generated_at: string;
+}
+
+const fmtDay = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+
+const planParams = (f: PlanFilters): Record<string, string> => {
+  const p: Record<string, string> = {};
+  if (f.from) p.from = f.from;
+  if (f.to) p.to = f.to;
+  if (f.lanes?.length) p.lanes = f.lanes.join(',');
+  if (f.who && f.who !== 'team') p.who = f.who;
+  if (f.q?.trim()) p.q = f.q.trim();
+  return p;
+};
+
+export const useOpsPlan = (filters: PlanFilters, options?: { enabled?: boolean }) => {
+  const { currentTenant } = useAuth();
+  return useQuery({
+    queryKey: [...collectionsKeys.all, 'plan', currentTenant?.id || '', filters],
+    queryFn: async (): Promise<OpsPlan> => {
+      if (!currentTenant?.id) throw new Error('Missing tenant');
+      const response = await api.get(`${BASE}/plan`, { params: planParams(filters) });
+      return unwrap<OpsPlan>(response);
+    },
+    enabled: !!currentTenant?.id && options?.enabled !== false,
+    placeholderData: keepPreviousData,
+    staleTime: 20 * 1000,
+    refetchOnWindowFocus: true,
+  });
+};
+
+export interface PlanDayResult {
+  success: boolean;
+  day: string;
+  placed_count: number;
+  refused_count: number;
+  unassigned_count: number;
+  placed: Array<{ event_id: string; contract_number: string | null; block_name: string | null; scheduled_at: string; technician: string | null; appointment_id: string }>;
+  refused: Array<{ event_id: string; contract_number: string | null; block_name: string | null; reason: string; detail?: string | null }>;
+}
+/** "Plan this day" (023): proposes a slot for every unslotted service on the day. VaNi leverage — the RPC refuses vani_off. */
+export const usePlanDay = () =>
+  useToolMutation<{ day: string }, PlanDayResult>(
+    (v) => `${BASE}/plan/${v.day}/place`,
+    () => ({}),
+    (r) => (r.placed_count
+      ? `Placed ${r.placed_count} service${r.placed_count === 1 ? '' : 's'} for ${fmtDay(r.day)}${r.unassigned_count ? ` · ${r.unassigned_count} still need a technician` : ''}${r.refused_count ? ` · ${r.refused_count} could not be placed` : ''}`
+      : r.refused_count ? `Nothing placed — ${r.refused_count} could not be placed` : 'Nothing to place on that day'),
+    'Could not plan the day'
+  );
+
+export interface AskDayResult {
+  success: boolean;
+  day: string;
+  channel: 'email' | 'whatsapp';
+  asked_count: number;
+  refused_count: number;
+  asked: Array<{ event_id: string; contract_number: string | null; block_name: string | null; recipient_name: string | null; scheduled_at: string; communication_id: string | null }>;
+  refused: Array<{ event_id: string; contract_number: string | null; block_name: string | null; reason: string; detail?: string | null }>;
+}
+/** "Ask everyone" (023): asks every proposed-not-asked slot of the day on email or WhatsApp. VaNi leverage — refuses vani_off. */
+export const useAskDay = () =>
+  useToolMutation<{ day: string; channel: 'email' | 'whatsapp' }, AskDayResult>(
+    (v) => `${BASE}/plan/${v.day}/ask`,
+    (v) => ({ channel: v.channel }),
+    (r) => (r.asked_count
+      ? `Asked ${r.asked_count} customer${r.asked_count === 1 ? '' : 's'} ${r.channel === 'whatsapp' ? 'on WhatsApp' : 'by email'}${r.refused_count ? ` · ${r.refused_count} could not be asked` : ''}`
+      : r.refused_count ? `Nobody asked — ${r.refused_count} could not be sent (${r.refused[0]?.reason === 'no_template' ? 'template not registered' : r.refused[0]?.reason || 'refused'})` : 'Nothing to ask on that day'),
+    'Could not ask the customers'
   );

@@ -19,7 +19,7 @@ const CadenceSettingsPage: React.FC = () => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
-  const { settings, loading, saving, error, save, addHoliday, removeHoliday } = useCadenceSettings();
+  const { settings, loading, saving, error, save, saveHours, addHoliday, removeHoliday } = useCadenceSettings();
 
   const [weekly, setWeekly] = useState<number[]>([]);
   const [shift, setShift] = useState<'next' | 'previous'>('next');
@@ -48,6 +48,23 @@ const CadenceSettingsPage: React.FC = () => {
     const ok = await save(weekly, shift);
     addToast(ok
       ? { type: 'success', title: 'Cadence settings saved', message: 'Service cycles will use this calendar.' }
+      : { type: 'error', title: 'Save failed', message: error || 'Please try again.' });
+  };
+
+  // ── 024: working hours + default visit length ──
+  const [workStart, setWorkStart] = useState('09:00');
+  const [workEnd, setWorkEnd] = useState('18:00');
+  const [visitMinutes, setVisitMinutes] = useState(60);
+  useEffect(() => {
+    setWorkStart(settings.work_start); setWorkEnd(settings.work_end); setVisitMinutes(settings.default_visit_minutes);
+  }, [settings.work_start, settings.work_end, settings.default_visit_minutes]);
+  const hoursDirty = workStart !== settings.work_start || workEnd !== settings.work_end || visitMinutes !== settings.default_visit_minutes;
+  const handleSaveHours = async () => {
+    if (workEnd <= workStart) { addToast({ type: 'error', title: 'Check the hours', message: 'The working day must end after it starts.' }); return; }
+    if (!Number.isFinite(visitMinutes) || visitMinutes < 15 || visitMinutes > 480) { addToast({ type: 'error', title: 'Check the visit length', message: 'Between 15 minutes and 8 hours.' }); return; }
+    const ok = await saveHours(workStart, workEnd, visitMinutes);
+    addToast(ok
+      ? { type: 'success', title: 'Working hours saved', message: `${workStart}–${workEnd} · ${visitMinutes} min per visit` }
       : { type: 'error', title: 'Save failed', message: error || 'Please try again.' });
   };
 
@@ -147,6 +164,35 @@ const CadenceSettingsPage: React.FC = () => {
             style={{ backgroundColor: colors.brand.primary }}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             {dirty ? 'Save changes' : 'Saved'}
+          </button>
+        </div>
+      </div>
+
+      {/* Working hours (024) */}
+      <div className="rounded-xl border p-5" style={card}>
+        <h2 className="text-sm font-semibold mb-1" style={{ color: colors.utility.primaryText }}>Working hours</h2>
+        <p className="text-xs mb-4" style={{ color: colors.utility.secondaryText }}>
+          When the organisation works, and how long a service visit is assumed to take. Ops flags a slot outside these hours and "Plan this day" starts from here. A person can carry their own hours on their page under Users.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>From
+            <input type="time" value={workStart} onChange={(e) => setWorkStart(e.target.value)} className="ml-2 rounded-lg border px-3 py-2 text-sm"
+              style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF', borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB', color: colors.utility.primaryText }} />
+          </label>
+          <label className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>To
+            <input type="time" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} className="ml-2 rounded-lg border px-3 py-2 text-sm"
+              style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF', borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB', color: colors.utility.primaryText }} />
+          </label>
+          <label className="text-xs font-medium" style={{ color: colors.utility.secondaryText }}>A visit takes
+            <input type="number" min={15} max={480} step={15} value={visitMinutes} onChange={(e) => setVisitMinutes(parseInt(e.target.value || '0', 10))} className="ml-2 w-20 rounded-lg border px-3 py-2 text-sm"
+              style={{ backgroundColor: isDarkMode ? colors.utility.primaryBackground : '#FFFFFF', borderColor: isDarkMode ? colors.utility.secondaryBackground : '#E5E7EB', color: colors.utility.primaryText }} />
+            <span className="ml-1">min</span>
+          </label>
+          <button onClick={handleSaveHours} disabled={saving || !hoursDirty}
+            className="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+            style={{ backgroundColor: colors.brand.primary, color: '#FFFFFF' }}>
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            {hoursDirty ? 'Save hours' : 'Saved'}
           </button>
         </div>
       </div>

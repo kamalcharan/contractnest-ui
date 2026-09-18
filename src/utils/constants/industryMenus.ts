@@ -51,6 +51,8 @@ export const defaultMenuItems: MenuItem[] = [
   // 2026-09-17 (commitments-register): Event Schedule became the Commitments Register — every commitment in
   // every status + the Activity timeline (appointments, follow-ups, calls, reminders). Ops = what needs you now.
   { id: 'ops-services', label: 'Commitments Register', icon: 'CalendarClock', path: '/ops/services' },
+  // 2026-09-18 (ops-timeboard): the Plan's cards on a clock — week, day by person, agenda; drag to propose/confirm.
+  { id: 'ops-timeboard', label: 'Timeboard', icon: 'CalendarDays', path: '/ops/timeboard' },
   { id: 'ops-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions' },
   // RETIRED 2026-09-17 (ops-appointments-loop): the appointment is the service's slot on the Ops board
   // (Services focus · Schedule · Ask customer · Confirm slot); /ops/appointments redirects there.

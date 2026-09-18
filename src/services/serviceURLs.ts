@@ -1309,6 +1309,14 @@ export const API_ENDPOINTS = {
     UPDATE: '/api/settings/cadence',
     ADD_HOLIDAY: '/api/settings/cadence/holidays',
     REMOVE_HOLIDAY: (date: string) => `/api/settings/cadence/holidays?date=${date}`,
+    /** 024: working hours + default visit length */
+    UPDATE_HOURS: '/api/settings/cadence/hours',
+  },
+  // Availability — who works when (migration jtd-nucleus/024): per-user hours, weekly off, leave; the team
+  AVAILABILITY: {
+    USER: (userId: string) => `/api/availability/users/${userId}`,
+    LEAVE: (userId: string) => `/api/availability/users/${userId}/leave`,
+    TEAM: '/api/availability/team',
   },
   // Group Session check-in — chair (authenticated) side. The member-facing
   // public endpoints (/api/checkin/...) are called by a bare axios client.

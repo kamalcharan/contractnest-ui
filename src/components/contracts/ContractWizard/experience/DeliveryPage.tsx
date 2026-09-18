@@ -63,8 +63,12 @@ export default function DeliveryPage(p:Props) {
     if (gateway.isPending||gateway.isFetching) errors.push('Wait for payment gateway status to finish loading.');
     else if (gateway.isError) errors.push('Retry payment gateway status. A failed lookup is not an offline-payment choice.');
   }
+  // The recipient is the contact person chosen in Agreement when there is
+  // one; otherwise the contact itself (a corporate contact's own channels are
+  // enough — owner decision 2026-09-17). Only a chosen person that has since
+  // been removed blocks this chapter.
   const person = contact.data?.contact_persons?.find(x=>x.id===s.buyerContactPersonId);
-  const needsPerson = contact.data?.type==='corporate'&&!s.useCompanyContact;
+  const needsPerson = contact.data?.type==='corporate'&&!!s.buyerContactPersonId;
   const recipientMissing = needsPerson&&!person;
   const channels = needsPerson ? person?.contact_channels : contact.data?.contact_channels;
   const emails = (channels || []).filter(x=>x.channel_type==='email');
@@ -72,7 +76,7 @@ export default function DeliveryPage(p:Props) {
   if (s.acceptanceMethod&&s.acceptanceMethod!=='auto') {
     if (contact.isPending||contact.isFetching) errors.push('Wait for recipient details to finish loading.');
     else if (contact.isError) errors.push('Retry recipient details before completing this chapter.');
-    else if (recipientMissing) errors.push('The selected contact person is missing. Return to Agreement to choose the recipient.');
+    else if (recipientMissing) errors.push('The contact person chosen in Agreement is no longer on this contact. Return to Agreement to choose the recipient.');
   }
   const patch = (value:Partial<ContractWizardState>) => {
     if (locked) return;

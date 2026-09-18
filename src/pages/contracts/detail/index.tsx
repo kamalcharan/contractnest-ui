@@ -76,6 +76,7 @@ import {
 import TabsNavigation from '@/components/shared/TabsNavigation';
 import ContactHeaderCard from '@/components/contacts/view/cards/ContactHeaderCard';
 import RecordPaymentDialog from '@/components/contracts/RecordPaymentDialog';
+import PaySheet from '@/components/ops/PaySheet';
 import PaymentRequestHistory from '@/components/contracts/PaymentRequestHistory';
 import TimelineTab from '@/components/contracts/TimelineTab';
 import OperationsTab from '@/components/contracts/OperationsTab';
@@ -395,11 +396,13 @@ interface FinancialHealthProps {
   contract: ContractDetail;
   colors: any;
   onRecordPayment?: () => void;
+  /** Buyer view (expense): pay online / declare an offline payment — the seller's ledger is never written from here. */
+  onPay?: () => void;
   hasActiveGateway?: boolean;
   onViewInvoice?: (invoiceId: string) => void;
 }
 
-const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onRecordPayment, hasActiveGateway, onViewInvoice }) => {
+const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onRecordPayment, onPay, hasActiveGateway, onViewInvoice }) => {
   const { data, isLoading } = useContractInvoices(contract.id);
   const invoices = data?.invoices || [];
   const summary = data?.summary || {
@@ -459,6 +462,17 @@ const FinancialHealth: React.FC<FinancialHealthProps> = ({ contract, colors, onR
           >
             {arApLabel}
           </span>
+          {onPay && invoices.length > 0 && (
+            <button
+              onClick={onPay}
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[0.65rem] font-semibold transition-all hover:opacity-80"
+              style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
+              title="Pay online or declare an offline payment"
+            >
+              <Wallet className="h-3 w-3" />
+              Pay / declare
+            </button>
+          )}
           {onRecordPayment && invoices.length > 0 && (
             <button
               onClick={onRecordPayment}
@@ -2007,6 +2021,8 @@ const ContractDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>(initialTabParam || 'operations');
   const [tabInitialized, setTabInitialized] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  // Buyer view (expense): the in-app pay / declare sheet (batch ops-expense-board)
+  const [isPaySheetOpen, setIsPaySheetOpen] = useState(false);
 
   // ── JTD Nucleus Step 3: ONE aggregate call feeds the whole page ──
   // useContractDetailsV2 fetches contract+events+cnak+invoices in a single
@@ -2587,7 +2603,9 @@ const ContractDetailPage: React.FC = () => {
                 contract={contract}
                 colors={colors}
                 hasActiveGateway={hasActiveGateway}
-                onRecordPayment={isFullyPaid ? undefined : () => setIsPaymentDialogOpen(true)}
+                // A buyer never records money on the seller's ledger: they pay or declare (batch ops-expense-board)
+                onRecordPayment={isFullyPaid || showBuyerView ? undefined : () => setIsPaymentDialogOpen(true)}
+                onPay={showBuyerView && !isFullyPaid ? () => setIsPaySheetOpen(true) : undefined}
                 onViewInvoice={(invoiceId) => navigate(`/contracts/${id}/invoice/${invoiceId}`)}
               />
               <CreditDepositCard
@@ -3097,6 +3115,17 @@ const ContractDetailPage: React.FC = () => {
       <div className="px-6 py-6">
         {renderTabContent()}
       </div>
+
+      {/* ═══════ BUYER: PAY / DECLARE (expense side) ═══════ */}
+      {isPaySheetOpen && (
+        <PaySheet
+          cnak={contract.global_access_id || null}
+          contractId={contract.id}
+          sellerName={contract.seller_company || contract.seller_name || 'the provider'}
+          onClose={() => setIsPaySheetOpen(false)}
+          onDone={() => { setIsPaySheetOpen(false); detailsQ.refetch(); }}
+        />
+      )}
 
       {/* ═══════ RECORD PAYMENT DIALOG (T11) ═══════ */}
       <RecordPaymentDialog

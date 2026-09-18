@@ -187,6 +187,9 @@ export interface Contact {
   contact_addresses?: ContactAddress[]; // Alias
   contact_persons?: Contact[];
   parent_contacts?: Contact[];
+  /** List RPC (list_contacts_with_channels_v2): the companies this person is
+   *  linked to, resolved from parent_contact_ids — {id, name} only. */
+  parent_links?: { id: string; name: string }[];
   notes?: string;
   tenant_id: string;
   auth_user_id?: string;
