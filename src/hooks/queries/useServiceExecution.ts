@@ -372,6 +372,10 @@ interface CreateEvidencePayload {
   block_id?: string;
   block_name?: string;
   evidence_type: string;
+  /** The file in t_contract_evidence (evidence-storage/008). Preferred over file_url. */
+  evidence_id?: string;
+  label?: string;
+  /** Legacy durable URL. Only set by rows written before the broker. */
   file_url?: string;
   file_name?: string;
   file_size?: number;

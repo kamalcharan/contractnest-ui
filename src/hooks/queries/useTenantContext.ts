@@ -66,6 +66,16 @@ export interface TenantContextSubscription {
   rhythm?: SubscriptionRhythm | null;
 }
 
+export interface TenantContextStorage {
+  success: boolean;
+  used_bytes: number;
+  quota_bytes: number;
+  free_bytes: number;
+  /** Percentage used, one decimal place. */
+  pct: number;
+  warn_level: 'ok' | 'warning' | 'critical' | 'full';
+}
+
 export interface TenantContext {
   success: boolean;
   tenant_id: string;
@@ -91,7 +101,15 @@ export interface TenantContext {
     rfqs: number;
     contacts: number;
     templates: number;
+    /** Ceiling of usage.storage.used_bytes in MB. Coarse at a 40 MB quota — prefer `storage`. */
     storage_mb: number;
+    /**
+     * Exact evidence usage, read live from the evidence registry rather than a
+     * stored counter. Contract evidence only: profile pictures, logos, block
+     * icons and payment QRs are identity assets and are not metered. One figure
+     * across Live and Test — space is space. Absent on older API payloads.
+     */
+    storage?: TenantContextStorage;
   };
   credits: {
     whatsapp: number;

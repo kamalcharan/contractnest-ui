@@ -14,7 +14,7 @@ import { useCreateCatBlock } from '../../../hooks/mutations/useCatBlocksMutation
 import { useCatBlocksTest } from '../../../hooks/queries/useCatBlocksTest';
 import { blockToCreateData, catBlocksToBlocks } from '../../../utils/catalog-studio/catBlockAdapter';
 import { VaNiLoader } from '../../../components/common/loaders/UnifiedLoader';
-import { useStorageManagement } from '../../../hooks/useStorageManagement';
+import { useUploadIdentityAsset } from '../../../hooks/queries/useEvidenceQueries';
 import { vaniToast } from '../../../components/common/toast';
 
 // =================================================================
@@ -40,7 +40,7 @@ const NewBlockPage: React.FC = () => {
   const { categories, isLoading: categoriesLoading, getDbIdByType } = useBlockCategories();
   const { getDbIdByMode } = usePricingModes();
   const createBlockMutation = useCreateCatBlock();
-  const { uploadFile, storageSetupComplete } = useStorageManagement();
+  const { uploadAsset } = useUploadIdentityAsset('block_icon');
 
   // Use DB categories if available, fallback to hardcoded
   const blockCategories = categories.length > 0 ? categories : BLOCK_CATEGORIES;
@@ -102,19 +102,13 @@ const NewBlockPage: React.FC = () => {
       // ── Upload image if a File is buffered in meta ──────────────
       const imageFile = blockData.meta?.image as File | undefined;
       if (imageFile) {
-        if (!storageSetupComplete) {
-          vaniToast.error('Storage is not configured. Please set up storage in Settings → Storage before uploading images.');
-          setIsSaving(false);
-          return;
-        }
+        // Through the evidence broker (tenants/<id>/block_icon/...). No
+        // storage-setup gate any more: there is no per-tenant folder to
+        // provision, so the upload either succeeds or reports why.
+        const publicUrl = await uploadAsset(imageFile);
 
-        const uploaded = await uploadFile(imageFile, 'block_images', {
-          source: 'catalog_block',
-          blockName: blockData.name,
-        });
-
-        if (!uploaded) {
-          // uploadFile already shows a toast on failure
+        if (!publicUrl) {
+          // the hook already surfaced the reason
           setIsSaving(false);
           return;
         }
@@ -122,7 +116,7 @@ const NewBlockPage: React.FC = () => {
         // Inject the public URL so the adapter picks it up
         blockData = {
           ...blockData,
-          image_url: uploaded.download_url,
+          image_url: publicUrl,
         };
       }
 
@@ -153,7 +147,7 @@ const NewBlockPage: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [blockType, createBlockMutation, navigate, getDbIdByType, getDbIdByMode, storageSetupComplete, uploadFile]);
+  }, [blockType, createBlockMutation, navigate, getDbIdByType, getDbIdByMode, uploadAsset]);
 
   const handleCancel = useCallback(() => {
     // Navigate back to configure page

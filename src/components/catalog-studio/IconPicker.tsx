@@ -5,7 +5,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import * as LucideIcons from 'lucide-react';
 import { Search, X, Check, Upload, Image, Loader2 } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useStorageManagement, StorageFile } from '../../hooks/useStorageManagement';
+import { useUploadIdentityAsset } from '@/hooks/queries/useEvidenceQueries';
 import { formatFileSize } from '../../utils/constants/storageConstants';
 
 // =================================================================
@@ -113,7 +113,10 @@ const IconPicker: React.FC<IconPickerProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const { uploadFile, storageSetupComplete } = useStorageManagement();
+  // A block icon is an identity asset: tenants/{tenant}/block_icon/… , not
+  // metered, durable URL. Storage is never provisioned now, so it is always ready.
+  const { uploadAsset } = useUploadIdentityAsset('block_icon');
+  const storageSetupComplete = true;
 
   // Get icon component by name
   const getIconComponent = useCallback((iconName: string) => {
@@ -167,9 +170,9 @@ const IconPicker: React.FC<IconPickerProps> = ({
     setUploadError(null);
 
     try {
-      const uploadedFile = await uploadFile(file, 'block_icons');
-      if (uploadedFile && onCustomIconChange) {
-        onCustomIconChange(uploadedFile.download_url);
+      const publicUrl = await uploadAsset(file);
+      if (publicUrl && onCustomIconChange) {
+        onCustomIconChange(publicUrl);
         // Set a placeholder Lucide icon name when using custom
         onChange('ImageIcon');
       }
@@ -178,7 +181,7 @@ const IconPicker: React.FC<IconPickerProps> = ({
     } finally {
       setIsUploading(false);
     }
-  }, [uploadFile, onCustomIconChange, onChange]);
+  }, [uploadAsset, onCustomIconChange, onChange]);
 
   // Handle remove custom icon
   const handleRemoveCustomIcon = useCallback(() => {

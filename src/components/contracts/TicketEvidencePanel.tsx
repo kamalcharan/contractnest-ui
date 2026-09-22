@@ -1,7 +1,11 @@
 // src/components/contracts/TicketEvidencePanel.tsx
 // Stage 2 — evidence CAPTURE for an existing service ticket.
 // Renders inside ServiceTicketDetail:
-//   - Upload evidence: file → storage API (uploadFile) → create_service_evidence
+//   - Upload evidence: file → EVIDENCE BROKER (slot → PUT → confirm) →
+//     create_service_evidence carrying the registry id. Migrated from the
+//     legacy per-tenant storage API in evidence-storage batch F: the file now
+//     lives under contracts/**, is metered against the tenant's quota, and is
+//     read back through a short-TTL signed URL instead of a durable public one.
 //   - Smart forms (policy = smart_form): fetch template schema → FormRenderer
 //     modal → m_form_submissions + service-form evidence record
 // The backend for all of this already existed (Stage 2 audit) — this panel is
@@ -13,7 +17,12 @@ import { Upload, FileText, Loader2, X, ClipboardList } from 'lucide-react';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { vaniToast } from '@/components/common/toast';
-import { useStorageManagement } from '@/hooks/useStorageManagement';
+import {
+  useUploadEvidence,
+  useContractEvidence,
+  useEvidenceUrl,
+} from '@/hooks/queries/useEvidenceQueries';
+import { EvidenceChip } from '@/components/common/evidence/FileUpload';
 import { useCreateServiceEvidence } from '@/hooks/queries/useServiceExecution';
 import { useFormSubmission } from '@/pages/settings/smart-forms/hooks/useFormSubmission';
 import FormRenderer from '@/pages/settings/smart-forms/components/FormRenderer';
@@ -44,7 +53,11 @@ const TicketEvidencePanel: React.FC<TicketEvidencePanelProps> = ({
   const [activeForm, setActiveForm] = useState<EvidenceSelectedForm | null>(null);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
-  const { uploadFile } = useStorageManagement();
+  const uploadEvidence = useUploadEvidence();
+  // What has already been captured. Reading the registry directly (rather than
+  // the service rows) keeps one source of truth for the files themselves.
+  const { data: captured = [], isLoading: loadingCaptured } = useContractEvidence(contractId);
+  const evidenceUrl = useEvidenceUrl();
   const createEvidence = useCreateServiceEvidence();
   const { createSubmission, updateSubmission } = useFormSubmission();
 
@@ -71,13 +84,16 @@ const TicketEvidencePanel: React.FC<TicketEvidencePanelProps> = ({
 
     setIsUploading(true);
     try {
-      const stored = await uploadFile(file, 'service_evidence', {
-        ticket_id: ticketId,
-        contract_id: contractId,
+      // Through the broker: the slot request is the gate (membership, mime,
+      // quota), so a refusal happens before any bytes move.
+      const stored = await uploadEvidence.mutateAsync({
+        file,
+        target: {
+          scope: 'contract',
+          contractId,
+          eventId: primaryEvent?.id || null,
+        },
       });
-      if (!stored?.download_url) {
-        throw new Error('Upload did not return a file URL');
-      }
 
       // Success/error toasts come from the mutation hook itself
       await createEvidence.mutateAsync({
@@ -87,14 +103,27 @@ const TicketEvidencePanel: React.FC<TicketEvidencePanelProps> = ({
         block_id: (primaryEvent as any)?.block_id || undefined,
         block_name: (primaryEvent as any)?.block_name || undefined,
         evidence_type: 'upload-form',
-        label: file.name,
-        file_url: stored.download_url,
-        file_name: file.name,
-        file_size: file.size,
+        label: stored.file_name,
+        // No file_url: the registry owns the object and reads are signed
+        // per request. A durable public URL is exactly what this redesign
+        // set out to stop handing out.
+        evidence_id: stored.evidence_id,
+        file_name: stored.file_name,
+        file_size: stored.size_bytes,
         file_type: file.type,
       } as any);
     } catch (err: any) {
-      vaniToast.error(`Upload failed: ${err?.message || 'unknown error'}`, { duration: 5000 });
+      // The broker's refusals are machine-readable and worth showing as-is:
+      // 'quota_exceeded' and 'mime_not_allowed' are things the user can act on.
+      const reason = err?.response?.data?.error?.code || err?.message || 'unknown error';
+      vaniToast.error(
+        reason === 'quota_exceeded'
+          ? 'Storage is full — free up space before adding more evidence'
+          : reason === 'mime_not_allowed'
+          ? 'That file type cannot be used as evidence'
+          : `Upload failed: ${reason}`,
+        { duration: 5000 }
+      );
     } finally {
       setIsUploading(false);
     }
@@ -148,8 +177,49 @@ const TicketEvidencePanel: React.FC<TicketEvidencePanelProps> = ({
 
   if (isClosed && evidencePolicyType === 'none') return null;
 
+  // Evidence captured against this ticket's own event, newest first. An open
+  // link is minted per click and expires in minutes — nothing here is a
+  // durable public URL.
+  const forThisVisit = React.useMemo(
+    () =>
+      (captured as any[]).filter(
+        (row) => !primaryEvent?.id || row.event_id === primaryEvent.id || !row.event_id
+      ),
+    [captured, primaryEvent?.id]
+  );
+
+  const openEvidence = async (evidenceId: string) => {
+    const result = await evidenceUrl.mutateAsync(evidenceId);
+    if (result?.url) window.open(result.url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="space-y-3">
+      {(loadingCaptured || forThisVisit.length > 0) && (
+        <div className="space-y-2">
+          <h4
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: colors.utility.secondaryText }}
+          >
+            Captured Evidence
+          </h4>
+          {loadingCaptured ? (
+            <p className="text-xs" style={{ color: colors.utility.secondaryText }}>Loading…</p>
+          ) : (
+            forThisVisit.map((row: any) => (
+              <EvidenceChip
+                key={row.id}
+                fileName={row.file_name}
+                mimeType={row.mime_type}
+                sizeBytes={row.size_bytes}
+                busy={evidenceUrl.isPending}
+                onOpen={() => openEvidence(row.id)}
+              />
+            ))
+          )}
+        </div>
+      )}
+
       <h4
         className="text-[10px] font-bold uppercase tracking-wider"
         style={{ color: colors.utility.secondaryText }}

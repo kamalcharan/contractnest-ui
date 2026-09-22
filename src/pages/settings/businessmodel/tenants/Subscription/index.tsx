@@ -28,13 +28,14 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle, Loader2, ArrowUpRight, Sparkles, Infinity as InfinityIcon,
-  FileText, Send, Zap, CalendarClock, PauseCircle, CheckCircle2, Link2, CircleSlash,
+  FileText, Send, Zap, CalendarClock, PauseCircle, CheckCircle2, Link2, CircleSlash, HardDrive,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { analyticsService } from '@/services/analytics.service';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { useTenantContext } from '@/hooks/queries/useTenantContext';
+import { formatStorageBytes, readStorage, storagePct } from '@/utils/storageFormat';
 import { useWaitingCredits } from '@/hooks/queries/useWaitingCredits';
 import { useBillingOverview, billingOverviewKeys } from '@/hooks/queries/useBillingOverview';
 import { useCreateOrder, type VerifyPaymentResponse } from '@/hooks/queries/usePaymentGatewayQueries';
@@ -450,6 +451,60 @@ const SubscriptionPage: React.FC = () => {
           );
         })}
       </div>
+
+      {/* ── EVIDENCE STORAGE ─────────────────────────────────────────── */}
+      {(() => {
+        // Read live from the evidence registry (migration evidence-storage/005),
+        // not a stored counter, so this can never drift from what is really held.
+        const storage = readStorage(ctx?.usage?.storage);
+        if (!storage) return null;
+        const pct = storagePct(storage);
+        const tone = storage.warn_level === 'full' || storage.warn_level === 'critical' ? bad
+          : storage.warn_level === 'warning' ? warn : ok;
+        return (
+          <div style={surface} className="p-5 mb-5">
+            <div className="flex items-center justify-between mb-1 gap-3">
+              <div className="flex items-center gap-2">
+                <HardDrive className="w-4 h-4" style={{ color: dim }} />
+                <h2 className="text-sm font-semibold" style={{ color: ink }}>Evidence storage</h2>
+              </div>
+              {storage.warn_level !== 'ok' && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
+                      style={{ backgroundColor: `${tone}18`, color: tone }}>
+                  {storage.warn_level === 'full' ? 'Full' : storage.warn_level === 'critical' ? 'Almost full' : 'Filling up'}
+                </span>
+              )}
+            </div>
+            <p className="text-xs mb-4" style={{ color: dim }}>
+              Photos and documents attached to your contracts and service visits. Profile
+              pictures, your logo, block icons and payment QRs are not counted. One figure
+              across Live and Test — clearing test data frees the same space.
+            </p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-extrabold leading-none"
+                    style={{ color: storage.warn_level === 'ok' ? ink : tone }}>
+                {formatStorageBytes(storage.free_bytes)}
+              </span>
+              <span className="text-sm" style={{ color: dim }}>
+                {storage.warn_level === 'full' ? 'free — uploads are paused' : 'free to use'}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full overflow-hidden mt-3" style={{ backgroundColor: `${ink}12` }}>
+              <div className="h-full rounded-full transition-all"
+                   style={{ width: `${pct}%`, backgroundColor: tone }} />
+            </div>
+            <p className="text-xs mt-2" style={{ color: dim }}>
+              {formatStorageBytes(storage.used_bytes)} of {formatStorageBytes(storage.quota_bytes)} used · {pct}%
+            </p>
+            {storage.warn_level === 'full' && (
+              <p className="text-xs mt-2" style={{ color: tone }}>
+                New evidence uploads are refused until space is freed. Everything already
+                uploaded stays exactly where it is.
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── CREDIT POOLS ─────────────────────────────────────────────── */}
       <div style={surface} className="p-5 mb-5">

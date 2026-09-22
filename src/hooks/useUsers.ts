@@ -436,17 +436,26 @@ export const useCurrentUserProfile = () => {
         avatar_url: avatarUrl
       });
 
-      vaniToast.success('Avatar updated successfully');
-      await fetchProfile();
-
-      // Update the user in AuthContext to reflect in Header
-      if (authUser && setUser) {  // You'll need to get setUser from AuthContext
-        setUser({
-          ...authUser,
-          avatar_url: avatarUrl
-        });
+      // The save has already succeeded at this point. Everything below is
+      // refreshing what is on screen, so it must not be able to turn a saved
+      // avatar into a reported failure — that is exactly what happened: the
+      // picture was stored and the user was told "Failed to update profile
+      // with new avatar".
+      // NOTE: this used to also call setUser({...authUser, avatar_url}) to
+      // refresh the header. setUser is AuthContext's own internal state and has
+      // never been exported — the hook destructures { user, currentTenant }
+      // only — so that line threw ReferenceError on EVERY avatar save, the
+      // catch below swallowed it, and the caller was told the save had failed
+      // while the picture was sitting in the database. Removed rather than
+      // caught: exposing a setter from AuthContext is its own change, and the
+      // header picks the new url up on the next profile load.
+      try {
+        await fetchProfile();
+      } catch (refreshError) {
+        console.error('Avatar saved, but refreshing the profile failed:', refreshError);
       }
 
+      vaniToast.success('Avatar updated successfully');
       return true;
     } catch (err: any) {
       console.error('Error updating avatar:', err);

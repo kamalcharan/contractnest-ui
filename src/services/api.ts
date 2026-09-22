@@ -338,12 +338,22 @@ api.interceptors.response.use(
       sessionStorage.removeItem('api_down_error');
     }
 
+    // A successful response is proof the platform is serving, so the
+    // maintenance flag must not outlive it. Nothing cleared it before:
+    // maintenanceService reads the stored value FIRST and unconditionally, so
+    // once set the session showed the maintenance page until sessionStorage
+    // was cleared by hand — even after the API had recovered.
+    if (response.headers['x-maintenance-mode'] !== 'true') {
+      sessionStorage.removeItem('maintenance_info');
+    }
+
     // Check for maintenance mode header
     if (response.headers['x-maintenance-mode'] === 'true') {
       const maintenanceInfo = {
         isInMaintenance: true,
         estimatedEndTime: response.headers['x-maintenance-end-time'] || import.meta.env.VITE_MAINTENANCE_END_TIME || null,
-        message: response.headers['x-maintenance-message'] || import.meta.env.VITE_MAINTENANCE_MESSAGE || 'System maintenance in progress'
+        message: response.headers['x-maintenance-message'] || import.meta.env.VITE_MAINTENANCE_MESSAGE || 'System maintenance in progress',
+        storedAt: Date.now()
       };
       sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
       console.warn('[API] Maintenance mode detected - redirect disabled to prevent loops');
@@ -407,19 +417,40 @@ api.interceptors.response.use(
     }
 
     // Handle 503 Service Unavailable
+    //
+    // ⚠️ A BARE 503 IS NOT A MAINTENANCE DECLARATION. This used to flag the
+    // whole platform as "in maintenance" on ANY 503 from ANY endpoint — a
+    // crashed edge function, a gateway hiccup, a rate limiter, one route
+    // reporting a missing config. Combined with a flag nothing ever cleared,
+    // a single unrelated 503 put the session behind the maintenance page for
+    // good, and the only way out was clearing sessionStorage by hand.
+    //
+    // Maintenance is declared by the x-maintenance-mode header, which the
+    // success path above already honours. Only that header counts here too.
     if (error.response?.status === 503) {
-      const maintenanceInfo = {
-        isInMaintenance: true,
-        estimatedEndTime: error.response.headers['x-maintenance-end-time'] ||
-          import.meta.env.VITE_MAINTENANCE_END_TIME || null,
-        message: error.response.data?.message ||
-          import.meta.env.VITE_MAINTENANCE_MESSAGE ||
-          'System maintenance in progress'
-      };
-      sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
-      console.warn('[API] 503 Service Unavailable - redirect disabled to prevent loops');
-      // DISABLED: Redirect causes potential loops
-      // window.location.href = '/misc/maintenance';
+      const declaresMaintenance = error.response.headers?.['x-maintenance-mode'] === 'true';
+
+      if (declaresMaintenance) {
+        const maintenanceInfo = {
+          isInMaintenance: true,
+          estimatedEndTime: error.response.headers['x-maintenance-end-time'] ||
+            import.meta.env.VITE_MAINTENANCE_END_TIME || null,
+          message: error.response.data?.message ||
+            import.meta.env.VITE_MAINTENANCE_MESSAGE ||
+            'System maintenance in progress',
+          storedAt: Date.now()
+        };
+        sessionStorage.setItem('maintenance_info', JSON.stringify(maintenanceInfo));
+        console.warn('[API] Maintenance declared by 503 + x-maintenance-mode header');
+        // DISABLED: Redirect causes potential loops
+        // window.location.href = '/misc/maintenance';
+      } else {
+        console.warn(
+          `[API] 503 from ${error.config?.url ?? 'unknown endpoint'} — treated as an ordinary ` +
+          'error, NOT maintenance (no x-maintenance-mode header)'
+        );
+      }
+
       return Promise.reject(error);
     }
 

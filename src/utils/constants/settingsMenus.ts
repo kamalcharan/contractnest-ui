@@ -150,27 +150,10 @@ export const settingsMenuItems: SettingsItem[] = [
     adminOnly: false
   },
 
-  // Storage Space
-  {
-    id: 'storage-space',
-    settings_type: GROUP_STORAGE_SPACE,
-    parent_type: null,
-    description_short: 'Manage your storage',
-    description_long: 'Configure and manage cloud storage for your files',
-    route_path: '/settings/storage/storagemanagement',
-    card_icon_name: 'Database',
-    adminOnly: false
-  },
-  {
-    id: 'storage-management',
-    settings_type: 'Storage Management',
-    parent_type: GROUP_STORAGE_SPACE,
-    description_short: 'File storage management',
-    description_long: 'Manage files, upload documents, and monitor storage usage',
-    route_path: '/settings/storage/storagemanagement',
-    card_icon_name: 'HardDrive',
-    adminOnly: false
-  },
+  // Storage Space — removed with the per-tenant provisioned-folder model.
+  // Storage is no longer something a tenant configures: contract evidence is
+  // metered on the Workspace Account card, and the bucket itself is managed
+  // from Implementation Toolkit -> Storage Admin.
 
 
 
@@ -335,7 +318,7 @@ export const getGroupedSettingsMetadata = (isProfile: boolean = false): GroupedS
   // GROUP_SUBSCRIPTION enabled for Business Model Phase 4
   const groupNames = isProfile
     ? [] // For profile page - Subscription not shown
-    : [GROUP_TEAM, GROUP_VANI, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_STORAGE_SPACE, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - includes Subscription + VaNi
+    : [GROUP_TEAM, GROUP_VANI, GROUP_LIST_OF_VALUE, GROUP_INTEGRATIONS, GROUP_PAYMENT_GATEWAY, GROUP_CUSTOMER_CHANNELS, GROUP_BUSINESS_PROFILE, GROUP_SUBSCRIPTION]; // For settings page - includes Subscription + VaNi
 
   // Create group entries for each category
   groupNames.forEach(groupName => {

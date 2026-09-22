@@ -169,6 +169,8 @@ const UserProfilePage: React.FC = () => {
               <PersonalInfoSection
                 profile={profile}
                 onUpdate={updateProfile}
+                onUpdateAvatar={updateAvatar}
+                onRemoveAvatar={removeAvatar}
                 onValidateMobile={validateMobile}
                 updating={updating}
                 onChangeDetected={setHasUnsavedChanges}

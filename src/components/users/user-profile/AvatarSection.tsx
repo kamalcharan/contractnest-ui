@@ -2,8 +2,10 @@
 import React, { useState, useRef } from 'react';
 import { Camera, Upload, Trash2, User } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useStorageManagement } from '@/hooks/useStorageManagement';
-import toast from 'react-hot-toast';
+import { useUploadIdentityAsset } from '@/hooks/queries/useEvidenceQueries';
+// vaniToast, not react-hot-toast: the app mounts only VaNiToast, so every
+// react-hot-toast call in this file rendered nothing at all.
+import { vaniToast as toast } from '@/components/common/toast/VaNiToast';
 import { cn } from '@/lib/utils';
 
 interface AvatarSectionProps {
@@ -22,7 +24,15 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  const { uploadFile, isSubmitting, storageSetupComplete, isLoading: isStorageLoading } = useStorageManagement();
+  // One upload path for the whole product (/api/evidence). An avatar is an
+  // identity asset: it lives under tenants/{tenant}/avatar/… , is NOT metered
+  // against the evidence quota, and comes back with a durable URL — the same
+  // shape this component already stores.
+  const { uploadAsset, isPending: isSubmitting } = useUploadIdentityAsset('avatar');
+  // Storage is no longer provisioned per tenant, so there is nothing to set up
+  // and nothing to wait for.
+  const storageSetupComplete = true;
+  const isStorageLoading = false;
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -76,17 +86,14 @@ const AvatarSection: React.FC<AvatarSectionProps> = ({
       setUploadProgress(20);
       
       // Upload to storage - use 'avatar' as category if 'avatars' doesn't exist
-      const uploadedFile = await uploadFile(file, 'contact_photos', {
-        user_id: profile.user_id || profile.id,
-        type: 'profile_picture'
-      });
-      
+      const publicUrl = await uploadAsset(file);
+
       setUploadProgress(60);
-      
-      if (uploadedFile && uploadedFile.download_url) {
+
+      if (publicUrl) {
         // Update profile with new avatar URL
         setUploadProgress(80);
-        const success = await onUpdateAvatar(uploadedFile.download_url);
+        const success = await onUpdateAvatar(publicUrl);
         
         if (success) {
           setUploadProgress(100);

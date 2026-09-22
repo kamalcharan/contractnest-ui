@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Video, Upload, Link, Youtube, Lightbulb, ChevronDown, ChevronUp, Maximize, Play } from 'lucide-react';
 import { useTheme } from '../../../../../contexts/ThemeContext';
-import FileUploader from '../../../../common/FileUploader';
 import IconPicker from '../../../IconPicker';
 
 interface MediaStepProps {
@@ -45,7 +44,6 @@ const MediaStep: React.FC<MediaStepProps> = ({ formData, onChange }) => {
   };
 
   const sourceTypes = [
-    { id: 'upload', icon: Upload, label: 'Upload', description: 'Upload video file' },
     { id: 'url', icon: Link, label: 'URL', description: 'External video URL' },
     { id: 'youtube', icon: Youtube, label: 'YouTube', description: 'YouTube video' },
     { id: 'vimeo', icon: Video, label: 'Vimeo', description: 'Vimeo video' },
@@ -137,17 +135,9 @@ const MediaStep: React.FC<MediaStepProps> = ({ formData, onChange }) => {
             })}
           </div>
 
-          {/* Upload Area */}
-          {formData.sourceType === 'upload' && (
-            <FileUploader
-              category="block_videos"
-              accept="video/mp4,video/webm,video/quicktime"
-              onUploadComplete={(file) => onChange('mediaUrl', file.download_url)}
-              onUploadError={(error) => console.error('Video upload failed:', error)}
-              showPreview={false}
-              hint="MP4, WebM, MOV (max 100MB)"
-            />
-          )}
+          {/* Direct video upload removed with the legacy storage model: it
+              wrote through the Firebase client SDK, and zero videos were ever
+              uploaded through it. YouTube, Vimeo and a direct URL all remain. */}
 
           {/* URL Input */}
           {(formData.sourceType === 'url' || formData.sourceType === 'youtube' || formData.sourceType === 'vimeo' || !formData.sourceType) && (

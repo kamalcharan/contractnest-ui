@@ -5,10 +5,11 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Copy, Check, Mail, Phone, Hash, Edit2, Save, X, Camera, Upload, Trash2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { useStorageManagement } from '@/hooks/useStorageManagement';
+import { useUploadIdentityAsset } from '@/hooks/queries/useEvidenceQueries';
 import { countries, getPhoneLengthForCountry } from '@/utils/constants/countries';
 import { validatePhoneByCountry, getPhonePlaceholder, getPhoneLengthDescription } from '@/utils/validation/contactValidation';
-import toast from 'react-hot-toast';
+// vaniToast, not react-hot-toast: the app mounts only VaNiToast.
+import { vaniToast as toast } from '@/components/common/toast/VaNiToast';
 import { cn } from '@/lib/utils';
 
 // Popular countries to show first in dropdown
@@ -22,6 +23,13 @@ interface ProfileInfoSectionProps {
   onValidateMobile: (mobile: string, countryCode: string) => Promise<boolean>;
   updating: boolean;
   initialEditMode?: boolean; // Start in edit mode (useful for onboarding)
+  /**
+   * Reports whether the form differs from the loaded profile, so the page can
+   * warn before navigating away. Was declared and never called, which left the
+   * page's hasUnsavedChanges permanently false and its "unsaved changes"
+   * confirm on Back dead — edits were discarded without a word.
+   */
+  onChangeDetected?: (hasChanges: boolean) => void;
 }
 
 const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
@@ -31,12 +39,16 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   onRemoveAvatar,
   onValidateMobile,
   updating,
-  initialEditMode = false
+  initialEditMode = false,
+  onChangeDetected
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const { currentTenant } = useAuth();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-  const { uploadFile, isSubmitting, storageSetupComplete, isLoading: isStorageLoading } = useStorageManagement();
+  // Identity asset via the one upload path — unmetered, durable URL.
+  const { uploadAsset, isPending: isSubmitting } = useUploadIdentityAsset('avatar');
+  const storageSetupComplete = true;   // nothing is provisioned per tenant any more
+  const isStorageLoading = false;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(initialEditMode);
@@ -49,6 +61,13 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
   });
   const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<any>({});
+  /** The profile as loaded/last saved. formData differing from this is "unsaved". */
+  const [baseline, setBaseline] = useState({
+    first_name: '',
+    last_name: '',
+    country_code: 'IN',
+    mobile_number: ''
+  });
 
   // Sort countries: popular first, then alphabetical
   const sortedCountries = useMemo(() => {
@@ -94,14 +113,34 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
         }
       }
 
-      setFormData({
+      const loaded = {
         first_name: profile.first_name || '',
         last_name: profile.last_name || '',
         country_code: countryCode,
         mobile_number: profile.mobile_number || ''
-      });
+      };
+      setFormData(loaded);
+      setBaseline(loaded);
     }
   }, [profile]);
+
+  // Tell the page whether there is anything to lose. onChangeDetected was
+  // declared but never called, so hasUnsavedChanges upstream stayed false
+  // forever and the "You have unsaved changes" guard on Back never fired —
+  // edits were discarded silently.
+  //
+  // Compared against the loaded profile rather than set on every keystroke, so
+  // typing a change and undoing it does not leave a false warning, and saving
+  // (which resets the baseline) clears it.
+  useEffect(() => {
+    if (!onChangeDetected) return;
+    onChangeDetected(
+      formData.first_name !== baseline.first_name ||
+      formData.last_name !== baseline.last_name ||
+      formData.country_code !== baseline.country_code ||
+      formData.mobile_number !== baseline.mobile_number
+    );
+  }, [formData, baseline, onChangeDetected]);
 
   const handleInputChange = (field: string, value: string) => {
     if (field === 'mobile_number') {
@@ -164,12 +203,14 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
       }
     }
 
-    setFormData({
+    const restored = {
       first_name: profile?.first_name || '',
       last_name: profile?.last_name || '',
       country_code: countryCode,
       mobile_number: profile?.mobile_number || ''
-    });
+    };
+    setFormData(restored);
+    setBaseline(restored);
     setErrors({});
     setIsEditing(false);
   };
@@ -205,22 +246,18 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
 
     try {
       setUploadProgress(20);
-      const uploadedFile = await uploadFile(file, 'contact_photos', {
-        user_id: profile.user_id || profile.id,
-        type: 'profile_picture'
-      });
+      const publicUrl = await uploadAsset(file);
 
-      // Check if upload succeeded (returns null if storage not set up or other error)
-      if (!uploadedFile) {
-        // Error toast was already shown by useStorageManagement hook
+      // The upload hook has already toasted anything that went wrong.
+      if (!publicUrl) {
         setUploadProgress(0);
         return;
       }
 
       setUploadProgress(60);
-      if (uploadedFile.download_url) {
+      if (publicUrl) {
         setUploadProgress(80);
-        const success = await onUpdateAvatar(uploadedFile.download_url);
+        const success = await onUpdateAvatar(publicUrl);
         if (success) {
           setUploadProgress(100);
           setTimeout(() => setUploadProgress(0), 1000);
@@ -232,9 +269,13 @@ const ProfileInfoSection: React.FC<ProfileInfoSectionProps> = ({
         toast.error('Upload succeeded but no download URL returned');
         setUploadProgress(0);
       }
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload image');
+    } catch (error: any) {
+      // Surface what actually failed. This message used to be a flat
+      // "Failed to upload image", which hid a TypeError from calling the
+      // onUpdateAvatar prop the page never passed — the upload had already
+      // succeeded, and the real fault was two lines further on.
+      console.error('Avatar save error:', error);
+      toast.error(error?.message || 'Could not save the profile picture');
       setUploadProgress(0);
     }
   };

@@ -293,17 +293,6 @@ export const OnboardingUtils = {
         component: 'WelcomeStep'
       },
       {
-        id: 'storage-setup',
-        sequence: 2,
-        title: 'Storage Setup',
-        description: 'Configure your file storage',
-        isRequired: false,
-        estimatedTime: '1 min',
-        icon: 'HardDrive',
-        path: ONBOARDING_CONSTANTS.ROUTES.STORAGE_SETUP,
-        component: 'StorageSetupStep'
-      },
-      {
         id: 'user-profile',
         sequence: 3,
         title: 'Your Profile',

@@ -1,4 +1,5 @@
 import type { TenantContext } from '@/hooks/queries/useTenantContext';
+import { formatStorageBytes, readStorage } from '@/utils/storageFormat';
 
 export interface AccountSignal { id: string; title: string; detail: string; to: string; action: string }
 const subscription = '/businessmodel/tenants/subscription';
@@ -33,6 +34,21 @@ export function accountSignals(account: TenantContext, now = new Date()): Accoun
     }
   }
   if (account.flags?.credits_low) signals.push({id:'credits', title:'Messaging credits running low', detail:'Review channel balances before your next reminders.', to:subscription, action:'Review credits'});
+  // Evidence storage. Unlike the plan allowances this one really does bite:
+  // an upload is refused once the quota is full, so it is worth saying early.
+  const storage = readStorage(account.usage?.storage);
+  if (storage && storage.warn_level !== 'ok') {
+    const full = storage.warn_level === 'full';
+    signals.push({
+      id: 'storage',
+      title: full ? 'Evidence storage is full' : storage.warn_level === 'critical' ? 'Evidence storage almost full' : 'Evidence storage filling up',
+      detail: full
+        ? `${formatStorageBytes(storage.quota_bytes)} used. New evidence uploads are refused until space is freed or your quota is raised.`
+        : `${formatStorageBytes(storage.used_bytes)} of ${formatStorageBytes(storage.quota_bytes)} used · ${formatStorageBytes(storage.free_bytes)} free.`,
+      to: subscription,
+      action: 'Review storage',
+    });
+  }
   if (account.flags?.over_limit || account.flags?.near_limit) signals.push({id:'allowance', title:account.flags.over_limit ? 'Plan allowance reached' : 'Approaching a plan allowance', detail:'Review your usage and available options. You can continue working.', to:subscription, action:'Review allowance'});
   return signals;
 }

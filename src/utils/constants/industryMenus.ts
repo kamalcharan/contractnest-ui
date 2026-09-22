@@ -331,6 +331,12 @@ export const defaultMenuItems: MenuItem[] = [
     defaultOpen: true, // Implementation Toolkit should be open by default
     submenuItems: [
       {
+        id: 'storage-admin',
+        label: 'Storage Admin',
+        icon: 'HardDrive',
+        path: '/settings/storage-admin'
+      },
+      {
         id: 'global-templates',
         label: 'Global Templates',
         icon: 'FileText',

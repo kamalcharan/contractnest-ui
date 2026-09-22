@@ -48,13 +48,6 @@ const normalizePersona = (raw: string): PersonaId => {
 function buildTasks(persona: PersonaId, industryNames: string[], equipCount = 0): TaskDef[] {
   const industryLabel = industryNames.length > 0 ? industryNames.join(', ') : 'your industries';
 
-  const storageTask: TaskDef = {
-    id: 'storage',
-    label: 'Setting up cloud storage',
-    detail: 'Provisioning secure document and file storage',
-    detailDone: 'Storage ready',
-    detailSkipped: 'Already configured',
-  };
   const industryTask: TaskDef = {
     id: 'industry',
     label: 'Industry knowledge loaded',
@@ -94,26 +87,16 @@ function buildTasks(persona: PersonaId, industryNames: string[], equipCount = 0)
   };
 
   if (persona === 'seller') {
-    return [storageTask, industryTask, catalogTask, sequencesTask, completeTask];
+    return [industryTask, catalogTask, sequencesTask, completeTask];
   }
   if (persona === 'buyer') {
-    return [storageTask, industryTask, facilityTask, sequencesTask, completeTask];
+    return [industryTask, facilityTask, sequencesTask, completeTask];
   }
   // both
-  return [storageTask, industryTask, catalogTask, facilityTask, sequencesTask, completeTask];
+  return [industryTask, catalogTask, facilityTask, sequencesTask, completeTask];
 }
 
 // ── Preflight helpers ─────────────────────────────────────────────────────────
-
-// Returns true if storage is already set up (stats call succeeds with storageSetupComplete !== false)
-async function checkStorageAlreadySetup(): Promise<boolean> {
-  try {
-    const resp = await api.get(API_ENDPOINTS.STORAGE.STATS);
-    return resp.data?.storageSetupComplete !== false;
-  } catch {
-    return false;
-  }
-}
 
 // Returns { isSeeded, count } from GET /api/seeds/status
 async function checkSequencesAlreadySeeded(): Promise<{ isSeeded: boolean; count: number }> {
@@ -236,30 +219,10 @@ const VaniWorkingStep: React.FC = () => {
     setStatus('storage', 'running');
     setLiveOp('Checking cloud storage…');
 
-    const storageAlready = await checkStorageAlreadySetup();
-    if (storageAlready) {
-      setStatus('storage', 'skipped');
-      setDetail('storage', tasks.find(t => t.id === 'storage')!.detailSkipped);
-      setLiveOp('Storage already configured — continuing…');
-    } else {
-      setLiveOp('Setting up your secure document storage…');
-      try {
-        await api.post(API_ENDPOINTS.STORAGE.SETUP);
-        setStatus('storage', 'done');
-        setLiveOp('Storage ready!');
-      } catch (err: any) {
-        if (err?.response?.status === 409) {
-          setStatus('storage', 'skipped');
-          setDetail('storage', tasks.find(t => t.id === 'storage')!.detailSkipped);
-        } else {
-          const msg = err?.response?.data?.error || err?.message || 'Storage setup failed';
-          setStatus('storage', 'error');
-          setErrorMessages(prev => ({ ...prev, storage: msg }));
-          return;
-        }
-      }
-    }
-    doneCount++;
+    // Storage provisioning removed with the per-tenant folder model. There is
+    // no workspace folder to create any more: evidence goes to
+    // contracts/<contract-id>/ and identity assets to tenants/<tenant-id>/,
+    // both brokered by the API. A new tenant is storage-ready immediately.
     updateProgress(doneCount);
 
     // ── Industry context (no fake work — the real KT lookup happens inside the
