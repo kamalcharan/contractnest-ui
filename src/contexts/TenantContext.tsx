@@ -105,9 +105,14 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       if (profileData) {
         setProfile(profileData);
         setLastFetchTime(now);
-        // Initialize perspective default from business type (only runs once)
-        if (profileData.business_type_id) {
-          initializePerspective(profileData.business_type_id);
+        // Persona (the agent-readable column the lite flow dual-writes) with
+        // the legacy business_type_id as fallback — older profiles hold only
+        // one of the two (signia: persona 'both', business_type_id null, so
+        // this never ran for it). Settles the perspective default once and
+        // keeps AuthContext's persona current for the Revenue/Expense toggle.
+        const personaRaw = profileData.persona || profileData.business_type_id;
+        if (personaRaw) {
+          initializePerspective(personaRaw);
         }
       } else {
         setProfile(null);

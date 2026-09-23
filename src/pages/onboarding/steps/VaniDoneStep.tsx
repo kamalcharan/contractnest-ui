@@ -6,6 +6,8 @@
 //   9A — seller: summary + VaNi signoff + "Try test mode →" + ETL entry
 //   9B — buyer:  summary + workspace code + VaNi signoff + "Try test mode →" + CNAK button
 //   9C — both:   tabbed provider/asset-owner view + "Go to dashboard →"
+//   9D — side activation (existing tenant added their other side via the
+//        perspective toggle): that side's summary + "Go to my <side> side →"
 //
 // LIGHT PALETTE, deliberately. This screen used to be the one dark room in an
 // otherwise light journey — express paper (#f7f5f2) → VaNi-orange working
@@ -27,7 +29,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { completeVaniStep, markOnboardingComplete } from '@/utils/onboarding/completeVaniStep';
-import { clearPendingSideActivation } from '@/utils/perspective/sideActivation';
+import {
+  clearPendingSideActivation,
+  readPendingSideActivation,
+  setLandingPerspective,
+  type ActivationSide,
+} from '@/utils/perspective/sideActivation';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -356,11 +363,69 @@ const Screen9C: React.FC<{ state: DoneState; onDashboard: () => void }> = ({ sta
   );
 };
 
+// ── Screen 9D — Side activation ───────────────────────────────────────────────
+// Reached from the perspective toggle's "Set up my Expense/Revenue side". The
+// tenant already had a workspace; this walk only added the other half, so the
+// ending is about that half and where to go next — never the seller's
+// rehearsal contract (9A/9C) or the buyer's test-mode RFQ hop (9B).
+
+const Screen9D: React.FC<{
+  state: DoneState;
+  side: ActivationSide;
+  onGo: (side: ActivationSide) => void;
+}> = ({ state, side, onGo }) => {
+  const expense = side === 'expense';
+  const sideName = expense ? 'Expense' : 'Revenue';
+  const otherName = expense ? 'Revenue' : 'Expense';
+  const otherSide: ActivationSide = expense ? 'revenue' : 'expense';
+  const industries = state.industryNames.join(', ');
+  const tail = industries ? ` · ${industries}` : '';
+  // A re-run adds nothing (the seeder skips what exists) — say so instead of "0".
+  const assets = state.facilityNodesSeeded || 0;
+  const blocks = state.catalogBlocksSeeded || 0;
+  const contacts = state.sampleContactsSeeded || 0;
+
+  return (
+    <div style={{ position: 'relative', zIndex: 10 }}>
+      <div style={{ width: 80, height: 80, background: `linear-gradient(135deg, ${GREEN}, #22c55e)`, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: WHITE, margin: '0 auto 32px', boxShadow: '0 12px 32px rgba(22,163,74,.25)', animation: 'successPop .6s cubic-bezier(.34,1.56,.64,1) both' }}>✓</div>
+      <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, color: INK, marginBottom: 6 }}>{sideName} side is on.</div>
+      <div style={{ fontSize: 14, color: SOFT, marginBottom: 32, lineHeight: 1.6 }}>
+        {state.companyName} now runs on both sides of ContractNest.
+      </div>
+
+      <div style={{ background: SURFACE, border: `1px solid ${EDGE}`, borderRadius: 8, padding: '6px 0', marginBottom: 28, textAlign: 'left' }}>
+        {expense ? (
+          <>
+            <DoneItem name="Equipment registry" val={assets > 0 ? `${assets} sample assets · test mode${tail}` : `Already in place${tail}`} delay={0.1} />
+            <DoneItem name="Sample vendors" val={contacts > 0 ? `${contacts} ready · test mode` : 'Already in place · test mode'} delay={0.2} />
+          </>
+        ) : (
+          <>
+            <DoneItem name="Service catalog" val={blocks > 0 ? `${blocks} blocks${tail}` : `Already in place${tail}`} delay={0.1} />
+            <DoneItem name="Sample clients" val={contacts > 0 ? `${contacts} ready · test mode` : 'Already in place · test mode'} delay={0.2} />
+          </>
+        )}
+      </div>
+
+      <VaniSignoff message={expense
+        ? 'Your <strong>Expense</strong> side is where contracts you receive live — vendor dues, services to accept, and the assets you own. Switch between the two sides from the header any time.'
+        : 'Your <strong>Revenue</strong> side is where contracts you send live — your catalog, prices and receivables. Switch between the two sides from the header any time.'} />
+
+      <CtaButton label={`Go to my ${sideName} side →`} primary onClick={() => onGo(side)} />
+      <CtaButton label={`Stay in ${otherName} for now`} onClick={() => onGo(otherSide)} />
+    </div>
+  );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 const VaniDoneStep: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Read the side-activation hand-off BEFORE the completion effect below
+  // clears it: set = this walk activated one side of an existing workspace.
+  const [activationSide] = useState<ActivationSide | null>(() => readPendingSideActivation());
 
   const state = (location.state as DoneState) || {
     persona: 'seller' as const,
@@ -440,6 +505,15 @@ const VaniDoneStep: React.FC = () => {
     navigate('/contracts/claim');
   };
 
+  // Side activation ending: land on the chosen side. Hard navigation for the
+  // same reason as the buyer hop above (caches, and the profile's persona is
+  // now 'both'); the landing side is taken once by initializePerspective on
+  // that load, otherwise 'both' would always land on Revenue.
+  const handleActivationGo = (side: ActivationSide) => {
+    setLandingPerspective(side);
+    window.location.assign('/ops/cockpit');
+  };
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: css }} />
@@ -475,9 +549,15 @@ const VaniDoneStep: React.FC = () => {
           animation: 'cardRise .6s cubic-bezier(.22,1,.36,1) .2s both',
           textAlign: 'center',
         }}>
-          {persona === 'seller' && <Screen9A state={state} onDashboard={handleDashboard} />}
-          {persona === 'buyer' && <Screen9B state={state} onDashboard={handleDashboard} onClaim={handleClaim} />}
-          {persona === 'both' && <Screen9C state={state} onDashboard={handleDashboard} />}
+          {activationSide ? (
+            <Screen9D state={state} side={activationSide} onGo={handleActivationGo} />
+          ) : (
+            <>
+              {persona === 'seller' && <Screen9A state={state} onDashboard={handleDashboard} />}
+              {persona === 'buyer' && <Screen9B state={state} onDashboard={handleDashboard} onClaim={handleClaim} />}
+              {persona === 'both' && <Screen9C state={state} onDashboard={handleDashboard} />}
+            </>
+          )}
         </div>
       </div>
     </>

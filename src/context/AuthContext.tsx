@@ -6,8 +6,9 @@ import { API_ENDPOINTS } from '../services/serviceURLs';
 import { vaniToast } from '../components/common/toast';
 import { setUserContext } from '../utils/sentry';
 import { sessionService } from '../services/sessionService';
-import { isRevenueSideReady, isExpenseSideReady } from '../utils/perspective/sideReadiness';
-import { setPendingSideActivation } from '../utils/perspective/sideActivation';
+import { isSideReady, normaliseSidePersona } from '../utils/perspective/sideReadiness';
+import type { SidePersona } from '../utils/perspective/sideReadiness';
+import { setPendingSideActivation, takeLandingPerspective } from '../utils/perspective/sideActivation';
 
 // Constants for storage keys
 const STORAGE_KEYS = {
@@ -98,8 +99,9 @@ export const onboardingTypeToLiteTier = (onboardingType: string | null | undefin
   return null;
 };
 
-// Readiness of the perspective being switched INTO (see requestPerspectiveSwitch)
-export type PerspectiveReadiness = 'checking' | 'ready' | 'activation_needed';
+// Readiness of the perspective being switched INTO (see requestPerspectiveSwitch):
+// decided by persona alone — utils/perspective/sideReadiness.ts.
+export type PerspectiveReadiness = 'ready' | 'activation_needed';
 
 // Auth context interface
 interface AuthContextType {
@@ -210,17 +212,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Perspective state (Revenue/Expense) — defaults set after profile loads
   const [perspective, setPerspective] = useState<Perspective>('revenue');
   const [perspectiveInitialized, setPerspectiveInitialized] = useState<boolean>(false);
+  // The tenant's persona (seller / buyer / both) as last seen on the business
+  // profile — what the Revenue/Expense toggle's readiness is decided on.
+  // Recorded on every initializePerspective call, not only the first, so an
+  // activation walk (persona → 'both') is reflected after its final reload.
+  const [tenantPersona, setTenantPersona] = useState<SidePersona>(null);
 
   // Perspective switch modal state
   const [showPerspectiveSwitchModal, setShowPerspectiveSwitchModal] = useState<boolean>(false);
   const [pendingPerspective, setPendingPerspective] = useState<Perspective | null>(null);
-  // Readiness of the side being switched INTO: 'checking' while the probe
-  // runs, 'ready' → normal confirm, 'activation_needed' → empty-state offer.
+  // Readiness of the side being switched INTO: 'ready' → normal confirm,
+  // 'activation_needed' → the persona does not cover that side yet →
+  // empty-state offer to activate it.
   const [pendingPerspectiveReadiness, setPendingPerspectiveReadiness] =
     useState<PerspectiveReadiness>('ready');
-  // Monotonic token so a stale readiness probe can't update a modal that was
-  // cancelled/confirmed/superseded while it was in flight.
-  const perspectiveCheckSeqRef = useRef<number>(0);
 
   // Google OAuth state
   const [hasGoogleAuth, setHasGoogleAuth] = useState<boolean>(false);
@@ -1005,12 +1010,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ── Initialize perspective from tenant profile (no modal, called once) ──
   const initializePerspective = (businessTypeId: string) => {
+    // Always record the persona (the toggle's readiness reads it), even when
+    // the default perspective was settled on an earlier call.
+    setTenantPersona(normaliseSidePersona(businessTypeId));
     if (perspectiveInitialized) return;
     // Lite tenants: the tier owns the perspective (cnak→expense, rfq→revenue,
     // set in applyLiteTier). A leftover business profile from an abandoned
     // normal-onboarding run must not override it — checked via ref because
     // this can race applyLiteTier within the same render cycle.
     if (liteTierRef.current) return;
+    // A side the tenant just ACTIVATED wins over the persona default, once:
+    // the activation done screen writes it, this load takes it. Persona is
+    // 'both' after an activation, which would otherwise always mean Revenue.
+    const landing = takeLandingPerspective();
+    if (landing) {
+      setPerspective(landing);
+      setPerspectiveInitialized(true);
+      return;
+    }
     // 'buyer' → expense view. 'seller' or 'both' → revenue view.
     // 'both' defaults to revenue: seller side is the major persona entry point.
     const defaultPerspective: Perspective = businessTypeId.toLowerCase() === 'buyer' ? 'expense' : 'revenue';
@@ -1029,17 +1046,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 'activation_needed' (empty-state offering to run the lite onboarding
   // for the missing side).
   const requestPerspectiveSwitch = (target: Perspective) => {
-    const seq = ++perspectiveCheckSeqRef.current;
     setPendingPerspective(target);
-    setPendingPerspectiveReadiness('checking');
+    // Persona decides, synchronously (utils/perspective/sideReadiness.ts): a
+    // side the persona covers switches; the other side is offered for
+    // activation. No data probe — a side can be empty and still be theirs.
+    setPendingPerspectiveReadiness(isSideReady(target, tenantPersona) ? 'ready' : 'activation_needed');
     setShowPerspectiveSwitchModal(true);
-
-    const probe = target === 'revenue' ? isRevenueSideReady : isExpenseSideReady;
-    probe(currentTenant?.id || '', isLive).then((ready) => {
-      // A newer request/cancel/confirm supersedes this probe's result.
-      if (perspectiveCheckSeqRef.current !== seq) return;
-      setPendingPerspectiveReadiness(ready ? 'ready' : 'activation_needed');
-    });
   };
 
   const togglePerspective = () => {
@@ -1055,11 +1067,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Confirm perspective switch
   const confirmPerspectiveSwitch = () => {
     if (!pendingPerspective) return;
-    // Never blind-switch into a side that is still checking or needs
-    // activation — those states have their own affordances in the modal.
+    // Never blind-switch into a side that needs activation — that state has
+    // its own affordances in the modal.
     if (pendingPerspectiveReadiness !== 'ready') return;
 
-    perspectiveCheckSeqRef.current++;
     setShowPerspectiveSwitchModal(false);
 
     const label = pendingPerspective === 'revenue' ? 'Revenue' : 'Expense';
@@ -1078,7 +1089,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Cancel perspective switch
   const cancelPerspectiveSwitch = () => {
-    perspectiveCheckSeqRef.current++;
     setShowPerspectiveSwitchModal(false);
     setPendingPerspective(null);
   };
@@ -1090,12 +1100,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // side-aware: /start/serve asks the target side's question and the seeder
   // runs ONLY the target leg (see utils/perspective/sideActivation.ts).
   // BusinessPersonaStep pre-selects "Both" so the tenant keeps their
-  // existing side. Perspective is NOT switched here — after activation the
-  // flow's final hard reload re-derives it from the updated persona.
+  // existing side. Perspective is NOT switched here — the activation's done
+  // screen lets the tenant choose the side to land on (sideActivation's
+  // landing perspective), which initializePerspective takes on the final
+  // hard reload.
   const activatePendingPerspective = () => {
     const side = pendingPerspective;
     if (side !== 'revenue' && side !== 'expense') return;
-    perspectiveCheckSeqRef.current++;
     setShowPerspectiveSwitchModal(false);
     setPendingPerspective(null);
     setPendingSideActivation(side);

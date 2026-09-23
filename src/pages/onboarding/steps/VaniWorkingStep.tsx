@@ -400,7 +400,10 @@ const VaniWorkingStep: React.FC = () => {
     setTimeout(() => {
       navigate(nextRoute, {
         state: {
-          persona: personaId,
+          // On a side activation this is the activated leg ('buyer' |
+          // 'seller'), so equipment-confirm's Back and the done screen follow
+          // the walk actually taken; otherwise it IS the persona, unchanged.
+          persona: effectivePersona,
           noCoverage: localNoCoverage,
           catalogBlocksSeeded: localBlocks,
           facilityNodesSeeded: localNodes,

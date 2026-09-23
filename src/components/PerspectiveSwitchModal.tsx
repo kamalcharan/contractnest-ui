@@ -1,21 +1,20 @@
 // src/components/PerspectiveSwitchModal.tsx
 //
-// The Revenue/Expense switch modal, in three modes driven by
+// The Revenue/Expense switch modal, in two modes driven by
 // AuthContext.pendingPerspectiveReadiness:
 //
 //   'ready'             → the original confirm dialog, unchanged behaviour.
-//   'checking'          → brief probe state while side-readiness resolves.
 //   'activation_needed' → a proper EMPTY STATE: illustration, what the two
 //                         sides of the toggle mean, and an offer to activate
 //                         the missing side by running the lite onboarding
 //                         (which is idempotent — it only adds what's missing).
 //
-// Both directions can produce 'activation_needed' (see
-// utils/perspective/sideReadiness.ts): Expense→Revenue when there is no
-// catalog, Revenue→Expense when there are no OWN registry assets.
+// Readiness is the PERSONA, nothing else (utils/perspective/sideReadiness.ts):
+// a 'buyer' switching to Revenue or a 'seller' switching to Expense sees
+// 'activation_needed'; 'both' never does, however empty a side is.
 
 import React from 'react';
-import { ArrowRightLeft, Loader2, Sparkles, FileText, Wallet } from 'lucide-react';
+import { ArrowRightLeft, Sparkles, FileText, Wallet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import ConfirmationDialog from './ui/ConfirmationDialog';
@@ -76,7 +75,7 @@ const PerspectiveSwitchModal: React.FC = () => {
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
-  // ── Modes 'checking' / 'activation_needed' — custom overlay ───────────────
+  // ── Mode 'activation_needed' — custom overlay ─────────────────────────────
   if (pendingPerspectiveReadiness !== 'ready') {
     const surface = colors.utility.secondaryBackground;
     const ink = colors.utility.primaryText;
@@ -91,8 +90,8 @@ const PerspectiveSwitchModal: React.FC = () => {
     const stayName = targetIsRevenue ? 'Expense' : 'Revenue';
     const title = targetIsRevenue ? 'Revenue is your selling side' : 'Expense is your buying side';
     const emptyBody = targetIsRevenue
-      ? "Your Revenue side isn't set up yet — there's no catalog or pricing behind it, so there's nothing to show. VaNi can build it the same way she set up your workspace: a couple of questions, then your catalog with market-reference prices."
-      : "Your Expense side isn't set up yet — there's no equipment or facility registry of your own behind it, so there's nothing to show. VaNi can set it up the same way she set up your workspace: tell her what you own, and she builds your registry with sample vendors to try things on.";
+      ? "Your workspace is set up as an asset owner, so the Revenue side isn't switched on yet. VaNi can add it the same way she set up your workspace: a couple of questions, then your catalog with market-reference prices."
+      : "Your workspace is set up as a service provider, so the Expense side isn't switched on yet. VaNi can add it the same way she set up your workspace: tell her what you own, and she builds your registry with sample vendors to try things on.";
     const revenueRow = {
       icon: FileText,
       label: 'Revenue · Clients',
@@ -142,94 +141,85 @@ const PerspectiveSwitchModal: React.FC = () => {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {pendingPerspectiveReadiness === 'checking' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '28px 0' }}>
-              <Loader2 size={26} className="animate-spin" style={{ color: accent }} />
-              <div style={{ fontSize: 14, color: soft }}>Checking your {targetName} side…</div>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+            <ActivationIllustration
+              accent={accent}
+              muted={soft}
+              surface={colors.utility.primaryBackground}
+            />
+          </div>
+
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: ink, margin: '10px 0 6px', letterSpacing: '-0.01em' }}>
+            {title}
+          </h2>
+          <p style={{ fontSize: 13.5, color: soft, lineHeight: 1.6, margin: '0 0 18px' }}>
+            The toggle switches which half of your business you&apos;re looking at:
+          </p>
+
+          {/* what the two sides mean — target first (dashed), current second */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 18 }}>
+            <div
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                border: `1.5px dashed ${accent}55`, background: `${accent}0d`,
+                borderRadius: 10, padding: '10px 12px',
+              }}
+            >
+              <TargetIcon size={16} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>{targetRow.label}</div>
+                <div style={{ fontSize: 12, color: soft, lineHeight: 1.5 }}>
+                  {targetRow.desc}
+                </div>
+              </div>
             </div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
-                <ActivationIllustration
-                  accent={accent}
-                  muted={soft}
-                  surface={colors.utility.primaryBackground}
-                />
-              </div>
-
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: ink, margin: '10px 0 6px', letterSpacing: '-0.01em' }}>
-                {title}
-              </h2>
-              <p style={{ fontSize: 13.5, color: soft, lineHeight: 1.6, margin: '0 0 18px' }}>
-                The toggle switches which half of your business you&apos;re looking at:
-              </p>
-
-              {/* what the two sides mean — target first (dashed), current second */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginBottom: 18 }}>
-                <div
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    border: `1.5px dashed ${accent}55`, background: `${accent}0d`,
-                    borderRadius: 10, padding: '10px 12px',
-                  }}
-                >
-                  <TargetIcon size={16} style={{ color: accent, flexShrink: 0, marginTop: 2 }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>{targetRow.label}</div>
-                    <div style={{ fontSize: 12, color: soft, lineHeight: 1.5 }}>
-                      {targetRow.desc}
-                    </div>
-                  </div>
+            <div
+              style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                border: `1px solid ${edge}`, background: colors.utility.primaryBackground,
+                borderRadius: 10, padding: '10px 12px',
+              }}
+            >
+              <CurrentIcon size={16} style={{ color: soft, flexShrink: 0, marginTop: 2 }} />
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>
+                  {currentRow.label} <span style={{ fontWeight: 600, color: soft, fontSize: 11 }}>— where you are now</span>
                 </div>
-                <div
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 10,
-                    border: `1px solid ${edge}`, background: colors.utility.primaryBackground,
-                    borderRadius: 10, padding: '10px 12px',
-                  }}
-                >
-                  <CurrentIcon size={16} style={{ color: soft, flexShrink: 0, marginTop: 2 }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: ink }}>
-                      {currentRow.label} <span style={{ fontWeight: 600, color: soft, fontSize: 11 }}>— where you are now</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: soft, lineHeight: 1.5 }}>
-                      {currentRow.desc}
-                    </div>
-                  </div>
+                <div style={{ fontSize: 12, color: soft, lineHeight: 1.5 }}>
+                  {currentRow.desc}
                 </div>
               </div>
+            </div>
+          </div>
 
-              <p style={{ fontSize: 13, color: soft, lineHeight: 1.6, margin: '0 0 20px' }}>
-                {emptyBody}
-              </p>
+          <p style={{ fontSize: 13, color: soft, lineHeight: 1.6, margin: '0 0 20px' }}>
+            {emptyBody}
+          </p>
 
-              <button
-                type="button"
-                onClick={activatePendingPerspective}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  padding: '13px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                  background: accent, color: '#ffffff', fontSize: 14.5, fontWeight: 700,
-                  boxShadow: `0 6px 18px ${accent}45`,
-                }}
-              >
-                <Sparkles size={16} />
-                Set up my {targetName} side · ~6 min
-              </button>
-              <button
-                type="button"
-                onClick={cancelPerspectiveSwitch}
-                style={{
-                  width: '100%', marginTop: 10, padding: '10px 20px', borderRadius: 10,
-                  border: 'none', background: 'transparent', cursor: 'pointer',
-                  color: soft, fontSize: 13, fontWeight: 600,
-                }}
-              >
-                Not now — stay in {stayName}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={activatePendingPerspective}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '13px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: accent, color: '#ffffff', fontSize: 14.5, fontWeight: 700,
+              boxShadow: `0 6px 18px ${accent}45`,
+            }}
+          >
+            <Sparkles size={16} />
+            Set up my {targetName} side · ~6 min
+          </button>
+          <button
+            type="button"
+            onClick={cancelPerspectiveSwitch}
+            style={{
+              width: '100%', marginTop: 10, padding: '10px 20px', borderRadius: 10,
+              border: 'none', background: 'transparent', cursor: 'pointer',
+              color: soft, fontSize: 13, fontWeight: 600,
+            }}
+          >
+            Not now — stay in {stayName}
+          </button>
         </div>
       </div>
     );

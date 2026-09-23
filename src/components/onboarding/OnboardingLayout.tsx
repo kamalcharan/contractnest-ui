@@ -17,6 +17,7 @@ import {
 import { OnboardingUtils } from '@/types/onboardingTypes';
 import JourneyRail from './JourneyRail';
 import { resolveJourney, normaliseJourneyPersona } from './journey';
+import { readPendingSideActivation } from '@/utils/perspective/sideActivation';
 import toast from 'react-hot-toast';
 
 interface OnboardingLayoutProps {
@@ -90,9 +91,15 @@ const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({ children }) => {
   const personaSource = tenantFormData as
     | { persona?: unknown; business_type_id?: unknown }
     | undefined;
-  const journeyPersona = normaliseJourneyPersona(
-    personaSource?.persona ?? personaSource?.business_type_id
-  );
+  // A side-activation walk (perspective toggle → lite flow) shows the
+  // ACTIVATED side's journey, not the stored persona's: persona is already
+  // 'both' by this point, and the 'both' rail promises pricing, terms and
+  // first-contract steps an Expense activation never visits.
+  const activationSide = readPendingSideActivation();
+  const journeyPersona =
+    activationSide === 'expense' ? 'buyer' :
+    activationSide === 'revenue' ? 'seller' :
+    normaliseJourneyPersona(personaSource?.persona ?? personaSource?.business_type_id);
   const journey = resolveJourney(location.pathname, journeyPersona);
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;

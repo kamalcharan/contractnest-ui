@@ -49,3 +49,31 @@ export function clearPendingSideActivation(): void {
     /* nothing to clear */
   }
 }
+
+// ── Landing perspective ──────────────────────────────────────────────────────
+// The activation walk ends with a hard reload (caches must go), and
+// perspective is React state that a reload re-derives from persona — which
+// after an activation is 'both', i.e. Revenue. So the done screen's CTA
+// writes the side the tenant chose here, and AuthContext.initializePerspective
+// takes it exactly once on the next load. Tab-scoped, like the hand-off above.
+
+const LANDING_KEY = 'cn_landing_perspective';
+
+export function setLandingPerspective(side: ActivationSide): void {
+  try {
+    sessionStorage.setItem(LANDING_KEY, side);
+  } catch {
+    /* storage unavailable — the reload lands on the persona default */
+  }
+}
+
+/** Read AND clear: a landing side applies to one load only. */
+export function takeLandingPerspective(): ActivationSide | null {
+  try {
+    const v = sessionStorage.getItem(LANDING_KEY);
+    if (v !== null) sessionStorage.removeItem(LANDING_KEY);
+    return v === 'revenue' || v === 'expense' ? v : null;
+  } catch {
+    return null;
+  }
+}
