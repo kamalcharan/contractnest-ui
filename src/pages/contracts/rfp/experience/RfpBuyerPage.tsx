@@ -20,6 +20,7 @@ import { currencyOptions } from '@/utils/constants/currencies';
 import { RFP_KEY, newDraft, validate, restore, commitmentSummary, type RfpDraft, type Family } from './model';
 import { persistDraft, unwrap } from './persistence';
 import './rfp-buyer.css';
+import RfpEmptyState from './RfpEmptyState';
 
 const steps=['The need','Questions for vendors','Terms & money','Invite vendors','Review'];
 const headings=['Find the right service partner.','Get answers you can compare.','Set clear terms from the start.','Bring the right people to the table.','Ready for the other side.'];
@@ -98,7 +99,19 @@ function RfpWorkspace({tenantId,live,id,list}:{tenantId:string;live:boolean;id?:
  function addRecipient(name:string,email:string,contactId:string|null){if(!name.trim()||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){fail('A recipient needs a name and valid email.');return;}if(draft.invites.some(v=>v.email.toLowerCase()===email.toLowerCase())){fail('That email is already selected.');return;}change({invites:[...draft.invites,{id:uid(),name,email,contactId}]});setProspect({name:'',email:''});}
  const styles={'--rfp-ink':colors.utility.primaryText,'--rfp-muted':colors.utility.secondaryText,'--rfp-surface':colors.utility.secondaryBackground,'--rfp-bg':colors.utility.primaryBackground,'--rfp-brand':colors.brand.primary,'--rfp-line':colors.utility.primaryText+'25'} as React.CSSProperties;
  if(loading)return <PageLoader message="Opening your RFP draft"/>;
- if(list)return <main className="rfp-buyer" style={styles}><div className="rfp-row between"><div><small>BUYER WORKSPACE</small><h1>RFP drafts</h1><p>Structured requests, saved before inviting the other side.</p></div><Link className="rfp-button primary" to="/requests/rfp/new">New RFP →</Link></div><p className="rfp-note">Buyer release · sharing is not enabled until the vendor questionnaire flow is connected.</p>{drafts.isLoading?<PageLoader message="Loading RFP drafts"/>:drafts.isError?<div role="alert">{errorText(drafts.error)}{button('Retry',()=>void drafts.refetch())}</div>:<>{drafts.data?.items.map((c:any)=><Link key={c.id} className="rfp-paper rfp-draft" to={`/requests/rfp/${c.id}`}><strong>{c.name||c.title}</strong><span>{c.rfq_number||c.contract_number} · Draft</span><span>Continue →</span></Link>)}{!drafts.data?.items.length&&<p>No RFP drafts on this page. Older RFQ drafts stay in Requests.</p>}<div className="rfp-row">{button('Previous',()=>setPage(p=>p-1),false,page===1)}<span>Page {page}</span>{button('Next',()=>setPage(p=>p+1),false,!drafts.data?.next)}</div></>}<Link to="/requests">Existing Requests / RFQs</Link></main>;
+ const firstUse = !drafts.isLoading && !drafts.isError && !!drafts.data && page === 1 && drafts.data.items.length === 0 && !drafts.data.next;
+ if(list)return <main className="rfp-buyer rfp-list" style={styles}>
+   <div className="rfp-row between rfp-list-heading"><div><small>BUYER WORKSPACE</small><h1>RFP drafts</h1><p>{firstUse?'A considered brief is the first step to the right service partner.':'Your requirements, organised. Pick up where you left off.'}</p></div>{!firstUse&&<Link className="rfp-button primary" to="/requests/rfp/new">New RFP →</Link>}</div>
+   {firstUse?<RfpEmptyState/>:<>
+     <p className="rfp-note">Draft preparation is available. Vendor invitations and responses are not enabled yet.</p>
+     {drafts.isLoading?<PageLoader message="Loading RFP drafts"/>:drafts.isError?<div role="alert">{errorText(drafts.error)}{button('Retry',()=>void drafts.refetch())}</div>:<>
+       {drafts.data?.items.map((c:any)=><Link key={c.id} className="rfp-paper rfp-draft" to={`/requests/rfp/${c.id}`}><strong>{c.name||c.title}</strong><span>{c.rfq_number||c.contract_number} · Draft</span><span>Continue →</span></Link>)}
+       {!drafts.data?.items.length&&<p>No RFP drafts on this page. Older RFQ drafts stay in Requests.</p>}
+       {(page>1||drafts.data?.next)&&<div className="rfp-row">{button('Previous',()=>setPage(p=>p-1),false,page===1)}<span>Page {page}</span>{button('Next',()=>setPage(p=>p+1),false,!drafts.data?.next)}</div>}
+     </>}
+     <Link to="/requests">Existing Requests / RFQs</Link>
+   </>}
+ </main>;
  return <main className="rfp-buyer" style={styles}>
   <div className="rfp-shell"><aside className="rfp-rail"><Link to="/requests/rfp" onClick={e=>{if(dirty&&!window.confirm('Leave with unsaved changes?'))e.preventDefault();}}>← RFP drafts</Link><small>A NEW REQUEST</small><nav>{steps.map((name,i)=><button key={name} aria-current={draft.step===i?'step':undefined} disabled={busy||i>draft.step} onClick={()=>change({step:i})}><b>{i+1}</b>{name}</button>)}</nav><p>Manual, by design.<br/>Your scope. Your decision.</p></aside>
   <div className="rfp-main"><small>{draft.step+1} OF 5 · BUYER REQUEST</small><h1>{headings[draft.step]}</h1><p>Define the need clearly. Vendors bring their approach and price.</p>
