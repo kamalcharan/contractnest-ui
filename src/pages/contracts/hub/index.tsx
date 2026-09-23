@@ -583,12 +583,13 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
   }, [location.state]);
 
   const handleVaniDraftReady = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
+    if (!result.context?.relationship) throw new Error('VaNi contract relationship is missing. Reopen the composer.');
     setVaniPrefill(result.draft);
     setVaniInteractionIds(interactionIds);
     setVaniInitialStep(initialStepId || null);
     setShowVaniComposer(false);
     setResumeDraftId(null);
-    setWizardContractType('client'); // VaNi drafts are seller→client contracts
+    setWizardContractType(result.context.relationship!); // Preserve the explicitly chosen relationship
     setShowWizard(true);
   };
 
@@ -773,6 +774,11 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
   // Open wizard with draft data once fetched (wait for data before opening)
   useEffect(() => {
     if (resumeDraftId && resumeDraftData && !isLoadingDraft && !showWizard) {
+      if (resumeDraftData.metadata?.rfp_buyer_v1) {
+        navigate(`/requests/rfp/${resumeDraftId}`);
+        setResumeDraftId(null);
+        return;
+      }
       setShowWizard(true);
     }
   }, [resumeDraftId, resumeDraftData, isLoadingDraft, showWizard]);

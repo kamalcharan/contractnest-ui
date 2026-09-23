@@ -2211,6 +2211,12 @@ const ContractDetailPage: React.FC = () => {
   }
 
   // ─── RFQ gets its own report, not the contract detail layout (B7) ───
+  if (contract.metadata?.rfp_buyer_v1) {
+    return <div className="p-8"><h1 className="text-2xl font-semibold">RFP buyer draft</h1>
+      <p>This structured request uses the new buyer flow. Sharing is not enabled in this release.</p>
+      <button className="mt-4 px-4 py-3 rounded-lg" onClick={() => navigate(`/requests/rfp/${contract.id}`)}
+        style={{ backgroundColor: colors.brand.primary, color: '#fff' }}>Open RFP draft →</button></div>;
+  }
   if (isRfq) {
     return (
       <RfqReport

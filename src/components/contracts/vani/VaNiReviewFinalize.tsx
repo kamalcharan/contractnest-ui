@@ -23,7 +23,7 @@ import ReviewSendStep from '@/components/contracts/ContractWizard/steps/ReviewSe
 import EventsPreviewStep from '@/components/contracts/ContractWizard/steps/EventsPreviewStep';
 import { createInitialWizardState, serializeWizardState, sanitizeStateForTemplate } from '@/components/contracts/ContractWizard';
 import useContractSubmission, { SubmissionResult } from '@/hooks/useContractSubmission';
-import vaniComposerService, { VaniComposeResult } from '@/services/vaniComposerService';
+import vaniComposerService, { VaniComposeResult, assertVaniScope } from '@/services/vaniComposerService';
 import { useSaveTemplate } from '@/hooks/mutations/useCatTemplatesMutations';
 
 export interface VaNiReviewFinalizeProps {
@@ -87,6 +87,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
   // wizard's gated steps enforce): buyer + blocks (+ coverage for asset groups)
   const blockers = useMemo(() => {
     const list: string[] = [];
+    if (!isTemplateMode && !result.context?.relationship) list.push('Contract relationship is missing');
     if (draft.selectedBlocks.length === 0) list.push('No service blocks');
     if (!isTemplateMode) {
       if (!draft.buyerId) list.push('Buyer not selected — use Edit in wizard to pick or create the contact');
@@ -105,7 +106,10 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
 
   const handleSend = async () => {
     try {
-      const created = await submit({ ...draft, eventOverrides } as any, 'client');
+      assertVaniScope(result.context);
+      const relationship = result.context.relationship;
+      if (!relationship || blockers.length) throw new Error(blockers.join('. ') || 'Choose a contract relationship.');
+      const created = await submit({ ...draft, eventOverrides } as any, relationship);
       setSent(created);
       vaniComposerService.sendFeedback(interactionIds, { was_accepted: true, was_edited: false });
       addToast({
@@ -121,6 +125,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
   };
 
   const handleSaveAsTemplate = async () => {
+    try { assertVaniScope(result.context); } catch (error: any) { addToast({ type: 'error', title: 'Context changed', message: error.message }); return; }
     const name = templateName.trim();
     if (!name || saveTemplateMutation.isPending) return;
     const blocks = draft.selectedBlocks.map((b: any, idx: number) => ({

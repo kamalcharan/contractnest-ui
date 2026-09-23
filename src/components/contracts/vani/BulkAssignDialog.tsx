@@ -16,10 +16,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
 import { useContactList } from '@/hooks/useContacts';
 import { useContractSubmission } from '@/hooks/useContractSubmission';
-import vaniComposerService, { VaniParsedIntent, VaniComposeResult } from '@/services/vaniComposerService';
+import vaniComposerService, { VaniParsedIntent, VaniComposeResult, assertVaniScope } from '@/services/vaniComposerService';
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 import type { TemplateSeed } from './VaNiComposerLauncher';
+import VaniContextQuestions from './VaniContextQuestions';
+import { useAuth } from '@/context/AuthContext';
 import EventScheduleAdjuster from '@/components/contracts/EventScheduleAdjuster';
 import {
   computeContractEvents,
@@ -68,20 +70,16 @@ const toTitleCase = (s: string): string =>
 // Display classification — the contact's actual type, for the tag/badge shown
 // beside their name. Uses the shared 4-type config (client/vendor/partner/
 // team_member) so it never mislabels a team member as a client.
+const contactClasses = (c: any): string[] => Array.isArray(c?.classifications)
+  ? c.classifications.map((v: any) => typeof v === 'string' ? v : v?.classification_value).filter(Boolean) : [];
 const contactClassificationLabel = (c: any): string => {
-  const cls: string[] = c?.classifications || [];
-  const match = CONTACT_CLASSIFICATION_CONFIG.find((cfg) => cls.includes(cfg.id));
-  return match?.label || 'Client';
+  const classes = contactClasses(c);
+  return CONTACT_CLASSIFICATION_CONFIG.filter(cfg => classes.includes(cfg.id)).map(cfg => cfg.label).join(', ') || 'Unclassified';
 };
-
-// Contract relationship (t_contracts.contract_type) — distinct from the
-// display tag above. The contract record only models client/partner/vendor;
-// a team-member contact still gets a normal client-perspective contract.
 const contactContractType = (c: any): 'client' | 'partner' | 'vendor' => {
-  const cls: string[] = c?.classifications || [];
-  if (cls.includes('partner')) return 'partner';
-  if (cls.includes('vendor')) return 'vendor';
-  return 'client';
+  const types = Array.from(new Set(contactClasses(c).filter(v => ['client','partner','vendor'].includes(v))));
+  if (types.length !== 1) throw new Error(`Choose an unambiguous Client, Partner or Vendor classification for ${contactDisplayName(c)} before assigning.`);
+  return types[0] as 'client' | 'partner' | 'vendor';
 };
 
 const addDays = (isoDate: string, days: number): Date => {
@@ -95,13 +93,15 @@ const isoDaysBetween = (startIso: string, endIso: string): number => {
   return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
 };
 
-const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
+const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
   isOpen, onClose, seed, templateName, onDone,
 }) => {
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
   const { submitBulk } = useContractSubmission();
+  const composer = useMemo(() => vaniComposerService.withContext('template', null), []);
+  const [clarify, setClarify] = useState<VaniParsedIntent | null>(null);
 
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState<string>('all');
@@ -179,8 +179,9 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   const reassembleBase = useCallback(async (nextIntent: VaniParsedIntent, cadOverride: Record<string, string>) => {
     if (!seed) return;
     setAssembling(true);
+    setResult(null);
     try {
-      const res = await vaniComposerService.assembleFromTemplate(
+      const res = await composer.assembleFromTemplate(
         seed.match.template_id,
         nextIntent,
         null,
@@ -188,7 +189,12 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
         Object.entries(cadOverride).map(([block_id, cycle]) => ({ block_id, cycle }))
       );
       setResult(res);
+      setClarify(null);
     } catch (err: any) {
+      if (err?.response?.data?.error?.code === 'MISSING_AGREEMENT_DETAILS') {
+        setClarify(err.response.data.error.details.intent);
+        return;
+      }
       addToast({ type: 'error', title: 'Could not refresh draft', message: err?.message || 'Failed to assemble' });
     } finally {
       setAssembling(false);
@@ -327,6 +333,8 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
     setFinished(false);
 
     try {
+      assertVaniScope(result.context);
+      await composer.validateContacts(members.map(c => ({ id: c.id, relationship: contactContractType(c) })));
       const baseName = String((result.draft as any).contractName || '');
       const baseNameParts = baseName.split(' — ');
 
@@ -410,6 +418,10 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
         className="sm:max-w-[96vw] w-[96vw] rounded-xl h-[95vh] max-h-[95vh] overflow-y-auto"
         style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.border }}
       >
+        {clarify && <VaniContextQuestions intent={clarify} template={false} onConfirm={next => {
+          setIntent(next); setStartDate(next.start_date); reassembleBase(next, cadenceOverrides);
+        }} />}
+
         <DialogHeader>
           <DialogTitle style={{ color: colors.utility.primaryText, fontSize: '0.95rem' }}>
             <div className="flex items-center gap-2">
@@ -855,4 +867,9 @@ const BulkAssignDialog: React.FC<BulkAssignDialogProps> = ({
   );
 };
 
+const BulkAssignDialog: React.FC<BulkAssignDialogProps> = props => {
+  const { currentTenant, user, isLive } = useAuth();
+  if (!props.isOpen) return null;
+  return <BulkAssignContent key={`${currentTenant?.id}:${user?.id}:${isLive}`} {...props} />;
+};
 export default BulkAssignDialog;

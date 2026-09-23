@@ -120,6 +120,7 @@ export const FirstContractStep: React.FC = () => {
   );
 
   const { data: contacts, loading: contactsLoading, hardRefresh } = useContactList({
+    classifications: ['client'], // This rehearsal explicitly creates a client contract.
     status: 'active',
     limit: 25,
   });
@@ -205,7 +206,7 @@ export const FirstContractStep: React.FC = () => {
       setLoadingBlocks(true);
       setLoadError(null);
       try {
-        const result = await vaniComposerService.shortlist(buildIntent('', ''));
+        const result = await vaniComposerService.withContext('contract', 'client').shortlist(buildIntent('', ''));
         if (cancelled) return;
         setCandidates(result?.candidates || []);
       } catch (err: unknown) {
@@ -345,7 +346,7 @@ export const FirstContractStep: React.FC = () => {
         interactionId: '',
       };
 
-      const result = await vaniComposerService.assemble(
+      const result = await vaniComposerService.withContext('contract', 'client').assemble(
         intent,
         buyer,
         activeGroup?.items || candidates,

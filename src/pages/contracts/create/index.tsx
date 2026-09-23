@@ -41,9 +41,12 @@ const ContractCreatePage: React.FC = () => {
   const [vaniPrefill, setVaniPrefill] = useState<Record<string, any> | null>(null);
   const [vaniInteractionIds, setVaniInteractionIds] = useState<string[]>([]);
   const [vaniEntitled, setVaniEntitled] = useState(false);
+  const [vaniRelationship, setVaniRelationship] = useState<ContractType | null>(null);
   const [vaniInitialStep, setVaniInitialStep] = useState<string | null>(null);
 
   const handleVaniDraftReady = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
+    if (!result.context?.relationship) throw new Error('VaNi contract relationship is missing.');
+    setVaniRelationship(result.context.relationship);
     setVaniPrefill(result.draft);
     setVaniInteractionIds(interactionIds);
     setVaniInitialStep(initialStepId || null);
@@ -230,6 +233,7 @@ const ContractCreatePage: React.FC = () => {
 
       {/* VaNi Composer — intent → drafted contract */}
       <VaNiComposerLauncher
+        initialRelationship={validContractType}
         isOpen={showVaniComposer}
         onClose={() => setShowVaniComposer(false)}
         onDraftReady={handleVaniDraftReady}
@@ -244,7 +248,7 @@ const ContractCreatePage: React.FC = () => {
           setVaniInteractionIds([]);
           setVaniInitialStep(null);
         }}
-        contractType={validContractType}
+        contractType={vaniPrefill ? vaniRelationship! : validContractType}
         vaniPrefill={vaniPrefill}
         vaniInteractionIds={vaniInteractionIds}
         vaniInitialStepId={vaniInitialStep}

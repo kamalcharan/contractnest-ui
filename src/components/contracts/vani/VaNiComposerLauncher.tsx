@@ -34,8 +34,12 @@ import vaniComposerService, {
 } from '@/services/vaniComposerService';
 import { getCurrencySymbol, getDefaultCurrency, currencyOptions } from '@/utils/constants/currencies';
 import VaNiReviewFinalize from './VaNiReviewFinalize';
+import VaniContextQuestions from './VaniContextQuestions';
+import { useAuth } from '@/context/AuthContext';
+import { type VaniRelationship, assertVaniScope } from '@/services/vaniComposerService';
 
 export interface VaNiComposerLauncherProps {
+  initialRelationship?: VaniRelationship;
   isOpen: boolean;
   onClose: () => void;
   /** Edit path → open the wizard pre-filled, optionally at a specific step */
@@ -61,13 +65,13 @@ export interface TemplateSeed {
  *  the template shape (settings.wizard_state may be absent). */
 export function buildTemplateSeed(t: any): TemplateSeed {
   const ws = t?.settings?.wizard_state || {};
-  const durationUnitRaw = ws.durationUnit ?? 'years';
-  const durationUnit: 'days' | 'months' | 'years' =
-    (['days', 'months', 'years'].includes(durationUnitRaw) ? durationUnitRaw : 'years');
-  const payModeRaw = ws.paymentMode ?? 'prepaid';
-  const billingMode: 'prepaid' | 'emi' | 'per_block' =
-    (['prepaid', 'emi', 'per_block'].includes(payModeRaw) ? payModeRaw : 'prepaid');
-  const currency = t?.currency ?? ws.currency ?? 'INR';
+  const durationUnitRaw = ws.durationUnit ?? t?.settings?.defaults?.duration_unit ?? '';
+  const durationUnit: VaniParsedIntent['duration']['unit'] =
+    (['days', 'months', 'years'].includes(durationUnitRaw) ? durationUnitRaw : '');
+  const payModeRaw = ws.paymentMode ?? t?.settings?.defaults?.payment_mode ?? '';
+  const billingMode: VaniParsedIntent['billing']['mode'] =
+    (payModeRaw === 'defined' ? 'per_block' : ['prepaid', 'emi', 'per_block'].includes(payModeRaw) ? payModeRaw : '');
+  const currency = t?.currency ?? ws.currency ?? '';
   const match: VaniTemplateMatch = {
     template_id: t?.id,
     name: t?.display_name || t?.name || 'Template',
@@ -80,16 +84,16 @@ export function buildTemplateSeed(t: any): TemplateSeed {
   };
   const intent: VaniParsedIntent = {
     contract_kind: t?.name || 'contract',
-    nomenclature: ws.nomenclatureId || '',
+    nomenclature: ws.nomenclatureName || t?.settings?.defaults?.nomenclature_name || '',
     buyer_text: '',
-    duration: { value: Number(ws.durationValue ?? t?.duration_value ?? 1) || 1, unit: durationUnit },
+    duration: { value: Number(ws.durationValue ?? t?.settings?.defaults?.duration_value ?? t?.duration_value ?? 0) || 0, unit: durationUnit },
     start_date: '',
     grace_period_days: Number(ws.gracePeriodValue ?? 0) || 0,
-    acceptance: '',
+    acceptance: ws.acceptanceMethod || t?.settings?.defaults?.acceptance_method || '',
     billing: {
       mode: billingMode,
       emi_months: Number(ws.emiMonths ?? 0) || 0,
-      cycle: ws.billingCycleType ?? 'monthly',
+      cycle: ws.selectedBlocks?.find((b: any) => b.cycle && b.cycle !== 'prepaid')?.cycle || '',
     },
     equipment_hint: '',
     activities: [],
@@ -161,15 +165,21 @@ const CANVAS_CSS = `
 .vani-card-in { animation: vaniCardIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
 `;
 
-const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
+const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   isOpen,
   onClose,
   onDraftReady,
   mode = 'contract',
   onTemplateSaved,
   seedTemplate = null,
+  initialRelationship,
 }) => {
   const isTemplateMode = mode === 'template';
+  const [relationship, setRelationship] = useState<VaniRelationship | ''>(initialRelationship || '');
+  const client = React.useMemo(() => vaniComposerService.withContext(mode, relationship || null), [mode, relationship]);
+  const composerRef = useRef(client);
+  composerRef.current = client;
+  const [clarification, setClarification] = useState<{ intent: VaniParsedIntent; retry: () => void } | null>(null);
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
@@ -211,7 +221,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   const [smartChips, setSmartChips] = useState<string[]>([]);
   useEffect(() => {
     if (isOpen) {
-      vaniComposerService.getSuggestions(isTemplateMode ? 'template' : 'contract')
+      composerRef.current.getSuggestions(isTemplateMode ? 'template' : 'contract')
         .then(setSmartChips);
     }
   }, [isOpen, isTemplateMode]);
@@ -248,6 +258,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   }, []);
 
   const handleClose = useCallback(() => {
+    setClarification(null);
     reset();
     onClose();
   }, [reset, onClose]);
@@ -264,9 +275,13 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     opts?: { retryable?: boolean; hint?: React.ReactNode },
   ) => {
     setRunningStep(null);
+    if (err?.response?.data?.error?.code === 'MISSING_AGREEMENT_DETAILS') {
+      setClarification({ intent: err.response.data.error.details.intent, retry });
+      return;
+    }
     // Prefer the API's own message (err.response.data.message) over axios's
     // generic "Request failed with status code 500".
-    const message = err?.response?.data?.message || err?.message || 'Failed';
+    const message = err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'Failed';
     const retryable = opts?.retryable !== false;
     setCards((prev) => [...prev.filter((c) => c.id !== step), {
       id: step,
@@ -311,7 +326,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     setRunningStep('assemble');
     try {
       const cadMap = cadenceOverride ?? cadenceOverrides;
-      const res = await vaniComposerService.assemble(
+      const res = await composerRef.current.assemble(
         parse.intent, buyerRef.current, shortlist.candidates, selection,
         currencyOverride ?? contractCurrency,
         Object.entries(cadMap).map(([block_id, cycle]) => ({ block_id, cycle }))
@@ -357,7 +372,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     setRunningStep('assemble');
     try {
       const cadMap = cadenceOverride ?? cadenceOverrides;
-      const res = await vaniComposerService.assembleFromTemplate(
+      const res = await composerRef.current.assembleFromTemplate(
         match.template_id, parse.intent, buyerRef.current,
         currencyOverride ?? contractCurrency,
         Object.entries(cadMap).map(([block_id, cycle]) => ({ block_id, cycle }))
@@ -426,7 +441,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     if (!parse || !shortlist) return;
     setRunningStep('select');
     try {
-      const res = await vaniComposerService.selectBlocks(parse.intent, parse.nomenclatureMatch, shortlist.candidates);
+      const res = await composerRef.current.selectBlocks(parse.intent, parse.nomenclatureMatch, shortlist.candidates);
       selectRef.current = res;
       const byId = new Map(shortlist.candidates.map((c) => [c.block_id, c]));
       pushCard({
@@ -461,7 +476,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     if (!parse) return;
     setRunningStep('shortlist');
     try {
-      const res = await vaniComposerService.shortlist(parse.intent);
+      const res = await composerRef.current.shortlist(parse.intent);
       shortlistRef.current = res;
       pushCard({
         id: 'shortlist',
@@ -478,6 +493,10 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
       });
       runSelect();
     } catch (err: any) {
+      if (err?.response?.data?.error?.code === 'MISSING_AGREEMENT_DETAILS') {
+        fail('shortlist', 'Confirm agreement details', err, runShortlist);
+        return;
+      }
       // Empty/insufficient catalog is a user-actionable condition (422), not a
       // server fault — steer to the template path instead of a scary retry.
       const status = err?.response?.status;
@@ -555,7 +574,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     if (q.length < 3) return;
     setBuyerSearching(true);
     try {
-      const res = await vaniComposerService.resolveBuyer(q);
+      const res = await composerRef.current.resolveBuyer(q);
       if (res.status === 'resolved' && res.contact) {
         resumeWithBuyer(res.contact);
       } else {
@@ -586,7 +605,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     if (!parse) return;
     setRunningStep('buyer');
     try {
-      const res: VaniBuyerResolution = await vaniComposerService.resolveBuyer(parse.intent.buyer_text);
+      const res: VaniBuyerResolution = await composerRef.current.resolveBuyer(parse.intent.buyer_text);
       if (res.status === 'resolved' && res.contact) {
         buyerRef.current = res.contact;
         pushCard(buyerDoneCard(res.contact.name));
@@ -616,7 +635,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     if (!parse) return;
     setRunningStep('template');
     try {
-      const tm = await vaniComposerService.matchTemplate(rawTextRef.current, parse.intent);
+      const tm = await composerRef.current.matchTemplate(rawTextRef.current, parse.intent);
       if (tm.match) {
         if (isTemplateMode) {
           // Creating a template: an existing match is a duplicate warning,
@@ -652,12 +671,12 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     setStage('running');
     setRunningStep('parse');
     try {
-      const parse = await vaniComposerService.parseIntent(inputText);
+      const parse = await composerRef.current.parseIntent(inputText);
       parseRef.current = parse;
       const it = parse.intent;
       pushCard({
         id: 'parse',
-        title: 'Request understood',
+        title: 'Request interpreted — review the terms',
         icon: <FileText className="w-4 h-4" />,
         status: 'done',
         body: (
@@ -667,7 +686,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
               {parse.nomenclatureMatch ? ` · ${parse.nomenclatureMatch.group.replace(/_/g, ' ')}` : ''}
             </p>
             <p>
-              {it.duration.value} {it.duration.unit} · {it.billing.mode === 'per_block' ? `${it.billing.cycle} billing` : it.billing.mode === 'emi' ? `EMI ×${it.billing.emi_months}` : 'paid upfront'}
+              {it.duration.value && it.duration.unit ? `${it.duration.value} ${it.duration.unit}` : 'Term not specified'} · {it.billing.mode === 'per_block' ? `${it.billing.cycle} billing` : it.billing.mode === 'emi' ? `EMI ×${it.billing.emi_months}` : it.billing.mode === 'prepaid' ? 'paid upfront' : 'payment plan not specified'}
               {it.equipment_hint ? ` · ${it.equipment_hint}` : ''}
             </p>
             {it.start_date && <p>Starts {it.start_date}</p>}
@@ -698,7 +717,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
     }
     setRunningStep('template');
     try {
-      const tm = await vaniComposerService.matchTemplate(inputText);
+      const tm = await composerRef.current.matchTemplate(inputText);
       if (tm.match && tm.quickIntent) {
         parseRef.current = {
           intent: tm.quickIntent,
@@ -719,7 +738,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                 {tm.nomenclatureMatch ? ` · ${tm.nomenclatureMatch.group.replace(/_/g, ' ')}` : ''}
               </p>
               <p>
-                {it.duration.value} {it.duration.unit} · {it.billing.mode === 'per_block' ? `${it.billing.cycle} billing` : it.billing.mode === 'emi' ? `EMI ×${it.billing.emi_months}` : 'paid upfront'}
+                {it.duration.value && it.duration.unit ? `${it.duration.value} ${it.duration.unit}` : 'Term not specified'} · {it.billing.mode === 'per_block' ? `${it.billing.cycle} billing` : it.billing.mode === 'emi' ? `EMI ×${it.billing.emi_months}` : it.billing.mode === 'prepaid' ? 'paid upfront' : 'payment plan not specified'}
               </p>
               <p className="opacity-80">Parsed without AI — confirmed by your template.</p>
             </div>
@@ -788,6 +807,9 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   /** Hand off to the wizard, optionally landing on the first gap step */
   const editInWizard = (targetStepId?: string) => {
     if (!result) return;
+    try { assertVaniScope(result.context); } catch (error: any) {
+      addToast({ type: 'error', title: 'Context changed', message: error.message }); return;
+    }
     const firstGap = targetStepId
       || result.readiness.steps.find((s) => !s.ready)?.id
       || 'review';
@@ -856,6 +878,22 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
         </div>
 
         {/* ── INPUT ── */}
+        {!isTemplateMode && <label className="block px-6 py-3 text-sm">
+          Contract relationship *
+          <select className="border rounded-lg px-3 py-2 ml-3" value={relationship}
+            disabled={!!relationship && stage !== 'input'}
+            onChange={e => { setRelationship(e.target.value as VaniRelationship); setBuyerSearch(''); }}>
+            <option value="">Choose relationship</option>
+            <option value="client">Client contract</option><option value="partner">Partner contract</option><option value="vendor">Vendor contract</option>
+          </select>
+        </label>}
+        {clarification && <VaniContextQuestions key={JSON.stringify(clarification.intent)} intent={clarification.intent} template={isTemplateMode}
+          onConfirm={intent => {
+            if (parseRef.current) parseRef.current.intent = intent;
+            const retry = clarification.retry;
+            setClarification(null);
+            retry();
+          }} />}
         {stage === 'input' && (
           <div className="p-6 max-w-xl mx-auto w-full">
             <textarea
@@ -888,7 +926,7 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
             </div>
             <button
               onClick={() => startPipeline(text.trim())}
-              disabled={text.trim().length < 5}
+              disabled={text.trim().length < 5 || (!isTemplateMode && !relationship)}
               className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
               style={{ backgroundColor: colors.brand.primary }}
             >
@@ -1155,8 +1193,8 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                               onClick={() => adjustAndReassemble(() => {
                                 const b = parseRef.current!.intent.billing;
                                 b.mode = m;
-                                if (m === 'emi' && !b.emi_months) b.emi_months = 12;
-                                if (m === 'per_block' && !b.cycle) b.cycle = 'quarterly';
+                                if (m === 'emi' && !b.emi_months) b.emi_months = 0;
+                                if (m === 'per_block' && !b.cycle) b.cycle = '';
                               })}
                               className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
                               style={{
@@ -1195,11 +1233,11 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
                       {/* Start date */}
                       <div>
                         <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>
-                          Start date {!parseRef.current.intent.start_date && '(default: today)'}
+                          Start date {!parseRef.current.intent.start_date && '(not specified)'}
                         </p>
                         <input
                           type="date"
-                          value={parseRef.current.intent.start_date || new Date().toISOString().slice(0, 10)}
+                          value={parseRef.current.intent.start_date || ''}
                           onChange={(e) => adjustAndReassemble(() => { parseRef.current!.intent.start_date = e.target.value; })}
                           className="px-2.5 py-1.5 rounded-lg border text-[11px] outline-none"
                           style={{ borderColor: `${colors.utility.primaryText}20`, backgroundColor: 'transparent', color: colors.utility.primaryText }}
@@ -1387,4 +1425,9 @@ const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = ({
   );
 };
 
+const VaNiComposerLauncher: React.FC<VaNiComposerLauncherProps> = props => {
+  const { currentTenant, user, isLive } = useAuth();
+  if (!props.isOpen) return null;
+  return <VaNiComposerContent key={`${currentTenant?.id}:${user?.id}:${isLive}:${props.mode}`} {...props} />;
+};
 export default VaNiComposerLauncher;

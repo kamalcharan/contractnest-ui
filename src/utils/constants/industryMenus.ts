@@ -173,6 +173,7 @@ export const defaultMenuItems: MenuItem[] = [
     icon: 'Inbox',
     path: '/requests'
   },
+  { id: 'rfp-buyer', label: 'RFP Drafts', icon: 'FileText', path: '/requests/rfp', expenseOnly: true },
   // VaNi — the real agent surface: Overview (landing + trial) and Briefing.
   // Autonomy & Credits joins when built (agreed end-state: 3 items).
   {

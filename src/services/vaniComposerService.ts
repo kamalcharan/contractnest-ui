@@ -4,7 +4,7 @@
 // shown only when its call has returned (honest progress).
 // CPU LLM inference is slow (30–90s per LLM step) — timeouts are per-request.
 
-import api from './api';
+import api, { getCurrentEnvironment } from './api';
 
 const BASE = '/api/vani-composer';
 const LLM_TIMEOUT_MS = 300000;   // parse-intent, select-blocks
@@ -14,11 +14,11 @@ export interface VaniParsedIntent {
   contract_kind: string;
   nomenclature: string;
   buyer_text: string;
-  duration: { value: number; unit: 'days' | 'months' | 'years' };
+  duration: { value: number; unit: 'days' | 'months' | 'years' | '' };
   start_date: string;
   grace_period_days: number;
   acceptance: 'payment' | 'signoff' | 'auto' | '';
-  billing: { mode: 'prepaid' | 'emi' | 'per_block'; emi_months: number; cycle: string };
+  billing: { mode: 'prepaid' | 'emi' | 'per_block' | ''; emi_months: number; cycle: string };
   equipment_hint: string;
   activities: string[];
   special_asks: string[];
@@ -81,7 +81,20 @@ export interface VaniStepReadiness {
   note?: string;
 }
 
+export type VaniRelationship = 'client' | 'partner' | 'vendor';
+export interface VaniScope {
+  tenantId: string;
+  environment: 'live' | 'test';
+  workflow: 'contract' | 'template' | 'rfq';
+  relationship: VaniRelationship | null;
+}
+export function assertVaniScope(scope: VaniScope): void {
+  const tenant = localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id');
+  if (!scope || scope.tenantId !== tenant || scope.environment !== getCurrentEnvironment())
+    throw new Error('Workspace or Live/Test changed. Reopen VaNi before continuing.');
+}
 export interface VaniComposeResult {
+  context: VaniScope & { schemaVersion: 1; currencySource: 'request' | 'catalogue' | 'template'; calendar: 'agreement' | 'illustrative'; template?: { id: string; revision: string | null } };
   draft: {
     contractName: string;
     buyerId: string;
@@ -168,6 +181,40 @@ function unwrap<T>(response: any, fallbackMessage: string): T {
 }
 
 class VaniComposerService {
+  constructor(private scope?: VaniScope, private token?: string | null) {}
+  /** One client per open flow, never a mutable singleton workspace. */
+  withContext(workflow: VaniScope['workflow'], relationship: VaniRelationship | null) {
+    return new VaniComposerService({
+      tenantId: localStorage.getItem('tenant_id') || sessionStorage.getItem('tenant_id') || '',
+      environment: getCurrentEnvironment(), workflow, relationship,
+    }, localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token'));
+  }
+  private assertCurrent() {
+    if (!this.scope) throw new Error('Open VaNi with a workspace context first.');
+    assertVaniScope(this.scope);
+    if (this.token !== (localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token')))
+      throw new Error('Your sign-in changed. Reopen VaNi before continuing.');
+  }
+  private contextReady?: Promise<void>;
+  private async post(url: string, body: any, options: any) {
+    this.assertCurrent();
+    if (!this.contextReady) {
+      this.contextReady = this.getContext().then(data => {
+        if (data?.schemaVersion !== 1) throw new Error('Update the API shared-context release before using VaNi.');
+      }).catch(error => { this.contextReady = undefined; throw error; });
+    }
+    await this.contextReady;
+    this.assertCurrent();
+    const response = await api.post(url, { ...body, context: this.scope }, options);
+    this.assertCurrent(); // reject a late result after a tenant/environment/account change
+    return response;
+  }
+  async getContext() {
+    this.assertCurrent();
+    const response = await api.get(`${BASE}/context`, { params: { context: JSON.stringify(this.scope) } });
+    this.assertCurrent();
+    return unwrap<any>(response, 'Workspace context unavailable');
+  }
   /** Is VaNi visible/usable for this tenant? UI hides the entry point when not. */
   async checkEntitlement(): Promise<VaniEntitlement> {
     try {
@@ -181,26 +228,35 @@ class VaniComposerService {
 
   /** STEP 1 — LLM: text → intent + nomenclature */
   async parseIntent(text: string): Promise<VaniParseStepResult> {
-    const response = await api.post(`${BASE}/parse-intent`, { text }, { timeout: LLM_TIMEOUT_MS });
+    const response = await this.post(`${BASE}/parse-intent`, { text }, { timeout: LLM_TIMEOUT_MS });
     return unwrap<VaniParseStepResult>(response, 'VaNi could not read your request');
+  }
+
+  async validateContacts(contacts: Array<{ id: string; relationship: VaniRelationship }>) {
+    const response = await this.post(`${BASE}/validate-contacts`, { contacts }, { timeout: FAST_TIMEOUT_MS });
+    return unwrap<{ contacts: Array<{ id: string; name: string; relationship: VaniRelationship }> }>(response, 'Contact validation failed');
   }
 
   /** STEP 2 — deterministic: buyer lookup */
   async resolveBuyer(buyerText: string): Promise<VaniBuyerResolution> {
-    const response = await api.post(`${BASE}/resolve-buyer`, { buyer_text: buyerText }, { timeout: FAST_TIMEOUT_MS });
+    const response = await this.post(`${BASE}/resolve-buyer`, { buyer_text: buyerText }, { timeout: FAST_TIMEOUT_MS });
     return unwrap<VaniBuyerResolution>(response, 'Buyer lookup failed');
   }
 
   /** STEP 3 — deterministic: catalog scan → candidates */
   async shortlist(intent: VaniParsedIntent): Promise<VaniShortlistResult> {
-    const response = await api.post(`${BASE}/shortlist`, { intent }, { timeout: FAST_TIMEOUT_MS });
+    const response = await this.post(`${BASE}/shortlist`, { intent }, { timeout: FAST_TIMEOUT_MS });
     return unwrap<VaniShortlistResult>(response, 'Catalog shortlist failed');
   }
 
   /** Smart helper chips — deterministic, per-tenant; [] on any failure */
   async getSuggestions(mode: 'contract' | 'template'): Promise<string[]> {
     try {
-      const response = await api.get(`${BASE}/suggestions?mode=${mode}`, { timeout: 20000 });
+      this.assertCurrent();
+      const response = await api.get(`${BASE}/suggestions?mode=${mode}`, {
+        timeout: 20000, params: { context: JSON.stringify(this.scope) },
+      });
+      this.assertCurrent();
       if (response.data?.success) return response.data.data?.suggestions || [];
     } catch { /* chips are cosmetic */ }
     return [];
@@ -210,7 +266,7 @@ class VaniComposerService {
    *  Pass intent when the LLM already parsed; omit it to let the server
    *  quick-parse simple requests (zero-LLM fast path). */
   async matchTemplate(text: string, intent?: VaniParsedIntent | null): Promise<VaniTemplateMatchResult> {
-    const response = await api.post(
+    const response = await this.post(
       `${BASE}/match-template`,
       { text, intent: intent || undefined },
       { timeout: FAST_TIMEOUT_MS }
@@ -226,7 +282,7 @@ class VaniComposerService {
     defaultCurrency?: string,
     cadenceSelections?: Array<{ block_id: string; cycle: string }>
   ): Promise<VaniComposeResult> {
-    const response = await api.post(
+    const response = await this.post(
       `${BASE}/assemble-from-template`,
       {
         template_id: templateId,
@@ -247,7 +303,7 @@ class VaniComposerService {
     nomenclature: VaniNomenclatureMatch | null,
     candidates: VaniCandidate[]
   ): Promise<VaniSelectResult> {
-    const response = await api.post(
+    const response = await this.post(
       `${BASE}/select-blocks`,
       { intent, nomenclature, candidates },
       { timeout: LLM_TIMEOUT_MS }
@@ -264,7 +320,7 @@ class VaniComposerService {
     defaultCurrency?: string,
     cadenceSelections?: Array<{ block_id: string; cycle: string }>
   ): Promise<VaniComposeResult> {
-    const response = await api.post(
+    const response = await this.post(
       `${BASE}/assemble`,
       {
         intent,
