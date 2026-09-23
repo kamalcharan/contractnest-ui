@@ -48,3 +48,13 @@
 @media(max-width:760px){.rfp-list{padding:20px 16px}.rfp-list-heading{margin-bottom:20px}.rfp-empty{border-radius:17px}.rfp-empty-hero{grid-template-columns:1fr;padding:28px 22px;gap:30px}.rfp-empty-copy h2{font-size:34px;max-width:450px}.rfp-empty-types{margin:18px 0 24px;gap:8px}.rfp-empty-preview{max-width:370px;padding:0 8px 0 0}.rfp-empty-steps{grid-template-columns:1fr;padding:25px 22px;gap:22px}.rfp-empty-steps p{max-width:none}.rfp-empty-footnote{padding:18px 22px;gap:10px}}
 @media(max-width:400px){.rfp-empty-copy h2{font-size:30px}.rfp-empty .rfp-empty-cta{width:100%;gap:12px}.rfp-empty-types>span{font-size:11px;padding:6px 8px}.rfp-empty-doc-line small{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.rfp-empty .rfp-empty-cta{transition:none}}
+.rfp-coverage-actions{justify-content:flex-end;flex-wrap:wrap;margin:18px 0}.rfp-modal .rfp-row{flex-wrap:wrap}.rfp-modal{max-width:calc(100vw - 32px)}
+@media print {
+ body:has(.rfp-print-document) * { visibility:hidden!important; }
+ .rfp-print-document,.rfp-print-document * { visibility:visible!important; }
+ .rfp-print-document { position:absolute!important;left:0!important;top:0!important;width:100%!important;border:0!important;background:white!important;color:#111!important;padding:15mm!important; }
+ .rfp-print-document section { break-inside:avoid; }
+ .rfp-print-document h3 { break-after:avoid; }
+ .rfp-print-document { page:rfp; }
+ @page rfp { size:A4; margin:12mm; }
+}

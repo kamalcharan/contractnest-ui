@@ -71,6 +71,7 @@ export interface QuoteMe {
 }
 
 export interface QuoteResolve {
+  rfp?: import('../contracts/rfp/experience/model').RfpDraft;
   rfq: QuoteRfq;
   buyer: { tenant_id: string };
   blocks: QuoteBlock[];

@@ -149,6 +149,7 @@ interface BuyerSelectionStepProps {
   ) => void;
   // Multi-select mode (for RFQ vendor selection)
   multiSelect?: boolean;
+  rfpDraftMode?: boolean;
   selectedVendorIds?: string[];
   selectedVendorNames?: string[];
   onVendorsChange?: (ids: string[], names: string[]) => void;
@@ -165,6 +166,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   contractType = 'client',
   onSelectBuyer,
   multiSelect = false,
+  rfpDraftMode = false,
   selectedVendorIds = [],
   selectedVendorNames = [],
   onVendorsChange,
@@ -267,13 +269,13 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
     } else {
       // Add
       onVendorsChange([...selectedVendorIds, contactId], [...selectedVendorNames, name]);
-      addToast({
+      if (!rfpDraftMode) addToast({
         type: 'success',
         title: 'Vendor added',
         message: `${name} added to RFQ recipients`,
       });
     }
-  }, [onVendorsChange, selectedVendorIds, selectedVendorNames, addToast]);
+  }, [onVendorsChange, selectedVendorIds, selectedVendorNames, addToast, rfpDraftMode]);
 
   // Auto-select primary person when full contact data loads
   useEffect(() => {
@@ -345,13 +347,14 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
   const handleQuickAddSuccess = useCallback((contactId: string) => {
     setIsDrawerOpen(false);
     // Invalidate cache and refetch the contact list
+    if (rfpDraftMode) { setSearchTerm(''); setDebouncedSearch(''); }
     refreshContactList();
     addToast({
       type: 'success',
       title: 'Contact created',
       message: 'New contact added and visible in the list below.',
     });
-  }, [addToast, refreshContactList]);
+  }, [addToast, refreshContactList, rfpDraftMode]);
 
   // Format phone number with country code
   const formatPhoneDisplay = (channel: ContactChannel): string => {
@@ -1046,13 +1049,13 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
             className="text-2xl font-bold mb-2"
             style={{ color: colors.utility.primaryText }}
           >
-            {multiSelect ? 'Select Vendors for RFQ' : labels.heading}
+            {multiSelect ? (rfpDraftMode ? 'Choose existing vendors' : 'Select Vendors for RFQ') : labels.heading}
           </h2>
           <p
             className="text-sm"
             style={{ color: colors.utility.secondaryText }}
           >
-            {multiSelect ? 'Choose one or more vendors to send this RFQ to' : labels.subtitle}
+            {multiSelect ? (rfpDraftMode ? 'Select intended recipients. Nothing is sent when you select a vendor.' : 'Choose one or more vendors to send this RFQ to') : labels.subtitle}
           </p>
           {/* Selected count badge for multi-select */}
           {multiSelect && selectedVendorIds.length > 0 && (
@@ -1363,6 +1366,7 @@ const BuyerSelectionStep: React.FC<BuyerSelectionStepProps> = ({
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         onSuccess={handleQuickAddSuccess}
+        requiredClassification={rfpDraftMode ? 'vendor' : undefined}
       />
     </div>
   );

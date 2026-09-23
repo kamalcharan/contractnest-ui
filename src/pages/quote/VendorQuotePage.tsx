@@ -25,6 +25,7 @@ import {
 // since descriptions come from the buyer's RichTextEditor. Pure leaf
 // component (no ThemeContext/app-shell dependency), safe on this
 // dependency-light public page.
+import RfpVendorResponse from '../contracts/rfp/experience/RfpVendorResponse';
 import SafeHtml from '@/components/catalog-studio/SafeHtml';
 
 // ── brand tokens — same palette as the public check-in page ─────────────────
@@ -245,6 +246,7 @@ const VendorQuotePage: React.FC = () => {
     );
   }
 
+  if(data.rfp)return <RfpVendorResponse draft={data.rfp} number={data.rfq.rfq_number||''} status={data.rfq.status} cnak={cnak} secret={secret} me={data.me}/>;
   const { rfq, blocks, me } = data;
 
   // Already answered and awarded elsewhere, or answered in this session

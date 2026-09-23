@@ -59,6 +59,7 @@ interface QuickAddContactDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (contactId: string) => void;
+  requiredClassification?: 'client' | 'vendor' | 'partner';
 }
 
 interface ChannelInput {
@@ -103,7 +104,8 @@ const QUICK_ADD_CHANNELS = CHANNELS.filter(ch =>
 const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
   isOpen,
   onClose,
-  onSuccess
+  onSuccess,
+  requiredClassification
 }) => {
   const navigate = useNavigate();
   const { isDarkMode, currentTheme } = useTheme();
@@ -137,7 +139,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
 
   // Form state
   const [formData, setFormData] = useState<QuickFormData>({
-    classifications: [],
+    classifications: requiredClassification ? [requiredClassification] : [],
     type: 'individual',
     salutation: '',
     name: '',
@@ -153,7 +155,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        classifications: [],
+        classifications: requiredClassification ? [requiredClassification] : [],
         type: 'individual',
         salutation: '',
         name: '',
@@ -214,6 +216,7 @@ const QuickAddContactDrawer: React.FC<QuickAddContactDrawerProps> = ({
 
   // Toggle classification
   const toggleClassification = (value: string) => {
+    if (value === requiredClassification) return;
     setFormData(prev => {
       const exists = prev.classifications.includes(value);
       return {

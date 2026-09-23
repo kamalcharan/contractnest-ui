@@ -1,3 +1,4 @@
+import { API_ENDPOINTS } from '@/services/serviceURLs';
 import { draftPayload, RFP_KEY, type RfpDraft } from './model';
 
 type Transport = {
@@ -5,8 +6,11 @@ type Transport = {
   post: (url: string, body: any, config: any) => Promise<any>;
   put: (url: string, body: any, config: any) => Promise<any>;
 };
+export class DraftSaveError extends Error {
+  constructor(message: string, public outcome: 'rejected' | 'uncertain') { super(message); this.name='DraftSaveError'; }
+}
 export const unwrap = (response: any) => {
-  if (response.data?.success === false) throw new Error(response.data.error?.message || response.data.error || 'Request failed');
+  if (response.data?.success === false) throw new DraftSaveError(response.data.error?.message || response.data.error || 'Request failed', 'rejected');
   return response.data?.data ?? response.data;
 };
 const canonical = (value: unknown) => JSON.stringify(value, (_key, x) =>
@@ -29,13 +33,27 @@ export async function persistDraft(
   if (!isCurrent()) throw new Error('Workspace changed. Save cancelled before writing.');
   const payload = draftPayload(snapshot, metadata);
   const config = { headers: { 'x-idempotency-key': idempotencyKey } };
-  const saved = record
-    ? unwrap(await api.put(urls.update(record.id), { ...payload, version: record.version }, config))
-    : unwrap(await api.post('/api/v2/contracts', payload, config));
-  const id = record?.id || saved.id;
-  if (!id) throw new Error('The save returned no request ID. Check saved drafts before retrying.');
-  if (!isCurrent()) throw new Error('Workspace changed. Reopen the original workspace to check the saved draft.');
-  const confirmed = unwrap(await api.get(urls.get(id)));
-  if (!inScope(confirmed) || canonical(confirmed.metadata?.[RFP_KEY]) !== canonical(snapshot)) throw new Error('The server did not confirm the complete draft. Reopen saved drafts before retrying.');
-  return confirmed;
+  let saved: any;
+  try {
+    // Use the existing RFQ-capable transaction, not a fabricated buyer ID.
+    saved = record
+      ? unwrap(await api.put(urls.update(record.id), { ...payload, version: record.version }, config))
+      : unwrap(await api.post(API_ENDPOINTS.CONTRACTS.CREATE, payload, config));
+  } catch (error: any) {
+    if (error instanceof DraftSaveError) throw error;
+    const status=error?.response?.status;
+    const rejected=typeof status==='number' && status>=400 && status<500 && status!==408;
+    const detail=error?.response?.data?.error;
+    throw new DraftSaveError(typeof detail==='string'?detail:detail?.message||error.message||'Draft save failed', rejected?'rejected':'uncertain');
+  }
+  try {
+    const id = record?.id || saved.id;
+    if (!id) throw new Error('The save returned no request ID. Check saved drafts before retrying.');
+    if (!isCurrent()) throw new Error('Workspace changed. Reopen the original workspace to check the saved draft.');
+    const confirmed = unwrap(await api.get(urls.get(id)));
+    if (!inScope(confirmed) || canonical(confirmed.metadata?.[RFP_KEY]) !== canonical(snapshot)) throw new Error('The server did not confirm the complete draft. Reopen saved drafts before retrying.');
+    return confirmed;
+  } catch (error: any) {
+    throw new DraftSaveError(error.message || 'Draft confirmation failed', 'uncertain');
+  }
 }

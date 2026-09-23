@@ -4,6 +4,7 @@
 // Cycle 4 v2: Single-column list rows (not grid), 6 statuses, Active default,
 // pipeline bar with counts + colored segments. Fixed By Client grouping.
 
+import RequestsEmptyState, { requestState } from './RequestsEmptyState';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -200,52 +201,14 @@ interface EmptyStateProps {
   perspective: Perspective;
   colors: any;
   onCreateType: (type: ContractType) => void;
-  /** Requests page (record_type='rfq') — different object, different copy,
-      and on Revenue no creation at all (you cannot raise an RFQ for yourself;
-      you can only receive one). */
-  isRfqView?: boolean;
   /** Received requests waiting for a quote — shown as the primary pointer
       instead of "create your first contract" when > 0 (CNAK-vendor case). */
   pendingRequests?: number;
   onShowRequests?: () => void;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ perspective, colors, onCreateType, isRfqView = false, pendingRequests = 0, onShowRequests }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ perspective, colors, onCreateType, pendingRequests = 0, onShowRequests }) => {
   const label = perspective === 'revenue' ? 'client' : 'vendor';
-
-  // ── Requests page ──────────────────────────────────────────────
-  if (isRfqView) {
-    const received = perspective === 'revenue';
-    return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center',
-        justifyContent:'center', padding:'80px 40px', textAlign:'center' }}>
-        <div style={{ width:72, height:72, borderRadius:16, display:'flex',
-          alignItems:'center', justifyContent:'center',
-          background: colors.brand.primary + '14', marginBottom:20 }}>
-          <FileText size={32} style={{ color: colors.brand.primary, opacity:0.6 }} />
-        </div>
-        <h3 style={{ fontSize:18, fontWeight:600, color: colors.utility.primaryText, marginBottom:8 }}>
-          {received ? 'No requests waiting' : 'No requests sent yet'}
-        </h3>
-        <p style={{ fontSize:13.5, color: colors.utility.secondaryText, marginBottom: received ? 0 : 20, maxWidth:400 }}>
-          {received
-            ? 'When a buyer sends you a request for quote, it lands here. Nothing to respond to right now.'
-            : 'Ask several vendors to quote the same scope, then compare their responses side by side.'}
-        </p>
-        {/* No create button on Revenue — raising an RFQ is a buyer action. */}
-        {!received && (
-          <button
-            onClick={() => onCreateType('vendor' as ContractType)}
-            style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 22px',
-              borderRadius:10, border:'none', background: colors.brand.primary, color:'#fff',
-              fontSize:13.5, fontWeight:700, cursor:'pointer' }}
-          >
-            <Plus size={16} /> New Request
-          </button>
-        )}
-      </div>
-    );
-  }
 
   if (pendingRequests > 0 && onShowRequests) {
     return (
@@ -516,13 +479,23 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
   // NEW capability — the removed header toggle never filtered the list.
   const [relationshipFilter, setRelationshipFilter] = useState<'client' | 'partner' | null>(null);
 
-  // ── Filter state — Active is the default status ──
+  // Contracts start on Active; Requests start on All unless the URL chooses a status.
   const [activeStatus, setActiveStatus] = useState<string | null>(
-    searchParams.get('status') || 'active'
+    searchParams.get('status') || (isRfqView ? null : 'active')
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<PortfolioSortOption>('health_score');
   const [currentPage, setCurrentPage] = useState(1);
+
+  const previousRecordType = useRef(isRfqView);
+  useEffect(() => {
+    if (previousRecordType.current === isRfqView) return;
+    previousRecordType.current = isRfqView;
+    setActiveStatus(searchParams.get('status') || (isRfqView ? null : 'active'));
+    setSearchQuery('');
+    setCurrentPage(1);
+    if (isRfqView) setRelationshipFilter(null);
+  }, [isRfqView, searchParams]);
 
   // ── View mode state (flat vs grouped) ──
   const [viewMode, setViewMode] = useState<ViewMode>('flat');
@@ -743,7 +716,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
     // RFQ view → the dedicated product-led request builder (its own route),
     // not the shared wizard modal.
     if (isRfqView) {
-      navigate('/contracts/rfq/new');
+      navigate('/requests/rfp/new');
       return;
     }
     // Revenue → use the chosen relationship (client/partner); Expense → vendor
@@ -833,6 +806,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
       handleResumeDraft(id);
       return;
     }
+    if (contract?.metadata?.rfp_buyer_v1) { navigate(`/requests/rfp/${id}`); return; }
     navigate(`/contracts/${id}`);
   };
 
@@ -851,6 +825,16 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
   const hasData = viewMode === 'flat' ? contracts.length > 0 : groups.length > 0;
   const hasLoadedData = viewMode === 'flat' ? !!contractsData : !!groupedData;
   const showEmptyState = (!isLoading && !hasData) || (isError && !hasLoadedData);
+
+  const requestView = requestState({ loading: isLoading, error: isError, loaded: hasLoadedData, hasData, filtered: !!(activeStatus || searchQuery.trim() || relationshipFilter), page: currentPage, total: totalCount });
+  const requestPanel = isRfqView && ['empty', 'error', 'filtered', 'page'].includes(requestView) ? (
+    <RequestsEmptyState kind={requestView as 'empty' | 'error' | 'filtered' | 'page'}
+      received={isReceivedRequestsView} colors={colors}
+      onCreate={handleCreateClick} onRetry={() => { void refetch(); }}
+      onClear={() => { setSearchQuery(''); setRelationshipFilter(null); handleStatusClick(null); setCurrentPage(1); }}
+      onFirstPage={() => setCurrentPage(1)} onContracts={() => navigate('/contracts')} />
+  ) : null;
+  const showRequestIntro = isRfqView && requestView === 'empty';
 
   // ── Render ──
   return (
@@ -878,7 +862,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
                 }}
               >
                 {isRfqView
-                  ? (activePerspective === 'revenue' ? 'Requests received' : 'Requests sent')
+                  ? (activePerspective === 'revenue' ? 'Requests received' : 'Requests')
                   : (activePerspective === 'revenue' ? 'Contracts' : 'Vendor contracts')}
               </h1>
               <span
@@ -896,7 +880,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
               {isRfqView
                 ? (activePerspective === 'revenue'
                     ? 'Requests from buyers — respond with your quote'
-                    : 'Requests you sent to vendors')
+                    : 'Prepare RFPs, track vendor responses and follow awards')
                 : (activePerspective === 'revenue'
                     ? 'Contracts you deliver & bill'
                     : "Contracts you've hired & pay")}
@@ -984,7 +968,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
             {/* Create button — label reflects the chosen relationship / record
                 type. Hidden on Revenue · Requests: you don't create a request
                 you RECEIVE — you respond to it (row click → quote flow). */}
-            {!isReceivedRequestsView && (
+            {!isReceivedRequestsView && !showRequestIntro && (
             <button
               onClick={handleCreateClick}
               style={{
@@ -1011,6 +995,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
         </div>
 
         {/* ═══ SUMMARY STRIP (computed from loaded contracts per perspective) ═══ */}
+        {!showRequestIntro && <>
         <PortfolioSummaryStrip
           stats={computedPortfolio.stats}
           totalValue={computedPortfolio.totalValue}
@@ -1084,8 +1069,10 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
           <PortfolioSortSelect value={sortBy} onChange={setSortBy} colors={colors} />
         </div>
 
+        </>}
+
         {/* ═══ CONTRACT LIST / GROUPED CONTENT ═══ */}
-        {isLoading && !hasLoadedData ? (
+        {requestPanel ? requestPanel : ((isRfqView && requestView === 'loading') || (isLoading && !hasLoadedData)) ? (
           <div
             style={{
               background: colors.utility.secondaryBackground,
@@ -1096,7 +1083,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
           >
             <VaNiLoader
               size="md"
-              message={`Loading ${perspectiveType} contracts...`}
+              message={isRfqView ? 'Loading requests...' : `Loading ${perspectiveType} contracts...`}
               showSkeleton={true}
               skeletonVariant="list"
               skeletonCount={8}
@@ -1114,7 +1101,6 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
             <EmptyState
               perspective={activePerspective}
               colors={colors}
-              isRfqView={isRfqView}
               onCreateType={() => handleCreateClick()}
               pendingRequests={pendingRequestsCount}
               onShowRequests={() => navigate('/requests')}
