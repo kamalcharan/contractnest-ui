@@ -4,6 +4,7 @@ import { FileText, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import ContractWizard, { type ContractType } from '@/components/contracts/ContractWizard';
+import RfpContractDraft from '../rfp/experience/RfpContractDraft';
 
 // A separate manual entry. Templates, VaNi and existing draft resume stay on their current paths.
 export default function CreateContractExperiencePage() {
@@ -19,6 +20,7 @@ export default function CreateContractExperiencePage() {
   const [initialScope, setInitialScope] = useState(() => JSON.stringify([currentTenant?.id, isLive, perspective]));
   const scopeChanged = !!started && initialScope !== JSON.stringify([currentTenant?.id, isLive, perspective]);
   const close = () => navigate('/contracts/experience');
+  if (params.get('draft')) return <RfpContractDraft key={`${currentTenant?.id}-${isLive}-${params.get('draft')}`} id={params.get('draft')!} />;
   if (started && currentTenant?.id && !scopeChanged) return <ContractWizard
     presentation="experience" agreementOnly isOpen contractType={started} onClose={close} />;
   return <main style={{ maxWidth: 880, margin: 'auto', padding: 'clamp(20px, 5vw, 64px)', color: colors.utility.primaryText }}>

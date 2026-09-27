@@ -58,6 +58,8 @@ export interface QuoteBreakdownRow {
 }
 
 export interface QuoteMe {
+  agreement_prepared_by?: 'buyer' | 'vendor' | null;
+  proposal?: { schema?:number; blocks?:import('../contracts/rfp/experience/ProposalBlocks').ProposalBlock[]; billingTerms?:string; approach?:string; answers?:Record<string,string>; acceptTerms?:boolean };
   vendor_id: string;
   vendor_name?: string | null;
   vendor_company?: string | null;

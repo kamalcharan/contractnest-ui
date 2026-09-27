@@ -2,7 +2,7 @@
 // Contract 360° View — full lifecycle dashboard
 // R4: Buyer view + Document tab + edge cases (draft/cancelled/expired)
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
   ArrowLeft,
@@ -2212,10 +2212,7 @@ const ContractDetailPage: React.FC = () => {
 
   // ─── RFQ gets its own report, not the contract detail layout (B7) ───
   if (contract.metadata?.rfp_buyer_v1) {
-    return <div className="p-8"><h1 className="text-2xl font-semibold">RFP buyer draft</h1>
-      <p>This structured request uses the new buyer flow. Sharing is not enabled in this release.</p>
-      <button className="mt-4 px-4 py-3 rounded-lg" onClick={() => navigate(`/requests/rfp/${contract.id}`)}
-        style={{ backgroundColor: colors.brand.primary, color: '#fff' }}>Open RFP draft →</button></div>;
+    return <Navigate to={`/requests/rfp/${contract.id}`} replace />;
   }
   if (isRfq) {
     return (

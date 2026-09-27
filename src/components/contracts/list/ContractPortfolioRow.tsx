@@ -389,6 +389,7 @@ const ContractPortfolioRow: React.FC<ContractPortfolioRowProps> = ({
         </button>
       )}
 
+      {isRfq && c.status === 'quotes_received' && <button onClick={e => { e.stopPropagation(); onRowClick(c.id); }} style={{ border: `1px solid ${colors.brand.primary}`, borderRadius: 8, padding: '7px 12px', color: colors.brand.primary, background: 'transparent', cursor: 'pointer', flexShrink: 0 }}>Review proposals</button>}
       {/* ── Action Icons: Contract View + Contact View ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
         {/* Contract View */}

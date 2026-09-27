@@ -30,6 +30,7 @@ import type {
 import { VaNiLoader } from '@/components/common/loaders/UnifiedLoader';
 import { vaniToast } from '@/components/common/toast';
 import api from '@/services/api';
+import { unwrap as unwrapRfp } from '@/pages/contracts/rfp/experience/persistence';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import ContractWizard from '@/components/contracts/ContractWizard';
 import type { ContractType } from '@/components/contracts/ContractWizard';
@@ -790,7 +791,7 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
     }
   };
 
-  const handleRowClick = (id: string) => {
+  const handleRowClick = async (id: string) => {
     // If contract is a draft, resume the wizard instead of navigating to detail page.
     // Note: the list API does not return metadata, so we check status only.
     const contract = contracts.find((c) => c.id === id)
@@ -806,7 +807,15 @@ const ContractsHubPage: React.FC<ContractsHubPageProps> = ({ recordType = 'contr
       handleResumeDraft(id);
       return;
     }
-    if (contract?.metadata?.rfp_buyer_v1) { navigate(`/requests/rfp/${id}`); return; }
+    if (contract?.record_type === 'rfq') {
+      try {
+        const detail = unwrapRfp(await api.get(API_ENDPOINTS.CONTRACTS.GET(id)));
+        if (detail.metadata?.rfp_buyer_v1) { navigate(`/requests/rfp/${id}`); return; }
+      } catch {
+        vaniToast.error('Could not open request', { message: 'Request details could not load. Please try again.', duration: 4000 });
+        return;
+      }
+    }
     navigate(`/contracts/${id}`);
   };
 

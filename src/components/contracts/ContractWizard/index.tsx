@@ -623,6 +623,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
     setSilentMode(true);
     try {
       const metadata = {
+        ...(draftContractData?.metadata?.rfp_origin ? { rfp_origin: draftContractData.metadata.rfp_origin } : {}),
         wizard_state: serializeWizardState(wizardState),
         // Classic resume must still visit acceptance, which this slice defers.
         wizard_step: agreementOnly ? activeSteps.findIndex(step => step.id === 'nomenclature') : stepIndex,
@@ -934,7 +935,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
           // Draft exists — final update with all data + transition status
           const request = mapWizardToRequest(wizardState, contractType);
           // Clear wizard metadata on final submit (no longer a draft)
-          request.metadata = {};
+          request.metadata = draftContractData?.metadata?.rfp_origin ? { rfp_origin: draftContractData.metadata.rfp_origin } : {};
           const result = await updateContract({
             contractId: draftId,
             contractData: {
@@ -1136,7 +1137,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       // Step 1: Create or update the contract
       setProcessingStep('Creating contract...');
       const request = mapWizardToRequest(wizardState, contractType);
-      request.metadata = {}; // Clear wizard metadata on final submit
+      request.metadata = draftContractData?.metadata?.rfp_origin ? { rfp_origin: draftContractData.metadata.rfp_origin } : {}; // Keep award provenance, clear wizard state.
 
       if (draftId) {
         contractResult = (await updateContract({
@@ -1236,7 +1237,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       setShowPrePaymentDialog(false);
 
       const request = mapWizardToRequest(wizardState, contractType);
-      request.metadata = {}; // Clear wizard metadata on final submit
+      request.metadata = draftContractData?.metadata?.rfp_origin ? { rfp_origin: draftContractData.metadata.rfp_origin } : {}; // Keep award provenance, clear wizard state.
       let result: Record<string, any>;
 
       if (draftId) {
@@ -1286,7 +1287,7 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
       // Step 1: Create or update the contract
       setProcessingStep('Creating contract...');
       const request = mapWizardToRequest(wizardState, contractType);
-      request.metadata = {}; // Clear wizard metadata on final submit
+      request.metadata = draftContractData?.metadata?.rfp_origin ? { rfp_origin: draftContractData.metadata.rfp_origin } : {}; // Keep award provenance, clear wizard state.
 
       if (draftId) {
         contractResult = (await updateContract({
