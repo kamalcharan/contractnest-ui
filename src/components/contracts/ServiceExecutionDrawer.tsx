@@ -1,42 +1,36 @@
 // src/components/contracts/ServiceExecutionDrawer.tsx
-// Redesigned Service Execution Drawer — 2-column layout
-// Left: Event cards with inline status, add events (from contract + beyond scope), notes
-// Right: Evidence section driven by contract evidence policy
-// Responsive: 2-col on desktop, single-col stacked on mobile
+// Shared selected-service workspace. Evidence saving and completion are distinct.
 
-import React, { useState, useCallback, useMemo } from 'react';
+import './service-workspace.css';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import {useStartVisit,useCompleteVisit,useAssignVisit,useCollectionsBoard} from '@/hooks/queries/useCollectionsQueries';
+import {useServiceWorkspaceEvents as useContractEventsForContract} from '@/hooks/queries/useServiceExecution';
+import {useContractFormMappings,useServiceFormSubmissions,useServiceStartMetadataProblem} from '@/hooks/queries/useFormTemplates';
+import {applicableForms,outcomeNeedsFollowup} from '@/utils/serviceForms';
+import {useServiceTicketForEvent,useUpdateServiceTicket} from '@/hooks/queries/useServiceExecution';
 import {
   X,
-  Play,
-  Wrench,
   Package,
-  DollarSign,
-  ChevronDown,
   Plus,
   Loader2,
-  User,
   AlertTriangle,
-  ClipboardList,
-  Upload,
-  ShieldOff,
-  FileText,
-  Ticket,
   Search,
   Zap,
   ArrowLeft,
   Trash2,
   Briefcase,
-  CheckCircle2,
-  Lock,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import {
-  useContractEventOperations,
   useContractEventAssets,
 } from '@/hooks/queries/useContractEventQueries';
+import ServiceFormUpload from './ServiceFormUpload';
+import {useContractEvidence} from '@/hooks/queries/useEvidenceQueries';
 import FormFillModal from '@/components/contracts/FormFillModal';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
+import { useReceivables } from '@/hooks/queries/useFinanceQueries';
 import {
-  useCreateServiceTicket,
   useCreateBeyondScopeInvoice,
 } from '@/hooks/queries/useServiceExecution';
 import { useContactsForResourceDropdown } from '@/hooks/queries/useContactsResource';
@@ -46,7 +40,6 @@ import { getCurrencySymbol } from '@/utils/constants/currencies';
 import type { Block } from '@/types/catalogStudio';
 import type {
   ContractEvent,
-  ContractEventStatus,
 } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
 
@@ -69,9 +62,8 @@ interface BeyondScopeItem {
   description?: string;
   categoryId: string;
   isFlyBy?: boolean;
-  // B3.5 — billed amount for this beyond-scope line (prefilled from the
-  // catalog block's price; editable). Ticket creation raises an on-the-fly
-  // invoice from these lines (tax applied server-side from settings).
+  // Editable amount. Only the explicit additional-work invoice action bills
+  // these lines; starting a ticket does not create an invoice or payment.
   amount?: number;
 }
 
@@ -98,18 +90,6 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const formatDate = (dateStr: string): string => {
   const d = new Date(dateStr);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
-};
-
-const EVENT_TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  service: { icon: Wrench, color: '#8B5CF6', label: 'Service' },
-  spare_part: { icon: Package, color: '#06B6D4', label: 'Spare Part' },
-  billing: { icon: DollarSign, color: '#F59E0B', label: 'Billing' },
-};
-
-const FALLBACK_TRANSITIONS: Record<string, string[]> = {
-  scheduled: ['in_progress'],
-  in_progress: ['completed'],
-  overdue: ['in_progress'],
 };
 
 // Pricing-only categories for beyond-scope
@@ -517,993 +497,104 @@ const BeyondScopePanel: React.FC<BeyondScopePanelProps> = ({
 // COMPONENT
 // ═══════════════════════════════════════════════════
 
-const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({
-  isOpen,
-  contractId,
-  date,
-  events: initialEvents,
-  allContractEvents = [],
-  currency,
-  evidencePolicyType = 'none',
-  evidenceSelectedForms = [],
-  statusDefsByType = {},
-  transitionsByType = {},
-  onClose,
-}) => {
-  const { isDarkMode, currentTheme } = useTheme();
-  const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
-
-  // ─── State ───
-  const [drawerEvents, setDrawerEvents] = useState<ContractEvent[]>(initialEvents);
-  const [beyondScopeItems, setBeyondScopeItems] = useState<BeyondScopeItem[]>([]);
-  const [notes, setNotes] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [assigneeName, setAssigneeName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAddFromContract, setShowAddFromContract] = useState(false);
-  const [showBeyondScope, setShowBeyondScope] = useState(false);
-  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
-  const [statusDropdownId, setStatusDropdownId] = useState<string | null>(null);
-  const [teamSearch, setTeamSearch] = useState('');
-  // B3.4 — which evidence form is open in the fill modal (null = closed)
-  const [openFormTemplate, setOpenFormTemplate] = useState<{ id: string; name: string } | null>(null);
-
-  // ─── Hooks ───
-  const { options: teamMembers, isLoading: loadingTeam, error: teamError } = useContactsForResourceDropdown(teamSearch || undefined);
-  const createTicket = useCreateServiceTicket();
-  const createBeyondScopeInvoice = useCreateBeyondScopeInvoice();
-  const { updateStatus, changingStatusEventId } = useContractEventOperations();
-
-  // Per-asset rows for this contract, keyed by event id (shared query cache
-  // with the tab that opened the drawer). Shows WHICH equipment a visit
-  // covers — critical on multi-equipment contracts where "Start Service"
-  // would otherwise be ambiguous.
-  const { data: eventAssetsByEvent = {} } = useContractEventAssets(contractId, { enabled: isOpen });
-
-  // ─── Derived ───
-  const deliverables = useMemo(
-    () => drawerEvents.filter((e) => e.event_type === 'service' || e.event_type === 'spare_part'),
-    [drawerEvents]
-  );
-  const billingEvents = useMemo(
-    () => drawerEvents.filter((e) => e.event_type === 'billing'),
-    [drawerEvents]
-  );
-
-  // Unconsumed contract events (not in this drawer already)
-  const unconsumedEvents = useMemo(() => {
-    const drawerIds = new Set(drawerEvents.map((e) => e.id));
-    return allContractEvents.filter(
-      (e) =>
-        !drawerIds.has(e.id) &&
-        e.status !== 'completed' &&
-        e.status !== 'cancelled' &&
-        (e.event_type === 'service' || e.event_type === 'spare_part')
-    );
-  }, [allContractEvents, drawerEvents]);
-
-  // ─── Handlers ───
-  const handleStatusChange = useCallback(
-    async (eventId: string, newStatus: ContractEventStatus, version: number) => {
-      try {
-        await updateStatus({ eventId, newStatus, version });
-        setDrawerEvents((prev) =>
-          prev.map((e) =>
-            e.id === eventId ? { ...e, status: newStatus, version: e.version + 1 } : e
-          )
-        );
-      } catch {
-        // Error handled in hook with toast
-      }
-      setStatusDropdownId(null);
-    },
-    [updateStatus]
-  );
-
-  const handleAddFromContract = useCallback(
-    (event: ContractEvent) => {
-      setDrawerEvents((prev) => [...prev, event]);
-      setShowAddFromContract(false);
-    },
-    []
-  );
-
-  const handleRemoveEvent = useCallback((eventId: string) => {
-    setDrawerEvents((prev) => prev.filter((e) => e.id !== eventId));
-  }, []);
-
-  const handleAddBeyondScopeBlock = useCallback((block: Block) => {
-    setBeyondScopeItems((prev) => {
-      if (prev.some((b) => b.id === block.id)) return prev;
-      return [...prev, {
-        id: block.id,
-        name: block.name,
-        description: block.description,
-        categoryId: block.categoryId,
-        amount: typeof (block as any).price === 'number' ? (block as any).price : 0,
-      }];
-    });
-  }, []);
-
-  // B3.5 — edit a beyond-scope line's billed amount
-  const handleUpdateBeyondScopeAmount = useCallback((id: string, amount: number) => {
-    setBeyondScopeItems((prev) => prev.map((b) => (b.id === id ? { ...b, amount } : b)));
-  }, []);
-
-  const handleRemoveBeyondScope = useCallback((id: string) => {
-    setBeyondScopeItems((prev) => prev.filter((b) => b.id !== id));
-  }, []);
-
-  const handleSelectTeamMember = useCallback(
-    (value: string, label: string) => {
-      setAssigneeId(value);
-      setAssigneeName(label);
-      setTeamSearch('');
-      setShowTeamDropdown(false);
-    },
-    []
-  );
-
-  const handleCreateTicket = useCallback(async () => {
-    setIsSubmitting(true);
-    try {
-      const ticket = await createTicket.mutateAsync({
-        contract_id: contractId,
-        event_ids: drawerEvents.map((e) => e.id),
-        assigned_to: assigneeId || undefined,
-        assigned_to_name: assigneeName || undefined,
-        notes: notes || undefined,
-        // This drawer IS Start Service — ticket is born in_progress (B3.1)
-        start_now: true,
-      });
-
-      // B3.5 — beyond-scope lines with a real amount become their own
-      // on-the-fly invoice (unpaid, ticket provenance, tax from settings).
-      // Zero-amount lines are documentation-only and are not billed.
-      const billable = beyondScopeItems.filter((b) => (b.amount ?? 0) > 0);
-      if (ticket?.id && billable.length > 0) {
-        await createBeyondScopeInvoice.mutateAsync({
-          ticketId: ticket.id,
-          contract_id: contractId,
-          line_items: billable.map((b) => ({
-            name: b.name,
-            description: b.description,
-            amount: b.amount as number,
-            block_id: b.isFlyBy ? undefined : b.id,
-          })),
-          notes: notes || undefined,
-        });
-      }
-      onClose();
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [createTicket, createBeyondScopeInvoice, beyondScopeItems, contractId, drawerEvents, assigneeId, assigneeName, notes, onClose]);
-
-  // Get available transitions for an event using props or fallback
-  const getTransitions = (event: ContractEvent): string[] => {
-    const typeTransitions = transitionsByType[event.event_type];
-    if (typeTransitions && typeTransitions[event.status]) {
-      return typeTransitions[event.status];
-    }
-    return FALLBACK_TRANSITIONS[event.status] || [];
-  };
-
-  const getStatusConfig = (status: string, eventType?: string) => {
-    const defs = eventType ? statusDefsByType[eventType] : [];
-    const def = defs?.find((s) => s.status_key === status);
-    if (def) {
-      return { label: def.display_name, color: def.color || '#6B7280', icon: def.icon };
-    }
-    const fallback: Record<string, { label: string; color: string }> = {
-      scheduled: { label: 'Scheduled', color: '#3B82F6' },
-      in_progress: { label: 'In Progress', color: '#F59E0B' },
-      completed: { label: 'Completed', color: '#10B981' },
-      cancelled: { label: 'Cancelled', color: '#EF4444' },
-      overdue: { label: 'Overdue', color: '#EF4444' },
-    };
-    return fallback[status] || { label: status, color: '#6B7280' };
-  };
-
-  if (!isOpen) return null;
-
-  // ─── Beyond Scope Panel (full drawer takeover) ───
-  if (showBeyondScope) {
-    return (
-      <BeyondScopePanel
-        colors={colors}
-        currency={currency}
-        beyondScopeItems={beyondScopeItems}
-        onAddBlock={handleAddBeyondScopeBlock}
-        onAddFlyBy={(type) => {
-          const flyById = `flyby-${Date.now()}`;
-          setBeyondScopeItems((prev) => [...prev, {
-            id: flyById,
-            name: `Custom ${type === 'spare' ? 'Spare Part' : 'Service'}`,
-            categoryId: type === 'spare' ? 'spare_part' : 'service',
-            isFlyBy: true,
-            amount: 0,
-          }]);
-        }}
-        onRemoveItem={handleRemoveBeyondScope}
-        onUpdateAmount={handleUpdateBeyondScopeAmount}
-        onClose={() => setShowBeyondScope(false)}
-      />
-    );
-  }
-
-  // ─── Main Drawer ───
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 transition-opacity"
-        style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        onClick={onClose}
-      />
-
-      {/* Drawer */}
-      <div
-        className="fixed top-0 right-0 bottom-0 z-50 w-full md:w-[700px] lg:w-[900px] shadow-2xl border-l flex flex-col animate-slide-in-right"
-        style={{
-          backgroundColor: colors.utility.primaryBackground,
-          borderColor: `${colors.utility.primaryText}15`,
-        }}
-      >
-        {/* ═══ HEADER ═══ */}
-        <div
-          className="flex-shrink-0 px-5 py-4 border-b flex items-center gap-4"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: `${colors.utility.primaryText}10`,
-          }}
-        >
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: `linear-gradient(135deg, ${colors.brand.primary}20, ${colors.brand.primary}08)` }}
-          >
-            <Play className="w-5 h-5" style={{ color: colors.brand.primary }} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold" style={{ color: colors.utility.primaryText }}>
-              Service Execution
-            </h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                {formatDate(date)}
-              </span>
-              <span
-                className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: `${colors.brand.primary}10`, color: colors.brand.primary }}
-              >
-                {drawerEvents.length} event{drawerEvents.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-          </div>
-
-          {/* Team Member Selector */}
-          <div className="relative flex-shrink-0">
-            <button
-              onClick={() => setShowTeamDropdown((prev) => !prev)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-all hover:shadow-sm"
-              style={{
-                backgroundColor: assigneeId ? `${colors.brand.primary}08` : colors.utility.secondaryBackground,
-                borderColor: assigneeId ? `${colors.brand.primary}30` : `${colors.utility.primaryText}15`,
-                color: assigneeId ? colors.brand.primary : colors.utility.secondaryText,
-              }}
-            >
-              <User className="w-3.5 h-3.5" />
-              {assigneeName || 'Assign'}
-              <ChevronDown className="w-3 h-3" />
-            </button>
-
-            {showTeamDropdown && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowTeamDropdown(false)} />
-                <div
-                  className="absolute right-0 top-full mt-1 w-72 rounded-xl border shadow-xl z-20 overflow-hidden"
-                  style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderColor: `${colors.utility.primaryText}15`,
-                  }}
-                >
-                  <div
-                    className="px-3 py-2 border-b flex items-center gap-2"
-                    style={{ borderColor: `${colors.utility.primaryText}08` }}
-                  >
-                    <Search className="w-3.5 h-3.5" style={{ color: colors.utility.secondaryText }} />
-                    <input
-                      type="text"
-                      value={teamSearch}
-                      onChange={(e) => setTeamSearch(e.target.value)}
-                      placeholder="Search team members..."
-                      autoFocus
-                      className="flex-1 text-xs bg-transparent outline-none"
-                      style={{ color: colors.utility.primaryText }}
-                    />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto">
-                    {loadingTeam ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: colors.brand.primary }} />
-                      </div>
-                    ) : teamError ? (
-                      <p className="text-xs text-center py-4" style={{ color: colors.semantic.error }}>
-                        Failed to load team members
-                      </p>
-                    ) : teamMembers.length === 0 ? (
-                      <p className="text-xs text-center py-4" style={{ color: colors.utility.secondaryText }}>
-                        No team members found
-                      </p>
-                    ) : (
-                      teamMembers.map((member) => (
-                        <button
-                          key={member.value}
-                          onClick={() => handleSelectTeamMember(member.value, member.label)}
-                          className="w-full px-3 py-2.5 text-left flex items-center gap-3 transition-opacity hover:opacity-80"
-                          style={{
-                            borderBottom: `1px solid ${colors.utility.primaryText}06`,
-                            backgroundColor: member.value === assigneeId ? `${colors.brand.primary}06` : 'transparent',
-                          }}
-                        >
-                          <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
-                            style={{ backgroundColor: `${colors.brand.primary}12`, color: colors.brand.primary }}
-                          >
-                            {member.label.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate" style={{ color: colors.utility.primaryText }}>
-                              {member.label}
-                            </p>
-                            {member.subLabel && (
-                              <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
-                                {member.subLabel}
-                              </p>
-                            )}
-                          </div>
-                          {member.value === assigneeId && (
-                            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
-                              <span className="text-white text-[8px] font-bold">&#10003;</span>
-                            </div>
-                          )}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:opacity-70 transition-opacity flex-shrink-0"
-            style={{ color: colors.utility.secondaryText }}
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* ═══ BODY — 2-Column ═══ */}
-        <div className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-2 h-full">
-
-            {/* ══════ LEFT COLUMN: Events + Notes ══════ */}
-            <div
-              className="p-5 space-y-5 overflow-y-auto md:border-r"
-              style={{
-                borderColor: `${colors.utility.primaryText}08`,
-                backgroundColor: colors.utility.primaryBackground,
-              }}
-            >
-              {/* ─── Service Events ─── */}
-              <div>
-                <h3
-                  className="text-[10px] font-bold uppercase tracking-wider mb-3"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Service Events ({deliverables.length})
-                </h3>
-                <div className="space-y-2">
-                  {deliverables.map((event) => {
-                    const typeConf = EVENT_TYPE_CONFIG[event.event_type] || EVENT_TYPE_CONFIG.service;
-                    const TypeIcon = typeConf.icon;
-                    const statusConf = getStatusConfig(event.status, event.event_type);
-                    const transitions = getTransitions(event);
-                    const isUpdating = changingStatusEventId === event.id;
-                    const isDropdownOpen = statusDropdownId === event.id;
-
-                    return (
-                      <div
-                        key={event.id}
-                        className="rounded-lg border p-3 transition-all"
-                        style={{
-                          backgroundColor: colors.utility.secondaryBackground,
-                          borderColor: `${colors.utility.primaryText}10`,
-                        }}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${typeConf.color}15` }}
-                          >
-                            <TypeIcon className="w-4 h-4" style={{ color: typeConf.color }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                              {event.block_name}
-                            </p>
-                            <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                              {typeConf.label}
-                              {event.sequence_number > 0 && ` #${event.sequence_number}/${event.total_occurrences}`}
-                            </p>
-                          </div>
-
-                          {/* Status dropdown */}
-                          <div className="relative flex-shrink-0">
-                            <button
-                              onClick={() => setStatusDropdownId(isDropdownOpen ? null : event.id)}
-                              disabled={isUpdating || transitions.length === 0}
-                              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-all disabled:opacity-60"
-                              style={{
-                                backgroundColor: `${statusConf.color}15`,
-                                color: statusConf.color,
-                                border: `1px solid ${statusConf.color}25`,
-                              }}
-                            >
-                              {isUpdating ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <>
-                                  {statusConf.label}
-                                  {transitions.length > 0 && <ChevronDown className="w-3 h-3" />}
-                                </>
-                              )}
-                            </button>
-
-                            {isDropdownOpen && transitions.length > 0 && (
-                              <>
-                                <div className="fixed inset-0 z-10" onClick={() => setStatusDropdownId(null)} />
-                                <div
-                                  className="absolute right-0 top-full mt-1 rounded-lg border shadow-lg z-20 py-1 min-w-[140px]"
-                                  style={{
-                                    backgroundColor: colors.utility.secondaryBackground,
-                                    borderColor: `${colors.utility.primaryText}15`,
-                                  }}
-                                >
-                                  <p className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider" style={{ color: colors.utility.secondaryText }}>
-                                    Change to
-                                  </p>
-                                  {transitions.map((t) => {
-                                    const tConf = getStatusConfig(t, event.event_type);
-                                    return (
-                                      <button
-                                        key={t}
-                                        onClick={() => handleStatusChange(event.id, t as ContractEventStatus, event.version)}
-                                        className="w-full px-3 py-2 text-left text-xs font-medium flex items-center gap-2 hover:opacity-80 transition-opacity"
-                                      >
-                                        <div
-                                          className="w-2 h-2 rounded-full"
-                                          style={{ backgroundColor: tConf.color }}
-                                        />
-                                        <span style={{ color: colors.utility.primaryText }}>{tConf.label}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          {/* Remove button — only for events added after drawer opened */}
-                          {!initialEvents.some((ie) => ie.id === event.id) && (
-                            <button
-                              onClick={() => handleRemoveEvent(event.id)}
-                              className="p-1 rounded hover:opacity-70 transition-opacity flex-shrink-0"
-                              title="Remove"
-                            >
-                              <X className="w-3 h-3" style={{ color: colors.semantic.error }} />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Covered equipment — which assets this visit is for */}
-                        {event.event_type === 'service' && (eventAssetsByEvent[event.id]?.length || 0) > 0 && (
-                          <div className="mt-2 pt-2 border-t" style={{ borderColor: `${colors.utility.primaryText}08` }}>
-                            <p className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: colors.utility.secondaryText }}>
-                              Covers {eventAssetsByEvent[event.id].length} asset{eventAssetsByEvent[event.id].length > 1 ? 's' : ''}
-                            </p>
-                            <div className="flex flex-wrap gap-1">
-                              {eventAssetsByEvent[event.id].map((a) => {
-                                const isProven = a.status === 'proven';
-                                const isBlocked = a.status === 'blocked_placeholder';
-                                const chipColor = isProven
-                                  ? colors.semantic.success
-                                  : isBlocked
-                                    ? '#d97706'
-                                    : colors.utility.secondaryText;
-                                return (
-                                  <span
-                                    key={a.id}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                    style={{
-                                      backgroundColor: isProven ? '#05966915' : isBlocked ? '#f59e0b18' : `${colors.utility.primaryText}08`,
-                                      color: chipColor,
-                                    }}
-                                    title={isBlocked ? 'Awaiting asset — attach the real asset' : a.status.replace(/_/g, ' ')}
-                                  >
-                                    {isProven ? (
-                                      <CheckCircle2 className="w-2.5 h-2.5" />
-                                    ) : isBlocked ? (
-                                      <Lock className="w-2.5 h-2.5" />
-                                    ) : null}
-                                    {a.asset_name}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {deliverables.length === 0 && (
-                    <div
-                      className="rounded-lg border-2 border-dashed p-6 text-center"
-                      style={{
-                        borderColor: `${colors.utility.primaryText}10`,
-                        backgroundColor: colors.utility.secondaryBackground,
-                      }}
-                    >
-                      <Wrench className="w-6 h-6 mx-auto mb-2" style={{ color: `${colors.utility.secondaryText}40` }} />
-                      <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                        No service events — add from contract or create new
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ─── Beyond Scope Items ─── */}
-              {beyondScopeItems.length > 0 && (
-                <div>
-                  <h3
-                    className="text-[10px] font-bold uppercase tracking-wider mb-3 flex items-center gap-2"
-                    style={{ color: colors.semantic.warning }}
-                  >
-                    <AlertTriangle className="w-3 h-3" />
-                    Beyond Scope ({beyondScopeItems.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {beyondScopeItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-lg border p-3 flex items-center gap-3"
-                        style={{
-                          backgroundColor: `${colors.semantic.warning}06`,
-                          borderColor: `${colors.semantic.warning}20`,
-                        }}
-                      >
-                        <Zap className="w-4 h-4 flex-shrink-0" style={{ color: colors.semantic.warning }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                            {item.name}
-                          </p>
-                          <p className="text-[9px] font-semibold" style={{ color: colors.semantic.warning }}>
-                            Chargeable {item.isFlyBy ? '(Fly-by)' : ''}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveBeyondScope(item.id)}
-                          className="p-1 rounded hover:opacity-70 transition-opacity flex-shrink-0"
-                        >
-                          <X className="w-3 h-3" style={{ color: colors.semantic.error }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ─── Billing Events ─── */}
-              {billingEvents.length > 0 && (
-                <div>
-                  <h3
-                    className="text-[10px] font-bold uppercase tracking-wider mb-3"
-                    style={{ color: colors.utility.secondaryText }}
-                  >
-                    Billing ({billingEvents.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {billingEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="flex items-center gap-3 p-3 rounded-lg border"
-                        style={{
-                          backgroundColor: colors.utility.secondaryBackground,
-                          borderColor: `${colors.utility.primaryText}10`,
-                        }}
-                      >
-                        <DollarSign className="w-4 h-4 flex-shrink-0" style={{ color: '#F59E0B' }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                            {event.block_name}
-                          </p>
-                          <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                            {event.billing_cycle_label || 'Billing'}
-                          </p>
-                        </div>
-                        {event.amount != null && (
-                          <span className="text-xs font-bold" style={{ color: '#F59E0B' }}>
-                            {currency} {event.amount.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ─── Add Events Actions ─── */}
-              <div>
-                <h3
-                  className="text-[10px] font-bold uppercase tracking-wider mb-3"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Add Events
-                </h3>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <button
-                      onClick={() => {
-                        setShowAddFromContract(!showAddFromContract);
-                      }}
-                      disabled={unconsumedEvents.length === 0}
-                      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition-all hover:shadow-sm disabled:opacity-40"
-                      style={{
-                        borderColor: `${colors.brand.primary}25`,
-                        color: colors.brand.primary,
-                        backgroundColor: `${colors.brand.primary}06`,
-                      }}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      From Contract
-                      {unconsumedEvents.length > 0 && (
-                        <span
-                          className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
-                          style={{ backgroundColor: `${colors.brand.primary}15` }}
-                        >
-                          {unconsumedEvents.length}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Unconsumed events dropdown */}
-                    {showAddFromContract && unconsumedEvents.length > 0 && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setShowAddFromContract(false)} />
-                        <div
-                          className="absolute left-0 bottom-full mb-1 w-72 rounded-xl border shadow-xl z-20 py-1 max-h-52 overflow-y-auto"
-                          style={{
-                            backgroundColor: colors.utility.secondaryBackground,
-                            borderColor: `${colors.utility.primaryText}15`,
-                          }}
-                        >
-                          {unconsumedEvents.map((event) => {
-                            const tc = EVENT_TYPE_CONFIG[event.event_type] || EVENT_TYPE_CONFIG.service;
-                            const TIcon = tc.icon;
-                            return (
-                              <button
-                                key={event.id}
-                                onClick={() => handleAddFromContract(event)}
-                                className="w-full px-3 py-2.5 text-left flex items-center gap-3 transition-opacity hover:opacity-80"
-                                style={{ borderBottom: `1px solid ${colors.utility.primaryText}06` }}
-                              >
-                                <TIcon className="w-4 h-4 flex-shrink-0" style={{ color: tc.color }} />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium truncate" style={{ color: colors.utility.primaryText }}>
-                                    {event.block_name}
-                                  </p>
-                                  <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                                    {tc.label} #{event.sequence_number} &mdash; {formatDate(event.scheduled_date)}
-                                  </p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => setShowBeyondScope(true)}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition-all hover:shadow-sm"
-                    style={{
-                      borderColor: `${colors.semantic.warning}25`,
-                      color: colors.semantic.warning,
-                      backgroundColor: `${colors.semantic.warning}06`,
-                    }}
-                    title="Add services beyond contract scope"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    Beyond Scope
-                  </button>
-                </div>
-              </div>
-
-              {/* ─── Service Notes ─── */}
-              <div>
-                <h3
-                  className="text-[10px] font-bold uppercase tracking-wider mb-2"
-                  style={{ color: colors.utility.secondaryText }}
-                >
-                  Service Notes
-                </h3>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes about the service..."
-                  rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border text-xs resize-none"
-                  style={{
-                    backgroundColor: colors.utility.secondaryBackground,
-                    borderColor: `${colors.utility.primaryText}15`,
-                    color: colors.utility.primaryText,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* ══════ RIGHT COLUMN: Evidence ══════ */}
-            <div
-              className="p-5 space-y-5 overflow-y-auto"
-              style={{ backgroundColor: colors.utility.primaryBackground }}
-            >
-              <h3
-                className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-2"
-                style={{ color: colors.utility.secondaryText }}
-              >
-                Evidence
-                <span
-                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full normal-case tracking-normal"
-                  style={{
-                    backgroundColor:
-                      evidencePolicyType === 'smart_form'
-                        ? `${colors.brand.primary}15`
-                        : evidencePolicyType === 'upload'
-                        ? `#3B82F615`
-                        : `${colors.utility.primaryText}08`,
-                    color:
-                      evidencePolicyType === 'smart_form'
-                        ? colors.brand.primary
-                        : evidencePolicyType === 'upload'
-                        ? '#3B82F6'
-                        : colors.utility.secondaryText,
-                  }}
-                >
-                  {evidencePolicyType === 'smart_form'
-                    ? 'Smart Form'
-                    : evidencePolicyType === 'upload'
-                    ? 'Upload Proof'
-                    : 'No Verification'}
-                </span>
-              </h3>
-
-              {/* ── No Verification ── */}
-              {evidencePolicyType === 'none' && (
-                <div
-                  className="rounded-xl border-2 border-dashed p-8 text-center"
-                  style={{
-                    borderColor: `${colors.utility.primaryText}10`,
-                    backgroundColor: colors.utility.secondaryBackground,
-                  }}
-                >
-                  <ShieldOff
-                    className="w-10 h-10 mx-auto mb-3"
-                    style={{ color: `${colors.utility.secondaryText}40` }}
-                  />
-                  <p className="text-sm font-medium" style={{ color: colors.utility.secondaryText }}>
-                    No evidence required
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: `${colors.utility.secondaryText}80` }}>
-                    This contract does not require evidence capture during service execution
-                  </p>
-                </div>
-              )}
-
-              {/* ── Upload Proof ── */}
-              {evidencePolicyType === 'upload' && (
-                <div>
-                  <div
-                    className="rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-all hover:shadow-sm"
-                    style={{
-                      borderColor: `${colors.brand.primary}25`,
-                      backgroundColor: colors.utility.secondaryBackground,
-                    }}
-                  >
-                    <Upload
-                      className="w-10 h-10 mx-auto mb-3"
-                      style={{ color: `${colors.brand.primary}60` }}
-                    />
-                    <p className="text-sm font-medium" style={{ color: colors.utility.primaryText }}>
-                      Upload Evidence
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: colors.utility.secondaryText }}>
-                      Drop files here or click to browse
-                    </p>
-                    <p className="text-[10px] mt-2" style={{ color: `${colors.utility.secondaryText}60` }}>
-                      Photos, PDFs, documents accepted
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── Smart Form ── */}
-              {evidencePolicyType === 'smart_form' && (
-                <div className="space-y-4">
-                  <div
-                    className="flex items-start gap-3 rounded-lg border p-3"
-                    style={{
-                      backgroundColor: `#3B82F608`,
-                      borderColor: `#3B82F620`,
-                    }}
-                  >
-                    <ClipboardList className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: '#3B82F6' }} />
-                    <p className="text-[11px] leading-relaxed" style={{ color: colors.utility.secondaryText }}>
-                      Complete each form below to capture the required evidence for this service.
-                    </p>
-                  </div>
-
-                  {/* Render configured forms from evidence policy */}
-                  {evidenceSelectedForms.length > 0 ? (
-                    evidenceSelectedForms
-                      .sort((a, b) => a.sequence - b.sequence)
-                      .map((form, idx) => (
-                        <div
-                          key={form.form_template_id}
-                          className="rounded-xl border p-4"
-                          style={{
-                            backgroundColor: colors.utility.secondaryBackground,
-                            borderColor: `${colors.utility.primaryText}10`,
-                          }}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                              style={{ backgroundColor: `${colors.brand.primary}10` }}
-                            >
-                              <span className="text-xs font-bold" style={{ color: colors.brand.primary }}>
-                                {idx + 1}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold truncate" style={{ color: colors.utility.primaryText }}>
-                                {form.name}
-                              </p>
-                              <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                                Form #{idx + 1} of {evidenceSelectedForms.length}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => setOpenFormTemplate({ id: form.form_template_id, name: form.name })}
-                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-90"
-                              style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
-                            >
-                              Open Form
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                  ) : (
-                    <div
-                      className="rounded-xl border p-5"
-                      style={{
-                        backgroundColor: colors.utility.secondaryBackground,
-                        borderColor: `${colors.utility.primaryText}10`,
-                      }}
-                    >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div
-                          className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: `${colors.brand.primary}10` }}
-                        >
-                          <FileText className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold" style={{ color: colors.utility.primaryText }}>
-                            Service Execution Forms
-                          </p>
-                          <p className="text-[10px]" style={{ color: colors.utility.secondaryText }}>
-                            Forms from contract evidence policy
-                          </p>
-                        </div>
-                      </div>
-                      <div
-                        className="rounded-lg border-2 border-dashed p-6 text-center"
-                        style={{ borderColor: `${colors.utility.primaryText}10` }}
-                      >
-                        <ClipboardList
-                          className="w-8 h-8 mx-auto mb-2"
-                          style={{ color: `${colors.utility.secondaryText}30` }}
-                        />
-                        <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
-                          No forms configured yet
-                        </p>
-                        <p className="text-[10px] mt-1" style={{ color: `${colors.utility.secondaryText}60` }}>
-                          Smart forms will appear once configured in the contract evidence policy
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ═══ FOOTER ═══ */}
-        <div
-          className="flex-shrink-0 px-5 py-4 border-t flex items-center gap-3"
-          style={{
-            backgroundColor: colors.utility.secondaryBackground,
-            borderColor: `${colors.utility.primaryText}10`,
-          }}
-        >
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="flex-1 px-4 py-2.5 rounded-lg border text-xs font-semibold transition-opacity hover:opacity-80"
-            style={{
-              borderColor: `${colors.utility.primaryText}20`,
-              color: colors.utility.secondaryText,
-              backgroundColor: 'transparent',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            disabled={isSubmitting || drawerEvents.length === 0}
-            onClick={handleCreateTicket}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-opacity hover:opacity-90 disabled:opacity-50"
-            style={{ backgroundColor: colors.brand.primary, color: '#ffffff' }}
-          >
-            {isSubmitting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Ticket className="w-3.5 h-3.5" />
-            )}
-            Create Ticket
-          </button>
-        </div>
-      </div>
-
-      {/* B3.4 — evidence form fill (submission bound to one asset, then proven) */}
-      {openFormTemplate && (
-        <FormFillModal
-          isOpen={!!openFormTemplate}
-          onClose={() => setOpenFormTemplate(null)}
-          contractId={contractId}
-          formTemplateId={openFormTemplate.id}
-          formName={openFormTemplate.name}
-          serviceEvents={drawerEvents.filter((e) => e.event_type === 'service')}
-          eventAssetsByEvent={eventAssetsByEvent}
-        />
-      )}
-
-      <style>{`
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-        .animate-slide-in-right {
-          animation: slideInRight 0.25s ease-out;
-        }
-      `}</style>
-    </>
-  );
+const VisitWork: React.FC<{event:ContractEvent;contractId:string;colors:any;onOpenForm:(f:any)=>void;onDirty:(id:string,dirty:boolean)=>void}> = ({event,contractId,colors,onOpenForm,onDirty}) => {
+ const start = useStartVisit(), complete = useCompleteVisit(), assign = useAssignVisit();
+ const team=useCollectionsBoard({perspective:'revenue',lanes:['services'],limit:1});
+ const teamMembers=(team.data?.team||[]).map(m=>({value:m.user_id,label:m.name||'Team member'}));
+ const [assignee,setAssignee]=useState('');
+ // Recover an existing ticket even if the timeline supplied an older event snapshot.
+ const ticket=useServiceTicketForEvent(contractId,event.id,true);
+ const receivables=useReceivables({enabled:!!ticket.data?.id});
+ const ticketInvoices=(receivables.data?.invoices||[]).filter(i=>i.is_beyond_scope&&i.service_ticket_id===ticket.data?.id&&i.contract_id===contractId);
+ const startLock=useRef(false);
+ const [startAccepted,setStartAccepted]=useState(false);
+ const [starting,setStarting]=useState(false);
+ const [openFirstForm,setOpenFirstForm]=useState(false);
+ const updateTicket=useUpdateServiceTicket();
+ const [note,setNote]=useState<string|null>(null);
+ const noteTouched=useRef(false);
+ const [extra,setExtra]=useState<BeyondScopeItem[]>([]),[showExtra,setShowExtra]=useState(false);
+ const [reviewInvoice,setReviewInvoice]=useState(false);
+ const [createdInvoice,setCreatedInvoice]=useState<{id:string;number:string}|null>(null);
+ const invoice=useCreateBeyondScopeInvoice();
+ const assignedId=event.assigned_to||ticket.data?.assigned_to_id||'';
+ const assignedName=event.assigned_to_name||ticket.data?.assigned_to_name||teamMembers.find(m=>m.value===assignedId)?.label||'';
+ useEffect(()=>{setAssignee(assignedId);},[assignedId]);
+ const chargedLines=extra.filter(x=>Number.isFinite(x.amount)&&Number(x.amount)>0);
+ const subtotal=chargedLines.reduce((sum,x)=>sum+Number(x.amount),0);
+ const money=(value:number)=>`${getCurrencySymbol(event.currency||'INR')}${value.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+ const createInvoice=()=>{
+  if(!ticket.data||invoice.isPending||!chargedLines.length)return;
+  invoice.mutate({ticketId:ticket.data.id,contract_id:contractId,currency:event.currency||'INR',line_items:chargedLines.map(x=>({name:x.name,description:x.description,amount:x.amount!,block_id:x.isFlyBy?undefined:x.id}))},{onSuccess:(result)=>{
+   setCreatedInvoice({id:result.invoice_id,number:result.invoice_number});
+   setExtra([]);setReviewInvoice(false);
+  }});
+ };
+ useEffect(()=>{onDirty(event.id,note!==null||extra.length>0);return()=>onDirty(event.id,false);},[note,extra.length,event.id,onDirty]);
+ const {data:mappings=[],isLoading:mappingLoading,error:mappingError}=useContractFormMappings(contractId);
+ const {data:assetsByEvent={},isLoading:assetsLoading,error:assetsError}=useContractEventAssets(contractId);
+ const submissions=useServiceFormSubmissions(event.id);
+ const forms=applicableForms(mappings,event);
+ const uploads=useContractEvidence(contractId);
+ const assets=assetsByEvent[event.id]||[];
+ const missingEquipment=assets.some(a=>a.status==='blocked_placeholder');
+ const targets=assets.length?assets:[{id:'',asset_name:'This service visit',status:'open'}];
+ const [review,setReview]=useState(false);
+ const closed=['completed','cancelled'].includes(event.status);
+ const running=!closed&&(event.status==='in_progress'||ticket.data?.status==='in_progress'||startAccepted);
+ const startCheck=useServiceStartMetadataProblem(event.id,!closed&&!running);
+ useEffect(()=>{
+  if(!openFirstForm||mappingLoading||assetsLoading||submissions.isLoading)return;
+  setOpenFirstForm(false);
+  if(forms.length===1&&targets.length===1&&targets[0].status!=='blocked_placeholder')
+   onOpenForm({...forms[0],event:{...event,status:'in_progress'},assetId:targets[0].id,readOnly:false});
+ },[openFirstForm,mappingLoading,assetsLoading,submissions.isLoading,forms,targets,event,onOpenForm]);
+ const startService=()=>{
+  if(startLock.current||running||closed||assetsLoading||assetsError||missingEquipment||startCheck.isLoading||startCheck.error||startCheck.data?.problem)return;
+  startLock.current=true;setStarting(true);
+  start.mutate({eventId:event.id},{
+   onSuccess:()=>{setStartAccepted(true);setOpenFirstForm(true);},
+   onSettled:()=>{startLock.current=false;setStarting(false);},
+  });
+ };
+ const latest=Object.values((submissions.data||[]).reduce((acc:any,s)=>{const key=s.form_template_id+':'+(s.event_asset_id||'');if(!acc[key]||(s.updated_at||'')>(acc[key].updated_at||''))acc[key]=s;return acc;},{})) as any[];
+ const missing=targets.some(a=>a.status==='blocked_placeholder'||forms.filter(f=>f.is_mandatory).some(f=>!latest.some(s=>s.form_template_id===f.form_template_id&&(s.event_asset_id||'')===a.id&&['submitted','approved'].includes(s.status))));
+ const missingUpload=targets.some(a=>forms.some(f=>f.require_upload&&!('evidence_id' in a&&a.evidence_id)&&!uploads.data?.evidence.some(file=>file.event_id===event.id&&file.confirmed_at&&latest.some(s=>s.id===file.form_submission_id&&s.form_template_id===f.form_template_id&&(s.event_asset_id||'')===a.id))));
+ const followup=latest.some(s=>forms.some(f=>f.form_template_id===s.form_template_id)&&s.status!=='draft'&&outcomeNeedsFollowup(s.responses));
+ const busy=starting||start.isPending||complete.isPending;
+ const blocked=mappingLoading||assetsLoading||submissions.isLoading||!!mappingError||!!assetsError||!!submissions.error||missing||missingUpload||followup||note!==null||extra.length>0;
+ const style={background:colors.utility.primaryBackground,borderColor:colors.utility.secondaryText+'30',color:colors.utility.primaryText};
+ if(showExtra)return <BeyondScopePanel colors={colors} currency={event.currency||'INR'} beyondScopeItems={extra}
+  onAddBlock={b=>setExtra(xs=>xs.some(x=>x.id===b.id)?xs:[...xs,{id:b.id,name:b.name,description:b.description,categoryId:b.categoryId,amount:typeof (b as any).price==='number'?(b as any).price:0}])}
+  onAddFlyBy={type=>setExtra(xs=>[...xs,{id:crypto.randomUUID(),name:type==='spare'?'Additional spare part':'Additional service',categoryId:type==='spare'?'spare_part':'service',isFlyBy:true,amount:0}])}
+  onRemoveItem={id=>setExtra(xs=>xs.filter(x=>x.id!==id))} onUpdateAmount={(id,amount)=>setExtra(xs=>xs.map(x=>x.id===id?{...x,amount}:x))} onClose={()=>setShowExtra(false)}/>;
+ return <section className="service-visit border rounded-xl p-5 space-y-4" style={style}>
+ <div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-semibold break-words">{event.block_name}</h2><p className="text-sm">Visit {event.sequence_number} of {event.total_occurrences} · {formatDate(event.scheduled_date)}</p>{ticket.data&&<p className="text-sm">{ticket.data.ticket_number} · {ticket.data.assigned_to_name||'Unassigned'}</p>}</div><span className="text-sm font-semibold">{running?'In progress':event.status.replace(/_/g,' ')}</span></div>
+ {!closed&&<details className="service-assignment"><summary>Technician assignment · {assignedName||'Unassigned'}</summary><div className="flex flex-wrap gap-2 items-center"><label>Assign to <select aria-label="Assign service to" value={assignee} onChange={e=>setAssignee(e.target.value)} className="border rounded-lg p-2 ml-2" style={style}><option value="">Choose a team member</option>{assignedId&&!teamMembers.some(m=>m.value===assignedId)&&<option value={assignedId}>{assignedName||'Assigned technician'}</option>}{teamMembers.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}</select></label><button disabled={!assignee||assignee===assignedId||assign.isPending} onClick={()=>assign.mutate({eventId:event.id,assignTo:assignee})} className="border rounded-lg px-4 py-2 disabled:opacity-50">{assign.isPending?'Assigning…':'Change technician'}</button></div></details>}
+ {!closed&&(assetsLoading||assetsError||missingEquipment)&&<div className="rounded-lg border p-4 space-y-3" role="status"><h3 className="font-semibold">{missingEquipment?'Attach required equipment first':'Checking required equipment'}</h3><p>{assetsError?'Equipment could not be checked. Close and reopen this workspace to retry.':assetsLoading?'Checking the equipment covered by this visit…':running?'This ticket was started before equipment was attached. Attach the real equipment before recording work or completing this visit.':'This visit cannot start until the real equipment is attached to the contract.'}</p>{missingEquipment&&<><ul>{assets.filter(a=>a.status==='blocked_placeholder').map(a=><li key={a.id}>{a.asset_name}</li>)}</ul><a className="inline-block rounded-lg px-4 py-3 font-semibold" style={{background:colors.brand.primary,color:'#fff'}} href={`/contracts/${contractId}?tab=equipment`}>Attach equipment in contract →</a><p className="text-sm">Use Attach Asset on the existing coverage card, then return to Tasks.</p></>}</div>}
+ {!running&&!closed&&<>{startCheck.data?.problem&&<div role="alert" className="rounded-lg border p-4 space-y-2" style={{borderColor:'#f59e0b',backgroundColor:'#fef3c7',color:'#92400e'}}><h3 className="font-semibold">Complete equipment details before starting</h3><p>{startCheck.data.problem}</p><a href={`/contracts/${contractId}?tab=equipment`} className="inline-block rounded-lg px-4 py-2 font-semibold border">Open equipment →</a><button className="ml-2 underline" onClick={()=>startCheck.refetch()}>Recheck</button></div>}<p>An appointment is optional. Start when work begins; opening this workspace does not create a ticket.</p><button disabled={busy||ticket.isLoading||!!ticket.error||assetsLoading||!!assetsError||missingEquipment||startCheck.isLoading||!!startCheck.error||!!startCheck.data?.problem} onClick={startService} className="rounded-lg px-5 py-3 font-semibold disabled:opacity-50" style={{background:colors.brand.primary,color:'#fff'}}>{busy?'Starting…':ticket.isLoading||startCheck.isLoading?'Checking service…':missingEquipment?'Attach equipment to start':startCheck.data?.problem?'Complete equipment details':'Start service'}</button>{(ticket.error||startCheck.error)&&<p role="alert">Could not check service readiness. <button className="underline" onClick={()=>{ticket.refetch();startCheck.refetch();}}>Retry</button></p>}</>}
+ {((running&&!missingEquipment&&!assetsLoading&&!assetsError)||closed)&&<><h3 className="font-semibold">Work & required evidence</h3><p className="text-sm">Record each equipment outcome. Saving evidence does not complete this visit.</p>
+ {!closed&&!ticket.data&&<p role="status" className="text-sm">{ticket.isLoading?'Loading your service ticket…':'The service ticket could not be found. Reload it before recording additional work.'}{!ticket.isLoading&&<button className="underline ml-2" onClick={()=>ticket.refetch()}>Reload ticket</button>}</p>}
+ {mappingLoading||assetsLoading||submissions.isLoading?<p role="status">Loading service evidence…</p>:mappingError||assetsError||submissions.error?<p role="alert">Could not load evidence. Close and retry before completing.</p>:targets.map(a=><div key={a.id} className="service-form-card border rounded-lg p-4 space-y-3" style={style}><h3 className="font-semibold">{a.asset_name||'Equipment'}</h3>{a.status==='blocked_placeholder'?<p>Attach the actual equipment in the contract’s coverage before recording evidence.</p>:forms.length?forms.map(f=>{const record=latest.find(s=>s.form_template_id===f.form_template_id&&(s.event_asset_id||'')===a.id);const submitted=record&&['submitted','approved'].includes(record.status);return <div key={f.id} className="flex flex-wrap justify-between gap-3"><div><strong>{f.form_name}</strong><p className="text-sm">{f.resolved_via==='platform_default'?'Default form':'Configured Smart Form'} · {f.is_mandatory?'Required':'Optional'} · {f.timing?.replace(/_/g,' ')||'During service'} · {record?.status||'Not recorded'}</p></div><button onClick={()=>onOpenForm({...f,event,assetId:a.id,readOnly:closed||!!submitted})} className="service-form-action border rounded-lg px-4 py-2">{closed||submitted?'View report':record?.status==='draft'?'Continue form':'Continue service form'}</button>{submitted&&!closed&&<button onClick={()=>onOpenForm({...f,event,assetId:a.id,readOnly:false})} className="border rounded-lg px-4 py-2 font-semibold">Record correction</button>}{f.require_upload&&<ServiceFormUpload contractId={contractId} eventId={event.id} submissionId={submitted?record.id:undefined} readOnly={closed}/>}</div>}):<p>No Smart Form is configured for this service.</p>}</div>)}
+ {ticket.data&&!closed&&<details><summary className="cursor-pointer font-semibold">Additional work outside this service</summary><p className="text-sm my-3">Reuse catalog or custom items. Review charges before creating an unpaid invoice; no payment is recorded.</p><button onClick={()=>setShowExtra(true)} className="border rounded-lg px-4 py-2 font-semibold">Edit additional work ({extra.length})</button>{chargedLines.length>0&&<button disabled={invoice.isPending} onClick={()=>setReviewInvoice(true)} className="rounded-lg px-4 py-2 ml-2 font-semibold text-white disabled:opacity-50" style={{background:colors.brand.primary}}>Review invoice · {money(subtotal)}</button>}</details>}
+ {ticket.data&&<section className="rounded-lg border p-4 space-y-3" style={style} aria-label="Invoices for this service ticket"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Additional-work invoices for {ticket.data.ticket_number}</h3><a className="text-sm font-semibold underline" href="/invoices">All invoices →</a></div>{receivables.isLoading?<p role="status" className="text-sm">Loading invoices…</p>:receivables.isError?<p role="alert" className="text-sm">Could not load invoices. <button className="underline font-semibold" onClick={()=>receivables.refetch()}>Retry</button></p>:ticketInvoices.length===0&&!createdInvoice?<p className="text-sm">No additional-work invoice has been created for this ticket.</p>:<div className="space-y-2">{ticketInvoices.map(i=><div key={i.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><strong>{i.invoice_number}</strong><p className="text-sm">{i.status.replace(/_/g,' ')} · {money(Number(i.total_amount))} total · {money(Number(i.balance))} open</p></div><a className="font-semibold underline" href={`/invoices/${i.id}`}>View invoice →</a></div>)}{createdInvoice&&!ticketInvoices.some(i=>i.id===createdInvoice.id)&&<div role="status" className="rounded-lg border p-3"><strong>{createdInvoice.number}</strong> created. <a className="font-semibold underline" href={`/invoices/${createdInvoice.id}`}>View invoice →</a></div>}</div>}</section>}
+ <ConfirmationDialog isOpen={reviewInvoice} onClose={()=>!invoice.isPending&&setReviewInvoice(false)} onConfirm={createInvoice} title="Review additional-work invoice" type="primary" confirmText={invoice.isPending?'Creating…':'Create unpaid invoice'} isLoading={invoice.isPending} description={<div className="space-y-3"><p>For {ticket.data?.ticket_number||'this service ticket'}. Check the chargeable lines before creating the invoice.</p><ul className="divide-y border rounded-lg px-3">{chargedLines.map(x=><li key={x.id} className="flex justify-between gap-3 py-2"><span>{x.name}</span><strong>{money(Number(x.amount))}</strong></li>)}</ul><p className="flex justify-between font-semibold"><span>Subtotal</span><span>{money(subtotal)}</span></p><p className="text-sm">Tax is calculated from your tenant settings on creation. The final total will appear on the invoice. This creates an unpaid receivable in Money In; it does not send the invoice or record payment.</p></div>}/>
+ {ticket.data&&!closed&&<div className="service-notes space-y-2"><RichTextEditor label="Service notes" value={note??ticket.data.notes??''} onFocus={()=>{noteTouched.current=true}} onChange={html=>{if(noteTouched.current)setNote(html)}} placeholder="Record the work performed, observations and follow-up." toolbarButtons={['bold','italic','underline','bulletList','orderedList']} minHeight={120} maxHeight={320} allowFullscreen={false}/><button disabled={updateTicket.isPending||note===null} onClick={()=>updateTicket.mutate({ticketId:ticket.data!.id,version:ticket.data!.version,notes:note||''},{onSuccess:()=>{noteTouched.current=false;setNote(null)}})} className="border rounded-lg px-4 py-2 font-semibold disabled:opacity-50">{updateTicket.isPending?'Saving…':'Save service notes'}</button></div>}
+ {!closed&&<><button onClick={()=>setReview(!review)} className="border rounded-lg px-4 py-3 font-semibold">Review & complete</button>{review&&<div className="rounded-lg border p-4 space-y-3" style={style}><h3 className="font-semibold">Complete this service?</h3><p>{note!==null||extra.length?'Save your notes and finish or remove additional-work items before completing.':missing?'Complete all required equipment outcomes first.':missingUpload?'Attach the required supporting evidence for each equipment outcome.':followup?'Recorded work needs follow-up. Keep the service open; do not mark it completed.':'Required outcomes have been recorded. Completion closes this visit; it does not record payment.'}</p><button disabled={blocked||busy} onClick={()=>complete.mutate({eventId:event.id})} className="rounded-lg px-4 py-3 font-semibold disabled:opacity-50" style={{background:colors.brand.primary,color:'#fff'}}>Complete service</button></div>}</>}
+ </>}
+ </section>
 };
-
+const ServiceExecutionDrawer: React.FC<ServiceExecutionDrawerProps> = ({isOpen,contractId,events:initialEvents,currency,onClose}) => {
+ const {isDarkMode,currentTheme}=useTheme(),colors=isDarkMode?currentTheme.darkMode.colors:currentTheme.colors;
+ const eventsQuery=useContractEventsForContract(contractId,{enabled:isOpen,per_page:200});
+ const {data:eventAssetsByEvent={}}=useContractEventAssets(contractId,{enabled:isOpen});
+ const [openForm,setOpenForm]=useState<any>(null);
+ const [dirtyVisits,setDirtyVisits]=useState<Record<string,boolean>>({});
+ const trackDirty=useCallback((id:string,dirty:boolean)=>setDirtyVisits(old=>old[id]===dirty?old:{...old,[id]:dirty}),[]);
+ const closeWorkspace=()=>{if(!Object.values(dirtyVisits).some(Boolean)||window.confirm('Leave without saving your notes or additional work?'))onClose();};
+ if(!isOpen)return null;
+ const events=initialEvents.filter(e=>e.event_type==='service').map(e=>eventsQuery.data?.items.find(x=>x.id===e.id)||e);
+ if(eventsQuery.isLoading||eventsQuery.error)return <div data-theme={isDarkMode?'dark':'light'} className="service-workspace fixed inset-0 z-50 bg-black/40 flex justify-end" role="dialog" aria-modal="true" aria-label="Service workspace"><section className="w-full max-w-5xl h-full p-8 bg-white"><button className="border rounded-lg px-4 py-2" onClick={closeWorkspace}>Close workspace</button><p role="status" className="my-6">{eventsQuery.error?'Unable to refresh this service. No action has been taken.':'Loading current service status…'}</p>{eventsQuery.error&&<button className="border rounded-lg px-4 py-2" onClick={()=>eventsQuery.refetch()}>Retry loading service</button>}</section></div>;
+ return <div data-theme={isDarkMode?'dark':'light'} className="service-workspace fixed inset-0 z-50 bg-black/40 flex justify-end" role="dialog" aria-modal="true" aria-label="Service workspace"><section className="w-full max-w-5xl h-full overflow-auto p-5 sm:p-8" style={{background:colors.utility.secondaryBackground,color:colors.utility.primaryText}}><header className="flex justify-between gap-4 mb-6"><div><p className="text-sm">Service workspace · Tasks and financial milestones remain unchanged</p><h1 className="text-2xl font-semibold">{events.length===1?events[0].block_name:'Carry out this service visit'}</h1></div><button onClick={closeWorkspace} className="border rounded-lg px-4 py-2 self-start">Close workspace</button></header><div className="space-y-5">{events.length?events.map(event=><VisitWork key={event.id} event={event} contractId={contractId} colors={colors} onOpenForm={setOpenForm} onDirty={trackDirty}/>):<p role="alert">The selected service could not be loaded. Close and open it from its task.</p>}</div>{openForm&&<FormFillModal key={openForm.id+':'+openForm.assetId} isOpen readOnly={openForm.readOnly} contractId={contractId} formTemplateId={openForm.form_template_id} formName={openForm.form_name} serviceEvents={[openForm.event]} eventAssetsByEvent={eventAssetsByEvent} initialAssetId={openForm.assetId} onClose={()=>setOpenForm(null)}/>}</section></div>
+};
 export default ServiceExecutionDrawer;

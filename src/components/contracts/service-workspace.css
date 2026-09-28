@@ -1,0 +1,19 @@
+.service-workspace > section { background: #f1f5f9 !important; color: #17263c !important; }
+.service-workspace header { position: sticky; top: -2rem; z-index: 2; background: #f1f5f9; padding: 18px 0; border-bottom: 1px solid #cbd5e1; }
+.service-workspace .service-visit { background: #fff !important; border-color: #cbd5e1 !important; box-shadow: 0 8px 24px #17263c0a; }
+.service-workspace button, .service-workspace a { min-height: 44px; font-weight: 600; }
+.service-workspace button:focus-visible, .service-workspace a:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.service-workspace button:disabled { cursor: not-allowed; opacity: .5; }
+.service-workspace select, .service-workspace textarea, .service-workspace input { background: #fff !important; color: #17263c !important; border-color: #94a3b8 !important; }
+.service-workspace .service-form-card { background: #f0f6ff !important; border: 1px solid #9ab7e1 !important; border-left: 4px solid #2457a7 !important; padding: 24px; }
+.service-workspace .service-form-action { background: #194fa3 !important; color: #fff !important; border-color: #194fa3 !important; padding: 12px 20px; box-shadow: 0 2px 4px #194fa320; }
+.service-workspace .service-form-action:hover { background: #123b7d !important; }
+.service-workspace details { border: 1px solid #d2dae5; border-radius: 10px; padding: 12px 16px; background: #f8fafc; }
+.service-workspace summary { cursor: pointer; font-weight: 600; min-height: 28px; }
+.service-workspace details > div { padding-top: 12px; }
+.service-workspace .service-notes { border-top: 1px solid #d2dae5; padding-top: 16px; }
+@media (max-width:640px) { .service-workspace header { top: -1.25rem; } .service-workspace .service-form-action { width: 100%; } .service-workspace .service-form-card { padding: 16px; } }
+.service-workspace[data-theme="dark"] > section,.service-workspace[data-theme="dark"] header {background:#152235!important;color:#f1f5f9!important;}
+.service-workspace[data-theme="dark"] .service-visit,.service-workspace[data-theme="dark"] details {background:#1e293b!important;color:#f1f5f9!important;}
+.service-workspace[data-theme="dark"] .service-form-card {background:#203b55!important;color:#f1f5f9!important;}
+.service-workspace[data-theme="dark"] input,.service-workspace[data-theme="dark"] select,.service-workspace[data-theme="dark"] textarea {background:#152235!important;color:#f1f5f9!important;}

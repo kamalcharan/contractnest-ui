@@ -22,6 +22,7 @@
 
 import React, { useState } from 'react';
 import { ArrowUpRight, Check, Mail, MessageCircle, PhoneCall, UserPlus, PauseCircle, PlayCircle, RefreshCw, X, IndianRupee, CalendarClock, History, Wrench, CalendarCheck, Play, CheckCircle2, Share2, Copy, FileText } from 'lucide-react';
+import VisitAppointmentPanel from './VisitAppointmentPanel';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { useInvoiceTheme } from '@/pages/invoices/ui';
 import { fmtMoney, fmtDate } from '@/utils/format';
@@ -44,6 +45,7 @@ export interface JobCardActions {
   // ── services lane (the card id is the service event id) ──
   onAssignVisit: (card: BoardCard, userId: string) => Promise<unknown> | void;
   /** scheduledAt is a local date-time (YYYY-MM-DDTHH:mm, IST); confirmed = agreed with the customer. */
+  onSlotSaved?: (scheduledAt:string) => void;
   onSchedule: (card: BoardCard, scheduledAt: string, confirmed: boolean) => Promise<unknown> | void;
   onConfirmSlot: (card: BoardCard) => void;
   onStartVisit: (card: BoardCard) => void;
@@ -298,7 +300,7 @@ export const actionsFor = (c: BoardCard): { actions: ActionKey[]; primary: Actio
       const a: ActionKey[] = ['start_visit', 'schedule'];
       if (c.slot_state !== 'confirmed') a.push('ask_customer');
       if (c.slot_state === 'proposed') a.push('confirm_slot');
-      a.push('assign_visit', 'complete_visit');
+      a.push('assign_visit');
       const asked = !!c.visit?.ask?.asked_at;
       const primary: ActionKey | null =
         c.kind !== 'visit_scheduled' ? 'start_visit'
@@ -344,13 +346,10 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
   const hairline = `${colors.utility.primaryText}14`;
 
   const [panel, setPanel] = useState<'assign' | 'pause' | 'followup' | 'assign_visit' | 'schedule' | 'complete' | 'ask' | 'propose' | null>(null);
-  const [askResult, setAskResult] = useState<AskVisitSlotResult | null>(null);
-  const [askDone, setAskDone] = useState<'wa' | 'copy' | null>(null);
   const [assignTo, setAssignTo] = useState<string>(meId || '');
   const [assignDue, setAssignDue] = useState<string>('');
   const [followUpDue, setFollowUpDue] = useState<string>(() => tomorrowISO());
   const [slotAt, setSlotAt] = useState<string>(() => defaultSlot(c, defaultSlotAt));
-  const [slotConfirmed, setSlotConfirmed] = useState<boolean>(false);
   const [doneNotes, setDoneNotes] = useState<string>('');
   const [pauseReason, setPauseReason] = useState<PauseReason>('manual');
   const [pauseUntil, setPauseUntil] = useState<string>('');
@@ -396,30 +395,6 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
     setPanelBusy(true);
     try { await actions.onAssignVisit(c, assignTo); setPanel(null); } finally { setPanelBusy(false); }
   };
-  const submitSchedule = async () => {
-    if (!slotAt) return;
-    setPanelBusy(true);
-    try { await actions.onSchedule(c, slotAt, slotConfirmed); setPanel(null); } finally { setPanelBusy(false); }
-  };
-  // Share = the tool records the ask and returns message + link; we then hand it to WhatsApp or the clipboard.
-  const shareAsk = async (how: 'wa' | 'copy') => {
-    setPanelBusy(true);
-    try {
-      const r = await actions.onAskCustomer(c, 'share');
-      if (!r) return;
-      setAskResult(r); setAskDone(how);
-      const text = r.message?.body || r.link;
-      if (how === 'wa') {
-        window.open(`https://wa.me/${(r.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
-      } else {
-        try { await navigator.clipboard.writeText(text); } catch { /* clipboard blocked — the link is shown below */ }
-      }
-    } finally { setPanelBusy(false); }
-  };
-  const sendAsk = async (channel: 'email' | 'whatsapp') => {
-    setPanelBusy(true);
-    try { const r = await actions.onAskCustomer(c, channel); if (r) setPanel(null); } finally { setPanelBusy(false); }
-  };
   const submitComplete = async () => {
     setPanelBusy(true);
     try { await actions.onCompleteVisit(c, doneNotes.trim()); setPanel(null); setDoneNotes(''); } finally { setPanelBusy(false); }
@@ -462,11 +437,11 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
       case 'send_whatsapp': return <Btn key={k} primary={p} onClick={() => actions.onSendInvoice(c, 'whatsapp')} icon={<MessageCircle size={s} />} label={c.nudge_count ? 'Send again · WhatsApp' : 'Send invoice · WhatsApp'} title="Send the invoice on WhatsApp with the amount due and how to pay" />;
       // services
       case 'assign_visit': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'assign_visit' ? null : 'assign_visit'); setAssignTo(c.visit?.assigned_to || meId || ''); }} icon={<UserPlus size={s} />} label={c.visit?.assigned_to ? 'Reassign' : 'Assign'} title="Technician for this service" />;
-      case 'schedule': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'schedule' ? null : 'schedule'); setSlotAt(defaultSlot(c, defaultSlotAt)); setSlotConfirmed(c.slot_state === 'confirmed'); }} icon={<CalendarClock size={s} />} label={c.slot_state === 'none' ? 'Schedule' : 'Reschedule'} title="Propose or move the slot" />;
+      case 'schedule': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'schedule' ? null : 'schedule'); setSlotAt(defaultSlot(c, defaultSlotAt)); }} icon={<CalendarClock size={s} />} label={c.slot_state === 'none' ? 'Schedule' : 'Reschedule'} title="Propose or move the slot" />;
       case 'confirm_slot': return <Btn key={k} primary={p} onClick={() => actions.onConfirmSlot(c)} icon={<CalendarCheck size={s} />} label="Confirm slot" title="The customer agreed to this slot — they get a confirmation" />;
-      case 'start_visit': return <Btn key={k} primary={p} onClick={() => actions.onStartVisit(c)} icon={<Play size={s} />} label="Start service" title="Opens a service ticket and marks the service in progress" />;
-      case 'complete_visit': return <Btn key={k} primary={p} onClick={() => setPanel(panel === 'complete' ? null : 'complete')} icon={<CheckCircle2 size={s} />} label="Mark done" title="Completes the ticket and the service" />;
-      case 'ask_customer': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'ask' ? null : 'ask'); setAskResult(null); setAskDone(null); }} icon={<Share2 size={s} />}
+      case 'start_visit': return <Btn key={k} primary={p} onClick={() => actions.onStartVisit(c)} icon={<Play size={s} />} label="Start service" title="Open the service workspace to begin work" />;
+      case 'complete_visit': return <Btn key={k} primary={p} onClick={() => actions.onStartVisit(c)} icon={<Play size={s} />} label="Continue service" title="Review work and required evidence before completing" />;
+      case 'ask_customer': return <Btn key={k} primary={p} onClick={() => { setPanel(panel === 'ask' ? null : 'ask'); }} icon={<Share2 size={s} />}
         label={c.visit?.ask?.asked_at ? 'Ask again' : 'Ask customer'} title="Send the customer a link to confirm the slot or suggest another time" />;
       // ── expense side ──
       case 'pay': return actions.onPay ? <Btn key={k} primary={p} onClick={() => actions.onPay!(c)} icon={<IndianRupee size={s} />} label={c.kind === 'bill_overdue' ? 'Pay now' : 'Pay / declare'} title="Pay online, or declare an offline payment with its reference" /> : null;
@@ -545,37 +520,7 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
           <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
         </div>
       )}
-      {panel === 'schedule' && (
-        <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
-          <input type="datetime-local" value={slotAt} onChange={(e) => setSlotAt(e.target.value)} style={inputStyle} aria-label="Visit slot" />
-          <label className="inline-flex items-center gap-1.5 text-[11.5px] font-bold" style={sub}>
-            <input type="checkbox" checked={slotConfirmed} onChange={(e) => setSlotConfirmed(e.target.checked)} /> Agreed with the customer
-          </label>
-          <Btn primary onClick={submitSchedule} label={panelBusy ? '…' : slotConfirmed ? 'Confirm slot' : 'Propose slot'} />
-          <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Cancel" />
-        </div>
-      )}
-      {panel === 'ask' && (
-        <div className={`mt-2.5 rounded-xl border p-2.5 ${compact ? '' : 'ml-5'}`} style={{ borderColor: hairline, backgroundColor: colors.utility.primaryBackground }}>
-          <p className="text-[11.5px] leading-snug" style={sub}>
-            {c.slot_state === 'none'
-              ? <>Proposes <b>{fmtTime(c.visit?.scheduled_at)}</b> (10:00 on the planned day) and sends {name} a link to confirm or suggest another time.</>
-              : <>Sends {name} a link to confirm <b>{fmtTime(c.visit?.slot?.at || c.visit?.scheduled_at)}</b> or suggest another time.</>}
-          </p>
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <Btn primary onClick={() => shareAsk('wa')} icon={<MessageCircle size={12} />} label={panelBusy ? '…' : 'Share on WhatsApp'} title="Opens WhatsApp with the message ready to send from your number" />
-            <Btn onClick={() => shareAsk('copy')} icon={<Copy size={12} />} label="Copy message" title="Copy the message and link to paste anywhere" />
-            {askChannels?.includes('whatsapp') && <Btn onClick={() => sendAsk('whatsapp')} icon={<MessageCircle size={12} />} label="Send on WhatsApp" title="Sent from the business number by ContractNest" />}
-            {askChannels?.includes('email') && <Btn onClick={() => sendAsk('email')} icon={<Mail size={12} />} label="Send by email" title="Sent by ContractNest" />}
-            <Btn onClick={() => setPanel(null)} icon={<X size={12} />} label="" title="Close" />
-          </div>
-          {askResult && (
-            <p className="mt-2 text-[11px] break-all" style={sub}>
-              {askDone === 'copy' ? 'Copied · ' : askDone === 'wa' ? 'WhatsApp opened · ' : ''}link: <a href={askResult.link} target="_blank" rel="noreferrer" className="font-bold" style={{ color: brand }}>{askResult.link}</a>
-            </p>
-          )}
-        </div>
-      )}
+      {(panel === 'schedule' || panel === 'ask') && <VisitAppointmentPanel key={panel} eventId={c.id} initialAt={defaultSlot(c,defaultSlotAt)} scheduledAt={c.visit?.slot?.at || c.visit?.scheduled_at} hasSlot={c.slot_state !== 'none' && !!c.slot_state} initialMode={panel} askChannels={askChannels} locked={!!busy||!!locked} onClose={()=>setPanel(null)} onScheduled={actions.onSlotSaved} onBusyChange={setPanelBusy}/>}
       {panel === 'propose' && (
         <div className={`mt-2.5 flex items-center gap-2 flex-wrap ${compact ? '' : 'pl-5'}`}>
           <input type="datetime-local" value={slotAt} onChange={(e) => setSlotAt(e.target.value)} style={inputStyle} aria-label="Suggested time" />
@@ -621,6 +566,7 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
           </p>
           {pill}{clashPill}
         </div>
+        {isVisit(c) && c.block_name && <p className="text-sm font-medium break-words mt-1" style={ink}>{c.block_name}</p>}
         <div className="flex items-baseline justify-between gap-2 mt-0.5">
           <button onClick={() => actions.onOpen(c)} className="text-[10px] font-bold" style={{ ...mono, color: brand }}>{c.contract_number}</button>
           <p className="text-[14px] font-extrabold tabular-nums" style={ink}>{c.amount != null ? fmtMoney(c.amount, c.currency) : ''}</p>
@@ -641,10 +587,11 @@ const JobCard: React.FC<JobCardProps> = ({ card: c, compact, busy, locked, team,
       <div className="flex items-center gap-4">
         <span className="w-1 self-stretch rounded-full flex-none" style={{ backgroundColor: `${kc}66` }} />
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] font-bold truncate" style={ink}>
+          <p className="text-[15px] font-bold break-words" style={ink}>
             {name}
             <button onClick={() => actions.onOpen(c)} className="ml-2 text-[10px] font-bold align-middle" style={{ ...mono, color: brand }}>{c.contract_number}</button>
           </p>
+          {isVisit(c) && c.block_name && <p className="text-sm font-medium break-words mt-1" style={ink}>{c.block_name}</p>}
           <p className="text-[12.5px] mt-0.5" style={{ color: c.days_overdue > 0 && c.kind !== 'declaration_pending' ? red : colors.utility.secondaryText }}>{evidence(c, ladder, meId)}</p>
         </div>
         <div className="text-right flex-none">

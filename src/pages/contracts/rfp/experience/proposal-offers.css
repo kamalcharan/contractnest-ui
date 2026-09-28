@@ -1,0 +1,9 @@
+.rfp-proposal-work .offer-request,.rfp-proposal-work .offer-item{background:white;border:1px solid #dce3da;border-radius:14px;padding:20px;margin:16px 0}
+.rfp-proposal-work .offer-request{border-left:4px solid #285f48}
+.rfp-proposal-work .offer-extra{margin-top:24px;padding-top:20px;border-top:1px solid #dce3da}
+.rfp-proposal-work .cm-editor-footer{display:flex;gap:12px;justify-content:flex-end;padding:18px 0;flex-wrap:wrap}
+.rfp-proposal-work .cm-editor-footer button{border:1px solid #6d8077;border-radius:9px;background:white;color:#243b35;padding:12px 20px;min-height:46px;font-weight:600;cursor:pointer}
+.rfp-proposal-work .cm-editor-footer .ag-primary{background:#285f48;color:white;border-color:#285f48;box-shadow:0 2px 5px #0002}
+.rfp-proposal-work button:focus-visible,.rfp-proposal-work [tabindex]:focus-visible{outline:3px solid #527f6c;outline-offset:3px}
+.rfp-proposal-work summary{cursor:pointer;margin:12px 0;text-decoration:underline}
+@media(max-width:600px){.rfp-proposal-work .cm-editor-footer button{flex:1}.rfp-proposal-work .offer-request,.rfp-proposal-work .offer-item{padding:14px}}

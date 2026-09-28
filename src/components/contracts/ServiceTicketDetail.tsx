@@ -4,6 +4,7 @@
 // Fetches real data when ticketId is provided, falls back to props data otherwise
 
 import React, { useState } from 'react';
+import SafeHtml from '@/components/catalog-studio/SafeHtml';
 import {
   X,
   Ticket,
@@ -417,7 +418,7 @@ const ServiceTicketDetail: React.FC<ServiceTicketDetailProps> = ({
                     color: colors.utility.primaryText,
                   }}
                 >
-                  {ticketDetail?.notes || 'No notes recorded for this service ticket.'}
+                  {ticketDetail?.notes ? <SafeHtml html={ticketDetail.notes} /> : 'No notes recorded for this service ticket.'}
                 </div>
               </div>
             )}

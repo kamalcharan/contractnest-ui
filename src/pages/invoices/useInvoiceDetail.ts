@@ -32,6 +32,25 @@ export interface InvoiceDoc {
   receipts: InvoiceDocReceipt[];
 }
 
+// Additional-work invoices retain their ticket provenance in a line-items
+// envelope. The shared invoice viewer expects a flat list, so adapt only the
+// read model and leave the stored invoice/audit data intact.
+export function invoiceDocumentLines(value: unknown): InvoiceDocLine[] {
+  const raw = Array.isArray(value) ? value : value && typeof value === 'object' && Array.isArray((value as {items?: unknown}).items)
+    ? (value as {items: unknown[]}).items : [];
+  return raw.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object').map(item => {
+    const amount = Number(item.amount ?? 0);
+    const qty = Number(item.qty ?? item.quantity ?? 1);
+    return {
+      name: String(item.name ?? 'Additional work'),
+      qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+      unit_price: Number.isFinite(Number(item.unit_price)) ? Number(item.unit_price) : amount,
+      amount: Number.isFinite(amount) ? amount : 0,
+      block_id: typeof item.block_id === 'string' ? item.block_id : null,
+    };
+  });
+}
+
 export const useInvoiceDetail = (invoiceId: string | undefined) => {
   const { currentTenant } = useAuth();
   return useQuery({
@@ -40,7 +59,8 @@ export const useInvoiceDetail = (invoiceId: string | undefined) => {
       if (!currentTenant?.id) throw new Error('Missing tenant');
       if (!invoiceId) throw new Error('Missing invoice');
       const res = await api.get(API_ENDPOINTS.INVOICES.DETAIL(invoiceId));
-      return res.data?.data || res.data;
+      const invoice = (res.data?.data || res.data) as InvoiceDoc;
+      return { ...invoice, line_items: invoiceDocumentLines(invoice.line_items) };
     },
     enabled: !!currentTenant?.id && !!invoiceId,
     staleTime: 30_000,

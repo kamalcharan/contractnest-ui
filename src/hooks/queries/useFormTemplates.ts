@@ -57,6 +57,8 @@ export const useApprovedFormTemplates = (options?: { enabled?: boolean }) => {
 // ---------------------------------------------------------------------------
 
 export interface ContractFormMapping {
+  effective_from?: string | null;
+  effective_to?: string | null;
   id: string;
   contract_id: string;
   contract_block_id: string | null;
@@ -85,8 +87,11 @@ export const useContractFormMappings = (
       const rows = response.data?.data || [];
       return (Array.isArray(rows) ? rows : []).map((m: any) => ({
         id: m.id,
+        effective_from: m.effective_from,
+        effective_to: m.effective_to,
         contract_id: m.contract_id,
         contract_block_id: m.contract_block_id ?? null,
+        original_block_id: m.original_block_id ?? null,
         form_template_id: m.form_template_id,
         resource_template_id: m.resource_template_id ?? null,
         require_upload: !!m.require_upload,
@@ -100,7 +105,7 @@ export const useContractFormMappings = (
       }));
     },
     enabled: !!currentTenant?.id && !!contractId && (options?.enabled !== false),
-    staleTime: 5 * 60 * 1000,
+      staleTime: 0,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
@@ -114,12 +119,19 @@ export const useContractFormMappings = (
 // ---------------------------------------------------------------------------
 
 export interface FormSchemaField {
+  /** Absent on historical templates; those fields remain technician answers. */
+  binding?: import('@/types/assetMetadata').FieldBinding;
   id: string;
   type: string; // select | textarea | text | number | date | checkbox
   label: string;
   help_text?: string;
   options?: { label: string; value: string }[];
-  validation?: { required?: boolean };
+  required?: boolean;
+  placeholder?: string;
+  step?: number;
+  validation?: { required?: boolean; min?: number; max?: number };
+  reading_range?: { normal_min: number | null; normal_max: number | null; unit: string | null };
+  reading_stage?: 'before' | 'final';
 }
 
 export interface FormSchemaSection {
@@ -149,14 +161,16 @@ export const useFormTemplateDetail = (
       return response.data?.data || response.data;
     },
     enabled: !!currentTenant?.id && !!templateId && (options?.enabled !== false),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     gcTime: 15 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 };
 
 export interface CreateSubmissionInput {
+  submission_id?: string;
+  save_draft?: boolean;
   form_template_id: string;
   service_event_id: string;
   contract_id: string;
@@ -170,8 +184,12 @@ export const useCreateFormSubmission = () => {
 
   return useMutation({
     mutationFn: async (input: CreateSubmissionInput) => {
-      const response = await api.post(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.CREATE, input);
-      return response.data?.data || response.data;
+      const {submission_id, save_draft, ...body} = input;
+      const response = submission_id
+        ? await api.put(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.UPDATE(submission_id), {responses: body.responses, status: save_draft ? 'draft' : 'submitted'})
+        : await api.post(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.CREATE, {...body,status:save_draft?'draft':'submitted'});
+      const saved = response.data?.data || response.data;
+      return saved;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['form-submissions'] });
@@ -182,3 +200,54 @@ export const useCreateFormSubmission = () => {
 };
 
 export default useApprovedFormTemplates;
+
+export interface ServiceFormSubmission {
+  id: string; form_template_id: string; form_template_version: number;
+  service_event_id: string; event_asset_id?: string | null; status: string;
+  responses: Record<string, any>; updated_at?: string;
+  asset_metadata_snapshot?: Record<string, unknown> | null;
+  service_context_snapshot?: Record<string, unknown> | null;
+  form_schema_snapshot?: FormTemplateDetail['schema'] | null;
+}
+export interface FormExecutionContext {
+  values: Record<string, unknown>;
+  asset_snapshot: Record<string, unknown> | null;
+  service_snapshot: Record<string, unknown>;
+  missing_form_metadata: Array<{key:string;label:string}>;
+}
+export function useServiceStartMetadataProblem(eventId?: string, enabled = true) {
+  const { currentTenant } = useAuth();
+  return useQuery<{problem:string|null}>({
+    queryKey: ['service-start-metadata', currentTenant?.id, eventId],
+    enabled: enabled && !!currentTenant?.id && !!eventId,
+    queryFn: async () => {
+      const r = await api.get(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.START_CHECK(eventId!));
+      return r.data?.data || r.data;
+    },
+    staleTime: 0,
+  });
+}
+export function useFormExecutionContext(eventId?: string, assetId?: string, templateId?: string, enabled = true) {
+  const { currentTenant } = useAuth();
+  return useQuery<FormExecutionContext>({
+    queryKey: ['form-execution-context', currentTenant?.id, eventId, assetId, templateId],
+    enabled: enabled && !!currentTenant?.id && !!eventId && !!templateId,
+    queryFn: async () => {
+      const r = await api.get(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.CONTEXT(eventId!,templateId!,assetId));
+      return r.data?.data || r.data;
+    },
+    staleTime: 0,
+  });
+}
+export function useServiceFormSubmissions(eventId?: string) {
+  const { currentTenant } = useAuth();
+  return useQuery<ServiceFormSubmission[]>({
+    queryKey: ['form-submissions', currentTenant?.id, eventId],
+    enabled: !!currentTenant?.id && !!eventId,
+    queryFn: async () => {
+      const r = await api.get(API_ENDPOINTS.SMART_FORMS.SUBMISSIONS.LIST_WITH_FILTERS({event_id:eventId}));
+      const data = r.data?.data ?? r.data;
+      return Array.isArray(data) ? data : data?.items || [];
+    },
+  });
+}

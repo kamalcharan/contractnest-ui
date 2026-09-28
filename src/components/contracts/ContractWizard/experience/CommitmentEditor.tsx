@@ -1,3 +1,4 @@
+import { numberEditing, editableNumber } from '@/utils/numberEditing';
 // Experience-only commitment editor. Existing checklist/RFQ screens are untouched.
 // Cadence, occurrence and split controls retain their existing update contracts.
 import React, { useState, useContext, useEffect, useRef } from 'react';
@@ -20,6 +21,12 @@ import {
 } from '@/utils/catalog-studio/cadencePricing';
 
 export interface ChecklistRowProps {
+  saveLabel?: string;
+  proposalMode?: boolean;
+  onSaved?: ()=>void;
+  cancelLabel?: string;
+  onValidationError?: (message:string)=>void;
+  validateBeforeSave?: (candidate:ConfigurableBlock)=>string|undefined;
   editorOnly?: boolean;
   colors: any;
   isDarkMode: boolean;
@@ -103,7 +110,8 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
   const {colors,isDarkMode,currency,block,priced:pricedProp,flyBy=false,mode='contract',
     coverageUnitCount,durationMonths,typeLabel} = props;
   const [instance,setInstance] = useState<ConfigurableBlock>(()=>structuredClone(props.instance));
-  const [error,setError] = useState('');
+  const [error,setErrorState] = useState('');
+  const setError=(message:string)=>{setErrorState(message);if(message){props.onValidationError?.(message);if(props.proposalMode)requestAnimationFrame(()=>{const error=editorRef.current?.querySelector<HTMLElement>('.cm-error');error?.focus({preventScroll:true});error?.scrollIntoView({block:'center',behavior:'smooth'});});}};
   const setEditing = useContext(CommitmentEditingContext);
   const editorRef=useRef<HTMLElement>(null);
   useEffect(()=>{setEditing(true);return()=>setEditing(false);},[setEditing]);
@@ -225,7 +233,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
 
   const handlePriceChange = (raw: string) => {
     if (!instance) return;
-    const v = raw === '' ? undefined : Math.max(0, parseFloat(raw) || 0);
+    const v = raw === '' ? NaN : Number(raw);
     const cfg: any = { ...instance.config };
     if (v === undefined || (hasList && v === listPrice)) delete cfg.customPrice;
     else cfg.customPrice = v;
@@ -234,7 +242,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
 
   const handleQtyChange = (raw: string) => {
     if (!instance) return;
-    const v = Math.max(1, parseInt(raw, 10) || 1);
+    const v = raw === '' ? NaN : Number(raw);
     const cfg: any = { ...instance.config };
     // A manual count pins group sessions (stops duration auto-derive)
     if (cfg.autoCount) cfg.autoCount = false;
@@ -326,17 +334,18 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
   const gross=Math.round((cadenceMath?cadenceMath.termTotal:(instance.unlimited?1:instance.quantity)*(effPrice??0))*taxFactor*100)/100;
   const money=(v:number)=>Number.isFinite(v)?new Intl.NumberFormat(undefined,{style:'currency',currency:instance.currency}).format(v):'Review price';
   const apply=()=>{
+    const problem=props.validateBeforeSave?.(instance);if(problem){setError(problem);return;}
     if(!instance.name.trim()){setError('Enter a commitment name.');return;}
     if(!Number.isInteger(instance.quantity)||instance.quantity<1){setError('Enter a positive whole quantity.');return;}
     if(priced&&(!Number.isFinite(effPrice)||effPrice!<0||(effPrice===0&&!instance.config?.complimentary))){setError('Enter a price or explicitly mark this commitment complimentary.');return;}
     if(priced&&instance.cycle==='custom'&&(!instance.customCycleDays||instance.customCycleDays<1)){setError('Enter the custom billing interval.');return;}
     if(instance.serviceCycleDays!==undefined&&(!Number.isFinite(instance.serviceCycleDays)||instance.serviceCycleDays<1)){setError('Enter a valid service interval.');return;}
-    props.onUpdate(instance); props.onToggleExpand();
+    props.onUpdate(instance); (props.onSaved||props.onToggleExpand)();
   };
   return <section ref={editorRef} className="cm-editor" aria-label="Edit commitment" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();props.onToggleExpand();}}}>
-    <header className="cm-editor-head"><div><small>EDIT COMMITMENT</small><h3>{instance.name||'New commitment'}</h3><div className="cm-editor-identity"><span>{instance.categoryName || instance.categoryId}</span><span>{instance.coverageTypeName || 'Whole agreement'}{instance.config?.splitUnitIndex ? ` · Unit ${instance.config.splitUnitIndex} of ${instance.config.splitUnitTotal}` : coverageUnitCount ? ` × ${coverageUnitCount}` : ''}</span></div><p>Editing this commitment only. Apply or cancel below.</p></div><button type="button" aria-label="Cancel commitment editing" onClick={props.onToggleExpand}><X size={18}/></button></header>
+    <header className="cm-editor-head"><div><small>{props.proposalMode?'EDIT YOUR OFFER':'EDIT COMMITMENT'}</small><h3>{instance.name||'New commitment'}</h3><div className="cm-editor-identity"><span>{instance.categoryName || instance.categoryId}</span><span>{instance.coverageTypeName || 'Whole agreement'}{instance.config?.splitUnitIndex ? ` · Unit ${instance.config.splitUnitIndex} of ${instance.config.splitUnitTotal}` : coverageUnitCount ? ` × ${coverageUnitCount}` : ''}</span></div><p>{props.proposalMode?'Describe your offer, then save this item below. Nothing is submitted yet.':'Editing this commitment only. Apply or cancel below.'}</p></div><button type="button" aria-label="Cancel commitment editing" onClick={props.onToggleExpand}><X size={18}/></button></header>
     <section className="cm-section"><h4><span>1</span>What’s included</h4>
-      {flyBy && <label>Commitment name *<input aria-label="Commitment name" value={name} onChange={e=>onUpdate({name:e.target.value})}/></label>}
+      {flyBy && <label>{props.proposalMode?'Work or terms name':'Commitment name'} *<input aria-label={props.proposalMode?'Work or terms name':'Commitment name'} value={name} onChange={e=>onUpdate({name:e.target.value})}/></label>}
       {flyBy ? <RichTextEditor value={description} onChange={html=>onUpdate({description:html})} label="Description" placeholder="What does this line cover?" minHeight={90} maxHeight={220} allowFullscreen={false}/> : <SafeHtml html={description || instance.config?.content || ''}/>}
       <p className="cm-hint">{instance.coverageTypeName ? `Covers ${instance.coverageTypeName}${instance.config?.splitUnitIndex ? ' · Unit '+instance.config.splitUnitIndex+' of '+instance.config.splitUnitTotal : coverageUnitCount ? ' × '+coverageUnitCount:''}`:'Whole agreement'}</p>
       <label className="cm-check"><input type="checkbox" checked={!!instance.config?.showDescription} onChange={e=>onUpdate({config:{...instance.config,showDescription:e.target.checked}})}/>Show description on contract</label>
@@ -378,11 +387,11 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                   {isGroupSession ? 'Sessions' : instance.categoryId === 'service' && !cp && !instance.config?.billingOnly ? 'Total visits' : 'Quantity'}
                 </label>
                 <div className="flex items-center gap-2">
-                  <input
+                  <input {...numberEditing}
                     type="number"
                     min={1}
                     aria-label="Commitment quantity"
-                    value={instance.unlimited ? '' : instance.quantity}
+                    value={instance.unlimited ? '' : editableNumber(instance.quantity)}
                     disabled={instance.unlimited}
                     onChange={(e) => handleQtyChange(e.target.value)}
                     className="w-full rounded-lg px-2.5 py-2 text-[13px] disabled:opacity-50"
@@ -467,7 +476,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                   <>
                     <div className="flex items-center gap-2">
                       <span className="text-xs" style={{ color: dim }}>Every</span>
-                      <input
+                      <input {...numberEditing}
                         type="number"
                         min={1}
                         aria-label={`Days between ${occurrences}`}
@@ -539,7 +548,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                         Grace period
                       </div>
                       <div className="flex items-center gap-2">
-                        <input
+                        <input {...numberEditing}
                           type="number"
                           min={0}
                           placeholder="e.g. 7"
@@ -628,7 +637,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-xs" style={{ color: dim }}>Every</span>
-                  <input
+                  <input {...numberEditing}
                     type="number"
                     min={1}
                     aria-label={`Days between ${occurrences}`}
@@ -698,11 +707,11 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                   <label className="block text-[11px] font-bold uppercase tracking-wide mb-1.5" style={{ color: dim }}>
                     Your price {cp ? '(per payment)' : instance.categoryId === 'service' && !instance.config?.billingOnly ? '(per visit)' : '(per unit)'}
                   </label>
-                  <input
+                  <input {...numberEditing}
                     type="number"
                     min={0}
                     aria-label="Your price"
-                    value={effPrice ?? ''}
+                    value={editableNumber(effPrice)}
                     onChange={(e) => handlePriceChange(e.target.value)}
                     className="w-full rounded-lg px-2.5 py-2 text-[13px]"
                     style={inputStyle}
@@ -717,7 +726,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                         : effPrice !== undefined && effPrice > listPrice!
                           ? `Above list (${sym}${listPrice!.toLocaleString()})`
                           : 'At list price — no discount recorded'
-                      : 'No list price on this block'}
+                      : (props.proposalMode?'Enter your proposed unit price':'No list price on this block')}
                   </div>
                 </div>
               )}
@@ -725,7 +734,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
         {!(cp ? cadenceOptions.some(c=>c.id===instance.cycle) : CYCLE_OPTIONS.some(c=>c.id===instance.cycle)) && <option value={instance.cycle}>{instance.cycle || 'Choose billing frequency'}</option>}
         {cp ? cadenceOptions.map(c=><option key={c.id} value={c.id}>{c.label}{cp.defaultCadence===c.id?' · Catalogue default':''}</option>) : CYCLE_OPTIONS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
       </select></label>}
-      {priced && !cp && instance.cycle==='custom' && <label>Days between bills *<input aria-label="Days between bills" type="number" min={1} value={instance.customCycleDays ?? ''} onChange={e=>onUpdate({customCycleDays:e.target.value?Number(e.target.value):undefined})}/></label>}
+      {priced && !cp && instance.cycle==='custom' && <label>Days between bills *<input {...numberEditing} aria-label="Days between bills" type="number" min={1} value={instance.customCycleDays ?? ''} onChange={e=>onUpdate({customCycleDays:e.target.value?Number(e.target.value):undefined})}/></label>}
 
 
           {/* Cadence payment schedule + seller-set final payment (as before) */}
@@ -748,7 +757,7 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
                     {cadenceMath.remMonths} month{cadenceMath.remMonths > 1 ? 's' : ''} left over — you decide the final payment
                   </div>
                   <div className="flex items-center gap-2">
-                    <input
+                    <input {...numberEditing}
                       type="number"
                       min={0}
                       aria-label="Final payment"
@@ -782,15 +791,15 @@ const CommitmentEditor: React.FC<ChecklistRowProps & { instance: ConfigurableBlo
           )}
 
 
-      <div className="cm-tax"><strong>Tax from catalogue</strong><p>{instance.taxes?.length ? instance.taxes.map(t=>`${t.name} ${t.rate}%`).join(' + ') : instance.taxRate ? `${instance.taxRate}%`:'No tax configured'}{instance.taxRate ? ` · ${instance.taxInclusion}`:''}</p><small>Tax settings stay attached to the selected block; no replacement rate is assumed.</small></div>
+      <div className="cm-tax"><strong>{props.proposalMode?'Tax':'Tax from catalogue'}</strong><p>{instance.taxes?.length ? instance.taxes.map(t=>`${t.name} ${t.rate}%`).join(' + ') : instance.taxRate ? `${instance.taxRate}%`:'No tax configured'}{instance.taxRate ? ` · ${instance.taxInclusion}`:''}</p><small>{props.proposalMode?'If tax is not configured, clarify applicable taxes in your billing terms.':'Tax settings stay attached to the selected block; no replacement rate is assumed.'}</small></div>
       <label className="cm-check"><input type="checkbox" checked={!!instance.config?.complimentary} onChange={e=>onUpdate({config:{...instance.config,complimentary:e.target.checked,...(e.target.checked?{customPrice:0}:{})}})}/>This line is intentionally complimentary</label>
-      <label>This commitment creates<select aria-label="This commitment creates" value={instance.config?.billingOnly?'billing':'delivery'} onChange={e=>onUpdate({config:{...instance.config,billingOnly:e.target.value==='billing'}})}><option value="delivery">Delivery + billing events</option><option value="billing">Billing events only</option></select></label>
+      <label>{props.proposalMode?'Your delivery plan':'This commitment creates'}<select aria-label="This commitment creates" value={instance.config?.billingOnly?'billing':'delivery'} onChange={e=>onUpdate({config:{...instance.config,billingOnly:e.target.value==='billing'}})}><option value="delivery">Delivery + billing events</option><option value="billing">Billing events only</option></select></label>
       <p className="cm-hint">{instance.config?.billingOnly?'No service visits or appointments.':'Delivery frequency and billing frequency are separate.'}</p>
-      <div className="cm-result" aria-live="polite"><span>Commitment total · configured tax</span><strong>{money(gross)}</strong></div>
-    </>:<p>No charge. {isGroupSession?'Session scheduling remains part of this commitment.':'This block contributes content to your agreement.'}</p>}
+      <div className="cm-result" aria-live="polite"><span>{props.proposalMode?'Item total · configured tax':'Commitment total · configured tax'}</span><strong>{money(gross)}</strong></div>
+    </>:<p>No charge. {isGroupSession?'Session scheduling remains part of this commitment.':props.proposalMode?'These terms explain what you include or exclude.':'This block contributes content to your agreement.'}</p>}
     </section>
-    {error && <p className="cm-error" role="alert">{error}</p>}
-    <footer className="cm-editor-footer"><button type="button" onClick={props.onToggleExpand}>Cancel</button><button type="button" className="ag-primary" onClick={apply}>Apply changes</button></footer>
+    {error && <p className="cm-error" role="alert" tabIndex={-1}>{error}</p>}
+    <footer className="cm-editor-footer"><button type="button" onClick={props.onToggleExpand}>{props.cancelLabel||'Cancel'}</button><button type="button" className="ag-primary" onClick={apply}>{props.saveLabel||'Apply changes'}</button></footer>
   </section>;
 };
 export default CommitmentEditor;

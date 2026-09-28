@@ -3,6 +3,8 @@
 // variant="full" (default) for detail pages, variant="compact" for grids/dashboards
 
 import React, { useState } from 'react';
+import ContractAppointmentDialog from './ContractAppointmentDialog';
+import ServiceWorkspaceEntry from './ServiceWorkspaceEntry';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
@@ -27,7 +29,6 @@ import {
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import type { ContractEvent, ContractEventStatus } from '@/types/contractEvents';
 import type { EventStatusDefinition } from '@/types/eventStatusConfig';
-import { useCreateAppointment } from '@/hooks/queries/useAppointmentQueries';
 
 // ─── Helpers ───
 
@@ -141,7 +142,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   event,
   currency = 'INR',
   colors,
-  onStatusChange,
+  onStatusChange: changeStatus,
   isUpdating: isUpdatingLegacy,
   updatingEventId,
   hideActions,
@@ -154,7 +155,13 @@ export const EventCard: React.FC<EventCardProps> = ({
   const navigate = useNavigate();
   const [showActions, setShowActions] = useState(false);
   // Stage 3: appointment context (fields arrive via get_contract_events_list v3)
-  const createAppointment = useCreateAppointment();
+  const [slotOpen,setSlotOpen]=useState(false);
+  const [workOpen,setWorkOpen]=useState(false);
+  const onStatusChange=(id:string,status:ContractEventStatus,version:number)=>{
+    if(event.event_type==='service' && (event as any).audience!=='group' && ['in_progress','completed'].includes(status)) setWorkOpen(true);
+    else changeStatus(id,status,version);
+  };
+  const workspace=workOpen?<ServiceWorkspaceEntry contractId={event.contract_id} eventId={event.id} onClose={()=>setWorkOpen(false)}/>:null;
   const appointmentStatus = (event as any).appointment_status as string | undefined;
   const appointmentAt = (event as any).appointment_scheduled_at as string | undefined;
   // Group Session occurrences are 1:N (attendance/roster), not 1:1 visits — so
@@ -234,7 +241,7 @@ export const EventCard: React.FC<EventCardProps> = ({
               <TypeIcon className="w-4 h-4" style={{ color: accent }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold truncate" style={{ color: colors.utility.primaryText }}>
+              <p className="text-xs font-bold whitespace-normal break-words" style={{ color: colors.utility.primaryText }}>
                 {event.block_name}
               </p>
               <p className="text-[10px] truncate" style={{ color: colors.utility.secondaryText }}>
@@ -259,7 +266,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                 {formatEventDate(event.scheduled_date)}
               </span>
               {event.amount != null && event.amount > 0 && (
-                <span className="text-[10px] font-bold truncate" style={{ color: colors.semantic?.warning || '#F59E0B' }}>
+                <span className="text-[10px] font-bold whitespace-normal break-words" style={{ color: colors.semantic?.warning || '#F59E0B' }}>
                   {formatCurrency(event.amount, event.currency || currency)}
                 </span>
               )}
@@ -317,6 +324,7 @@ export const EventCard: React.FC<EventCardProps> = ({
             </div>
           )}
         </div>
+        {workspace}
       </div>
     );
   }
@@ -341,7 +349,7 @@ export const EventCard: React.FC<EventCardProps> = ({
             <TypeIcon className="w-5 h-5" style={{ color: accent }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold truncate" style={{ color: colors.utility.primaryText }}>
+            <p className="text-sm font-bold whitespace-normal break-words" style={{ color: colors.utility.primaryText }}>
               {event.block_name}
             </p>
             <p className="text-xs" style={{ color: colors.utility.secondaryText }}>
@@ -507,22 +515,16 @@ export const EventCard: React.FC<EventCardProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!createAppointment.isPending) {
-                    createAppointment.mutate({ event_id: event.id });
-                  }
+                  setSlotOpen(true);
                 }}
-                disabled={createAppointment.isPending}
                 className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all hover:opacity-80"
                 style={{ backgroundColor: colors.brand?.primary || '#4F46E5', color: '#fff' }}
               >
-                {createAppointment.isPending ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  <CalendarDays className="w-3 h-3" />
-                )}
-                Propose slot
+                <CalendarDays className="w-3 h-3" />
+                Plan visit
               </button>
             )}
+            {appointmentStatus && !['completed','cancelled'].includes(event.status) && <button onClick={e=>{e.stopPropagation();setSlotOpen(true);}} className="border rounded-lg px-3 py-1 text-xs font-semibold">Change slot</button>}
           </div>
         )}
 
@@ -538,6 +540,8 @@ export const EventCard: React.FC<EventCardProps> = ({
             {event.notes}
           </div>
         )}
+        {slotOpen && <ContractAppointmentDialog eventId={event.id} name={event.block_name} scheduledAt={appointmentAt || event.scheduled_date} hasSlot={!!appointmentStatus} onClose={()=>setSlotOpen(false)}/>}
+        {workspace}
       </div>
     </div>
   );

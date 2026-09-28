@@ -11,7 +11,8 @@
 // - Stay-open placeholder attach flow
 // - "Show only awaiting" filter
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Wrench, Plus, X, Search, Package, Building2, LayoutGrid, TableIcon, CheckCircle2 } from 'lucide-react';
 import type { ContractEquipmentDetail } from '@/types/contracts';
 import { isPlaceholderDetail } from '@/components/contracts/ContractWizard/steps/AssetSelectionStep';
@@ -132,6 +133,15 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   defaultLens = 'cards',
 }) => {
   const { currentTenant } = useAuth();
+  const queryClient = useQueryClient();
+  const attachmentBusy = useRef(false);
+  const refreshCoverage = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['contract-events'] }),
+      queryClient.invalidateQueries({ queryKey: ['contract-details-v2'] }),
+      queryClient.invalidateQueries({ queryKey: ['service-execution'] }),
+    ]);
+  }, [queryClient]);
   const tenantId = currentTenant?.id || '';
   const isSeller = !isBuyer;
   const role: 'seller' | 'buyer' = isBuyer ? 'buyer' : 'seller';
@@ -139,6 +149,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   // ── State ──────────────────────────────────────────────────────
 
   const [showPicker, setShowPicker] = useState(false);
+  const [resolveAttachIntent, setResolveAttachIntent] = useState(false);
   /** Which resource type the picker is currently filtering for */
   const [pickerResourceType, setPickerResourceType] = useState<'equipment' | 'entity'>(mode === 'facility' ? 'entity' : 'equipment');
   const [searchQuery, setSearchQuery] = useState('');
@@ -202,7 +213,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     };
   }, [isBuyer, buyerId]);
 
-  const { assets, isLoading: assetsLoading } = useAssetRegistryManager(
+  const { assets, isLoading: assetsLoading, isError: assetsError, refetch: refreshRegistry } = useAssetRegistryManager(
     showPicker ? filters : { limit: 0, offset: 0 }
   );
 
@@ -490,7 +501,8 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   // ── Handlers ──────────────────────────────────────────────────
 
   const handleToggleAsset = useCallback(async (asset: TenantAsset) => {
-    if (!contractId) return;
+    if (!contractId || attachmentBusy.current) return;
+    attachmentBusy.current = true;
     setMutatingAssetId(asset.id);
 
     try {
@@ -508,6 +520,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           equipmentItem: item,
           replacesItemId: attachingPlaceholder?.id,
         });
+        await refreshCoverage();
         if (attachingPlaceholder) {
           // Stay-open attach: if other placeholders remain, advance to the
           // next one instead of closing the picker.
@@ -534,11 +547,13 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
     } catch {
       // Error toast handled by mutation hook
     } finally {
+      attachmentBusy.current = false;
       setMutatingAssetId(null);
     }
-  }, [contractId, existingAssetIds, equipmentDetails, tenantId, role, resourceIdToSubCategory, addMutation, removeMutation, attachingPlaceholder]);
+  }, [contractId, existingAssetIds, equipmentDetails, tenantId, role, resourceIdToSubCategory, addMutation, removeMutation, attachingPlaceholder, refreshCoverage]);
 
   const handleStartAttach = useCallback((placeholder: ContractEquipmentDetail) => {
+    setResolveAttachIntent(true);
     setAttachingPlaceholder(placeholder);
     setPickerResourceType(placeholder.resource_type === 'entity' ? 'entity' : 'equipment');
     setSearchQuery('');
@@ -547,6 +562,7 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   }, []);
 
   const handleClosePicker = useCallback(() => {
+    setResolveAttachIntent(false);
     setShowPicker(false);
     setSearchQuery('');
     setAttachingPlaceholder(null);
@@ -568,15 +584,18 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
   // otherwise it is a genuinely new extra unit.
   const handleCreateSubmit = useCallback(
     async (data: AssetFormData) => {
-      if (!contractId) return;
+      if (!contractId || attachmentBusy.current) return;
+      attachmentBusy.current = true;
+      let created: TenantAsset | undefined;
       try {
-        const created = await createMutation.mutateAsync(data);
+        created = await createMutation.mutateAsync(data);
         const item = assetToDetail(created, tenantId, role, resourceIdToSubCategory);
         await addMutation.mutateAsync({
           contractId,
           equipmentItem: item,
           replacesItemId: attachingPlaceholder?.id,
         });
+        await refreshCoverage();
         setIsAddFormOpen(false);
         if (attachingPlaceholder) {
           // Mirror the pick-existing flow: advance to the next open placeholder
@@ -600,10 +619,20 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
           }
         }
       } catch {
-        /* toast handled by hooks */
+        // Registration may succeed while contract attachment fails. Return to
+        // the existing picker so retry uses the saved asset, not a duplicate.
+        if (created) {
+          setIsAddFormOpen(false);
+          setShowPicker(true);
+          setAttachedNote(`"${created.name}" was saved in the registry but was not attached. Select it below to retry attachment; do not register it again.`);
+          await refreshRegistry();
+        }
+        /* failure toast handled by the failing mutation */
+      } finally {
+        attachmentBusy.current = false;
       }
     },
-    [createMutation, tenantId, role, resourceIdToSubCategory, contractId, addMutation, attachingPlaceholder, equipmentDetails]
+    [createMutation, tenantId, role, resourceIdToSubCategory, contractId, addMutation, attachingPlaceholder, equipmentDetails, refreshCoverage, refreshRegistry]
   );
 
   /** Card click → open the machine logbook drawer (buttons keep their own actions) */
@@ -621,22 +650,16 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
   const isLoading = assetsLoading || resourcesLoading;
 
-  // Attach-flow shortcut: when "Attach asset" opened the picker for a
-  // placeholder and there is NOTHING to pick (no matching registry unit),
-  // skip the dead-end list and open the Add Equipment slider directly —
-  // category/type/client already prefilled by addFormDefaults. Guarded to
-  // fire once per placeholder so Cancel returns to the picker instead of
-  // looping the dialog open again.
-  const autoOpenedForRef = useRef<string | null>(null);
+  // Resolve only a fresh Attach click, after a successful registry check.
+  // Cancel and attachment failures must not reopen the form automatically.
   useEffect(() => {
-    if (!showPicker || !attachingPlaceholder || isLoading || isAddFormOpen) return;
-    if (searchQuery) return;
-    if (displayAssets.length > 0) return;
-    if (autoOpenedForRef.current === attachingPlaceholder.id) return;
-    autoOpenedForRef.current = attachingPlaceholder.id;
-    setAddFormMode(attachingPlaceholder.resource_type === 'entity' ? 'entity' : 'equipment');
-    setIsAddFormOpen(true);
-  }, [showPicker, attachingPlaceholder, isLoading, isAddFormOpen, searchQuery, displayAssets]);
+    if (!resolveAttachIntent || !showPicker || !attachingPlaceholder || isLoading || assetsError) return;
+    setResolveAttachIntent(false);
+    if (displayAssets.length === 0) {
+      setAddFormMode(attachingPlaceholder.resource_type === 'entity' ? 'entity' : 'equipment');
+      setIsAddFormOpen(true);
+    }
+  }, [resolveAttachIntent, showPicker, attachingPlaceholder, isLoading, assetsError, displayAssets.length]);
 
   // ── Render helpers ────────────────────────────────────────────
 
@@ -883,6 +906,8 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
               <div className="flex items-center justify-center py-12">
                 <VaNiLoader size="sm" message="Loading equipment..." />
               </div>
+            ) : assetsError ? (
+              <div role="alert" className="text-center py-8"><p>Could not load equipment. Your registry may not be empty.</p><button className="border rounded-lg px-4 py-2 mt-3" onClick={() => refreshRegistry()}>Retry loading equipment</button></div>
             ) : displayAssets.length === 0 ? (
               <div className="text-center py-12">
                 <Package
@@ -892,12 +917,12 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
                 <p className="text-sm mb-1" style={{ color: colors.utility.secondaryText }}>
                   {searchQuery
                     ? `No ${pickerResourceType === 'entity' ? 'facilities' : 'equipment'} matching "${searchQuery}"`
-                    : `No ${pickerResourceType === 'entity' ? 'facilities' : 'equipment'} in registry yet`}
+                    : isSeller ? 'No available equipment registered for this contract’s client' : 'No available equipment in your own registry'}
                 </p>
                 <p className="text-xs" style={{ color: colors.utility.secondaryText + '80' }}>
                   {searchQuery
                     ? 'Try a different search term'
-                    : `Click "+ ${pickerResourceType === 'entity' ? 'Add Facility' : 'Add Equipment'}" to register first.`}
+                    : `Use "+ ${pickerResourceType === 'entity' ? 'Add Facility' : 'Add Equipment'}" to register and attach a new unit. Equipment belonging to other clients is not shown.`}
                 </p>
               </div>
             ) : (
@@ -1075,7 +1100,9 @@ const EquipmentTab: React.FC<EquipmentTabProps> = ({
         mode="create"
         categories={allFormCategories}
         onSubmit={handleCreateSubmit}
-        isSubmitting={createMutation.isPending}
+        isSubmitting={createMutation.isPending || addMutation.isPending}
+        submitLabel={attachingPlaceholder ? 'Save & attach to contract' : undefined}
+        submittingLabel={attachingPlaceholder ? 'Saving & attaching…' : undefined}
         defaultOwnershipType={isBuyer ? 'self' : 'client'}
         lockedContactId={isBuyer ? undefined : buyerId}
         lockedContactName={isBuyer ? undefined : (buyerId ? contactNameMap.get(buyerId) : undefined)}

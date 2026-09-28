@@ -48,6 +48,8 @@ interface EquipmentFormDialogProps {
   categories?: Array<{ id: string; name: string; sub_category?: string | null; resource_type_id?: string }>;
   onSubmit: (data: AssetFormData) => Promise<void>;
   isSubmitting?: boolean;
+  submitLabel?: string;
+  submittingLabel?: string;
   /** When set, locks the owner field to this contact (used from wizard where buyer is already known) */
   lockedContactId?: string;
   lockedContactName?: string;
@@ -68,6 +70,8 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
   categories = [],
   onSubmit,
   isSubmitting = false,
+  submitLabel,
+  submittingLabel,
   lockedContactId,
   lockedContactName,
   registryMode = 'equipment',
@@ -859,10 +863,10 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
             }}
           >
             {isSubmitting
-              ? 'Saving...'
-              : mode === 'create'
+              ? (submittingLabel || 'Saving...')
+              : submitLabel || (mode === 'create'
                 ? 'Save Equipment'
-                : 'Update Equipment'}
+                : 'Update Equipment')}
           </Button>
         </div>
       </div>

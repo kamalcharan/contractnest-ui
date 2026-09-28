@@ -1,3 +1,4 @@
+import ServiceWorkspaceEntry from '@/components/contracts/ServiceWorkspaceEntry';
 // src/pages/ops/cockpit/Commitments.tsx
 //
 // Ops on JTD — the body of /ops/cockpit for the revenue side (mounted through
@@ -175,6 +176,7 @@ const OpsCommitmentsPage: React.FC = () => {
   const hairline = `${colors.utility.primaryText}14`;
 
   // ── view + window ──────────────────────────────────────────────────────────
+  const [serviceWork,setServiceWork] = useState<{contractId:string;eventId:string}|null>(null);
   const [view, setViewState] = useState<View>(() => readPref(VIEW_KEY, isView, 'list'));
   const [horizon, setHorizonState] = useState<Horizon>(() => readPref(HORIZON_KEY, isHorizon, 30));
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
@@ -331,8 +333,8 @@ const OpsCommitmentsPage: React.FC = () => {
       return run(c.id, () => scheduleVisit.mutateAsync({ eventId: c.id, scheduledAt, confirmed }));
     },
     onConfirmSlot: (c) => { run(c.id, () => confirmSlot.mutateAsync({ eventId: c.id })); },
-    onStartVisit: (c) => { run(c.id, () => startVisit.mutateAsync({ eventId: c.id })); },
-    onCompleteVisit: (c, notes) => run(c.id, () => completeVisit.mutateAsync({ eventId: c.id, notes: notes || undefined })),
+    onStartVisit: (c) => { setServiceWork({contractId:c.contract_id,eventId:c.id}); },
+    onCompleteVisit: (c) => { setServiceWork({contractId:c.contract_id,eventId:c.id}); },
     // ── expense side (migration 021): the buyer's verbs ──
     onPay: (c) => setPayFor(c),
     onRespondSlot: (c, action, proposedAt, note) => {
@@ -743,6 +745,7 @@ const OpsCommitmentsPage: React.FC = () => {
         />
       )}
 
+      {serviceWork && <ServiceWorkspaceEntry {...serviceWork} onClose={()=>setServiceWork(null)}/>}
       {historyFor && (
         <HistoryDrawer
           contractId={historyFor.contract_id}
@@ -904,7 +907,8 @@ const HappenedRow: React.FC<{ h: WlHappened }> = ({ h }) => {
       <p className="text-[13px] flex-1 min-w-0 truncate" style={ink}>{text}</p>
       <span className="text-[10px] font-bold flex-none" style={{ ...mono, color: statusColor }}>{h.status}{h.error ? ` · ${h.error}` : ''}</span>
       <span className="text-[10px] flex-none" style={{ ...sub, ...mono }}>{fmtTime(h.at)}</span>
-    </div>
+    
+</div>
   );
 };
 

@@ -85,6 +85,8 @@ export interface FinanceInvoice {
   billing_cycle: string | null;
   payment_mode: string | null;
   contract_event_id: string | null;
+  is_beyond_scope?: boolean | null;
+  service_ticket_id?: string | null;
   last_reminder_at?: string | null;
   created_at: string;
   contract_id: string;

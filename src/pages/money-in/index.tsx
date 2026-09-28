@@ -119,6 +119,11 @@ const MoneyInPage: React.FC = () => {
       const invs = invoices.filter((i) => contractIds.has(i.contract_id));
       const openEvs = evs.filter((e) => chipState(e) !== 'paid');
       const late = openEvs.filter((e) => e.days_overdue > 0);
+      // Additional-work invoices intentionally have no billing event. Include
+      // their balance exactly once alongside the scheduled contract events.
+      const extraInvoices = invs.filter((i) => i.is_beyond_scope &&
+        (i.status === 'unpaid' || i.status === 'partially_paid') && i.balance > 0.001);
+      const lateExtra = extraInvoices.filter((i) => i.days_overdue > 0);
       const upcoming = openEvs
         .filter((e) => e.days_overdue <= 0 && daysUntil(e.due_on) >= 0 && daysUntil(e.due_on) <= upWindow)
         .sort((a, z) => daysUntil(a.due_on) - daysUntil(z.due_on));
@@ -130,10 +135,10 @@ const MoneyInPage: React.FC = () => {
         direct: !evs[0].buyer_id,
         contracts,
         invoices: invs,
-        open: openEvs.reduce((s, e) => s + e.open_amount, 0),
-        lateAmount: late.reduce((s, e) => s + e.open_amount, 0),
-        lateCount: late.length,
-        oldest,
+        open: openEvs.reduce((s, e) => s + e.open_amount, 0) + extraInvoices.reduce((s, i) => s + i.balance, 0),
+        lateAmount: late.reduce((s, e) => s + e.open_amount, 0) + lateExtra.reduce((s, i) => s + i.balance, 0),
+        lateCount: late.length + lateExtra.length,
+        oldest: Math.max(oldest, ...lateExtra.map((i) => i.days_overdue)),
         received: invs.reduce((s, i) => s + (i.amount_paid || 0), 0),
         nextDue: openEvs.filter((e) => e.days_overdue <= 0).sort((a, z) => (a.due_on || '').localeCompare(z.due_on || ''))[0] || null,
         atRisk: late.length >= RISK_ARREARS || oldest > RISK_DAYS,
@@ -441,6 +446,11 @@ const MoneyInPage: React.FC = () => {
                 <p className="text-[13px] mt-0.5 truncate" style={{ color: b.lateAmount > 0 ? red : colors.utility.secondaryText }}>
                   {sentenceFor(b)}
                 </p>
+                {b.invoices.some((i) => i.is_beyond_scope && i.balance > 0.001) && (
+                  <p className="text-[11px] mt-1" style={sub}>
+                    Includes {fmtMoney(b.invoices.filter((i) => i.is_beyond_scope && i.balance > 0.001).reduce((sum, i) => sum + i.balance, 0))} additional work · open the buyer to view the invoice
+                  </p>
+                )}
               </div>
               <div className="text-right flex-none">
                 {b.open > 0.001

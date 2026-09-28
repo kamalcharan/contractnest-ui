@@ -5,6 +5,7 @@
 // unguessable per-ticket report_token is the whole grant.
 
 import React, { useEffect, useState } from 'react';
+import SafeHtml from '@/components/catalog-studio/SafeHtml';
 import { useParams } from 'react-router-dom';
 import { CheckCircle2, Circle, Lock, Printer, ClipboardList, AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -204,7 +205,7 @@ const ServiceReportPage: React.FC = () => {
           {(ticket.notes || ticket.completion_notes) && (
             <div style={{ padding: '4px 28px 24px' }}>
               <h2 style={{ fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: '#64748b', fontWeight: 700, marginBottom: 8 }}>Notes</h2>
-              {ticket.notes && <p style={{ fontSize: 13, color: '#334155', marginBottom: 6 }}>{ticket.notes}</p>}
+              {ticket.notes && <SafeHtml html={ticket.notes} style={{ fontSize: 13, color: '#334155', marginBottom: 6 }} />}
               {ticket.completion_notes && <p style={{ fontSize: 13, color: '#334155' }}>{ticket.completion_notes}</p>}
             </div>
           )}

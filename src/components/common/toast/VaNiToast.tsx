@@ -135,7 +135,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
   return (
     <div
       className={`
-        relative w-[400px] p-4 rounded-2xl flex items-center gap-4 shadow-2xl overflow-hidden
+        relative w-[400px] max-w-[calc(100vw-2rem)] p-4 rounded-2xl flex items-start gap-4 shadow-2xl overflow-hidden
         transform transition-all duration-300 ease-out
         ${isExiting ? 'translate-y-full opacity-0 scale-95' : 'translate-y-0 opacity-100 scale-100'}
       `}
@@ -166,7 +166,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
           {config.label}
         </p>
         <p
-          className="text-sm font-semibold truncate"
+          className="text-sm font-semibold whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
           style={{ color: isDarkMode ? '#FFFFFF' : colors.utility.primaryText }}
         >
           {toast.title}
@@ -183,7 +183,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, onRemove }) => {
 
       {/* Actions */}
       <div
-        className="flex items-center gap-2 pl-4"
+        className="flex shrink-0 items-center gap-2 pl-4"
         style={{
           borderLeft: `1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`,
         }}

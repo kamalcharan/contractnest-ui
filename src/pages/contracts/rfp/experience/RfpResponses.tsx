@@ -14,7 +14,8 @@ import type { RfpDraft } from './model';
 export default function RfpResponses({ draft, recordId }: { draft: RfpDraft; recordId: string }) {
   const cache = useQueryClient(), { addToast } = useVaNiToast();
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<any>(null), [note, setNote] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [selected, setSelected] = useState<any>(null), [note, setNote] = useState(''), [busy, setBusy] = useState(false), [error, setErrorState] = useState('');
+  function setError(message: string) { const friendly=/permission denied/i.test(message)?'We could not complete this action. Please contact your workspace administrator.':message;setErrorState(friendly); if (friendly) addToast({type:'error',title:'Action not completed',message:friendly}); }
   const flight = useRef(false), dialog = useRef<HTMLDialogElement>(null);
   async function load() {
     const data = unwrap(await api.get(API_ENDPOINTS.CONTRACTS.GET(recordId)));
@@ -52,6 +53,7 @@ export default function RfpResponses({ draft, recordId }: { draft: RfpDraft; rec
   }
   async function prepareContract() {
     if (flight.current) return;
+    if (data?.metadata?.rfp_contract_draft_id) { navigate(`/contracts/experience/create?relationship=vendor&draft=${encodeURIComponent(data.metadata.rfp_contract_draft_id)}`); return; }
     flight.current = true; setBusy(true); setError('');
     try {
       const result = unwrap(await api.post(`/api/rfq/${recordId}/prepare-contract`, { is_live: draft.isLive }));
@@ -67,13 +69,12 @@ export default function RfpResponses({ draft, recordId }: { draft: RfpDraft; rec
     {query.isError && <p className="rfp-error" role="alert">{rfpError(query.error)}</p>}
     {winner && <div className="rfp-note"><strong>Awarded to {winner.vendor_company || winner.vendor_name} · {money(winner)}</strong><p>{vendorPreparing ? 'The vendor is preparing the linked agreement in their workspace. They will send it for your review; no second draft is needed.' : data?.metadata?.rfp_contract_draft_id ? 'Your linked buyer-prepared draft is ready to continue. Nothing is activated by opening it.' : 'The vendor can prepare the agreement from their submitted commitments using their private request link. You review it before acceptance.'}</p>
       {!vendorPreparing && (data?.metadata?.rfp_contract_draft_id ? <button className="rfp-button primary" disabled={busy} onClick={() => void prepareContract()}>Open linked agreement →</button> : <details><summary>Need to prepare it on the buyer’s behalf instead?</summary><p>This uses the same proposal and reserves one shared draft for your workspace. The vendor will not create a second draft.</p><label className="rfp-check"><input type="checkbox" checked={prepareConfirmed} onChange={e=>setPrepareConfirmed(e.target.checked)}/>I will prepare the agreement for the vendor to review.</label><button className="rfp-button" disabled={busy || !prepareConfirmed} onClick={() => void prepareContract()}>{busy?'Opening agreement…':'Prepare as buyer →'}</button></details>)}
-      <h3>Award messages</h3><p>The winner receives the award next step; other vendors receive a thank-you. Queued messages are not confirmed delivery.</p>
+      <details><summary>View notification status</summary><p>Award and thank-you notifications are handled automatically. Queued messages are not confirmed delivery.</p>
       {notices.isLoading && <InlineLoader text="Checking award messages"/>}
       {notices.isError && <p role="alert">{rfpError(notices.error)}</p>}
       {Array.isArray(notices.data) && notices.data.map((n:any,i:number)=><p key={n.id||i}>{n.name} · {n.channel} · {({awaiting_template:'Waiting for approved provider template',channel_disabled:'Channel disabled',no_invitation_destination:'No saved invitation destination',created:'Queued',queued:'Queued',delivered:'Delivered',sent:'Sent — delivery not confirmed'} as Record<string,string>)[n.status]||n.status}{n.error?` · ${n.error}`:''}</p>)}
-      <button className="rfp-button" disabled={busy} onClick={async()=>{setBusy(true);try{await rfpRpc('rfp_award_delivery',{p_id:recordId,p_tenant:draft.tenantId,p_live:draft.isLive,p_retry:true});await notices.refetch();addToast({type:'info',title:'Award messages checked',message:'See each channel’s status below. Existing messages were not duplicated.'});}catch(e){setError(rfpError(e));}finally{setBusy(false);}}}>Queue missing award messages</button>
+      </details>
     </div>}
-    {!selected && error && <p className="rfp-error" role="alert">{error}</p>}
     {data && <div className="rfp-row">{vendors.map(v => <span className="rfp-tag" key={v.id}>{v.vendor_company || v.vendor_name} · {v.response_status === 'accepted' ? 'Awarded' : v.response_status}</span>)}</div>}
     {data && !proposals.length && <p>No submitted proposals yet. Invitations and delivery status are shown below.</p>}
     {!!proposals.length && <><p>{proposals.length} proposal{proposals.length === 1 ? '' : 's'} received{proposals.length === 1 ? ' — additional submissions will appear alongside this one.' : '.'}</p><div style={{ overflowX: 'auto' }} tabIndex={0} aria-label="Compare vendor proposals"><table style={{ borderCollapse: 'collapse', width: '100%', textAlign: 'left' }}><thead><tr><th style={cell}>Compare like for like</th>{proposals.map(v => <th key={v.id} style={cell}>{v.vendor_company || v.vendor_name}<small>{v.response_status === 'accepted' ? 'Awarded' : v.response_status}</small></th>)}</tr></thead><tbody>

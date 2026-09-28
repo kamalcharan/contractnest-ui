@@ -1,3 +1,4 @@
+import ServiceWorkspaceEntry from '@/components/contracts/ServiceWorkspaceEntry';
 // src/pages/ops/timeboard/index.tsx
 //
 // TIMEBOARD (batch ops-timeboard, POA batch 3, 2026-09-18) — the playground
@@ -66,6 +67,7 @@ const AVATAR = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed'
 const TimeboardPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [serviceWork,setServiceWork] = useState<{contractId:string;eventId:string}|null>(null);
   const [params, setParams] = useSearchParams();
   const { user, currentTenant, perspective } = useAuth() as any;
   const { colors, ink, sub } = useInvoiceTheme();
@@ -213,10 +215,11 @@ const TimeboardPage: React.FC = () => {
       });
     },
     onAssignVisit: (c, userId) => { if (!userId) { vaniToast.error('Pick a technician first'); return; } return run(c.id, () => assignVisit.mutateAsync({ eventId: c.id, assignTo: userId })); },
+    onSlotSaved: landOn,
     onSchedule: (c, scheduledAt, confirmed) => { if (!scheduledAt) { vaniToast.error('Pick a date and time first'); return; } return run(c.id, async () => { const r = await scheduleVisit.mutateAsync({ eventId: c.id, scheduledAt, confirmed }); landOn(r.scheduled_at); }, 'Saving the slot…'); },
     onConfirmSlot: (c) => { run(c.id, () => confirmSlot.mutateAsync({ eventId: c.id })); },
-    onStartVisit: (c) => { run(c.id, () => startVisit.mutateAsync({ eventId: c.id })); },
-    onCompleteVisit: (c, notes) => run(c.id, () => completeVisit.mutateAsync({ eventId: c.id, notes: notes || undefined })),
+    onStartVisit: (c) => { setServiceWork({contractId:c.contract_id,eventId:c.id}); },
+    onCompleteVisit: (c) => { setServiceWork({contractId:c.contract_id,eventId:c.id}); },
     onAskCustomer: async (c, channel) => { if (busyId || busyDay) return; setBusyId(c.id); try { return await askVisit.mutateAsync({ eventId: c.id, channel }); } catch { return; } finally { setBusyId(null); } },
   };
 
@@ -579,7 +582,8 @@ const TimeboardPage: React.FC = () => {
         <LogCallSheet card={callFor} busy={busyId === callFor.id} onClose={() => setCallFor(null)}
           onSubmit={(v) => run(callFor.id, async () => { await logCall.mutateAsync({ jobId: callFor.job_id!, calledAt: v.calledAt, outcome: v.outcome, notes: v.notes, promiseDate: v.promiseDate }); setCallFor(null); })} />
       )}
-    </div>
+    {serviceWork && <ServiceWorkspaceEntry {...serviceWork} onClose={()=>setServiceWork(null)}/>}
+</div>
   );
 };
 

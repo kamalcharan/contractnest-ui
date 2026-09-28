@@ -41,33 +41,6 @@ interface SparePart {
   variant_applicability?: { variant_id: string }[];
 }
 
-// ── Equipment Identification + Variant Selector (always first) ──
-function buildIdentificationSection(variants: Variant[]): FormSection {
-  const variantOptions: FormFieldOption[] = variants.map((v) => ({
-    label: v.capacity_range ? `${v.name} (${v.capacity_range})` : v.name,
-    value: v.id,
-  }));
-
-  return {
-    id: 'identification',
-    title: 'Equipment Identification',
-    fields: [
-      { id: 'asset_id', type: 'text', label: 'Equipment ID / Tag Number', validation: { required: true } },
-      { id: 'serial_number', type: 'text', label: 'Serial Number', validation: { required: true } },
-      { id: 'make_model', type: 'text', label: 'Make & Model', validation: { required: true } },
-      { id: 'location', type: 'text', label: 'Location / Department', validation: { required: true } },
-      {
-        id: 'variant_id', type: 'select', label: 'Equipment Variant / Type',
-        validation: { required: true },
-        options: variantOptions,
-        help_text: 'Select the specific variant — this determines which parts and thresholds apply',
-      },
-      { id: 'service_date', type: 'date', label: 'Service Date', validation: { required: true } },
-      { id: 'technician_name', type: 'text', label: 'Technician Name', validation: { required: true } },
-    ],
-  };
-}
-
 // ── Condition checkpoints → select fields grouped by section ──
 function buildConditionSections(checkpoints: Checkpoint[]): FormSection[] {
   const conditions = checkpoints.filter((cp) => cp.checkpoint_type === 'condition');
@@ -121,26 +94,22 @@ function buildReadingSections(checkpoints: Checkpoint[]): FormSection[] {
     id: `read_${sectionName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
     title: `${sectionName} — Readings`,
     description: `${cps.length} measurements`,
-    fields: cps.map((cp): FormField => {
+    fields: cps.flatMap((cp): FormField[] => {
       const rangeHint = cp.normal_min != null && cp.normal_max != null
         ? `Normal: ${cp.normal_min}–${cp.normal_max} ${cp.unit || ''}`
         : undefined;
-      const thresholdHint = cp.amber_threshold != null
-        ? `⚠ ${cp.amber_threshold} ${cp.unit || ''} | 🔴 ${cp.red_threshold ?? '—'} ${cp.unit || ''}`
-        : undefined;
-
-      return {
+      const readingRange = { normal_min: cp.normal_min, normal_max: cp.normal_max, unit: cp.unit };
+      const finalField: FormField = {
         id: `cp_${cp.id}`,
         type: 'number',
-        label: cp.unit ? `${cp.name} (${cp.unit})` : cp.name,
+        label: cp.unit ? `${cp.name} - Final reading (${cp.unit})` : `${cp.name} - Final reading`,
         placeholder: rangeHint,
-        help_text: [cp.threshold_note, thresholdHint].filter(Boolean).join(' · ') || undefined,
-        validation: {
-          required: true,
-          ...(cp.normal_min != null ? { min: cp.red_threshold != null && cp.red_threshold < cp.normal_min ? Math.floor(cp.red_threshold * 0.5) : undefined } : {}),
-          ...(cp.normal_max != null ? { max: cp.red_threshold != null && cp.red_threshold > cp.normal_max ? Math.ceil(cp.red_threshold * 1.5) : undefined } : {}),
-        },
+        help_text: cp.threshold_note || undefined,
+        validation: { required: true },
+        reading_range: readingRange,
+        reading_stage: 'final',
       };
+      return [{ ...finalField, id: `cp_${cp.id}_before`, label: cp.unit ? `${cp.name} - Before service (${cp.unit})` : `${cp.name} - Before service`, validation: { required: false }, reading_stage: 'before' }, finalField];
     }),
   }));
 }
@@ -232,7 +201,7 @@ function buildSignOffSection(): FormSection {
 // every checkpoint on the equipment.
 export function composeBlockForm(
   blockName: string,
-  variants: Variant[],
+  _variants: Variant[],
   allCheckpoints: Checkpoint[],
   checkpointIds: string[],
 ): FormSchema {
@@ -241,7 +210,7 @@ export function composeBlockForm(
 
   const conditionSections = buildConditionSections(scoped);
   const readingSections = buildReadingSections(scoped);
-  const totalFields = 7 +
+  const totalFields =
     conditionSections.reduce((s, sec) => s + sec.fields.length, 0) +
     readingSections.reduce((s, sec) => s + sec.fields.length, 0) +
     4;
@@ -252,7 +221,6 @@ export function composeBlockForm(
     description: `Auto-composed from Knowledge Tree · ${scoped.length} checkpoints · ${totalFields} fields`,
     version: 1,
     sections: [
-      buildIdentificationSection(variants),
       ...conditionSections,
       ...readingSections,
       buildSignOffSection(),
@@ -284,7 +252,7 @@ export function useAutoComposeForm(
     const conditionSections = buildConditionSections(allCheckpoints);
     const readingSections = buildReadingSections(allCheckpoints);
     const sparePartsSection = buildSparePartsSection(partsByGroup, selectedVariantId);
-    const totalFields = 7 + // identification
+    const totalFields =
       conditionSections.reduce((s, sec) => s + sec.fields.length, 0) +
       readingSections.reduce((s, sec) => s + sec.fields.length, 0) +
       sparePartsSection.fields.length +
@@ -296,7 +264,6 @@ export function useAutoComposeForm(
       description: `Auto-composed from Knowledge Tree · ${allCheckpoints.length} checkpoints · ${totalFields} fields`,
       version: 1,
       sections: [
-        buildIdentificationSection(variants),
         ...conditionSections,
         ...readingSections,
         sparePartsSection,

@@ -180,6 +180,7 @@ export interface RegisterFormData {
   // auto-claims the contract with the review-link secret.
   cnakRef?: string;
   cnakSecret?: string;
+  rfpTracking?: boolean;
 }
 
 // User preferences interface
@@ -1309,7 +1310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         workspaceName: userData.workspaceName,
         countryCode: userData.countryCode,
         mobileNumber: userData.mobileNumber,
-        ...(userData.cnakRef ? { cnakRef: userData.cnakRef, cnakSecret: userData.cnakSecret } : {})
+        ...(userData.cnakRef ? { cnakRef: userData.cnakRef, cnakSecret: userData.cnakSecret, rfpTracking: userData.rfpTracking === true } : {})
       });
 
       storage.setRememberMe(true);
@@ -1378,6 +1379,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!data.tenant) {
         navigate('/create-tenant');
+      } else if (userData.rfpTracking && userData.cnakRef) {
+        if (data.rfp_tracking?.success) {
+          setHasCompletedOnboarding(false);
+          applyLiteTier('rfq');
+          if (typeof data.rfp_tracking.contract?.is_live === 'boolean') {
+            localStorage.setItem(STORAGE_KEYS.IS_LIVE, String(data.rfp_tracking.contract.is_live));
+            setIsLive(data.rfp_tracking.contract.is_live);
+          }
+          sessionStorage.removeItem('contractnest_auth_redirect');
+          sessionStorage.removeItem('contractnest_entry_intent');
+          navigate('/requests');
+        } else {
+          vaniToast.error('Your account is ready, but the request was not connected. Use Track this request to retry.');
+          navigate(`/quote/${encodeURIComponent(userData.cnakRef)}/${encodeURIComponent(userData.cnakSecret || '')}`);
+        }
       } else if (userData.cnakRef) {
         // CNAK-lite signup: the backend flagged this tenant with the right
         // lite onboarding_type ('cnak' buyer / 'cnak_vendor' seller, echoed

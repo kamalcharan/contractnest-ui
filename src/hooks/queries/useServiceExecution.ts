@@ -5,9 +5,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { financeKeys } from '@/hooks/queries/useFinanceQueries';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/services/serviceURLs';
 import type { ServiceTicketFilters, ServiceEvidenceFilters, AuditLogFilters } from '@/services/serviceURLs';
+import type { ContractEvent } from '@/types/contractEvents';
+
+// The workspace must also find services beyond the first timeline page.
+export function useServiceWorkspaceEvents(contractId: string, options?: {enabled?: boolean; per_page?: number}) {
+  const {currentTenant}=useAuth();
+  return useQuery({
+    queryKey:['contract-events','service-workspace',currentTenant?.id,contractId],
+    enabled:!!currentTenant?.id && !!contractId && options?.enabled!==false,
+    queryFn:async()=>{
+      const items:ContractEvent[]=[];
+      for(let page=1;;page++) {
+        const r=await api.get(API_ENDPOINTS.CONTRACT_EVENTS.LIST_WITH_FILTERS({contract_id:contractId,page,per_page:100,sort_by:'scheduled_date',sort_order:'asc'}));
+        const data=r.data?.data||r.data;
+        items.push(...(data?.items||[]));
+        if(!data?.items?.length || !data.page_info?.has_next_page) break;
+      }
+      return {items};
+    },staleTime:30000,
+  });
+}
 
 // =================================================================
 // TYPES
@@ -194,6 +215,26 @@ export const useServiceTicketDetail = (
 // TICKET MUTATIONS
 // =================================================================
 
+export function useServiceTicketForEvent(contractId:string,eventId:string,enabled:boolean) {
+ const {currentTenant}=useAuth();
+ return useQuery<ServiceTicketDetail|null>({
+  queryKey:[...serviceExecutionKeys.all,'event-ticket',currentTenant?.id,eventId], enabled:!!currentTenant?.id&&enabled,
+  queryFn:async()=>{
+   for(let page=1;;page++){
+    const response=await api.get(API_ENDPOINTS.SERVICE_EXECUTION.TICKETS.LIST_WITH_FILTERS({contract_id:contractId,page,per_page:100}));
+    const data=response.data?.data||response.data;
+    const rows=data.tickets||data.items||[];
+    for(const row of rows){
+     const detail=await api.get(API_ENDPOINTS.SERVICE_EXECUTION.TICKETS.GET(row.id));
+     const ticket=detail.data?.data||detail.data;
+     if(ticket.events?.some((e:any)=>e.event_id===eventId||e.id===eventId)&&ticket.status!=='cancelled')return ticket;
+    }
+    if(!rows.length||page >= (data.pagination?.total_pages??Math.ceil((data.total_count??rows.length)/100)))return null;
+   }
+  },staleTime:30000,
+ });
+}
+
 interface CreateTicketPayload {
   contract_id: string;
   event_ids: string[];
@@ -256,6 +297,7 @@ export const useCreateBeyondScopeInvoice = () => {
       contract_id: string;
       line_items: { name: string; description?: string; amount: number; block_id?: string }[];
       notes?: string;
+      currency?: string;
     }) => {
       const response = await api.post(
         API_ENDPOINTS.SERVICE_EXECUTION.TICKETS.INVOICE(params.ticketId),
@@ -269,6 +311,7 @@ export const useCreateBeyondScopeInvoice = () => {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries({ queryKey: financeKeys.all });
       queryClient.invalidateQueries({ queryKey: ['contract-details-v2'] });
       toast({
         title: 'Beyond-scope invoice created',
@@ -296,6 +339,7 @@ export const useUpdateServiceTicket = () => {
       return response.data?.data || response.data;
     },
     onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: serviceExecutionKeys.all });
       queryClient.invalidateQueries({ queryKey: serviceExecutionKeys.tickets() });
       queryClient.invalidateQueries({ queryKey: serviceExecutionKeys.ticketDetail(variables.ticketId) });
       toast({

@@ -582,6 +582,9 @@ const useToolMutation = <TVars, TResult = any>(
     onSuccess: (result, vars) => {
       vaniToast.success(successText(result, vars), { duration: 3500 });
       queryClient.invalidateQueries({ queryKey: collectionsKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['contract-events'] });
+      queryClient.invalidateQueries({ queryKey: ['service-execution'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
     },
     onError: (error: any) => {
       vaniToast.error(errorMessage(error, fallback), { duration: 5000 });
@@ -671,7 +674,7 @@ export const useScheduleVisit = () =>
   >(
     (v) => `${BASE}/visits/${v.eventId}/schedule`,
     (v) => ({ scheduled_at: v.scheduledAt, confirmed: v.confirmed, note: v.note ?? null }),
-    (r) => (r.confirmed ? `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified` : `Slot proposed for ${fmtSlot(r.scheduled_at)} — awaiting the customer`) + warningsText(r.warnings),
+    (r) => (r.confirmed ? `Slot confirmed for ${fmtSlot(r.scheduled_at)} — delivery status is tracked separately` : `Slot proposed for ${fmtSlot(r.scheduled_at)} — not yet confirmed`) + warningsText(r.warnings),
     'Could not schedule the visit'
   );
 
@@ -679,7 +682,7 @@ export const useConfirmVisitSlot = () =>
   useToolMutation<{ eventId: string; note?: string }, { success: boolean; scheduled_at: string }>(
     (v) => `${BASE}/visits/${v.eventId}/confirm-slot`,
     (v) => ({ note: v.note ?? null }),
-    (r) => `Slot confirmed for ${fmtSlot(r.scheduled_at)} — the customer is notified${warningsText((r as any).warnings)}`,
+    (r) => `Slot confirmed for ${fmtSlot(r.scheduled_at)} — delivery status is tracked separately${warningsText((r as any).warnings)}`,
     'Could not confirm the slot'
   );
 

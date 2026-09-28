@@ -561,7 +561,7 @@ export const SellerTasksTab: React.FC<SellerTasksTabProps> = ({
                             }}
                           >
                             <Play className="w-3.5 h-3.5" />
-                            Start Service
+                            {group.serviceEvents.some(e => e.status === 'in_progress') ? 'Continue service' : 'Start service'}
                           </button>
                         )}
                         {onViewMatrix && (

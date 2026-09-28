@@ -30,6 +30,7 @@ const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const cnakRef = searchParams.get('ref');
+  const rfpTracking = searchParams.get('source') === 'rfp';
 
   // CNAK-lite: the review page stores its full return URL (with cnak+secret)
   // in sessionStorage before redirecting here with only ?ref=<CNAK>. Recover
@@ -40,6 +41,10 @@ const RegisterPage: React.FC = () => {
     if (!cnakRef) return undefined;
     try {
       const stored = sessionStorage.getItem('contractnest_auth_redirect') || '';
+      if (rfpTracking) {
+        const match = /^\/quote\/(CNAK-[A-Za-z0-9]+)\/([A-Za-z0-9_-]{24,})$/.exec(stored);
+        return match && match[1].toUpperCase() === cnakRef.toUpperCase() ? match[2] : undefined;
+      }
       const qs = stored.split('?')[1];
       if (!qs) return undefined;
       const params = new URLSearchParams(qs);
@@ -50,7 +55,7 @@ const RegisterPage: React.FC = () => {
     } catch {
       return undefined;
     }
-  }, [cnakRef]);
+  }, [cnakRef, rfpTracking]);
 
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
 
@@ -175,7 +180,7 @@ const RegisterPage: React.FC = () => {
         firstName: formData.firstName,
         lastName: formData.lastName,
         workspaceName: formData.workspaceName.trim(),
-        ...(cnakRef ? { cnakRef, cnakSecret } : {}),
+        ...(cnakRef ? { cnakRef, cnakSecret, rfpTracking } : {}),
       });
       analyticsService.trackEvent(AUTH_EVENTS.SIGNUP_SUCCESS, {
         workspace_name: formData.workspaceName,
@@ -360,7 +365,7 @@ const RegisterPage: React.FC = () => {
             Create your account
           </h2>
           <p style={{ fontSize: '14px', color: colors.utility.secondaryText, marginBottom: '28px', lineHeight: 1.5 }}>
-            Set up your ContractNest workspace in minutes.
+            {rfpTracking ? 'Track your RFP response and buyer decisions. Business setup is optional and can wait.' : 'Set up your ContractNest workspace in minutes.'}
           </p>
 
           {/* Inline account-exists error */}

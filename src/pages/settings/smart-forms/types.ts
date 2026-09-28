@@ -78,6 +78,8 @@ export interface FormField {
   options?: FormFieldOption[];
   photo_required?: boolean;
   validation?: FormFieldValidation;
+  reading_range?: { normal_min: number | null; normal_max: number | null; unit: string | null };
+  reading_stage?: 'before' | 'final';
   computed?: {
     formula: string;
     depends_on: string[];
