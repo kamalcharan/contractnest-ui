@@ -58,6 +58,8 @@ export const defaultMenuItems: MenuItem[] = [
   // (Services focus · Schedule · Ask customer · Confirm slot); /ops/appointments redirects there.
   // { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
   { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
+  // Leads — contacts tagged 'lead' + what they wanted (From your reach · RFQ). Revenue side.
+  { id: 'leads', label: 'Leads', icon: 'UserPlus', path: '/leads', revenueOnly: true },
   { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
   { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' },
   // HIDDEN: Activity Feed, Reports - commented out

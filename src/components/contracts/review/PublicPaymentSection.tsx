@@ -78,6 +78,10 @@ interface PublicPaymentSectionProps {
   paperShadow: string;
   /** Fires after a Razorpay payment verifies server-side (contract auto-activates) */
   onPaid: () => void;
+  /** Reports whether the seller can take a payment here at all (gateway or
+      offline UPI). false → the page words its action bar as "the seller will
+      connect with you" instead of "accepted on payment". */
+  onAvailability?: (canCollect: boolean) => void;
 }
 
 const fmt = (amount: number, currency: string) =>
@@ -86,7 +90,7 @@ const fmt = (amount: number, currency: string) =>
 const PublicPaymentSection: React.FC<PublicPaymentSectionProps> = ({
   cnak, secret, tenantName, buyerName, buyerEmail, buyerPhone,
   brandPrimary, logoUrl, paperBg, borderColor, inkText, inkSub, paperShadow,
-  onPaid,
+  onPaid, onAvailability,
 }) => {
   const [loading, setLoading] = useState(true);
   const [context, setContext] = useState<PaymentContext | null>(null);
@@ -117,6 +121,7 @@ const PublicPaymentSection: React.FC<PublicPaymentSectionProps> = ({
         if (cancelled) return;
         const ctx: PaymentContext = resp.data;
         setContext(ctx);
+        onAvailability?.(!!ctx.success && !!ctx.can_collect_payment);
         if (ctx.success && ctx.offline_upi_configured) {
           try {
             const upiResp = await api.post(API_ENDPOINTS.CONTRACTS.PUBLIC_OFFLINE_UPI_CONFIG, {
@@ -132,6 +137,7 @@ const PublicPaymentSection: React.FC<PublicPaymentSectionProps> = ({
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnak, secret]);
 
   // ── Razorpay SDK loader (same dedupe pattern as useRazorpayCheckout) ──
@@ -335,10 +341,10 @@ const PublicPaymentSection: React.FC<PublicPaymentSectionProps> = ({
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <CheckCircle size={22} style={{ color: '#22c55e', flexShrink: 0, marginTop: 2 }} />
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: inkText }}>Payment reference submitted</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: inkText }}>Thank you — payment reference submitted</div>
             <div style={{ fontSize: 12.5, color: inkSub, marginTop: 4, lineHeight: 1.6 }}>
-              {tenantName} will verify your payment and the contract will activate automatically
-              once it is confirmed. You can close this page — your access code keeps working.
+              {tenantName} will check the payment and connect with you. The contract activates
+              as soon as they confirm it. You can close this page — your access code keeps working.
             </div>
           </div>
         </div>
@@ -431,7 +437,7 @@ const PublicPaymentSection: React.FC<PublicPaymentSectionProps> = ({
             )}
             <p style={{ fontSize: 11, color: inkSub, marginBottom: 10, lineHeight: 1.5 }}>
               {upiConfig.qr_image_url ? 'Scan the QR or pay' : 'Pay'} {amountLabel} to this UPI ID from your
-              UPI app, then enter the transaction reference (UTR) below.
+              UPI app, then enter the transaction reference (UTR) below. {tenantName} checks it and confirms.
             </p>
 
             <div style={{ display: 'flex', gap: 8 }}>

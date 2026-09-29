@@ -15,6 +15,7 @@ import { useContractOperations } from '@/hooks/queries/useContractQueries';
 import {
   mapWizardToRequest,
   createInitialWizardState,
+  serializeWizardState,
   ContractWizardState,
 } from '@/components/contracts/ContractWizard';
 import type { CreateContractRequest } from '@/types/contracts';
@@ -148,7 +149,17 @@ export function useContractSubmission() {
               : new Date(),
           };
           const request = mapWizardToRequest(state, contractType);
-          request.metadata = {};
+          // Drafts must retain the complete wizard state for individual review
+          // and activation from the Contracts experience. Activated batch
+          // contracts do not need a resumable draft snapshot.
+          request.metadata = opts.activate === false ? {
+            wizard_state: serializeWizardState(state),
+            wizard_contract_type: contractType,
+            experience_chapter: 'agreement',
+            experience_step: 'review',
+            experience_version: 3,
+            bulk_review_draft: true,
+          } : {};
           return { buyer_id: buyerId, request };
         });
 

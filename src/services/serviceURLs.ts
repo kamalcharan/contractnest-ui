@@ -1358,7 +1358,18 @@ export const API_ENDPOINTS = {
   // Backed by contractnest-api/src/routes/extendRoutes.ts, which has been
   // registered and working the whole time; only this block was missing, which
   // is why /extend 404'd and useTouchpoints threw on EXTEND.TOUCHPOINTS.
+  // [extend-leads] contacts tagged 'lead' + interests (migration business-model-v2/039)
+  LEADS: {
+    LIST: '/api/leads',
+    CAPTURE: '/api/leads/capture',
+    INTEREST: (id: string) => `/api/leads/${id}`,
+  },
   EXTEND: {
+    // [extend-storefront-v2] package-first storefronts (migration business-model-v2/038)
+    STOREFRONTS: '/api/extend/storefronts',
+    STOREFRONT: (id: string) => `/api/extend/storefronts/${id}`,
+    VANI_SITE: '/api/extend/vani-site',   // [extend-vani-site] migration 040
+    // legacy (pre-038), kept one release
     TOUCHPOINTS: '/api/extend/touchpoints',
     TOUCHPOINT: (id: string) => `/api/extend/touchpoints/${id}`,
   },

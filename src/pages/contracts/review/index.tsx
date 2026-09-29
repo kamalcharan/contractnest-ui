@@ -100,6 +100,9 @@ interface FullContractData {
   buyer_contact_person_name: string | null;
   global_access_id: string;
   acceptance_method: string;
+  /** migration 041: metadata->>'source' — 'storefront_purchase' when the buyer
+      raised this themselves from a storefront / widget / package page */
+  source?: string | null;
   duration_value: number;
   duration_unit: string;
   grace_period_value: number | null;
@@ -248,6 +251,11 @@ const ContractReviewPage: React.FC = () => {
   // Cadence pricing 2b: buyer's payment-plan picks — {block row id → cycle}.
   // Empty/absent = keep the seller's proposal.
   const [cadenceSelections, setCadenceSelections] = useState<Record<string, string>>({});
+  // What the payment section found: true = Razorpay and/or UPI is on offer,
+  // false = the seller has no way to take a payment here (they will connect),
+  // null = not known yet. Drives the action-bar placeholder wording only —
+  // the server still refuses a plain accept on a payment-gated contract.
+  const [paymentAvailable, setPaymentAvailable] = useState<boolean | null>(null);
 
   const paperRef = useRef<HTMLDivElement>(null);
   // PDF export captures the professional ContractDocument (off-screen render)
@@ -498,6 +506,13 @@ const ContractReviewPage: React.FC = () => {
     && contract?.status === 'pending_acceptance'
     && (contract?.grand_total || contract?.total_value || 0) > 0;
 
+  // A storefront purchase is the BUYER's own request (batch
+  // extend-checkout-flow): the success screen speaks to that — the seller
+  // connects to close it up, or checks the payment — not "the issuing party
+  // has been notified".
+  const isStorefront = contract?.source === 'storefront_purchase';
+  const sellerDisplayName = tenant?.profile?.business_name || tenant?.name || 'The seller';
+
   // The buyer may change plans only while the contract awaits their sign-off.
   // EMI contracts keep the seller's proposal: EMI events are contract-level
   // and would not regenerate on a cadence switch (stale-schedule hazard).
@@ -707,15 +722,21 @@ const ContractReviewPage: React.FC = () => {
             <XCircle size={56} style={{ color: '#ef4444', marginBottom: 20 }} />
           )}
           <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
-            Contract {isAccepted ? 'Accepted' : 'Rejected'}
+            {isAccepted ? (isStorefront ? 'Thank you — request received' : 'Contract Accepted') : (isStorefront ? 'Request withdrawn' : 'Contract Rejected')}
           </h2>
           <p style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 8 }}>
             {contract?.name} ({contract?.contract_number})
           </p>
           <p style={{ fontSize: 14, color: colors.textSecondary, marginBottom: 24 }}>
             {isAccepted
-              ? 'The contract has been accepted and is now active. The issuing party has been notified.'
-              : 'The contract has been rejected. The issuing party has been notified.'}
+              ? (isStorefront
+                ? (isPaymentGated
+                  ? `Your payment is with ${sellerDisplayName}. They will check it and connect with you.`
+                  : `${sellerDisplayName} will connect with you to close up your request.`)
+                : 'The contract has been accepted and is now active. The issuing party has been notified.')
+              : (isStorefront
+                ? `${sellerDisplayName} has been told you no longer want this.`
+                : 'The contract has been rejected. The issuing party has been notified.')}
           </p>
 
           {/* CNAK Reference */}
@@ -917,6 +938,7 @@ const ContractReviewPage: React.FC = () => {
             inkSub={inkSub}
             paperShadow={paperShadow}
             onPaid={() => setResponseState('accepted')}
+            onAvailability={setPaymentAvailable}
           />
         </div>
       )}
@@ -1042,6 +1064,7 @@ const ContractReviewPage: React.FC = () => {
                     /* 'manual' is the legacy spelling of payment-gated, from
                        before the mapper stopped squashing it (migration 036) */
                     : (contract.acceptance_method === 'payment' || contract.acceptance_method === 'manual') ? 'Payment Required'
+                    : contract.acceptance_method === 'signoff' ? 'Your acceptance'
                     : contract.acceptance_method === 'auto' ? 'Auto Accept' : contract.acceptance_method || '—'}
                 </p>
               </div>
@@ -1244,7 +1267,9 @@ const ContractReviewPage: React.FC = () => {
           // above; a plain accept is refused server-side (PAYMENT_REQUIRED).
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 10, backgroundColor: `${brandPrimary}0C`, border: `1px solid ${brandPrimary}30`, fontSize: 13, fontWeight: 600, color: brandPrimary }}>
             <CreditCard size={16} />
-            Accepted on payment — see the payment step above
+            {paymentAvailable === false
+              ? `${sellerDisplayName} will connect with you to complete this`
+              : 'Accepted on payment — see the payment step above'}
           </div>
         ) : (
           <button

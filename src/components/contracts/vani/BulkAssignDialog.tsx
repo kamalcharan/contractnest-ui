@@ -1,16 +1,14 @@
 // src/components/contracts/vani/BulkAssignDialog.tsx
-// Multi-party assignment (Phase 2): assign one published template to many
-// members at once. Reuses the SAME deterministic core as single-party —
-// vaniComposerService.assembleFromTemplate (no LLM) → useContractSubmission —
-// looped per member with animated batch progress. No backend change.
+// Multi-party assignment of one published template. The user reviews the
+// batch before explicitly choosing activation now or individual draft review.
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Users, Search, User, Building2, CheckCircle2, Loader2, AlertTriangle,
-  Zap, ArrowRight, Settings2,
+  ArrowRight,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useVaNiToast } from '@/components/common/toast/VaNiToast';
@@ -20,9 +18,10 @@ import vaniComposerService, { VaniParsedIntent, VaniComposeResult, assertVaniSco
 import { getCurrencySymbol } from '@/utils/constants/currencies';
 import { CONTACT_CLASSIFICATION_CONFIG } from '@/utils/constants/contacts';
 import type { TemplateSeed } from './VaNiComposerLauncher';
-import VaniContextQuestions from './VaniContextQuestions';
 import { useAuth } from '@/context/AuthContext';
-import EventScheduleAdjuster from '@/components/contracts/EventScheduleAdjuster';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import type { TemplateRelationship } from '@/components/contracts/ContractWizard/logic/templateRelationship';
 import {
   computeContractEvents,
   type ContractEvent,
@@ -34,6 +33,7 @@ interface BulkAssignDialogProps {
   onClose: () => void;
   seed: TemplateSeed | null;
   templateName: string;
+  relationship: TemplateRelationship;
   onDone?: () => void;
 }
 
@@ -43,18 +43,10 @@ interface ProgressRow {
   name: string;
   status: RowStatus;
   contractNumber?: string;
+  contractId?: string;
+  createdStatus?: string;
   error?: string;
 }
-
-// Mirrors CADENCE_LABEL in VaNiComposerLauncher.tsx / cadence-acceptance.ts
-const CADENCE_LABEL: Record<string, string> = {
-  monthly: 'Monthly',
-  quarterly: 'Quarterly',
-  halfyearly: '6-Monthly',
-  annual: 'Annual',
-};
-
-const DURATION_TO_DAYS: Record<string, number> = { days: 1, months: 30, years: 365 };
 
 const contactDisplayName = (c: any): string =>
   c?.display_name || c?.company_name ||
@@ -81,58 +73,41 @@ const contactContractType = (c: any): 'client' | 'partner' | 'vendor' => {
   if (types.length !== 1) throw new Error(`Choose an unambiguous Client, Partner or Vendor classification for ${contactDisplayName(c)} before assigning.`);
   return types[0] as 'client' | 'partner' | 'vendor';
 };
-
-const addDays = (isoDate: string, days: number): Date => {
-  const d = new Date(isoDate + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d;
-};
-const isoDaysBetween = (startIso: string, endIso: string): number => {
-  const start = new Date(startIso + 'T00:00:00');
-  const end = new Date(endIso + 'T00:00:00');
-  return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000));
+const eligibleForTemplate = (c: any, relationship: TemplateRelationship): boolean => {
+  const types = Array.from(new Set(contactClasses(c).filter(v => ['client','partner','vendor'].includes(v))));
+  return types.length === 1 && types[0] === relationship;
 };
 
 const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
-  isOpen, onClose, seed, templateName, onDone,
+  isOpen, onClose, seed, templateName, relationship, onDone,
 }) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isDarkMode, currentTheme } = useTheme();
   const colors = isDarkMode ? currentTheme.darkMode.colors : currentTheme.colors;
   const { addToast } = useVaNiToast();
   const { submitBulk } = useContractSubmission();
   const composer = useMemo(() => vaniComposerService.withContext('template', null), []);
-  const [clarify, setClarify] = useState<VaniParsedIntent | null>(null);
+  const [templateError, setTemplateError] = useState('');
 
   const [search, setSearch] = useState('');
-  const [classFilter, setClassFilter] = useState<string>('all');
   const [selected, setSelected] = useState<Record<string, any>>({}); // id -> contact
+  const [reviewing, setReviewing] = useState(false);
+  const [submissionMode, setSubmissionMode] = useState<'activate' | 'drafts' | null>(null);
   const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [running, setRunning] = useState(false);
+  const submissionStarted = useRef(false);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
   const [finished, setFinished] = useState(false);
 
-  // Preferences — mirrors VaNiComposerLauncher's single-assign panel, applied
-  // to the ONE shared draft (assembleFromTemplate is buyer-independent) that
-  // gets cloned per member at Create time.
+  // The published template fixes all terms. Only the shared start date varies.
   const [intent, setIntent] = useState<VaniParsedIntent | null>(null);
-  const [cadenceOverrides, setCadenceOverrides] = useState<Record<string, string>>({});
   const [result, setResult] = useState<VaniComposeResult | null>(null);
   const [assembling, setAssembling] = useState(false);
 
-  // Schedule adjustment for the SHARED template schedule. Every clone is built
-  // from the same draft and the same start date, so all clones compute an
-  // identical event series — one override map ({ eventId → Date }) therefore
-  // applies correctly to all of them, and mapWizardToRequest (used per item in
-  // submitBulk) applies it exactly as it does for a single wizard contract.
-  const [eventOverrides, setEventOverrides] = useState<Record<string, Date>>({});
-  // Open by default — the schedule is what the batch actually creates, so it
-  // should be reviewable without hunting for a disclosure control. Still
-  // collapsible for batches that take the generated dates as-is.
-  const [showSchedule, setShowSchedule] = useState(true);
-
   const { data: contacts, loading } = useContactList({
     search: search.trim().length >= 2 ? search.trim() : undefined,
-    classifications: classFilter === 'all' ? [] : [classFilter],
+    classifications: [relationship],
     limit: 100,
     enabled: isOpen && !running && !finished,
   });
@@ -148,53 +123,55 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
   const fmt = (n: number) => currencySym ? currencySym.format(n) : `${seed?.match.currency || 'INR'} ${n.toLocaleString()}`;
 
   const toggle = (c: any) => {
+    if (!eligibleForTemplate(c, relationship)) return;
     setSelected((prev) => {
       const next = { ...prev };
       if (next[c.id]) delete next[c.id];
-      else next[c.id] = c;
+      else if (Object.keys(next).length < 200) next[c.id] = c;
       return next;
     });
   };
   const selectAllVisible = () => {
     setSelected((prev) => {
       const next = { ...prev };
-      const list = contacts || [];
+      const list = (contacts || []).filter((c: any) => eligibleForTemplate(c, relationship));
       const allOn = list.length > 0 && list.every((c: any) => next[c.id]);
       if (allOn) list.forEach((c: any) => delete next[c.id]);
-      else list.forEach((c: any) => { next[c.id] = c; });
+      else list.forEach((c: any) => { if (Object.keys(next).length < 200) next[c.id] = c; });
       return next;
     });
   };
 
   const reset = () => {
+    submissionStarted.current = false;
     setSelected({}); setProgress([]); setFinished(false); setRunning(false);
-    setSearch(''); setClassFilter('all');
-    setIntent(null); setResult(null); setCadenceOverrides({});
+    setSearch(''); setReviewing(false); setSubmissionMode(null);
+    setIntent(null); setResult(null); setTemplateError('');
   };
   const handleClose = () => { if (!running) { reset(); onClose(); } };
 
-  // ── Preview assemble: runs once on open, then again on every preference
-  //    change — same live-reassemble UX as single-assign. Create time just
-  //    clones whatever the LAST assemble produced, per member. ──
-  const reassembleBase = useCallback(async (nextIntent: VaniParsedIntent, cadOverride: Record<string, string>) => {
+  // Preview the fixed template at the selected start date before any writes.
+  const reassembleBase = useCallback(async (nextIntent: VaniParsedIntent) => {
     if (!seed) return;
     setAssembling(true);
     setResult(null);
+    setTemplateError('');
     try {
       const res = await composer.assembleFromTemplate(
         seed.match.template_id,
         nextIntent,
         null,
         seed.match.currency,
-        Object.entries(cadOverride).map(([block_id, cycle]) => ({ block_id, cycle }))
+        []
       );
       setResult(res);
-      setClarify(null);
     } catch (err: any) {
       if (err?.response?.data?.error?.code === 'MISSING_AGREEMENT_DETAILS') {
-        setClarify(err.response.data.error.details.intent);
+        const fields = err?.response?.data?.error?.details?.missingFields;
+        setTemplateError(`This template could not be prepared for assignment${Array.isArray(fields) && fields.length ? `: ${fields.join(', ')}` : ''}. No contracts have been created.`);
         return;
       }
+      setTemplateError('The template preview could not be prepared. No contracts have been created.');
       addToast({ type: 'error', title: 'Could not refresh draft', message: err?.message || 'Failed to assemble' });
     } finally {
       setAssembling(false);
@@ -207,45 +184,26 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
     setStartDate(today);
     const initIntent: VaniParsedIntent = { ...seed.intent, start_date: today };
     setIntent(initIntent);
-    setCadenceOverrides({});
-    reassembleBase(initIntent, {});
+    reassembleBase(initIntent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, seed?.match.template_id]);
 
-  const updateIntent = (mutate: (i: VaniParsedIntent) => void) => {
-    if (!intent || assembling) return;
-    const next: VaniParsedIntent = { ...intent, billing: { ...intent.billing }, duration: { ...intent.duration } };
-    mutate(next);
-    setIntent(next);
-    reassembleBase(next, cadenceOverrides);
-  };
-
   const updateStartDate = (v: string) => {
-    setStartDate(v);
-    updateIntent((i) => { i.start_date = v; });
-  };
-
-  const setCadenceOverride = (blockId: string, cycle: string) => {
     if (!intent || assembling) return;
-    const next = { ...cadenceOverrides, [blockId]: cycle };
-    setCadenceOverrides(next);
-    reassembleBase(intent, next);
-  };
-
-  const endDateIso = useMemo(() => {
-    if (!intent) return startDate;
-    const days = Math.max(1, Number(intent.duration.value) || 1) * (DURATION_TO_DAYS[intent.duration.unit] || 30);
-    return addDays(startDate, days).toISOString().slice(0, 10);
-  }, [intent, startDate]);
-
-  const updateEndDate = (v: string) => {
-    updateIntent((i) => { i.duration = { value: isoDaysBetween(startDate, v), unit: 'days' }; });
+    setStartDate(v);
+    const next = { ...intent, start_date: v };
+    setIntent(next);
+    if (!v) {
+      setResult(null);
+      setTemplateError('Choose a start date for this batch.');
+      return;
+    }
+    reassembleBase(next);
   };
 
   // ── Template schedule preview ──
   // Same computation the wizard's Events Preview runs, fed from the assembled
-  // (buyer-independent) draft. This IS what each clone will generate, so
-  // adjusting it here adjusts every contract in the batch.
+  // (buyer-independent) draft. Every clone uses this same schedule.
   const templateEvents: ContractEvent[] = useMemo(() => {
     const d: any = result?.draft;
     if (!d || !Array.isArray(d.selectedBlocks) || d.selectedBlocks.length === 0) return [];
@@ -270,12 +228,6 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
     }
   }, [result, startDate]);
 
-  // Start date / cadence changes re-derive the schedule, which invalidates any
-  // overrides keyed to the previous series — drop them rather than silently
-  // applying stale dates.
-  useEffect(() => {
-    setEventOverrides({});
-  }, [startDate, cadenceOverrides]);
 
   // ── Same-person detection across the SELECTED members ──
   // A contact may legitimately hold any number of contracts, so nothing here
@@ -325,8 +277,10 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
   //    every member gets a clone with buyer + start date substituted, and the
   //    whole set goes to the server bulk endpoint (create + activate +
   //    idempotent dedup, one round-trip). No per-member client loop.
-  const run = async () => {
-    if (!seed || !result || selectedCount === 0) return;
+  const run = async (mode: 'activate' | 'drafts') => {
+    if (submissionStarted.current || !seed || !result || selectedCount === 0 || selectedCount > 200) return;
+    submissionStarted.current = true;
+    setSubmissionMode(mode);
     const members = selectedIds.map((id) => selected[id]);
     setProgress(members.map((c) => ({ id: c.id, name: contactDisplayName(c), status: 'running' as RowStatus })));
     setRunning(true);
@@ -334,6 +288,7 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
 
     try {
       assertVaniScope(result.context);
+      if (members.some(c => contactContractType(c) !== relationship)) throw new Error('A selected contact does not match this template relationship. Return to the contact list and review the selection.');
       await composer.validateContacts(members.map(c => ({ id: c.id, relationship: contactContractType(c) })));
       const baseName = String((result.draft as any).contractName || '');
       const baseNameParts = baseName.split(' — ');
@@ -361,15 +316,16 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
             // Every clone shares this start date and draft, so it computes the
             // same event ids and base dates — the one override map applies
             // cleanly to all. mapWizardToRequest does the substitution.
-            eventOverrides,
+            eventOverrides: {},
           },
         };
       });
 
       const { results, summary } = await submitBulk(items, {
         templateId: seed.match.template_id,
-        activate: true,
+        activate: mode === 'activate',
       });
+      const activationIncomplete = mode === 'activate' && results.some(r => r.status === 'draft');
 
       const byBuyer = new Map(results.map((r) => [r.buyer_id, r]));
       setProgress(members.map((c) => {
@@ -383,17 +339,21 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
           name: contactDisplayName(c),
           status,
           contractNumber: r?.contract_number,
+          contractId: r?.contract_id,
+          createdStatus: r?.status,
           error: r?.error || r?.reason,
         };
       }));
 
       addToast({
-        type: summary.failed === 0 ? 'success' : 'warning',
-        title: 'Bulk assignment complete',
-        message: `${summary.created} created`
+        type: summary.failed === 0 && !activationIncomplete ? 'success' : 'warning',
+        title: mode === 'drafts' ? 'Drafts created for individual review' : 'Bulk assignment complete',
+        message: `${summary.created} ${mode === 'drafts' ? 'drafts' : 'contracts'} created`
           + (summary.skipped ? `, ${summary.skipped} skipped` : '')
-          + (summary.failed ? `, ${summary.failed} failed` : ''),
+          + (summary.failed ? `, ${summary.failed} failed` : '')
+          + (activationIncomplete ? '. Some contracts remain drafts because activation did not complete.' : ''),
       });
+      void queryClient.invalidateQueries({ queryKey: ['contracts-experience'] });
     } catch (err: any) {
       // Whole-batch failure — mark all rows.
       setProgress((p) => p.map((r) => ({ ...r, status: 'error' as RowStatus, error: err?.message || 'Failed' })));
@@ -407,7 +367,7 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
 
   if (!isOpen || !seed) return null;
 
-  const list = contacts || [];
+  const list = (contacts || []).filter((c: any) => eligibleForTemplate(c, relationship));
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -418,25 +378,27 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
         className="sm:max-w-[96vw] w-[96vw] rounded-xl h-[95vh] max-h-[95vh] overflow-y-auto"
         style={{ backgroundColor: colors.utility.primaryBackground, borderColor: colors.utility.border }}
       >
-        {clarify && <VaniContextQuestions intent={clarify} template={false} onConfirm={next => {
-          setIntent(next); setStartDate(next.start_date); reassembleBase(next, cadenceOverrides);
-        }} />}
-
         <DialogHeader>
           <DialogTitle style={{ color: colors.utility.primaryText, fontSize: '0.95rem' }}>
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4" style={{ color: colors.brand.primary }} />
-              Assign to members
+              {finished ? 'Bulk assignment results' : reviewing ? 'Review this batch' : 'Assign a template to contacts'}
             </div>
           </DialogTitle>
           <DialogDescription style={{ color: colors.utility.secondaryText, fontSize: '0.72rem' }}>
-            <Zap className="w-3 h-3 inline mr-1" />
-            {templateName}{perContract ? ` · ${fmt(perContract)} each` : ''} — one contract per member, deterministic (no AI).
+            {templateName}{perContract ? ` · ${fmt(perContract)} each` : ''} · {relationship} template
           </DialogDescription>
         </DialogHeader>
 
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2" aria-label="Bulk assignment steps">
+          {['1 · Select contacts and start date', '2 · Review the batch', '3 · Assign now or review each'].map((label, index) => (
+            <div key={label} className="rounded-lg border px-3 py-2 text-sm font-semibold" style={{ borderColor: index === (reviewing ? 1 : finished || running ? 2 : 0) ? colors.brand.primary : colors.utility.border, color: colors.utility.primaryText, backgroundColor: index === (reviewing ? 1 : finished || running ? 2 : 0) ? `${colors.brand.primary}12` : 'transparent' }}>{label}</div>
+          ))}
+        </div>
+        {templateError && <div role="alert" className="mt-3 rounded-lg border p-4 text-sm" style={{ borderColor: colors.semantic.error, color: colors.semantic.error }}>{templateError}</div>}
+
         {/* ── PICK STAGE ── */}
-        {!running && !finished && (
+        {!running && !finished && !reviewing && (
           <div className="space-y-4 mt-1">
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-2">
@@ -460,36 +422,7 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
               </button>
             </div>
 
-            {/* Contact type filter — radio, all 4 classifications */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setClassFilter('all')}
-                className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
-                style={{
-                  borderColor: classFilter === 'all' ? colors.brand.primary : colors.utility.border,
-                  backgroundColor: classFilter === 'all' ? `${colors.brand.primary}10` : 'transparent',
-                  color: classFilter === 'all' ? colors.brand.primary : colors.utility.secondaryText,
-                }}
-              >
-                All types
-              </button>
-              {CONTACT_CLASSIFICATION_CONFIG.map((cfg) => (
-                <button
-                  key={cfg.id}
-                  type="button"
-                  onClick={() => setClassFilter(cfg.id)}
-                  className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
-                  style={{
-                    borderColor: classFilter === cfg.id ? colors.brand.primary : colors.utility.border,
-                    backgroundColor: classFilter === cfg.id ? `${colors.brand.primary}10` : 'transparent',
-                    color: classFilter === cfg.id ? colors.brand.primary : colors.utility.secondaryText,
-                  }}
-                >
-                  {cfg.label}
-                </button>
-              ))}
-            </div>
+            <p className="text-xs" style={{ color: colors.utility.secondaryText }}>Only unambiguous {relationship} contacts are shown. Select the contacts who should receive this template.</p>
 
             {/* Member list — taller now the dialog is near-fullscreen */}
             <div className="rounded-lg border overflow-y-auto" style={{ borderColor: colors.utility.border, maxHeight: '32rem' }}>
@@ -547,241 +480,68 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
               )}
             </div>
 
-            {/* Preferences — same live-reassemble pattern as single-assign */}
-            <div className="rounded-lg border p-3" style={{ borderColor: colors.utility.border }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Settings2 className="w-4 h-4" style={{ color: colors.brand.primary }} />
-                <span className="text-xs font-bold" style={{ color: colors.utility.primaryText }}>
-                  Preferences — applies to every contract in this batch
-                </span>
-                {assembling && <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" style={{ color: colors.brand.primary }} />}
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {/* Acceptance */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Acceptance</p>
-                  <div className="flex gap-1 flex-wrap">
-                    {(['signoff', 'payment', 'auto'] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => updateIntent((i) => { i.acceptance = m; })}
-                        className="px-2 py-1 rounded-lg border text-[11px] font-medium hover:opacity-80"
-                        style={{
-                          borderColor: intent?.acceptance === m ? colors.brand.primary : colors.utility.border,
-                          backgroundColor: intent?.acceptance === m ? `${colors.brand.primary}10` : 'transparent',
-                          color: intent?.acceptance === m ? colors.brand.primary : colors.utility.secondaryText,
-                        }}
-                      >
-                        {m === 'signoff' ? 'Sign-off' : m === 'payment' ? 'Payment' : 'Auto'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Billing */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Billing</p>
-                  <div className="flex gap-1 flex-wrap">
-                    {([
-                      { m: 'prepaid' as const, label: 'Upfront' },
-                      { m: 'emi' as const, label: 'EMI' },
-                      { m: 'per_block' as const, label: 'Per cycle' },
-                    ]).map(({ m, label }) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => updateIntent((i) => {
-                          i.billing.mode = m;
-                          if (m === 'emi' && !i.billing.emi_months) i.billing.emi_months = 12;
-                          if (m === 'per_block' && !i.billing.cycle) i.billing.cycle = 'quarterly';
-                        })}
-                        className="px-2 py-1 rounded-lg border text-[11px] font-medium hover:opacity-80"
-                        style={{
-                          borderColor: intent?.billing.mode === m ? colors.brand.primary : colors.utility.border,
-                          backgroundColor: intent?.billing.mode === m ? `${colors.brand.primary}10` : 'transparent',
-                          color: intent?.billing.mode === m ? colors.brand.primary : colors.utility.secondaryText,
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Start date */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Start date (all)</p>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => updateStartDate(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-full"
-                    style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-                  />
-                </div>
-                {/* End date — directly selectable. Picking one back-computes an
-                    EXACT duration in days (not the lossy months=30/years=365
-                    approximation); editing Duration instead keeps its own unit
-                    and just moves this date. Both stay in sync either way. */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>End date</p>
-                  <input
-                    type="date"
-                    value={endDateIso}
-                    onChange={(e) => updateEndDate(e.target.value)}
-                    className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-full"
-                    style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-                  />
-                </div>
-                {/* Duration override */}
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>Duration</p>
-                  <div className="flex gap-1">
-                    <input
-                      type="number"
-                      min={1}
-                      value={intent?.duration.value ?? ''}
-                      onChange={(e) => updateIntent((i) => { i.duration.value = Math.max(1, Number(e.target.value) || 1); })}
-                      className="px-2 py-1.5 rounded-lg border text-[11px] outline-none w-16"
-                      style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-                    />
-                    <select
-                      value={intent?.duration.unit ?? 'months'}
-                      onChange={(e) => updateIntent((i) => { i.duration.unit = e.target.value as VaniParsedIntent['duration']['unit']; })}
-                      className="px-2 py-1.5 rounded-lg border text-[11px] outline-none flex-1"
-                      style={{ borderColor: colors.utility.border, color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
-                    >
-                      <option value="days">Days</option>
-                      <option value="months">Months</option>
-                      <option value="years">Years</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Per-block cadence — only for blocks with a real cadencePricing
-                  rate card (same as single-assign's picker). */}
-              {result?.draft.selectedBlocks
-                .filter((b: any) => b.config?.cadencePricing?.rates?.length)
-                .map((b: any) => {
-                  const rates = (b.config.cadencePricing.rates as Array<{ cycle: string; amount: number; enabled?: boolean }>)
-                    .filter((r) => r.enabled !== false && Number(r.amount) > 0);
-                  const activeCycle = cadenceOverrides[b.id] ?? b.cycle;
-                  return (
-                    <div key={b.id} className="mt-3 pt-3 border-t" style={{ borderColor: colors.utility.border }}>
-                      <p className="text-[10px] uppercase tracking-wide mb-1" style={{ color: colors.utility.secondaryText }}>
-                        Cadence — {b.name}
-                      </p>
-                      <div className="flex gap-1 flex-wrap">
-                        {rates.map((r) => (
-                          <button
-                            key={r.cycle}
-                            type="button"
-                            onClick={() => setCadenceOverride(b.id, r.cycle)}
-                            className="px-2.5 py-1.5 rounded-lg border text-[11px] font-medium hover:opacity-80"
-                            style={{
-                              borderColor: activeCycle === r.cycle ? colors.brand.primary : colors.utility.border,
-                              backgroundColor: activeCycle === r.cycle ? `${colors.brand.primary}10` : 'transparent',
-                              color: activeCycle === r.cycle ? colors.brand.primary : colors.utility.secondaryText,
-                            }}
-                          >
-                            {CADENCE_LABEL[r.cycle] || r.cycle} · {getCurrencySymbol(b.currency)}{Number(r.amount).toLocaleString()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-              {/* ── Schedule review — the template's computed events, adjustable
-                     once for the whole batch. Collapsed by default: most
-                     batches take the generated schedule as-is. ── */}
+            {/* Published template terms stay fixed; only the shared start date is variable. */}
+            <div className="rounded-xl border p-4" style={{ borderColor: colors.utility.secondaryText + '40' }}>
+              <label className="block text-sm font-semibold" htmlFor="bulk-start-date">Start date for all contracts</label>
+              <input
+                id="bulk-start-date"
+                type="date"
+                value={startDate}
+                disabled={assembling}
+                onChange={(e) => updateStartDate(e.target.value)}
+                className="mt-2 rounded-lg border px-3 py-2 text-sm"
+                style={{ borderColor: colors.utility.secondaryText + '40', color: colors.utility.primaryText, backgroundColor: colors.utility.primaryBackground }}
+              />
+              <p className="mt-3 text-xs" style={{ color: colors.utility.secondaryText }}>The approved template fixes the term, services, price, billing and acceptance. To change those terms, make a new template revision rather than changing this batch.</p>
               {templateEvents.length > 0 && (
-                <div className="mt-3 pt-3 border-t" style={{ borderColor: colors.utility.border }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSchedule((s) => !s)}
-                    className="flex items-center gap-2 text-[11px] font-semibold"
-                    style={{ color: colors.brand.primary }}
-                  >
-                    {showSchedule ? '▾' : '▸'} Review schedule
-                    <span style={{ color: colors.utility.secondaryText, fontWeight: 400 }}>
-                      {templateEvents.length} event{templateEvents.length === 1 ? '' : 's'} per contract
-                      {Object.keys(eventOverrides).length > 0
-                        ? ` · ${Object.keys(eventOverrides).length} adjusted`
-                        : ''}
-                    </span>
-                  </button>
-
-                  {showSchedule && (
-                    <div className="mt-3">
-                      <EventScheduleAdjuster
-                        events={templateEvents}
-                        eventOverrides={eventOverrides}
-                        onEventOverridesChange={setEventOverrides}
-                        appliesToNote={`applies to all ${selectedCount || 0} contract${selectedCount === 1 ? '' : 's'}`}
-                      />
-
-                      {/* Two-up on wide screens — the dialog is near-fullscreen
-                          now, so a single column of compact rows wastes it.
-                          Scrolls internally so a 12-event schedule doesn't
-                          push the Create button off-screen. */}
-                      <div
-                        className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 overflow-y-auto pr-1"
-                        style={{ maxHeight: '18rem' }}
-                      >
-                        {[...templateEvents]
-                          .sort((a, b) => {
-                            const da = (eventOverrides[a.id] || a.scheduled_date).getTime();
-                            const db = (eventOverrides[b.id] || b.scheduled_date).getTime();
-                            return da - db;
-                          })
-                          .map((ev) => {
-                            const eff = eventOverrides[ev.id] || ev.scheduled_date;
-                            const moved = !!eventOverrides[ev.id];
-                            const isBilling = ev.event_type === 'billing';
-                            return (
-                              <div
-                                key={ev.id}
-                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-[11px]"
-                                style={{
-                                  borderColor: moved ? `${colors.brand.primary}40` : colors.utility.border,
-                                  backgroundColor: moved ? `${colors.brand.primary}08` : 'transparent',
-                                }}
-                              >
-                                <span
-                                  className="px-1.5 py-0.5 rounded font-semibold flex-none"
-                                  style={{
-                                    fontSize: 9,
-                                    textTransform: 'uppercase',
-                                    color: isBilling ? colors.brand.primary : colors.semantic.success,
-                                    backgroundColor: isBilling
-                                      ? `${colors.brand.primary}12`
-                                      : `${colors.semantic.success}12`,
-                                  }}
-                                >
-                                  {isBilling ? 'Billing' : 'Service'}
-                                </span>
-                                <span className="truncate" style={{ color: colors.utility.primaryText }}>
-                                  {ev.billing_cycle_label || ev.block_name}
-                                </span>
-                                <span className="ml-auto flex-none tabular-nums" style={{ color: colors.utility.secondaryText }}>
-                                  {eff.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </span>
-                                {ev.amount ? (
-                                  <span className="flex-none tabular-nums" style={{ color: colors.utility.secondaryText }}>
-                                    {getCurrencySymbol(ev.currency || 'INR')}{Number(ev.amount).toLocaleString('en-IN')}
-                                  </span>
-                                ) : null}
-                              </div>
-                            );
-                          })}
+                <details className="mt-4 rounded-lg border p-3" style={{ borderColor: colors.utility.secondaryText + '40' }}>
+                  <summary className="cursor-pointer text-sm font-semibold">Preview schedule · {templateEvents.length} events per contract</summary>
+                  <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-2 max-h-72 overflow-y-auto">
+                    {[...templateEvents].sort((a, b) => a.scheduled_date.getTime() - b.scheduled_date.getTime()).map(ev => (
+                      <div key={ev.id} className="rounded-lg border p-3 text-xs" style={{ borderColor: colors.utility.secondaryText + '40' }}>
+                        <strong>{ev.event_type === 'billing' ? 'Billing' : 'Service'} · {ev.billing_cycle_label || ev.block_name}</strong>
+                        <span className="ml-2" style={{ color: colors.utility.secondaryText }}>{ev.scheduled_date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        {ev.amount ? <span className="ml-2">{getCurrencySymbol(ev.currency || 'INR')}{Number(ev.amount).toLocaleString('en-IN')}</span> : null}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           </div>
+        )}
+
+        {/* One batch preview precedes either outcome. It is not a draft. */}
+        {reviewing && !running && !finished && (
+          <section className="mt-3 space-y-4" aria-label="Batch review">
+            <div className="rounded-xl border p-5" style={{ borderColor: colors.utility.border }}>
+              <h3 className="text-base font-bold mb-3" style={{ color: colors.utility.primaryText }}>Check before creating</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                <div><p style={{ color: colors.utility.secondaryText }}>Template</p><strong>{templateName}</strong></div>
+                <div><p style={{ color: colors.utility.secondaryText }}>Contacts</p><strong>{selectedCount} {relationship}{selectedCount === 1 ? '' : 's'}</strong></div>
+                <div><p style={{ color: colors.utility.secondaryText }}>Start and term</p><strong>{startDate} · {result?.draft.durationValue} {result?.draft.durationUnit}</strong></div>
+                <div><p style={{ color: colors.utility.secondaryText }}>Estimated batch total</p><strong>{Number(result?.draft.grandTotal || result?.draft.totalValue || perContract) > 0 ? fmt(Number(result?.draft.grandTotal || result?.draft.totalValue || perContract) * selectedCount) : 'Not priced in template'}</strong></div>
+              </div>
+              <p className="mt-4 text-xs" style={{ color: colors.utility.secondaryText }}>Each contact gets a separate contract using this published template. The schedule has {templateEvents.length} event{templateEvents.length === 1 ? '' : 's'} per contract. No contract has been created yet.</p>
+            </div>
+            <div className="rounded-xl border p-4" style={{ borderColor: colors.utility.border }}>
+              <h3 className="font-semibold mb-2">Selected contacts</h3>
+              <div className="flex flex-wrap gap-2">{selectedIds.slice(0, 12).map(id => <span key={id} className="rounded-lg border px-3 py-1.5 text-xs" style={{ borderColor: colors.utility.border }}>{contactDisplayName(selected[id])}</span>)}</div>
+              {selectedCount > 12 && <p className="mt-2 text-xs" style={{ color: colors.utility.secondaryText }}>And {selectedCount - 12} more contacts</p>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-xl border p-5" style={{ borderColor: colors.brand.primary }}>
+                <h3 className="font-bold">Assign now</h3>
+                <p className="text-sm mt-2" style={{ color: colors.utility.secondaryText }}>Create and activate all {selectedCount} contracts after this batch review. You will not review each contract separately before activation.</p>
+                <button type="button" onClick={() => run('activate')} className="mt-4 rounded-lg px-4 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: colors.brand.primary }}>Create and activate {selectedCount}</button>
+              </div>
+              <div className="rounded-xl border p-5" style={{ borderColor: colors.utility.border }}>
+                <h3 className="font-bold">Review each contract</h3>
+                <p className="text-sm mt-2" style={{ color: colors.utility.secondaryText }}>Create {selectedCount} drafts. Open each one, review it, and activate it individually. There is no later bulk activation.</p>
+                <button type="button" onClick={() => run('drafts')} className="mt-4 rounded-lg border px-4 py-2.5 text-sm font-semibold" style={{ borderColor: colors.brand.primary, color: colors.brand.primary }}>Create {selectedCount} drafts</button>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* ── PROGRESS / SUMMARY STAGE ── */}
@@ -799,7 +559,7 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
                   </span>
                   <span className="text-xs font-medium truncate flex-1" style={{ color: colors.utility.primaryText }}>{r.name}</span>
                   <span className="text-[10px] flex-shrink-0" style={{ color: r.status === 'error' ? colors.semantic.error : colors.utility.secondaryText }}>
-                    {r.status === 'done' ? r.contractNumber
+                    {r.status === 'done' ? `${r.contractNumber || 'Contract created'} · ${r.createdStatus === 'draft' && submissionMode === 'activate' ? 'Activation incomplete—draft saved' : r.createdStatus === 'draft' ? 'Draft' : r.createdStatus || 'Created'}`
                       : r.status === 'skipped' ? 'Already assigned'
                       : r.status === 'error' ? r.error
                       : r.status === 'running' ? 'Creating…' : 'Queued'}
@@ -809,11 +569,12 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
             </div>
             {finished && (
               <p className="text-xs mt-2 font-semibold" style={{ color: colors.utility.primaryText }}>
-                {progress.filter((r) => r.status === 'done').length} created
+                {progress.filter((r) => r.status === 'done').length} {submissionMode === 'drafts' ? 'drafts created for individual review' : 'contracts created'}
                 {progress.some((r) => r.status === 'skipped') ? ` · ${progress.filter((r) => r.status === 'skipped').length} already assigned` : ''}
                 {progress.some((r) => r.status === 'error') ? ` · ${progress.filter((r) => r.status === 'error').length} failed` : ''}
               </p>
             )}
+            {finished && progress.some(r => r.createdStatus === 'draft') && <button type="button" className="mt-4 rounded-lg px-4 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: colors.brand.primary }} onClick={() => { handleClose(); navigate('/ncontracts?status=draft'); }}>Open draft contracts</button>}
           </div>
         )}
 
@@ -851,16 +612,17 @@ const BulkAssignContent: React.FC<BulkAssignDialogProps> = ({
           >
             {finished ? 'Close' : 'Cancel'}
           </button>
-          {!finished && (
+          {!finished && !reviewing && (
             <button
-              onClick={run}
+              onClick={() => setReviewing(true)}
               disabled={running || assembling || !result || selectedCount === 0}
               className="px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90 flex items-center gap-1.5"
               style={{ backgroundColor: colors.brand.primary, opacity: (running || assembling || !result || selectedCount === 0) ? 0.6 : 1 }}
             >
-              {running ? (<><Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating…</>) : (<><ArrowRight className="w-3.5 h-3.5" /> Create {selectedCount || ''} contract{selectedCount === 1 ? '' : 's'}</>)}
+              <ArrowRight className="w-3.5 h-3.5" /> Review {selectedCount || ''} contract{selectedCount === 1 ? '' : 's'}
             </button>
           )}
+          {reviewing && !running && !finished && <button type="button" onClick={() => setReviewing(false)} className="rounded-lg border px-4 py-2 text-xs font-semibold" style={{ borderColor: colors.utility.border }}>Back to contacts and schedule</button>}
         </div>
       </DialogContent>
     </Dialog>

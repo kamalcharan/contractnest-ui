@@ -46,6 +46,10 @@ import ChairCheckinPage from './pages/session-checkin/ChairCheckinPage'; // [bat
 import VendorQuotePage from './pages/quote/VendorQuotePage'; // [rfq] public vendor quote response
 import ServiceReportPage from './pages/report/ServiceReportPage'; // [B3.6] public service report (token link)
 import VisitSlotPage from './pages/visit-slot/VisitSlotPage'; // [ops-appointments-loop] public: customer confirms a visit slot (token link)
+import PackagePage from './pages/storefront/PackagePage'; // [extend-storefront-v2] public package page (/p/:key)
+import BuyPage from './pages/buy'; // [extend-storefront-v2] public OTP checkout (/buy/:key)
+import WidgetFrame from './pages/storefront/WidgetFrame'; // [extend-storefront-v2] what embed.js puts in its iframe (/w/:key)
+import VaniChatPage from './pages/storefront/VaniChatPage'; // [extend-vani-site] VaNi on the tenant's own site (bubble panel / Ask VaNi)
 
 // Catalog Pages
 
@@ -207,6 +211,7 @@ import GroupSessionsPage from './pages/operations/group-sessions';
 import InvoiceRegisterPage from './pages/invoices';
 import InvoiceComposerPage from './pages/invoices/composer';
 import ExtendPage from './pages/extend';
+import LeadsPage from './pages/leads'; // [extend-leads] contacts tagged lead + what they wanted
 import MoneyInPage from './pages/money-in';
 import ToPayPage from './pages/to-pay';
 import TaxesPage from './pages/taxes';
@@ -406,6 +411,11 @@ const AppContent: React.FC = () => {
           <Route path="/report/service/:token" element={<ServiceReportPage />} />
           {/* [ops-appointments-loop] public slot page — no auth, gated by the per-appointment slot_token */}
           <Route path="/slot/:token" element={<VisitSlotPage />} />
+          {/* [extend-storefront-v2] public storefront surfaces — no auth, gated by the opaque storefront key */}
+          <Route path="/p/:storefrontKey" element={<PackagePage />} />
+          <Route path="/buy/:storefrontKey" element={<BuyPage />} />
+          <Route path="/w/:storefrontKey" element={<WidgetFrame />} />
+          <Route path="/vani-chat/:key" element={<VaniChatPage />} />
           <Route path="/session-checkin" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<ChairCheckinPage />} />
           </Route>
@@ -731,6 +741,18 @@ const AppContent: React.FC = () => {
             }
           >
             <Route index element={<ExtendPage />} />
+          </Route>
+
+          {/* Leads — From your reach (storefront / VaNi / manual) · RFQ (requests sent to us). Revenue side. */}
+          <Route
+            path="/leads"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<LeadsPage />} />
           </Route>
 
           {/* Money In / To Pay — one money workspace per perspective.

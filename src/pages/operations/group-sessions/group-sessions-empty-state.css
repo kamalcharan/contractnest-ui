@@ -1,0 +1,13 @@
+.gs-journey-stage{display:grid;grid-template-columns:1fr 58px 1fr;align-items:center;gap:8px;margin:18px 0 4px;min-height:126px}
+.gs-journey-library,.gs-journey-contract{min-height:112px;border:1px solid var(--rq-line);border-radius:11px;padding:12px;background:color-mix(in srgb,var(--rq-brand) 3%,var(--rq-bg))}
+.gs-journey-library>span,.gs-journey-contract>span{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:.8px;color:var(--rq-muted)}
+.gs-journey-library>div{display:flex;align-items:center;gap:7px;margin-top:15px;border:1px solid var(--rq-brand);border-radius:8px;padding:8px;color:var(--rq-brand);font-size:10px;font-weight:700}
+.gs-journey-track{position:relative;display:flex;justify-content:center;align-items:center;color:var(--rq-brand)}
+.gs-journey-moving{--gs-travel:145px;position:absolute;left:-89px;top:-11px;display:flex;align-items:center;gap:4px;white-space:nowrap;padding:8px;border-radius:7px;background:var(--rq-brand);color:#fff;font-size:10px;font-weight:700;box-shadow:0 6px 14px #142d2326;opacity:0;animation:gs-block-move 6s ease-in-out infinite}
+.gs-journey-slot{margin-top:12px;padding:8px 4px;border:1px dashed var(--rq-brand);border-radius:7px;color:var(--rq-muted);text-align:center;font-size:9px;animation:gs-slot-ready 6s ease-in-out infinite}
+.gs-journey-contract>strong{display:block;margin-top:9px;color:var(--rq-brand);font-size:9px;opacity:.45;animation:gs-active 6s ease-in-out infinite}
+@keyframes gs-block-move{0%,13%{opacity:0;transform:translateX(0) scale(.95)}19%,39%{opacity:1;transform:translateX(0) scale(1)}61%,70%{opacity:1;transform:translateX(var(--gs-travel)) scale(.85)}76%,100%{opacity:0;transform:translateX(var(--gs-travel)) scale(.85)}}
+@keyframes gs-slot-ready{0%,57%{background:transparent}62%,90%{background:color-mix(in srgb,var(--rq-brand) 14%,var(--rq-bg))}100%{background:transparent}}
+@keyframes gs-active{0%,64%{opacity:.45}72%,90%{opacity:1}100%{opacity:.45}}
+@media(max-width:400px){.gs-journey-stage{grid-template-columns:1fr 30px 1fr;gap:4px}.gs-journey-library,.gs-journey-contract{padding:8px}.gs-journey-moving{--gs-travel:98px;left:-65px}}
+@media(prefers-reduced-motion:reduce){.gs-journey-moving,.gs-journey-slot,.gs-journey-contract>strong{animation:none}.gs-journey-moving{display:none}.gs-journey-contract>strong{opacity:1}}

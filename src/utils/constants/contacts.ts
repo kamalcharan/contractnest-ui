@@ -82,6 +82,15 @@ export const CONTACT_CLASSIFICATION_CONFIG = [
     emoji: '🤝'
   },
   {
+    id: 'lead',
+    label: 'Lead',
+    labelPlural: 'Leads',
+    description: 'Showed interest — not a client yet',
+    colorKey: 'teal',
+    lucideIcon: 'Tag',
+    emoji: '✨'
+  },
+  {
     id: 'team_member',
     label: 'Team Member',
     labelPlural: 'Team Members',
@@ -99,6 +108,7 @@ export const CLASSIFICATION_HEX_COLORS: Record<string, string> = {
   purple: '#8B5CF6',  // Vendor
   orange: '#F59E0B',  // Partner
   indigo: '#6366F1',  // Team Member
+  teal: '#0F766E',    // Lead
   red: '#EF4444',     // Error/Overdue
   default: '#6B7280'  // Default gray
 };

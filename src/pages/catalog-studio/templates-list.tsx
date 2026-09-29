@@ -924,6 +924,7 @@ const TemplatesList: React.FC = () => {
         onClose={() => setBulkTemplate(null)}
         seed={bulkTemplate ? buildTemplateSeed(bulkTemplate) : null}
         templateName={bulkTemplate?.display_name || bulkTemplate?.name || 'Template'}
+        relationship={templateRelationship(bulkTemplate) || 'client'}
         onDone={() => refetch()}
       />
 

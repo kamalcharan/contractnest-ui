@@ -309,7 +309,11 @@ const ContractWizard: React.FC<ContractWizardProps> = ({
               : saved.buyerId && saved.contractName
                 ? 'coverage'
                 : 'agreement';
-        setExperienceStep(restoredState.path === 'template' && restoredState.templateId ? 'agreement' : validMarkedStep ? markedStep : inferredStep);
+        setExperienceStep(
+          restoredState.path === 'template' && restoredState.templateId && !draftContractData.metadata.bulk_review_draft
+            ? 'agreement'
+            : validMarkedStep ? markedStep : inferredStep
+        );
         restoredState.currency = typeof saved.currency === 'string' ? saved.currency : '';
         restoredState.durationValue = typeof saved.durationValue === 'number' ? saved.durationValue : 0;
         restoredState.startDate = saved.startDate ? new Date(saved.startDate) : new Date(NaN);

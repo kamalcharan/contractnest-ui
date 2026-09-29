@@ -59,6 +59,7 @@ import { useStatusMap, useTransitionMap } from '@/hooks/queries/useEventStatusCo
 import InstalmentActionModal from '@/components/finance/InstalmentActionModal';
 import QRCard from '@/components/group-sessions/QRCard';
 import { formatContactDisplayName } from '@/utils/constants/contacts';
+import GroupSessionsEmptyState from './GroupSessionsEmptyState';
 
 // Every screen in this file shows an individual (never corporate), so this
 // is just formatContactDisplayName with the type branch pre-filled — same
@@ -573,7 +574,9 @@ const GroupSessionsPage: React.FC = () => {
   // ─────────────────────────────────────────────
   // Overview — Groups | Payments tabs
   // ─────────────────────────────────────────────
-  const renderOverview = () => (
+  const renderOverview = () => sessions.length === 0 && declarations.length === 0 ? (
+    <GroupSessionsEmptyState colors={colors} onCreateBlock={() => navigate('/catalog-studio/configure?category=session')} onContracts={() => navigate('/ncontracts')} />
+  ) : (
     <>
       <h1 className="text-xl font-semibold" style={ink}>Group Sessions</h1>
       <p className="text-sm mt-1 mb-4" style={sub}>Every group you run — its recurring sessions, attendance and dues. Drill into any of it.</p>

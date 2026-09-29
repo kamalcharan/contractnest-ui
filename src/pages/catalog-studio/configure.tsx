@@ -3,7 +3,7 @@
 // v2.1: Use URL navigation instead of inline wizard for better space utilization
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
@@ -154,7 +154,8 @@ const CatalogStudioConfigurePage: React.FC = () => {
   }, [blocksResponse]);
 
   // State (wizard uses URL navigation now)
-  const [selectedCategory, setSelectedCategory] = useState<string>('service');
+  const [searchParams] = useSearchParams();
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => searchParams.get('category') === 'session' ? 'session' : 'service');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
   const [isEditorPanelOpen, setIsEditorPanelOpen] = useState<boolean>(false);

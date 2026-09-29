@@ -1,7 +1,7 @@
 // src/pages/contracts/create/index.tsx
 // Contract Type Pages - Client, Vendor, Partner Contracts
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Plus, FileText, Search, Filter, Sparkles } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import ContractWizard from '@/components/contracts/ContractWizard';
@@ -43,6 +43,20 @@ const ContractCreatePage: React.FC = () => {
   const [vaniEntitled, setVaniEntitled] = useState(false);
   const [vaniRelationship, setVaniRelationship] = useState<ContractType | null>(null);
   const [vaniInitialStep, setVaniInitialStep] = useState<string | null>(null);
+
+  // [extend-leads] "Send contract" from a lead: /contracts/create/client?contactId=&contactName=
+  // opens the wizard with the buyer chosen (the prefill path VaNi uses). The
+  // relationship is the route's own type — the wizard reads it from
+  // vaniRelationship whenever a prefill is present.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const contactId = searchParams.get('contactId');
+    if (!contactId) return;
+    setVaniRelationship(validContractType);
+    setVaniPrefill({ buyerId: contactId, buyerName: searchParams.get('contactName') || '' });
+    setShowWizard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVaniDraftReady = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
     if (!result.context?.relationship) throw new Error('VaNi contract relationship is missing.');
