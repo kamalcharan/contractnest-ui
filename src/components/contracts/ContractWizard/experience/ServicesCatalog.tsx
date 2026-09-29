@@ -36,7 +36,7 @@ export function serviceErrors(blocks: ConfigurableBlock[], currency: string, cov
       continue;
     }
     const name = b.name?.trim() || 'Unnamed FlyBy entry';
-    if (!b.name?.trim()) errors.push('Name each FlyBy entry.');
+    if (!b.name?.trim()) errors.push('The unnamed FlyBy commitment needs a name. Open “Edit commitment” on the “Name this commitment” card, or remove that card.');
     if (coverage.length && !coverage.some(c => c.id === b.coverageTypeId)) errors.push(`${name}: review its coverage assignment.`);
     if (!Number.isFinite(b.quantity) || b.quantity <= 0) errors.push(`${name}: enter a valid quantity.`);
     if (!Number.isFinite(b.totalPrice) || b.totalPrice < 0) errors.push(`${name}: calculated price is invalid.`);
@@ -79,7 +79,7 @@ export default function ServicesCatalog(p: ServicesCatalogProps) {
     const coverage = p.coverage.find(c => c.id === b.coverageTypeId);
     if (instance && editing?.id === b.id) return <article className="sv-row cm-card" data-selected="true" data-editing="true" data-commitment-id={b.id} key={b.id}>{p.editor(b,block)}</article>;
     if (instance) return <article className="sv-row cm-card" data-selected="true" data-editing="false" data-commitment-id={b.id} key={b.id}>
-      <div className="cm-card-top"><span className="sv-type">{['service','session'].includes(b.categoryId || '') ? <Wrench size={15}/> : <FileText size={15}/>} {b.categoryName || b.categoryId}</span><span className="cm-added"><Check size={14}/>Added</span></div>
+      <div className="cm-card-top"><span className="sv-type">{['service','session'].includes(b.categoryId || '') ? <Wrench size={15}/> : <FileText size={15}/>} {b.categoryName || b.categoryId}</span><span className="cm-added">{!b.name?.trim() || missingPrice ? 'Needs attention' : <><Check size={14}/>Added</>}</span></div>
       <h3>{label}</h3><small>{b.isFlyBy ? 'FlyBy · this agreement only' : block ? 'From Catalog Studio' : 'Saved selection · catalogue eligibility needs review'}{b.config?.customPrice !== undefined && ' · Price adjusted'}</small>
       <div className="cm-facts"><span><Boxes size={16}/>{coverage ? `${coverage.resource_name}${b.config?.splitUnitIndex ? ` · Unit ${b.config.splitUnitIndex} of ${b.config.splitUnitTotal}` : ` × ${coverage.unit_count}`}` : b.coverageTypeId ? 'Coverage needs review' : 'Whole agreement'}</span>
         <span><CalendarDays size={16}/>{b.config?.billingOnly ? 'Billing only · no service visits' : b.unlimited ? 'Ongoing support' : `${b.quantity} ${b.config?.cadencePricing ? 'full payments' : b.categoryId === 'session' ? 'sessions' : b.categoryId === 'service' ? 'visits' : 'items'}`}{!b.config?.billingOnly && b.serviceCycleDays ? ` · every ${b.serviceCycleDays} days` : ''}</span>

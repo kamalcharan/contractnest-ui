@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useRef, useState, type CSSProperties 
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, Plus, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { ContractType } from '@/components/contracts/ContractWizard';
@@ -11,6 +11,8 @@ import { textOnBrand } from '@/pages/experience/model';
 import { counterparty, listScopeKey, money, nextStep, PAGE_SIZE, relationshipScope, statusLabel, statuses, type Relationship } from './model';
 import { useContractList, useDraftForList } from './useContractList';
 import ContactClassificationBadge from './ContactClassificationBadge';
+import VaNiComposerLauncher from '@/components/contracts/vani/VaNiComposerLauncher';
+import vaniComposerService, { type VaniComposeResult } from '@/services/vaniComposerService';
 import './contracts-list.css';
 
 const ContractWizard = lazy(() => import('@/components/contracts/ContractWizard'));
@@ -46,12 +48,22 @@ function ContractsListContent() {
   const [sort, setSort] = useState(restore && ['created_at', 'total_value', 'health_score'].includes(initialSort) ? initialSort : 'created_at');
   const [page, setPage] = useState(restore && Number.isSafeInteger(initialPage) && initialPage > 0 ? initialPage : 1);
   const [wizardType, setWizardType] = useState<ContractType | null>(null);
+  const [showVani, setShowVani] = useState(false);
+  const [vaniEntitled, setVaniEntitled] = useState(false);
+  const [vaniPrefill, setVaniPrefill] = useState<Record<string, any> | null>(null);
+  const [vaniInteractionIds, setVaniInteractionIds] = useState<string[]>([]);
+  const [vaniInitialStep, setVaniInitialStep] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [handoffError, setHandoffError] = useState('');
   const newMenu = useRef<HTMLDetailsElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const pageHeading = useRef<HTMLHeadingElement>(null);
   const contractType = relationshipScope(perspective, relationship);
+  useEffect(() => {
+    let mounted = true;
+    vaniComposerService.checkEntitlement().then(value => { if (mounted) setVaniEntitled(value.entitled && value.llm_enabled); }).catch(() => { if (mounted) setVaniEntitled(false); });
+    return () => { mounted = false; };
+  }, [tenantId, isLive]);
   const list = useContractList({ contract_type: contractType, status, search, page, limit: PAGE_SIZE, sort_by: sort, sort_direction: sort === 'health_score' ? 'asc' : 'desc' });
   // Exact server counts, not page-derived totals or mixed RFQ/contract stats.
   // These three shortcuts intentionally stay scoped to the relationship, not search.
@@ -87,13 +99,22 @@ function ContractsListContent() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: listScopeKey(tenantId, isLive, perspective) });
   const closeWizard = () => {
-    setWizardType(null); setDraftId(null); void refresh();
+    setWizardType(null); setDraftId(null); setVaniPrefill(null); setVaniInteractionIds([]); setVaniInitialStep(null); void refresh();
     requestAnimationFrame(() => trigger.current?.isConnected ? trigger.current.focus() : pageHeading.current?.focus());
   };
   const openNew = (type: ContractType) => {
     trigger.current = newMenu.current?.querySelector('summary') || document.activeElement as HTMLElement;
     if (newMenu.current) newMenu.current.open = false;
     navigate(`/contracts/experience/create?relationship=${type}`);
+  };
+  const editVaniDraft = (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => {
+    if (!result.context?.relationship) { setHandoffError('VaNi did not resolve the contract relationship. Please review the draft again.'); return; }
+    setVaniPrefill(result.draft);
+    setVaniInteractionIds(interactionIds);
+    setVaniInitialStep(initialStepId || 'review');
+    setWizardType(result.context.relationship);
+    setDraftId(null);
+    setShowVani(false);
   };
   const openContract = (contract: Contract) => {
     if (contract.status === 'draft' && contract.tenant_id === tenantId) {
@@ -128,10 +149,10 @@ function ContractsListContent() {
     <div className="cnl-shell">
       <div className="cnl-topline"><span>{currentTenant?.name || 'Your workspace'} / Contracts</span><Link to="/contracts">Existing list <ArrowUpRight size={14} /></Link></div>
       <header className="cnl-header"><div><p className="cnl-eyebrow">{revenue ? 'AGREEMENTS YOU DELIVER' : 'AGREEMENTS YOU RECEIVE'}</p><h1 tabIndex={-1} ref={pageHeading}>Contracts, moving forward.</h1><p>Find an agreement. Know what’s next. Keep the work moving.</p></div>
-        <details className="cnl-create" ref={newMenu} onKeyDown={event => { if (event.key === 'Escape' && newMenu.current) { newMenu.current.open = false; newMenu.current.querySelector('summary')?.focus(); } }}>
+        <div className="cnl-header-actions">{vaniEntitled && <button type="button" className="cnl-button cnl-vani" onClick={() => setShowVani(true)}><Sparkles size={18} />Draft with VaNi</button>}<details className="cnl-create" ref={newMenu} onKeyDown={event => { if (event.key === 'Escape' && newMenu.current) { newMenu.current.open = false; newMenu.current.querySelector('summary')?.focus(); } }}>
           <summary className="cnl-button cnl-primary"><Plus size={18} />New contract<ChevronDown size={16} /></summary>
-          <div className="cnl-create-options"><p>Who is this agreement with?</p>{(revenue ? ['client', 'partner'] as const : ['vendor'] as const).map(type => <button key={type} onClick={() => openNew(type)}><strong>{type === 'client' ? 'Client contract' : type === 'partner' ? 'Partner contract' : 'Vendor contract'}</strong><small>{type === 'client' ? 'Services you provide to a customer' : type === 'partner' ? 'An agreement with a partner' : 'Services you receive from a provider'}</small><ArrowRight size={16} /></button>)}</div>
-        </details>
+          <div className="cnl-create-options"><p>Create manually</p>{(revenue ? ['client', 'partner'] as const : ['vendor'] as const).map(type => <button key={type} onClick={() => openNew(type)}><strong>{type === 'client' ? 'Client contract' : type === 'partner' ? 'Partner contract' : 'Vendor contract'}</strong><small>{type === 'client' ? 'Services you provide to a customer' : type === 'partner' ? 'An agreement with a partner' : 'Services you receive from a provider'}</small><ArrowRight size={16} /></button>)}<button onClick={() => { if (newMenu.current) newMenu.current.open = false; navigate('/contracts/experience/create?source=template'); }}><strong>Start from a template</strong><small>Use published terms, then add the matching contact and start date</small><ArrowRight size={16} /></button></div>
+        </details></div>
       </header>
       <div className="cnl-shortcut-caption">{revenue ? relationship === 'all' ? 'Across your client and partner contracts' : `Across your ${relationship} contracts` : 'Across your vendor contracts'}</div>
       <section className="cnl-shortcuts" aria-label="Contract shortcuts">{shortcuts.map(({key, label, caption, query, icon: Icon}) => <button className="cnl-shortcut" key={key} aria-pressed={status === key} onClick={() => chooseShortcut(key)}>
@@ -172,11 +193,11 @@ function ContractsListContent() {
       <p className="cnl-footnote">One contract connects scope, services and payments. Open an agreement for the complete picture.</p>
       {handoffError && <p className="cnl-notice" role="alert">{handoffError} <Link to="/contracts">Open existing list</Link></p>}
     </div>
+    <VaNiComposerLauncher isOpen={showVani} onClose={() => { setShowVani(false); void refresh(); }} onDraftReady={editVaniDraft} onManualFallback={(text, type) => { setShowVani(false); navigate(`/contracts/experience/create?relationship=${type}`, { state: { vaniIntent: text } }); }} initialRelationship={perspective === 'expense' ? 'vendor' : relationship === 'partner' ? 'partner' : 'client'} />
     {(wizardType || draftId) && createPortal(<div className="cnl-portal" style={palette}><WizardBoundary onClose={closeWizard}>
-      {draftId && !loadedDraft ? <div className="cnl-overlay" role="dialog" aria-modal="true" aria-label="Opening draft"><div className="cnl-dialog"><h2>{draft.isError ? 'This draft couldn’t open' : 'Opening your draft…'}</h2><p>{draft.isError ? 'It may have changed or no longer be a draft. Close and refresh the list.' : 'Loading the saved details before continuing.'}</p><button autoFocus className="cnl-button" onClick={closeWizard}>Close</button></div></div> : <Suspense fallback={<div className="cnl-overlay" role="status"><div className="cnl-dialog">Opening your contract journey…<button className="cnl-button" onClick={closeWizard}>Cancel</button></div></div>}><ContractWizard presentation="experience" agreementOnly isOpen contractType={wizardType || resumeType} draftContractId={draftId} draftContractData={loadedDraft} onClose={closeWizard} onComplete={closeWizard} onAssignTemplate={async template => {
+      {draftId && !loadedDraft ? <div className="cnl-overlay" role="dialog" aria-modal="true" aria-label="Opening draft"><div className="cnl-dialog"><h2>{draft.isError ? 'This draft couldn’t open' : 'Opening your draft…'}</h2><p>{draft.isError ? 'It may have changed or no longer be a draft. Close and refresh the list.' : 'Loading the saved details before continuing.'}</p><button autoFocus className="cnl-button" onClick={closeWizard}>Close</button></div></div> : <Suspense fallback={<div className="cnl-overlay" role="status"><div className="cnl-dialog">Opening your contract journey…<button className="cnl-button" onClick={closeWizard}>Cancel</button></div></div>}><ContractWizard presentation="experience" agreementOnly isOpen contractType={wizardType || resumeType} draftContractId={draftId} draftContractData={loadedDraft} vaniPrefill={vaniPrefill} vaniInteractionIds={vaniInteractionIds} vaniInitialStepId={vaniInitialStep} onClose={closeWizard} onComplete={closeWizard} onAssignTemplate={async template => {
         try {
-          const { buildTemplateSeed } = await import('@/components/contracts/vani/VaNiComposerLauncher');
-          navigate('/contracts', { state: { assignSeed: buildTemplateSeed(template) } });
+          navigate(`/contracts/experience/create?source=template&template=${encodeURIComponent(template.id)}`);
         } catch { closeWizard(); setHandoffError('Template handoff couldn’t open. Please try from the existing list.'); }
       }} /></Suspense>}
     </WizardBoundary></div>, document.body)}

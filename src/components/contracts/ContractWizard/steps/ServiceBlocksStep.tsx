@@ -323,6 +323,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
 
   // Local state
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
+  const pendingFlyById = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [vaniDismissed, setVaniDismissed] = useState(false);
@@ -581,6 +582,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       };
 
       onBlocksChange([...selectedBlocks, newBlock]);
+      pendingFlyById.current = flyById;
       addToast({
         type: 'success',
         title: 'FlyBy block added',
@@ -597,6 +599,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   // Remove block (UNCHANGED)
   const handleRemoveBlock = useCallback(
     (blockId: string) => {
+      if (pendingFlyById.current === blockId) pendingFlyById.current = null;
       const block = selectedBlocks.find((b) => b.id === blockId);
       onBlocksChange(selectedBlocks.filter((b) => b.id !== blockId));
 
@@ -675,7 +678,18 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
   );
 
   const handleToggleExpand = useCallback((blockId: string) => {
+    if (pendingFlyById.current === blockId && expandedBlockId === blockId) {
+      pendingFlyById.current = null;
+      onBlocksChange(selectedBlocks.filter((block) => block.id !== blockId));
+      setExpandedBlockId(null);
+      return;
+    }
     setExpandedBlockId((prev) => (prev === blockId ? null : blockId));
+  }, [expandedBlockId, onBlocksChange, selectedBlocks]);
+
+  const handleSaveCommitment = useCallback((blockId: string) => {
+    if (pendingFlyById.current === blockId) pendingFlyById.current = null;
+    setExpandedBlockId(null);
   }, []);
 
   // ── "Align all to X" — snaps every offender to the majority cycle
@@ -781,7 +795,7 @@ const ServiceBlocksStep: React.FC<ServiceBlocksStepProps> = ({
       flyBy={!!instance.isFlyBy} expanded durationMonths={contractDuration}
       coverageUnitCount={coverageTypes.find(c => c.id === instance.coverageTypeId)?.unit_count}
       onSplitByUnits={instance.isFlyBy ? () => handleSplitByUnits(instance.id) : undefined}
-      onToggle={() => handleRemoveBlock(instance.id)} onToggleExpand={() => handleToggleExpand(instance.id)}
+      onToggle={() => handleRemoveBlock(instance.id)} onToggleExpand={() => handleToggleExpand(instance.id)} onSaved={() => handleSaveCommitment(instance.id)}
       onUpdate={updates => handleUpdateBlock(instance.id, updates.config?.customPrice > 0 ? { ...updates, config: { ...updates.config, complimentary: false } } : updates)} onRemove={() => handleRemoveBlock(instance.id)}/>} />;
 
   return (

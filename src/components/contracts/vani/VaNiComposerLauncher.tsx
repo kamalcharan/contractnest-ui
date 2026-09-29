@@ -42,6 +42,8 @@ export interface VaNiComposerLauncherProps {
   initialRelationship?: VaniRelationship;
   isOpen: boolean;
   onClose: () => void;
+  /** Preserve the user's request when the AI service is unavailable. */
+  onManualFallback?: (text: string, relationship: VaniRelationship) => void;
   /** Edit path → open the wizard pre-filled, optionally at a specific step */
   onDraftReady: (result: VaniComposeResult, interactionIds: string[], initialStepId?: string) => void;
   /** 'template': compose a reusable TEMPLATE — no buyer step, no dates;
@@ -168,6 +170,7 @@ const CANVAS_CSS = `
 const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   isOpen,
   onClose,
+  onManualFallback,
   onDraftReady,
   mode = 'contract',
   onTemplateSaved,
@@ -188,6 +191,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   // Which tab the review opens on — set by the Ready-card buttons.
   const [reviewInitialView, setReviewInitialView] = useState<'contract' | 'events'>('contract');
   const [text, setText] = useState('');
+  const [parseFailure, setParseFailure] = useState('');
   const [runningStep, setRunningStep] = useState<StepId | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [cards, setCards] = useState<StepCard[]>([]);
@@ -241,6 +245,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   const reset = useCallback(() => {
     setStage('input');
     setText('');
+    setParseFailure('');
     setRunningStep(null);
     setCards([]);
     setResult(null);
@@ -668,6 +673,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   // ── STEP 1: parse intent (LLM) ──
   const runParse = useCallback(async (inputText: string) => {
     if (inputText.length < 5) return;
+    setParseFailure('');
     setStage('running');
     setRunningStep('parse');
     try {
@@ -695,7 +701,14 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
       });
       runTemplateCheck();
     } catch (err: any) {
-      addToast({ type: 'error', title: 'VaNi could not read that', message: err.message });
+      const code = err?.response?.data?.error?.code;
+      const message = code === 'VANI_MODEL_AUTH'
+        ? 'VaNi’s model connection needs administrator attention. No draft was created.'
+        : code === 'VANI_MODEL_UNAVAILABLE' || err?.response?.status >= 500
+          ? 'VaNi is temporarily unavailable. No draft was created; you can retry or continue manually.'
+          : err?.response?.data?.error?.message || 'VaNi could not process this request. No draft was created.';
+      setParseFailure(message);
+      addToast({ type: 'error', title: 'VaNi draft not created', message });
       setStage('input');
       setRunningStep(null);
     }
@@ -707,6 +720,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
   // repeat contract composes with NO LLM calls at all.
   const startPipeline = useCallback(async (inputText: string) => {
     if (inputText.length < 5) return;
+    setParseFailure('');
     rawTextRef.current = inputText;
     setStage('running');
     if (isTemplateMode) {
@@ -870,6 +884,8 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
           </div>
           <button
             onClick={handleClose}
+            type="button"
+            aria-label="Close VaNi drafting"
             className="p-1.5 rounded-lg hover:opacity-70 transition-opacity"
             style={{ color: colors.utility.secondaryText }}
           >
@@ -895,8 +911,25 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
             retry();
           }} />}
         {stage === 'input' && (
-          <div className="p-6 max-w-xl mx-auto w-full">
+          <div className="p-6 max-w-xl mx-auto w-full flex-1 min-h-0 overflow-y-auto">
+            <div className="mb-5">
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: colors.brand.primary }}>Optional drafting help</p>
+              <h2 className="mt-1 text-xl font-bold" style={{ color: colors.utility.primaryText }}>Tell VaNi what this agreement needs to cover</h2>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: colors.utility.secondaryText }}>
+                Describe the scope in your own words. VaNi will prepare a draft for you to review; you decide what to keep before creating a contract.
+              </p>
+            </div>
+            {parseFailure && <div role="alert" className="mb-5 rounded-xl border p-4 text-sm" style={{ borderColor: colors.semantic.error, backgroundColor: `${colors.semantic.error}0D`, color: colors.utility.primaryText }}>
+              <strong>VaNi could not prepare a draft</strong>
+              <p className="mt-1 leading-relaxed">{parseFailure}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {onManualFallback && relationship && <button type="button" className="rounded-lg px-4 py-2 font-semibold" style={{ backgroundColor: colors.brand.primary, color: '#fff' }} onClick={() => onManualFallback(text.trim(), relationship)}>Continue without VaNi</button>}
+                <button type="button" className="rounded-lg border px-4 py-2 font-semibold" style={{ borderColor: `${colors.utility.primaryText}30` }} onClick={handleClose}>Close</button>
+              </div>
+            </div>}
+            <label htmlFor="vani-contract-request" className="mb-2 block text-sm font-semibold">What should the agreement include?</label>
             <textarea
+              id="vani-contract-request"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={isTemplateMode
@@ -912,7 +945,8 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
                 color: colors.utility.primaryText,
               }}
             />
-            <div className="mt-3 space-y-1.5">
+            {!parseFailure && <><p className="mt-4 mb-2 text-xs font-semibold" style={{ color: colors.utility.secondaryText }}>Or start with an example</p>
+            <div className="space-y-1.5">
               {(smartChips.length > 0 ? smartChips : (isTemplateMode ? TEMPLATE_EXAMPLES : EXAMPLES)).map((ex) => (
                 <button
                   key={ex}
@@ -923,7 +957,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
                   {ex}
                 </button>
               ))}
-            </div>
+            </div></>}
             <button
               onClick={() => startPipeline(text.trim())}
               disabled={text.trim().length < 5 || (!isTemplateMode && !relationship)}
@@ -931,7 +965,7 @@ const VaNiComposerContent: React.FC<VaNiComposerLauncherProps> = ({
               style={{ backgroundColor: colors.brand.primary }}
             >
               <Sparkles className="w-4 h-4" />
-              Draft it
+              Prepare draft for review
             </button>
             <p className="mt-2 text-[10px] text-center" style={{ color: colors.utility.secondaryText }}>
               VaNi runs on your own AI server. Nothing is created or sent without your approval.

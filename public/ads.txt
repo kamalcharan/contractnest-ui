@@ -1,6 +1,6 @@
 # Ads.txt file for contractnest.com
 # This file authorizes digital advertising sellers
-# Updated: 2026-08-06
+# Updated: 2026-09-29
 
 # We currently do not serve ads on our platform
 # This file prevents unauthorized ad inventory sales

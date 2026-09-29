@@ -171,8 +171,8 @@ export function deserializeWizardState(raw: Record<string, any>): ContractWizard
   };
 }
 
-// Strip contract-instance data (buyer, assets, event overrides) before a
-// wizard state is persisted inside a template — templates are counterparty-free
+// Strip contract-instance data (buyer, identified assets, event overrides).
+// Coverage types and quantities are reusable requirements, not customer assets.
 export function sanitizeStateForTemplate(state: ContractWizardState): ContractWizardState {
   return {
     ...state,
@@ -187,9 +187,30 @@ export function sanitizeStateForTemplate(state: ContractWizardState): ContractWi
     vendorNames: [],
     status: 'draft',
     equipmentDetails: [],
-    coverageTypes: [],
+    coverageTypes: state.coverageTypes,
     allowBuyerToAdd: false,
     eventOverrides: {},
     eventsReview: undefined,
+  };
+}
+
+/** Copy reusable terms into a new contract, never customer-specific data. */
+export function contractStateFromTemplate(raw: Record<string, any>, templateId: string): ContractWizardState {
+  // Query-cache template data must remain immutable while the contract is edited.
+  const reusable = sanitizeStateForTemplate(deserializeWizardState(JSON.parse(JSON.stringify(raw))));
+  return {
+    ...reusable,
+    path: 'template',
+    templateId,
+    buyerId: null,
+    buyerName: '',
+    buyerContactPersonId: null,
+    buyerContactPersonName: null,
+    useCompanyContact: false,
+    equipmentDetails: [],
+    startDate: new Date(NaN),
+    eventOverrides: {},
+    eventsReview: undefined,
+    status: 'draft',
   };
 }

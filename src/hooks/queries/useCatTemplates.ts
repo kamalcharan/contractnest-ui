@@ -106,10 +106,10 @@ export const catTemplateKeys = {
  * Hook to fetch tenant templates
  */
 export const useCatTemplates = (filters?: CatTemplateFilters) => {
-  const { currentTenant } = useAuth();
+  const { currentTenant, isLive } = useAuth();
 
   return useQuery({
-    queryKey: catTemplateKeys.list(filters || {}),
+    queryKey: [...catTemplateKeys.list(filters || {}), currentTenant?.id, isLive],
     queryFn: async (): Promise<CatTemplatesResponse> => {
       if (!currentTenant?.id) {
         throw new Error('Missing tenant');
@@ -131,10 +131,10 @@ export const useCatTemplates = (filters?: CatTemplateFilters) => {
  * Hook to fetch a single template by ID
  */
 export const useCatTemplate = (templateId: string | undefined) => {
-  const { currentTenant } = useAuth();
+  const { currentTenant, isLive } = useAuth();
 
   return useQuery({
-    queryKey: catTemplateKeys.detail(templateId || ''),
+    queryKey: [...catTemplateKeys.detail(templateId || ''), currentTenant?.id, isLive],
     queryFn: async (): Promise<CatTemplateResponse> => {
       if (!currentTenant?.id || !templateId) {
         throw new Error('Missing tenant or template ID');
@@ -144,7 +144,8 @@ export const useCatTemplate = (templateId: string | undefined) => {
 
       const response = await api.get(url);
 
-      return response.data;
+      const body = response.data;
+      return body?.data?.template ? { ...body, data: body.data.template } : body;
     },
     enabled: !!currentTenant?.id && !!templateId,
     staleTime: 5 * 60 * 1000,

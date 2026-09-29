@@ -12,7 +12,7 @@
 // payment is recorded afterwards via the Record Payment flow. Only the button
 // label changes ("Approve & Create" vs "Approve & Send").
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Sparkles, ArrowLeft, CheckCircle2, PencilLine, Send, Loader2,
   AlertTriangle, Info, Copy, Check, LayoutTemplate,
@@ -25,6 +25,8 @@ import { createInitialWizardState, serializeWizardState, sanitizeStateForTemplat
 import useContractSubmission, { SubmissionResult } from '@/hooks/useContractSubmission';
 import vaniComposerService, { VaniComposeResult, assertVaniScope } from '@/services/vaniComposerService';
 import { useSaveTemplate } from '@/hooks/mutations/useCatTemplatesMutations';
+import { serviceErrors } from '@/components/contracts/ContractWizard/experience/ServicesCatalog';
+import { eventPreview } from '@/components/contracts/ContractWizard/experience/eventsModel';
 
 export interface VaNiReviewFinalizeProps {
   result: VaniComposeResult;
@@ -65,6 +67,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
   const { submit, isSubmitting } = useContractSubmission();
 
   const [sent, setSent] = useState<SubmissionResult | null>(null);
+  const submittingRef = useRef(false);
   const [cnakCopied, setCnakCopied] = useState(false);
 
   // Contract | Events view switch. Event-date overrides made on the Events
@@ -98,13 +101,19 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
       ) {
         list.push('Asset coverage missing — use Edit in wizard to pick coverage');
       }
+      const state = { ...createInitialWizardState(), ...draft,
+        startDate: draft.startDate ? new Date(draft.startDate) : new Date() };
+      list.push(...serviceErrors(state.selectedBlocks as any, state.currency, state.coverageTypes));
+      list.push(...eventPreview(state as any).errors);
     }
-    return list;
+    return [...new Set(list)];
   }, [draft, isTemplateMode]);
 
   const isAutoAccept = draft.acceptanceMethod === 'auto';
 
   const handleSend = async () => {
+    if (submittingRef.current || sent) return;
+    submittingRef.current = true;
     try {
       assertVaniScope(result.context);
       const relationship = result.context.relationship;
@@ -114,13 +123,17 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
       vaniComposerService.sendFeedback(interactionIds, { was_accepted: true, was_edited: false });
       addToast({
         type: 'success',
-        title: isAutoAccept ? 'Contract created' : 'Contract sent',
-        message: isAutoAccept
+        title: created.status === 'draft' ? 'Draft created; activation needs attention' : isAutoAccept ? 'Contract created' : 'Contract sent',
+        message: created.status === 'draft'
+          ? 'The contract exists as a draft, but its final status was not confirmed. Open it before retrying.'
+          : isAutoAccept
           ? `${draft.contractName} is active — record payment when it comes in.`
           : `${draft.contractName} is now awaiting acceptance.`,
       });
     } catch (err: any) {
       addToast({ type: 'error', title: 'Sending failed', message: err?.message || 'Please try again.' });
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -298,7 +311,7 @@ const VaNiReviewFinalize: React.FC<VaNiReviewFinalizeProps> = ({
               <CheckCircle2 className="w-8 h-8" style={{ color: colors.semantic.success }} />
             </div>
             <h3 className="text-lg font-bold mb-1" style={{ color: colors.utility.primaryText }}>
-              {isAutoAccept ? 'Contract created' : 'Contract sent'}
+              {sent.status === 'draft' ? 'Contract saved as draft' : isAutoAccept ? 'Contract created' : 'Contract sent'}
             </h3>
             <p className="text-sm mb-1" style={{ color: colors.utility.secondaryText }}>
               {draft.contractName}

@@ -73,6 +73,9 @@
   gap: 24px;
   margin-bottom: 30px;
 }
+.cnl-header-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.cnl-vani{min-height:48px;border-color:var(--cnl-brand);color:var(--cnl-brand);font-weight:750;background:var(--cnl-tint);white-space:nowrap}
+.cnl-vani:hover{filter:brightness(.96)}
 .cnl-eyebrow {
   font-size: 10px;
   letter-spacing: .14em;
@@ -626,6 +629,9 @@
     display: block;
     margin-bottom: 24px;
   }
+  .cnl-header-actions{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cnl-header-actions .cnl-vani,.cnl-header-actions .cnl-create,.cnl-header-actions .cnl-create summary{width:100%}
+  .cnl-header-actions .cnl-create{margin-top:0}
   .cnl-header h1 {
     font-size: 29px;
     letter-spacing: -1px;
@@ -813,7 +819,7 @@
     margin-bottom: 20px;
   }
   .cnl-create {
-    margin-top: 16px;
+    margin-top: 0;
   }
   .cnl-topline {
     margin-bottom: 20px;

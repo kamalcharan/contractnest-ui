@@ -59,11 +59,10 @@ export function canGoNextForStep(
   }
 }
 
-// Skip asset selection step when nomenclature group has no resource mapping
-// (template mode has no asset step at all — flag must stay false)
+// Skip coverage when the agreement is not equipment/facility-based.
 export function shouldSkipAssetStepFor(
   state: ContractWizardState,
   ctx: { isRfqMode: boolean; isTemplateMode: boolean }
 ): boolean {
-  return !ctx.isRfqMode && !ctx.isTemplateMode && !ASSET_STEP_GROUPS.has(state.nomenclatureGroup || '');
+  return !ctx.isRfqMode && !ASSET_STEP_GROUPS.has(state.nomenclatureGroup || '');
 }

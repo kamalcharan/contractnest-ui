@@ -37,6 +37,8 @@ import { VaNiLoader } from '../../components/common/loaders/UnifiedLoader';
 import VaNiComposerLauncher, { buildTemplateSeed } from '../../components/contracts/vani/VaNiComposerLauncher';
 import BulkAssignDialog from '../../components/contracts/vani/BulkAssignDialog';
 import vaniComposerService from '../../services/vaniComposerService';
+import { useVaNiToast } from '../../components/common/toast/VaNiToast';
+import { templateRelationship, templateRelationshipLabel, type TemplateRelationship } from '../../components/contracts/ContractWizard/logic/templateRelationship';
 
 // =====================================================
 // Lifecycle (lives in settings.lifecycle — status_id is an unused uuid col)
@@ -171,14 +173,16 @@ const TemplatesList: React.FC = () => {
 
   // ── VaNi template composer (subscribers only — same gate as contracts) ──
   const [showVaniComposer, setShowVaniComposer] = useState(false);
+  const { addToast } = useVaNiToast();
   const navigate = useNavigate();
-  // Assign a published template to a member: hand a composer seed to the
-  // contracts hub, which opens the VaNi composer straight at the buyer step.
+  // Start one contract in the new journey; no VaNi entitlement is required.
   const handleAssignTemplate = useCallback((template: any) => {
-    navigate('/contracts', { state: { assignSeed: buildTemplateSeed(template) } });
+    navigate(`/contracts/experience/create?source=template&template=${encodeURIComponent(template.id)}`);
   }, [navigate]);
   // Multi-party assignment: one template → many members in one batch.
   const [bulkTemplate, setBulkTemplate] = useState<CatTemplate | null>(null);
+  const [classifyTemplate, setClassifyTemplate] = useState<CatTemplate | null>(null);
+  const [selectedRelationship, setSelectedRelationship] = useState<TemplateRelationship | null>(null);
   const [vaniEntitled, setVaniEntitled] = useState(false);
   useEffect(() => {
     vaniComposerService.checkEntitlement().then((e) => setVaniEntitled(e.entitled && e.llm_enabled));
@@ -202,8 +206,9 @@ const TemplatesList: React.FC = () => {
   }, []);
 
   const handleEditTemplate = useCallback((t: CatTemplate) => {
+    if (isSignedOff(t)) addToast({ type: 'info', title: 'Editing published template', message: 'Saving content creates a draft revision. Publish it again when ready; existing contracts do not change.' });
     setTemplateWizard({ open: true, template: t });
-  }, []);
+  }, [addToast]);
 
   const closeTemplateWizard = useCallback(() => {
     setTemplateWizard({ open: false, template: null });
@@ -243,6 +248,19 @@ const TemplatesList: React.FC = () => {
   const handleToggleSignOff = useCallback(
     (t: CatTemplate) => {
       if (updateTemplateMutation.isPending) return;
+      if (!isSignedOff(t)) {
+        const state = (t.settings as any)?.wizard_state;
+        const needsCoverage = ['equipment_maintenance', 'facility_property'].includes(state?.nomenclatureGroup || '');
+        if (!state?.contractName?.trim() || !state?.selectedBlocks?.length || !state?.durationValue ||
+          !state?.acceptanceMethod || !state?.billingCycleType || (needsCoverage && !state?.coverageTypes?.length)) {
+          addToast({ type: 'error', title: 'Template needs review', message: 'Complete the name, term, acceptance, services, billing and any required coverage before publishing.' });
+          handleEditTemplate(t);
+          return;
+        }
+        setClassifyTemplate(t);
+        setSelectedRelationship(templateRelationship(t));
+        return;
+      }
       updateTemplateMutation.mutate({
         id: t.id,
         // Spread existing settings — the edge update replaces the whole JSON,
@@ -255,8 +273,17 @@ const TemplatesList: React.FC = () => {
         },
       });
     },
-    [updateTemplateMutation]
+    [updateTemplateMutation, addToast, handleEditTemplate]
   );
+
+  const confirmRelationship = useCallback(() => {
+    if (!classifyTemplate || !selectedRelationship || updateTemplateMutation.isPending) return;
+    updateTemplateMutation.mutate({
+      id: classifyTemplate.id,
+      data: { settings: { ...((classifyTemplate.settings as Record<string, any>) || {}), relationship: selectedRelationship,
+        lifecycle: SIGNED_OFF_STATUS } },
+    }, { onSuccess: () => { setClassifyTemplate(null); setSelectedRelationship(null); } });
+  }, [classifyTemplate, selectedRelationship, updateTemplateMutation]);
 
   const typeLabel = (category?: string): string | null =>
     TYPE_OPTIONS.find((o) => o.id === category)?.label || null;
@@ -646,6 +673,8 @@ const TemplatesList: React.FC = () => {
                     <h3 className="font-bold text-lg mb-1 line-clamp-1" style={{ color: colors.utility.primaryText }}>
                       {template.name}
                     </h3>
+                    {templateRelationship(template) && <span className="inline-flex rounded-full px-2.5 py-1 mb-2 text-[11px] font-bold" style={{ backgroundColor: `${brand}15`, color: brand }}>{templateRelationshipLabel(templateRelationship(template)!)}</span>}
+                    {signedOff && !templateRelationship(template) && <span className="inline-flex rounded-full px-2.5 py-1 mb-2 text-[11px] font-bold" style={{ backgroundColor: `${colors.semantic.warning}18`, color: colors.semantic.warning }}>Relationship needed</span>}
                     {category && (
                       <div className="mb-1">
                         <span className="text-[11px] font-semibold" style={{ color: brand }}>
@@ -733,21 +762,24 @@ const TemplatesList: React.FC = () => {
                           )}
                           {signedOff ? 'Unpublish' : 'Publish'}
                         </button>
-                        {signedOff && (
+                        {signedOff && templateRelationship(template) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleAssignTemplate(template);
                             }}
-                            title="Create a contract for a member from this template"
+                            title="Start a contract from this template"
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
                             style={{ backgroundColor: `${brand}15`, color: brand }}
                           >
                             <UserPlus className="w-3.5 h-3.5" />
-                            Assign
+                            Use template
                           </button>
                         )}
-                        {signedOff && (
+                        {signedOff && !templateRelationship(template) && (
+                          <button onClick={(e) => { e.stopPropagation(); setClassifyTemplate(template); setSelectedRelationship(null); }} className="rounded-lg px-3 py-2 text-xs font-semibold" style={{ backgroundColor: `${brand}15`, color: brand }}>Set relationship</button>
+                        )}
+                        {signedOff && templateRelationship(template) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -895,10 +927,13 @@ const TemplatesList: React.FC = () => {
         onDone={() => refetch()}
       />
 
+      {classifyTemplate && <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ backgroundColor: '#0008' }} role="presentation" onMouseDown={event => { if (event.target === event.currentTarget && !updateTemplateMutation.isPending) setClassifyTemplate(null); }}><div role="dialog" aria-modal="true" aria-labelledby="template-relationship-heading" className="w-full max-w-md rounded-2xl p-6 shadow-2xl" style={{ backgroundColor: colors.utility.primaryBackground, color: colors.utility.primaryText }}><h2 id="template-relationship-heading" className="text-xl font-bold">Who is this template for?</h2><p className="mt-2 text-sm" style={{ color: colors.utility.secondaryText }}>Choose once before publishing. The relationship will be locked for contracts created from this template.</p><div className="mt-5 grid gap-2">{(['client', 'vendor', 'partner'] as TemplateRelationship[]).map(value => <button type="button" key={value} onClick={() => setSelectedRelationship(value)} aria-pressed={selectedRelationship === value} className="rounded-xl border px-4 py-3 text-left text-sm font-semibold" style={{ borderColor: selectedRelationship === value ? brand : colors.utility.border, backgroundColor: selectedRelationship === value ? `${brand}14` : colors.utility.secondaryBackground }}>{templateRelationshipLabel(value)}</button>)}</div><div className="mt-6 flex justify-end gap-2"><button type="button" className="rounded-lg border px-4 py-2" style={{ borderColor: colors.utility.border }} disabled={updateTemplateMutation.isPending} onClick={() => setClassifyTemplate(null)}>Cancel</button><button type="button" className="rounded-lg px-4 py-2 font-semibold" style={{ backgroundColor: brand, color: '#fff' }} disabled={!selectedRelationship || updateTemplateMutation.isPending} onClick={confirmRelationship}>{updateTemplateMutation.isPending ? 'Saving…' : 'Confirm and publish'}</button></div></div></div>}
+
       {/* ═══ TEMPLATE WIZARD (ContractWizard in template mode) ═══ */}
       <ContractWizard
         isOpen={templateWizard.open}
         onClose={closeTemplateWizard}
+        presentation="experience"
         mode="template"
         editTemplate={templateWizard.template}
         onTemplateSaved={() => refetch()}

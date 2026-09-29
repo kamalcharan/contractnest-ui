@@ -33,6 +33,7 @@ export const TEMPLATE_STEPS: StepConfig[] = [
   { id: 'nomenclature', label: 'Contract Type', heading: { title: 'What type of contract is this template for?', subtitle: 'Select the nomenclature that best describes it' } },
   { id: 'acceptance', label: 'Acceptance', heading: { title: 'Default acceptance method', subtitle: 'Contracts created from this template will start with this — changeable per contract' } },
   { id: 'details', label: 'Details', heading: { title: 'Template Details', subtitle: 'Name this template and set the default duration' } },
+  { id: 'assetSelection', label: 'Coverage', heading: { title: 'Coverage requirements', subtitle: 'Describe the type and number of units; actual customer equipment is attached to each contract' } },
   { id: 'billingCycle', label: 'Billing Cycle', heading: { title: 'Billing Cycle', subtitle: 'How should services be billed by default?' } },
   { id: 'blocks', label: 'Add Blocks', heading: { title: 'Add Service Blocks', subtitle: 'Select services and configure them for this template' } },
   { id: 'billingView', label: 'Billing View', heading: { title: 'Billing View', subtitle: 'Review line items, pricing and default tax' } },

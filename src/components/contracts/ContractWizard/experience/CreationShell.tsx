@@ -8,6 +8,7 @@ import { CREATION_CHAPTERS, DECISION_LABELS, chapterFor } from './chapters';
 import './creation.css';
 
 interface Props {
+  templateMode?: boolean;
   state: ContractWizardState;
   relationship: ContractType;
   steps: StepConfig[];
@@ -42,24 +43,25 @@ export default function CreationShell(p: Props) {
   const last = step.id === 'review';
   const visible = p.steps.map((s, index) => ({ ...s, index })).filter(s => s.id !== 'path' && s.index !== p.skip);
   const decision = visible.findIndex(s => s.index === p.current) + 1;
-  const status = p.saveStatus === 'failed' ? 'Save failed — keep this page open'
+  const status = p.templateMode ? (p.hasDraft ? 'Template saved · unpublished changes require review' : 'Template not saved yet')
+    : p.saveStatus === 'failed' ? 'Save failed — keep this page open'
     : p.saveStatus === 'saving' ? 'Saving draft…'
     : p.saveStatus === 'saved' ? 'Draft saved'
     : p.hasDraft ? 'Draft started · edits save automatically' : 'Not saved yet';
   const summary = <>
-    <div className="cn-create-kicker"><FileText size={16} /> Your agreement</div>
+    <div className="cn-create-kicker"><FileText size={16} /> {p.templateMode ? 'Reusable template' : 'Your agreement'}</div>
     <h2>{p.state.contractName.trim() || 'A new commitment'}</h2>
-    <span className="cn-create-pill">{p.relationship === 'partner' ? 'Partner' : p.relationship === 'vendor' ? 'Vendor' : 'Client'} contract</span>
+    <span className="cn-create-pill">{p.templateMode ? 'No customer attached' : `${p.relationship === 'partner' ? 'Partner' : p.relationship === 'vendor' ? 'Vendor' : 'Client'} contract`}</span>
     <dl>
-      <div><dt>With</dt><dd>{p.state.buyerName || 'Choose a contact'}</dd></div>
+      {!p.templateMode && <div><dt>With</dt><dd>{p.state.buyerName || 'Choose a contact'}</dd></div>}
       <div><dt>Agreement label</dt><dd>{p.state.nomenclatureName || 'Not selected'}</dd></div>
       <div><dt>Term</dt><dd>{p.state.durationValue} {p.state.durationUnit}</dd></div>
       <div><dt>Coverage</dt><dd>{p.state.coverageTypes.length ? `${p.state.coverageTypes.length} coverage types` : 'No asset coverage selected'}</dd></div>
       <div><dt>Inclusions</dt><dd>{p.state.selectedBlocks.length} lines</dd></div>
       <div><dt>Acceptance</dt><dd>{p.state.acceptanceMethod === 'auto' ? 'Automatic' : p.state.acceptanceMethod === 'signoff' ? 'Sign-off' : p.state.acceptanceMethod === 'payment' ? 'Payment' : 'Not selected'}</dd></div>
     </dl>
-    <p className="cn-create-note">Services and payment events will belong to this contract. Nothing is sent by saving a draft.</p>
-    <p className="cn-create-note">Check the full price in Money and the dates in Events Preview before creating.</p>
+    <p className="cn-create-note">{p.templateMode ? 'This is a reusable pattern. Saving it creates no contract and sends nothing. Customer, actual assets and dates are chosen when it is used.' : 'Services and payment events will belong to this contract. Nothing is sent by saving a draft.'}</p>
+    <p className="cn-create-note">{p.templateMode ? 'Review the price and illustrative event plan before publishing.' : 'Check the full price in Money and the dates in Events Preview before creating.'}</p>
   </>;
   return <div className="cn-create" style={{
     '--cc-bg': c.utility.primaryBackground, '--cc-panel': c.utility.secondaryBackground,
@@ -68,10 +70,10 @@ export default function CreationShell(p: Props) {
     '--cc-brand-text': textOnBrand(c.brand.primary),
   } as React.CSSProperties}>
     <header className="cn-create-header">
-      <div className="cn-create-brand"><FileText size={22} /><span>ContractNest <small>Create an agreement</small></span></div>
+      <div className="cn-create-brand"><FileText size={22} /><span>ContractNest <small>{p.templateMode ? 'Build a template' : 'Create an agreement'}</small></span></div>
       <div className="cn-create-header-actions">
         <span role="status" className={p.saveStatus === 'failed' ? 'cn-create-error-text' : 'cn-create-save-status'}>{status}</span>
-        <button disabled={p.busy} onClick={p.onClose} aria-label="Close contract creation"><X size={20} /></button>
+        <button disabled={p.busy} onClick={p.onClose} aria-label={p.templateMode ? 'Close template editor' : 'Close contract creation'}><X size={20} /></button>
       </div>
     </header>
     <nav ref={chapters} className="cn-create-chapters" aria-label="Contract chapters">
@@ -102,11 +104,11 @@ export default function CreationShell(p: Props) {
     <footer className="cn-create-footer">
       {p.error && <p role="alert" className="cn-create-error">{p.error}</p>}
       <div className="cn-create-footer-inner">
-        <button className="cn-create-back" disabled={p.current <= 1 || p.busy} onClick={p.onBack}><ArrowLeft size={17} /><span>Back</span></button>
+        <button className="cn-create-back" disabled={p.current <= (p.templateMode ? 0 : 1) || p.busy} onClick={p.onBack}><ArrowLeft size={17} /><span>Back</span></button>
         <span className="cn-create-position">Decision {decision} of {visible.length}</span>
-        <button className="cn-create-save" onClick={p.onSave} disabled={p.busy || !p.state.contractName.trim()} title={!p.state.contractName.trim() ? 'Name the agreement before saving' : 'Save without sending'}><Save size={16} /><span>Save draft</span></button>
+        <button className="cn-create-save" onClick={p.onSave} disabled={p.busy || !p.state.contractName.trim()} title={!p.state.contractName.trim() ? 'Name this before saving' : 'Save without sending'}><Save size={16} /><span>Save draft</span></button>
         <button className="cn-create-primary" disabled={p.busy} onClick={p.onNext}>
-          {p.busy ? <><Loader2 size={17} className="animate-spin" /> Working…</> : <>{last ? (p.state.acceptanceMethod === 'auto' ? 'Create contract' : 'Create & request acceptance') : 'Continue'}<ArrowRight size={17} /></>}
+          {p.busy ? <><Loader2 size={17} className="animate-spin" /> Working…</> : <>{last ? (p.templateMode ? 'Save template draft' : p.state.acceptanceMethod === 'auto' ? 'Create contract' : 'Create & request acceptance') : 'Continue'}<ArrowRight size={17} /></>}
         </button>
       </div>
     </footer>
