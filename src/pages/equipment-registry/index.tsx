@@ -67,8 +67,10 @@
     if (mode === 'entity') {
       return {
         typeIds: ['asset'],
-        pageTitle: 'Facility Registry',
-        pageDescription: 'Register and manage facilities, properties, and spaces. Link them to contracts and track service schedules.',
+        pageTitle: perspective === 'revenue' ? 'Facility Registry — Client Facilities' : 'Facility Registry — My Facilities',
+        pageDescription: perspective === 'revenue'
+          ? 'Register the client facilities and spaces you maintain. Keep ownership, contract coverage and service history connected.'
+          : 'Register your own facilities and spaces. Keep their details, maintenance and operational history together.',
         breadcrumb: 'Facility Registry',
         sidebarTitle: 'Facility Categories',
         allLabel: 'All Facilities',
@@ -218,9 +220,7 @@
     const [contactFilter, setContactFilter] = useState<string>('');
 
     // ── Data: Assets (filtered by ownership_type based on perspective) ──
-    const ownershipType = registryMode === 'equipment'
-      ? (perspective === 'revenue' ? 'client' : 'self') as const
-      : undefined;
+    const ownershipType = (perspective === 'revenue' ? 'client' : 'self') as const;
 
     const filters: AssetRegistryFilters = useMemo(
       () => ({
@@ -229,9 +229,9 @@
         with_contracts: true, // R4: contract chips on cards
         ...(ownershipType ? { ownership_type: ownershipType } : {}),
         ...(activeFilter === 'inactive' ? { include_inactive: true } : {}),
-        ...(contactFilter ? { contact_id: contactFilter } : {}), // R5: client filter
+        ...(perspective === 'revenue' && contactFilter ? { contact_id: contactFilter } : {}), // R5: client filter
       }),
-      [ownershipType, activeFilter, contactFilter]
+      [ownershipType, activeFilter, contactFilter, perspective]
     );
 
     const {
@@ -239,6 +239,7 @@
       isLoading: assetsLoading,
       isError,
       isMutating,
+      refetch: refetchAssets,
     } = useAssetRegistryManager(filters);
 
     // Mutations
@@ -882,7 +883,12 @@
                   );
                 })}
               </div>
-            ) : searchQuery && !isError ? (
+            ) : isError ? (
+              <div className="rounded-lg border p-12 text-center" role="alert" style={{ backgroundColor: colors.utility.secondaryBackground, borderColor: colors.utility.primaryText + '20' }}>
+                <p className="text-sm mb-4" style={{ color: colors.utility.primaryText }}>Could not load this registry. Your records may still be there.</p>
+                <Button variant="outline" size="sm" onClick={() => refetchAssets()}>Try again</Button>
+              </div>
+            ) : searchQuery ? (
               /* No search results */
               <div
                 className="rounded-lg border p-12 text-center"
@@ -928,6 +934,7 @@
                 selectedSubCategory={selectedSubCategory}
                 onAddEquipment={handleCreateNew}
                 registryMode={registryMode}
+                perspective={perspective}
               />
             )}
           </div>
@@ -943,7 +950,7 @@
           onSubmit={handleCreateSubmit}
           isSubmitting={createMutation.isPending}
           registryMode={registryMode}
-          defaultOwnershipType={ownershipType || 'client'}
+          defaultOwnershipType={ownershipType}
         />
 
         {/* R1: deactivation confirm (or "in contract" blocker) — replaces window.confirm */}
@@ -980,7 +987,7 @@
           onSubmit={handleEditSubmit}
           isSubmitting={updateMutation.isPending}
           registryMode={registryMode}
-          defaultOwnershipType={ownershipType || 'client'}
+          defaultOwnershipType={ownershipType}
         />
       </div>
     );

@@ -443,7 +443,7 @@ const EquipmentFormDialog: React.FC<EquipmentFormDialogProps> = ({
                   Client / Owner
                 </h4>
                 <p className="text-xs mb-3" style={{ color: colors.utility.secondaryText }}>
-                  Which client does this equipment belong to?
+                  Which client does this {registryMode === 'entity' ? 'facility' : 'equipment'} belong to?
                 </p>
                 {lockedContactId ? (
                   /* Locked from wizard — Contract Buyer context */

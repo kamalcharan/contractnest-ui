@@ -21,6 +21,10 @@ export interface MenuItem {
 
 // Default menu structure
 export const defaultMenuItems: MenuItem[] = [
+  // 2026-09-29 (owner): main-menu sequence — Home · VaNi · Ops Cockpit · Commitments Register · Timeboard ·
+  // Group Sessions · Contracts · Leads · Requests (to hide later; the RFQ tab on Leads covers the seller side) ·
+  // Contacts · Money In · Invoices (To Pay on the expense side) · Claim Contract · Equipment Registry ·
+  // Facility Registry · Extend · Catalog Studio · Settings. Entries and ids unchanged, only the order.
 { id: 'home', label: 'Home', icon: 'Home', path: '/experience' },
 {
   id: 'getting-started',
@@ -29,6 +33,21 @@ export const defaultMenuItems: MenuItem[] = [
   path: '/onboarding/welcome',
   hasSubmenu: false
 },
+  // RFP drafts are part of Requests; keep the existing direct routes for bookmarks.
+  // VaNi — the real agent surface: Overview (landing + trial) and Briefing.
+  // Autonomy & Credits joins when built (agreed end-state: 3 items).
+  {
+    id: 'vani',
+    label: 'VaNi',
+    icon: 'Sparkles',
+    path: '/vani/landing',
+    hasSubmenu: true,
+    defaultOpen: false,
+    submenuItems: [
+      { id: 'vani-landing', label: 'Overview', icon: 'Home', path: '/vani/landing' },
+      { id: 'vani-briefing', label: 'Briefing', icon: 'Sunrise', path: '/vani/briefing' }
+    ]
+  },
   // HIDDEN: Dashboard - login/signup now redirects to /ops/cockpit
   // {
   //   id: 'dashboard',
@@ -54,14 +73,6 @@ export const defaultMenuItems: MenuItem[] = [
   // 2026-09-18 (ops-timeboard): the Plan's cards on a clock — week, day by person, agenda; drag to propose/confirm.
   { id: 'ops-timeboard', label: 'Timeboard', icon: 'CalendarDays', path: '/ops/timeboard' },
   { id: 'ops-group-sessions', label: 'Group Sessions', icon: 'Users', path: '/group-sessions' },
-  // RETIRED 2026-09-17 (ops-appointments-loop): the appointment is the service's slot on the Ops board
-  // (Services focus · Schedule · Ask customer · Confirm slot); /ops/appointments redirects there.
-  // { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
-  { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
-  // Leads — contacts tagged 'lead' + what they wanted (From your reach · RFQ). Revenue side.
-  { id: 'leads', label: 'Leads', icon: 'UserPlus', path: '/leads', revenueOnly: true },
-  { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
-  { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' },
   // HIDDEN: Activity Feed, Reports - commented out
   // { id: 'ops-activity', label: 'Activity Feed', icon: 'Activity', path: '/ops/activity' }
   // { id: 'ops-reports', label: 'Reports', icon: 'BarChart2', path: '/ops/reports' }
@@ -106,9 +117,26 @@ export const defaultMenuItems: MenuItem[] = [
   // the old 'contracts' id (hidden below) remain untangled — every industry
   // sees the plain "Contracts" label, per the domain-agnostic decision.
   { id: 'ncontracts', label: 'Contracts', icon: 'FileText', path: '/ncontracts' },
-  // Claim Contract promoted to the main menu from the hidden classic group
-  // (owner, 2026-09-16). Same id as before so nothing keyed on it changes.
-  { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' },
+  // Leads — contacts tagged 'lead' + what they wanted (From your reach · RFQ). Revenue side.
+  { id: 'leads', label: 'Leads', icon: 'UserPlus', path: '/leads', revenueOnly: true },
+  // Requests (RFQ) — its OWN menu item, not a toggle inside Contracts.
+  // An RFQ is a different object with a different lifecycle (draft → sent →
+  // quotes in → awarded → converted). Visible on BOTH sides, because the
+  // two halves of an RFQ live on opposite sides:
+  //   EXPENSE → RAISE a request + track the ones you sent
+  //   REVENUE → VIEW requests you received and RESPOND with a quote
+  // The page enforces the difference (the "New Request" button only exists
+  // on expense); the menu must not hide the view/respond half.
+  {
+    id: 'requests',
+    label: 'Requests',
+    icon: 'Inbox',
+    path: '/requests'
+  },
+  // RETIRED 2026-09-17 (ops-appointments-loop): the appointment is the service's slot on the Ops board
+  // (Services focus · Schedule · Ask customer · Confirm slot); /ops/appointments redirects there.
+  // { id: 'ops-appointments', label: 'Appointments', icon: 'CalendarCheck', path: '/ops/appointments' },
+  { id: 'entities', label: 'Contacts', icon: 'Building2', path: '/contacts' },
   /* HIDDEN 2026-09-16 (owner): classic Contracts menu. The /contracts routes
      stay registered — the hub, /contracts/:id and the wizard remain reachable
      from the experience pages; only this menu entry is hidden. Un-hide by
@@ -161,34 +189,20 @@ export const defaultMenuItems: MenuItem[] = [
     path: '/to-pay',
     expenseOnly: true
   },
-  // Requests (RFQ) — its OWN menu item, not a toggle inside Contracts.
-  // An RFQ is a different object with a different lifecycle (draft → sent →
-  // quotes in → awarded → converted). Visible on BOTH sides, because the
-  // two halves of an RFQ live on opposite sides:
-  //   EXPENSE → RAISE a request + track the ones you sent
-  //   REVENUE → VIEW requests you received and RESPOND with a quote
-  // The page enforces the difference (the "New Request" button only exists
-  // on expense); the menu must not hide the view/respond half.
+  // Claim Contract promoted to the main menu from the hidden classic group
+  // (owner, 2026-09-16). Same id as before so nothing keyed on it changes.
+  { id: 'contracts-claim', label: 'Claim Contract', icon: 'Download', path: '/contracts/claim' },
+  { id: 'equipment-registry', label: 'Equipment Registry', icon: 'Wrench', path: '/equipment-registry' },
+  { id: 'facility-registry', label: 'Facility Registry', icon: 'Landmark', path: '/facility-registry' },
+
+  // Extend — customer touchpoints (Website / WhatsApp / Email): publish a
+  // template as a public buy link. Paid feature (touchpoint add-ons).
   {
-    id: 'requests',
-    label: 'Requests',
-    icon: 'Inbox',
-    path: '/requests'
-  },
-  // RFP drafts are part of Requests; keep the existing direct routes for bookmarks.
-  // VaNi — the real agent surface: Overview (landing + trial) and Briefing.
-  // Autonomy & Credits joins when built (agreed end-state: 3 items).
-  {
-    id: 'vani',
-    label: 'VaNi',
-    icon: 'Sparkles',
-    path: '/vani/landing',
-    hasSubmenu: true,
-    defaultOpen: false,
-    submenuItems: [
-      { id: 'vani-landing', label: 'Overview', icon: 'Home', path: '/vani/landing' },
-      { id: 'vani-briefing', label: 'Briefing', icon: 'Sunrise', path: '/vani/briefing' }
-    ]
+    id: 'extend',
+    label: 'Extend',
+    icon: 'Share2',
+    path: '/extend',
+    hasSubmenu: false
   },
   // HIDDEN 2026-08-14: VaNi (old) — mock/reference pages, per the block's own
   // prior comment ("parked here until the cleanup pass removes them") this
@@ -267,16 +281,6 @@ export const defaultMenuItems: MenuItem[] = [
       { id: 'catalog-studio-equipment', label: 'VaNi Seeding', icon: 'Sprout', path: '/catalog-studio/equipment' },
       { id: 'catalog-studio-templates-list', label: 'Templates', icon: 'List', path: '/catalog-studio/templates-list' }
     ]
-  },
-
-  // Extend — customer touchpoints (Website / WhatsApp / Email): publish a
-  // template as a public buy link. Paid feature (touchpoint add-ons).
-  {
-    id: 'extend',
-    label: 'Extend',
-    icon: 'Share2',
-    path: '/extend',
-    hasSubmenu: false
   },
 
   // HIDDEN: Service Catalog - commented out for now
